@@ -13,7 +13,11 @@ use crate::payload::JobPayload;
 
 /// Queues a job and returns its id. The id is made here because the app role cannot read
 /// queue rows back.
-pub async fn enqueue(cx: &DataContext, queue: &str, payload: &JobPayload) -> Result<Uuid, ApiError> {
+pub async fn enqueue(
+    cx: &DataContext,
+    queue: &str,
+    payload: &JobPayload,
+) -> Result<Uuid, ApiError> {
     let id = Uuid::new_v4();
     cx.db()
         .execute(
@@ -34,7 +38,9 @@ pub struct ClaimedJob {
 /// Claims the oldest waiting job in `queue`, on the worker role.
 pub async fn claim(worker: &Database, queue: &str) -> Result<Option<ClaimedJob>, ApiError> {
     if worker.role() != RuntimeRole::Worker {
-        return Err(ApiError::Internal("jobs are claimed on the worker role".into()));
+        return Err(ApiError::Internal(
+            "jobs are claimed on the worker role".into(),
+        ));
     }
     let client = worker.client().await?;
     let claimed = client
@@ -47,7 +53,11 @@ pub async fn claim(worker: &Database, queue: &str) -> Result<Option<ClaimedJob>,
             &[&queue],
         )
         .await?;
-    Ok(claimed.map(|row| ClaimedJob { id: row.get("id"), data: row.get("data"), client }))
+    Ok(claimed.map(|row| ClaimedJob {
+        id: row.get("id"),
+        data: row.get("data"),
+        client,
+    }))
 }
 
 impl ClaimedJob {

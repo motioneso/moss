@@ -24,10 +24,20 @@ fn env_of(value: &Value) -> Env {
 
 fn keyring_for(fixtures: &Value, name: &str) -> Keyring {
     let keyring = &fixtures["keyrings"][name];
-    let names: Vec<&str> =
-        keyring["names"].as_array().unwrap().iter().map(|n| n.as_str().unwrap()).collect();
-    resolve_keyring(names[0], names[1], names[2], "unused-dev-default", &env_of(&keyring["env"]))
+    let names: Vec<&str> = keyring["names"]
+        .as_array()
         .unwrap()
+        .iter()
+        .map(|n| n.as_str().unwrap())
+        .collect();
+    resolve_keyring(
+        names[0],
+        names[1],
+        names[2],
+        "unused-dev-default",
+        &env_of(&keyring["env"]),
+    )
+    .unwrap()
 }
 
 fn envelope_json(case: &Value) -> Value {
@@ -38,7 +48,10 @@ fn envelope_json(case: &Value) -> Value {
 }
 
 fn decrypt(cipher: &JsonSecretCipher, envelope: &Value) -> Outcome {
-    match cipher.parse_envelope(envelope).and_then(|e| cipher.decrypt_json(&e)) {
+    match cipher
+        .parse_envelope(envelope)
+        .and_then(|e| cipher.decrypt_json(&e))
+    {
         Ok(decrypted) => Outcome::Ok(Value::String(STANDARD.encode(&decrypted.plaintext))),
         Err(error) => Outcome::Error(error),
     }
@@ -52,12 +65,20 @@ fn rust_decrypts_app_made_envelopes() {
     let mut failures = Vec::new();
     let cases = fixtures["cases"].as_array().unwrap();
     for case in cases {
-        let cipher = if case["keyring"] == "ai" { &ai } else { &connector };
+        let cipher = if case["keyring"] == "ai" {
+            &ai
+        } else {
+            &connector
+        };
         assert_eq!(case["cipherLabel"].as_str().unwrap(), cipher.label);
         let got = decrypt(cipher, &envelope_json(case));
         let want = Outcome::expected(&case["expect"]);
         if STRICTER_THAN_NODE.contains(&label(case)) {
-            assert!(matches!(want, Outcome::Ok(_)), "{} should be accepted by Node", label(case));
+            assert!(
+                matches!(want, Outcome::Ok(_)),
+                "{} should be accepted by Node",
+                label(case)
+            );
             if !matches!(got, Outcome::Error(_)) {
                 failures.push(format!("{}: rust should refuse, got {got:?}", label(case)));
             }
@@ -84,7 +105,9 @@ fn lone_surrogate_payload_is_reported() {
         .iter()
         .find(|case| label(case) == "lone-surrogate-payload")
         .unwrap();
-    let decrypted = ai.decrypt_json(&ai.parse_envelope(&case["envelope"]).unwrap()).unwrap();
+    let decrypted = ai
+        .decrypt_json(&ai.parse_envelope(&case["envelope"]).unwrap())
+        .unwrap();
     assert!(decrypted.replaced_lone_surrogates);
     assert_eq!(decrypted.value["value"], "a\u{fffd}b");
 }
@@ -139,7 +162,10 @@ fn family_keys_nested_in_the_master_store() {
         family["masterCipherLabel"].as_str().unwrap(),
     );
     let keyring = family_keyring_from_setting(&family["storedSetting"], &master).unwrap();
-    assert_eq!(keyring.current_key_id, family["currentKeyId"].as_str().unwrap());
+    assert_eq!(
+        keyring.current_key_id,
+        family["currentKeyId"].as_str().unwrap()
+    );
     let want: Vec<String> = family["legacyCandidateFingerprints"]
         .as_array()
         .unwrap()
@@ -158,7 +184,11 @@ fn family_keys_nested_in_the_master_store() {
             failures.push(format!("{}: rust {got:?}, node {want:?}", label(case)));
         }
     }
-    println!("family keys: {}/{} envelopes agree with Node", cases.len() - failures.len(), cases.len());
+    println!(
+        "family keys: {}/{} envelopes agree with Node",
+        cases.len() - failures.len(),
+        cases.len()
+    );
     assert!(failures.is_empty(), "{failures:#?}");
 }
 
@@ -171,7 +201,11 @@ fn node_decoders_match() {
     ] {
         for sample in fixtures["nodeDecoding"][kind].as_array().unwrap() {
             let input = text(&sample["input"]);
-            assert_eq!(hex::encode(decode(&input)), sample["hex"].as_str().unwrap(), "{kind} {input:?}");
+            assert_eq!(
+                hex::encode(decode(&input)),
+                sample["hex"].as_str().unwrap(),
+                "{kind} {input:?}"
+            );
         }
     }
 }

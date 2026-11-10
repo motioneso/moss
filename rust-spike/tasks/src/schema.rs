@@ -11,8 +11,14 @@ use serde_json::{Map, Number, Value};
 #[derive(Clone, Debug)]
 pub enum Schema {
     Object(ObjectSchema),
-    String { allowed: Option<&'static [&'static str]>, pattern: Option<Pattern> },
-    Integer { minimum: Option<i64>, maximum: Option<i64> },
+    String {
+        allowed: Option<&'static [&'static str]>,
+        pattern: Option<Pattern>,
+    },
+    Integer {
+        minimum: Option<i64>,
+        maximum: Option<i64>,
+    },
     Boolean,
     Null,
     AnyOf(Vec<Schema>),
@@ -33,11 +39,17 @@ pub struct Pattern {
 
 impl Schema {
     pub fn string() -> Self {
-        Self::String { allowed: None, pattern: None }
+        Self::String {
+            allowed: None,
+            pattern: None,
+        }
     }
 
     pub fn one_of_strings(allowed: &'static [&'static str]) -> Self {
-        Self::String { allowed: Some(allowed), pattern: None }
+        Self::String {
+            allowed: Some(allowed),
+            pattern: None,
+        }
     }
 
     pub fn nullable(inner: Schema) -> Self {
@@ -48,7 +60,11 @@ impl Schema {
         required: &'static [&'static str],
         properties: Vec<(&'static str, Schema)>,
     ) -> Self {
-        Self::Object(ObjectSchema { required, properties, additional_properties: false })
+        Self::Object(ObjectSchema {
+            required,
+            properties,
+            additional_properties: false,
+        })
     }
 }
 
@@ -63,7 +79,11 @@ struct Issue {
 }
 
 /// Validates and coerces `value` in place. `data_var` is `body`, `params` or `querystring`.
-pub fn validate(schema: &Schema, value: &mut Value, data_var: &str) -> Result<(), ValidationFailure> {
+pub fn validate(
+    schema: &Schema,
+    value: &mut Value,
+    data_var: &str,
+) -> Result<(), ValidationFailure> {
     let mut issues = Vec::new();
     if check(schema, value, "", &mut issues) {
         return Ok(());
@@ -78,7 +98,10 @@ pub fn validate(schema: &Schema, value: &mut Value, data_var: &str) -> Result<()
 
 fn check(schema: &Schema, value: &mut Value, path: &str, issues: &mut Vec<Issue>) -> bool {
     let issue = |issues: &mut Vec<Issue>, message: String| {
-        issues.push(Issue { path: path.to_owned(), message });
+        issues.push(Issue {
+            path: path.to_owned(),
+            message,
+        });
         false
     };
     match schema {
@@ -277,7 +300,10 @@ mod tests {
                 ("title", Schema::string()),
                 (
                     "priority",
-                    Schema::nullable(Schema::Integer { minimum: Some(1), maximum: Some(5) }),
+                    Schema::nullable(Schema::Integer {
+                        minimum: Some(1),
+                        maximum: Some(5),
+                    }),
                 ),
             ],
         )

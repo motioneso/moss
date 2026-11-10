@@ -292,7 +292,12 @@ fn run_credentials(install: &Path, folder: &Path) -> Result<(String, String), Fa
         .map_err(|_| Failure::DatabaseFailed)?;
     let text = String::from_utf8(output.stdout).map_err(|_| Failure::DatabaseFailed)?;
     let value: Value = serde_json::from_str(&text).map_err(|_| Failure::DatabaseFailed)?;
-    let field = |key: &str| value[key].as_str().filter(|v| !v.is_empty()).map(str::to_owned);
+    let field = |key: &str| {
+        value[key]
+            .as_str()
+            .filter(|v| !v.is_empty())
+            .map(str::to_owned)
+    };
     // Every field or nothing; the texts go to owner-only files and are never logged.
     let (Some(app_url), Some(auth_url), Some(auth_secret), Some(connector_key)) = (
         field("app_url"),

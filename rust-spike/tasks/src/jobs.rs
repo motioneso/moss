@@ -88,7 +88,9 @@ async fn run_deferred_status(
     job_id: Uuid,
     data: &Value,
 ) -> Result<Value, String> {
-    let payload = data.as_object().ok_or_else(|| format!("Job {job_id} has no payload"))?;
+    let payload = data
+        .as_object()
+        .ok_or_else(|| format!("Job {job_id} has no payload"))?;
     let actor = payload
         .get("actorUserId")
         .and_then(Value::as_str)
@@ -100,10 +102,18 @@ async fn run_deferred_status(
     let actor = Uuid::parse_str(actor).map_err(|error| error.to_string())?;
     let access = AccessContext::new(actor, format!("pgboss:{job_id}"));
 
-    if !payload.keys().all(|key| PAYLOAD_KEYS.contains(&key.as_str())) {
-        return Err(format!("Task job {job_id} contains non-metadata payload fields"));
+    if !payload
+        .keys()
+        .all(|key| PAYLOAD_KEYS.contains(&key.as_str()))
+    {
+        return Err(format!(
+            "Task job {job_id} contains non-metadata payload fields"
+        ));
     }
-    let task_id = payload.get("taskId").and_then(Value::as_str).unwrap_or_default();
+    let task_id = payload
+        .get("taskId")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
     let status = match payload.get("requestedStatus").and_then(Value::as_str) {
         Some("todo") => TaskStatus::Todo,
         Some("done") => TaskStatus::Done,
@@ -113,7 +123,9 @@ async fn run_deferred_status(
 
     let describe = |error: ApiError| format!("{error:?}");
     let cx = DataContext::open(worker, &access).await.map_err(describe)?;
-    let task = repo::update(&cx, task_id, &status_only(status)).await.map_err(describe)?;
+    let task = repo::update(&cx, task_id, &status_only(status))
+        .await
+        .map_err(describe)?;
     cx.commit().await.map_err(describe)?;
     Ok(json!({
         "taskId": task_id,

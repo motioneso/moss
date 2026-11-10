@@ -29,8 +29,13 @@ pub fn nfkc(password: &str) -> String {
 fn derive_key(password: &str, salt: &str) -> [u8; KEY_LEN] {
     let params = Params::new(LOG_N, R, P, KEY_LEN).expect("fixed scrypt parameters are valid");
     let mut key = [0u8; KEY_LEN];
-    scrypt(nfkc(password).as_bytes(), salt.as_bytes(), &params, &mut key)
-        .expect("output length matches the parameters");
+    scrypt(
+        nfkc(password).as_bytes(),
+        salt.as_bytes(),
+        &params,
+        &mut key,
+    )
+    .expect("output length matches the parameters");
     key
 }
 

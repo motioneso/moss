@@ -38,7 +38,10 @@ impl TrustedOrigins {
         let mut patterns = vec![base.origin().ascii_serialization()];
         match resolve_moss_env(env, "JARVIS_AUTH_TRUSTED_ORIGINS") {
             Some(list) => patterns.extend(
-                list.split(',').map(str::trim).filter(|item| !item.is_empty()).map(str::to_owned),
+                list.split(',')
+                    .map(str::trim)
+                    .filter(|item| !item.is_empty())
+                    .map(str::to_owned),
             ),
             None => match configured {
                 Some(url) => patterns.push(url.to_owned()),
@@ -46,9 +49,16 @@ impl TrustedOrigins {
             },
         }
         if let Some(list) = env.get("BETTER_AUTH_TRUSTED_ORIGINS") {
-            patterns.extend(list.split(',').filter(|item| !item.is_empty()).map(str::to_owned));
+            patterns.extend(
+                list.split(',')
+                    .filter(|item| !item.is_empty())
+                    .map(str::to_owned),
+            );
         }
-        Ok(Self { patterns, enforced: !is_test(env) })
+        Ok(Self {
+            patterns,
+            enforced: !is_test(env),
+        })
     }
 
     /// `originCheckMiddleware`: an auth POST that carries a cookie must come from a trusted page.
@@ -100,9 +110,17 @@ impl TrustedOrigins {
             .find(|value| !value.is_empty())
             .unwrap_or_default();
         if origin.is_empty() || origin == "null" {
-            return Err(fail(403, "MISSING_OR_NULL_ORIGIN", "Missing or null Origin"));
+            return Err(fail(
+                403,
+                "MISSING_OR_NULL_ORIGIN",
+                "Missing or null Origin",
+            ));
         }
-        if self.patterns.iter().any(|pattern| matches_origin_pattern(&origin, pattern)) {
+        if self
+            .patterns
+            .iter()
+            .any(|pattern| matches_origin_pattern(&origin, pattern))
+        {
             return Ok(());
         }
         // A referer can carry a path and query, so only its origin is logged.
@@ -121,7 +139,9 @@ impl TrustedOrigins {
 /// better-auth's `isTest()`: `NODE_ENV=test`, or `TEST` set to anything but "false".
 fn is_test(env: &Env) -> bool {
     env.get("NODE_ENV").is_some_and(|name| name == "test")
-        || env.get("TEST").is_some_and(|flag| !flag.is_empty() && flag != "false")
+        || env
+            .get("TEST")
+            .is_some_and(|flag| !flag.is_empty() && flag != "false")
 }
 
 /// Fetch's `Headers.get`: every value of the header, joined with ", ".
@@ -145,11 +165,17 @@ fn matches_origin_pattern(url: &str, pattern: &str) -> bool {
             let origin = parsed.as_ref().and_then(origin_of);
             return wildcard_matches(pattern, origin.as_deref().unwrap_or(url));
         }
-        return parsed.as_ref().and_then(host_of).is_some_and(|host| wildcard_matches(pattern, &host));
+        return parsed
+            .as_ref()
+            .and_then(host_of)
+            .is_some_and(|host| wildcard_matches(pattern, &host));
     }
     match &parsed {
         Some(parsed) if !matches!(parsed.scheme(), "http" | "https") => url.starts_with(pattern),
-        _ => parsed.as_ref().and_then(origin_of).is_some_and(|origin| origin == pattern),
+        _ => parsed
+            .as_ref()
+            .and_then(origin_of)
+            .is_some_and(|origin| origin == pattern),
     }
 }
 
@@ -176,9 +202,13 @@ enum Piece {
     /// `*`: any run of characters that are not separators.
     Run,
     /// The `/` after a segment: one or more separators, or any number after the last.
-    Separator { at_least_one: bool },
+    Separator {
+        at_least_one: bool,
+    },
     /// A `**` segment: any whole segments.
-    Segments { at_least_one: bool },
+    Segments {
+        at_least_one: bool,
+    },
 }
 
 fn is_separator(char: char) -> bool {
@@ -248,8 +278,12 @@ fn wildcard_matches(pattern: &str, text: &str) -> bool {
                 Piece::One => plain && rest[j + 1],
                 Piece::Run => rest[j] || (plain && row[j + 1]),
                 Piece::Separator { at_least_one: true } => slash && (rest[j + 1] || row[j + 1]),
-                Piece::Separator { at_least_one: false } => rest[j] || (slash && row[j + 1]),
-                Piece::Segments { at_least_one: false } => (j..=end).any(|k| rest[k]),
+                Piece::Separator {
+                    at_least_one: false,
+                } => rest[j] || (slash && row[j + 1]),
+                Piece::Segments {
+                    at_least_one: false,
+                } => (j..=end).any(|k| rest[k]),
                 Piece::Segments { at_least_one: true } => {
                     rest[j] || (j + 1..=end).any(|k| is_separator(text[k - 1]) && rest[k])
                 }
@@ -278,7 +312,10 @@ mod tests {
     const LOCAL: &str = "http://localhost:3000";
 
     fn env(pairs: &[(&str, &str)]) -> Env {
-        pairs.iter().map(|(key, value)| (key.to_string(), value.to_string())).collect()
+        pairs
+            .iter()
+            .map(|(key, value)| (key.to_string(), value.to_string()))
+            .collect()
     }
 
     fn enforced() -> TrustedOrigins {
@@ -296,7 +333,9 @@ mod tests {
     fn refusal(result: Result<(), Failure>) -> Option<&'static str> {
         match result {
             Ok(()) => None,
-            Err(Failure::Reply { status: 403, code, .. }) => Some(code),
+            Err(Failure::Reply {
+                status: 403, code, ..
+            }) => Some(code),
             Err(_) => Some("not a 403 reply"),
         }
     }
@@ -306,29 +345,50 @@ mod tests {
         let list = |pairs: &[(&str, &str)]| TrustedOrigins::from_env(&env(pairs), 4000).unwrap();
         assert_eq!(
             list(&[]).patterns,
-            ["http://localhost:4000", "http://localhost:4000", "http://127.0.0.1:4000"]
+            [
+                "http://localhost:4000",
+                "http://localhost:4000",
+                "http://127.0.0.1:4000"
+            ]
         );
         assert_eq!(
             list(&[("JARVIS_AUTH_BASE_URL", "https://moss.example.com:443/app/")]).patterns,
-            ["https://moss.example.com", "https://moss.example.com:443/app/"]
+            [
+                "https://moss.example.com",
+                "https://moss.example.com:443/app/"
+            ]
         );
         assert_eq!(
             list(&[
                 ("BETTER_AUTH_URL", "https://auth.example.com"),
-                ("JARVIS_AUTH_TRUSTED_ORIGINS", " http://192.168.1.20:3000 , ,http://moss:81 "),
+                (
+                    "JARVIS_AUTH_TRUSTED_ORIGINS",
+                    " http://192.168.1.20:3000 , ,http://moss:81 "
+                ),
             ])
             .patterns,
-            ["https://auth.example.com", "http://192.168.1.20:3000", "http://moss:81"]
+            [
+                "https://auth.example.com",
+                "http://192.168.1.20:3000",
+                "http://moss:81"
+            ]
         );
         // The MOSS_ name wins even when empty; better-auth's own list is not trimmed.
         assert_eq!(
             list(&[
                 ("JARVIS_AUTH_TRUSTED_ORIGINS", "http://old.example"),
                 ("MOSS_AUTH_TRUSTED_ORIGINS", ""),
-                ("BETTER_AUTH_TRUSTED_ORIGINS", "http://a.example, http://b.example,"),
+                (
+                    "BETTER_AUTH_TRUSTED_ORIGINS",
+                    "http://a.example, http://b.example,"
+                ),
             ])
             .patterns,
-            ["http://localhost:4000", "http://a.example", " http://b.example"]
+            [
+                "http://localhost:4000",
+                "http://a.example",
+                " http://b.example"
+            ]
         );
         assert!(TrustedOrigins::from_env(&env(&[("JARVIS_AUTH_BASE_URL", "moss")]), 1).is_err());
     }
@@ -347,31 +407,64 @@ mod tests {
             assert_eq!(refusal(origins.check_auth_post(&hostile)), None);
             assert_eq!(refusal(origins.check_sign_in_form(&hostile)), None);
         }
-        for pairs in [[("NODE_ENV", "production")], [("TEST", "false")], [("TEST", "")]] {
-            assert!(TrustedOrigins::from_env(&env(&pairs), 3000).unwrap().enforced, "{pairs:?}");
+        for pairs in [
+            [("NODE_ENV", "production")],
+            [("TEST", "false")],
+            [("TEST", "")],
+        ] {
+            assert!(
+                TrustedOrigins::from_env(&env(&pairs), 3000)
+                    .unwrap()
+                    .enforced,
+                "{pairs:?}"
+            );
         }
     }
 
     #[test]
     fn auth_posts_with_a_cookie_need_a_trusted_origin() {
         let origins = enforced();
-        let check = |pairs: &[(&'static str, &str)]| refusal(origins.check_auth_post(&headers(pairs)));
+        let check =
+            |pairs: &[(&'static str, &str)]| refusal(origins.check_auth_post(&headers(pairs)));
         let cookie = ("cookie", "a=b");
         assert_eq!(check(&[]), None);
         assert_eq!(check(&[("origin", "https://evil.example")]), None);
         assert_eq!(check(&[cookie]), Some("MISSING_OR_NULL_ORIGIN"));
-        assert_eq!(check(&[cookie, ("origin", "null")]), Some("MISSING_OR_NULL_ORIGIN"));
+        assert_eq!(
+            check(&[cookie, ("origin", "null")]),
+            Some("MISSING_OR_NULL_ORIGIN")
+        );
         assert_eq!(check(&[cookie, ("origin", LOCAL)]), None);
         assert_eq!(check(&[cookie, ("origin", "http://127.0.0.1:3000")]), None);
-        assert_eq!(check(&[cookie, ("origin", "https://evil.example")]), Some("INVALID_ORIGIN"));
-        assert_eq!(check(&[cookie, ("referer", "http://localhost:3000/login?next=/")]), None);
-        assert_eq!(check(&[cookie, ("origin", ""), ("referer", "http://localhost:3000/x")]), None);
         assert_eq!(
-            check(&[cookie, ("origin", "https://evil.example"), ("referer", LOCAL)]),
+            check(&[cookie, ("origin", "https://evil.example")]),
+            Some("INVALID_ORIGIN")
+        );
+        assert_eq!(
+            check(&[cookie, ("referer", "http://localhost:3000/login?next=/")]),
+            None
+        );
+        assert_eq!(
+            check(&[
+                cookie,
+                ("origin", ""),
+                ("referer", "http://localhost:3000/x")
+            ]),
+            None
+        );
+        assert_eq!(
+            check(&[
+                cookie,
+                ("origin", "https://evil.example"),
+                ("referer", LOCAL)
+            ]),
             Some("INVALID_ORIGIN")
         );
         // Two Origin headers read as one joined value, which matches nothing.
-        assert_eq!(check(&[cookie, ("origin", LOCAL), ("origin", LOCAL)]), Some("INVALID_ORIGIN"));
+        assert_eq!(
+            check(&[cookie, ("origin", LOCAL), ("origin", LOCAL)]),
+            Some("INVALID_ORIGIN")
+        );
     }
 
     #[test]
@@ -383,20 +476,37 @@ mod tests {
         assert_eq!(check(&[]), None);
         assert_eq!(check(&[("sec-fetch-site", " ")]), None);
         assert_eq!(
-            check(&[("sec-fetch-site", "cross-site"), ("sec-fetch-mode", "navigate")]),
+            check(&[
+                ("sec-fetch-site", "cross-site"),
+                ("sec-fetch-mode", "navigate")
+            ]),
             Some("CROSS_SITE_NAVIGATION_LOGIN_BLOCKED")
         );
         assert_eq!(
-            check(&[("sec-fetch-site", "same-origin"), ("sec-fetch-mode", "cors"), ("origin", LOCAL)]),
+            check(&[
+                ("sec-fetch-site", "same-origin"),
+                ("sec-fetch-mode", "cors"),
+                ("origin", LOCAL)
+            ]),
             None
         );
         assert_eq!(
-            check(&[("sec-fetch-site", "cross-site"), ("sec-fetch-mode", "cors"), ("origin", LOCAL)]),
+            check(&[
+                ("sec-fetch-site", "cross-site"),
+                ("sec-fetch-mode", "cors"),
+                ("origin", LOCAL)
+            ]),
             None
         );
-        assert_eq!(check(&[("sec-fetch-dest", "empty")]), Some("MISSING_OR_NULL_ORIGIN"));
         assert_eq!(
-            check(&[("sec-fetch-site", "same-origin"), ("origin", "http://192.168.1.20:3000")]),
+            check(&[("sec-fetch-dest", "empty")]),
+            Some("MISSING_OR_NULL_ORIGIN")
+        );
+        assert_eq!(
+            check(&[
+                ("sec-fetch-site", "same-origin"),
+                ("origin", "http://192.168.1.20:3000")
+            ]),
             Some("INVALID_ORIGIN")
         );
         assert_eq!(check(&[("cookie", "a=b")]), Some("MISSING_OR_NULL_ORIGIN"));
@@ -410,7 +520,10 @@ mod tests {
             ("sec-fetch-mode", "cors"),
             ("origin", "http://192.168.1.20:3000"),
         ]);
-        assert_eq!(refusal(enforced().check_sign_in_form(&phone)), Some("INVALID_ORIGIN"));
+        assert_eq!(
+            refusal(enforced().check_sign_in_form(&phone)),
+            Some("INVALID_ORIGIN")
+        );
         let trusted = env(&[("JARVIS_AUTH_TRUSTED_ORIGINS", "http://192.168.1.20:3000")]);
         let origins = TrustedOrigins::from_env(&trusted, 3000).unwrap();
         assert_eq!(refusal(origins.check_sign_in_form(&phone)), None);
@@ -423,8 +536,16 @@ mod tests {
             ("http://LOCALHOST:3000", LOCAL, true),
             ("http://localhost:3000/login?next=/", LOCAL, true),
             ("http://localhost:3001", LOCAL, false),
-            ("https://moss.example.com:443", "https://moss.example.com", true),
-            ("https://moss.example.com", "https://moss.example.com/", false),
+            (
+                "https://moss.example.com:443",
+                "https://moss.example.com",
+                true,
+            ),
+            (
+                "https://moss.example.com",
+                "https://moss.example.com/",
+                false,
+            ),
             ("http://192.168.1.20:3000", "http://192.168.1.*:3000", true),
             ("http://192.168.2.20:3000", "http://192.168.1.*:3000", false),
             ("https://app.example.com", "*.example.com", true),
@@ -443,7 +564,11 @@ mod tests {
             ("null", "null", false),
         ];
         for (url, pattern, want) in cases {
-            assert_eq!(matches_origin_pattern(url, pattern), want, "{url} against {pattern}");
+            assert_eq!(
+                matches_origin_pattern(url, pattern),
+                want,
+                "{url} against {pattern}"
+            );
         }
     }
 
@@ -468,7 +593,11 @@ mod tests {
             ("**", "", true),
         ];
         for (pattern, text, want) in cases {
-            assert_eq!(wildcard_matches(pattern, text), want, "{text} against {pattern}");
+            assert_eq!(
+                wildcard_matches(pattern, text),
+                want,
+                "{text} against {pattern}"
+            );
         }
     }
 
@@ -491,17 +620,28 @@ mod tests {
         for (name, value) in pairs {
             request = request.header(*name, *value);
         }
-        let response =
-            server().oneshot(request.body(Body::from(body.to_owned())).unwrap()).await.unwrap();
+        let response = server()
+            .oneshot(request.body(Body::from(body.to_owned())).unwrap())
+            .await
+            .unwrap();
         let status = response.status().as_u16();
         let bytes = to_bytes(response.into_body(), 1 << 16).await.unwrap();
-        (status, serde_json::from_slice(&bytes).unwrap_or(Value::Null))
+        (
+            status,
+            serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+        )
     }
 
     #[tokio::test]
     async fn the_sign_in_routes_run_both_checks() {
-        let cross_site = [("sec-fetch-site", "cross-site"), ("sec-fetch-mode", "navigate")];
-        let foreign = [("sec-fetch-site", "same-site"), ("origin", "https://evil.example")];
+        let cross_site = [
+            ("sec-fetch-site", "cross-site"),
+            ("sec-fetch-mode", "navigate"),
+        ];
+        let foreign = [
+            ("sec-fetch-site", "same-site"),
+            ("origin", "https://evil.example"),
+        ];
         let same_origin = [("sec-fetch-site", "same-origin"), ("origin", LOCAL)];
         let routes = [
             (
@@ -517,7 +657,10 @@ mod tests {
         ];
         for (path, body, past_the_checks) in routes {
             let (status, reply) = post(path, &cross_site, body).await;
-            assert_eq!((status, &reply["code"]), (403, &json!("CROSS_SITE_NAVIGATION_LOGIN_BLOCKED")));
+            assert_eq!(
+                (status, &reply["code"]),
+                (403, &json!("CROSS_SITE_NAVIGATION_LOGIN_BLOCKED"))
+            );
             let (status, reply) = post(path, &foreign, body).await;
             assert_eq!((status, &reply["code"]), (403, &json!("INVALID_ORIGIN")));
             // A trusted page gets as far as the handler's own checks, which need no database.
@@ -525,13 +668,22 @@ mod tests {
             assert_eq!((status, &reply["code"]), (400, &json!(past_the_checks)));
             // A cookie is checked before the body is read.
             let (status, reply) = post(path, &[("cookie", "a=b")], "{}").await;
-            assert_eq!((status, &reply["code"]), (403, &json!("MISSING_OR_NULL_ORIGIN")));
+            assert_eq!(
+                (status, &reply["code"]),
+                (403, &json!("MISSING_OR_NULL_ORIGIN"))
+            );
         }
 
         let (status, reply) = post("/api/auth/sign-out", &[("cookie", "a=b")], "").await;
-        assert_eq!((status, &reply["code"]), (403, &json!("MISSING_OR_NULL_ORIGIN")));
+        assert_eq!(
+            (status, &reply["code"]),
+            (403, &json!("MISSING_OR_NULL_ORIGIN"))
+        );
         let trusted = [("cookie", "a=b"), ("origin", LOCAL)];
         let (status, reply) = post("/api/auth/sign-out", &trusted, "").await;
-        assert_eq!((status, &reply["code"]), (400, &json!("FAILED_TO_GET_SESSION")));
+        assert_eq!(
+            (status, &reply["code"]),
+            (400, &json!("FAILED_TO_GET_SESSION"))
+        );
     }
 }

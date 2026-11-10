@@ -32,7 +32,9 @@ fn parse(raw: Vec<String>) -> Result<Args> {
         if flag == "--approve" {
             approve = true;
         } else if let Some(name) = flag.strip_prefix("--") {
-            let value = raw.next().with_context(|| format!("{flag} needs a value"))?;
+            let value = raw
+                .next()
+                .with_context(|| format!("{flag} needs a value"))?;
             match name {
                 "instance" => instance = Some(PathBuf::from(value)),
                 "registry-id" => id = Some(value),
@@ -70,10 +72,19 @@ fn parse(raw: Vec<String>) -> Result<Args> {
 /// The module tables each have one table that proves they exist, so a second run is a no-op.
 fn bootstrap_steps() -> [(&'static str, &'static str); 4] {
     [
-        ("moss_modules.catalog", moss_module_host::postgres::MIGRATION),
-        ("moss_modules.migrations", moss_module_host::migrations::MIGRATION),
+        (
+            "moss_modules.catalog",
+            moss_module_host::postgres::MIGRATION,
+        ),
+        (
+            "moss_modules.migrations",
+            moss_module_host::migrations::MIGRATION,
+        ),
         ("moss_queue.jobs", moss_module_host::jobs::QUEUE_MIGRATION),
-        ("moss_modules.paused_modules", moss_module_host::jobs::MIGRATION),
+        (
+            "moss_modules.paused_modules",
+            moss_module_host::jobs::MIGRATION,
+        ),
     ]
 }
 
@@ -117,7 +128,11 @@ pub fn run(raw: Vec<String>) -> Result<()> {
     private_write(&file, stored.to_string().as_bytes()).map_err(anyhow::Error::msg)?;
     let settings = modules::read_settings(&file)?;
     let database = runtime
-        .block_on(Database::connect(&settings.producer_url, 4, RuntimeRole::App))
+        .block_on(Database::connect(
+            &settings.producer_url,
+            4,
+            RuntimeRole::App,
+        ))
         .map_err(|_| anyhow::anyhow!("Cannot reach the instance database"))?;
     let application = modules::application(settings, database)?;
     let access = AccessContext::new(owner, "module-install");
@@ -145,4 +160,42 @@ pub fn run(raw: Vec<String>) -> Result<()> {
     }
     drop(application);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn words(text: &str) -> Vec<String> {
+        text.split(' ').map(str::to_owned).collect()
+    }
+
+    #[test]
+    fn a_full_command_parses() {
+        let args = parse(words(
+            "--instance /x --registry-id r --registry-folder /reg --root-key a --first-party-key b --approve people",
+        ))
+        .unwrap();
+        assert!(args.approve);
+        assert_eq!(args.modules, ["people"]);
+    }
+
+    #[test]
+    fn missing_pieces_and_unknown_options_are_refused() {
+        assert!(parse(words("--instance /x people")).is_err());
+        assert!(parse(words("--bogus 1 people")).is_err());
+        assert!(parse(words(
+            "--instance /x --registry-id r --registry-folder /reg --root-key a --first-party-key b"
+        ))
+        .is_err());
+    }
+
+    #[test]
+    fn every_bootstrap_step_has_a_distinct_marker() {
+        let steps = bootstrap_steps();
+        for (i, (marker, sql)) in steps.iter().enumerate() {
+            assert!(!sql.is_empty());
+            assert!(steps[i + 1..].iter().all(|(other, _)| other != marker));
+        }
+    }
 }

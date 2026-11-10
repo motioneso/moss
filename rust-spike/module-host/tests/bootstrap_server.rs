@@ -65,7 +65,11 @@ fn installer_alone_brings_a_fresh_instance_to_serving_people() {
         .unwrap()
         .success());
     fs::create_dir(root.join("web")).unwrap();
-    fs::write(root.join("web/index.html"), "<!doctype html><title>x</title>").unwrap();
+    fs::write(
+        root.join("web/index.html"),
+        "<!doctype html><title>x</title>",
+    )
+    .unwrap();
     let app_url = std::env::var("JS43_APP_URL").unwrap();
     let worker_url = std::env::var("JS43_WORKER_URL").unwrap();
     let bootstrap_url = std::env::var("JS43_BOOTSTRAP_URL").unwrap();
@@ -92,7 +96,12 @@ fn installer_alone_brings_a_fresh_instance_to_serving_people() {
         .unwrap();
     let log = |path: &str| fs::read_to_string(root.join(path)).unwrap_or_default();
     let mut command = Command::new(std::env::var("JS170_SERVER").unwrap());
-    command.arg("serve").arg("--instance").arg(root).arg("--web").arg(root.join("web"));
+    command
+        .arg("serve")
+        .arg("--instance")
+        .arg(root)
+        .arg("--web")
+        .arg(root.join("web"));
     let _server = Server(
         command
             .stdin(Stdio::null())
@@ -117,7 +126,13 @@ fn installer_alone_brings_a_fresh_instance_to_serving_people() {
         .send()
         .unwrap();
     assert_eq!(signup.status(), 200);
-    let cookie = signup.headers()["set-cookie"].to_str().unwrap().split(';').next().unwrap().to_owned();
+    let cookie = signup.headers()["set-cookie"]
+        .to_str()
+        .unwrap()
+        .split(';')
+        .next()
+        .unwrap()
+        .to_owned();
     let call = |method: reqwest::Method, path: &str, body: Option<Value>| {
         let mut request = client
             .request(method, format!("{origin}/api/m/people{path}"))
@@ -127,10 +142,17 @@ fn installer_alone_brings_a_fresh_instance_to_serving_people() {
             request = request.json(&body);
         }
         let response = request.send().unwrap();
-        (response.status().as_u16(), response.json::<Value>().unwrap_or(Value::Null))
+        (
+            response.status().as_u16(),
+            response.json::<Value>().unwrap_or(Value::Null),
+        )
     };
     use reqwest::Method;
-    assert_eq!(call(Method::GET, "/people", None).0, 503, "nothing installed yet");
+    assert_eq!(
+        call(Method::GET, "/people", None).0,
+        503,
+        "nothing installed yet"
+    );
     let registry = root.join("registry");
     let keys = installed::publish(&registry);
     let output = Command::new(std::env::var("JS170_SERVER").unwrap())
@@ -139,7 +161,13 @@ fn installer_alone_brings_a_fresh_instance_to_serving_people() {
         .arg(root)
         .args(["--registry-id", "people-test-registry", "--registry-folder"])
         .arg(&registry)
-        .args(["--root-key", &keys.root, "--first-party-key", &keys.publisher, "--approve"])
+        .args([
+            "--root-key",
+            &keys.root,
+            "--first-party-key",
+            &keys.publisher,
+            "--approve",
+        ])
         .args(["person-providers", "people"])
         .output()
         .unwrap();
@@ -151,24 +179,42 @@ fn installer_alone_brings_a_fresh_instance_to_serving_people() {
     );
     println!("{}", String::from_utf8_lossy(&output.stdout));
     let owner_folder = {
-        let stored: Value = serde_json::from_slice(&fs::read(root.join("modules.json")).unwrap()).unwrap();
-        root.join("notes").join(stored["admin_user_id"].as_str().expect("owner recorded"))
+        let stored: Value =
+            serde_json::from_slice(&fs::read(root.join("modules.json")).unwrap()).unwrap();
+        root.join("notes")
+            .join(stored["admin_user_id"].as_str().expect("owner recorded"))
     };
     // The running server picks the module up with no restart.
     let deadline = Instant::now() + Duration::from_secs(30);
     let (mut status, mut list) = call(Method::GET, "/people", None);
     while status != 200 {
-        assert!(Instant::now() < deadline, "not served after install: {status} {list}\n{}", log("server.log"));
+        assert!(
+            Instant::now() < deadline,
+            "not served after install: {status} {list}\n{}",
+            log("server.log")
+        );
         std::thread::sleep(Duration::from_millis(500));
         (status, list) = call(Method::GET, "/people", None);
     }
-    let saved = call(Method::PUT, "/people/notes-settings", Some(json!({"folder": owner_folder})));
+    let saved = call(
+        Method::PUT,
+        "/people/notes-settings",
+        Some(json!({"folder": owner_folder})),
+    );
     assert_eq!(saved.0, 200, "{}\n{}", saved.1, log("server.log"));
-    let created = call(Method::POST, "/people", Some(json!({"displayName":"Grace Hopper"})));
+    let created = call(
+        Method::POST,
+        "/people",
+        Some(json!({"displayName":"Grace Hopper"})),
+    );
     assert_eq!(created.0, 200, "{}\n{}", created.1, log("server.log"));
-    assert!(owner_folder.join(created.1["notePath"].as_str().unwrap()).is_file());
+    assert!(owner_folder
+        .join(created.1["notePath"].as_str().unwrap())
+        .is_file());
     let (_, mine) = call(Method::GET, "/people", None);
     assert!(mine.to_string().contains("Grace Hopper"), "{mine}");
     println!("PASS fresh instance: installer alone prepared tables, recorded the owner and installed People; the running server served it with no restart and no hand-made file");
-    println!("NOT PROVEN: second device, native UI, installing from a remote registry over the network");
+    println!(
+        "NOT PROVEN: second device, native UI, installing from a remote registry over the network"
+    );
 }

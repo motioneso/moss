@@ -21,7 +21,9 @@ pub struct Secret {
 
 impl Secret {
     pub fn new(value: impl Into<String>) -> Self {
-        Self { value: value.into() }
+        Self {
+            value: value.into(),
+        }
     }
 
     pub fn expose_secret(&self) -> &str {
@@ -80,7 +82,10 @@ impl SecretFields {
     }
 
     pub fn get(&self, name: &str) -> Option<&Secret> {
-        self.fields.iter().find(|(field, _)| field == name).map(|(_, secret)| secret)
+        self.fields
+            .iter()
+            .find(|(field, _)| field == name)
+            .map(|(_, secret)| secret)
     }
 
     pub fn names(&self) -> impl Iterator<Item = &str> {
@@ -130,7 +135,11 @@ impl SecretCipher {
     /// `createAiSecretCipher`.
     pub fn ai(env: &Env) -> Result<Self, CipherError> {
         Self::from_env(
-            ["JARVIS_AI_SECRET_KEY", "JARVIS_AI_SECRET_KEY_ID", "JARVIS_AI_SECRET_KEYS"],
+            [
+                "JARVIS_AI_SECRET_KEY",
+                "JARVIS_AI_SECRET_KEY_ID",
+                "JARVIS_AI_SECRET_KEYS",
+            ],
             "jarv1s-development-ai-secret",
             "AI credential",
             env,
@@ -145,14 +154,21 @@ impl SecretCipher {
     ) -> Result<Self, CipherError> {
         let keyring = resolve_keyring(names[0], names[1], names[2], dev_default, env)
             .map_err(CipherError::Config)?;
-        Ok(Self { inner: JsonSecretCipher::new(keyring, label) })
+        Ok(Self {
+            inner: JsonSecretCipher::new(keyring, label),
+        })
     }
 
     pub fn seal(&self, fields: &SecretFields) -> Value {
         let mut plain: Map<String, Value> = fields
             .fields
             .iter()
-            .map(|(name, secret)| (name.clone(), Value::String(secret.expose_secret().to_owned())))
+            .map(|(name, secret)| {
+                (
+                    name.clone(),
+                    Value::String(secret.expose_secret().to_owned()),
+                )
+            })
             .collect();
         let sealed = self.inner.encrypt_json(&plain);
         for value in plain.values_mut() {
@@ -164,8 +180,14 @@ impl SecretCipher {
     }
 
     pub fn open(&self, stored: &Value) -> Result<SecretFields, CipherError> {
-        let envelope = self.inner.parse_envelope(stored).map_err(|_| CipherError::Malformed)?;
-        let mut opened = self.inner.decrypt_json(&envelope).map_err(|_| CipherError::CannotOpen)?;
+        let envelope = self
+            .inner
+            .parse_envelope(stored)
+            .map_err(|_| CipherError::Malformed)?;
+        let mut opened = self
+            .inner
+            .decrypt_json(&envelope)
+            .map_err(|_| CipherError::CannotOpen)?;
         opened.plaintext.zeroize();
         let mut fields = SecretFields::new();
         for (name, value) in std::mem::take(&mut opened.value) {
@@ -208,14 +230,22 @@ mod tests {
         assert!(!format!("{error} {error:?}").contains(SENTINEL));
 
         let not_text = cipher.inner.encrypt_json(
-            &[("count".to_owned(), Value::from(3))].into_iter().collect::<Map<_, _>>(),
+            &[("count".to_owned(), Value::from(3))]
+                .into_iter()
+                .collect::<Map<_, _>>(),
         );
-        assert_eq!(cipher.open(&not_text).err().unwrap(), CipherError::NotText("count".into()));
+        assert_eq!(
+            cipher.open(&not_text).err().unwrap(),
+            CipherError::NotText("count".into())
+        );
     }
 
     #[test]
     fn production_refuses_the_development_key() {
         let env: Env = [("NODE_ENV".to_owned(), "production".to_owned())].into();
-        assert!(matches!(SecretCipher::connectors(&env), Err(CipherError::Config(_))));
+        assert!(matches!(
+            SecretCipher::connectors(&env),
+            Err(CipherError::Config(_))
+        ));
     }
 }

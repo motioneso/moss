@@ -41,7 +41,11 @@ fn find_marker(flat: &str) -> Option<(usize, &'static str)> {
     for marker in SECRET_MARKERS {
         for (at, _) in flat.match_indices(marker) {
             let rest = &flat[at + marker.len()..];
-            if *marker == "secret" && BENIGN_AFTER_SECRET.iter().any(|word| rest.starts_with(word)) {
+            if *marker == "secret"
+                && BENIGN_AFTER_SECRET
+                    .iter()
+                    .any(|word| rest.starts_with(word))
+            {
                 continue;
             }
             if best.map_or(true, |(seen, _)| at < seen) {
@@ -55,8 +59,11 @@ fn find_marker(flat: &str) -> Option<(usize, &'static str)> {
 
 /// Whether a field or header name names a secret ("api_key", "X-Auth-Token", "Set-Cookie").
 pub fn is_secret_name(name: &str) -> bool {
-    let flat: String =
-        name.chars().filter(|ch| !ignored(*ch)).map(|ch| ch.to_ascii_lowercase()).collect();
+    let flat: String = name
+        .chars()
+        .filter(|ch| !ignored(*ch))
+        .map(|ch| ch.to_ascii_lowercase())
+        .collect();
     find_marker(&flat).is_some()
 }
 
@@ -207,7 +214,14 @@ mod tests {
 
     #[test]
     fn names_secret_fields_like_the_typescript_sanitizer() {
-        for name in ["password", "api_key", "X-Auth-Token", "Set-Cookie", "clientSecret", "PASS WORD"] {
+        for name in [
+            "password",
+            "api_key",
+            "X-Auth-Token",
+            "Set-Cookie",
+            "clientSecret",
+            "PASS WORD",
+        ] {
             assert!(is_secret_name(name), "{name}");
         }
         for name in ["secretary", "email", "name", "status", "session"] {
@@ -243,7 +257,13 @@ mod tests {
             let redacted = redact_text(&line);
             assert!(!redacted.contains(SENTINEL), "{line} -> {redacted}");
         }
-        assert_eq!(redact_text("the token was missing"), "the token was missing");
-        assert_eq!(redact_query(&format!("a=1&token={SENTINEL}")), "a=1&token=[redacted]");
+        assert_eq!(
+            redact_text("the token was missing"),
+            "the token was missing"
+        );
+        assert_eq!(
+            redact_query(&format!("a=1&token={SENTINEL}")),
+            "a=1&token=[redacted]"
+        );
     }
 }

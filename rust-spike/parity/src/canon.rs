@@ -20,13 +20,19 @@ pub struct Canon {
 
 impl Canon {
     pub fn new(start: DateTime<Utc>, known: &HashSet<String>) -> Self {
-        Canon { labels: HashMap::new(), known: known.clone(), start }
+        Canon {
+            labels: HashMap::new(),
+            known: known.clone(),
+            start,
+        }
     }
 
     pub fn value(&mut self, value: &Value) -> Value {
         match value {
             Value::String(text) => Value::String(self.string(text)),
-            Value::Array(items) => Value::Array(items.iter().map(|item| self.value(item)).collect()),
+            Value::Array(items) => {
+                Value::Array(items.iter().map(|item| self.value(item)).collect())
+            }
             Value::Object(map) => {
                 let mut out = Map::new();
                 for (key, item) in map {
@@ -82,8 +88,11 @@ pub fn json_numbers(value: &Value) -> Value {
             }
         }
         Value::Array(items) => Value::Array(items.iter().map(json_numbers).collect()),
-        Value::Object(map) => Value::Object(map.iter().map(|(key, value)|
-            (key.clone(), json_numbers(value))).collect()),
+        Value::Object(map) => Value::Object(
+            map.iter()
+                .map(|(key, value)| (key.clone(), json_numbers(value)))
+                .collect(),
+        ),
         _ => value.clone(),
     }
 }
@@ -94,9 +103,11 @@ fn shape(value: &Value) -> Value {
         Value::String(text) if is_uuid(text) => Value::String("U".into()),
         Value::String(text) if parse_time(text).is_some() => Value::String("T".into()),
         Value::Array(items) => Value::Array(items.iter().map(shape).collect()),
-        Value::Object(map) => {
-            Value::Object(map.iter().map(|(key, item)| (key.clone(), shape(item))).collect())
-        }
+        Value::Object(map) => Value::Object(
+            map.iter()
+                .map(|(key, item)| (key.clone(), shape(item)))
+                .collect(),
+        ),
         other => other.clone(),
     }
 }
@@ -114,7 +125,9 @@ fn parse_time(text: &str) -> Option<DateTime<Utc>> {
     if text.len() < 20 || text.as_bytes().get(10) != Some(&b'T') {
         return None;
     }
-    DateTime::parse_from_rfc3339(text).ok().map(|time| time.with_timezone(&Utc))
+    DateTime::parse_from_rfc3339(text)
+        .ok()
+        .map(|time| time.with_timezone(&Utc))
 }
 
 /// Paths where the two values differ, at most `limit` of them.
@@ -153,7 +166,11 @@ fn walk(path: &str, ts: &Value, rs: &Value, out: &mut Vec<String>, limit: usize)
             left.len(),
             right.len()
         )),
-        _ => out.push(format!("{path}: TypeScript {} vs Rust {}", short(ts), short(rs))),
+        _ => out.push(format!(
+            "{path}: TypeScript {} vs Rust {}",
+            short(ts),
+            short(rs)
+        )),
     }
 }
 
@@ -189,8 +206,10 @@ mod tests {
     fn integral_json_floats_match_javascript_without_rounding_large_integers() {
         let mut canon = Canon::new(Utc::now(), &HashSet::new());
         assert_eq!(canon.value(&json!([1.0, -0.0, 0.75])), json!([1, 0, 0.75]));
-        assert_ne!(canon.value(&json!(9007199254740992_u64)),
-            canon.value(&json!(9007199254740993_u64)));
+        assert_ne!(
+            canon.value(&json!(9007199254740992_u64)),
+            canon.value(&json!(9007199254740993_u64))
+        );
     }
 
     #[test]
@@ -218,9 +237,16 @@ mod tests {
 
     #[test]
     fn reports_where_values_differ() {
-        let found = diff(&json!({"a": 1, "b": [1, 2]}), &json!({"a": 2, "b": [1], "c": 0}), 10);
+        let found = diff(
+            &json!({"a": 1, "b": [1, 2]}),
+            &json!({"a": 2, "b": [1], "c": 0}),
+            10,
+        );
         assert_eq!(found.len(), 3);
-        assert!(contains(&json!({"a": 1, "b": {"c": 2, "d": 3}}), &json!({"b": {"c": 2}})));
+        assert!(contains(
+            &json!({"a": 1, "b": {"c": 2, "d": 3}}),
+            &json!({"b": {"c": 2}})
+        ));
         assert!(!contains(&json!({"a": [1, 2]}), &json!({"a": [1]})));
     }
 }

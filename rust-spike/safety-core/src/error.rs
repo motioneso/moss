@@ -18,18 +18,27 @@ pub enum ApiError {
     /// "Session is missing or expired".
     Unauthorized,
     /// Pending or deactivated account.
-    AccountState { code: &'static str, message: &'static str },
+    AccountState {
+        code: &'static str,
+        message: &'static str,
+    },
     /// Anything unmapped; the detail stays in the server log.
     Internal(String),
 }
 
 impl ApiError {
     pub fn http(status: u16, message: impl Into<String>) -> Self {
-        ApiError::Http { status, message: message.into() }
+        ApiError::Http {
+            status,
+            message: message.into(),
+        }
     }
 
     pub fn framework(status: u16, message: impl Into<String>) -> Self {
-        ApiError::Framework { status, message: message.into() }
+        ApiError::Framework {
+            status,
+            message: message.into(),
+        }
     }
 
     /// The Postgres message, which the TypeScript repositories match on for 409 replies.
@@ -42,7 +51,8 @@ impl ApiError {
 
     /// `err.message.includes(...)` for any of `needles`.
     pub fn db_message_contains(&self, needles: &[&str]) -> bool {
-        self.db_message().is_some_and(|message| needles.iter().any(|n| message.contains(n)))
+        self.db_message()
+            .is_some_and(|message| needles.iter().any(|n| message.contains(n)))
     }
 }
 
@@ -69,13 +79,17 @@ impl ApiError {
             ApiError::Framework { status, message } if status < 500 => {
                 (status, json!({ "error": message }))
             }
-            ApiError::Framework { status, .. } => (status, json!({ "error": "Internal Server Error" })),
+            ApiError::Framework { status, .. } => {
+                (status, json!({ "error": "Internal Server Error" }))
+            }
             ApiError::Unauthorized => (401, json!({ "error": "Session is missing or expired" })),
             ApiError::AccountState { code, message } => {
                 (403, json!({ "error": message, "code": code }))
             }
             ApiError::Internal(detail) => {
-                crate::http::log(json!({ "level": "error", "msg": "unhandled route error", "detail": detail }));
+                crate::http::log(
+                    json!({ "level": "error", "msg": "unhandled route error", "detail": detail }),
+                );
                 (500, json!({ "error": "Internal server error" }))
             }
         }

@@ -25,7 +25,10 @@ pub struct JobPayload {
 
 impl JobPayload {
     pub fn builder() -> JobPayloadBuilder {
-        JobPayloadBuilder { fields: Map::new(), error: None }
+        JobPayloadBuilder {
+            fields: Map::new(),
+            error: None,
+        }
     }
 
     pub fn to_json(&self) -> Value {
@@ -70,7 +73,9 @@ impl JobPayloadBuilder {
     pub fn build(self) -> Result<JobPayload, PayloadError> {
         match self.error {
             Some(error) => Err(error),
-            None => Ok(JobPayload { fields: self.fields }),
+            None => Ok(JobPayload {
+                fields: self.fields,
+            }),
         }
     }
 
@@ -117,7 +122,10 @@ mod tests {
     fn refuses_secret_names_duplicates_and_large_numbers() {
         let named = JobPayload::builder().id("accessToken", Uuid::nil()).build();
         assert_eq!(named.unwrap_err(), PayloadError::SecretName("accessToken"));
-        let twice = JobPayload::builder().flag("done", true).flag("done", false).build();
+        let twice = JobPayload::builder()
+            .flag("done", true)
+            .flag("done", false)
+            .build();
         assert_eq!(twice.unwrap_err(), PayloadError::Duplicate("done"));
         let large = JobPayload::builder().count("rows", MAX_COUNT + 1).build();
         assert_eq!(large.unwrap_err(), PayloadError::TooLarge("rows"));

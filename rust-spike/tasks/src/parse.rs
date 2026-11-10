@@ -5,8 +5,8 @@ use chrono::{DateTime, NaiveDate, Utc};
 use serde_json::{Map, Value};
 
 use crate::dates::parse_js_date;
-use safety_core::error::ApiError;
 use crate::model::{Recurrence, TaskStatus};
+use safety_core::error::ApiError;
 
 /// A field the request may set, clear, or leave alone.
 #[derive(Clone, Debug, PartialEq)]
@@ -37,7 +37,9 @@ pub struct TaskFields {
 }
 
 pub fn require_object(value: &Value) -> Result<&Map<String, Value>, ApiError> {
-    value.as_object().ok_or_else(|| ApiError::http(400, "Expected JSON object body"))
+    value
+        .as_object()
+        .ok_or_else(|| ApiError::http(400, "Expected JSON object body"))
 }
 
 pub fn parse_create_task(body: &Value) -> Result<TaskFields, ApiError> {
@@ -105,7 +107,8 @@ pub fn parse_deferred_status(body: &Value) -> Result<DeferredStatusInput, ApiErr
 }
 
 pub fn required_string(value: Option<&Value>, field: &str) -> Result<String, ApiError> {
-    optional_string(value, field)?.ok_or_else(|| ApiError::http(400, format!("{field} is required")))
+    optional_string(value, field)?
+        .ok_or_else(|| ApiError::http(400, format!("{field} is required")))
 }
 
 pub fn optional_string(value: Option<&Value>, field: &str) -> Result<Option<String>, ApiError> {
@@ -139,7 +142,10 @@ fn optional_effort(value: Option<&Value>) -> Result<Patch<String>, ApiError> {
         Some(Value::String(text)) if ["quick", "medium", "large"].contains(&text.as_str()) => {
             Ok(Patch::Set(text.clone()))
         }
-        Some(_) => Err(ApiError::http(400, "effort must be quick, medium, or large")),
+        Some(_) => Err(ApiError::http(
+            400,
+            "effort must be quick, medium, or large",
+        )),
     }
 }
 
@@ -185,7 +191,10 @@ fn is_valid_occurrence_date(text: &str) -> bool {
     bytes.len() == 10
         && bytes[4] == b'-'
         && bytes[7] == b'-'
-        && bytes.iter().enumerate().all(|(i, b)| i == 4 || i == 7 || b.is_ascii_digit())
+        && bytes
+            .iter()
+            .enumerate()
+            .all(|(i, b)| i == 4 || i == 7 || b.is_ascii_digit())
         && NaiveDate::parse_from_str(text, "%Y-%m-%d").is_ok()
 }
 
@@ -208,9 +217,15 @@ fn optional_priority(value: Option<&Value>) -> Result<Patch<i16>, ApiError> {
         Some(Value::Null) => Ok(Patch::Clear),
         Some(Value::Number(number)) => match number.as_f64() {
             Some(n) if n.fract() == 0.0 && (1.0..=5.0).contains(&n) => Ok(Patch::Set(n as i16)),
-            _ => Err(ApiError::http(400, "priority must be an integer from 1 to 5")),
+            _ => Err(ApiError::http(
+                400,
+                "priority must be an integer from 1 to 5",
+            )),
         },
-        Some(_) => Err(ApiError::http(400, "priority must be an integer from 1 to 5")),
+        Some(_) => Err(ApiError::http(
+            400,
+            "priority must be an integer from 1 to 5",
+        )),
     }
 }
 
@@ -222,7 +237,10 @@ fn optional_date(value: Option<&Value>, field: &str) -> Result<Patch<DateTime<Ut
         Some(Value::String(text)) => parse_js_date(text)
             .map(Patch::Set)
             .ok_or_else(|| ApiError::http(400, format!("{field} must be an ISO timestamp"))),
-        Some(_) => Err(ApiError::http(400, format!("{field} must be an ISO timestamp"))),
+        Some(_) => Err(ApiError::http(
+            400,
+            format!("{field} must be an ISO timestamp"),
+        )),
     }
 }
 

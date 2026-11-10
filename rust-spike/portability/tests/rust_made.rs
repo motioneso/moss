@@ -13,8 +13,12 @@ use serde_json::{json, Value};
 
 fn keyring_for(fixtures: &Value, name: &str) -> Keyring {
     let keyring = &fixtures["keyrings"][name];
-    let names: Vec<&str> =
-        keyring["names"].as_array().unwrap().iter().map(|n| n.as_str().unwrap()).collect();
+    let names: Vec<&str> = keyring["names"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|n| n.as_str().unwrap())
+        .collect();
     let env: Env = keyring["env"]
         .as_object()
         .unwrap()

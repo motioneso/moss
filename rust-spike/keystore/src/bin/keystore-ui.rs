@@ -13,8 +13,12 @@ use std::collections::HashMap;
 use std::io::Read;
 
 use keystore::probe::{probe, Keychain};
-use keystore::recovery::{full_word, parse_words, split_pasted, RecoveryKey, WordsError, WORD_COUNT};
-use keystore::store::{recover, secure, set_up, status, CredentialKeys, Paths, RecoverError, State};
+use keystore::recovery::{
+    full_word, parse_words, split_pasted, RecoveryKey, WordsError, WORD_COUNT,
+};
+use keystore::store::{
+    recover, secure, set_up, status, CredentialKeys, Paths, RecoverError, State,
+};
 use rand::seq::index::sample;
 use tiny_http::{Header, Method, Request, Response, Server};
 
@@ -71,12 +75,21 @@ impl App {
         } else if *request.method() == Method::Get && request.url().starts_with("/open?") {
             self.open(&request)
         } else if !self.has_session(&request) {
-            plain(403, "This page opens only in the browser Moss opened. Open it again from Moss.")
+            plain(
+                403,
+                "This page opens only in the browser Moss opened. Open it again from Moss.",
+            )
         } else if *request.method() == Method::Post {
             let mut body = String::new();
-            let read = request.as_reader().take(64 * 1024).read_to_string(&mut body);
+            let read = request
+                .as_reader()
+                .take(64 * 1024)
+                .read_to_string(&mut body);
             let fields = read.map(|_| form(&body)).unwrap_or_default();
-            if !same_text(fields.get("token").map(String::as_str).unwrap_or(""), &self.token) {
+            if !same_text(
+                fields.get("token").map(String::as_str).unwrap_or(""),
+                &self.token,
+            ) {
                 plain(403, "This form has expired. Go back and reload the page.")
             } else {
                 self.post(request.url(), &fields)
@@ -100,11 +113,18 @@ impl App {
         match self.launch_key.take() {
             Some(key) if same_text(&offered, &key) => redirect("/").with_header(header(
                 "Set-Cookie",
-                &format!("{}={}; HttpOnly; SameSite=Strict; Path=/", self.cookie_name(), self.session),
+                &format!(
+                    "{}={}; HttpOnly; SameSite=Strict; Path=/",
+                    self.cookie_name(),
+                    self.session
+                ),
             )),
             unused => {
                 self.launch_key = unused;
-                plain(403, "This link has been used already. Open Moss again for a new one.")
+                plain(
+                    403,
+                    "This link has been used already. Open Moss again for a new one.",
+                )
             }
         }
     }
@@ -127,8 +147,15 @@ impl App {
 
     /// Refuses other host names, so a web page cannot reach this server through DNS tricks.
     fn host_allowed(&self, request: &Request) -> bool {
-        let allowed = [format!("127.0.0.1:{}", self.port), format!("localhost:{}", self.port)];
-        let host = request.headers().iter().find(|h| h.field.equiv("Host")).map(|h| h.value.as_str());
+        let allowed = [
+            format!("127.0.0.1:{}", self.port),
+            format!("localhost:{}", self.port),
+        ];
+        let host = request
+            .headers()
+            .iter()
+            .find(|h| h.field.equiv("Host"))
+            .map(|h| h.value.as_str());
         host.is_some_and(|host| allowed.iter().any(|name| name == host))
     }
 
@@ -171,14 +198,19 @@ impl App {
                 redirect("/setup/words")
             }
             "/setup/check" => {
-                let Some(pending) = &self.pending else { return redirect("/") };
+                let Some(pending) = &self.pending else {
+                    return redirect("/");
+                };
                 let words = pending.recovery.words();
                 let wrong: Vec<usize> = pending
                     .ask
                     .iter()
                     .copied()
                     .filter(|position| {
-                        let typed = fields.get(&format!("w{position}")).map(String::as_str).unwrap_or("");
+                        let typed = fields
+                            .get(&format!("w{position}"))
+                            .map(String::as_str)
+                            .unwrap_or("");
                         full_word(typed) != Some(words[position - 1])
                     })
                     .collect();
@@ -202,7 +234,11 @@ impl App {
                 Ok(()) => redirect("/"),
                 Err(detail) => self.page(
                     "Moss couldn't make the file private",
-                    &format!("<p>Moss still won't use it.</p>{}{}", details(&detail), again()),
+                    &format!(
+                        "<p>Moss still won't use it.</p>{}{}",
+                        details(&detail),
+                        again()
+                    ),
                 ),
             },
             _ => plain(404, "Not found."),
@@ -272,7 +308,9 @@ impl App {
 
     fn setup_choice(&self, keychain: &Keychain) -> Resp {
         let reason = match keychain {
-            Keychain::NoSessionBus(_) => "This computer has no desktop session that Moss can ask for a keychain.",
+            Keychain::NoSessionBus(_) => {
+                "This computer has no desktop session that Moss can ask for a keychain."
+            }
             _ => "This computer has no keychain installed.",
         };
         self.page(
@@ -316,7 +354,12 @@ impl App {
         )
     }
 
-    fn check_page(&self, pending: &Pending, typed: &HashMap<String, String>, wrong: &[usize]) -> Resp {
+    fn check_page(
+        &self,
+        pending: &Pending,
+        typed: &HashMap<String, String>,
+        wrong: &[usize],
+    ) -> Resp {
         let errors: String = wrong
             .iter()
             .map(|position| format!("<li>Word {position} doesn't match your sheet.</li>"))
@@ -333,8 +376,11 @@ impl App {
                 )
             })
             .collect();
-        let error_box =
-            if errors.is_empty() { String::new() } else { format!("<div class=\"errors\"><ul>{errors}</ul></div>") };
+        let error_box = if errors.is_empty() {
+            String::new()
+        } else {
+            format!("<div class=\"errors\"><ul>{errors}</ul></div>")
+        };
         self.respond(
             if wrong.is_empty() { 200 } else { 422 },
             "Check your sheet",
@@ -355,17 +401,23 @@ impl App {
             | State::KeyFileForAnotherKey { needs, .. } => needs,
             _ => return redirect("/"),
         };
-        let mut typed: Vec<String> =
-            (1..=WORD_COUNT).map(|i| fields.get(&format!("w{i}")).cloned().unwrap_or_default()).collect();
+        let mut typed: Vec<String> = (1..=WORD_COUNT)
+            .map(|i| fields.get(&format!("w{i}")).cloned().unwrap_or_default())
+            .collect();
         // A whole sheet pasted into the first box fills the rest.
         if typed[1..].iter().all(|word| word.trim().is_empty()) {
             let pasted = split_pasted(&typed[0]);
             if pasted.len() > 1 {
-                typed = (0..WORD_COUNT).map(|i| pasted.get(i).cloned().unwrap_or_default()).collect();
+                typed = (0..WORD_COUNT)
+                    .map(|i| pasted.get(i).cloned().unwrap_or_default())
+                    .collect();
             }
         }
-        let kept: HashMap<String, String> =
-            typed.iter().enumerate().map(|(i, word)| (format!("w{}", i + 1), word.clone())).collect();
+        let kept: HashMap<String, String> = typed
+            .iter()
+            .enumerate()
+            .map(|(i, word)| (format!("w{}", i + 1), word.clone()))
+            .collect();
         let error = match parse_words(&typed) {
             Err(WordsError::WrongCount { filled }) => {
                 format!("<p>Fill in all 24 words. {filled} of 24 are filled in.</p>")
@@ -425,7 +477,9 @@ impl App {
                 )
             })
             .collect();
-        let error_box = error.map(|error| format!("<div class=\"errors\">{error}</div>")).unwrap_or_default();
+        let error_box = error
+            .map(|error| format!("<div class=\"errors\">{error}</div>"))
+            .unwrap_or_default();
         self.respond(
             if error.is_some() { 422 } else { 200 },
             "Enter your recovery words",
@@ -497,7 +551,10 @@ impl App {
     }
 
     fn token_field(&self) -> String {
-        format!("<input type=\"hidden\" name=\"token\" value=\"{}\">", self.token)
+        format!(
+            "<input type=\"hidden\" name=\"token\" value=\"{}\">",
+            self.token
+        )
     }
 
     fn page(&self, title: &str, body: &str) -> Resp {
@@ -511,7 +568,10 @@ impl App {
              <title>{title} - Moss</title><link rel=\"stylesheet\" href=\"/style.css\"></head>\
              <body><main><p class=\"brand\">Moss</p><h1>{title}</h1>{body}</main></body></html>"
         );
-        with_headers(Response::from_string(html).with_status_code(code), "text/html; charset=utf-8")
+        with_headers(
+            Response::from_string(html).with_status_code(code),
+            "text/html; charset=utf-8",
+        )
     }
 }
 
@@ -519,7 +579,8 @@ type Resp = Response<std::io::Cursor<Vec<u8>>>;
 
 /// Off for every recovery word box: no saved form history, no cloud spell check, no
 /// automatic capitals.
-const INPUT_FLAGS: &str = "autocomplete=\"off\" autocapitalize=\"none\" autocorrect=\"off\" spellcheck=\"false\"";
+const INPUT_FLAGS: &str =
+    "autocomplete=\"off\" autocapitalize=\"none\" autocorrect=\"off\" spellcheck=\"false\"";
 
 fn again() -> String {
     again_labelled("Check again")
@@ -530,16 +591,25 @@ fn again_labelled(label: &str) -> String {
 }
 
 fn details(detail: &str) -> String {
-    format!("<details><summary>What Moss saw</summary><p><code>{}</code></p></details>", esc(detail))
+    format!(
+        "<details><summary>What Moss saw</summary><p><code>{}</code></p></details>",
+        esc(detail)
+    )
 }
 
 fn redirect(to: &str) -> Resp {
-    with_headers(Response::from_string("").with_status_code(303), "text/plain; charset=utf-8")
-        .with_header(header("Location", to))
+    with_headers(
+        Response::from_string("").with_status_code(303),
+        "text/plain; charset=utf-8",
+    )
+    .with_header(header("Location", to))
 }
 
 fn plain(code: u16, text: &str) -> Resp {
-    with_headers(Response::from_string(text).with_status_code(code), "text/plain; charset=utf-8")
+    with_headers(
+        Response::from_string(text).with_status_code(code),
+        "text/plain; charset=utf-8",
+    )
 }
 
 fn css() -> Resp {
@@ -564,7 +634,11 @@ fn header(name: &str, value: &str) -> Header {
 }
 
 fn esc(text: &str) -> String {
-    text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;").replace('\'', "&#39;")
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
 }
 
 fn secret() -> String {
@@ -573,7 +647,11 @@ fn secret() -> String {
 
 /// Compares two strings in time that depends only on their lengths.
 fn same_text(a: &str, b: &str) -> bool {
-    a.len() == b.len() && a.bytes().zip(b.bytes()).fold(0, |diff, (x, y)| diff | (x ^ y)) == 0
+    a.len() == b.len()
+        && a.bytes()
+            .zip(b.bytes())
+            .fold(0, |diff, (x, y)| diff | (x ^ y))
+            == 0
 }
 
 /// An `application/x-www-form-urlencoded` body.
@@ -609,7 +687,8 @@ fn decode(text: &str) -> String {
 }
 
 fn hex_digit(byte: Option<&u8>) -> Option<u8> {
-    byte.and_then(|byte| char::from(*byte).to_digit(16)).map(|digit| digit as u8)
+    byte.and_then(|byte| char::from(*byte).to_digit(16))
+        .map(|digit| digit as u8)
 }
 
 const STYLE: &str = r#"

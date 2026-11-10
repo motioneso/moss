@@ -27,7 +27,10 @@ fn sql_names(directory: &Path) -> std::io::Result<Vec<String>> {
     let mut names = Vec::new();
     for entry in fs::read_dir(directory)? {
         let name = entry?.file_name().into_string().map_err(|name| {
-            std::io::Error::new(ErrorKind::InvalidData, format!("file name is not UTF-8: {name:?}"))
+            std::io::Error::new(
+                ErrorKind::InvalidData,
+                format!("file name is not UTF-8: {name:?}"),
+            )
         })?;
         if name.ends_with(".sql") {
             names.push(name);
@@ -42,7 +45,10 @@ fn read(directory: &Path, name: &str) -> Result<Vec<u8>, String> {
     let path = directory.join(name);
     fs::read(&path).map_err(|error| match error.kind() {
         ErrorKind::NotFound => {
-            format!("ENOENT: no such file or directory, open '{}'", path.display())
+            format!(
+                "ENOENT: no such file or directory, open '{}'",
+                path.display()
+            )
         }
         _ => format!("{error}, open '{}'", path.display()),
     })
@@ -84,7 +90,13 @@ pub fn load_migration_files(directory: &Path) -> Result<Vec<MigrationFile>, Stri
                 (hex::encode(hash.finalize()), Some(backfill))
             }
         };
-        files.push(MigrationFile { version, name, checksum, backfill, old_rule_checksum });
+        files.push(MigrationFile {
+            version,
+            name,
+            checksum,
+            backfill,
+            old_rule_checksum,
+        });
     }
     Ok(files)
 }
@@ -94,22 +106,30 @@ pub fn load_migration_files(directory: &Path) -> Result<Vec<MigrationFile>, Stri
 fn declared_backfill(sql: &str, name: &str) -> Result<Option<String>, String> {
     let lines: Vec<&str> = sql.split('\n').map(js::trim).collect();
     let is_declaration = |line: &str| {
-        line.strip_prefix("--")
-            .is_some_and(|rest| rest.trim_start_matches(js::is_space).starts_with("moss:backfill"))
+        line.strip_prefix("--").is_some_and(|rest| {
+            rest.trim_start_matches(js::is_space)
+                .starts_with("moss:backfill")
+        })
     };
-    let declarations: Vec<usize> = (0..lines.len()).filter(|&at| is_declaration(lines[at])).collect();
+    let declarations: Vec<usize> = (0..lines.len())
+        .filter(|&at| is_declaration(lines[at]))
+        .collect();
     let Some(&first) = declarations.first() else {
         return Ok(None);
     };
 
     let expected = format!("{}.backfill.mjs", name.strip_suffix(".sql").unwrap_or(name));
-    let header_is_comments = lines[..first].iter().all(|line| line.is_empty() || line.starts_with("--"));
+    let header_is_comments = lines[..first]
+        .iter()
+        .all(|line| line.is_empty() || line.starts_with("--"));
     if declarations.len() != 1
         || !is_backfill_file_name(&expected)
         || lines[first] != format!("-- moss:backfill {expected}")
         || !header_is_comments
     {
-        return Err(format!("Migration {name} has an invalid backfill declaration"));
+        return Err(format!(
+            "Migration {name} has an invalid backfill declaration"
+        ));
     }
     Ok(Some(expected))
 }
