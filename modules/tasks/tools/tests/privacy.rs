@@ -626,7 +626,7 @@ fn compiled_tasks_routes_enforce_privacy_and_complete_recurring_tasks() {
         f.route(f.admin, "PATCH", &path, json!({"title":"admin forbidden"}))["status"],
         404
     );
-    let created = f.route(f.owner,"POST","/tasks",json!({"title":"Daily check","recurrence":{"freq":"daily","interval":1,"occurrence_date":"2026-11-08"}}));
+    let created = f.route(f.owner,"POST","/tasks",json!({"title":"Daily check","recurrence":{"freq":"daily","interval":1,"occurrence_date":"2099-01-01"}}));
     assert_eq!(created["status"], 201, "{created}");
     let recurring = created["body"]["task"]["id"].as_str().unwrap();
     let closed = f.route(
@@ -642,7 +642,7 @@ fn compiled_tasks_routes_enforce_privacy_and_complete_recurring_tasks() {
         tasks
             .iter()
             .any(|t| t["source"] == "recurrence"
-                && t["recurrence"]["occurrence_date"] == "2026-11-09")
+                && t["recurrence"]["occurrence_date"] == "2099-01-02")
     );
     assert_eq!(tasks.len(), 3);
     assert!(tasks
