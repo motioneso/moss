@@ -93,6 +93,17 @@ impl Host for Services {
                 assert_eq!(self.writes.borrow().len(), 1);
                 json!({"deferred":true})
             }
+            ("jobs", "unschedule", "notes.sync-tick") => {
+                assert_eq!(params, json!({"id":ID}));
+                json!({"cancelled":true})
+            }
+            ("jobs", "schedule", "notes.sync-tick") => {
+                assert_eq!(
+                    params,
+                    json!({"cron":"*/15 * * * *","timezone":"UTC","key":"notes-sync","params":{}})
+                );
+                json!({"id":ID})
+            }
             _ => panic!("Unexpected manual-sync access: {port}/{op}/{resource}"),
         })
     }
@@ -144,5 +155,55 @@ fn manual_sync_failures_return_safe_legacy_error() {
             out,
             json!({"status":500,"body":{"error":"Internal server error"}})
         );
+    }
+}
+
+#[test]
+fn scheduled_tick_requests_a_checkpoint_only_when_a_folder_is_linked() {
+    let linked = Services {
+        source: json!("/notes"),
+        fail: None,
+        writes: RefCell::new(vec![]),
+    };
+    let out = handle(&linked, "job", r#"{"queue":"notes.sync-tick","parameters":{}}"#).unwrap();
+    assert_eq!(serde_json::from_str::<Value>(&out).unwrap(), json!({"checkpointId":ID}));
+    assert_eq!(linked.writes.borrow().len(), 1);
+
+    let unlinked = Services {
+        source: json!(""),
+        fail: None,
+        writes: RefCell::new(vec![]),
+    };
+    let out = handle(&unlinked, "job", r#"{"queue":"notes.sync-tick","parameters":{}}"#).unwrap();
+    assert_eq!(serde_json::from_str::<Value>(&out).unwrap(), json!({"noOp":true}));
+    assert!(unlinked.writes.borrow().is_empty());
+}
+
+#[test]
+fn unlinking_cancels_the_schedule_and_linking_keeps_it() {
+    struct Calls(RefCell<Vec<String>>);
+    impl Host for Calls {
+        fn call(&self, port: &str, op: &str, _: &str, _: Value) -> Result<Value> {
+            self.0.borrow_mut().push(format!("{port}/{op}"));
+            Ok(match (port, op) {
+                ("vault", _) => json!({"status":200,"body":null}),
+                ("jobs", "schedule") => json!({"id":ID}),
+                ("jobs", "unschedule") => json!({"cancelled":true}),
+                _ => panic!("unexpected {port}/{op}"),
+            })
+        }
+    }
+    for (path, expected) in [
+        (json!("/notes"), vec!["vault/folder.set", "jobs/schedule"]),
+        (Value::Null, vec!["vault/folder.set", "jobs/schedule", "jobs/unschedule"]),
+    ] {
+        let host = Calls(RefCell::new(vec![]));
+        handle(
+            &host,
+            "route",
+            &json!({"method":"PUT","path":"/notes-source","body":{"path":path}}).to_string(),
+        )
+        .unwrap();
+        assert_eq!(*host.0.borrow(), expected);
     }
 }

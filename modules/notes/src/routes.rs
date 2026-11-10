@@ -35,8 +35,18 @@ fn execute(host: &impl Host, request: &RouteRequest) -> Result<Response> {
         }
         _ => return Ok(Response::new(404, json!({"error":"Not Found"}))),
     };
+    #[cfg(feature = "write-tools")]
+    let parameters_path_is_null = parameters["path"].is_null();
     let value = host.call("vault", operation, "source", parameters)?;
     let mut response: Response = serde_json::from_value(value)?;
+    #[cfg(feature = "write-tools")]
+    if operation == "folder.set" && response.status == 200 {
+        if parameters_path_is_null {
+            crate::sync_worker::cancel_schedule(host);
+        } else {
+            crate::sync_worker::reconcile_schedule(host);
+        }
+    }
     if response.status == 200 {
         if operation == "folder.get" {
             response.body = json!({"path":response.body.as_str()});
@@ -63,6 +73,7 @@ fn manual_sync(host: &impl Host) -> Result<Response> {
         ));
     };
     let saved = crate::sync_worker::request_source(host, &source)?;
+    crate::sync_worker::reconcile_schedule(host);
     // This is the durable request identity, not a claim of completed indexing.
     // Outer finalization must commit and publish before returning HTTP success.
     Ok(Response::new(202, json!({"jobId":saved["checkpointId"]})))

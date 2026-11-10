@@ -495,6 +495,48 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
     let (status, state) = call(Method::GET, "/notes-last-sync", Some(&cookie), None);
     assert_eq!(status, 200, "{state}");
     println!("last sync status after indexing: {state}");
+    // Linking the folder also created the account's fifteen-minute sync schedule. Add a
+    // note, make the schedule due now, and wait for the server's own scheduler and worker
+    // to index it without any manual sync request.
+    let schedule_sql = "SELECT cron FROM moss_queue.schedules WHERE actor_user_id=$1 AND queue LIKE '%.notes.sync-tick' AND disabled_reason IS NULL";
+    assert_eq!(rows(schedule_sql), vec!["*/15 * * * *".to_string()]);
+    fs::write(
+        journal.join("tick.md"),
+        "# Tick\n\nWritten after the first sync; only the schedule can index it.\n",
+    )
+    .unwrap();
+    {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        runtime.block_on(async {
+            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
+                .await
+                .unwrap();
+            tokio::spawn(async move {
+                let _ = connection.await;
+            });
+            let changed = db
+                .execute(
+                    "UPDATE moss_queue.schedules SET next_at=now()-interval '1 minute' WHERE actor_user_id=$1 AND queue LIKE '%.notes.sync-tick'",
+                    &[&owner],
+                )
+                .await
+                .unwrap();
+            assert_eq!(changed, 1);
+        });
+    }
+    let deadline = Instant::now() + Duration::from_secs(90);
+    loop {
+        if rows(indexed_sql).iter().any(|p| p.ends_with("tick.md")) {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the schedule did not index the new note\n{}",
+            fs::read_to_string(root.join("server.log")).unwrap_or_default()
+        );
+        std::thread::sleep(Duration::from_millis(500));
+    }
+    println!("scheduled tick indexed a note added after the first sync");
     // Search runs through the same host ports in this process (the server has no tool
     // endpoint yet), against the real index and the same embeddings endpoint.
     {
@@ -593,7 +635,12 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
         journal.join("day.md").is_file(),
         "unlinking must keep the files"
     );
+    assert!(
+        rows(schedule_sql).is_empty(),
+        "unlinking must cancel the sync schedule"
+    );
     println!("PASS installed Notes package served over HTTPS: sign-in required, folder offered and browsed inside the account root, outside path refused, link saved, status readable, sync requested, unlink keeps files");
+    println!("PASS schedule: linking created one fifteen-minute sync schedule per account; when due, the server's scheduler and worker indexed a note added later, with no manual request");
     println!("PASS indexing: the server's own worker embedded three real notes through a local HTTP embeddings endpoint, and search returned the matching note first for two queries");
     println!("NOT PROVEN: a hosted embeddings provider (a local stand-in endpoint was used), search from the chat or any server endpoint, second signed-in account (setup allows one owner), native UI, second physical device");
 }
