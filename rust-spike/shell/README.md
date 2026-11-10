@@ -104,9 +104,35 @@ records `moss-run moss-app`, preserving the selected install and data paths. Mis
 fail instead of silently choosing direct programs. Unstaged development installs still use direct
 programs and the installed OpenSSL.
 
-This option **does not package native WebKit helpers or desktop resources**. Linked app libraries
-are only part of its runtime. Signing, updates, desktop helper/resource closure and general
-clean-machine app installation remain unqualified. It is still one staged install containing both app and server programs.
+The server-runtime option does not package native WebKit helpers or desktop resources.
+Use `--linux-desktop-runtime` instead to also stage the build platform's WebKit processes and
+injected bundle, GIO TLS backend, compiled GSettings schemas, MIME cache, basic DejaVu fonts,
+and Mesa software renderer (including its dynamically loaded EGL/GLES inputs). No tools are
+downloaded or installed. Desktop staging additionally needs the build host's `pkg-config`,
+`gio-querymodules`, WebKitGTK 4.1 and Mesa files at their declared library directory.
+
+Release WebKit uses compiled-in absolute helper paths. The desktop stage therefore has an
+explicit **target-root payload** in `runtime/rootfs`, with its required absolute destinations in
+`runtime/closure.json`. A target-root assembler must copy that payload's contents into its new
+root, preserving paths. Staging never modifies the host's system folders. `moss-run moss-app`
+refuses missing fixed-path files with a payload error. It does not verify that pre-existing
+system helpers match the staged WebKit; the assembler must deploy the matching payload.
+The launcher selects the staged schemas, TLS backend, fonts and Mesa files. This is a native
+software-rendering checkpoint on the build ABI, not a relocatable desktop bundle or general
+installer. Hardware graphics, media plugins, desktop services, signing and updates remain open.
+The inventory covers the staged payload only; `uninstall.py` does not remove copies deployed
+outside the install folder. A future target-root installer owns their installation and removal.
+
+For a native scratch-root startup proof, set `MOSS_CLEAN_INSTALL` to a desktop stage and
+`MOSS_DESKTOP_PROOF` to a new scratch output directory, then run `pnpm test:rust-linux-desktop`.
+This proof does not touch a database. It copies an explicit Xvfb/X11/D-Bus test desktop from the
+host, imports a scratch Docker root, mounts no host folders, disables external networking and
+runs as uid 1000. It uses software rendering without compositing, omits portal/accessibility
+services, and never sets a sandbox-disable flag. It records a missing-helper negative control,
+native process/window assertions, logs and a cropped `native.png` to inspect for the real first-run
+screen. The root, container and image are removed even on failure. Docker, Xvfb, `xdotool`, `xwd`,
+`xkbcomp`, D-Bus and ffmpeg must already be available; the script installs nothing.
+This proves neither a real desktop login nor This computer creation or second-device HTTPS.
 
 To remove a stage, disable Start Moss at login, quit the app and stop its servers. As the
 ordinary install owner, run `python3 /path/to/install/uninstall.py`. Python 3 and Linux `/proc`
