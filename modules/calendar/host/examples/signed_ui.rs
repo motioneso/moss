@@ -52,6 +52,7 @@ fn main() -> Result<()> {
             intelligence: Arc::new(NoAi),
             version: "0.1.0".parse()?,
             compiled_cache: None,
+            fuel_ceiling: None,
         },
         move |next| Ok(Arc::new(moss_calendar_host::CalendarPorts::new(db, next)?)),
     )?;

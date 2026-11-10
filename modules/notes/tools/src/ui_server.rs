@@ -84,6 +84,7 @@ impl Server {
                         intelligence: Arc::new(NoAi),
                         version: "0.1.0".parse()?,
                         compiled_cache: None,
+                        fuel_ceiling: None,
                     },
                     |next| {
                         let roots = self
