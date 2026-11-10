@@ -99,13 +99,13 @@ impl<'a, H: Host + ?Sized> Repository<'a, H> {
     }
     pub fn person(&self, id: &str) -> Result<Value> {
         self.one(PEOPLE, Filter::eq("id", id))?
-            .map(|r| person_response(&r))
+            .map(person_response)
             .ok_or_else(|| Error::new("Person not found"))
     }
     pub fn detail(&self, id: &str) -> Result<Value> {
         let mut person = self.person(id)?;
-        person["identities"] = json!(self.identities(id)?);
-        person["recentLinks"] = json!(self.links(id, None, None, Some(20))?);
+        person["identities"] = Value::Array(self.identities(id)?);
+        person["recentLinks"] = Value::Array(self.links(id, None, None, Some(20))?);
         Ok(person)
     }
     pub fn resolve(&self, query: &str) -> Result<Option<Value>> {
@@ -127,7 +127,8 @@ impl<'a, H: Host + ?Sized> Repository<'a, H> {
                 orders(&[("created_at", false), ("id", false)]),
                 Some(1),
             )?
-            .first()
+            .into_iter()
+            .next()
             .map(person_response))
     }
     pub fn list_people(
@@ -155,7 +156,7 @@ impl<'a, H: Host + ?Sized> Repository<'a, H> {
                 orders(&[("display_name", false), ("id", false)]),
                 limit.filter(|n| *n != 0),
             )?
-            .iter()
+            .into_iter()
             .map(person_response)
             .collect())
     }
@@ -167,7 +168,7 @@ impl<'a, H: Host + ?Sized> Repository<'a, H> {
                 orders(&[("last_seen_at", true), ("id", false)]),
                 None,
             )?
-            .iter()
+            .into_iter()
             .map(identity_response)
             .collect())
     }
@@ -192,7 +193,7 @@ impl<'a, H: Host + ?Sized> Repository<'a, H> {
                 orders(&[("occurred_at", true), ("created_at", true), ("id", false)]),
                 limit.filter(|n| *n != 0),
             )?
-            .iter()
+            .into_iter()
             .map(link_response)
             .collect())
     }
@@ -249,7 +250,7 @@ impl<'a, H: Host + ?Sized> Repository<'a, H> {
         let mut initial = values.clone();
         initial["id"] = json!(id);
         initial["created_at"] = json!(now);
-        Ok(person_response(&self.upsert(
+        Ok(person_response(self.upsert(
             PEOPLE,
             &["id"],
             initial,
@@ -266,10 +267,10 @@ impl<'a, H: Host + ?Sized> Repository<'a, H> {
             },
         ]);
         if let Some(row) = self.one(PEOPLE, filter)? {
-            return Ok(person_response(&row));
+            return Ok(person_response(row));
         }
         let now = self.now()?;
-        Ok(person_response(&self.insert(PEOPLE, json!({"display_name":name,"status":"active","confidence":0.5,"created_at":now,"updated_at":now}))?))
+        Ok(person_response(self.insert(PEOPLE, json!({"display_name":name,"status":"active","confidence":0.5,"created_at":now,"updated_at":now}))?))
     }
     /// Legacy HTTP fallback when a canonical note is absent or unavailable.
     /// Retains summaries, confidence and archive metadata that a note projection replaces.
@@ -285,7 +286,7 @@ impl<'a, H: Host + ?Sized> Repository<'a, H> {
                 values[column] = value.clone();
             }
         }
-        Ok(person_response(&first(self.update(
+        Ok(person_response(first(self.update(
             PEOPLE,
             Filter::eq("id", person_id),
             values,
@@ -377,22 +378,12 @@ pub(crate) fn orders(fields: &[(&str, bool)]) -> Vec<Order> {
         .collect()
 }
 
-pub(crate) fn response(row: &Value, fields: &[&str]) -> Value {
+pub(crate) fn response(mut row: Value, fields: &[(&str, &str)]) -> Value {
     let mut result = serde_json::Map::new();
-    for field in fields {
-        let mut name = String::new();
-        let mut upper = false;
-        for c in field.chars() {
-            if c == '_' {
-                upper = true;
-            } else if upper {
-                name.push(c.to_ascii_uppercase());
-                upper = false;
-            } else {
-                name.push(c);
-            }
-        }
-        let mut value = row[*field].clone();
+    for (field, name) in fields {
+        // These rows are consumed by the response: move strings and nested JSON
+        // instead of copying them, and use the declared wire names directly.
+        let mut value = row.get_mut(*field).map(Value::take).unwrap_or(Value::Null);
         // node-postgres returns NUMERIC(4,2) as text. The legacy repository's
         // TypeScript assertion does not convert it, including on Type.Any routes.
         if *field == "confidence" {
@@ -409,69 +400,69 @@ pub(crate) fn response(row: &Value, fields: &[&str]) -> Value {
                 }
             }
         }
-        result.insert(name, value);
+        result.insert((*name).into(), value);
     }
     Value::Object(result)
 }
-pub(crate) fn person_response(row: &Value) -> Value {
+pub(crate) fn person_response(row: Value) -> Value {
     response(
         row,
         &[
-            "id",
-            "owner_user_id",
-            "display_name",
-            "relationship_summary",
-            "context_summary",
-            "status",
-            "confidence",
-            "memory_entity_id",
-            "merged_into_person_id",
-            "archived_at",
-            "merged_at",
-            "created_at",
-            "updated_at",
+            ("id", "id"),
+            ("owner_user_id", "ownerUserId"),
+            ("display_name", "displayName"),
+            ("relationship_summary", "relationshipSummary"),
+            ("context_summary", "contextSummary"),
+            ("status", "status"),
+            ("confidence", "confidence"),
+            ("memory_entity_id", "memoryEntityId"),
+            ("merged_into_person_id", "mergedIntoPersonId"),
+            ("archived_at", "archivedAt"),
+            ("merged_at", "mergedAt"),
+            ("created_at", "createdAt"),
+            ("updated_at", "updatedAt"),
         ],
     )
 }
-pub(crate) fn identity_response(row: &Value) -> Value {
+pub(crate) fn identity_response(row: Value) -> Value {
     response(
         row,
         &[
-            "id",
-            "owner_user_id",
-            "person_id",
-            "identity_kind",
-            "source_kind",
-            "display_value",
-            "source_ref_hash",
-            "status",
-            "confidence",
-            "provenance",
-            "first_seen_at",
-            "last_seen_at",
-            "created_at",
-            "updated_at",
+            ("id", "id"),
+            ("owner_user_id", "ownerUserId"),
+            ("person_id", "personId"),
+            ("identity_kind", "identityKind"),
+            ("source_kind", "sourceKind"),
+            ("display_value", "displayValue"),
+            ("source_ref_hash", "sourceRefHash"),
+            ("status", "status"),
+            ("confidence", "confidence"),
+            ("provenance", "provenance"),
+            ("first_seen_at", "firstSeenAt"),
+            ("last_seen_at", "lastSeenAt"),
+            ("created_at", "createdAt"),
+            ("updated_at", "updatedAt"),
         ],
     )
 }
-pub(crate) fn link_response(row: &Value) -> Value {
+pub(crate) fn link_response(row: Value) -> Value {
     response(
         row,
         &[
-            "id",
-            "owner_user_id",
-            "person_id",
-            "source_kind",
-            "source_ref_hash",
-            "source_label",
-            "link_kind",
-            "summary",
-            "occurred_at",
-            "source_updated_at",
-            "confidence",
-            "provenance",
-            "created_at",
-            "updated_at",
+            ("id", "id"),
+            ("owner_user_id", "ownerUserId"),
+            ("person_id", "personId"),
+            ("source_kind", "sourceKind"),
+            ("source_ref_hash", "sourceRefHash"),
+            ("source_label", "sourceLabel"),
+            ("link_kind", "linkKind"),
+            ("summary", "summary"),
+            ("occurred_at", "occurredAt"),
+            ("source_updated_at", "sourceUpdatedAt"),
+            ("confidence", "confidence"),
+            ("provenance", "provenance"),
+            ("created_at", "createdAt"),
+            ("updated_at", "updatedAt"),
         ],
     )
 }

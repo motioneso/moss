@@ -142,6 +142,10 @@
       ]
     },
     {
+      "id": "people.list-reads",
+      "description": "Contact and link list APIs support limiting returned results. Large responses can exceed module budgets and fail; reduce the requested result count where supported. Installed UI and physical-device verification remain open."
+    },
+    {
       "id": "people.note-suggestions",
       "description": "Suggest note updates is on by default; the account switch preserves the existing sourceBehaviors preference."
     },
