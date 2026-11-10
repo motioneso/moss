@@ -11,6 +11,7 @@ import { interpretedSearch } from "./search.mjs";
 import { quickCapture } from "./quick-add.mjs";
 import { taskActivity } from "./activity.mjs";
 import { taskSettings } from "./settings.mjs";
+import { taskDetails } from "./details.mjs";
 
 const client = moduleClient();
 const $ = (id) => document.getElementById(id);
@@ -53,6 +54,25 @@ const activity = taskActivity({
   focus: (node) => {
     state.focusAfter = node;
   }
+});
+const details = taskDetails({
+  api,
+  run,
+  taskRow,
+  isBusy: () => state.busy,
+  focus: (node) => {
+    state.focusAfter = node;
+  },
+  tagButton: (tag, assigned) =>
+    button(
+      `#${tag.name}`,
+      async () => {
+        if (assigned) await api("DELETE", `/tasks/${state.editing.id}/tags/${tag.id}`);
+        else await api("POST", `/tasks/${state.editing.id}/tags`, { tagId: tag.id });
+        await refreshEditor();
+      },
+      { pressed: assigned, variant: assigned ? "primary" : "secondary" }
+    )
 });
 const labels = { todo: "Open", done: "Done", suggested: "Suggested", archived: "Archived" };
 const search = interpretedSearch({
@@ -160,6 +180,7 @@ async function run(action) {
     search.sync();
     activity.sync();
     settings.sync();
+    details.sync();
     $("tasks-app").removeAttribute("aria-busy");
     state.focusAfter?.focus();
     state.focusAfter = null;
@@ -202,8 +223,8 @@ function taskRow(task) {
     done.checked = task.status === "done";
     void run(async () => {
       await api("PATCH", `/tasks/${task.id}`, { status: task.status === "done" ? "todo" : "done" });
-      await load();
-      if (state.editing) await extras();
+      if (state.editing) await refreshDetails();
+      else await load();
     });
   });
   const content = text("div", "", "tasks-row-title");
@@ -293,6 +314,7 @@ async function editTask(id, title) {
   state.editing = task;
   state.pendingTag = null;
   activity.reset(task?.id ?? null);
+  details.reset(task);
   $("task-form").reset();
   capture.reset();
   show("new-task-extras", !task);
@@ -330,33 +352,18 @@ function closeEditor() {
   if (state.returnFocus?.isConnected) state.focusAfter = state.returnFocus;
 }
 async function extras() {
-  const task = state.editing;
-  const [subtasks, tags] = await Promise.all([
-    api("GET", `/tasks/${task.id}/subtasks`),
-    api("GET", `/tasks/lists/${task.listId}/tags`),
-    activity.load()
-  ]);
-  $("subtasks").replaceChildren(...subtasks.tasks.map(taskRow));
-  const assigned = new Set(task.tags.map((tag) => tag.id));
-  $("task-tags").replaceChildren(
-    ...tags.tags.map((tag) =>
-      button(
-        `#${tag.name}`,
-        async () => {
-          if (assigned.has(tag.id)) await api("DELETE", `/tasks/${task.id}/tags/${tag.id}`);
-          else await api("POST", `/tasks/${task.id}/tags`, { tagId: tag.id });
-          await refreshEditor();
-        },
-        { pressed: assigned.has(tag.id), variant: assigned.has(tag.id) ? "primary" : "secondary" }
-      )
-    )
-  );
   show("task-extras", true);
+  await Promise.all([details.load(state.editing), activity.load()]);
 }
 async function refreshEditor() {
   state.editing = (await api("GET", `/tasks/${state.editing.id}`)).task;
-  await load();
-  await extras();
+  await refreshDetails();
+}
+async function refreshDetails() {
+  // Wait for both before releasing the page's write guard, even if one rejects.
+  const results = await Promise.allSettled([load(), extras()]);
+  const failed = results.find((result) => result.status === "rejected");
+  if (failed) throw failed.reason;
 }
 function manageLists() {
   deleting.close();

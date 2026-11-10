@@ -1,5 +1,11 @@
 # Tasks component checkpoint
 
+Part 26 loads subtasks, list tags and activity independently in task details. Each
+panel has its own loading, empty and retry state. Failed refreshes retain loaded
+rows and unsaved editor fields. Assigned tags remain usable if list suggestions
+cannot load. Retrying a read does not repeat a completed write. This adds no
+route, tool, job kind or host contract.
+
 Part 25 retains a completed recurring task's stored history when its owner
 retries completion alone and the next occurrence already exists. The atomic
 next-occurrence insert decides whether the retry can reuse the completed row;

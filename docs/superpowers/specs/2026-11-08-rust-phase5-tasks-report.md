@@ -1817,3 +1817,41 @@ settings parity; installed chat and summary presentation; real application shell
 integration; performance budgets; and physical second-device HTTPS proof.
 The existing device bridge reported no attached physical device during this
 work. A local HTTPS fixture is not another device or the full application shell.
+
+## Tasks part 26 checkpoint (JS-158, Card 526)
+
+Task details now load subtasks, list tags and activity independently. A failed
+read has its own retry control and does not hide the other panels. Failed
+refreshes keep loaded children and tags; assigned tags remain available even
+when list suggestions cannot load. Each panel distinguishes a successful empty
+read from a failure. Opening another task clears the prior task's detail rows.
+Retries keep unsaved fields and perform reads only, without repeating an
+acknowledged completion. Stale subtask controls stay unavailable until a successful read, and a successful
+retry returns focus to the panel input. Detail refresh still runs if the page-wide
+task reload fails; both finish before the write guard is released. The module's
+app map describes this recovery.
+
+Two real-markup controller regressions were observed failing on the original
+screen: either a rejected subtask read or a rejected tag read hid every detail
+panel. These checks use the actual Rust-rendered markup and controller with a
+labeled bridge stand-in; they are not live browser evidence. Current controller,
+endpoint, privacy and signed-screen run receipts accompany this checkpoint in
+its task proof artifact. Passing the existing endpoint cases does not establish
+full feature parity.
+
+The existing scratch Rust toolchain, Wasm target, approved generator graph and
+Cargo dependencies were reused offline. The tools lockfile was refreshed offline
+without a byte change. Declared JavaScript dependencies were restored offline.
+No global tool or new dependency was installed. The signed HTTPS fixture is
+separate from the real application shell. The existing device bridge reported
+no attached physical device; local browser checks do not prove another device.
+
+This checkpoint adds no HTTP route, tool, job kind, migration or host contract.
+Remaining Phase 5 work: lazy recurrence advancement; recurrence jobs;
+deferred-queue retry/retention policy, optional request-key retention and
+installed worker dispatch; public People linkage; policy enforcement and
+feedback orchestration; remaining screen and settings parity; installed chat
+and summary presentation; real application shell integration; performance
+budgets; and physical second-device HTTPS proof. The previously documented
+manage-share retry and duplicate-response differences are unchanged. Workshop
+and Food remain excluded. Part of #4027; release note Category N/A.

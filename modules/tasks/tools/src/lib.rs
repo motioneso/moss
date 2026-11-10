@@ -46,6 +46,7 @@ pub fn package_files(
     for name in [
         "app.mjs",
         "activity.mjs",
+        "details.mjs",
         "settings.mjs",
         "model.mjs",
         "local-date.mjs",
