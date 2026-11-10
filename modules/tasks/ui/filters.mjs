@@ -29,6 +29,22 @@ export function taskFilters(changed, searchIntent = () => null) {
   });
 
   function render(lists, result) {
+    const focus = $("focus-filter");
+    $("active-focus").replaceChildren();
+    if (focus.value) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "jds-btn jds-btn--secondary";
+      button.textContent = `${focus.selectedOptions[0].textContent} ×`;
+      button.setAttribute("aria-label", "Clear focus");
+      button.addEventListener("click", () => {
+        focus.value = "";
+        $("status-filter").value = "todo";
+        changed();
+        focus.focus();
+      });
+      $("active-focus").append(button);
+    }
     const changedLists = lists.filter(
       (list) => listStates[list.id] && listStates[list.id] !== "included"
     );

@@ -102,6 +102,7 @@ test(
       assert.deepEqual(titles(), []);
       choose("focus-filter", "priorities");
       assert.equal($("status-filter").value, "");
+      assert.match($("active-focus").textContent, /Do First/);
       assert.deepEqual(titles(), ["High priority", "Work priority"]);
       choose("list-filter", "home");
       choose("tag-filter", "red");
@@ -110,6 +111,11 @@ test(
       assert.match($("list-filter").selectedOptions[0].textContent, /Home \(2\)/);
       choose("focus-filter", "donetoday");
       assert.deepEqual(titles(), ["Finished today"]);
+      $("active-focus").querySelector("button").click();
+      assert.equal($("focus-filter").value, "");
+      assert.equal(document.activeElement, $("focus-filter"));
+      assert.deepEqual(titles(), ["High priority", "Low priority"]);
+      choose("focus-filter", "donetoday");
       choose("search", "missing", "input");
       assert.deepEqual(titles(), []);
       assert.match($("list-filter").selectedOptions[0].textContent, /Home \(1\)/);
@@ -121,6 +127,7 @@ test(
       assert.equal($("task-results").className, "tasks-matrix");
       choose("status-filter", "done", "input");
       assert.equal($("focus-filter").value, "");
+      assert.equal($("active-focus").children.length, 0);
       assert.deepEqual(titles(), ["Finished earlier", "Finished today"]);
       choose("focus-filter", "priorities");
       choose("focus-filter", "");

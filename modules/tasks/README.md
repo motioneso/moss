@@ -2,7 +2,8 @@
 
 Part 28 adds the legacy screen's **Do First**, **At risk** and **Done today**
 focus presets in List and Grid. Focus replaces status while retaining list, tag
-and search filters. Choosing a status leaves focus; Clear filters returns to
+and search filters. Choosing a status (including one from interpreted search) leaves focus. Removing
+the focus chip returns to open tasks; Clear filters returns to
 open tasks across all lists. At risk includes open tasks overdue or due within
 two calendar days in the saved account timezone; Do First uses the existing
 high-priority/forty-eight-hour quadrant rule. These screen presets differ from
