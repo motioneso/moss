@@ -13,6 +13,7 @@ pub mod model;
 mod operations;
 pub mod plans;
 mod preview;
+pub mod provider_tools;
 mod saved_read;
 pub mod settings;
 pub mod settings_http;
@@ -68,6 +69,9 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
         let result = match input.tool.as_str() {
             "calendar.heartbeatWindow" => heartbeat::read(host, &input.parameters),
             "calendar.listVisibleEvents" => visible_events::read(host, &input.parameters),
+            "calendar.createEvent" => provider_tools::create(host, &input.parameters),
+            "calendar.deleteEvent" => provider_tools::delete(host, &input.parameters),
+            "calendar.rescheduleEvent" => provider_tools::reschedule(host, &input.parameters),
             "calendar.dayPlanDraft" => draft_tool::save(host, &input.parameters),
             _ => Err(Error::new(404, "Calendar tool is unavailable")),
         }

@@ -496,3 +496,200 @@ fn http_settings_normalize_before_the_scoped_host_call() {
     .unwrap();
     assert_eq!(response["status"], 200);
 }
+
+mod provider {
+    use super::*;
+    use chrono::{DateTime, Utc};
+    use moss_calendar::provider_tools::resolve_window;
+    use std::cell::RefCell;
+
+    fn at(text: &str) -> DateTime<Utc> {
+        DateTime::parse_from_rfc3339(text)
+            .unwrap()
+            .with_timezone(&Utc)
+    }
+    fn iso(w: DateTime<Utc>) -> String {
+        w.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+    }
+
+    #[test]
+    fn relative_request_means_tomorrow_morning_in_the_saved_zone() {
+        let now = at("2026-11-10T03:00:00Z"); // still Nov 9 in New York
+        let w = resolve_window(&json!({}), now, "America/New_York").unwrap();
+        assert_eq!(iso(w.start), "2026-11-10T14:00:00.000Z");
+        assert_eq!(iso(w.end), "2026-11-10T17:00:00.000Z");
+        assert_eq!((w.duration_minutes, w.title.as_str()), (120, "Focus time"));
+    }
+
+    #[test]
+    fn bands_dates_and_fixed_offsets() {
+        let now = at("2026-11-10T12:00:00Z");
+        let w = resolve_window(
+            &json!({"date":"2026-07-01","partOfDay":"evening","title":"  Plan  ","durationMinutes":5000.9}),
+            now,
+            "+05:30",
+        )
+        .unwrap();
+        assert_eq!(iso(w.start), "2026-07-01T11:30:00.000Z");
+        assert_eq!(iso(w.end), "2026-07-01T15:30:00.000Z");
+        assert_eq!((w.duration_minutes, w.title.as_str()), (480, "Plan"));
+        let short = resolve_window(&json!({"durationMinutes":3}), now, "UTC").unwrap();
+        assert_eq!(short.duration_minutes, 15);
+        let text = resolve_window(&json!({"durationMinutes":"60"}), now, "UTC").unwrap();
+        assert_eq!(text.duration_minutes, 120);
+    }
+
+    #[test]
+    fn explicit_start_wins_and_bad_input_is_refused() {
+        let now = at("2026-11-10T12:00:00Z");
+        let w = resolve_window(
+            &json!({"start":"2026-11-12T10:00:00-05:00","date":"nonsense","durationMinutes":45}),
+            now,
+            "UTC",
+        )
+        .unwrap();
+        assert_eq!(iso(w.start), "2026-11-12T15:00:00.000Z");
+        assert_eq!(iso(w.end), "2026-11-12T15:45:00.000Z");
+        for (input, message) in [
+            (
+                json!({"start":"soon"}),
+                "start must be a valid RFC3339 datetime",
+            ),
+            (
+                json!({"date":"2026-1-1"}),
+                "date must be in yyyy-mm-dd format",
+            ),
+            (
+                json!({"date":"2026-02-30"}),
+                "date is not a valid calendar date",
+            ),
+            (
+                json!({"partOfDay":"night"}),
+                "partOfDay must be morning, afternoon or evening",
+            ),
+        ] {
+            assert_eq!(
+                resolve_window(&input, now, "UTC").unwrap_err().message,
+                message
+            );
+        }
+        assert_eq!(
+            resolve_window(&json!({}), now, "Mars/Base")
+                .unwrap_err()
+                .status,
+            503
+        );
+    }
+
+    struct Recorder(RefCell<Vec<(String, Value)>>);
+    impl Host for Recorder {
+        fn call(&self, port: &str, op: &str, resource: &str, body: Value) -> Result<Value> {
+            match (port, op, resource) {
+                ("context", "read", "call") => Ok(json!({"now":"2026-11-10T12:00:00Z"})),
+                ("kv", "get", "calendar.chat-context") => Ok(json!({"timezone":"UTC"})),
+                ("api", _, "connectors") => {
+                    self.0.borrow_mut().push((
+                        body["name"].as_str().unwrap().to_string(),
+                        body["parameters"].clone(),
+                    ));
+                    Ok(json!({"created":true}))
+                }
+                _ => panic!("unexpected call {port}/{op}/{resource}"),
+            }
+        }
+    }
+    fn run(host: &Recorder, tool: &str, parameters: Value) -> Value {
+        let raw = handle(
+            host,
+            "tool",
+            &json!({"tool":tool,"parameters":parameters}).to_string(),
+        );
+        serde_json::from_str(&raw.unwrap()).unwrap()
+    }
+
+    #[test]
+    fn create_sends_the_requested_window_to_connectors() {
+        let host = Recorder(RefCell::new(vec![]));
+        let out = run(
+            &host,
+            "calendar.createEvent",
+            json!({"partOfDay":"afternoon","title":"Deep work"}),
+        );
+        assert_eq!(out["data"]["created"], true);
+        let calls = host.0.borrow();
+        assert_eq!(calls[0].0, "createCalendarEvent");
+        assert_eq!(
+            calls[0].1,
+            json!({"windowStart":"2026-11-11T12:00:00.000Z","windowEnd":"2026-11-11T17:00:00.000Z",
+                "durationMinutes":120,"title":"Deep work"})
+        );
+    }
+
+    #[test]
+    fn delete_and_reschedule_validate_before_any_provider_call() {
+        let host = Recorder(RefCell::new(vec![]));
+        let out = run(&host, "calendar.deleteEvent", json!({"eventId":""}));
+        assert_eq!(out["data"]["deleted"], false);
+        assert_eq!(out["data"]["message"], "eventId is required");
+        let out = run(
+            &host,
+            "calendar.rescheduleEvent",
+            json!({"eventRef":"e","newStart":"x","newEnd":"2026-11-12T10:00:00Z"}),
+        );
+        assert_eq!(out["data"]["ok"], false);
+        assert_eq!(out["data"]["reason"], "not_found");
+        assert!(host.0.borrow().is_empty());
+
+        run(
+            &host,
+            "calendar.deleteEvent",
+            json!({"eventId":"abc","displayTitle":"x"}),
+        );
+        run(
+            &host,
+            "calendar.rescheduleEvent",
+            json!({"eventRef":"abc","newStart":"2026-11-12T10:00:00+01:00","newEnd":"2026-11-12T11:00:00Z"}),
+        );
+        let calls = host.0.borrow();
+        assert_eq!(
+            calls[0],
+            ("deleteCalendarEvent".to_string(), json!({"eventId":"abc"}))
+        );
+        assert_eq!(
+            calls[1],
+            (
+                "rescheduleCalendarEvent".to_string(),
+                json!({"eventRef":"abc","newStart":"2026-11-12T09:00:00.000Z","newEnd":"2026-11-12T11:00:00.000Z"})
+            )
+        );
+    }
+
+    #[test]
+    fn provider_tools_fail_closed_without_connectors() {
+        struct Missing;
+        impl Host for Missing {
+            fn call(&self, port: &str, _: &str, resource: &str, _: Value) -> Result<Value> {
+                match (port, resource) {
+                    ("context", _) => Ok(json!({"now":"2026-11-10T12:00:00Z"})),
+                    ("kv", _) => Ok(json!({})),
+                    _ => Err(moss_module_sdk::Error::new("missing")),
+                }
+            }
+        }
+        for (tool, p) in [
+            ("calendar.createEvent", json!({})),
+            ("calendar.deleteEvent", json!({"eventId":"a"})),
+            (
+                "calendar.rescheduleEvent",
+                json!({"eventRef":"a","newStart":"2026-11-12T10:00:00Z","newEnd":"2026-11-12T11:00:00Z"}),
+            ),
+        ] {
+            let raw = handle(
+                &Missing,
+                "tool",
+                &json!({"tool":tool,"parameters":p}).to_string(),
+            );
+            assert_eq!(raw.unwrap_err(), "Calendar data is unavailable");
+        }
+    }
+}

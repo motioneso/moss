@@ -14,7 +14,7 @@ use serde_json::{json, Map, Value};
 const MAX_PREVIEW_TITLES: usize = 3;
 const MAX_TITLE_UNITS: usize = 80;
 
-fn iso(value: DateTime<Utc>) -> String {
+pub(crate) fn iso(value: DateTime<Utc>) -> String {
     value.to_rfc3339_opts(SecondsFormat::Millis, true)
 }
 
@@ -63,26 +63,51 @@ fn fixed_offset(text: &str) -> Option<chrono::FixedOffset> {
     chrono::FixedOffset::east_opt(sign * (h * 3600 + m * 60))
 }
 
-/// The `[start, end)` instants of a named local day plus its label.
-pub fn window_range(
-    name: &str,
-    now: DateTime<Utc>,
-    saved_zone: &str,
-) -> Option<(DateTime<Utc>, DateTime<Utc>, &'static str)> {
+/// A saved zone resolved to something dates can be computed in.
+pub enum Zone {
+    Named(chrono_tz::Tz),
+    Fixed(chrono::FixedOffset),
+}
+
+/// Resolves a saved zone. An empty or oversized value uses the product default; a value this
+/// build cannot read yields `None` rather than a wrong day.
+pub fn resolve_zone(saved_zone: &str) -> Option<Zone> {
     if saved_zone.is_empty() || saved_zone.len() > 100 {
-        return day_bounds(&actor_zone(""), now, name);
+        return Some(Zone::Named(actor_zone("")));
     }
     if let Ok(zone) = saved_zone.parse::<chrono_tz::Tz>() {
-        return day_bounds(&zone, now, name);
+        return Some(Zone::Named(zone));
     }
     if let Some(zone) = chrono_tz::TZ_VARIANTS
         .iter()
         .copied()
         .find(|zone| zone.name().eq_ignore_ascii_case(saved_zone))
     {
-        return day_bounds(&zone, now, name);
+        return Some(Zone::Named(zone));
     }
-    day_bounds(&fixed_offset(saved_zone)?, now, name)
+    fixed_offset(saved_zone).map(Zone::Fixed)
+}
+
+/// The `[start, end)` instants of a named local day plus its label.
+pub fn window_range(
+    name: &str,
+    now: DateTime<Utc>,
+    saved_zone: &str,
+) -> Option<(DateTime<Utc>, DateTime<Utc>, &'static str)> {
+    match resolve_zone(saved_zone)? {
+        Zone::Named(zone) => day_bounds(&zone, now, name),
+        Zone::Fixed(zone) => day_bounds(&zone, now, name),
+    }
+}
+
+/// The current instant and saved zone name for the signed-in account.
+pub(crate) fn clock_and_zone(host: &impl Host) -> Result<(DateTime<Utc>, String)> {
+    let now =
+        DateTime::parse_from_rfc3339(context(host, "read", "call")?["now"].as_str().unwrap_or(""))
+            .map_err(|_| Error::new(503, "Calendar clock is unavailable"))?
+            .with_timezone(&Utc);
+    let locale = host.call("kv", "get", "calendar.chat-context", json!({}))?;
+    Ok((now, locale["timezone"].as_str().unwrap_or("").to_string()))
 }
 
 fn bounded_titles(events: &[Value]) -> Vec<String> {
@@ -177,13 +202,8 @@ pub fn read(host: &impl Host, input: &Value) -> Result<Value> {
     let mut request = Map::new();
     let mut label = None;
     if let Some(name) = named {
-        let now = DateTime::parse_from_rfc3339(
-            context(host, "read", "call")?["now"].as_str().unwrap_or(""),
-        )
-        .map_err(|_| Error::new(503, "Calendar clock is unavailable"))?
-        .with_timezone(&Utc);
-        let locale = host.call("kv", "get", "calendar.chat-context", json!({}))?;
-        let (start, end, day) = window_range(name, now, locale["timezone"].as_str().unwrap_or(""))
+        let (now, zone) = clock_and_zone(host)?;
+        let (start, end, day) = window_range(name, now, &zone)
             .ok_or_else(|| Error::new(503, "Calendar timezone is unavailable"))?;
         request.insert("windowStart".into(), json!(iso(start)));
         request.insert("windowEnd".into(), json!(iso(end)));
