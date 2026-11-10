@@ -1,6 +1,7 @@
 //! Explicit assembly for an existing approved module catalog. Installation/bootstrap
 //! still owns schema creation; the serving process never runs bootstrap SQL.
 use anyhow::Result;
+use moss_calendar_host::CalendarPorts;
 use axum::{
     body::Bytes,
     extract::{Path as UrlPath, Query, State},
@@ -286,6 +287,7 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
         anyhow::ensure!(base.is_absolute(), "Notes base needs an absolute path");
     }
     let preferences_database = database.clone();
+    let calendar_database = database.clone();
     let mut embedding_model = None;
     let generator: Arc<dyn Intelligence> = match &settings.ai_key {
         Some(key) => crate::module_ai::intelligence(
@@ -326,7 +328,8 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
             compiled_cache: None,
             fuel_ceiling: Some(settings.fuel_ceiling.unwrap_or(DEFAULT_FUEL_CEILING)),
         },
-        |services| match notes_base {
+        |services| {
+            let services = match notes_base {
             Some(base) => {
                 let services = match embedding_model {
                     Some(model) => memory(
@@ -347,8 +350,12 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
                     BTreeMap::new(),
                 )?
                 .with_private_export("notes", "private-export", private_base);
-                Ok(Arc::new(LinkedNotesPorts::new(Arc::new(folders), services)))
+                Ok(Arc::new(LinkedNotesPorts::new(Arc::new(folders), services)) as Arc<dyn Ports>)
             }
+            }?;
+            // Calendar keeps its settings in the account's real preferences and reads the
+            // account timezone. The wrapper only answers calls made by the Calendar module.
+            Ok(Arc::new(CalendarPorts::new(calendar_database, services)?) as Arc<dyn Ports>)
         },
     )?;
     Ok(application)
