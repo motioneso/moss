@@ -21,6 +21,13 @@ pub struct Request {
     pub operation_key: Option<String>,
     #[serde(default)]
     pub selected_block_ids: Option<Vec<String>>,
+    /// Unattended batches freeze only their explicit selection. Never read from a request body.
+    #[serde(skip, default = "yes")]
+    pub include_pending_additions: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 fn invalid(message: &str) -> Error {
@@ -57,7 +64,11 @@ fn entry(block: &Value) -> Value {
 }
 
 /// The explicit selection plus every still-pending addition, in plan order.
-pub fn resolve_selection(blocks: &[Value], intent: &[String]) -> Result<Vec<Value>> {
+pub fn resolve_selection(
+    blocks: &[Value],
+    intent: &[String],
+    include_pending_additions: bool,
+) -> Result<Vec<Value>> {
     let by_id: BTreeMap<&str, &Value> = blocks
         .iter()
         .filter_map(|b| b["id"].as_str().map(|id| (id, b)))
@@ -72,7 +83,7 @@ pub fn resolve_selection(blocks: &[Value], intent: &[String]) -> Result<Vec<Valu
         }
         picked.insert(id.clone(), block);
     }
-    for block in blocks {
+    for block in blocks.iter().filter(|_| include_pending_additions) {
         if block["pendingChange"]["kind"] == "add" {
             if let Some(id) = block["id"].as_str() {
                 picked.entry(id.to_owned()).or_insert(block);
@@ -104,7 +115,7 @@ fn snapshot(value: &Value) -> Result<(Option<Vec<String>>, Vec<Value>)> {
     Ok((Some(intent), selection.clone()))
 }
 
-fn header_by_key(host: &impl Host, plan_id: &str, key: &str) -> Result<Option<Value>> {
+pub(crate) fn header_by_key(host: &impl Host, plan_id: &str, key: &str) -> Result<Option<Value>> {
     let found = query(
         host,
         OPERATIONS,
@@ -130,6 +141,20 @@ fn same(header: &Value, revision: i64, op_key: &Option<String>, intent: &[String
     let (stored_intent, stored_selection) = snapshot(&header["selection_snapshot"])?;
     Ok(stored_intent.as_deref() == Some(intent)
         && selection.is_none_or(|wanted| wanted == stored_selection.as_slice()))
+}
+
+/// The operation id of an unfinished batch for one key: any pending or unknown item
+/// still needs the apply job. Reads only; nothing is repaired or written.
+pub fn find_unfinished(host: &impl Host, plan_id: &str, key: &str) -> Result<Option<String>> {
+    let Some(header) = header_by_key(host, plan_id, key)? else {
+        return Ok(None);
+    };
+    let id = header["id"].as_str().ok_or_else(unreadable)?;
+    let items = query(host, ITEMS, &Query::select(Filter::eq("operation_id", id)))?;
+    let open = items
+        .iter()
+        .any(|row| matches!(row["outcome"].as_str(), Some("pending" | "unknown")));
+    Ok(open.then(|| id.to_owned()))
 }
 
 /// Writes any missing item rows (unique per batch and block) and returns the batch.
@@ -232,7 +257,7 @@ pub fn reserve(host: &impl Host, plan_id: &str, request: Request) -> Result<Valu
     if after.first().map(|p| p["revision"].as_i64()) != Some(Some(revision)) {
         return Err(Error::new(409, "day plan changed since it was read"));
     }
-    let selection = resolve_selection(&blocks, &intent)?;
+    let selection = resolve_selection(&blocks, &intent, request.include_pending_additions)?;
     if selection.is_empty() {
         return Err(invalid("no pending changes to reserve"));
     }

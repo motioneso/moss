@@ -1,3 +1,5 @@
+#[path = "support/auto_plan_oracle.rs"]
+mod auto_plan_oracle;
 #[path = "support/day_plan_oracle.rs"]
 mod day_plan_oracle;
 #[path = "support/kv_guard.rs"]
@@ -329,4 +331,5 @@ fn signed_rust_package_reuses_data_and_commits_only_successful_drafts() {
     settings_oracle::verify(&app, &f, &captured);
     println!("PASS signed registry download + install; actual Rust Wasm events/plans/preferences; owner/foreign/admin; revision conflict; rollback; original fifteen ledgers");
     operation_oracle::verify(&app, &f);
+    auto_plan_oracle::verify(&app, &f);
 }
