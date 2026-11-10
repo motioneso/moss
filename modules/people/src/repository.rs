@@ -381,26 +381,34 @@ pub(crate) fn orders(fields: &[(&str, bool)]) -> Vec<Order> {
 pub(crate) fn response(mut row: Value, fields: &[(&str, &str)]) -> Value {
     let mut result = serde_json::Map::new();
     for (field, name) in fields {
-        // These rows are consumed by the response: move strings and nested JSON
-        // instead of copying them, and use the declared wire names directly.
-        let mut value = row.get_mut(*field).map(Value::take).unwrap_or(Value::Null);
+        // Consume both the value and its key buffer. Wire names are usually
+        // shorter than database names, so renaming can reuse that allocation.
+        let (mut key, mut value) = row
+            .as_object_mut()
+            .and_then(|row| row.remove_entry(*field))
+            .unwrap_or_else(|| (String::new(), Value::Null));
+        if key != *name {
+            key.clear();
+            key.push_str(name);
+        }
         // node-postgres returns NUMERIC(4,2) as text. The legacy repository's
         // TypeScript assertion does not convert it, including on Type.Any routes.
         if *field == "confidence" {
             if let Some(number) = value.as_f64() {
-                value = json!(format!("{number:.2}"));
+                value = Value::String(format!("{number:.2}"));
             }
         }
         if field.ends_with("_at") {
             if let Some(text) = value.as_str() {
                 if let Ok(time) = chrono::DateTime::parse_from_rfc3339(text) {
-                    value = json!(time
-                        .with_timezone(&chrono::Utc)
-                        .to_rfc3339_opts(chrono::SecondsFormat::Millis, true));
+                    value = Value::String(
+                        time.with_timezone(&chrono::Utc)
+                            .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                    );
                 }
             }
         }
-        result.insert((*name).into(), value);
+        result.insert(key, value);
     }
     Value::Object(result)
 }

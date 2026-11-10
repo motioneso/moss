@@ -2763,3 +2763,75 @@ as the expanded diagnostic. The installed gate identifies `84294875c` with
 fingerprint `a9716790b245` and two dirty documentation files. Final metadata and
 receipt edits do not change the tested runtime; these receipts are not a clean
 final-commit full-parity or live-path qualification.
+
+## Part 25 — response allocation checkpoint
+
+Before editing, this branch fast-forwarded to `1361bd40f`, including merged
+People part 24 (PR 4162). Response conversion now consumes database entries,
+reusing their field-name buffers for the unchanged API names. Formatted confidence
+and timestamp strings move directly into JSON values instead of being copied by
+`json!`. Missing fields still become null, timestamp normalization and confidence
+formatting stay the same, and public APIs, queries, privacy rules, package grants
+and host budgets are unchanged. People remains a client of the shared server API.
+
+### What the measurements establish
+
+The generated baseline core was frozen from the merged source before editing.
+Baseline component SHA-256:
+`6c00f2a3ed5ab9ea6ca711045ef71ada4a4028b62d60d0300dac1a8595127311`.
+The first experiment, field-name reuse alone, produced component SHA-256
+`d8c78d200b7220f40cad5e1ff92dca9fb4bb385e39f71d385eac76dac610a17a`.
+Both were built with the same declared dependencies, compiler and wrapper.
+
+Fresh diagnostic runs `20261109-210802-H0KoJf` (baseline) and
+`20261109-211132-Fdz5tL` (field-name reuse) both exit **101**. Both compare
+complete 100-person and 100-link responses successfully, then exhaust fuel at
+150 people while dropping JSON response values. They do not reach 150 links or
+later cases. These measurements do **not** demonstrate an improved list limit;
+removing redundant allocations is not a claim of full large-account parity.
+Both receipts identify `122880aa2`, a clean tree and fingerprint `49dad9b276b8`;
+the baseline run explicitly selects the frozen pre-edit component above.
+
+The final experiment also moves normalized strings into JSON values. Its generated
+component SHA-256 is
+`06e03baf3f8aba28ec082c7bab92f7c2f7e8b6d6dd627ae5b87245929bc266a8`.
+Diagnostic `20261109-211958-7MFOmI` also exits **101** after the same two
+100-row passes and 150-person fuel trap. Its receipt identifies `122880aa2`,
+five dirty files and fingerprint `9915582737cd`. The final source is retained
+as a small allocation refactor, with **no measured improvement in the list-size
+boundary** and no claim of a general performance gain. The README and app map
+retain the observed 100-pass/150-fail limitation and name the 1,005-contact fixture.
+
+All **34 native People tests** and strict native Clippy pass with the final
+response conversion. Scoped Rustfmt, the four existing legacy vector comparisons
+and browser-bridge checks pass. A package containing the final component and the
+built Settings assets is prepared for the installed replay; its SHA-256 is
+`e569448e35e4ce08204e24585788d1501d5ecd1c5d76991a5c96d3f41baa5a53`.
+The final ordinary People and installed-package gate results are recorded in the
+proof, separately from the deliberately red large-account diagnostic.
+
+The scratch toolchain copy initially advertised a Wasm standard library whose
+files were missing. Only its task-owned component metadata was repaired, and the
+declared target was installed there. Cargo, rustup, target directories and
+Rust dependencies were task-owned. Approved `wit-bindgen =0.57.1` remains a local
+project dependency; no global tool or new third-party package was installed.
+JavaScript dependencies were restored from the existing frozen lockfile.
+
+An intermediate second-experiment build used plain `cargo build`, producing a
+component where the wrapper requires a core module. That invocation failed and
+its gate was stopped; it supplies no parity evidence. The corrected build uses
+`modules/people/tools/build-generated-component.sh`, including its required linker
+arguments. Use that script rather than reconstructing the compiler command.
+
+### Acceptance still open
+
+This is a partial checkpoint. Complete large-account parity, full locale ordering,
+shipping listener/parser qualification, ingest nudges, real providers, installed
+scheduling, command retention/quotas and broader backend failures remain open.
+The real Rust shell still needs installed People Settings/routes/chat composition.
+Authenticated UI/chat, sign-in/origin/privacy acceptance and a second physical
+device over HTTPS remain unproved. Installed fixture dispatch does not establish
+those live paths. The previous continuation's remaining list remains applicable.
+
+Final clean-commit gate and independent review receipts are retained in this task's
+proof. No receipt from an earlier continuation is presented as proof for this work.
