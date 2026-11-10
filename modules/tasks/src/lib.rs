@@ -11,6 +11,7 @@ mod mutations;
 pub mod parse;
 pub mod recurrence;
 pub mod repository;
+mod roll_forward;
 pub mod routes;
 pub mod rows;
 mod search_interpret;

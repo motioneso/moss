@@ -177,7 +177,7 @@
     },
     {
       "id": "tasks.package-filtered-list",
-      "description": "The tasks.list tool filters visible persisted tasks by list, tag, status, priority, strict date/completion boundaries and priority quadrant, preserving updated-time/identifier ordering and tag data. Explicit shares remain visible; private tasks remain hidden from other accounts including admins. Actor-local lazy recurrence and installed chat integration remain unfinished. Correct invalid filter types or date text and retry."
+      "description": "The tasks.list tool filters visible persisted tasks by list, tag, status, priority, strict date/completion boundaries and priority quadrant, preserving updated-time/identifier ordering and tag data. Explicit shares remain visible; private tasks remain hidden from other accounts including admins. Stale recurring series first advance to the next occurrence on your local day. Installed chat integration remains unfinished. Correct invalid filter types or date text and retry."
     },
     {
       "id": "tasks.package-list-deletion",
@@ -199,7 +199,7 @@
     },
     {
       "id": "tasks.package-drift",
-      "description": "Focus, at-risk and overdue routes and tools, plus a bounded twelve-row summary tool, read persisted tasks in the signed-in account scope. Private tasks stay hidden from other accounts including admins. Focus returns no external readiness signals in the package, so no readiness cap is applied. Day boundaries and summary due labels use your saved account timezone, with the existing fallback when none is valid. Day boundaries follow daylight-saving changes. Recurring series are not advanced by these reads yet."
+      "description": "Focus, at-risk and overdue routes and tools, plus a bounded twelve-row summary tool, read persisted tasks in the signed-in account scope. Private tasks stay hidden from other accounts including admins. Focus returns no external readiness signals in the package, so no readiness cap is applied. Day boundaries and summary due labels use your saved account timezone, with the existing fallback when none is valid. Day boundaries follow daylight-saving changes. Stale recurring series first advance to the next occurrence on your local day."
     },
     {
       "id": "tasks.package-search-interpretation",
@@ -445,7 +445,7 @@
       "risk": "read"
     },
     "tasks.list": {
-      "description": "List visible persisted tasks with list, tag, status, priority, date, completion and quadrant filters. Actor-local recurrence reconciliation remains unfinished.",
+      "description": "List visible persisted tasks with list, tag, status, priority, date, completion and quadrant filters. Stale recurring series first advance to the next occurrence on your local day.",
       "risk": "read"
     },
     "tasks.deleteList": {
@@ -453,11 +453,11 @@
       "risk": "write"
     },
     "tasks.summary": {
-      "description": "Read a bounded summary of today, overdue, upcoming, undated, completed or all tasks. Persisted occurrences only; days use your saved account timezone. Lazy recurring-series advancement is unfinished.",
+      "description": "Read a bounded summary of today, overdue, upcoming, undated, completed or all tasks. Persisted occurrences only; this read never advances recurring series. Days use your saved account timezone.",
       "risk": "read"
     },
     "tasks.focus": {
-      "description": "Get ranked overdue and at-risk tasks. Persisted occurrences only; days use your saved account timezone. Lazy recurring-series advancement is unfinished.",
+      "description": "Get ranked overdue and at-risk tasks. Stale recurring series first advance to the next occurrence on your local day; days use your saved account timezone.",
       "risk": "read"
     },
     "tasks.atRisk": {

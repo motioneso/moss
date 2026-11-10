@@ -1984,3 +1984,29 @@ application shell; a local browser or narrow viewport is not another physical
 device. The previously recorded manage-share retry and duplicate-response
 differences remain. Workshop and Food remain excluded. Part of #4027;
 release note Category N/A.
+
+## Tasks part 29 checkpoint (JS-174, Card 526)
+
+Lazy recurrence advancement is ported. Before the task list route, the list tool and
+the focus, at-risk and overdue reads (routes and tools), each stale owned series moves
+in place to its first occurrence on or after today in the account's saved timezone.
+Due and do times shift by the same number of days. Only the oldest live instance moves;
+shared rows, finished rows and series whose target date is already taken are left
+alone. The date-collision case is checked before the update instead of through a
+database savepoint, because the module host offers none; a concurrent writer minting
+the same date in the same instant is the one case that could still fail the read.
+
+The new differential case (`29-lazy-recurrence.json`) failed first: TypeScript returned
+the advanced dates and Rust returned the stale ones, and overdue returned two rows in
+Rust and none in TypeScript. After the change both servers match. The case rolls the
+two series in separate reads because the legacy server picks an unspecified order
+between series rolled in one read.
+
+No route, tool, job kind, migration or host contract changed. Workshop and Food remain
+excluded. Part of #4027; release note Category N/A.
+
+Remaining: recurrence jobs; deferred-queue retry/retention and installed worker
+dispatch; public People linkage; policy enforcement and feedback orchestration;
+remaining screens/settings and Today/chat links; installed chat and summary
+presentation; real application shell integration; performance budgets; physical
+second-device HTTPS proof.
