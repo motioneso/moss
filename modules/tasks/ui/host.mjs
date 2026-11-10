@@ -12,7 +12,21 @@ connectModuleFrame(frame, "tasks", {
     if (!response.ok) throw new Error("Tasks request failed");
     return response.json();
   },
-  theme: () => ({ theme: "sage", colorMode: "light" }),
+  theme: async () => {
+    const base = { theme: "sage", colorMode: "light" };
+    try {
+      const response = await fetch("/api/shell");
+      if (!response.ok) return base;
+      const shell = await response.json();
+      return {
+        ...base,
+        displayName: shell?.account?.display_name,
+        assistantName: shell?.assistant_name
+      };
+    } catch {
+      return base;
+    }
+  },
   navigate: (path) => {
     window.location.href = path;
   },
