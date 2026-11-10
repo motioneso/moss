@@ -465,7 +465,17 @@ fn installed_tool_dispatch_writes_syncs_and_searches_with_account_approvals() {
             let worker = Secret::new(std::env::var("JS55_WORKER_URL").unwrap());
             let expected_attempts = if name == "notes.create" {
                 let indexed = f.snapshot();
+                f.rt.block_on(f.bootstrap.execute(
+                    "DELETE FROM app.preferences WHERE owner_user_id=$1 AND key='notes-last-sync'",
+                    &[&owner],
+                ))
+                .unwrap();
+                assert!(f.status(db.clone(), owner).is_null());
                 f.source(owner, Value::Null);
+                let failure_started: std::time::SystemTime =
+                    f.rt.block_on(f.bootstrap.query_one("SELECT clock_timestamp()", &[]))
+                        .unwrap()
+                        .get(0);
                 assert!(
                     installer.run_job(&worker).is_err(),
                     "Unlinking must refuse saved work rather than retarget it"
@@ -475,16 +485,18 @@ fn installed_tool_dispatch_writes_syncs_and_searches_with_account_approvals() {
                     indexed,
                     "Refused delivery must leave the index unchanged"
                 );
+                assert_eq!(f.status(db.clone(), owner)["lastError"], "notes sync failed (Error)",
+                    "The Notes worker must record the source refusal, not fail before guest execution");
                 let retry = f.rt.block_on(f.bootstrap.query_one(
-                    "SELECT state, attempts, failure_code FROM moss_queue.jobs WHERE actor_user_id=$1 AND idempotency_key=$2",
-                    &[&owner, &id],
+                    "SELECT state, attempts, failure_code, run_at >= $3::timestamptz + interval '10 seconds' FROM moss_queue.jobs WHERE actor_user_id=$1 AND idempotency_key=$2",
+                    &[&owner, &id, &failure_started],
                 )).unwrap();
                 assert_eq!(retry.get::<_, String>(0), "pending");
                 assert_eq!(retry.get::<_, i32>(1), 1);
                 assert_eq!(retry.get::<_, String>(2), "handler");
                 assert!(
-                    !installer.run_job(&worker).unwrap(),
-                    "Backoff must prevent immediate retry"
+                    retry.get::<_, bool>(3),
+                    "Failure must retain the declared minimum retry delay"
                 );
                 f.source(owner, json!(root));
                 // Advance only this disposable job's due time; no wall-clock sleep
@@ -511,6 +523,12 @@ fn installed_tool_dispatch_writes_syncs_and_searches_with_account_approvals() {
             )).unwrap();
             assert_eq!(row.get::<_, String>(0), "completed");
             assert_eq!(row.get::<_, i32>(1), expected_attempts);
+            let status = f.status(db.clone(), owner);
+            assert_eq!(
+                status["errors"], 0,
+                "Successful queued sync must report no file errors"
+            );
+            assert!(status.get("lastError").is_none());
             let payload: Value = row.get(2);
             let module = moss_module_host::jobs::module_key("notes");
             assert_eq!(

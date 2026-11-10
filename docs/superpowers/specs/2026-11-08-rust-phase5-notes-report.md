@@ -1768,13 +1768,14 @@ The installed four-tool check now joins approved create, edit and delete to the
 real durable queue and installed job dispatcher before checking indexed search.
 Earlier checks captured publication and manually supplied worker parameters.
 The new check reads the saved queue row and verifies its calling account, module,
-manifest identity, checkpoint UUID, completion and attempt count. Private paths
-and note content remain in the existing private storage, outside the queue's
-fixed metadata envelope. Both runtime data roles are exercised; the queue producer
+manifest identity, checkpoint UUID, completion and attempt count. It compares the
+entire saved queue envelope against fixed metadata and the checkpoint UUID. Both runtime data roles are exercised; the queue producer
 always uses app credentials and the dispatcher claims with worker credentials.
 
 For each role, unlinking the source before the first delivery refuses the job and
-leaves indexed data unchanged. The queue saves a pending retry with backoff. After
+leaves indexed data unchanged. The newly saved Notes failure status confirms the guest ran. The queue saves a
+pending retry with a future due time. Successful deliveries must save zero file
+errors and no last-error message. After
 the original source is restored, the test advances only that disposable job's due
 time and the dispatcher completes it on its second attempt. The next claim finds
 no remaining work. Existing other-owner/admin read, update and delete checks on

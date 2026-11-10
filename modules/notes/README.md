@@ -137,7 +137,8 @@ The disposable aggregate gate now joins the existing generic `tools.run` service
 to an installed, signed experimental Notes guest for create, edit, delete and
 indexed search. A WAT probe only forwards the outer service request; the Notes
 handler, linked files, private sync checkpoints, indexing and retrieval use the
-real Rust implementations. Queue delivery is manual and both embedding adapters
+real Rust implementations. Part twenty-four replaces manual queue delivery with
+the real durable queue and installed dispatcher. Both embedding adapters still
 use the named deterministic test provider. The fixture declares write tools only
 in its experimental manifest; the ordinary package remains read-only.
 The same service probe calls the installed read-only approval-preparation API;
@@ -760,7 +761,9 @@ producer credentials and claiming uses the worker credentials.
 
 For each role, unlinking the source before the create-triggered job runs refuses
 delivery without changing the index. The real queue records a pending retry with
-its handler failure code and backoff. Restoring the source and advancing only the
+its handler failure code and a future retry time. The newly saved failure status
+confirms the Notes worker ran, and each successful delivery must save zero file
+errors without a last-error message. Restoring the source and advancing only the
 disposable job's due time lets the installed dispatcher complete that same job.
 The existing other-owner/admin checkpoint controls still remove RLS, observe
 otherwise denied read/update/delete access, restore it and repeat the denials.
