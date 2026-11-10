@@ -395,3 +395,47 @@ fn manifest_fuel_request_is_clamped_to_the_host_ceiling() {
     manifest.fuel_limit = Some(moss_module_host::manifest::MAX_FUEL_REQUEST + 1);
     assert!(manifest.validate(&"0.1.0".parse().unwrap()).is_err());
 }
+
+#[test]
+fn manifest_job_retries_reach_the_queue_spec_and_are_bounded() {
+    let mut manifest = common::manifest("1.0.0");
+    let job = manifest.jobs.keys().next().cloned();
+    let Some(job) = job else {
+        manifest.jobs.insert("sweep".into(), Default::default());
+        return manifest_job_retries_reach_the_queue_spec_and_are_bounded_with(
+            manifest,
+            "sweep".into(),
+        );
+    };
+    manifest_job_retries_reach_the_queue_spec_and_are_bounded_with(manifest, job);
+}
+
+fn manifest_job_retries_reach_the_queue_spec_and_are_bounded_with(
+    mut manifest: moss_module_host::manifest::Manifest,
+    job: String,
+) {
+    let spec = |m: &moss_module_host::manifest::Manifest| {
+        moss_module_host::jobs::specs(m)
+            .into_iter()
+            .find(|s| s.name.ends_with(&format!(".{job}")))
+            .unwrap()
+            .retry_limit
+    };
+    assert_eq!(spec(&manifest), 3);
+    manifest.job_retries.insert(job.clone(), 0);
+    assert_eq!(spec(&manifest), 0);
+    let moss = "0.1.0".parse().unwrap();
+    assert!(manifest.validate(&moss).is_ok());
+    manifest
+        .job_retries
+        .insert(job.clone(), moss_module_host::manifest::MAX_JOB_RETRIES);
+    assert_eq!(spec(&manifest), moss_module_host::manifest::MAX_JOB_RETRIES);
+    assert!(manifest.validate(&moss).is_ok());
+    manifest
+        .job_retries
+        .insert(job, moss_module_host::manifest::MAX_JOB_RETRIES + 1);
+    assert!(manifest.validate(&moss).is_err());
+    manifest.job_retries.clear();
+    manifest.job_retries.insert("not-a-job".into(), 0);
+    assert!(manifest.validate(&moss).is_err());
+}

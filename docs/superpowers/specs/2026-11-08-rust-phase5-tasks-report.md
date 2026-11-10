@@ -2096,3 +2096,26 @@ is a gate-driver gap, not a product failure. Workshop and Food remain excluded. 
 Remaining: per-queue retry/retention in the host; email triage feedback; Today/chat focus
 links; installed chat and summary presentation; real shell integration (also needed for
 the account name); performance budgets; physical second-device HTTPS proof.
+
+## Tasks part 33 checkpoint (JS-194, Card 526)
+
+Module manifests can now set a retry count per job (`jobRetries`, 0 to 10, only for declared
+jobs; bad values fail manifest validation). The host uses it for that queue and keeps its
+default of 3 elsewhere. Both Tasks queues declare 0, the legacy value. Public People linkage
+is dropped from the remaining list: the legacy Tasks module never called People.
+
+Checked: the host boundary tests pass (17), including a new one that the count reaches the
+queue spec and that out-of-range or unknown-job values are refused. The live HTTPS gate
+(`test:rust-tasks-server`) passed with sign-in: the server's own worker ran the nightly job,
+and the queued job row has retry limit 0. The gate had gone stale against the server's new
+background module loading (it asked before the host was ready and got 503); it now waits
+with a signed-in request, as the People gate does.
+
+Not proven or not built: retention of finished jobs (the host has no cleanup for any queue);
+email triage feedback; Today/chat focus links; installed chat and summary presentation; real
+shell integration; performance budgets; second physical device. Workshop and Food remain
+excluded. Part of #4027; release note Category N/A.
+
+Remaining: per-queue retention in the host; email triage feedback; Today/chat focus links;
+installed chat and summary presentation; real shell integration; performance budgets;
+physical second-device HTTPS proof.

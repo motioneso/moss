@@ -210,6 +210,12 @@ fn installed_tasks_package_serves_routes_and_nightly_job_from_the_real_server() 
         (status, response.json::<Value>().unwrap_or(Value::Null))
     };
     use reqwest::Method;
+    // The server opens its module host in the background; wait until it answers.
+    let ready = Instant::now() + Duration::from_secs(90);
+    while call(Method::GET, "/tasks", Some(&cookie), None).0 == 503 {
+        assert!(Instant::now() < ready, "module host never became ready");
+        std::thread::sleep(Duration::from_millis(500));
+    }
     assert_eq!(call(Method::GET, "/tasks", None, None).0, 401);
     let created = call(
         Method::POST,
@@ -265,10 +271,16 @@ fn installed_tasks_package_serves_routes_and_nightly_job_from_the_real_server() 
         assert!(Instant::now() < deadline, "the nightly job never rolled the series forward\n{}", fs::read_to_string(root.join("server.log")).unwrap_or_default());
         std::thread::sleep(Duration::from_millis(500));
     };
+    // The fired job carries the manifest's retry count (legacy value 0), not the host default of 3.
+    let retries: i32 = runtime
+        .block_on(db.query_one("SELECT retry_limit FROM moss_queue.jobs WHERE actor_user_id=$1 AND queue LIKE '%.tasks-recurrence' ORDER BY run_at DESC LIMIT 1", &[&owner]))
+        .unwrap()
+        .get(0);
+    assert_eq!(retries, 0, "the nightly job should not retry");
     let (status, list) = call(Method::GET, "/tasks", Some(&cookie), None);
     assert_eq!(status, 200, "{list}");
     let titles: Vec<_> = list["tasks"].as_array().unwrap().iter().map(|t| t["title"].as_str().unwrap().to_owned()).collect();
     assert!(titles.contains(&"Daily stretch".to_owned()) && titles.contains(&"Water plants".to_owned()), "{list}");
-    println!("PASS installed Tasks package over HTTPS: sign-in required, recurring create makes one nightly schedule, the server's own worker ran it and moved 2020-01-01 to {rolled}");
+    println!("PASS installed Tasks package over HTTPS: sign-in required, recurring create makes one nightly schedule, the server's own worker ran it and moved 2020-01-01 to {rolled}, and the queued job has retry limit 0 as declared");
     println!("NOT PROVEN: native UI, second physical device, second account over HTTP (setup allows one owner)");
 }
