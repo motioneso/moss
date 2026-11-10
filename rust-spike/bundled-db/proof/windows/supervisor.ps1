@@ -19,7 +19,7 @@ $ErrorActionPreference = 'Stop'
 $root = Join-Path $Work 'db'
 function Run($what, [string[]]$arguments) {
     $out = & $MossDb @arguments 2>&1 | Out-String
-    Write-Output "== $what (exit $LASTEXITCODE)"; Write-Output $out
+    Write-Host "== $what (exit $LASTEXITCODE)"; Write-Host $out
     if ($LASTEXITCODE -ne 0) { throw "$what failed" }
     $out
 }
@@ -75,7 +75,7 @@ try {
     if (-not $process.WaitForExit(600000)) { $process.Kill($true); throw 'Supervisor proof exceeded ten minutes' }
     Get-Content $out; Get-Content $err
     if ($process.ExitCode -ne 0 -or -not (Select-String -Path $out -Pattern 'WINDOWS SUPERVISOR PROOF')) {
-        Get-ChildItem $work -Recurse -Filter '*.log' | ForEach-Object { Write-Output "--- $($_.FullName)"; Get-Content $_.FullName -Tail 40 }
+        Get-ChildItem $work -Recurse -Filter '*.log' -ErrorAction SilentlyContinue | ForEach-Object { Write-Output "--- $($_.FullName)"; Get-Content $_.FullName -Tail 40 }
         throw "Supervisor proof failed ($($process.ExitCode))"
     }
 } finally {
