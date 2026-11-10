@@ -222,10 +222,7 @@ fn installed_tool_dispatch_writes_syncs_and_searches_with_account_approvals() {
             let before = std::fs::read(root.join("note.md")).ok();
             let count = jobs.lock().unwrap().len();
             let untouched = backend_calls.load(Ordering::SeqCst);
-            assert!(
-                call(owner, name, parameters.clone()).is_err(),
-                "Unapproved {name}"
-            );
+            assert_approval_denied(call(owner, name, parameters.clone()));
             services
                 .approve_tool(
                     &AccessContext::new(owner, "notes-tool-approval"),
@@ -236,17 +233,17 @@ fn installed_tool_dispatch_writes_syncs_and_searches_with_account_approvals() {
                 .unwrap();
             // Neither another account nor changed parameters may spend this grant.
             for actor in [other, f.actors[2]] {
-                assert!(call(actor, name, parameters.clone()).is_err());
+                assert_approval_denied(call(actor, name, parameters.clone()));
             }
             let mut changed = parameters.clone();
             changed["path"] = json!("different.md");
-            assert!(call(owner, name, changed).is_err());
+            assert_approval_denied(call(owner, name, changed));
             let different_tool = if name == "notes.delete" {
                 "notes.edit"
             } else {
                 "notes.delete"
             };
-            assert!(call(owner, different_tool, parameters.clone()).is_err());
+            assert_approval_denied(call(owner, different_tool, parameters.clone()));
             assert_eq!(
                 backend_calls.load(Ordering::SeqCst),
                 untouched,
@@ -258,6 +255,7 @@ fn installed_tool_dispatch_writes_syncs_and_searches_with_account_approvals() {
             let out: Value =
                 serde_json::from_str(&call(owner, name, parameters.clone()).unwrap()).unwrap();
             assert_eq!(out, json!({"data":{"path":"note.md","synced":true}}));
+            assert!(backend_calls.load(Ordering::SeqCst) > untouched);
             assert_eq!(
                 std::fs::read_to_string(root.join("note.md"))
                     .ok()
@@ -266,10 +264,7 @@ fn installed_tool_dispatch_writes_syncs_and_searches_with_account_approvals() {
             );
             assert_eq!(jobs.lock().unwrap().len(), count + 1);
             let untouched = backend_calls.load(Ordering::SeqCst);
-            assert!(
-                call(owner, name, parameters).is_err(),
-                "Grant replay for {name}"
-            );
+            assert_approval_denied(call(owner, name, parameters));
             assert_eq!(
                 backend_calls.load(Ordering::SeqCst),
                 untouched,
@@ -279,6 +274,7 @@ fn installed_tool_dispatch_writes_syncs_and_searches_with_account_approvals() {
             let params = jobs.lock().unwrap()[count]["params"].clone();
             assert_eq!(params.as_object().unwrap().len(), 1);
             let id: Uuid = serde_json::from_value(params["checkpoint-id"].clone()).unwrap();
+            assert_eq!(f.checkpoint_access(&db, owner, id), [1, 1, 1]);
             for actor in [other, f.actors[2]] {
                 assert_eq!(f.checkpoint_access(&db, actor, id), [0, 0, 0]);
             }
@@ -294,12 +290,11 @@ fn installed_tool_dispatch_writes_syncs_and_searches_with_account_approvals() {
                 f.rt.block_on(f.bootstrap.batch_execute(
                     "ALTER TABLE app.notes_sync_checkpoints ENABLE ROW LEVEL SECURITY; ALTER TABLE app.notes_sync_checkpoints FORCE ROW LEVEL SECURITY",
                 )).unwrap();
-                for actual in exposed {
-                    assert!(
-                        std::panic::catch_unwind(|| assert_eq!(actual, [0, 0, 0])).is_err(),
-                        "Checkpoint privacy assertion must fail without RLS"
-                    );
-                }
+                assert_eq!(
+                    exposed,
+                    vec![[1, 1, 1]; 2],
+                    "Checkpoint privacy assertions must fail without RLS"
+                );
                 for actor in [other, f.actors[2]] {
                     assert_eq!(f.checkpoint_access(&db, actor, id), [0, 0, 0]);
                 }
@@ -351,4 +346,9 @@ fn installed_tool_dispatch_writes_syncs_and_searches_with_account_approvals() {
         }
         println!("PASS {role}: installed tools.run → Notes create/edit/delete → private sync request → manually delivered installed worker → indexed search; account/parameter-bound one-use approvals");
     }
+}
+
+fn assert_approval_denied(result: anyhow::Result<String>) {
+    let error = format!("{:#}", result.unwrap_err());
+    assert!(error.contains("needs the account's approval"), "{error}");
 }

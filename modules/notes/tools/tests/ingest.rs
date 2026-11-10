@@ -30,10 +30,10 @@ mod durable_writes;
 mod manual_sync;
 #[path = "ingest/recovery.rs"]
 mod recovery;
-#[path = "ingest/tool_routing.rs"]
-mod tool_routing;
 #[path = "support/mod.rs"]
 mod support;
+#[path = "ingest/tool_routing.rs"]
+mod tool_routing;
 
 struct MutatingStub {
     file: PathBuf,

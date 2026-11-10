@@ -1592,8 +1592,9 @@ Query and document embeddings use the same named deterministic stand-in.
 A synthetic dependent caller also reaches the installed public approval API
 through the actual `api.call` service. Read-only preparation returns an action
 version without changing files or requesting sync; it does not approve the
-subsequent write. Another account and an unrelated admin cannot prepare the
-owner's source, and a caller without the Notes dependency is refused.
+subsequent write. Accounts without their own configured source, including an unrelated admin,
+receive the unconfigured-source response; preparation does not select the
+owner's source. A caller without the Notes dependency is refused.
 
 The dispatcher checks cover absent approvals, another account and an unrelated
 admin, changed inputs, another tool, and replay of a consumed approval. A port
@@ -1610,8 +1611,10 @@ runtime permission, dependency, SQL, host service or screen changes. The app map
 already describes writes and sync as experimental and remains accurate. The
 probe is a synthetic caller of the real service, not chat or an approval UI.
 It does not establish approval-version rechecking or permit ordinary-package
-write activation. Current command receipts and independent review are in the
-task proof artifact.
+write activation. Cross-account search negatives here supplement the existing
+search gate privacy-removal controls; these actors have no source or index.
+Current command receipts and independent review are attached to the checkpoint
+PR and task proof artifact.
 
 Builds use task-owned scratch Cargo and Rust homes and separate ordinary and
 write-tools guest targets. The declared Wasm target and approved pinned
