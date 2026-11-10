@@ -57,26 +57,15 @@ pub fn handle<H: moss_module_sdk::Host + ?Sized>(
                 #[serde(rename = "prepareTaskAction")]
                 Prepare(Prepare),
                 #[serde(rename = "prepareTaskRoute")]
-                Route(Route),
-                #[serde(rename = "prepareTaskPreferences")]
-                Preferences(Preferences),
+                PrepareRoute(PrepareRoute),
             }
-            type Map = serde_json::Map<String, serde_json::Value>;
             #[derive(serde::Deserialize)]
             #[serde(rename_all = "camelCase", deny_unknown_fields)]
-            struct Route {
+            struct PrepareRoute {
                 route: String,
-                params: Map,
-                query: Map,
-                // Absent when the request has no body.
+                params_json: Option<String>,
+                query_json: Option<String>,
                 body_json: Option<String>,
-            }
-            #[derive(serde::Deserialize)]
-            #[serde(rename_all = "camelCase", deny_unknown_fields)]
-            struct Preferences {
-                params: Map,
-                query: Map,
-                body_json: String,
             }
             #[derive(serde::Deserialize)]
             #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -86,17 +75,16 @@ pub fn handle<H: moss_module_sdk::Host + ?Sized>(
                 input_json: String,
             }
             Ok(match serde_json::from_str(payload)? {
-                Api::Prepare(r) => approval::prepare(host, &r.tool, &r.input_json),
-                Api::Route(r) => approval::prepare_route(
+                Api::Prepare(request) => {
+                    approval::prepare(host, &request.tool, &request.input_json)
+                }
+                Api::PrepareRoute(r) => approval::prepare_route(
                     host,
                     &r.route,
-                    &r.params,
-                    &r.query,
+                    r.params_json.as_deref(),
+                    r.query_json.as_deref(),
                     r.body_json.as_deref(),
                 ),
-                Api::Preferences(r) => {
-                    approval::prepare_preferences(&r.params, &r.query, &r.body_json)
-                }
             }
             .to_string())
         }

@@ -4,7 +4,7 @@
   "name": "Calendar",
   "description": "Calendar cached-event screens and draft tools; signed-in HTTPS Calendar pages; provider execution and full shell composition remain incomplete.",
   "publisher": "Moss",
-  "version": "0.24.0",
+  "version": "0.25.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -37,7 +37,8 @@
         "calendar.chat-context",
         "calendar.task-reference",
         "calendar.briefing-reference",
-        "calendar.ui-view"
+        "calendar.ui-view",
+        "calendar.source-behaviors"
       ]
     }
   ],
@@ -125,6 +126,16 @@
     },
     {
       "method": "GET",
+      "path": "/source-behaviors",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/source-behaviors",
+      "signIn": true
+    },
+    {
+      "method": "GET",
       "path": "/display-settings",
       "signIn": true
     },
@@ -179,6 +190,10 @@
     "defaultEnabled": true
   },
   "features": [
+    {
+      "id": "calendar.source-switches",
+      "description": "The Calendar settings screen has two switches, Include in briefings and Use for planning, both on by default. They save to the account's source-behavior preferences and change nothing for other modules. The Briefings module does not read them in this Rust version yet."
+    },
     {
       "id": "calendar.data",
       "description": "Reads cached events and saves private day-plan drafts. Provider execution is not included in this package checkpoint.",

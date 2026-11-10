@@ -540,7 +540,8 @@ pub(crate) fn prepare<H: Host + ?Sized>(host: &H, tool: &str, input_json: &str) 
     }
 }
 
-// Route name, tool it maps to, and the path parameters with the input key each fills.
+// Route name, tool it presents as, and path parameter to input key. The legacy module
+// declares the same table beside each route.
 const ROUTES: &[(&str, &str, &[(&str, &str)])] = &[
     ("addActivity", "tasks.addActivity", &[("id", "taskId")]),
     ("assignTag", "tasks.assignTag", &[("id", "taskId")]),
@@ -566,78 +567,100 @@ const ROUTES: &[(&str, &str, &[(&str, &str)])] = &[
     ("breakDown", "tasks.breakDown", &[("id", "taskId")]),
 ];
 
-/// Handles `prepareTaskRoute`. Path parameters join the body as explicit inputs, so a
-/// query string, an unknown or missing parameter, or a body key that collides gives no card.
+fn object(json: Option<&str>) -> Option<Vec<(String, Ordered)>> {
+    match json {
+        None => Some(Vec::new()),
+        Some(text) => match serde_json::from_str::<Ordered>(text).ok()? {
+            Ordered::Object(entries) => Some(entries),
+            _ => None,
+        },
+    }
+}
+
+/// Builds a route's card from its path parameters, query and body. Extra parameters, any
+/// query, a non-object body or a body key that repeats a path parameter give no card.
+fn prepare_route_card<H: Host + ?Sized>(
+    host: &H,
+    route: &str,
+    params: Option<&str>,
+    query: Option<&str>,
+    body: Option<&str>,
+) -> HostResult<Result<Option<Value>, &'static str>> {
+    let (Some(params), Some(query), Some(mut values)) = (object(params), object(query), object(body))
+    else {
+        return Ok(Ok(None));
+    };
+    if !query.is_empty() {
+        return Ok(Ok(None));
+    }
+    if route == "setPreferences" {
+        if !params.is_empty() {
+            return Ok(Ok(None));
+        }
+        let mut fields: Fields = Vec::new();
+        for (key, value) in &values {
+            let shown = match (key.as_str(), value) {
+                ("defaultView", Ordered::Str(v)) => match v.as_str() {
+                    "priority" => "List",
+                    "matrix" => "Grid",
+                    _ => return Ok(Ok(None)),
+                },
+                _ => return Ok(Ok(None)),
+            };
+            fields.push(("Default task view".to_owned(), shown.to_owned()));
+        }
+        if fields.is_empty() {
+            return Ok(Ok(None));
+        }
+        return Ok(Ok(Some(json!({
+            "title": "Set task view preference",
+            "content": "user_authored",
+            "target": "Your task preferences",
+            "fields": fields.iter().map(|(l, v)| json!({"label":l,"value":v})).collect::<Vec<_>>(),
+            "version": "[]"
+        }))));
+    }
+    let Some((_, tool, map)) = ROUTES.iter().find(|(name, _, _)| *name == route) else {
+        return Ok(Err("Unknown Tasks route"));
+    };
+    if params.iter().any(|(key, _)| !map.iter().any(|(k, _)| k == key)) {
+        return Ok(Ok(None));
+    }
+    for (param, key) in *map {
+        let Some((_, value)) = params.iter().find(|(k, _)| k == param) else {
+            return Ok(Ok(None));
+        };
+        if values.iter().any(|(k, _)| k == key) {
+            return Ok(Ok(None));
+        }
+        values.push(((*key).to_owned(), clone(value)));
+    }
+    prepare_card(host, tool, &values)
+}
+fn clone(value: &Ordered) -> Ordered {
+    match value {
+        Ordered::Null => Ordered::Null,
+        Ordered::Other => Ordered::Other,
+        Ordered::Num(n) => Ordered::Num(n.clone()),
+        Ordered::Str(s) => Ordered::Str(s.clone()),
+        Ordered::List(items) => Ordered::List(items.iter().map(clone).collect()),
+        Ordered::Object(entries) => {
+            Ordered::Object(entries.iter().map(|(k, v)| (k.clone(), clone(v))).collect())
+        }
+    }
+}
+
+/// Handles the `prepareTaskRoute` API for the routes the legacy module presents.
 pub(crate) fn prepare_route<H: Host + ?Sized>(
     host: &H,
     route: &str,
-    params: &serde_json::Map<String, Value>,
-    query: &serde_json::Map<String, Value>,
-    body_json: Option<&str>,
+    params: Option<&str>,
+    query: Option<&str>,
+    body: Option<&str>,
 ) -> Value {
-    let Some((_, tool, mapping)) = ROUTES.iter().find(|(name, _, _)| *name == route) else {
-        return json!({"error":{"statusCode":400,"error":"Unknown Tasks route"}});
-    };
-    let none = json!({"ok":null});
-    if !query.is_empty() {
-        return none;
-    }
-    let mut input: Vec<(String, Ordered)> = match body_json {
-        None => Vec::new(),
-        Some(text) => match serde_json::from_str::<Ordered>(text) {
-            Ok(Ordered::Object(entries)) => entries,
-            _ => return none,
-        },
-    };
-    if params.keys().any(|k| !mapping.iter().any(|(p, _)| p == k)) {
-        return none;
-    }
-    for (param, key) in *mapping {
-        let Some(value) = params.get(*param) else {
-            return none;
-        };
-        if input.iter().any(|(k, _)| k == key) {
-            return none;
-        }
-        let Ok(value) = serde_json::from_value::<Ordered>(value.clone()) else {
-            return none;
-        };
-        input.push(((*key).to_owned(), value));
-    }
-    match prepare_card(host, tool, &input) {
+    match prepare_route_card(host, route, params, query, body) {
         Ok(Ok(card)) => json!({"ok":card}),
         Ok(Err(message)) => json!({"error":{"statusCode":400,"error":message}}),
         Err(_) => json!({"error":{"statusCode":503,"error":"Tasks service is unavailable"}}),
     }
-}
-
-/// Handles `prepareTaskPreferences`: only the default view, shown in words.
-pub(crate) fn prepare_preferences(
-    params: &serde_json::Map<String, Value>,
-    query: &serde_json::Map<String, Value>,
-    body_json: &str,
-) -> Value {
-    let none = json!({"ok":null});
-    if !params.is_empty() || !query.is_empty() {
-        return none;
-    }
-    let Ok(Ordered::Object(body)) = serde_json::from_str::<Ordered>(body_json) else {
-        return none;
-    };
-    let [(key, value)] = body.as_slice() else {
-        return none;
-    };
-    if key != "defaultView" {
-        return none;
-    }
-    let Some(shown) = choice(value, &[("priority", "List"), ("matrix", "Grid")]) else {
-        return none;
-    };
-    json!({"ok":{
-        "title": "Set task view preference",
-        "content": "user_authored",
-        "target": "Your task preferences",
-        "fields": [{"label":"Default task view","value":shown}],
-        "version": "[]"
-    }})
 }

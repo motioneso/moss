@@ -226,90 +226,83 @@ fn read_tools_and_unknown_requests_are_refused() {
     assert!(moss_tasks_module::handle(&Rows, "api", &other.to_string()).is_err());
 }
 
-fn api(name: &str, parameters: Value) -> Value {
-    let request = json!({"name":name,"parameters":parameters});
+fn route(name: &str, params: &str, query: Option<&str>, body: Option<&str>) -> Value {
+    let request = json!({"name":"prepareTaskRoute","parameters":{
+        "route":name,"paramsJson":params,"queryJson":query,"bodyJson":body}});
     let out = moss_tasks_module::handle(&Rows, "api", &request.to_string()).unwrap();
     serde_json::from_str(&out).unwrap()
 }
-fn route(name: &str, params: Value, query: Value, body: Option<&str>) -> Value {
-    api(
-        "prepareTaskRoute",
-        json!({"route":name,"params":params,"query":query,"bodyJson":body}),
-    )
-}
 
 #[test]
-fn route_cards_join_path_parameters_to_the_body() {
-    let renamed = route(
+fn route_cards_match_the_tool_cards_with_path_values_after_body_values() {
+    let c = route(
+        "addActivity",
+        &format!(r#"{{"id":"{TASK}"}}"#),
+        None,
+        Some(r#"{"activityType":"note","body":"Called"}"#),
+    );
+    assert_eq!(c["ok"]["title"], "Add task activity");
+    assert_eq!(c["ok"]["target"], "Write report");
+    assert_eq!(
+        rows(&c),
+        vec![
+            pair("Activity type", "note"),
+            pair("Text", "Called"),
+            pair("Task", "Write report")
+        ]
+    );
+    let c = route(
         "renameTag",
-        json!({"listId":LIST,"tagId":TAG}),
-        json!({}),
+        &format!(r#"{{"listId":"{LIST}","tagId":"{TAG}"}}"#),
+        Some("{}"),
         Some(r#"{"name":"Chores"}"#),
     );
-    assert_eq!(renamed["ok"]["title"], "Rename task tag");
-    assert_eq!(renamed["ok"]["target"], "Errands");
+    assert_eq!(c["ok"]["target"], "Errands");
     assert_eq!(
-        rows(&renamed),
-        vec![pair("Name", "Chores"), pair("List", "Home"), pair("Tag", "Errands")]
+        rows(&c),
+        vec![
+            pair("Name", "Chores"),
+            pair("List", "Home"),
+            pair("Tag", "Errands")
+        ]
     );
-    let removed = route("deleteList", json!({"listId":LIST}), json!({}), None);
-    assert_eq!(removed["ok"]["target"], "Home");
-    let broken = route(
-        "breakDown",
-        json!({"id":TASK}),
-        json!({}),
-        Some(r#"{"steps":["One","Two"]}"#),
-    );
-    assert_eq!(
-        rows(&broken)[..2],
-        [pair("Subtask 1", "One"), pair("Subtask 2", "Two")]
-    );
-    let created = route("createList", json!({}), json!({}), Some(r#"{"name":"Errands"}"#));
-    assert_eq!(created["ok"]["target"], "Your task lists");
 }
 
 #[test]
-fn route_cards_refuse_extra_missing_or_colliding_inputs() {
-    let none = json!({"ok":null});
-    let body = Some(r#"{"name":"X"}"#);
-    // query string, unknown parameter, missing parameter, body collision, bad body shapes
-    assert_eq!(route("renameList", json!({"listId":LIST}), json!({"a":"1"}), body), none);
-    assert_eq!(route("renameList", json!({"listId":LIST,"x":LIST}), json!({}), body), none);
-    assert_eq!(route("renameList", json!({}), json!({}), body), none);
+fn route_cards_refuse_odd_requests() {
+    let id = format!(r#"{{"id":"{TASK}"}}"#);
+    let body = Some(r#"{"activityType":"note"}"#);
+    // A query string, an extra parameter, a repeated key and a non-object body.
+    assert_eq!(route("addActivity", &id, Some(r#"{"x":"1"}"#), body)["ok"], Value::Null);
     assert_eq!(
-        route("renameList", json!({"listId":LIST}), json!({}), Some(r#"{"name":"X","listId":"y"}"#)),
-        none
+        route("addActivity", &format!(r#"{{"id":"{TASK}","x":"1"}}"#), None, body)["ok"],
+        Value::Null
     );
-    assert_eq!(route("renameList", json!({"listId":LIST}), json!({}), Some("null")), none);
-    assert_eq!(route("renameList", json!({"listId":LIST}), json!({}), Some("[1]")), none);
-    // a task id the account cannot see gives no card
     assert_eq!(
-        route("breakDown", json!({"id":OTHER_LIST}), json!({}), Some(r#"{"steps":["a"]}"#)),
-        none
+        route("addActivity", &id, None, Some(&format!(r#"{{"activityType":"note","taskId":"{TASK}"}}"#)))["ok"],
+        Value::Null
     );
-    let unknown = route("nope", json!({}), json!({}), None);
-    assert_eq!(unknown["error"]["statusCode"], 400);
-}
-
-fn prefs(body: &str, params: Value, query: Value) -> Value {
-    api(
-        "prepareTaskPreferences",
-        json!({"params":params,"query":query,"bodyJson":body}),
-    )
+    assert_eq!(route("addActivity", &id, None, Some("[]"))["ok"], Value::Null);
+    assert_eq!(route("addActivity", "{}", None, body)["ok"], Value::Null);
+    assert_eq!(
+        route("nope", "{}", None, None),
+        json!({"error":{"statusCode":400,"error":"Unknown Tasks route"}})
+    );
 }
 
 #[test]
-fn preferences_card_shows_the_view_in_words_and_refuses_the_rest() {
-    let list = prefs(r#"{"defaultView":"priority"}"#, json!({}), json!({}));
-    assert_eq!(list["ok"]["title"], "Set task view preference");
-    assert_eq!(list["ok"]["target"], "Your task preferences");
-    assert_eq!(rows(&list), vec![pair("Default task view", "List")]);
-    let grid = prefs(r#"{"defaultView":"matrix"}"#, json!({}), json!({}));
-    assert_eq!(rows(&grid), vec![pair("Default task view", "Grid")]);
-    let none = json!({"ok":null});
-    assert_eq!(prefs(r#"{"defaultView":"table"}"#, json!({}), json!({})), none);
-    assert_eq!(prefs(r#"{"defaultView":"matrix","x":1}"#, json!({}), json!({})), none);
-    assert_eq!(prefs("{}", json!({}), json!({})), none);
-    assert_eq!(prefs(r#"{"defaultView":"matrix"}"#, json!({"a":"b"}), json!({})), none);
-    assert_eq!(prefs(r#"{"defaultView":"matrix"}"#, json!({}), json!({"q":"1"})), none);
+fn preferences_card_shows_the_view_in_words() {
+    let c = route("setPreferences", "{}", None, Some(r#"{"defaultView":"matrix"}"#));
+    assert_eq!(c["ok"]["title"], "Set task view preference");
+    assert_eq!(c["ok"]["target"], "Your task preferences");
+    assert_eq!(c["ok"]["content"], "user_authored");
+    assert_eq!(rows(&c), vec![pair("Default task view", "Grid")]);
+    assert_eq!(
+        rows(&route("setPreferences", "{}", None, Some(r#"{"defaultView":"priority"}"#))),
+        vec![pair("Default task view", "List")]
+    );
+    for bad in [r#"{}"#, r#"{"defaultView":"x"}"#, r#"{"defaultView":"matrix","a":1}"#] {
+        assert_eq!(route("setPreferences", "{}", None, Some(bad))["ok"], Value::Null);
+    }
+    assert_eq!(route("setPreferences", "{}", None, None)["ok"], Value::Null);
 }

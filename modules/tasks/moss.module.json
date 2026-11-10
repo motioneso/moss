@@ -94,8 +94,7 @@
   },
   "provides": {
     "prepareTaskAction": "1.0.0",
-    "prepareTaskRoute": "1.0.0",
-    "prepareTaskPreferences": "1.0.0"
+    "prepareTaskRoute": "1.0.0"
   },
   "navigation": [
     {

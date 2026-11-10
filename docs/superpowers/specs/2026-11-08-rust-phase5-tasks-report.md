@@ -2177,26 +2177,24 @@ during a session shows after a reload.
 Remaining: per-queue retention in the host; email triage feedback; Today/chat focus links;
 installed chat and summary presentation; performance budgets; physical second-device HTTPS proof.
 
-## Tasks part 37 checkpoint (JS-213, Card 526)
+## Tasks part 36 checkpoint (JS-212, Card 526)
 
-Two more public calls build approval cards for the route forms of the write actions.
-`prepareTaskRoute` covers the ten route-form actions (add activity, assign and remove tag,
-create, rename and delete list, create, rename and delete tag, break down). Path parameters
-join the body as explicit inputs, so a query string, an unknown or missing parameter, a body
-key that collides with a parameter, or a body that is not an object gives no card. Titles,
-field order, row names and the changed-row version match the tool cards. `prepareTaskPreferences`
-shows the default task view in words (List or Grid) and refuses any other key, value, parameter or
-query.
+The Tasks package has a second public call, `prepareTaskRoute`, that builds the approval card
+for the routes the legacy module presents (add activity, assign and remove tag, break down,
+create, rename and delete list, create, rename and delete tag) and for the task-view preference
+change. It follows the legacy rules: path values are shown after the body values, a query
+string, an extra or missing path value, a body key that repeats a path value, or a non-object
+body gives no card, and the preference card shows "List" or "Grid" and refuses anything else.
+Another account, including an admin, gets no card for rows it cannot see.
 
-Checked: three new native tests plus the compiled-component privacy test (another account,
-including an admin, gets no card for a list it cannot see) in the full Tasks gate; see the
-gate result below.
+Checked: three native tests (nine in the file) pass; the full Tasks gate (`test:rust-tasks`)
+passed, including a new compiled-component test on a real database for route cards and for
+other accounts being refused; the live HTTPS gate (`test:rust-tasks-server`) passed with the
+manifest change loaded by the real server.
 
-Not proven or not built: no HTTP route exposes these calls and the Rust chat drawer has no
-approval card yet, so they are proven against the compiled component and a real database, not in
-the browser; per-queue retention of finished jobs; email triage feedback; Today/chat focus links;
-installed chat and summary presentation; performance budgets; physical second-device HTTPS proof.
-Workshop and Food remain excluded. Part of #4027; release note Category N/A.
-
-Remaining: per-queue retention in the host; email triage feedback; Today/chat focus links;
-installed chat and summary presentation; performance budgets; physical second-device HTTPS proof.
+Not proven or not built: no HTTP route exposes either call and the Rust chat drawer has no
+approval card, so no browser proof exists for this slice (the card has no screen yet); the
+card was proven against the compiled component and a real database only. Still open:
+per-queue retention in the host; email triage feedback; Today/chat focus links; installed chat
+and summary presentation; performance budgets; physical second-device HTTPS proof. Workshop
+and Food remain excluded. Part of #4027; release note Category N/A.
