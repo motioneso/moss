@@ -1726,13 +1726,17 @@ permissions, dependencies or SQL changes are introduced.
 
 The new native regressions failed against the previous route handler: it refused
 legacy unlink coercions and returned a different validation body. The new schema
-corpus executes real Fastify with the authored legacy schemas and an explicit
-folder-admission echo stand-in. The separate installed Settings oracle compares
+corpus executes real Fastify with the authored legacy schemas, Moss's real API
+error handler and an explicit folder-admission echo stand-in. The separate
+installed Settings oracle uses the same error handler and compares
 actual legacy handlers on disposable data, including each saved source/revision
 and unchanged other-account preferences. The existing preference RLS-removal
 control remains required. Command receipts, failing-first output and independent
 review are recorded in this task's proof artifact; no earlier receipt is reused
-as proof of this change.
+as proof of this change. Review found that the initial fixtures had omitted the
+API error handler and agreed on the wrong stock Fastify response. The corrected
+regression was observed failing before the guest response was fixed. Missing-body
+save coverage is retained; duplicate serialized zero cases are removed.
 
 The schema check covers bounded inputs, not every JSON value or malformed
 JSON/content-type transport behavior. Scalar paths coerced to relative text

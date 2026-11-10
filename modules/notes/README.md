@@ -720,16 +720,19 @@ The generic host flag is additive and defaults off for existing packages.
 The installed folder routes now use the legacy Fastify schema's validation shape
 and coercions. Unknown query/body fields are ignored; they never select an
 account or change the server's roots. Repeated directory paths and invalid body
-or path types return `FST_ERR_VALIDATION` before accessing preferences or files.
+or path types return the legacy 400 response with its specific reason before
+accessing preferences or files.
 Legacy false, zero and empty-string bodies (including their supported singleton
 array forms) unlink the calling account's folder. Explicit null or a missing
 path also unlinks it. Numeric/boolean path fields become text before vault admission.
 
 `tools/settings-input-parity.ts` records actual legacy Fastify schema behavior
-with an explicit folder-admission echo stand-in. Its native corpus includes
+and Moss's real API error handler, with an explicit folder-admission echo stand-in.
+Its native corpus includes
 numeric formatting boundaries, union-type singleton-array coercions and ignored
 fields. The aggregate gate checks that corpus is current. The installed Settings
-oracle separately compares actual legacy handlers, saved source and revision,
+oracle separately uses the same error handler and compares actual legacy routes,
+saved source and revision,
 and unchanged other-account preferences on a disposable database. It retains the
 preference RLS-removal control. These are bounded schema/handler cases, not proof
 of every JSON value, malformed JSON/content-type transport behavior or complete

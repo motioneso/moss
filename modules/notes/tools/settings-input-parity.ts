@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import Fastify from "fastify";
+import { setMossErrorHandler } from "../../../apps/api/src/error-handling.js";
 import {
   getNotesSourceDirectoriesRouteSchema,
   putNotesSourceRouteSchema
@@ -17,12 +18,12 @@ server.get(
   { schema: { querystring: getNotesSourceDirectoriesRouteSchema.querystring } },
   async (request) => ({ path: (request.query as { path?: string }).path ?? null })
 );
+setMossErrorHandler(server);
 const values = [
   null,
   false,
   true,
   0,
-  -0,
   42,
   -42,
   0.000001,
@@ -87,6 +88,11 @@ try {
       expected: { status: reply.statusCode, body: reply.json() }
     });
   }
+  const reply = await server.inject({ method: "PUT", url: "/notes-source" });
+  vectors.push({
+    request: { method: "PUT", path: "/notes-source" },
+    expected: { status: reply.statusCode, body: reply.json() }
+  });
 } finally {
   await server.close();
 }

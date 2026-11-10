@@ -25,8 +25,7 @@ fn route(host: &Folder, method: &str, path: &str, body: Value, query: Value) -> 
     .unwrap()
 }
 fn validation(message: &str) -> Value {
-    json!({"status":400,"body":{"statusCode":400,"code":"FST_ERR_VALIDATION",
-        "error":"Bad Request","message":message}})
+    json!({"status":400,"body":{"error":message}})
 }
 #[test]
 fn input_matches_actual_legacy_fastify_schemas() {

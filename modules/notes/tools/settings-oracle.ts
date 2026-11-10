@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Fastify from "fastify";
+import { setMossErrorHandler } from "../../../apps/api/src/error-handling.js";
 import pg from "pg";
 import { createDatabase, DataContextRunner, getMossDatabaseUrls } from "@moss/db";
 import { PreferencesRepository } from "../../../packages/structured-state/src/preferences-repository.js";
@@ -50,6 +51,7 @@ export async function settingsOracle() {
       resolveAccessContext: async () => ({ actorUserId: actor }),
       preferencesRepository: new PreferencesRepository()
     });
+    setMossErrorHandler(server);
     await server.ready();
     const expected = [];
     for (const [index, id] of actors.entries()) {
@@ -102,6 +104,7 @@ export async function settingsOracle() {
         },
         { method: "PUT", route: "/notes-source", source: roots[index]!, status: null, body: null },
         { method: "PUT", route: "/notes-source", source: roots[index]!, status: null, body: {} },
+        { method: "PUT", route: "/notes-source", source: roots[index]!, status: null },
         ...[
           42,
           true,

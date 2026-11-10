@@ -3,12 +3,8 @@
 use serde_json::{json, Value};
 
 pub(crate) fn validation(message: &str) -> moss_module_sdk::Response {
-    moss_module_sdk::Response::new(
-        400,
-        json!({
-            "statusCode":400,"code":"FST_ERR_VALIDATION","error":"Bad Request","message":message
-        }),
-    )
+    // Moss's API error handler projects validation errors to this shape.
+    moss_module_sdk::Response::new(400, json!({"error":message}))
 }
 
 fn null_coercion(value: &Value) -> bool {

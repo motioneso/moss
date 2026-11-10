@@ -1,31 +1,29 @@
 {"request":{"method":"PUT","path":"/notes-source","body":null},"expected":{"status":200,"body":{"path":null}}}
 {"request":{"method":"PUT","path":"/notes-source","body":false},"expected":{"status":200,"body":{"path":null}}}
-{"request":{"method":"PUT","path":"/notes-source","body":true},"expected":{"status":400,"body":{"statusCode":400,"code":"FST_ERR_VALIDATION","error":"Bad Request","message":"body must be object,null"}}}
+{"request":{"method":"PUT","path":"/notes-source","body":true},"expected":{"status":400,"body":{"error":"body must be object,null"}}}
 {"request":{"method":"PUT","path":"/notes-source","body":0},"expected":{"status":200,"body":{"path":null}}}
-{"request":{"method":"PUT","path":"/notes-source","body":0},"expected":{"status":200,"body":{"path":null}}}
-{"request":{"method":"PUT","path":"/notes-source","body":42},"expected":{"status":400,"body":{"statusCode":400,"code":"FST_ERR_VALIDATION","error":"Bad Request","message":"body must be object,null"}}}
-{"request":{"method":"PUT","path":"/notes-source","body":-42},"expected":{"status":400,"body":{"statusCode":400,"code":"FST_ERR_VALIDATION","error":"Bad Request","message":"body must be object,null"}}}
-{"request":{"method":"PUT","path":"/notes-source","body":0.000001},"expected":{"status":400,"body":{"statusCode":400,"code":"FST_ERR_VALIDATION","error":"Bad Request","message":"body must be object,null"}}}
-{"request":{"method":"PUT","path":"/notes-source","body":1e-7},"expected":{"status":400,"body":{"statusCode":400,"code":"FST_ERR_VALIDATION","error":"Bad Request","message":"body must be object,null"}}}
-{"request":{"method":"PUT","path":"/notes-source","body":100000000000000000000},"expected":{"status":400,"body":{"statusCode":400,"code":"FST_ERR_VALIDATION","error":"Bad Request","message":"body must be object,null"}}}
-{"request":{"method":"PUT","path":"/notes-source","body":1e+21},"expected":{"status":400,"body":{"statusCode":400,"code":"FST_ERR_VALIDATION","error":"Bad Request","message":"body must be object,null"}}}
-{"request":{"method":"PUT","path":"/notes-source","body":9007199254740992},"expected":{"status":400,"body":{"statusCode":400,"code":"FST_ERR_VALIDATION","error":"Bad Request","message":"body must be object,null"}}}
-{"request":{"method":"PUT","path":"/notes-source","body":1.25},"expected":{"status":400,"body":{"statusCode":400,"code":"FST_ERR_VALIDATION","error":"Bad Request","message":"body must be object,null"}}}
+{"request":{"method":"PUT","path":"/notes-source","body":42},"expected":{"status":400,"body":{"error":"body must be object,null"}}}
+{"request":{"method":"PUT","path":"/notes-source","body":-42},"expected":{"status":400,"body":{"error":"body must be object,null"}}}
+{"request":{"method":"PUT","path":"/notes-source","body":0.000001},"expected":{"status":400,"body":{"error":"body must be object,null"}}}
+{"request":{"method":"PUT","path":"/notes-source","body":1e-7},"expected":{"status":400,"body":{"error":"body must be object,null"}}}
+{"request":{"method":"PUT","path":"/notes-source","body":100000000000000000000},"expected":{"status":400,"body":{"error":"body must be object,null"}}}
+{"request":{"method":"PUT","path":"/notes-source","body":1e+21},"expected":{"status":400,"body":{"error":"body must be object,null"}}}
+{"request":{"method":"PUT","path":"/notes-source","body":9007199254740992},"expected":{"status":400,"body":{"error":"body must be object,null"}}}
+{"request":{"method":"PUT","path":"/notes-source","body":1.25},"expected":{"status":400,"body":{"error":"body must be object,null"}}}
 {"request":{"method":"PUT","path":"/notes-source","body":""},"expected":{"status":200,"body":{"path":null}}}
-{"request":{"method":"PUT","path":"/notes-source","body":"/notes"},"expected":{"status":400,"body":{"statusCode":400,"code":"FST_ERR_VALIDATION","error":"Bad Request","message":"body must be object,null"}}}
+{"request":{"method":"PUT","path":"/notes-source","body":"/notes"},"expected":{"status":400,"body":{"error":"body must be object,null"}}}
 {"request":{"method":"PUT","path":"/notes-source","body":{}},"expected":{"status":200,"body":{"path":null}}}
-{"request":{"method":"PUT","path":"/notes-source","body":[]},"expected":{"status":400,"body":{"statusCode":400,"code":"FST_ERR_VALIDATION","error":"Bad Request","message":"body must be object,null"}}}
-{"request":{"method":"PUT","path":"/notes-source","body":[null]},"expected":{"status":400,"body":{"statusCode":400,"code":"FST_ERR_VALIDATION","error":"Bad Request","message":"body must be object,null"}}}
+{"request":{"method":"PUT","path":"/notes-source","body":[]},"expected":{"status":400,"body":{"error":"body must be object,null"}}}
+{"request":{"method":"PUT","path":"/notes-source","body":[null]},"expected":{"status":400,"body":{"error":"body must be object,null"}}}
 {"request":{"method":"PUT","path":"/notes-source","body":[false]},"expected":{"status":200,"body":{"path":null}}}
 {"request":{"method":"PUT","path":"/notes-source","body":[0]},"expected":{"status":200,"body":{"path":null}}}
 {"request":{"method":"PUT","path":"/notes-source","body":[""]},"expected":{"status":200,"body":{"path":null}}}
-{"request":{"method":"PUT","path":"/notes-source","body":["/notes"]},"expected":{"status":400,"body":{"statusCode":400,"code":"FST_ERR_VALIDATION","error":"Bad Request","message":"body must be object,null"}}}
-{"request":{"method":"PUT","path":"/notes-source","body":["a","b"]},"expected":{"status":400,"body":{"statusCode":400,"code":"FST_ERR_VALIDATION","error":"Bad Request","message":"body must be object,null"}}}
-{"request":{"method":"PUT","path":"/notes-source","body":[[null]]},"expected":{"status":400,"body":{"statusCode":400,"code":"FST_ERR_VALIDATION","error":"Bad Request","message":"body must be object,null"}}}
+{"request":{"method":"PUT","path":"/notes-source","body":["/notes"]},"expected":{"status":400,"body":{"error":"body must be object,null"}}}
+{"request":{"method":"PUT","path":"/notes-source","body":["a","b"]},"expected":{"status":400,"body":{"error":"body must be object,null"}}}
+{"request":{"method":"PUT","path":"/notes-source","body":[[null]]},"expected":{"status":400,"body":{"error":"body must be object,null"}}}
 {"request":{"method":"PUT","path":"/notes-source","body":{"path":null}},"expected":{"status":200,"body":{"path":null}}}
 {"request":{"method":"PUT","path":"/notes-source","body":{"path":false}},"expected":{"status":200,"body":{"path":"false"}}}
 {"request":{"method":"PUT","path":"/notes-source","body":{"path":true}},"expected":{"status":200,"body":{"path":"true"}}}
-{"request":{"method":"PUT","path":"/notes-source","body":{"path":0}},"expected":{"status":200,"body":{"path":"0"}}}
 {"request":{"method":"PUT","path":"/notes-source","body":{"path":0}},"expected":{"status":200,"body":{"path":"0"}}}
 {"request":{"method":"PUT","path":"/notes-source","body":{"path":42}},"expected":{"status":200,"body":{"path":"42"}}}
 {"request":{"method":"PUT","path":"/notes-source","body":{"path":-42}},"expected":{"status":200,"body":{"path":"-42"}}}
@@ -37,15 +35,15 @@
 {"request":{"method":"PUT","path":"/notes-source","body":{"path":1.25}},"expected":{"status":200,"body":{"path":"1.25"}}}
 {"request":{"method":"PUT","path":"/notes-source","body":{"path":""}},"expected":{"status":200,"body":{"path":""}}}
 {"request":{"method":"PUT","path":"/notes-source","body":{"path":"/notes"}},"expected":{"status":200,"body":{"path":"/notes"}}}
-{"request":{"method":"PUT","path":"/notes-source","body":{"path":{}}},"expected":{"status":400,"body":{"statusCode":400,"code":"FST_ERR_VALIDATION","error":"Bad Request","message":"body/path must be string,null"}}}
-{"request":{"method":"PUT","path":"/notes-source","body":{"path":[]}},"expected":{"status":400,"body":{"statusCode":400,"code":"FST_ERR_VALIDATION","error":"Bad Request","message":"body/path must be string,null"}}}
+{"request":{"method":"PUT","path":"/notes-source","body":{"path":{}}},"expected":{"status":400,"body":{"error":"body/path must be string,null"}}}
+{"request":{"method":"PUT","path":"/notes-source","body":{"path":[]}},"expected":{"status":400,"body":{"error":"body/path must be string,null"}}}
 {"request":{"method":"PUT","path":"/notes-source","body":{"path":[null]}},"expected":{"status":200,"body":{"path":""}}}
 {"request":{"method":"PUT","path":"/notes-source","body":{"path":[false]}},"expected":{"status":200,"body":{"path":"false"}}}
 {"request":{"method":"PUT","path":"/notes-source","body":{"path":[0]}},"expected":{"status":200,"body":{"path":"0"}}}
 {"request":{"method":"PUT","path":"/notes-source","body":{"path":[""]}},"expected":{"status":200,"body":{"path":null}}}
-{"request":{"method":"PUT","path":"/notes-source","body":{"path":["/notes"]}},"expected":{"status":400,"body":{"statusCode":400,"code":"FST_ERR_VALIDATION","error":"Bad Request","message":"body/path must be string,null"}}}
-{"request":{"method":"PUT","path":"/notes-source","body":{"path":["a","b"]}},"expected":{"status":400,"body":{"statusCode":400,"code":"FST_ERR_VALIDATION","error":"Bad Request","message":"body/path must be string,null"}}}
-{"request":{"method":"PUT","path":"/notes-source","body":{"path":[[null]]}},"expected":{"status":400,"body":{"statusCode":400,"code":"FST_ERR_VALIDATION","error":"Bad Request","message":"body/path must be string,null"}}}
+{"request":{"method":"PUT","path":"/notes-source","body":{"path":["/notes"]}},"expected":{"status":400,"body":{"error":"body/path must be string,null"}}}
+{"request":{"method":"PUT","path":"/notes-source","body":{"path":["a","b"]}},"expected":{"status":400,"body":{"error":"body/path must be string,null"}}}
+{"request":{"method":"PUT","path":"/notes-source","body":{"path":[[null]]}},"expected":{"status":400,"body":{"error":"body/path must be string,null"}}}
 {"request":{"method":"PUT","path":"/notes-source","body":{"path":"/notes","actorUserId":"other","ignored":true}},"expected":{"status":200,"body":{"path":"/notes"}}}
 {"request":{"method":"PUT","path":"/notes-source","body":{"actorUserId":"other"}},"expected":{"status":200,"body":{"path":null}}}
 {"request":{"method":"GET","path":"/notes-source/directories","query":{}},"expected":{"status":200,"body":{"path":null}}}
@@ -54,6 +52,7 @@
 {"request":{"method":"GET","path":"/notes-source/directories","query":{"path":"/notes"}},"expected":{"status":200,"body":{"path":"/notes"}}}
 {"request":{"method":"GET","path":"/notes-source/directories","query":{"path":"false"}},"expected":{"status":200,"body":{"path":"false"}}}
 {"request":{"method":"GET","path":"/notes-source/directories","query":{"path":"/notes","actorUserId":"other"}},"expected":{"status":200,"body":{"path":"/notes"}}}
-{"request":{"method":"GET","path":"/notes-source/directories","query":{"path":["a","b"]}},"expected":{"status":400,"body":{"statusCode":400,"code":"FST_ERR_VALIDATION","error":"Bad Request","message":"querystring/path must be string"}}}
-{"request":{"method":"GET","path":"/notes-source/directories","query":{"path":["",""]}},"expected":{"status":400,"body":{"statusCode":400,"code":"FST_ERR_VALIDATION","error":"Bad Request","message":"querystring/path must be string"}}}
+{"request":{"method":"GET","path":"/notes-source/directories","query":{"path":["a","b"]}},"expected":{"status":400,"body":{"error":"querystring/path must be string"}}}
+{"request":{"method":"GET","path":"/notes-source/directories","query":{"path":["",""]}},"expected":{"status":400,"body":{"error":"querystring/path must be string"}}}
 {"request":{"method":"GET","path":"/notes-source/directories","query":{"ignored":["a","b"]}},"expected":{"status":200,"body":{"path":null}}}
+{"request":{"method":"PUT","path":"/notes-source"},"expected":{"status":200,"body":{"path":null}}}
