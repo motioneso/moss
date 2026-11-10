@@ -24,13 +24,17 @@ pub fn handle<H: Host + ?Sized>(host: &H, request: ToolRequest) -> Result<Value>
     }
     let repo = Repository::new(host);
     Ok(match request.tool.as_str() {
-        "tasks.list" => return crate::list::execute(&repo, &input),
+        "tasks.list" => {
+            crate::roll_forward::roll_forward_owned(&repo)?;
+            return crate::list::execute(&repo, &input);
+        }
         "tasks.summary" => return crate::summary::execute(&repo, &input),
         "tasks.focus" | "tasks.atRisk" | "tasks.overdue" => {
             let now = repo
                 .now()?
                 .parse::<chrono::DateTime<chrono::Utc>>()
                 .map_err(|_| Error::Http(500, "Internal server error"))?;
+            crate::roll_forward::roll_forward_owned(&repo)?;
             let rows = match request.tool.as_str() {
                 "tasks.focus" => crate::drift::focus(&repo, now)?,
                 "tasks.atRisk" => crate::drift::at_risk(&repo, now)?,
