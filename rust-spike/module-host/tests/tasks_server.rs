@@ -212,7 +212,7 @@ fn installed_tasks_package_serves_routes_and_nightly_job_from_the_real_server() 
     use reqwest::Method;
     // The server opens its module host in the background; wait until it answers.
     let ready = Instant::now() + Duration::from_secs(90);
-    while call(Method::GET, "/tasks", None, None).0 == 503 {
+    while call(Method::GET, "/tasks", Some(&cookie), None).0 == 503 {
         assert!(Instant::now() < ready, "module host never became ready");
         std::thread::sleep(Duration::from_millis(500));
     }
