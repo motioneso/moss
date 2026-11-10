@@ -524,8 +524,7 @@ fn Frame(shell: ShellView, modules: Vec<api::ModuleNav>) -> impl IntoView {
                                 js_sys::encode_uri_component(&m.path)
                             );
                             view! {
-                                <iframe class="module-screen" title=m.label.clone() src=src
-                                    style="display:block;width:100%;height:calc(100dvh - 9rem);min-height:24rem;border:0"></iframe>
+                                <iframe class="module-screen" title=m.label.clone() src=src></iframe>
                             }.into_any()
                         } else {
                             view! { <NotPortedYet /> }.into_any()

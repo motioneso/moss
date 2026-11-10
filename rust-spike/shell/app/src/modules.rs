@@ -367,7 +367,16 @@ pub fn routes(slot: Slot, web: PathBuf) -> Router {
         .route("/module-ui/{module}/{digest}/{*path}", get(ui_asset))
         .route(
             "/module-frame",
-            get(|| async { Html(include_str!("../../assets/module-frame.html")) }),
+            get(|| async {
+                // Only the app page may frame this one; the page frames its sandboxed screen.
+                (
+                    [(
+                        header::CONTENT_SECURITY_POLICY,
+                        "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'none'",
+                    )],
+                    Html(include_str!("../../assets/module-frame.html")),
+                )
+            }),
         )
         .route(
             "/module-frame.css",
