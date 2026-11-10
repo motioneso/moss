@@ -33,6 +33,17 @@ Unit tests for name validation and argument parsing pass.
   a browser. No screenshot exists.
 - Registry settings are file-based only. There is no in-app way to set them yet.
 
+## Review
+
+Round 1 (Codex): one major, fixed. Approval now names the reviewed version and the installer
+refuses if the registry's latest differs (gate checks a stale version gets 422 and a missing
+one gets 400). Three minors left open:
+
+- The list marks a module installed by id, so a newer registry version shows no Install button.
+- The screen keeps Install buttons enabled while a request runs, so a slow reply can overwrite
+  a newer dialog.
+- The gate checks permission group and headline are present, not their exact wording.
+
 ## Not built
 
 - Item 2: module AI through the capability router. Design is settled: a database-backed
