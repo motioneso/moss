@@ -36,6 +36,8 @@ struct Settings {
     producer_url: String,
     worker_url: String,
     connector_key: String,
+    #[serde(default)]
+    fuel_ceiling: Option<u64>,
 }
 
 // AI configuration is not assembled by this checkpoint. Calls fail closed.
@@ -82,6 +84,7 @@ pub fn open(path: &Path, database: Database) -> Result<ServerModules> {
             intelligence: Arc::new(UnconfiguredIntelligence),
             version: "0.1.0".parse()?,
             compiled_cache: None,
+            fuel_ceiling: settings.fuel_ceiling,
         },
     )?);
     let worker = Worker::start(

@@ -357,3 +357,41 @@ fn nested_app_map_fields_are_checked_instead_of_silently_dropped() {
     m.features[0]["errors"][0]["newLimit"] = json!(true);
     assert!(m.validate(&"0.1.0".parse().unwrap()).is_err());
 }
+
+#[test]
+fn manifest_fuel_request_is_clamped_to_the_host_ceiling() {
+    let call = |limits: Limits, request: Option<u64>| {
+        let mut manifest = common::manifest("1.0.0");
+        manifest.fuel_limit = request;
+        Host::new(limits)
+            .unwrap()
+            .call(
+                &common::wasm(),
+                Arc::new(manifest),
+                AccessContext::new(uuid::Uuid::new_v4(), "fuel"),
+                Arc::new(moss_module_host::runtime::DenyPorts),
+                "health",
+                "{}",
+            )
+            .is_ok()
+    };
+    let small = |ceiling| Limits {
+        fuel: 1,
+        fuel_ceiling: ceiling,
+        ..Limits::default()
+    };
+    assert!(!call(small(10_000_000), None));
+    assert!(call(small(10_000_000), Some(10_000_000)));
+    assert!(!call(small(1), Some(10_000_000)));
+    assert!(Host::new(Limits {
+        fuel: 5,
+        fuel_ceiling: 1,
+        ..Limits::default()
+    })
+    .is_err());
+    let mut manifest = common::manifest("1.0.0");
+    manifest.fuel_limit = Some(0);
+    assert!(manifest.validate(&"0.1.0".parse().unwrap()).is_err());
+    manifest.fuel_limit = Some(moss_module_host::manifest::MAX_FUEL_REQUEST + 1);
+    assert!(manifest.validate(&"0.1.0".parse().unwrap()).is_err());
+}

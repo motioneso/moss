@@ -59,9 +59,15 @@ impl Application {
             data,
         )?);
         let catalog = Arc::new(PostgresCatalog::new(database, admin)?);
+        let limits = Limits {
+            fuel_ceiling: config
+                .fuel_ceiling
+                .map_or(Limits::default().fuel, |c| c.max(Limits::default().fuel)),
+            ..Limits::default()
+        };
         let host = match config.compiled_cache {
-            Some((path, key)) => Host::cached(Limits::default(), &path, key)?,
-            None => Host::new(Limits::default())?,
+            Some((path, key)) => Host::cached(limits, &path, key)?,
+            None => Host::new(limits)?,
         };
         let installer = Arc::new(Installer::new(
             data,

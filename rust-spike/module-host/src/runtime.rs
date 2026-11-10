@@ -16,6 +16,8 @@ use wasmtime::{
 pub struct Limits {
     pub memory_bytes: usize,
     pub fuel: u64,
+    /// Host-wide cap on a manifest's requested fuel. Never below `fuel`.
+    pub fuel_ceiling: u64,
     pub deadline: Duration,
     pub message_bytes: usize,
 }
@@ -24,9 +26,16 @@ impl Default for Limits {
         Self {
             memory_bytes: 64 * 1024 * 1024,
             fuel: 10_000_000,
+            fuel_ceiling: 10_000_000,
             deadline: Duration::from_secs(5),
             message_bytes: 1024 * 1024,
         }
+    }
+}
+impl Limits {
+    /// A manifest may raise its budget above the default, never above the host ceiling.
+    pub fn effective_fuel(&self, requested: Option<u64>) -> u64 {
+        requested.map_or(self.fuel, |r| r.clamp(self.fuel, self.fuel_ceiling))
     }
 }
 #[derive(Clone)]
@@ -112,7 +121,9 @@ pub struct Host {
 impl Host {
     pub fn new(limits: Limits) -> Result<Self> {
         ensure!(
-            limits.fuel > 0 && limits.memory_bytes > 0 && !limits.deadline.is_zero(),
+            limits.fuel > 0
+                && limits.fuel_ceiling >= limits.fuel
+                && limits.memory_bytes > 0 && !limits.deadline.is_zero(),
             "Host limits must be positive"
         );
         let mut config = Config::new();
@@ -253,6 +264,7 @@ impl Host {
                 },
             )?;
         }
+        let fuel = self.limits.effective_fuel(manifest.fuel_limit);
         let scope = CallScope {
             call_id: uuid::Uuid::new_v4(),
             access,
@@ -280,7 +292,7 @@ impl Host {
             },
         );
         store.limiter(|state| &mut state.limits);
-        store.set_fuel(self.limits.fuel)?;
+        store.set_fuel(fuel)?;
         store.set_epoch_deadline((self.limits.deadline.as_millis().div_ceil(10) as u64) + 1);
         let instance = linker.instantiate(&mut store, &component)?;
         let handle = instance

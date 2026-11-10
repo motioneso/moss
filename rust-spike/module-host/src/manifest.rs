@@ -72,6 +72,9 @@ pub struct Manifest {
     pub tools: BTreeMap<String, Tool>,
     #[serde(default)]
     pub install_wide_kv: BTreeSet<String>,
+    /// Requested per-invocation fuel; the host clamps it to its own ceiling.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fuel_limit: Option<u64>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub policy_routes: BTreeMap<String, crate::account_contracts::PolicyRoute>,
 }
@@ -216,9 +219,18 @@ pub fn relative_path(path: &str) -> bool {
                 )
         })
 }
+/// Largest compute budget any manifest may request.
+pub const MAX_FUEL_REQUEST: u64 = 2_000_000_000;
+
 impl Manifest {
     pub fn validate(&self, moss: &Version) -> Result<()> {
         crate::metadata::validate(self)?;
+        if let Some(fuel) = self.fuel_limit {
+            ensure!(
+                (1..=MAX_FUEL_REQUEST).contains(&fuel),
+                "The module asks for an unsupported compute budget"
+            );
+        }
         ensure!(
             self.schema_version == 2,
             "This package uses an unsupported manifest version"
