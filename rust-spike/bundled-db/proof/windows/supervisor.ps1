@@ -41,6 +41,8 @@ function Start-Up {
     throw 'up never became ready'
 }
 $first = Start-Up
+$written = Run 'check with a marked row' @('check', '--root', $root, '--write', 'before-crash')
+if ($written -notmatch 'before-crash') { throw 'the marked row was not stored' }
 $status = Run 'status while running' @('status', '--root', $root) | ConvertFrom-Json
 if (-not $status.supervisor_pid) { throw 'status shows no supervisor while running' }
 Run 'stop' @('stop', '--root', $root) | Out-Null
@@ -50,9 +52,27 @@ if ($after.supervisor_pid) { throw 'status still shows a supervisor after stop' 
 $second = Start-Up
 $again = Run 'status after restart' @('status', '--root', $root) | ConvertFrom-Json
 if (-not $again.supervisor_pid) { throw 'status shows no supervisor after restart' }
-Run 'stop again' @('stop', '--root', $root) | Out-Null
-if (-not $second.WaitForExit(60000)) { throw 'supervisor did not exit after second stop' }
-Write-Output 'WINDOWS SUPERVISOR PROOF: init, up, status, stop, restart, stop all passed'
+# Crash: end the supervisor without a stop request. The job object must take the whole database
+# tree with it, and the next start must recover without help.
+function Database-Processes { @(Get-Process postgres -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$Postgres*" }) }
+$before = (Database-Processes).Count
+if ($before -lt 1) { throw 'no database processes while running' }
+Write-Host "== crash: $before database processes, killing supervisor $($second.Id)"
+Stop-Process -Id $second.Id -Force
+$second.WaitForExit(30000) | Out-Null
+$left = 99
+for ($i = 0; $i -lt 60; $i++) { $left = (Database-Processes).Count; if ($left -eq 0) { break }; Start-Sleep -Milliseconds 500 }
+Write-Host "== database processes left after the crash: $left"
+if ($left -ne 0) { throw "database processes outlived the crashed supervisor ($left)" }
+$third = Start-Up
+$recovered = Run 'status after crash recovery' @('status', '--root', $root) | ConvertFrom-Json
+if (-not $recovered.supervisor_pid) { throw 'status shows no supervisor after crash recovery' }
+$survived = Run 'check after crash recovery' @('check', '--root', $root)
+if ($survived -notmatch 'before-crash') { throw 'the marked row did not survive the crash' }
+Run 'stop after crash recovery' @('stop', '--root', $root) | Out-Null
+if (-not $third.WaitForExit(60000)) { throw 'supervisor did not exit after the post-crash stop' }
+if ((Database-Processes).Count -ne 0) { throw 'database processes remain after the final stop' }
+Write-Output 'WINDOWS SUPERVISOR PROOF: init, up, status, stop, restart, crash cleanup, crash recovery, stop all passed'
 '@ | Set-Content $inner
 $account = 'moss-db-proof'
 $password = ConvertTo-SecureString ([guid]::NewGuid().ToString('N') + 'aA1!') -AsPlainText -Force
