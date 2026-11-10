@@ -1206,6 +1206,8 @@ be left that nothing can run.
 
 Review round 1 fixes: the plan revision is re-read after the blocks are read, so a draft save that lands mid-reservation conflicts instead of freezing the newer draft; replay matches items by their frozen change and never recreates an item for a deleted block; the route refuses a null or repeated selection and an empty operation key like the original.
 
+Open after round 2: a draft save raises the revision before it rewrites blocks (existing behavior of the save path), so a reservation that expects the new revision while another save is still rewriting blocks could freeze a half-written draft. The client that made the save only learns the new revision after it finishes, so the window needs two clients. Closing it needs one host transaction across the save and the reservation, which the host does not offer yet. The route does not call `reserve`, so nothing is exposed until that exists.
+
 Differences from the original: the original holds a row lock on the plan while reserving; the host
 runs each database call in its own transaction, so the unique idempotency key, the revision check and
 replay repair carry that protection. The 202 approval gate and tier policy are host work, not built.
