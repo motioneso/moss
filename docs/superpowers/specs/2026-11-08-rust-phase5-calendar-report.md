@@ -1341,3 +1341,11 @@ external-calendar (Outlook) status controls (they belong to the Connectors packa
 second account, a second physical device over LAN or tailnet. Still required: Connectors, Tasks and
 Briefings adapters, the apply job and execution, full shell and chat, old-screen replacement,
 complete parity.
+
+## JS-211 / part 29: overlap with part 28, and a test diagnostic
+
+Part 29 first built the briefing switch independently; part 28 (#4211) merged the same feature
+first, so that work was dropped in favor of part 28's version. Part 29's only contribution is that the
+server test now prints the sign-up response body on failure. Observed before the merge: the server
+test failed at sign-up (422 "Failed to create user") when run in the same database right after the
+other Calendar tests, and passed when run alone. Cause not found.

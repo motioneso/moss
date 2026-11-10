@@ -149,7 +149,10 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
     };
     let signup = |email: &str, name: &str| {
         let response = client.post(format!("{origin}/api/auth/sign-up/email")).header("origin", &origin).json(&json!({"name":name,"email":email,"password":"temporary-calendar-password-181-not-a-real-secret"})).send().unwrap();
-        assert_eq!(response.status(), 200);
+        let status = response.status();
+        if status != 200 {
+            panic!("sign-up answered {status}: {}", response.text().unwrap_or_default());
+        }
         response.headers()["set-cookie"]
             .to_str()
             .unwrap()
