@@ -210,7 +210,10 @@ pub fn routes(slot: Slot, web: PathBuf) -> Router {
         .route("/api/m/{module}/{*path}", any(dispatch))
         .route("/api/modules/{module}/screen", get(screen))
         .route("/module-ui/{module}/{digest}/{*path}", get(ui_asset))
-        .route("/module-frame", get(|| async { Html(include_str!("../../assets/module-frame.html")) }))
+        .route(
+            "/module-frame",
+            get(|| async { Html(include_str!("../../assets/module-frame.html")) }),
+        )
         .route(
             "/module-frame.js",
             get(|| async {
@@ -275,9 +278,7 @@ async fn screen(
         return StatusCode::SERVICE_UNAVAILABLE.into_response();
     };
     match tokio::task::spawn_blocking(move || {
-        application
-            .installer
-            .screen(&access, &module, &query.path)
+        application.installer.screen(&access, &module, &query.path)
     })
     .await
     {
@@ -315,11 +316,8 @@ async fn ui_asset(
     .await
     {
         Ok(Ok(asset)) => {
-            let mut response = (
-                [(header::CONTENT_TYPE, asset.content_type)],
-                asset.body,
-            )
-                .into_response();
+            let mut response =
+                ([(header::CONTENT_TYPE, asset.content_type)], asset.body).into_response();
             for (name, value) in asset.headers {
                 if let (Ok(name), Ok(value)) =
                     (HeaderName::try_from(name), HeaderValue::try_from(value))

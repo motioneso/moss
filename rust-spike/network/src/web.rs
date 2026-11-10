@@ -113,18 +113,19 @@ fn module_asset(path: &str) -> bool {
 fn public(path: &str) -> bool {
     module_asset(path)
         || matches!(
-        path,
-        "/sign-in"
-            | "/setup"
-            | "/api/setup/status"
-            | "/api/hello"
-            | "/api/auth/sign-in/email"
-            | "/api/auth/sign-up/email"
-            | "/access.js"
-            | "/app.css"
-            | "/boot-theme.js"
-            | "/icon.svg"
-    ) || path.starts_with("/fonts/")
+            path,
+            "/sign-in"
+                | "/setup"
+                | "/api/setup/status"
+                | "/api/hello"
+                | "/api/auth/sign-in/email"
+                | "/api/auth/sign-up/email"
+                | "/access.js"
+                | "/app.css"
+                | "/boot-theme.js"
+                | "/icon.svg"
+        )
+        || path.starts_with("/fonts/")
 }
 
 fn denied(status: u16, code: &'static str) -> Response {

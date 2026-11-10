@@ -289,8 +289,14 @@ fn installed_people_package_serves_routes_from_the_real_server() {
         .send()
         .unwrap();
     assert_eq!(asset.status(), 200, "screen file without a session");
-    let csp = asset.headers()["content-security-policy"].to_str().unwrap().to_owned();
-    assert!(csp.contains("sandbox allow-scripts allow-forms") && csp.contains(&origin), "{csp}");
+    let csp = asset.headers()["content-security-policy"]
+        .to_str()
+        .unwrap()
+        .to_owned();
+    assert!(
+        csp.contains("sandbox allow-scripts allow-forms") && csp.contains(&origin),
+        "{csp}"
+    );
     assert_eq!(
         client
             .get(format!("{origin}/api/modules/people/screen?path=/nope"))
@@ -403,7 +409,9 @@ fn installed_people_package_serves_routes_from_the_real_server() {
     let (status, owner_list) = call(Method::GET, "/people", Some(&cookie), None);
     assert_eq!(status, 200, "{owner_list}");
     assert!(
-        owner_list["people"].as_array().is_some_and(|p| !p.is_empty())
+        owner_list["people"]
+            .as_array()
+            .is_some_and(|p| !p.is_empty())
             && !owner_list.to_string().contains(&second_person),
         "owner must not see the second account's person: {owner_list}"
     );
