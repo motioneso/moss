@@ -1318,3 +1318,27 @@ protection, there is no concurrent test), a batch over 1000 items, any caller (n
 the apply job that would settle the batch, a second account over HTTP, a second physical device. Still required: Connectors, Tasks and Briefings
 adapters, apply execution, retry/recover/confirm running a change, source behavior and
 external-calendar status controls, full shell and chat, old-screen replacement, complete parity.
+
+## JS-211 / part 29: briefing signal switch (source behaviors)
+
+Package 0.24.0 adds `GET /source-behaviors` and `PUT /source-behaviors/:id`, backed by a new Calendar
+key-value resource that reads and writes the account's existing `sourceBehaviors` preference. The
+original app and this package therefore share one switch. Answers keep the original envelope for the
+Calendar source: four behaviors (briefings and planning and write-back default on, commitment
+detection "coming soon" and not toggleable). Errors match the original: unknown id 404, coming-soon
+422, bad body 400. Writes merge into the stored blob under an account lock and commit with the call.
+The settings screen now shows the original "Include calendar signal in briefings" switch.
+
+Proof (via `scripts/run-gate.sh`): the installed database test shows defaults, one account's toggle,
+no effect on another account or an administrator, and the three error cases. The real HTTPS server
+gate turns the switch off through the real control in a real browser, reads it back from the server
+(briefings off, planning still on) and sees it stay off after a reload. Nothing rewritten.
+
+One unexplained blip: the first server-gate run failed at account sign-up with 422 before reaching
+Calendar; an identical rerun passed. The test now prints the sign-up body if it recurs.
+
+Not proven: provider execution, the four provider tools end to end, retry/recover/confirm running a
+change, a second account in a browser, a second physical device. The write-back and planning
+switches are stored but no Rust code consults them yet, because the apply job and planning need the
+Connectors and Briefings packages. The core `/api/me/source-behaviors` list for other modules is
+still not in the Rust server; Calendar answers only for its own source.
