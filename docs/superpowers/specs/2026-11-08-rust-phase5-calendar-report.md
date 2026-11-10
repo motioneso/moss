@@ -1321,7 +1321,7 @@ external-calendar status controls, full shell and chat, old-screen replacement, 
 
 ## JS-211 / part 29: briefing signal switch (source behaviors)
 
-Package 0.24.0 adds `GET /source-behaviors` and `PUT /source-behaviors/:id`, backed by a new Calendar
+Package 0.25.0 adds `GET /source-behaviors` and `PUT /source-behaviors/:id`, backed by a new Calendar
 key-value resource that reads and writes the account's existing `sourceBehaviors` preference. The
 original app and this package therefore share one switch. Answers keep the original envelope for the
 Calendar source: four behaviors (briefings and planning and write-back default on, commitment

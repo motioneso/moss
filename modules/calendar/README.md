@@ -499,6 +499,6 @@ unique idempotency key and the revision check carry that protection instead.
 
 ## Briefing signal switch (part 29)
 
-Version 0.24.0 adds the "Include calendar signal in briefings" switch to the settings screen,
+Version 0.25.0 adds the "Include calendar signal in briefings" switch to the settings screen,
 backed by `GET /source-behaviors` and `PUT /source-behaviors/:id` over the shared `sourceBehaviors`
 preference. Planning and write-back toggles are stored but not yet consulted. See the phase report.
