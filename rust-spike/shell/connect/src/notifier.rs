@@ -182,6 +182,9 @@ async fn poll(entry: &Entry, seen: &mut HashSet<(String, String)>) {
     )
     .await;
     // The notice is in `seen` until the server agrees; after that the receipt carries it.
+    if !matches!(accepted, Ok((200, _))) {
+        eprintln!("moss-app notifier: the server did not accept the receipt ({:?})", accepted.as_ref().map(|(c, _)| *c));
+    }
     if matches!(accepted, Ok((200, _))) {
         seen.retain(|(s, id)| !(s == &entry.server && shown.contains(id)));
     }

@@ -489,6 +489,7 @@ fn module_worker_and_https_feed_assemble_without_a_desktop() {
             .arg("sh").arg(&stub).arg(&log).arg(&app).arg(&data)
             .output().unwrap();
         assert!(ran.status.success(), "{}", String::from_utf8_lossy(&ran.stderr));
+        println!("round {rounds} notifier stderr: {}", String::from_utf8_lossy(&ran.stderr));
         // The server's own schedule keeps posting its synthetic alert every minute.
         fs::read_to_string(&log).unwrap().lines().map(|l| serde_json::from_str::<Value>(l).unwrap()).filter(|t| t["title"] != "Synthetic module worker alert").collect()
     };
@@ -506,7 +507,8 @@ fn module_worker_and_https_feed_assemble_without_a_desktop() {
     let toasts = round();
     assert_eq!(toasts.len(), 1, "{toasts:?}");
     assert_eq!(toasts[0]["title"], "Alert one");
-    assert_eq!(round().len(), 0, "an accepted alert does not show twice");
+    let second = round();
+    assert_eq!(second.len(), 0, "an accepted alert does not show twice: {second:?}");
     runtime.block_on(db.execute("UPDATE app.notifications SET updated_at=now(), title='Alert one again' WHERE id=$1", &[&alert])).unwrap();
     let again = round();
     assert_eq!(again.len(), 1, "a refreshed notification alerts again");
