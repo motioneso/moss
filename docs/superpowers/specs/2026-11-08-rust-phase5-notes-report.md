@@ -1895,7 +1895,11 @@ nothing, so unlinking needs no cancellation. Scheduling failures never fail the 
 manual sync. Unit tests cover the schedule request and the linked and unlinked tick; the
 write-tools, sync, component and screen suites pass on the rebuilt components.
 
-RESULT_PLACEHOLDER
+Live proof (`pnpm test:rust-notes-server`, through the gate, passed): on the real HTTPS server
+with a real sign-up, linking the folder created exactly one `*/15 * * * *` schedule row. A note
+was then added to the folder and the schedule made due; the server's own scheduler and worker
+indexed the new note with no manual request. Not proven: waiting a real fifteen minutes (the due
+time was set directly), a hosted embeddings provider, a second account, native UI, second device.
 
 Still open: automatic recovery timer, retention, managed publication and reconciliation,
 private exports and daily archives, singleton coalescing and recall warmup, the assembled
