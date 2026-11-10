@@ -167,7 +167,15 @@ function signature() {
   const xwd = join(scratch, "sig.xwd");
   sh("xwd", ["-root", "-silent", "-out", xwd]);
   return execFileSync("ffmpeg", [
-    "-loglevel", "error", "-i", xwd, "-vf", "scale=32:24:flags=area,format=gray", "-f", "rawvideo", "-"
+    "-loglevel",
+    "error",
+    "-i",
+    xwd,
+    "-vf",
+    "scale=32:24:flags=area,format=gray",
+    "-f",
+    "rawvideo",
+    "-"
   ]);
 }
 function distance(a: Buffer, b: Buffer) {
@@ -198,18 +206,24 @@ async function startServer() {
 
 try {
   for (const d of [web, install, join(install, "web"), inst]) mkdirSync(d, { recursive: true });
-  if (realWeb) assert(existsSync(join(realWeb, "app.js")) || existsSync(join(realWeb, "index.html")), "CLICK_WEB must hold a built web app");
+  if (realWeb)
+    assert(
+      existsSync(join(realWeb, "app.js")) || existsSync(join(realWeb, "index.html")),
+      "CLICK_WEB must hold a built web app"
+    );
   mkdirSync(data, { mode: 0o700 }); // the app refuses a data folder others can read
-  if (!realWeb) writeFileSync(
-    join(web, "index.html"),
-    `<!doctype html><title>Moss proof page</title><body style="font:64px sans-serif;padding:40px">` +
-      `<div>PAGE:</div><div id=p></div><script src="/page.js"></script>`
-  );
-  if (!realWeb) writeFileSync(
-    join(web, "page.js"),
-    `document.getElementById("p").textContent=location.pathname;` +
-      `document.body.style.background=({"/tasks":"#f00","/notes":"#0f0","/today":"#00f"})[location.pathname]||"#fff"`
-  );
+  if (!realWeb)
+    writeFileSync(
+      join(web, "index.html"),
+      `<!doctype html><title>Moss proof page</title><body style="font:64px sans-serif;padding:40px">` +
+        `<div>PAGE:</div><div id=p></div><script src="/page.js"></script>`
+    );
+  if (!realWeb)
+    writeFileSync(
+      join(web, "page.js"),
+      `document.getElementById("p").textContent=location.pathname;` +
+        `document.body.style.background=({"/tasks":"#f00","/notes":"#0f0","/today":"#00f"})[location.pathname]||"#fff"`
+    );
   const credentials = join(scratch, "credentials.json");
   writeFileSync(
     credentials,
@@ -320,6 +334,11 @@ try {
   // 1. No window is open. A clicked alert starts one on the right server and page.
   await post("Proof one", "/tasks");
   await post("Proof two", realWeb ? "/modules" : "/notes");
+  // Posted before the window opens, because an open window holds back the separate notifier.
+  if (realWeb) {
+    await post("Proof three", "/tasks");
+    await post("Proof four", "/today");
+  }
   const first = await until("first alert", () => alerts().find((a) => a.title === "Proof one"));
   assert.deepEqual(first.actions, ["default", "Open"], "the alert offers a click action");
   assert.equal(windows().length, 0, "no window before the click");
@@ -334,10 +353,10 @@ try {
   const win = windows()[0];
   sh("xdotool", ["windowsize", win, "1100", "780", "windowmove", win, "0", "0"]);
   shot("1-after-first-click");
-  sh("xdotool", ["mousemove", "550", "400", "click", "1"]);
+  sh("xdotool", ["mousemove", "550", realWeb ? "386" : "400", "click", "1"]);
   console.log("SIGNIN-ATTEMPT");
   for (const step of [
-    ["key", "Tab"],
+    ...(realWeb ? [] : [["key", "Tab"]]),
     ["type", "click-proof@example.test"],
     ["key", "Tab"],
     ["type", "click-proof-password-1"],
@@ -373,11 +392,9 @@ try {
     };
     const modulesLook = await visit("Proof two", "3-modules-page");
     assert(distance(modulesLook, todayLook!) > 2, "the Modules link changed the page");
-    await post("Proof three", "/tasks");
     await until("third alert", () => alerts().find((a) => a.title === "Proof three"));
     const tasksLook = await visit("Proof three", "4-tasks-link");
     assert(distance(tasksLook, modulesLook) > 2, "the Tasks link changed the page again");
-    await post("Proof four", "/today");
     await until("fourth alert", () => alerts().find((a) => a.title === "Proof four"));
     const backLook = await visit("Proof four", "5-today-again");
     assert(distance(backLook, tasksLook) > 2, "the Today link left the Tasks page");
