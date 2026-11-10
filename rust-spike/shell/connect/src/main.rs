@@ -7,6 +7,7 @@
 
 mod desktop;
 mod launch;
+mod notifier;
 mod pin;
 mod provision;
 mod reach;
@@ -136,6 +137,9 @@ fn parse_args() -> Result<Args, String> {
 }
 
 fn main() {
+    if std::env::args().nth(1).as_deref() == Some("notifier") {
+        std::process::exit(notifier::command(std::env::args().skip(2).collect()));
+    }
     let args = match parse_args() {
         Ok(a) => a,
         Err(e) => {
@@ -802,11 +806,34 @@ impl App {
                 let proxy = self.proxy.clone();
                 let server = opened.id.clone();
                 let origin = opened.origin.clone();
+                let data = self.store.data.clone();
+                let pin = moss_network::instance::fingerprint(&opened.certificate);
                 move |request: Request<String>| {
                     if url::Url::parse(&request.uri().to_string())
                         .is_ok_and(|u| u.origin().ascii_serialization() == origin)
                     {
                         if let Ok(message) = serde_json::from_str::<Value>(request.body()) {
+                            if message["heartbeat"].as_bool() == Some(true) {
+                                notifier::mark_app_active(&data, &server);
+                            }
+                            // The page registered a device token for the notifier. The client id
+                            // is the page's own, so a receipt from either side covers both.
+                            if let (Some(client), Some(token)) =
+                                (message["client"].as_str(), message["token"].as_str())
+                            {
+                                if uuid::Uuid::parse_str(client).is_ok() && token.len() <= 128 {
+                                    let entry = notifier::Entry {
+                                        server: server.clone(),
+                                        origin: origin.clone(),
+                                        pin: pin.clone(),
+                                        client: client.into(),
+                                        token: token.into(),
+                                    };
+                                    if notifier::enroll(&data, entry).is_ok() {
+                                        notifier::spawn(&data);
+                                    }
+                                }
+                            }
                             if let (Some(kind @ ("chat" | "reminder")), Some(receipt)) =
                                 (message["notice"].as_str(), message["receipt"].as_str())
                             {

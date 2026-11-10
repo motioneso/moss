@@ -98,6 +98,22 @@
     window.ipc.postMessage(JSON.stringify({ notice: kind, receipt: token }));
   };
 
+  // One device token per server profile, kept in the profile and handed to the app so its
+  // notifier can keep alerting after the window closes. The notifier shares this client id.
+  const enrollKey = "moss.desktop.notifier.v1";
+  const enrollNotifier = async () => {
+    if (localStorage.getItem(enrollKey) === client()) return;
+    const response = await fetch("/api/desktop/notifier", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ client: client() })
+    });
+    if (!response.ok) return;
+    const saved = await response.json();
+    window.ipc.postMessage(JSON.stringify({ client: client(), token: saved.token }));
+    localStorage.setItem(enrollKey, client());
+  };
+
   const poll = async () => {
     if (busy) return;
     busy = true;
@@ -115,6 +131,8 @@
       const data = await response.json();
       if (account !== data.account) inflight.clear();
       account = data.account;
+      window.ipc.postMessage(JSON.stringify({ heartbeat: true }));
+      await enrollNotifier();
       observe("reminder", data.events, data.acknowledged);
       const thread = await fetch("/api/chat/thread", { cache: "no-store" });
       if (thread.ok) {
