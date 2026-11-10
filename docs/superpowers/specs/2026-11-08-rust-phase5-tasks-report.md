@@ -2010,3 +2010,28 @@ dispatch; public People linkage; policy enforcement and feedback orchestration;
 remaining screens/settings and Today/chat links; installed chat and summary
 presentation; real application shell integration; performance budgets; physical
 second-device HTTPS proof.
+
+## Tasks part 30 checkpoint (JS-182, Card 526)
+
+The nightly recurrence job is ported. Creating or rolling a recurring series now
+registers one schedule per account (03:00 UTC, keyed so a second series replaces the
+first instead of adding another). The host gained an optional schedule key that makes
+the schedule id deterministic. The job runs in the owner's account only, calls the
+same roll-forward as the lazy path, and returns how many series moved. The date
+arithmetic now jumps by whole periods instead of stepping, with a unit test proving it
+matches the old stepwise result.
+
+Proof: the focused job gate (`test:rust-tasks-jobs`) checks one schedule per account,
+fires it through the real scheduler and queue, and confirms another account's series
+stays put. The live gate (`test:rust-tasks-server`) runs the installed package on the
+real HTTPS server: sign-in required, a recurring create makes one schedule, the
+server's own worker ran the job and moved 2020-01-01 to 2026-11-10.
+
+Not proven: native UI, a second physical device, a second account over HTTP (setup
+allows one owner). Workshop and Food remain excluded. Part of #4027; release note
+Category N/A.
+
+Remaining: deferred-queue retry/retention and installed worker dispatch; public People
+linkage; policy enforcement and feedback orchestration; remaining screens/settings and
+Today/chat links; installed chat and summary presentation; real application shell
+integration; performance budgets; physical second-device HTTPS proof.

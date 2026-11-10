@@ -77,8 +77,11 @@ midnights follow DST rather than assuming every day lasts twenty-four hours.
 
 Part 29 adds lazy recurrence advancement: the list and focus, at-risk and overdue
 reads (routes and tools) first move each stale owned series to its next occurrence
-on the account's local day, as the legacy server does. Current remaining work:
-recurrence jobs, full
+on the account's local day, as the legacy server does.
+
+Part 30 adds the nightly recurrence job: one keyed schedule per account (03:00 UTC)
+runs the same roll-forward in the owner's account, and recurring creates keep it
+registered. Current remaining work: full
 deferred-queue policy and installed worker dispatch, public People linkage,
 policy/feedback orchestration, remaining screen/settings parity, installed chat and summary presentation,
 real application shell integration, performance budgets and physical second-device
