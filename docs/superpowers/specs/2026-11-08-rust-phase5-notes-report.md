@@ -1904,3 +1904,37 @@ time was set directly), a hosted embeddings provider, a second account, native U
 Still open: automatic recovery timer, retention, managed publication and reconciliation,
 private exports and daily archives, singleton coalescing and recall warmup, the assembled
 Settings and chat join, and second-device HTTPS proof.
+
+## Part twenty-nine checkpoint — private note export
+
+Package 0.1.18 provides `exportPrivateNote` and `inspectPrivateNote` (module-to-module APIs,
+input `{sourceId, version, content}`, no account or path override). A copy is written once to
+`notes/generated/<source id>/v<version>.md` in the caller's private area through a new vault
+resource, `private-export`. A retry compares complete bytes: identical is `unchanged`, different is
+`conflict` and the file is never overwritten. The result matches the legacy service (destination,
+audience, reference, SHA-256 content hash, status). Identities are checked before any host call.
+
+The server maps the resource to `<private_base>/<account id>/notes/generated` (a new optional
+`private_base` in the modules file, default `<data>/private-notes`). It is separate from the
+linked notes folder, so copies are never synced or indexed as ordinary notes.
+
+Checks: three guest unit tests (create once, conflict kept, inspect never writes, identity
+validation, forged fields refused); component, write-tool, screen and sync suites pass on the
+rebuilt components. Live (`pnpm test:rust-notes-server`, through the gate, passed): against real
+Postgres and real files, a copy was written once, a retry was unchanged, a different retry was a
+kept conflict, and a second actor's copy landed in its own folder.
+
+Review round 1 (Codex): the server now refuses a `private_base` that sits inside or contains the
+notes base, and private export is registered even when no notes base is configured (compile
+checked only; the live gate was not rerun after this change). One finding is declined: creation
+uses the existing compare-and-write, which checks then renames, so an outside program writing the
+exact same private file in that instant could be replaced. The area is owner-only and Moss is its
+only writer; the same documented limit applies to every linked-folder write.
+
+Not proven: the API over HTTP (it has no route; it ran in this process), indexing of private
+copies (the legacy queue-index step is not ported), a second signed-in account, native UI and a
+second physical device.
+
+Still open: automatic recovery timer, retention, managed publication and reconciliation, daily
+archives, singleton coalescing and recall warmup, the assembled Settings and chat join, and
+second-device HTTPS proof.

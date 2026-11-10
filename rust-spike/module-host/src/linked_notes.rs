@@ -67,8 +67,17 @@ pub struct PreferenceFolders {
     resources: BTreeMap<(String, String), PreferenceFolder>,
     roots: BTreeMap<Uuid, AllowedRoots>,
     account_base: Option<PathBuf>,
+    private_exports: BTreeMap<(String, String), PathBuf>,
 }
 impl PreferenceFolders {
+    /// Connects `resource` to `<base>/<account id>/notes/generated`, a private vault root
+    /// that is separate from any linked notes folder. No preference or guest input picks it.
+    pub fn with_private_export(mut self, module: &str, resource: &str, base: PathBuf) -> Self {
+        self.private_exports
+            .insert((module.into(), resource.into()), base);
+        self
+    }
+
     /// Accounts without explicit roots get `<base>/<account id>`.
     pub fn with_account_base(mut self, base: PathBuf) -> Self {
         self.account_base = Some(base);
@@ -85,6 +94,7 @@ impl PreferenceFolders {
             resources,
             roots,
             account_base: None,
+            private_exports: BTreeMap::new(),
         })
     }
 }
@@ -98,6 +108,17 @@ impl FolderProvider for PreferenceFolders {
     ) -> Result<LinkedFolder> {
         let started = Instant::now();
         ensure!(!budget.is_zero(), "The linked notes lookup timed out");
+        if let Some(base) = self
+            .private_exports
+            .get(&(module.to_owned(), resource.to_owned()))
+        {
+            let roots = crate::account_preferences::account_base_root(base, access.actor_user_id())?;
+            let root = roots.first().context("The private notes root is unavailable")?;
+            let target = root.join("notes").join("generated");
+            std::fs::create_dir_all(&target)
+                .context("The private notes root could not be prepared")?;
+            return LinkedFolder::open(access, &target, &AllowedRoots::for_account(access, roots));
+        }
         let config = self
             .resources
             .get(&(module.into(), resource.into()))

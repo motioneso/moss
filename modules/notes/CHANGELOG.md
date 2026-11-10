@@ -1,5 +1,9 @@
 # Notes package
 
+## 0.1.18
+
+- Other modules can now save a versioned private copy of a note into your own private area, and check whether a copy exists. Copies are never overwritten and never appear in your linked notes folder. Indexing of these copies is not available yet.
+
 ## 0.1.17
 
 - A linked notes folder now syncs on its own every fifteen minutes. Linking a folder or pressing Sync now sets up the schedule; unlinking cancels it. Automatic indexing recovery is not available yet.

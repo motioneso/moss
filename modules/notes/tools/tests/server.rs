@@ -624,6 +624,110 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
         drop(application);
         drop(runtime);
     }
+    // Private note export runs through the same host ports in this process (it is a
+    // module-to-module API with no HTTP route), with the real database and real files.
+    {
+        use moss_module_host::linked_notes::{LinkedNotesPorts, PreferenceFolders};
+        let ai: Arc<dyn moss_module_host::ai::Intelligence> = Arc::new(
+            moss_module_host::ai::EmbeddingsOnly::new(moss_module_host::ai::FixedEmbeddings::new(
+                embedding_url.parse().unwrap(),
+                "bag-of-words-768".into(),
+                "local-stub".into(),
+            ))
+            .unwrap(),
+        );
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let app = runtime.block_on(async {
+            safety_core::db::Database::connect(&app_url, 4, safety_core::db::RuntimeRole::App)
+                .await
+                .unwrap()
+        });
+        let folder_database = app.clone();
+        let cipher = safety_core::secret::SecretCipher::connectors(
+            &std::collections::HashMap::from([(
+                "JARVIS_CONNECTOR_SECRET_KEY".into(),
+                connector_key.clone(),
+            )]),
+        )
+        .unwrap();
+        let private_base = root.join("private");
+        let base_for_ports = private_base.clone();
+        let application = Application::open_extended_with(
+            &root.join("data"),
+            app,
+            access.clone(),
+            Configuration {
+                migrations: Secret::new(bootstrap_url.clone()),
+                producer: Secret::new(app_url.clone()),
+                cipher: Arc::new(cipher),
+                intelligence: ai,
+                version: "0.1.0".parse().unwrap(),
+                compiled_cache: None,
+                fuel_ceiling: None,
+            },
+            |services| {
+                let folders = PreferenceFolders::new(
+                    folder_database,
+                    std::collections::BTreeMap::new(),
+                    std::collections::BTreeMap::new(),
+                )
+                .unwrap()
+                .with_private_export("notes", "private-export", base_for_ports);
+                Ok(Arc::new(LinkedNotesPorts::new(Arc::new(folders), services)))
+            },
+        )
+        .unwrap();
+        let source = "0f8fad5b-d9cb-469f-a165-70867728950e";
+        let api = |actor: uuid::Uuid, name: &str, version: u64, content: &str| -> Value {
+            serde_json::from_str(
+                &application
+                    .installer
+                    .call(
+                        "notes",
+                        AccessContext::new(actor, "notes-private-export-live"),
+                        "api",
+                        &json!({"name":name,"parameters":{"sourceId":source,"version":version,"content":content}})
+                            .to_string(),
+                    )
+                    .unwrap(),
+            )
+            .unwrap()
+        };
+        let written = api(owner, "exportPrivateNote", 1, "# Meeting\nprivate text\n");
+        assert_eq!(written["status"], "written", "{written}");
+        let file = private_base
+            .join(owner.to_string())
+            .join("notes/generated")
+            .join(source)
+            .join("v1.md");
+        assert_eq!(
+            std::fs::read_to_string(&file).unwrap(),
+            "# Meeting\nprivate text\n"
+        );
+        assert!(
+            !file.starts_with(root.join("notes")),
+            "the copy must stay outside every linked notes folder"
+        );
+        assert_eq!(api(owner, "exportPrivateNote", 1, "# Meeting\nprivate text\n")["status"], "unchanged");
+        assert_eq!(api(owner, "exportPrivateNote", 1, "different")["status"], "conflict");
+        assert_eq!(
+            std::fs::read_to_string(&file).unwrap(),
+            "# Meeting\nprivate text\n",
+            "a conflicting retry must not overwrite"
+        );
+        assert_eq!(api(owner, "inspectPrivateNote", 2, "next")["status"], "missing");
+        let other = uuid::Uuid::new_v4();
+        assert_eq!(api(other, "exportPrivateNote", 1, "someone else")["status"], "written");
+        assert_eq!(
+            std::fs::read_to_string(&file).unwrap(),
+            "# Meeting\nprivate text\n",
+            "another account's copy must not touch this account's file"
+        );
+        assert!(private_base.join(other.to_string()).join("notes/generated").join(source).join("v1.md").is_file());
+        println!("private export -> written, unchanged, conflict (kept), missing; second actor isolated");
+        drop(application);
+        drop(runtime);
+    }
     let unlinked = call(
         Method::PUT,
         "/notes-source",
@@ -642,5 +746,6 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
     println!("PASS installed Notes package served over HTTPS: sign-in required, folder offered and browsed inside the account root, outside path refused, link saved, status readable, sync requested, unlink keeps files");
     println!("PASS schedule: linking created one fifteen-minute sync schedule per account; when due, the server's scheduler and worker indexed a note added later, with no manual request");
     println!("PASS indexing: the server's own worker embedded three real notes through a local HTTP embeddings endpoint, and search returned the matching note first for two queries");
-    println!("NOT PROVEN: a hosted embeddings provider (a local stand-in endpoint was used), search from the chat or any server endpoint, second signed-in account (setup allows one owner), native UI, second physical device");
+    println!("PASS private export: a versioned note copy was written once into the account's private area (outside the linked folder), a retry was unchanged, a different retry was a kept conflict, and another actor's copy stayed separate");
+    println!("NOT PROVEN: private export over HTTP (it is a module-to-module API run in-process) and indexing of private copies, a hosted embeddings provider (a local stand-in endpoint was used), search from the chat or any server endpoint, second signed-in account (setup allows one owner), native UI, second physical device");
 }

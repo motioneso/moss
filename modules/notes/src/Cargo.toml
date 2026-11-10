@@ -59,3 +59,8 @@ required-features = ["write-tools"]
 name = "manual_sync"
 path = "tests/manual_sync.rs"
 required-features = ["write-tools"]
+
+[[test]]
+name = "private_export"
+path = "tests/private_export.rs"
+required-features = ["write-tools"]

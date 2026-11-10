@@ -3,6 +3,8 @@ pub mod blocks;
 pub mod export;
 pub mod guest;
 pub mod identity;
+#[cfg(feature = "write-tools")]
+pub mod private_export;
 pub mod routes;
 pub mod search;
 mod settings_input;

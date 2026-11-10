@@ -15,6 +15,12 @@ enum ApiRequest {
     #[serde(rename = "requestNotesSync")]
     RequestSync(Empty),
     #[cfg(feature = "write-tools")]
+    #[serde(rename = "inspectPrivateNote")]
+    InspectPrivate(crate::private_export::Request),
+    #[cfg(feature = "write-tools")]
+    #[serde(rename = "exportPrivateNote")]
+    ExportPrivate(crate::private_export::Request),
+    #[cfg(feature = "write-tools")]
     #[serde(rename = "recoverNotesSync")]
     RecoverSync(crate::sync_recovery::Recovery),
 }
@@ -51,6 +57,12 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> Result<String> {
                 ApiRequest::Export(_) => crate::export::collect(host)?,
                 #[cfg(feature = "write-tools")]
                 ApiRequest::RequestSync(_) => crate::sync_worker::request(host)?,
+                #[cfg(feature = "write-tools")]
+                ApiRequest::InspectPrivate(input) => crate::private_export::inspect(host, &input)?,
+                #[cfg(feature = "write-tools")]
+                ApiRequest::ExportPrivate(input) => {
+                    crate::private_export::create_or_inspect(host, &input)?
+                }
                 #[cfg(feature = "write-tools")]
                 ApiRequest::RecoverSync(input) => crate::sync_recovery::recover(host, input)?,
                 ApiRequest::Prepare(request) => {
