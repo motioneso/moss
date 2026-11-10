@@ -70,7 +70,7 @@ fn fixture(fail: bool) -> Vec<u8> {
     let start = wat.find("      local.get $kind i32.load8_u").unwrap();
     let end = wat[start..].find("      i32.const 32))").unwrap() + start;
     wat.replace_range(start..end, &format!(
-        "      local.get $kind i32.load8_u i32.const 104 i32.ne if\n      i32.const 256 i32.const {} i32.const 32 call $kv\n      {}\n      i32.const 32 i32.load i32.eqz if\n        i32.const 36 i32.const 512 i32.store\n        i32.const 40 i32.const {} i32.store\n      end\n      else\n        i32.const 32 i32.const 0 i32.store\n        i32.const 36 i32.const 128 i32.store\n        i32.const 40 i32.const 7 i32.store\n      end\n", request.len(), if fail { "unreachable" } else { "" }, reply.len()));
+        "      local.get $kind i32.load8_u i32.const 114 i32.eq local.get $kind i32.load8_u i32.const 106 i32.eq i32.or if\n      i32.const 256 i32.const {} i32.const 32 call $kv\n      {}\n      i32.const 32 i32.load i32.eqz if\n        i32.const 36 i32.const 512 i32.store\n        i32.const 40 i32.const {} i32.store\n      end\n      else\n        i32.const 32 i32.const 0 i32.store\n        i32.const 36 i32.const 128 i32.store\n        i32.const 40 i32.const 7 i32.store\n      end\n", request.len(), if fail { "unreachable" } else { "" }, reply.len()));
     wat::parse_str(wat).unwrap()
 }
 #[test]

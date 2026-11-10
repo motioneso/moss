@@ -56,7 +56,12 @@ DB-touching checks run through verify-gate on its disposable PostgreSQL server.
 `pnpm test:rust-module-assembly` is the new executable integration gate. Worker unit checks
 cover error retry and joining an in-flight pass before shutdown returns. Server unit checks
 cover response-status preservation and malformed envelope refusal. Static checks cover the
-changed Rust files, repository lint, formatting, file size and typechecking. A whole-workspace
+changed Rust files, repository lint, formatting, file size and typechecking. The rollback assertion was observed failing with the transaction's success guard temporarily
+removed: a trapping guest left one notification where zero was required. The source guard
+was restored before final validation. The first fixture attempt trapped during installation;
+the fixture was corrected to post only for route and job entry points.
+
+A whole-workspace
 Rust formatting result is not claimed for unrelated pre-existing path dependencies.
 Module-host clippy with warnings denied stops on the unchanged
 `folder_sync_status.rs:39` `int_plus_one` lint under Rust 1.95; it is not reported green.
