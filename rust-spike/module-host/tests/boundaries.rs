@@ -240,6 +240,7 @@ fn approval_describes_changed_credential_tool_and_install_scope() {
     new.tools.insert(
         "save".into(),
         Tool {
+            approval_version: false,
             description: "Save".into(),
             risk: "destructive".into(),
         },

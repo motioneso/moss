@@ -75,6 +75,47 @@ impl Host for Ports {
     }
 }
 #[test]
+fn approved_version_refuses_changed_notes_before_writing_or_syncing() {
+    for (tool, parameters) in [
+        (
+            "notes.create",
+            json!({"path":"note.md","content":"Replacement","overwrite":true}),
+        ),
+        (
+            "notes.edit",
+            json!({"path":"note.md","oldText":"Before","newText":"After"}),
+        ),
+        ("notes.delete", json!({"path":"note.md"})),
+    ] {
+        let ports = Ports {
+            files: RefCell::new(BTreeMap::from([("note.md".into(), "Before".into())])),
+            syncs: RefCell::new(0),
+            checkpoints: RefCell::new(Vec::new()),
+        };
+        let request = json!({"tool":tool,"parameters":parameters});
+        let details: Value = serde_json::from_str(
+            &moss_notes::write_tools::presentation(&ports, &request.to_string()).unwrap(),
+        )
+        .unwrap();
+        ports
+            .files
+            .borrow_mut()
+            .insert("note.md".into(), "Before, changed on disk".into());
+        let mut approved = request;
+        approved["approvalVersion"] = details["version"].clone();
+        let error = handle(&ports, "tool", &approved.to_string()).unwrap_err();
+        assert_eq!(
+            serde_json::from_str::<Value>(&error.message).unwrap(),
+            json!({"statusCode":409,"error":"Note changed since approval. Prepare the action again."}),
+            "{tool}"
+        );
+        assert_eq!(ports.files.borrow()["note.md"], "Before, changed on disk");
+        assert_eq!(*ports.syncs.borrow(), 0);
+        assert!(ports.checkpoints.borrow().is_empty());
+    }
+}
+
+#[test]
 fn write_tools_match_actual_legacy_handlers() {
     let cases: Vec<Value> = include_str!("write-tool-vectors.jsonl")
         .lines()

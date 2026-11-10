@@ -143,6 +143,9 @@ pub struct Exchange {
 pub struct Tool {
     pub description: String,
     pub risk: String,
+    /// Require a trusted approval target version in addition to exact inputs.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub approval_version: bool,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "kebab-case")]

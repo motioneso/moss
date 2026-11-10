@@ -250,6 +250,7 @@ fn install_wide_storage_is_explicit_and_tools_cannot_lower_declared_risk() {
     m.tools.insert(
         "erase".into(),
         Tool {
+            approval_version: false,
             description: "Erase data".into(),
             risk: "destructive".into(),
         },
@@ -454,6 +455,7 @@ fn installed_public_apis_events_tool_grants_and_account_routes_use_the_real_host
     provider.tools.insert(
         "erase".into(),
         Tool {
+            approval_version: false,
             description: "Erase".into(),
             risk: "destructive".into(),
         },

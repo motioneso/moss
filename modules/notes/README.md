@@ -206,8 +206,7 @@ failure after finalization can leave the file saved without sync; no atomic
 filesystem/database/queue guarantee is made.
 
 Read-only approval preparation matches the legacy card fields and version for
-ordinary canonical POSIX folder preferences. It grants no approval. Its version
-must be rechecked after approval and before writing in the future host join.
+ordinary canonical POSIX folder preferences. It grants no approval. The experimental installed dispatcher can now carry its version in a trusted grant and recheck it before writing; see part twenty-two below.
 Delete and overwrite must still require explicit approval even with a trusted
 write policy. Neither approval consumption nor that orchestration is implemented
 here. Source aliases, Windows paths, symlink selection, missing-file error parity,
@@ -686,3 +685,27 @@ Existing vault admission is unchanged: symlink descendants, relative paths and
 traversal remain refused. Missing paths outside roots and non-directory sources
 can still differ from legacy, as can directory ordering and other invalid inputs.
 This does not activate chat, production sync or the assembled settings shell.
+
+## Displayed-target approvals (part twenty-two)
+
+Experimental tool declarations opt into `"approvalVersion": true`. The trusted
+server prepares the existing `prepareNoteAction` API, shows its details to the
+account, and saves the version that was shown with
+`ServicePorts::approve_tool_at_version`. Plain approvals are refused for these
+tools. The dispatcher obtains the version only from that account's saved grant;
+caller-supplied envelope versions are ignored. It consumes the grant before
+calling Notes, retaining the existing account/tool/input binding and expiry.
+
+Notes compares that version to its current resolved source, relative path and
+exact file content before create/edit/delete. The linked-folder adapter retains
+its existing call lock through comparison and guarded mutation; external writers
+are still fenced by the adapter's exact expected-text comparison. Changed content
+or a different source refuses the action without saving a sync checkpoint. A
+fresh preparation and approval are required after refusal. This detects state
+changes, not filesystem identity replacement at the same path with the same text.
+
+Only the signed experimental integration fixture declares these write tools.
+Legacy direct-handler parity fixtures remain unversioned; the ordinary package
+continues to offer only search. No assembled chat card, live approval endpoint,
+configured model, active queue or second-device HTTPS acceptance is claimed.
+The generic host flag is additive and defaults off for existing packages.

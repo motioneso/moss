@@ -1,5 +1,9 @@
 # Notes package
 
+## 0.1.14
+
+- Experimental installed writes can now bind approval to the displayed note version and refuse changed notes or relinked folders before writing or requesting sync. A new approval is needed after refusal. Ordinary chat writes remain unavailable.
+
 ## 0.1.13
 
 - Match legacy responses for missing folders inside allowed roots and existing paths outside them. Missing paths outside roots still differ; vault policy refusals retain general guidance. The chooser explains the reason and keeps the entered path and current folder link after a rejected save. Existing vault path restrictions still apply.
