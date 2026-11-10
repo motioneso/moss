@@ -1027,3 +1027,46 @@ adapters and provenance, complete validation/error parity, full shell/Today/chat
 old-screen replacement and physical second-device trusted HTTPS. Same-computer LAN
 requests and phone-width rendering do not prove another physical device or production
 certificate trust. This PR is the bounded saved-timezone screen checkpoint.
+
+## JS-160 / part 20: authored toolbar checkpoint
+
+Card 525. Package 0.20.0 restores the existing grouped View and Week type controls,
+selected choices, compact Previous / Next arrows and small Today button. Additive
+Segmented and IconButton components live in the published Leptos kit and consume
+the authored Park Press classes. Calendar uses the same installed display-settings
+API and remains a pure client of the server. No data, host, provider or module
+boundary changes are needed. The shared asset builder now includes the existing
+form-layout stylesheet after the kit stylesheet, matching the web app cascade;
+without it the segmented controls lacked their authored padding and height.
+
+The rendered differential invokes the real production React Calendar page for
+Day, Week and Month with both week choices. It was observed failing on the prior
+Rust toolbar's button sizing and grouping before the presentation was replaced.
+The signed-in runner checks navigation, saved Day cursor, saved Work week and
+Month across reloads, five/seven grid columns, Enter/Space activation, selected
+states, focus retained after saves and control bounds at desktop, 390px and
+320px. The same keyboard assertion failed before the focus fix: disabling the
+selected control during a save dropped focus to the document body. The bridge
+restores that connected control only when focus remains in the document, no
+dialog is open and the user has not focused something else. It does not restore
+old scroll positions. Evidence and fresh check
+verdicts, including the full Calendar gate's existing failing-first privacy
+witnesses, are recorded in the task Proof artifact. These tests do not assert
+full pixel parity or every regional label.
+
+Declared JavaScript dependencies are restored offline from the lockfile. Builds
+use copied scratch caches and a task-owned Rust 1.95.0 home. The prior task
+scratch home disappeared during the first gate, so the declared toolchain and
+Wasm target were restored into this task’s scratch directory. The first gate’s
+test cases passed but its final doctest could not start; that failed receipt is
+not counted as a green gate. Both shared asset bundles use one scratch
+directory. No global tool, new dependency or wit-bindgen installation is performed.
+
+This is another bounded screen checkpoint. Still required: concrete public
+Tasks/Briefings/provider adapters and full provenance; complete validation,
+coercion and error parity; four provider tools; day-plan apply job and
+apply/retry/recovery/confirm execution; worker-role cache-evict dispatch; source
+behavior and external-calendar status controls; full shell/Today/chat;
+old-screen replacement; complete assembled parity; physical second-device
+trusted HTTPS. Phone-width rendering, disposable TLS and a same-computer LAN
+request do not establish another physical device or production certificate trust.

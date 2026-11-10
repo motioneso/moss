@@ -21,6 +21,8 @@ extern "C" {
     fn preserve() -> JsValue;
     #[wasm_bindgen(js_namespace=calendarBridge)]
     fn restore(saved: &JsValue);
+    #[wasm_bindgen(js_namespace=calendarBridge, js_name=restoreFocus)]
+    fn restore_focus(saved: &JsValue);
     #[wasm_bindgen(js_namespace=calendarBridge)]
     fn navigate(path: &str) -> js_sys::Promise;
     #[wasm_bindgen(js_namespace=calendarBridge)]
@@ -186,12 +188,14 @@ impl State {
         if self.saving.get_untracked() {
             return;
         }
+        let focused = preserve();
         self.saving.set(true);
         let body = json!({"view":self.view.get_untracked(),"cursor":self.day().to_string(),"workWeek":self.work.get_untracked()});
         spawn_local(async move {
             self.unsaved
                 .set(request("PATCH", "/display-settings", body).await.is_err());
             self.saving.set(false);
+            restore_focus(&focused);
         });
     }
 }
@@ -287,25 +291,12 @@ pub fn Calendar() -> impl IntoView {
         return view! {<Settings state=state/>}.into_any();
     }
     view! {<main class="cal-wrap" aria-label="Calendar">
-        <div class="cal-toolbar"><div class="cal-toolbar__left">
-            <Button variant=ButtonVariant::Secondary disabled=Signal::derive(move||state.saving.get() || !state.initialized.get()) on_click=Callback::new(move |_|{state.cursor.set(Some(state.today()));state.persist();})>"Today"</Button>
-            <div class="cal-nav"><Button variant=ButtonVariant::Quiet disabled=Signal::derive(move||state.saving.get() || !state.initialized.get()) on_click=Callback::new(move |_|{state.cursor.set(Some(model::navigate(state.day(),&state.view.get(),-1)));state.persist();})>"Previous"</Button>
-            <Button variant=ButtonVariant::Quiet disabled=Signal::derive(move||state.saving.get() || !state.initialized.get()) on_click=Callback::new(move |_|{state.cursor.set(Some(model::navigate(state.day(),&state.view.get(),1)));state.persist();})>"Next"</Button></div>
-            <h1 class="cal-range">{move||{
-                let day=cursor.get();
-                view! {
-                    {(state.view.get()=="day").then(|| view!{<span class="cal-range__dow">{day.format("%a").to_string()}</span>})}
-                    {model::range_label(day, &state.view.get(), state.work.get())}
-                }
-            }}</h1>
-        </div><div class="cal-toolbar__right">
-            {move||(state.view.get()=="week").then(||view!{<Button variant=ButtonVariant::Secondary disabled=Signal::derive(move||state.saving.get() || !state.initialized.get()) on_click=Callback::new(move |_|{state.work.update(|v|*v=!*v);state.persist();})>{move||if state.work.get(){"Show full week"}else{"Show work week"}}</Button>})}
-            <div class="calendar-toolbar-actions" role="group" aria-label="Calendar view">
-                {[ ("day","Day"),("week","Week"),("month","Month") ].into_iter().map(|(key,label)|view!{
-                    <button type="button" class=move||format!("jds-btn jds-btn--secondary{}",if state.view.get()==key{" jds-btn--active"}else{""}) aria-pressed=move||(state.view.get()==key).to_string() disabled=move||state.saving.get() || !state.initialized.get() on:click=move |_|{if key!="day"{state.cursor.set(Some(state.today()));}state.view.set(key.into());state.persist();}>{label}</button>
-                }).collect_view()}
-            </div>
-        </div></div>
+        <crate::toolbar::Toolbar view=state.view.into() work=state.work.into() day=cursor.into()
+            disabled=Signal::derive(move||state.saving.get() || !state.initialized.get())
+            on_today=Callback::new(move |_|{state.cursor.set(Some(state.today()));state.persist();})
+            on_navigate=Callback::new(move |direction|{state.cursor.set(Some(model::navigate(state.day(),&state.view.get(),direction)));state.persist();})
+            on_view=Callback::new(move |key: String|{if key!="day"{state.cursor.set(Some(state.today()));}state.view.set(key);state.persist();})
+            on_work=Callback::new(move |work|{state.work.set(work);state.persist();})/>
         {move||view!{<CalendarLegend view=state.view.get() day=cursor.get() today=today.get() held=held_today.get() assistant_name=assistant_name.get()/>}}
         {move||(state.view.get()=="week").then(||view!{<p class="cal-scroll-hint jds-caption" id="calendar-scroll-hint">"Scroll sideways to see more days, or choose Day for a closer look."</p>})}
         <div class="cal-notice" aria-live="polite">
