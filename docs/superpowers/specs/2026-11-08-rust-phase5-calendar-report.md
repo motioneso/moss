@@ -1291,7 +1291,7 @@ a switch here: it is already controlled by the Time blocks mode, which sets the 
 Live (`pnpm test:rust-calendar-server` through `scripts/run-gate.sh`, real HTTPS server, real Chrome,
 nothing rewritten): no sign-in gives 401; defaults read as both on; an unknown field gives 400; the
 browser turns "Use for planning" off through the real control, sees "Settings saved.", reads back
-planning off and briefings on, and the choice survives a reload. Guest test
+planning off and briefings on, and the choice survives a reload. Review found that saving another setting reset the on-screen switches to On; fixed, and the gate now changes Look ahead after flipping a switch and checks the switch still reads Off. A failed switch read now shows both as On instead of failing the screen. Guest test
 `source_switch_patch_reaches_the_host_and_bad_bodies_do_not` and the package tests pass.
 
 Not proven: the Briefings module honoring the switches (the Rust Briefings package does not exist),
