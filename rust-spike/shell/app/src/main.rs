@@ -32,7 +32,6 @@ type Data = Arc<dyn ShellData>;
 struct Accounts {
     platform: Arc<safety_core::http::Platform>,
     runner: Option<PathBuf>,
-    modules: Option<PathBuf>,
     data: Mutex<HashMap<uuid::Uuid, Data>>,
 }
 
@@ -118,6 +117,7 @@ struct Args {
     instance: Option<PathBuf>,
     web: PathBuf,
     runner: Option<PathBuf>,
+    modules: Option<PathBuf>,
 }
 
 fn parse_args() -> Result<Args, String> {
