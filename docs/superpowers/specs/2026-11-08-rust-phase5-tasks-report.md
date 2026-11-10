@@ -2176,3 +2176,27 @@ during a session shows after a reload.
 
 Remaining: per-queue retention in the host; email triage feedback; Today/chat focus links;
 installed chat and summary presentation; performance budgets; physical second-device HTTPS proof.
+
+## Tasks part 37 checkpoint (JS-213, Card 526)
+
+Two more public calls build approval cards for the route forms of the write actions.
+`prepareTaskRoute` covers the ten route-form actions (add activity, assign and remove tag,
+create, rename and delete list, create, rename and delete tag, break down). Path parameters
+join the body as explicit inputs, so a query string, an unknown or missing parameter, a body
+key that collides with a parameter, or a body that is not an object gives no card. Titles,
+field order, row names and the changed-row version match the tool cards. `prepareTaskPreferences`
+shows the default task view in words (List or Grid) and refuses any other key, value, parameter or
+query.
+
+Checked: three new native tests plus the compiled-component privacy test (another account,
+including an admin, gets no card for a list it cannot see) in the full Tasks gate; see the
+gate result below.
+
+Not proven or not built: no HTTP route exposes these calls and the Rust chat drawer has no
+approval card yet, so they are proven against the compiled component and a real database, not in
+the browser; per-queue retention of finished jobs; email triage feedback; Today/chat focus links;
+installed chat and summary presentation; performance budgets; physical second-device HTTPS proof.
+Workshop and Food remain excluded. Part of #4027; release note Category N/A.
+
+Remaining: per-queue retention in the host; email triage feedback; Today/chat focus links;
+installed chat and summary presentation; performance budgets; physical second-device HTTPS proof.
