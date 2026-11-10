@@ -4,7 +4,7 @@
   "name": "Notes",
   "description": "Choose your notes folder, search your indexed notes, and create, edit or delete notes with your approval.",
   "publisher": "Moss",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -37,7 +37,7 @@
         "index.sync-file",
         "index.sync-cleanup"
       ],
-      "resources": ["source"]
+      "resources": ["source", "private-export"]
     },
     {
       "port": "jobs",
@@ -70,7 +70,9 @@
   },
   "provides": {
     "collectManagedNotesExportSection": "1.0.0",
-    "prepareNoteAction": "1.0.0"
+    "prepareNoteAction": "1.0.0",
+    "exportPrivateNote": "1.0.0",
+    "inspectPrivateNote": "1.0.0"
   },
   "navigation": [],
   "settings": [
@@ -102,6 +104,10 @@
           "path": "/settings"
         }
       ]
+    },
+    {
+      "id": "notes.private-export",
+      "description": "Other modules can save a versioned private copy of a note through the exportPrivateNote API and check one with inspectPrivateNote. Each copy is created once, never overwritten, and kept in the calling account's private notes area, separate from the linked notes folder. The server must be configured with a private notes location. These copies are not indexed or searchable yet."
     },
     {
       "id": "notes.folder-settings",
