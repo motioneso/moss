@@ -78,7 +78,7 @@ RLS to observe the denial assertion fail, restores it, and resumes the accepted
 request through the real indexing adapter. Queue publication and embeddings are
 still stand-ins. This is not HTTP transport, an assembled Settings/chat screen,
 real configured models, legacy singleton coalescing, recall warmup, automatic
-worker delivery or second-device HTTPS proof. Full Notes acceptance remains open.
+worker delivery or second-device HTTPS proof. Full Notes acceptance remains open. Part twenty-seven adds indexing and search on the real server (local embeddings stand-in); see the report.
 
 ## Write-triggered sync folder binding (part eighteen)
 
