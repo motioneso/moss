@@ -66,8 +66,14 @@ pub struct PreferenceFolders {
     runtime: tokio::runtime::Runtime,
     resources: BTreeMap<(String, String), PreferenceFolder>,
     roots: BTreeMap<Uuid, AllowedRoots>,
+    account_base: Option<PathBuf>,
 }
 impl PreferenceFolders {
+    /// Accounts without explicit roots get `<base>/<account id>`.
+    pub fn with_account_base(mut self, base: PathBuf) -> Self {
+        self.account_base = Some(base);
+        self
+    }
     pub fn new(
         database: safety_core::db::Database,
         resources: BTreeMap<(String, String), PreferenceFolder>,
@@ -78,6 +84,7 @@ impl PreferenceFolders {
             runtime: tokio::runtime::Runtime::new()?,
             resources,
             roots,
+            account_base: None,
         })
     }
 }
@@ -95,10 +102,18 @@ impl FolderProvider for PreferenceFolders {
             .resources
             .get(&(module.into(), resource.into()))
             .context("This notes resource is not connected")?;
-        let roots = self
-            .roots
-            .get(&access.actor_user_id())
-            .context("No notes roots are allowed for this account")?;
+        let derived;
+        let roots = match (self.roots.get(&access.actor_user_id()), &self.account_base) {
+            (Some(roots), _) => roots,
+            (None, Some(base)) => {
+                derived = AllowedRoots::for_account(
+                    access,
+                    crate::account_preferences::account_base_root(base, access.actor_user_id())?,
+                );
+                &derived
+            }
+            _ => anyhow::bail!("No notes roots are allowed for this account"),
+        };
         let paths = self.runtime.block_on(async {
             tokio::time::timeout(budget.saturating_sub(started.elapsed()), async {
                 let context = safety_core::db::DataContext::open_bounded(

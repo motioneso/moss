@@ -69,6 +69,7 @@ fn extended_assembly_installs_and_dispatches_through_the_adapter() {
             intelligence: Arc::new(NoAi),
             version: "0.1.0".parse().unwrap(),
             compiled_cache: None,
+            fuel_ceiling: None,
         },
         move |next| {
             Ok(Arc::new(Adapter {

@@ -55,7 +55,7 @@ concurrency:
 jobs:
   draft-workspace:
     name: Verify real meeting draft UI
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
       JARVIS_IMAGE_TAG: meetings-uat-${{ github.run_id }}-meetings
@@ -120,7 +120,7 @@ jobs:
 
   credential-free-regressions:
     name: Verify Meetings regression group (${{ matrix.group }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false

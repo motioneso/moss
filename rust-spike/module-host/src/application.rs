@@ -26,6 +26,8 @@ pub struct Configuration {
     pub intelligence: Arc<dyn Intelligence>,
     pub version: semver::Version,
     pub compiled_cache: Option<(std::path::PathBuf, Secret)>,
+    /// Host-wide cap on manifest fuel requests. `None` keeps the default budget.
+    pub fuel_ceiling: Option<u64>,
 }
 pub struct Application {
     pub installer: Arc<Installer>,
@@ -55,9 +57,15 @@ impl Application {
             data,
         )?);
         let catalog = Arc::new(PostgresCatalog::new(database, admin)?);
+        let limits = Limits {
+            fuel_ceiling: config
+                .fuel_ceiling
+                .map_or(Limits::default().fuel, |c| c.max(Limits::default().fuel)),
+            ..Limits::default()
+        };
         let host = match config.compiled_cache {
-            Some((path, key)) => Host::cached(Limits::default(), &path, key)?,
-            None => Host::new(Limits::default())?,
+            Some((path, key)) => Host::cached(limits, &path, key)?,
+            None => Host::new(limits)?,
         };
         let installer = Arc::new(Installer::new(
             data,

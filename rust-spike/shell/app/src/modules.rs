@@ -12,7 +12,9 @@ use axum::{
 use moss_module_host::{
     ai::Intelligence,
     application::{Application, Configuration},
-    runtime::{CallScope, Request},
+    account_preferences::{AccountPreferencesPorts, Binding},
+    linked_notes::{LinkedNotesPorts, PreferenceFolder, PreferenceFolders},
+    runtime::{CallScope, Ports, Request},
     worker::Worker,
 };
 use safety_core::{
@@ -23,9 +25,13 @@ use safety_core::{
 use serde::Deserialize;
 use serde_json::Value;
 use std::{
+    collections::BTreeMap,
     path::{Path, PathBuf},
     sync::Arc,
 };
+
+/// Largest per-invocation fuel a module manifest may request on this server.
+const DEFAULT_FUEL_CEILING: u64 = 250_000_000;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -36,6 +42,11 @@ struct Settings {
     producer_url: String,
     worker_url: String,
     connector_key: String,
+    #[serde(default)]
+    fuel_ceiling: Option<u64>,
+    /// Base folder for per-account notes roots (`<base>/<account id>`). Needed by People.
+    #[serde(default)]
+    notes_base: Option<PathBuf>,
 }
 
 // AI configuration is not assembled by this checkpoint. Calls fail closed.
@@ -47,6 +58,53 @@ impl Intelligence for UnconfiguredIntelligence {
     fn embed(&self, _: &CallScope, _: &Request) -> Result<Value> {
         anyhow::bail!("Module embeddings are not configured on this server")
     }
+}
+
+/// Account preference and linked-notes ports for People. Keys, resources and roots are
+/// fixed here, never chosen by the guest.
+fn linked_notes(
+    database: Database,
+    base: PathBuf,
+    next: Arc<dyn Ports>,
+) -> Result<Arc<dyn Ports>> {
+    let preferences = AccountPreferencesPorts::new(
+        database.clone(),
+        BTreeMap::from([
+            (
+                ("people".into(), "people-folder".into()),
+                Binding::Folder {
+                    key: "people-notes-folder".into(),
+                    roots: BTreeMap::new(),
+                },
+            ),
+            (
+                ("people".into(), "people-suggestions".into()),
+                Binding::BooleanOverride {
+                    key: "sourceBehaviors".into(),
+                    entry: "people.notes.suggest-updates".into(),
+                    default: true,
+                },
+            ),
+        ]),
+        next,
+    )?
+    .with_account_base(base.clone());
+    let folders = PreferenceFolders::new(
+        database,
+        BTreeMap::from([(
+            ("people".into(), "people-notes".into()),
+            PreferenceFolder {
+                preference: "people-notes-folder".into(),
+                relative_to: Some("notes-source-path".into()),
+            },
+        )]),
+        BTreeMap::new(),
+    )?
+    .with_account_base(base);
+    Ok(Arc::new(LinkedNotesPorts::new(
+        Arc::new(folders),
+        Arc::new(preferences),
+    )))
 }
 
 pub struct ServerModules {
@@ -71,7 +129,12 @@ pub fn open(path: &Path, database: Database) -> Result<ServerModules> {
         &[("JARVIS_CONNECTOR_SECRET_KEY".into(), settings.connector_key)].into(),
     )
     .map_err(|_| anyhow::anyhow!("Invalid module connector key"))?;
-    let application = Arc::new(Application::open_extended(
+    let notes_base = settings.notes_base.clone();
+    if let Some(base) = &notes_base {
+        anyhow::ensure!(base.is_absolute(), "Notes base needs an absolute path");
+    }
+    let preferences_database = database.clone();
+    let application = Arc::new(Application::open_extended_with(
         &settings.data,
         database,
         AccessContext::new(settings.admin_user_id, "server-module-catalog"),
@@ -82,6 +145,11 @@ pub fn open(path: &Path, database: Database) -> Result<ServerModules> {
             intelligence: Arc::new(UnconfiguredIntelligence),
             version: "0.1.0".parse()?,
             compiled_cache: None,
+            fuel_ceiling: Some(settings.fuel_ceiling.unwrap_or(DEFAULT_FUEL_CEILING)),
+        },
+        |services| match notes_base {
+            Some(base) => linked_notes(preferences_database, base, services),
+            None => Ok(services),
         },
     )?);
     let worker = Worker::start(

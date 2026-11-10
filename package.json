@@ -10,6 +10,8 @@
     "test:rust-linux-runtime": "python3 rust-spike/shell/tools/proof_linux_runtime.py",
     "test:rust-linux-creation": "python3 -B rust-spike/shell/tools/proof_linux_creation.py",
     "test:rust-linux-desktop": "python3 rust-spike/shell/tools/proof_linux_desktop.py",
+    "test:rust-people-large": "bash modules/people/tools/large-data-gate.sh",
+    "test:rust-people-server": "tsx rust-spike/module-host/tools/people-server-gate.ts",
     "test:rust-module-assembly": "tsx rust-spike/module-host/tools/assembly-gate.ts",
     "test:module-enqueue-options": "tsx rust-spike/module-host/tools/enqueue-options-gate.ts",
     "lint": "eslint . --max-warnings=0",

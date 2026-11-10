@@ -99,6 +99,7 @@ impl Installed {
                 intelligence: Arc::new(NoAi),
                 version: "0.1.0".parse().unwrap(),
                 compiled_cache: None,
+                fuel_ceiling: None,
             },
             move |next| {
                 Ok(Arc::new(
