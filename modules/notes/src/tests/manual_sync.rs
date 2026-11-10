@@ -195,13 +195,27 @@ fn unlinking_cancels_the_schedule_and_linking_keeps_it() {
                 ("vault", _) => json!({"status":200,"body":null}),
                 ("jobs", "schedule") => json!({"id":ID}),
                 ("jobs", "unschedule") => json!({"cancelled":true}),
+                // Unlink maintenance finds nothing to clean.
+                ("context", "read") => json!({"now":"2026-11-09T12:00:00Z"}),
+                ("db", "query") => json!([]),
                 _ => panic!("unexpected {port}/{op}"),
             })
         }
     }
     for (path, expected) in [
         (json!("/notes"), vec!["vault/folder.set", "jobs/schedule"]),
-        (Value::Null, vec!["vault/folder.set", "jobs/schedule", "jobs/unschedule"]),
+        (
+            Value::Null,
+            vec![
+                "vault/folder.set",
+                "context/read",
+                "db/query",
+                "db/query",
+                "context/read",
+                "jobs/schedule",
+                "jobs/unschedule",
+            ],
+        ),
     ] {
         let host = Calls(RefCell::new(vec![]));
         handle(

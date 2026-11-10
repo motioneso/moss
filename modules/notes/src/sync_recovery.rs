@@ -11,8 +11,9 @@ use serde_json::{json, Value};
 const PAGE_SIZE: u32 = 25;
 /// Saved checkpoints older than this are deleted, finished or not.
 const RETENTION_SECONDS: i64 = 24 * 60 * 60;
-/// Pages scanned per tick. A day of ordinary sync stays well inside this.
-const MAX_PAGES: usize = 10;
+/// Pages scanned per tick (1000 rows). A day holds about 100 ordinary requests,
+/// plus one row per continuation page of a very large folder.
+const MAX_PAGES: usize = 40;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
