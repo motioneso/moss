@@ -199,10 +199,33 @@ pub fn initialize(layout: &Layout, bundle: &Bundle) -> Result<bool, String> {
     if layout.data.join("PG_VERSION").is_file() {
         return Ok(false);
     }
-    if std::fs::read_dir(&layout.data).is_ok_and(|mut entries| entries.next().is_some()) {
+    // Windows keeps the data folder open as a pinned handle, so it cannot be replaced by a
+    // rename. initdb writes into it directly, and a marker file shows an unfinished first run.
+    #[cfg(windows)]
+    let marker = layout.root.join("initdb-unfinished");
+    #[cfg(windows)]
+    let unfinished = marker.exists();
+    #[cfg(not(windows))]
+    let unfinished = false;
+    if !unfinished && std::fs::read_dir(&layout.data).is_ok_and(|mut entries| entries.next().is_some()) {
         return Err(format!("{} holds files but no database; refusing to overwrite it", layout.data.display()));
     }
+    #[cfg(windows)]
+    {
+        if unfinished {
+            for entry in std::fs::read_dir(&layout.data).map_err(|e| format!("unfinished first run: {e}"))? {
+                let path = entry.map_err(|e| format!("unfinished first run: {e}"))?.path();
+                let gone = if path.is_dir() { std::fs::remove_dir_all(&path) } else { std::fs::remove_file(&path) };
+                gone.map_err(|e| format!("unfinished first run: {e}"))?;
+            }
+        }
+        std::fs::write(&marker, b"initdb running").map_err(|e| format!("first-run marker: {e}"))?;
+    }
+    #[cfg(windows)]
+    let partial = layout.data.clone();
+    #[cfg(not(windows))]
     let partial = layout.root.join("db.partial");
+    #[cfg(not(windows))]
     if partial.exists() {
         std::fs::remove_dir_all(&partial).map_err(|e| format!("unfinished first run: {e}"))?;
     }
@@ -264,10 +287,15 @@ pub fn initialize(layout: &Layout, bundle: &Bundle) -> Result<bool, String> {
         return Err(format!("initdb failed ({status}); see logs/initdb.log"));
     }
     std::fs::write(partial.join("pg_hba.conf"), hba()).map_err(|e| format!("pg_hba.conf: {e}"))?;
-    if layout.data.exists() {
-        std::fs::remove_dir(&layout.data).map_err(|e| format!("{}: {e}", layout.data.display()))?;
+    #[cfg(windows)]
+    std::fs::remove_file(&marker).map_err(|e| format!("first-run marker: {e}"))?;
+    #[cfg(not(windows))]
+    {
+        if layout.data.exists() {
+            std::fs::remove_dir(&layout.data).map_err(|e| format!("{}: {e}", layout.data.display()))?;
+        }
+        std::fs::rename(&partial, &layout.data).map_err(|e| format!("move the new database into place: {e}"))?;
     }
-    std::fs::rename(&partial, &layout.data).map_err(|e| format!("move the new database into place: {e}"))?;
     Ok(true)
 }
 
