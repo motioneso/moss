@@ -135,24 +135,8 @@ impl Fixture {
                 (actor, path)
             })
             .collect();
-        let mut manifest = moss_notes_checks::manifest().unwrap();
-        // Test-only grants. The shipped package offers only read-only search,
-        // with no write tools or sync worker while the core memory join is unfinished.
-        manifest
-            .capabilities
-            .iter_mut()
-            .find(|c| c.port == "vault")
-            .unwrap()
-            .operations
-            .extend(["notes.read", "notes.compare-write", "notes.remove"].map(str::to_owned));
-        manifest.capabilities.extend(serde_json::from_value::<Vec<_>>(json!([
-            {"port":"jobs","operations":["enqueue-after-commit","enqueue-options"],"resources":["notes.sync"]},
-            {"port":"context","operations":["uuid","read"],"resources":["new","call"]}
-        ])).unwrap());
-        manifest.jobs.insert(
-            "notes.sync".into(),
-            serde_json::from_value(json!({"checkpoint-id":{"kind":"id"}})).unwrap(),
-        );
+        // The shipped manifest alone grants every tool, sync and job permission.
+        let manifest = moss_notes_checks::manifest().unwrap();
         Self {
             _temp: temp,
             wasm: std::fs::read(std::env::var_os("NOTES_TOOL_COMPONENT").unwrap()).unwrap(),
@@ -323,14 +307,25 @@ fn compiled_guest_cannot_read_or_mutate_another_owners_folder() {
 }
 
 #[test]
-fn ordinary_package_refuses_the_tool_check_component_and_offers_no_mutations() {
+fn shipped_manifest_offers_four_tools_and_the_read_only_build_offers_none_of_the_writes() {
     let f = Fixture::new();
     let shipped = moss_notes_checks::manifest().unwrap();
-    assert_eq!(shipped.tools.len(), 1);
+    assert_eq!(shipped.tools.len(), 4);
     assert_eq!(shipped.tools["notes.search"].risk, "read");
-    assert!(shipped.jobs.is_empty());
+    assert_eq!(shipped.tools["notes.create"].risk, "write");
+    assert_eq!(shipped.tools["notes.edit"].risk, "write");
+    assert_eq!(shipped.tools["notes.delete"].risk, "destructive");
+    for name in ["notes.create", "notes.edit", "notes.delete"] {
+        assert!(shipped.tools[name].approval_version, "{name} binds approval to the shown version");
+    }
+    assert!(shipped.jobs.contains_key("notes.sync"));
+    assert!(shipped.routes.iter().any(|r| r.method == "POST" && r.path == "/notes/sync" && r.sign_in));
+    f.host.validate(&f.wasm, &Arc::new(shipped)).unwrap();
+    let read_only = moss_notes_checks::read_only_manifest().unwrap();
+    assert_eq!(read_only.tools.len(), 1);
+    assert!(read_only.jobs.is_empty());
     assert!(
-        f.host.validate(&f.wasm, &shipped).is_err(),
-        "Experimental tool imports must not be admitted by the ordinary package"
+        f.host.validate(&f.wasm, &read_only).is_err(),
+        "The read-only manifest must not admit the write-capable component"
     );
 }

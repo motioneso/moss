@@ -162,20 +162,8 @@ fn installed_tool_dispatch_writes_syncs_and_searches_with_account_approvals() {
             .unwrap(),
         );
         let mut manifest = f.durable_manifest();
-        for (name, risk) in [
-            ("notes.create", "write"),
-            ("notes.edit", "write"),
-            ("notes.delete", "destructive"),
-        ] {
-            manifest.tools.insert(
-                name.into(),
-                serde_json::from_value(json!({
-                    "description":"Experimental Notes routing check", "risk":risk,
-                    "approvalVersion":true
-                }))
-                .unwrap(),
-            );
-        }
+        // Route the exact tool declarations the signed package ships.
+        manifest.tools = moss_notes_checks::manifest().unwrap().tools;
         manifest.capabilities.push(
             serde_json::from_value(json!({
                 "port":"tools", "operations":["run"],

@@ -1,5 +1,5 @@
 #[test]
-fn connections_screen_uses_shared_controls_and_explains_unfinished_sync() {
+fn connections_screen_uses_shared_controls_and_offers_sync_now() {
     let page = moss_notes_checks::screen::render();
     assert!(page.contains("Connections"));
     for text in [
@@ -9,7 +9,7 @@ fn connections_screen_uses_shared_controls_and_explains_unfinished_sync() {
         "Link folder",
         "Unlink this folder?",
         "Your files are untouched.",
-        "sync and chat tools are not available yet.",
+        "Sync now",
     ] {
         assert!(page.contains(text), "Missing {text}");
     }
