@@ -15,7 +15,10 @@ use std::path::PathBuf;
 pub const INSTALL_URL_VARIABLE: &str = "MOSS_INSTALL_DATABASE_URL";
 
 const USAGE: &str = "usage: moss-shell install-module --instance DIR --registry-id ID \
-(--registry-folder DIR | --registry-url URL) --root-key KEY --first-party-key KEY [--approve] MODULE...";
+(--registry-folder DIR | --registry-url URL) --root-key KEY --first-party-key KEY \
+[--approve | --list | --plan] [MODULE...]
+  --list   prints the registry's modules as JSON and installs nothing
+  --plan   prints what each MODULE would ask permission for as JSON and installs nothing";
 
 struct Args {
     instance: PathBuf,
@@ -24,16 +27,28 @@ struct Args {
     root_key: String,
     first_party_key: String,
     approve: bool,
+    mode: Mode,
     modules: Vec<String>,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Mode {
+    Install,
+    List,
+    Plan,
 }
 
 fn parse(raw: Vec<String>) -> Result<Args> {
     let (mut instance, mut id, mut source, mut root, mut first) = (None, None, None, None, None);
-    let (mut approve, mut modules) = (false, vec![]);
+    let (mut approve, mut modules, mut mode) = (false, vec![], Mode::Install);
     let mut raw = raw.into_iter();
     while let Some(flag) = raw.next() {
         if flag == "--approve" {
             approve = true;
+        } else if flag == "--list" {
+            mode = Mode::List;
+        } else if flag == "--plan" {
+            mode = Mode::Plan;
         } else if let Some(name) = flag.strip_prefix("--") {
             let value = raw
                 .next()
@@ -58,7 +73,7 @@ fn parse(raw: Vec<String>) -> Result<Args> {
         }
     }
     let need = |what: &str| anyhow::anyhow!("missing {what}\n{USAGE}");
-    if modules.is_empty() {
+    if modules.is_empty() && mode != Mode::List {
         return Err(need("module name"));
     }
     Ok(Args {
@@ -68,6 +83,7 @@ fn parse(raw: Vec<String>) -> Result<Args> {
         root_key: root.ok_or_else(|| need("--root-key"))?,
         first_party_key: first.ok_or_else(|| need("--first-party-key"))?,
         approve,
+        mode,
         modules,
     })
 }
@@ -165,6 +181,31 @@ pub fn run(raw: Vec<String>) -> Result<()> {
         &args.first_party_key,
         &args.registry_id,
     )?;
+    if args.mode == Mode::List {
+        let installed: std::collections::BTreeSet<String> = application
+            .installer
+            .export_list()?
+            .modules
+            .into_iter()
+            .map(|m| m.id)
+            .collect();
+        let modules: Vec<_> = catalog
+            .index
+            .modules
+            .iter()
+            .map(|a| {
+                serde_json::json!({
+                    "id": a.id,
+                    "version": a.version.to_string(),
+                    "changelog": a.changelog,
+                    "installed": installed.contains(&a.id),
+                })
+            })
+            .collect();
+        println!("{}", serde_json::json!({ "registry": args.registry_id, "modules": modules }));
+        drop(application);
+        return Ok(());
+    }
     for name in &args.modules {
         let artifact: Artifact = catalog
             .index
@@ -174,6 +215,30 @@ pub fn run(raw: Vec<String>) -> Result<()> {
             .max_by(|a, b| a.version.cmp(&b.version))
             .cloned()
             .with_context(|| format!("{name} is not in the registry"))?;
+        if args.mode == Mode::Plan {
+            let moss = "0.1.0".parse()?;
+            let package = catalog
+                .download(&artifact, &moss)
+                .with_context(|| format!("Reading {name}"))?;
+            let approval = application.installer.approval(&package, artifact.urgent)?;
+            let permissions: Vec<_> = approval
+                .new_permissions
+                .iter()
+                .map(|p| serde_json::json!({ "group": p.group, "headline": p.headline, "details": p.details }))
+                .collect();
+            println!(
+                "{}",
+                serde_json::json!({
+                    "id": package.manifest.id,
+                    "name": package.manifest.name,
+                    "description": package.manifest.description,
+                    "version": artifact.version.to_string(),
+                    "permissions": permissions,
+                    "migrations": approval.new_migrations.len(),
+                })
+            );
+            continue;
+        }
         application
             .installer
             .install(&access, &catalog, &artifact, args.approve)
