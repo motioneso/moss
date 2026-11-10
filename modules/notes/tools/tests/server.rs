@@ -798,7 +798,12 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
                             "localDate":"2026-11-10","folder":"Moss/Chats","sessions":sessions}})
                             .to_string(),
                     )
-                    .unwrap(),
+                    .unwrap_or_else(|e| {
+                        panic!(
+                            "archive call failed: {e:#}; file written: {}",
+                            journal.join("Moss/Chats/2026-11-10.md").is_file()
+                        )
+                    }),
             )
             .unwrap()
         };
