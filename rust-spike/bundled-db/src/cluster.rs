@@ -100,7 +100,10 @@ impl Endpoint {
             .connect_timeout(Duration::from_secs(10))
             .port(self.port);
         match &self.socket_dir {
+            #[cfg(unix)]
             Some(dir) => config.host_path(dir),
+            #[cfg(not(unix))]
+            Some(_) => return Err("Unix sockets are not available on this system".into()),
             None => config.host("127.0.0.1"),
         };
         config.connect(postgres::NoTls).map_err(|e| format!("connect as {role}: {}", db_error(&e)))
@@ -559,6 +562,7 @@ pub fn read_postmaster_pid(layout: &Layout) -> Option<PostmasterPid> {
 ///   remove the stale lock file, which Postgres would otherwise refuse to start past.
 pub fn clear_leftovers(layout: &Layout) -> Result<Vec<String>, String> {
     let mut actions = Vec::new();
+    #[cfg(unix)]
     let pidfile = read_postmaster_pid(layout);
     #[cfg(unix)]
     let ours = procs::database_processes(&layout.data, &layout.cluster_name());
