@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import Fastify from "fastify";
+import { setMossErrorHandler } from "../../../apps/api/src/error-handling.js";
 import { updateCalendarBriefingSettingsRouteSchema } from "@moss/shared";
 
 const binary = process.env.CALENDAR_DATA_ORACLE;
@@ -11,6 +12,7 @@ const cases: unknown[] = JSON.parse(
   readFileSync(new URL("./settings-patch-cases.json", import.meta.url), "utf8")
 );
 const server = Fastify();
+setMossErrorHandler(server);
 server.patch(
   "/settings",
   {

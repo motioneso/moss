@@ -1075,14 +1075,14 @@ request do not establish another physical device or production certificate trust
 
 Card 525, package 0.21.0. The briefing-settings PATCH route now retains the
 original Fastify normalization: allowed scalar and singleton-array coercion,
-removal of additional fields, and the original `FST_ERR_VALIDATION` response for
+removal of additional fields, and the original field-specific HTTP 400 validation messages for
 invalid requests. For example, `lookaheadDays: "1"` saves one day; an unknown
 `ownerUserId` is discarded. Normalization happens at the HTTP guest boundary;
 the trusted preference writer retains its typed field allowlist and authenticated
 actor. Calendar remains a pure client of the server API.
 
 The baseline differential failed on an extra owner field: Rust returned 400 where
-the original removes the field and returns 200. All 242 schema comparisons pass
+the original removes the field and returns 200. The 242 schema comparisons use Moss’s production central error handler and pass
 after the correction, including booleans, nulls, singleton arrays, body shapes,
 radix/exponent/whitespace numeric strings and mixed invalid fields. The installed
 matrix compares these requests plus the eleven existing valid write sequences
@@ -1105,3 +1105,13 @@ validation/error contracts, full shell/Today/chat, old-screen replacement,
 complete assembled parity and physical second-device trusted HTTPS. Disposable
 TLS, a phone-width browser and same-computer LAN requests do not prove another
 physical device or production certificate trust.
+
+Independent review found that the initial oracles omitted Moss’s central error
+handler and therefore expected Fastify’s generic validation envelope. The oracles
+now install `setMossErrorHandler` before registering routes. The corrected test was
+observed failing before Rust was fixed to return the original type/enum messages
+and first-invalid-field ordering. The final proof records only corrected receipts.
+Malformed/empty JSON transport bodies and JSON `__proto__` parser rejection remain
+unmatched and unproven; the request matrix covers parsed JSON values only. The
+validation rules remain in both the HTTP adapter and strict preference writer;
+the production-schema differential guards their intended agreement.

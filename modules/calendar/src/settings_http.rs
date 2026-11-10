@@ -2,8 +2,8 @@
 use crate::{Error, Result};
 use serde_json::{json, Map, Value};
 
-fn invalid() -> Error {
-    Error::coded(400, "FST_ERR_VALIDATION", "Bad Request")
+fn invalid(message: impl Into<String>) -> Error {
+    Error::new(400, message)
 }
 
 const FIELDS: [(&str, &str); 7] = [
@@ -19,13 +19,16 @@ const FIELDS: [(&str, &str); 7] = [
 /// Fastify removes additional properties and coerces scalar/singleton-array values
 /// before invoking the original route. Preserve that contract only at this boundary.
 pub fn normalize(body: Value) -> Result<Value> {
-    let object = body.as_object().ok_or_else(invalid)?;
+    let object = body
+        .as_object()
+        .ok_or_else(|| invalid("body must be object"))?;
     let mut output = Map::new();
     for (key, kind) in FIELDS {
         let Some(value) = object.get(key) else {
             continue;
         };
-        let value = coerce(value, kind).ok_or_else(invalid)?;
+        let value =
+            coerce(value, kind).ok_or_else(|| invalid(format!("body/{key} must be {kind}")))?;
         let allowed = match key {
             "lookaheadDays" => matches!(value.as_f64(), Some(0.0 | 1.0 | 2.0)),
             "prepTaskMode" | "timeBlockMode" => {
@@ -34,7 +37,9 @@ pub fn normalize(body: Value) -> Result<Value> {
             _ => true,
         };
         if !allowed {
-            return Err(invalid());
+            return Err(invalid(format!(
+                "body/{key} must be equal to one of the allowed values"
+            )));
         }
         let value = if key == "lookaheadDays" {
             json!(value.as_f64().unwrap() as u8)
@@ -58,13 +63,19 @@ fn coerce(value: &Value, kind: &str) -> Option<Value> {
         ("number", Value::Null) => Some(json!(0)),
         ("number", Value::Bool(value)) => Some(json!(u8::from(*value))),
         ("number", Value::String(value)) => {
-            number(value).filter(|n| n.is_finite()).map(|n| json!(n))
+            number(value).map(|n| {
+                // Infinite numeric strings pass coercion but fail this field's enum.
+                // A finite value outside 0/1/2 preserves that error without JSON Infinity.
+                json!(if n.is_finite() { n } else { 3.0 })
+            })
         }
         ("boolean", Value::Null) => Some(json!(false)),
         ("boolean", Value::Number(n)) if n.as_f64() == Some(0.0) => Some(json!(false)),
         ("boolean", Value::Number(n)) if n.as_f64() == Some(1.0) => Some(json!(true)),
         ("boolean", Value::String(s)) if s == "false" => Some(json!(false)),
         ("boolean", Value::String(s)) if s == "true" => Some(json!(true)),
+        ("string", Value::Null) => Some(json!("")),
+        ("string", Value::Number(_) | Value::Bool(_)) => Some(json!(value.to_string())),
         _ => None,
     }
 }
@@ -90,6 +101,9 @@ fn number(value: &str) -> Option<f64> {
                     .map(|v| n * f64::from(radix) + f64::from(v))
             });
         }
+    }
+    if matches!(text, "Infinity" | "+Infinity" | "-Infinity") {
+        return Some(f64::INFINITY);
     }
     if !text
         .bytes()

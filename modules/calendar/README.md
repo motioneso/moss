@@ -470,11 +470,11 @@ complete remaining list.
 
 Version 0.21.0 restores the original briefing-settings PATCH request normalization
 on both original and installed URLs: scalar and singleton-array coercion, removal
-of unknown fields, and the original validation error envelope. This normalization
+of unknown fields, and the original field-specific validation messages. This normalization
 belongs only to the HTTP guest route. The trusted preference port continues to
 accept declared, typed fields only; it never accepts a request-supplied owner.
 
-The pure schema differential covers 242 requests. The installed matrix adds those
+The pure schema differential covers 242 requests using Moss’s production central error handler. The installed matrix adds those
 to the existing write sequences for owner, another user and administrator, compares
 complete response bodies, final stored values/revisions/policy, and checks each
 rejected request leaves storage unchanged. Existing failing-first privacy witnesses
@@ -483,3 +483,6 @@ browser and reloads the real settings controls after accepted and rejected write
 These are settings-contract checks; provider execution, full shell/chat, old-screen
 replacement, complete Calendar parity and physical second-device trusted HTTPS
 remain open. No new dependency, global tool or wit-bindgen is installed.
+
+Malformed/empty JSON transport bodies and JSON `__proto__` parser rejection remain
+unmatched; the settings matrix covers parsed JSON values.

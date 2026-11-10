@@ -40,7 +40,7 @@ export async function checkSettingsContract(tab: Page) {
     });
     assert.deepEqual(results.rejected, {
       status: 400,
-      body: { error: "Bad Request", code: "FST_ERR_VALIDATION" }
+      body: { error: "body/lookaheadDays must be equal to one of the allowed values" }
     });
     assert.deepEqual(
       results.persisted,

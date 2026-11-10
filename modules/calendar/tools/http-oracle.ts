@@ -1,6 +1,7 @@
 /** Production Calendar routes and real repositories on the disposable gate DB. */
 import assert from "node:assert/strict";
 import Fastify from "fastify";
+import { setMossErrorHandler } from "../../../apps/api/src/error-handling.js";
 import { PreferencesRepository } from "@moss/structured-state";
 import { LOCALE_PREFERENCE_KEY, resolveEffectiveLocale } from "@moss/shared";
 import { AiRepository } from "../../../packages/ai/src/repository.js";
@@ -49,6 +50,7 @@ export async function httpOracle(
   assert.equal(process.env.JARVIS_GATE_RUN, "1", "Use verify-gate");
   const db = createDatabase({ connectionString: getMossDatabaseUrls().app, maxConnections: 1 });
   const server = Fastify();
+  setMossErrorHandler(server);
   const dataContext = new DataContextRunner(db);
   registerCalendarRoutes(server, {
     resolveAccessContext: async () => ({ actorUserId: actor, requestId: "calendar-http-parity" }),

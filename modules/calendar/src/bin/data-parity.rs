@@ -8,7 +8,7 @@ fn run(v: &Value) -> moss_calendar::Result<Value> {
             match moss_calendar::settings_http::normalize(v["value"].clone()) {
                 Ok(body) => json!({"status":200,"body":body}),
                 Err(error) => {
-                    json!({"status":error.status,"body":{"error":error.message,"code":error.code}})
+                    json!({"status":error.status,"body":{"error":error.message}})
                 }
             },
         ),
