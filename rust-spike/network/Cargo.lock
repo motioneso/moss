@@ -1030,6 +1030,7 @@ dependencies = [
  "aes-gcm",
  "base64",
  "hex",
+ "libc",
  "rand 0.8.8",
  "scrypt",
  "serde_json",

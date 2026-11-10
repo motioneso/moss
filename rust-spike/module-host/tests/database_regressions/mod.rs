@@ -1,5 +1,5 @@
 use access_context::AccessContext;
-use moss_module_host::{jobs::specs, manifest::Manifest, store::Installer};
+use moss_module_host::{manifest::Manifest, store::Installer};
 use safety_core::secret::Secret;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -135,12 +135,10 @@ pub fn schedule_only_jobs_survive_execution_and_upgrade(
             tokio::spawn(async move { let _ = connection.await; });
             // Advance only this test schedule through the real scheduler, without sleeping.
             db.execute("UPDATE moss_queue.schedules SET next_at=clock_timestamp()-interval '1 minute' WHERE id=$1", &[&id]).await.unwrap();
-            let queue = moss_platform_jobs::Queue::connect(worker.expose_secret(), moss_platform_jobs::Role::Worker, specs(&manifest)).await.unwrap();
-            assert_eq!(queue.tick().await.unwrap(), 1, "A schedule-only module must retain its schedule across upgrades");
         });
         assert!(
             installer.run_job(worker).unwrap(),
-            "A schedule-only module must execute its due job"
+            "The module worker must advance schedules and execute the due job itself"
         );
         assert!(!installer.run_job(worker).unwrap());
         let cancel = json!({"operation":"unschedule","resource":"sync","parameters":{"id":id}});
