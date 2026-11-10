@@ -134,7 +134,19 @@ impl Ports for JobPorts {
                 "schedule"=> {
                     let queue=Queue::connect(self.producer.expose_secret(),Role::Producer,vec![spec.clone()]).await?;
                     let payload=json!({"actorUserId":scope.access().actor_user_id(),"moduleId":module_key(&scope.module().id),"manifestHash":manifest_hash(scope.module()),"jobKind":spec.name,"params":request.parameters["params"]});
-                    let id=uuid::Uuid::new_v4();
+                    // A key makes the schedule one stable row per account, queue and key, so repeated
+                    // reconciles replace it instead of adding another.
+                    let id=match request.parameters["key"].as_str(){
+                        Some(key)=>{
+                            use sha2::Digest;
+                            let mut hash=sha2::Sha256::new();
+                            for part in [module_key(&scope.module().id).as_str(),&scope.access().actor_user_id().to_string(),&spec.name,key]{hash.update((part.len() as u64).to_be_bytes());hash.update(part.as_bytes());}
+                            let mut bytes=[0u8;16];
+                            bytes.copy_from_slice(&hash.finalize()[..16]);
+                            uuid::Builder::from_random_bytes(bytes).into_uuid()
+                        }
+                        None=>uuid::Uuid::new_v4(),
+                    };
                     queue.schedule(actor(scope),id,&spec.name,payload,request.parameters["cron"].as_str().context("Cron required")?,request.parameters["timezone"].as_str().context("Timezone required")?,chrono::Utc::now()).await?;
                     Ok(json!({"id":id}))
                 }

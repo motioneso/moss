@@ -434,14 +434,17 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
                     .as_object()
                     .context("Schedule parameters required")?;
                 ensure!(
-                    p.len() == 3
+                    p.len() == 3 + usize::from(p.contains_key("key"))
+                        && p.get("key").is_none_or(|k| {
+                            k.as_str().is_some_and(|s| !s.is_empty() && s.len() <= 128)
+                        })
                         && p.get("cron")
                             .and_then(Value::as_str)
                             .is_some_and(|s| s.len() <= 128)
                         && p.get("timezone")
                             .and_then(Value::as_str)
                             .is_some_and(|s| s.len() <= 128),
-                    "Schedule requires only cron, timezone and params"
+                    "Schedule requires only cron, timezone, params and an optional key"
                 );
                 &request.parameters["params"]
             } else {
