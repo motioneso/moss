@@ -1223,3 +1223,35 @@ Not proven: Calendar screens on the real server, execution of any apply, retry, 
 confirmation, a second account, a second physical device. Still required: Connectors, Tasks and
 Briefings adapters, the apply job and execution, source behavior and external-calendar status
 controls, full shell and chat, old-screen replacement, complete parity.
+
+## JS-191 / part 25: operation routes and Calendar screens on the real server
+
+Package 0.23.0 declares `POST /day-plans/:id/operations/:operation_id/retry`, `/recover` and `/confirm`.
+Each checks the request like the original (retry: non-empty distinct uuid `itemIds`, no other fields;
+recover: absent or empty body; confirm: non-empty `approvalId`; ids must be uuids) and then answers 503
+"day plan apply is unavailable" without reading or writing, because execution needs a Connectors
+package and confirm needs stored approvals the host does not offer. Guest test:
+`retry_recover_and_confirm_validate_then_fail_closed`.
+
+Shared frame fix: the module frame page now keeps the frame at least window height. Before, Calendar's
+Month grid was cut off at 160px because the grid sizes to its own viewport.
+
+### Live run (real HTTPS server, signed-in owner, real Chrome, no rewritten responses)
+
+`pnpm test:rust-calendar-server` now also runs `modules/calendar/tools/server-browser.ts`. Passing in a
+real browser: sign in through the real route; the Month screen shows the owner's cached event (seeded
+for today, as a sync would leave it) inside the viewport; the event details open and close with Escape;
+Week and Day switch. Retry, recover and confirm answer 401 without sign-in, 503 with it, 400 for a bad
+selection. Screenshots were checked by eye in the task proof.
+
+### Open finding
+
+Changing "Look ahead" on the settings screen through the real control did not reach the server within
+30 seconds (the server still returned 2). The route itself works through the gate's direct calls and
+the earlier packaged-settings gates. Cause not yet found; the browser step is removed from the gate
+until it is diagnosed. The last gate run with the frame fix passed everything before that step.
+
+### Not proven
+
+Provider execution, retry/recover/confirm running a change, second account, second physical device
+(phone or laptop over LAN/tailnet), settings save through the UI on the real server.
