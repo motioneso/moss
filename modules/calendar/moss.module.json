@@ -34,11 +34,11 @@
       "operations": ["get", "set"],
       "resources": [
         "calendar.briefing-settings",
-        "calendar.source-behaviors",
         "calendar.chat-context",
         "calendar.task-reference",
         "calendar.briefing-reference",
-        "calendar.ui-view"
+        "calendar.ui-view",
+        "calendar.source-behaviors"
       ]
     }
   ],
@@ -130,8 +130,8 @@
       "signIn": true
     },
     {
-      "method": "PUT",
-      "path": "/source-behaviors/:id",
+      "method": "PATCH",
+      "path": "/source-behaviors",
       "signIn": true
     },
     {
@@ -190,6 +190,10 @@
     "defaultEnabled": true
   },
   "features": [
+    {
+      "id": "calendar.source-switches",
+      "description": "The Calendar settings screen has two switches, Include in briefings and Use for planning, both on by default. They save to the account's source-behavior preferences and change nothing for other modules. The Briefings module does not read them in this Rust version yet."
+    },
     {
       "id": "calendar.data",
       "description": "Reads cached events and saves private day-plan drafts. Provider execution is not included in this package checkpoint.",
@@ -364,7 +368,7 @@
       "id": "calendar.automation",
       "label": "Calendar",
       "path": "/settings/calendar",
-      "description": "Saved account lookahead, prep-task and time-block choices, plus the \"Include calendar signal in briefings\" switch (on by default; if saving fails the screen says so and keeps the last saved value). Time-block mode also saves the matching writeback permission. Auto grants standing permission also honored by the existing app; Rust action execution and the planning and write-back switches remain open.",
+      "description": "Saved account lookahead, prep-task and time-block choices. Time-block mode also saves the matching writeback permission. Auto grants standing permission also honored by the existing app; Rust action execution and source-behavior controls remain open.",
       "scope": "user"
     }
   ]

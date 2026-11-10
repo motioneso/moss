@@ -104,40 +104,30 @@ const confirmed = await context.request.get(`${origin}/api/m/calendar/briefing-s
 const settings = (await confirmed.json()).settings;
 assert.equal(settings.lookaheadDays, 0);
 assert.equal(settings.prepTaskMode, "off");
+// Source switch: "Use for planning" goes off through the real control; briefings stays on.
+const switchSaved = page.waitForResponse(
+  (r) => r.url().endsWith("/api/m/calendar/source-behaviors") && r.request().method() === "PATCH"
+);
+await frame.getByLabel("Use for planning", { exact: true }).selectOption("off");
+assert.equal((await switchSaved).status(), 200, "planning switch save");
+await saved.waitFor();
+const sources = await context.request.get(`${origin}/api/m/calendar/source-behaviors`, {
+  headers: { origin }
+});
+assert.deepEqual(await sources.json(), { briefings: true, planning: false });
+// Saving another setting must not reset the switch shown on screen.
+await saveSetting("Look ahead", "1");
+assert.equal(await frame.getByLabel("Use for planning", { exact: true }).inputValue(), "off");
+await saveSetting("Look ahead", "0");
 await page.screenshot({ path: join(OUT!, "calendar-settings.png") });
 await page.reload();
 await lookAhead.waitFor({ timeout: 60_000 });
 assert.equal(await lookAhead.inputValue(), "0");
+assert.equal(await frame.getByLabel("Use for planning", { exact: true }).inputValue(), "off");
+assert.equal(await frame.getByLabel("Include in briefings", { exact: true }).inputValue(), "on");
 console.log(
   "PASS settings changed in the real control are saved by the server and survive a reload"
 );
-
-// Briefing switch: on by default, saved through the real control, kept after reload.
-const signal = frame.getByLabel("Include calendar signal in briefings", { exact: true });
-await signal.waitFor({ timeout: 60_000 });
-assert.equal(await signal.isChecked(), true, "default is on");
-const toggled = page.waitForResponse(
-  (r) =>
-    r.url().endsWith("/api/m/calendar/source-behaviors/calendar.briefings") &&
-    r.request().method() === "PUT"
-);
-await signal.uncheck();
-assert.equal((await toggled).status(), 200, "briefing switch save");
-await saved.waitFor();
-const behaviors = await context.request.get(`${origin}/api/m/calendar/source-behaviors`, {
-  headers: { origin }
-});
-const rows = (await behaviors.json()).sources[0].behaviors;
-assert.equal(rows.find((b: { id: string }) => b.id === "calendar.briefings").enabled, false);
-assert.equal(rows.find((b: { id: string }) => b.id === "calendar.planning").enabled, true);
-// Changing another setting must not flip the switch back on screen.
-await saveSetting("Look ahead", "1");
-assert.equal(await signal.isChecked(), false, "switch stays off after another save");
-await page.screenshot({ path: join(OUT!, "calendar-briefing-switch.png") });
-await page.reload();
-await signal.waitFor({ timeout: 60_000 });
-assert.equal(await signal.isChecked(), false, "switch stays off after reload");
-console.log("PASS the briefing switch is saved by the server and survives a reload");
 
 assert.deepEqual(failed, [], "server errors during the run");
 await browser.close();

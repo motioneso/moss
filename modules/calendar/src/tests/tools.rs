@@ -41,6 +41,50 @@ fn settings_patch_reaches_the_scoped_host_once() {
 }
 
 #[test]
+fn source_switch_patch_reaches_the_host_and_bad_bodies_do_not() {
+    struct Sources;
+    impl Host for Sources {
+        fn call(&self, port: &str, operation: &str, resource: &str, body: Value) -> Result<Value> {
+            assert_eq!(
+                (port, operation, resource),
+                ("kv", "set", "calendar.source-behaviors")
+            );
+            assert_eq!(body, json!({"planning":false}));
+            Ok(json!({"briefings":true,"planning":false}))
+        }
+    }
+    let route = |host: &dyn Host, body: Value| -> Value {
+        struct Dyn<'a>(&'a dyn Host);
+        impl Host for Dyn<'_> {
+            fn call(&self, a: &str, b: &str, c: &str, d: Value) -> Result<Value> {
+                self.0.call(a, b, c, d)
+            }
+        }
+        serde_json::from_str(
+            &handle(
+                &Dyn(host),
+                "route",
+                &json!({"method":"PATCH","path":"/source-behaviors","params":{},"query":{},"body":body})
+                    .to_string(),
+            )
+            .unwrap(),
+        )
+        .unwrap()
+    };
+    let saved = route(&Sources, json!({"planning":false}));
+    assert_eq!(saved["status"], 200);
+    assert_eq!(saved["body"], json!({"briefings":true,"planning":false}));
+    for bad in [
+        json!({}),
+        json!({"planning":"off"}),
+        json!({"writeback":true}),
+        json!([true]),
+    ] {
+        assert_eq!(route(&NoCalls, bad)["status"], 400);
+    }
+}
+
+#[test]
 fn chat_rejects_provider_effects_and_extra_authority_before_host_access() {
     for key in [
         "startsAt",
@@ -691,55 +735,5 @@ mod provider {
             );
             assert_eq!(raw.unwrap_err(), "Calendar data is unavailable");
         }
-    }
-}
-
-#[test]
-fn source_behaviors_read_defaults_and_write_one_toggle() {
-    struct Store;
-    impl Host for Store {
-        fn call(&self, port: &str, operation: &str, resource: &str, body: Value) -> Result<Value> {
-            assert_eq!((port, resource), ("kv", "calendar.source-behaviors"));
-            if operation == "get" {
-                return Ok(json!({"calendar.planning":false}));
-            }
-            assert_eq!(body, json!({"id":"calendar.briefings","enabled":false}));
-            Ok(json!({"calendar.planning":false,"calendar.briefings":false}))
-        }
-    }
-    let route = |method: &str, path: &str, params: Value, body: Value| -> Value {
-        serde_json::from_str(
-            &handle(
-                &Store,
-                "route",
-                &json!({"method":method,"path":path,"params":params,"query":{},"body":body}).to_string(),
-            )
-            .unwrap(),
-        )
-        .unwrap()
-    };
-    let read = route("GET", "/source-behaviors", json!({}), Value::Null);
-    let rows = &read["body"]["sources"][0]["behaviors"];
-    assert_eq!(rows[0]["enabled"], true);
-    assert_eq!(rows[1]["enabled"], false);
-    assert_eq!(rows[2]["toggleable"], false);
-    assert_eq!(rows[2]["enabled"], false);
-    let saved = route("PUT", "/source-behaviors/:id", json!({"id":"calendar.briefings"}), json!({"enabled":false}));
-    assert_eq!(saved["status"], 200);
-    assert_eq!(saved["body"]["sources"][0]["behaviors"][0]["enabled"], false);
-    for (id, body, status) in [
-        ("calendar.briefings", json!({"enabled":"no"}), 400),
-        ("calendar.briefings", json!({"enabled":true,"x":1}), 400),
-        ("calendar.nope", json!({"enabled":true}), 404),
-        ("calendar.detect-commitments", json!({"enabled":true}), 422),
-    ] {
-        let none = handle(
-            &NoCalls,
-            "route",
-            &json!({"method":"PUT","path":"/source-behaviors/:id","params":{"id":id},"query":{},"body":body}).to_string(),
-        )
-        .unwrap();
-        let none: Value = serde_json::from_str(&none).unwrap();
-        assert_eq!(none["status"], status, "{id}");
     }
 }

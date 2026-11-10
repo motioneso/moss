@@ -19,7 +19,6 @@ pub mod provider_tools;
 mod saved_read;
 pub mod settings;
 pub mod settings_http;
-mod source_behaviors;
 pub mod visible_events;
 
 #[derive(Debug)]
@@ -239,8 +238,23 @@ fn route(host: &impl Host, request: RouteRequest) -> Result<Value> {
         ("PATCH", "/briefing-settings") => {
             settings::save(host, settings_http::normalize(request.body)?)
         }
-        ("GET", "/source-behaviors") => source_behaviors::read(host),
-        ("PUT", "/source-behaviors/:id") => source_behaviors::save(host, &id, &request.body),
+        ("GET", "/source-behaviors") => Ok(host.call(
+            "kv",
+            "get",
+            "calendar.source-behaviors",
+            json!({}),
+        )?),
+        ("PATCH", "/source-behaviors") => {
+            let object = request.body.as_object().filter(|o| {
+                !o.is_empty()
+                    && o.iter()
+                        .all(|(k, v)| matches!(k.as_str(), "briefings" | "planning") && v.is_boolean())
+            });
+            if object.is_none() {
+                return Err(Error::new(400, "Invalid calendar source switches"));
+            }
+            Ok(host.call("kv", "set", "calendar.source-behaviors", request.body)?)
+        }
         ("GET", "/display-settings") => display::read(host),
         ("PATCH", "/display-settings") => display::save(host, request.body),
         _ => Err(Error::new(404, "Calendar data operation not found")),

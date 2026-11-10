@@ -10,6 +10,7 @@ use std::{
 
 pub mod package;
 mod settings;
+mod sources;
 #[cfg(feature = "web")]
 pub mod web;
 pub const PREFERENCE_KEYS: [&str; 7] = [
@@ -85,10 +86,17 @@ impl Ports for CalendarPorts {
                 _ => unreachable!(),
             };
         }
+        if port == "kv"
+            && scope.module().id == "calendar"
+            && request.resource == "calendar.source-behaviors"
+        {
+            moss_module_host::runtime::authorize(scope.module(), port, request)?;
+            return self.source_behaviors(scope, request);
+        }
         if port != "kv"
             || !matches!(
                 request.resource.as_str(),
-                "calendar.briefing-settings" | "calendar.chat-context" | "calendar.source-behaviors"
+                "calendar.briefing-settings" | "calendar.chat-context"
             )
         {
             return self.next.invoke(scope, port, request);
@@ -100,14 +108,6 @@ impl Ports for CalendarPorts {
         {
             return self.save_settings(scope, &request.parameters);
         }
-        if scope.module().id == "calendar" && request.resource == "calendar.source-behaviors" {
-            return if request.operation == "set" {
-                self.save_source_behavior(scope, &request.parameters)
-            } else {
-                self.read_source_behaviors(scope, &request.parameters)
-            };
-        }
-
         ensure!(
             scope.module().id == "calendar"
                 && request.operation == "get"

@@ -1319,25 +1319,33 @@ the apply job that would settle the batch, a second account over HTTP, a second 
 adapters, apply execution, retry/recover/confirm running a change, source behavior and
 external-calendar status controls, full shell and chat, old-screen replacement, complete parity.
 
-## JS-211 / part 29: briefing signal switch (source behaviors)
+## JS-209 / part 28: briefing and planning source switches
 
-Package 0.25.0 adds `GET /source-behaviors` and `PUT /source-behaviors/:id`, backed by a new Calendar
-key-value resource that reads and writes the account's existing `sourceBehaviors` preference. The
-original app and this package therefore share one switch. Answers keep the original envelope for the
-Calendar source: four behaviors (briefings and planning and write-back default on, commitment
-detection "coming soon" and not toggleable). Errors match the original: unknown id 404, coming-soon
-422, bad body 400. Writes merge into the stored blob under an account lock and commit with the call.
-The settings screen now shows the original "Include calendar signal in briefings" switch.
+Package 0.25.0 adds two Calendar switches, "Include in briefings" and "Use for planning", to the
+Calendar settings screen. They read and write the account's existing source-behavior preference
+(entries `calendar.briefings` and `calendar.planning`, both on by default) through a Calendar-only
+host binding. Only those two entries change; other modules' entries in the same preference are kept.
+New routes `GET` and `PATCH /source-behaviors` (signed-in; the guest accepts only the two boolean
+fields and answers 400 otherwise; the host checks again). The "Write events back" behavior is not
+a switch here: it is already controlled by the Time blocks mode, which sets the writeback tier.
 
-Proof (via `scripts/run-gate.sh`): the installed database test shows defaults, one account's toggle,
-no effect on another account or an administrator, and the three error cases. The real HTTPS server
-gate turns the switch off through the real control in a real browser, reads it back from the server
-(briefings off, planning still on) and sees it stay off after a reload. Nothing rewritten.
+Live (`pnpm test:rust-calendar-server` through `scripts/run-gate.sh`, real HTTPS server, real Chrome,
+nothing rewritten): no sign-in gives 401; defaults read as both on; an unknown field gives 400; the
+browser turns "Use for planning" off through the real control, sees "Settings saved.", reads back
+planning off and briefings on, and the choice survives a reload. Review found that saving another setting reset the on-screen switches to On; fixed, and the gate now changes Look ahead after flipping a switch and checks the switch still reads Off. A failed switch read now shows both as On instead of failing the screen. Guest test
+`source_switch_patch_reaches_the_host_and_bad_bodies_do_not` and the package tests pass.
 
-One unexplained blip: the server test fails at account sign-up (422 "Failed to create user") when it runs in the same database right after the other Calendar tests, and passes when run alone (as in earlier parts). The test now prints the sign-up body.
+Not proven: the Briefings module honoring the switches (the Rust Briefings package does not exist),
+provider execution, the four provider tools end to end, retry/recover/confirm running a change,
+external-calendar (Outlook) status controls (they belong to the Connectors package, not built), a
+second account, a second physical device over LAN or tailnet. Still required: Connectors, Tasks and
+Briefings adapters, the apply job and execution, full shell and chat, old-screen replacement,
+complete parity.
 
-Not proven: provider execution, the four provider tools end to end, retry/recover/confirm running a
-change, a second account in a browser, a second physical device. The write-back and planning
-switches are stored but no Rust code consults them yet, because the apply job and planning need the
-Connectors and Briefings packages. The core `/api/me/source-behaviors` list for other modules is
-still not in the Rust server; Calendar answers only for its own source.
+## JS-211 / part 29: overlap with part 28, and a test diagnostic
+
+Part 29 first built the briefing switch independently; part 28 (#4211) merged the same feature
+first, so that work was dropped in favor of part 28's version. Part 29's only contribution is that the
+server test now prints the sign-up response body on failure. Observed before the merge: the server
+test failed at sign-up (422 "Failed to create user") when run in the same database right after the
+other Calendar tests, and passed when run alone. Cause not found.

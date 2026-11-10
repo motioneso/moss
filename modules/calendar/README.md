@@ -11,7 +11,7 @@ horizontal position. Day, Week and Month screens, saved views and editable brief
 Full shell composition, the source-behavior switch, the remaining four chat tools, jobs,
 provider execution and the assembled HTTP/UI parity gate remain open.
 
-Version 0.2.0 adds `calendar.heartbeatWindow` (owned cache reads) and
+Version 0.25.0 adds the Briefings and Planning source switches on the settings screen. Version 0.2.0 adds `calendar.heartbeatWindow` (owned cache reads) and
 `calendar.dayPlanDraft` (typed evening intent and untimed task proposals). The latter
 retains recorded placement and requires an actor-scoped public Tasks projection for
 new task references. Neither tool calls a provider. The package advertises only these
@@ -496,9 +496,3 @@ rows are repaired on replay. `POST /day-plans/:id/apply` validates the body and 
 because execution needs a Connectors package; it writes nothing. The original takes a row lock
 on the plan during reservation; the host runs each database call in its own transaction, so the
 unique idempotency key and the revision check carry that protection instead.
-
-## Briefing signal switch (part 29)
-
-Version 0.25.0 adds the "Include calendar signal in briefings" switch to the settings screen,
-backed by `GET /source-behaviors` and `PUT /source-behaviors/:id` over the shared `sourceBehaviors`
-preference. Planning and write-back toggles are stored but not yet consulted. See the phase report.
