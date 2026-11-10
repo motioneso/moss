@@ -124,8 +124,14 @@ fn setup_lock(servers: &Path) -> Result<std::fs::File, Failure> {
     }
     let file = options
         .open(servers.join("setup.lock"))
-        .map_err(|_| Failure::Other)?;
-    portability::file_lock::exclusive(&file).map_err(|_| Failure::Other)?;
+        .map_err(|e| {
+            eprintln!("moss-app setup: lock file: {e}");
+            Failure::Other
+        })?;
+    portability::file_lock::exclusive(&file).map_err(|e| {
+        eprintln!("moss-app setup: lock: {e}");
+        Failure::Other
+    })?;
     Ok(file)
 }
 
@@ -139,13 +145,19 @@ fn make_private_folder(path: &Path) -> Result<(), Failure> {
     }
     builder.create(path).map_err(|e| match e.kind() {
         std::io::ErrorKind::AlreadyExists => Failure::Exists,
-        _ => Failure::Other,
+        _ => {
+            eprintln!("moss-app setup: instance folder: {e}");
+            Failure::Other
+        }
     })
 }
 
 fn prepare(store: &Store, install: &Path, folder: &Path) -> Result<(), Failure> {
     // Keep the listener alive until network.json commits the port to this instance.
-    let (port, _reservation) = free_port(store).ok_or(Failure::Other)?;
+    let (port, _reservation) = free_port(store).ok_or_else(|| {
+        eprintln!("moss-app setup: no free port");
+        Failure::Other
+    })?;
     let origins = vec![
         format!("https://localhost:{port}"),
         format!("https://127.0.0.1:{port}"),
@@ -163,8 +175,14 @@ fn prepare(store: &Store, install: &Path, folder: &Path) -> Result<(), Failure> 
     ensure_database(install, folder, true)?;
     let (credentials, modules) = run_credentials(install, folder)?;
     let credentials_path = folder.join("credentials.json");
-    private_write(&credentials_path, credentials.as_bytes()).map_err(|_| Failure::Other)?;
-    private_write(&folder.join(MODULES_FILE), modules.as_bytes()).map_err(|_| Failure::Other)?;
+    private_write(&credentials_path, credentials.as_bytes()).map_err(|e| {
+        eprintln!("moss-app setup: credentials file: {e}");
+        Failure::Other
+    })?;
+    private_write(&folder.join(MODULES_FILE), modules.as_bytes()).map_err(|e| {
+        eprintln!("moss-app setup: modules file: {e}");
+        Failure::Other
+    })?;
     Config {
         listen: std::net::SocketAddr::from(([0, 0, 0, 0], port)),
         origins,
@@ -174,7 +192,10 @@ fn prepare(store: &Store, install: &Path, folder: &Path) -> Result<(), Failure> 
         credentials: credentials_path,
     }
     .write(&folder.join(NETWORK_FILE))
-    .map_err(|_| Failure::Other)
+    .map_err(|e| {
+        eprintln!("moss-app setup: network file: {e}");
+        Failure::Other
+    })
 }
 
 /// The first port at or above `FIRST_PORT` that no instance uses and nothing is listening on.
