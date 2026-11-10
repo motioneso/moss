@@ -321,3 +321,33 @@ fn repeat_manual_sync_joins_the_unfinished_request_for_the_same_folder() {
         assert_eq!(publishes[0]["idempotencyKey"], expected);
     }
 }
+
+#[test]
+fn a_burst_of_unrelated_requests_does_not_hide_the_waiting_one() {
+    struct Burst(RefCell<Vec<u64>>);
+    impl Host for Burst {
+        fn call(&self, port: &str, op: &str, resource: &str, params: Value) -> Result<Value> {
+            Ok(match (port, op, resource) {
+                ("vault", "folder.get", "source") => json!({"status":200,"body":"/notes"}),
+                ("context", "read", "call") => json!({"now":"2026-11-09T12:00:00Z"}),
+                ("jobs", "schedule", "notes.sync-tick") => json!({"id":ID}),
+                ("db", "query", "app.notes_sync_checkpoints") if params["kind"] == "select" => {
+                    let offset = params["offset"].as_u64().unwrap();
+                    self.0.borrow_mut().push(offset);
+                    let other = |n: u64| json!({"id":format!("00000000-0000-4000-8000-{n:012}"),"checkpoint":{"sourcePath":"/elsewhere"}});
+                    if offset < 200 {
+                        Value::Array((0..100).map(other).collect())
+                    } else {
+                        json!([{"id":ID,"checkpoint":{"sourcePath":"/notes"}}])
+                    }
+                }
+                ("jobs", "enqueue-after-commit", "notes.sync") => json!({"deferred":true}),
+                _ => panic!("Unexpected access: {port}/{op}/{resource}"),
+            })
+        }
+    }
+    let host = Burst(RefCell::new(vec![]));
+    let out = handle(&host, "api", r#"{"name":"requestNotesSync","parameters":{}}"#).unwrap();
+    assert_eq!(serde_json::from_str::<Value>(&out).unwrap(), json!({"checkpointId":ID}));
+    assert_eq!(*host.0.borrow(), vec![0, 100, 200]);
+}

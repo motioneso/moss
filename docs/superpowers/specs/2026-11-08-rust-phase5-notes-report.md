@@ -1971,7 +1971,11 @@ The manual Sync now route, the experimental request API and the fifteen-minute t
 
 Recall warmup is not ported on purpose. Legacy loaded a local model in the API process on first use. The Rust server embeds through a remote HTTP endpoint, so no model load exists to warm.
 
-Checks: a new unit test covers joined, finished, other-folder, continuation and empty cases and the five-minute cutoff; the Notes suites pass. Live (`pnpm test:rust-notes-server`, through the gate, passed): an unfinished request was saved for the linked folder, Sync now over HTTPS returned that request's id, and the server's worker then indexed the three notes from it.
+The window is read in pages of 100 (up to 1000 rows, ordered by id), so a burst of unrelated requests cannot hide the waiting one.
+
+Review round 1 (Codex): two majors. The row cap hiding a match was fixed with paging and a test. The race (two requests in one instant both saving a row) is judged acceptable and left: it costs one extra indexing pass, which is repeatable, and closing it needs a database-level claim the guest cannot express today.
+
+Checks: unit tests cover joined, finished, other-folder, continuation and empty cases, the five-minute cutoff and a 200-row burst; the Notes suites pass. Live (`pnpm test:rust-notes-server`, through the gate, passed): an unfinished request was saved for the linked folder, Sync now over HTTPS returned that request's id, and the server's worker then indexed the three notes from it.
 
 Not proven: two requests racing in the same instant (both could save a row; indexing is repeatable), a second signed-in account, native UI, a second physical device, the assembled Settings and chat join.
 

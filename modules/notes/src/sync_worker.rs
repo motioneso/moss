@@ -192,23 +192,38 @@ fn unfinished_request(host: &impl Host, source: &str) -> Result<Option<String>> 
     let now = context["now"].as_str().ok_or_else(unavailable)?;
     let cutoff = crate::sync_recovery::shift_seconds(now, -COALESCE_SECONDS)
         .ok_or_else(unavailable)?;
-    let mut query = Query::select(Filter::Compare {
-        column: "created_at".into(),
-        op: moss_module_sdk::query::Compare::Gt,
-        value: json!(cutoff),
-    });
-    query.limit = Some(100);
-    let rows = Client(host).query(TABLE, &query)?;
-    for row in rows {
-        let Some(checkpoint) = row["checkpoint"].as_object() else {
-            continue;
-        };
-        // A plain request holds only its source. Continuation pages hold more.
-        if checkpoint.len() == 1 && checkpoint.get("sourcePath").and_then(Value::as_str) == Some(source) {
-            if let Some(id) = row["id"].as_str() {
-                uuid::Uuid::parse_str(id).map_err(|_| unavailable())?;
-                return Ok(Some(id.to_owned()));
+    // Rows from the window are read in pages, so a burst of unrelated requests
+    // (writes, continuation pages) cannot hide a matching one. 1000 rows at most.
+    for page in 0..10u32 {
+        let mut query = Query::select(Filter::Compare {
+            column: "created_at".into(),
+            op: moss_module_sdk::query::Compare::Gt,
+            value: json!(cutoff),
+        });
+        query.limit = Some(100);
+        query.offset = page * 100;
+        query.order = vec![moss_module_sdk::query::Order {
+            column: "id".into(),
+            descending: false,
+        }];
+        let rows = Client(host).query(TABLE, &query)?;
+        let last = rows.len() < 100;
+        for row in rows {
+            let Some(checkpoint) = row["checkpoint"].as_object() else {
+                continue;
+            };
+            // A plain request holds only its source. Continuation pages hold more.
+            if checkpoint.len() == 1
+                && checkpoint.get("sourcePath").and_then(Value::as_str) == Some(source)
+            {
+                if let Some(id) = row["id"].as_str() {
+                    uuid::Uuid::parse_str(id).map_err(|_| unavailable())?;
+                    return Ok(Some(id.to_owned()));
+                }
             }
+        }
+        if last {
+            break;
         }
     }
     Ok(None)
