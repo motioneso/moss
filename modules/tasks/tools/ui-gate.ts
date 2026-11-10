@@ -158,6 +158,24 @@ try {
       "select count(*)::text as count from app.tasks where title = 'Browser proof task'"
     );
     assert.equal(result.rows[0]?.count, "1", "The real UI must create the proof task exactly once");
+    if (process.env["TASKS_UI_FOCUS_PROOF"] === "1") {
+      const rows = await db.query<{
+        title: string;
+        status: string;
+        priority: number | null;
+        dated: boolean;
+      }>(
+        "select title, status, priority, due_at is not null as dated from app.tasks where title in ('Browser proof task', 'Finished focus proof', 'Undated focus proof') order by title"
+      );
+      assert.deepEqual(rows.rows, [
+        { title: "Browser proof task", status: "todo", priority: 5, dated: true },
+        { title: "Finished focus proof", status: "done", priority: null, dated: false },
+        { title: "Undated focus proof", status: "todo", priority: null, dated: false }
+      ]);
+      console.log(
+        "PASS browser focus fixtures: high-priority dated open task, completed task and undated open task persisted with exact final states"
+      );
+    }
     if (process.env["TASKS_UI_REFRESH_PROOF"] === "1") {
       const parent = await db.query<{ status: string; description: string }>(
         "select status, description from app.tasks where title = 'Browser proof task'"

@@ -29,9 +29,16 @@ pub fn render() -> String {
                     </Field>
                     <Field><FormLabel control_id="status-filter">"Status"</FormLabel>
                         <select id="status-filter" class="jds-input">
+                            <option value="" disabled>"Using focus"</option>
                             <option value="todo">"To do"</option><option value="all">"All"</option>
                             <option value="done">"Done"</option>
                             <option value="suggested">"Suggested"</option><option value="archived">"Archived"</option>
+                        </select>
+                    </Field>
+                    <Field><FormLabel control_id="focus-filter">"Focus"</FormLabel>
+                        <select id="focus-filter" class="jds-input" aria-describedby="focus-description">
+                            <option value="">"No focus"</option><option value="priorities">"Do First"</option>
+                            <option value="atrisk">"At risk"</option><option value="donetoday">"Done today"</option>
                         </select>
                     </Field>
                     <Field><FormLabel control_id="tag-filter">"Tags"</FormLabel>
@@ -75,6 +82,8 @@ pub fn render() -> String {
                     </div>
                 </details>
                 <div id="active-tags" class="tasks-actions" role="group" aria-label="Active tag filters"></div>
+                <div id="active-focus" class="tasks-actions" role="group" aria-label="Active focus"></div>
+                <p id="focus-description" class="jds-caption">"Focus replaces the status filter. Do First shows open high-priority tasks due within forty-eight hours; At risk shows open tasks overdue or due within two local days. Done today uses your saved timezone. Choose a status or clear filters to leave focus."</p>
                 <p id="search-warning" role="status" hidden></p>
                 <div id="search-intent" class="tasks-actions" role="group" aria-label="Interpreted search filters"></div>
                 <p class="jds-caption">"Interpret a phrase into filters, or search by title and description. Interpreted dates use your saved timezone."</p>

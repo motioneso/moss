@@ -1,5 +1,12 @@
 # Calendar package
 
+## 0.21.0
+
+- Preserve the original settings API's scalar and singleton-array coercion and removal of extra fields.
+- Return the original field-specific validation messages for invalid settings, without changing saved preferences or writeback policy.
+- Compare normalization with the production schema and installed writes with the original handler for owner, other user and administrator.
+- Full cutover, provider execution and physical second-device acceptance remain open.
+
 ## 0.20.0
 
 - Retain keyboard focus on the selected toolbar control after its view save finishes.
