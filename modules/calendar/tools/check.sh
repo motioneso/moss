@@ -20,6 +20,7 @@ export CALENDAR_CORE_WASM="$calendar_guest_target/wasm32-unknown-unknown/release
 CARGO_TARGET_DIR="$calendar_guest_target" cargo +1.95.0 test --locked --offline --manifest-path modules/calendar/src/Cargo.toml
 CARGO_TARGET_DIR="$calendar_guest_target" cargo +1.95.0 build --locked --offline --manifest-path modules/calendar/src/Cargo.toml --bin calendar-data-parity
 pnpm exec tsx modules/calendar/tools/data-parity.ts
+pnpm exec tsx modules/calendar/tools/settings-validation-parity.ts
 cargo +1.95.0 test --locked --offline --manifest-path modules/calendar/host/Cargo.toml --test package
 
 cargo +1.95.0 test --locked --offline --manifest-path modules/calendar/host/Cargo.toml --features web --lib

@@ -1,5 +1,6 @@
 import { localDay, localNoon } from "./local-date.mjs";
 import { matchesSearchIntent } from "./search.mjs";
+import { matchesFocus } from "./focus.mjs";
 
 // Keep unchanged timestamps and recurrence rules byte-for-byte on unrelated edits.
 export function taskFields(form, previous = null, today = undefined, timeZone = "UTC") {
@@ -35,6 +36,7 @@ export function filterTasks(
     lists = [],
     listStates = {},
     status = "todo",
+    focus = null,
     tagFilter = [],
     search = "",
     searchIntent = null,
@@ -49,7 +51,8 @@ export function filterTasks(
   for (const task of tasks) {
     for (const tag of task.tags) allTags.add(tag.name);
     if (task.parentTaskId !== null) continue;
-    if (status !== "all" && task.status !== status) continue;
+    if (focus ? !matchesFocus(task, focus, timeZone) : status !== "all" && task.status !== status)
+      continue;
     // Manual tags are alternatives, matching the legacy screen's tag set.
     if (tagFilter.length && !task.tags.some((tag) => tagFilter.includes(tag.name))) continue;
     if (Object.hasOwn(listCounts, task.listId)) listCounts[task.listId]++;

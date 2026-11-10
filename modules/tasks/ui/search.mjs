@@ -95,7 +95,10 @@ export function interpretedSearch({ api, run, changed, focus }) {
     if (!query) return;
     try {
       const response = await api("POST", "/tasks/search/interpret", { query });
-      if (response.intent.status) $("status-filter").value = response.intent.status;
+      if (response.intent.status) {
+        $("status-filter").value = response.intent.status;
+        $("focus-filter").value = "";
+      }
       const next = { ...response.intent, status: null };
       intent = hasSearchIntent(next) ? next : null;
       warning = response.warnings[0] ?? (intent ? "" : "No structured filter found.");

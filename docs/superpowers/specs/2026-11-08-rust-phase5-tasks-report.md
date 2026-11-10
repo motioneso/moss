@@ -1917,3 +1917,70 @@ application shell. The existing device bridge reported no attached physical
 device during this work, so local HTTPS cannot prove access from another device.
 The previously recorded manage-share retry and duplicate-response differences
 remain. Workshop and Food remain excluded. Part of #4027; release note Category N/A.
+
+## Tasks part 28 checkpoint (JS-165, Card 526)
+
+The installed package screen now offers the existing **Do First**, **At risk**
+and **Done today** focus presets in List and Grid. A preset replaces the status
+filter while retaining list choices, selected tags and search. List counts follow
+focus and tags before search, matching the legacy screen. Choosing a status
+leaves focus; removing its chip, choosing No focus or Clear filters returns to open tasks. Clear
+filters also resets lists, tags and search. Filtering reads loaded account data
+and does not call a mutation route. The package includes the new controller
+asset, and its app map and changelog describe the controls.
+
+These are the legacy screen presets, not aliases for the drift API endpoints.
+Do First uses the open, high-priority, forty-eight-hour quadrant rule, including
+overdue tasks. At risk includes open tasks overdue or due within two calendar
+days in the saved account timezone. Done today checks completion on the current
+calendar day in that timezone. Subtasks remain outside the top-level results.
+This checkpoint does not connect Today or chat deep links to the package frame.
+
+The new differential check was observed failing on the original package model:
+focus was ignored and the first Do First comparison returned unrelated rows and
+incorrect list counts. The port passes **3,645 exact comparisons** against the
+unchanged legacy screen model, across three clocks (including both Pacific DST
+changes), three account timezones, all statuses, list choices, tags and searches.
+It checks the entire filter result and verifies source rows are unchanged. The
+real-markup controller regression checks focus/status transitions, chip removal, retained
+filters, counts before search, both layouts and Clear filters, with an explicitly
+labeled bridge stand-in. That controller check is separate from installed live
+proof. Gate and browser receipts belong to this task's proof artifact.
+
+The signed UI gate has an optional `TASKS_UI_FOCUS_PROOF=1` persistence receipt.
+Create a list through Manage lists, then create `Browser proof task` as an open
+Critical task due today; `Finished focus proof` as Done without dates or priority;
+and `Undated focus proof` as open without dates or priority. Exercise all three
+focus choices, both layouts, explicit status changes and Clear filters through
+the real screen before writing its `finished` receipt. The gate verifies the
+three saved statuses, priorities and date-presence values. UI result assertions and screenshots must come
+from the actual browser session; the persistence receipt alone does not prove
+filter rendering.
+
+The branch was fast-forwarded to main including part 27. Declared JavaScript
+dependencies were restored offline. The tools lockfile was regenerated offline
+from the existing scratch cache without a byte change. Existing Rust 1.95,
+Wasm target and approved wit-bindgen dependency graph were copied into this
+task's scratch folders and reused; no global tool, compiler target, generator
+or new dependency was installed. Native guest tests use a separate target from
+host tools. Independent review found that an interpreted search supplying a status
+left focus active and silently overrode that status. A regression failed before
+the fix; successful interpretations with a status now leave focus, while a reply
+without a status or a failed interpretation preserves it. The real-markup
+search test also exercises this transition. Review
+also identified the missing removable focus chip, which was added. Broad Rust formatting also reports pre-existing differences in
+unchanged spike sources; the changed Rust files pass the scoped check.
+
+This is a bounded screen-parity checkpoint, not full Phase 5 acceptance. It
+changes no HTTP route, tool, job kind, migration or host contract. Remaining:
+lazy recurrence advancement; recurrence jobs; deferred-queue retry/retention
+policy, optional request-key retention and installed worker dispatch; public
+People linkage; policy enforcement and feedback orchestration; remaining
+screen/settings parity and Today/chat focus links; installed chat and summary
+presentation; real application shell integration; performance budgets; and
+physical second-device HTTPS proof. The available device bridge reported no
+attached device during this work. The signed fixture remains separate from the
+application shell; a local browser or narrow viewport is not another physical
+device. The previously recorded manage-share retry and duplicate-response
+differences remain. Workshop and Food remain excluded. Part of #4027;
+release note Category N/A.

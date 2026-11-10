@@ -2193,6 +2193,7 @@ dependencies = [
  "moss-network",
  "moss-shell-contract",
  "safety-core",
+ "serde",
  "serde_json",
  "tokio",
  "tower-http",

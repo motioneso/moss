@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add Do First, At risk and Done today focus presets in both task views, using the saved account timezone for day filters. Presets replace status; choosing a status or clearing filters leaves focus.
+
 - Keep task editor drafts while refreshing untouched fields after detail actions, including parent completion from the last subtask.
 
 - Load task-detail panels independently, retry failed subtask and list-tag reads, and keep loaded details and unsaved drafts.
