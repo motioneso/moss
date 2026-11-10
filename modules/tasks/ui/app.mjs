@@ -9,6 +9,7 @@ import { findOrCreateTag } from "./task-tags.mjs";
 import { interpretedSearch } from "./search.mjs";
 import { quickCapture } from "./quick-add.mjs";
 import { taskActivity } from "./activity.mjs";
+import { taskSettings } from "./settings.mjs";
 
 const client = moduleClient();
 const $ = (id) => document.getElementById(id);
@@ -24,6 +25,12 @@ const state = {
   focusAfter: null,
   listDrafts: new Map()
 };
+const settings = taskSettings({
+  api,
+  run,
+  isBusy: () => state.busy,
+  resize: () => void client.resize(document.documentElement.scrollHeight).catch(() => {})
+});
 const capture = captureDraft({
   api,
   run,
@@ -148,6 +155,7 @@ async function run(action) {
     quick.sync();
     search.sync();
     activity.sync();
+    settings.sync();
     $("tasks-app").removeAttribute("aria-busy");
     state.focusAfter?.focus();
     state.focusAfter = null;

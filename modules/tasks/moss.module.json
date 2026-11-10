@@ -102,7 +102,15 @@
       "order": 30
     }
   ],
-  "settings": [],
+  "settings": [
+    {
+      "id": "tasks.assistant-actions",
+      "label": "Task settings",
+      "path": "/tasks",
+      "scope": "user",
+      "description": "Open Task settings in Tasks to read or save your assistant task-change preference. Installed chat actions still require one-use approval until automatic-action integration is complete."
+    }
+  ],
   "features": [
     {
       "id": "tasks.package-data",
@@ -199,7 +207,22 @@
     },
     {
       "id": "tasks.account_policy_routes",
-      "description": "Read or change the account\u2019s task-change assistant preference through the existing agency-auto-execute API. Canonical policy takes precedence over the older toggle; legacy opt-outs are preserved. These API routes preserve the setting; the package screen does not expose a switch yet, and installed chat actions still require one-use approval."
+      "description": "Open Task settings in Tasks to read or change your account\u2019s task-change assistant preference. Canonical policy takes precedence over the older toggle; legacy opt-outs are preserved. The switch stays unavailable until a saved value loads, keeps the last confirmed value after failed refreshes or saves, and offers Retry loading. Installed chat actions still require one-use approval; this control saves the preference only.",
+      "errors": [
+        {
+          "code": "tasks-preference-unavailable",
+          "class": "transient",
+          "description": "The task action preference could not load or save. A failed initial read disables the switch; failed refreshes and saves keep the last confirmed value.",
+          "remediationRef": "tasks-retry-preference"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "tasks-retry-preference",
+          "description": "Open Task settings and choose Retry loading after checking your connection. If a save failed, change the switch again to retry.",
+          "path": "/tasks"
+        }
+      ]
     }
   ],
   "screens": {

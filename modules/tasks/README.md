@@ -1,5 +1,14 @@
 # Tasks component checkpoint
 
+Part 23 adds **Task settings** in the package screen for the existing assistant
+task-change preference. Opening the section reads the saved choice; the switch
+is unavailable until it loads. Failed refreshes or saves keep the last confirmed
+value, and Retry loading does not write a default. A successful save updates the
+confirmed choice without reloading tasks. The screen explicitly says installed
+chat actions still require approval while automatic-action integration remains
+unfinished. The app map links this account setting to the implemented Tasks
+screen rather than advertising an unimplemented settings-shell route.
+
 Part 22 connects the disposable endpoint adapter to the real Rust queue and a
 worker-role compiled guest invocation. The old harness table records only the
 actual terminal state and successful handler result after the real queue finishes;
@@ -14,8 +23,8 @@ boundaries for focus, at-risk, overdue and bounded summaries. The host supplies
 scoped policy and calendar-day contracts; Tasks never queries core preferences.
 Canonical policy beats the legacy toggle, including `always_confirm`, and a
 legacy opt-out prevents the initial grant. These routes preserve the saved choice;
-the package screen still has no policy switch and installed chat still requires
-one-use approval. The summary's timezone and local date now reflect the saved
+part 23 exposes the saved choice in the package screen, while installed chat still
+requires one-use approval. The summary's timezone and local date now reflect the saved
 account locale. Missing or invalid zones retain the legacy fallback. Consecutive
 midnights follow DST rather than assuming every day lasts twenty-four hours.
 

@@ -53,6 +53,27 @@ pub fn render() -> String {
                     <p class="jds-caption">"Include lists, show only selected lists, or hide lists. Counts follow status and tags, before search."</p>
                     <div id="list-selection" class="tasks-fields"></div>
                 </details>
+                <details id="task-settings">
+                    <summary>"Task settings"</summary>
+                    <div class="tasks-fields">
+                        <h2>"Assistant actions"</h2>
+                        <p>"How your assistant handles task changes from chat."</p>
+                        <Field>
+                            <FormLabel control_id="assistant-auto-execute">"Saved preference: let your assistant create and update tasks without asking"</FormLabel>
+                            <input id="assistant-auto-execute" type="checkbox" role="switch" disabled aria-describedby="task-settings-description task-settings-limit"/>
+                        </Field>
+                        <p id="task-settings-description">"When off, your assistant asks before creating, updating, scheduling, or completing tasks from chat."</p>
+                        <p id="task-settings-limit" class="jds-caption">"This saves your preference. Installed chat actions still ask for approval while their automatic-action connection is unfinished."</p>
+                        <p id="task-settings-loading" hidden role="status">"Loading task settings…"</p>
+                        <p id="task-settings-saving" hidden role="status">"Saving task action preference…"</p>
+                        <div id="task-settings-load-error" hidden role="alert">
+                            <p id="task-settings-load-message"></p>
+                            <span id="retry-task-settings"><Button variant=ButtonVariant::Secondary>"Retry loading"</Button></span>
+                        </div>
+                        <p id="task-settings-save-error" hidden role="alert">"Could not save task action preference. Your last confirmed preference is shown. Try again."</p>
+                        <p id="task-settings-saved" hidden role="status">"Task action preference saved."</p>
+                    </div>
+                </details>
                 <div id="active-tags" class="tasks-actions" role="group" aria-label="Active tag filters"></div>
                 <p id="search-warning" role="status" hidden></p>
                 <div id="search-intent" class="tasks-actions" role="group" aria-label="Interpreted search filters"></div>

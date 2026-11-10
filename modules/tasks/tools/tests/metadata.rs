@@ -28,11 +28,12 @@ fn package_owns_every_existing_tasks_table() {
     );
     assert!(
         m.navigation.len() == 1
-            && m.settings.is_empty()
+            && m.settings.len() == 1
+            && m.settings[0]["path"] == "/tasks"
             && m.screens
                 .get("/tasks")
                 .is_some_and(|path| path == "ui/index.html"),
-        "Advertise only the implemented package screen; action-policy settings are unfinished"
+        "Task settings are reached from the implemented Tasks package screen"
     );
 }
 #[test]
