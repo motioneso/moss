@@ -158,6 +158,21 @@ try {
       "select count(*)::text as count from app.tasks where title = 'Browser proof task'"
     );
     assert.equal(result.rows[0]?.count, "1", "The real UI must create the proof task exactly once");
+    if (process.env["TASKS_UI_REFRESH_PROOF"] === "1") {
+      const parent = await db.query<{ status: string; description: string }>(
+        "select status, description from app.tasks where title = 'Browser proof task'"
+      );
+      assert.deepEqual(parent.rows, [
+        { status: "done", description: "Draft kept across completion" }
+      ]);
+      const children = await db.query<{ title: string; status: string }>(
+        "select c.title, c.status from app.tasks c join app.tasks p on p.id=c.parent_task_id where p.title='Browser proof task'"
+      );
+      assert.deepEqual(children.rows, [{ title: "Last proof subtask", status: "done" }]);
+      console.log(
+        "PASS browser editor refresh: completed child and parent remain done after saving the preserved description draft"
+      );
+    }
     if (process.env["TASKS_UI_ACTIVITY_PROOF"] === "1") {
       const comments = await db.query<{ body: string }>(
         "select a.body from app.task_activity a join app.tasks t on t.id=a.task_id where t.title='Browser proof task' and a.activity_type='comment' order by a.created_at, a.id"
