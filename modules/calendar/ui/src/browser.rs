@@ -57,6 +57,7 @@ struct State {
     saving: RwSignal<bool>,
     unsaved: RwSignal<bool>,
     initialized: RwSignal<bool>,
+    scroll_position: RwSignal<Option<i32>>,
 }
 impl State {
     fn save_briefing(self, body: Value) {
@@ -157,7 +158,11 @@ impl State {
                             );
                         }
                     }
+                    let previous_zone = self.zone();
                     self.display.set(display);
+                    if self.zone() != previous_zone {
+                        self.scroll_position.set(None);
+                    }
                     if let Some(events) = events {
                         if self.events.get_untracked().as_ref() != Some(&events) {
                             let saved = preserve();
@@ -208,8 +213,8 @@ pub fn Calendar() -> impl IntoView {
         saving: RwSignal::new(false),
         unsaved: RwSignal::new(false),
         initialized: RwSignal::new(false),
+        scroll_position: RwSignal::new(None),
     };
-    let scroll_position = RwSignal::new(None::<i32>);
     let zone = Memo::new(move |_| state.zone());
     let assistant_name = Memo::new(move |_| state.assistant_name());
     let twelve = Memo::new(move |_| state.twelve());
@@ -317,7 +322,7 @@ pub fn Calendar() -> impl IntoView {
                     view!{<Month cursor=cursor.get() today=today.get() events=groups twelve=twelve.get() on_day=day_pick on_event=pick/>}.into_any()
                 }else{
                     let days=if state.view.get()=="week" {model::week(cursor.get(),state.work.get())}else{vec![cursor.get()]};
-                    view!{<TimeGrid days=days today=today.get() now_min=now events=groups twelve=twelve.get() on_event=pick scroll_position=scroll_position/>}.into_any()
+                    view!{<TimeGrid days=days today=today.get() now_min=now events=groups twelve=twelve.get() on_event=pick scroll_position=state.scroll_position/>}.into_any()
                 }}
             }
         })}</div>

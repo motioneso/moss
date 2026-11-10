@@ -37,12 +37,8 @@ export async function checkGridScroll(
         )
         .toBeLessThanOrEqual(1);
       assert((await scroll.evaluate((el) => el.clientHeight)) > 0);
-      const bounds = await frame.locator(".cal-body").boundingBox();
-      assert(bounds);
-      await tab.screenshot({
-        path: join(out, `grid-scroll-${view.toLowerCase()}-${width}.png`),
-        clip: { ...bounds, height: Math.min(bounds.height, 860 - bounds.y) }
-      });
+      // Keep screenshot clipping outside the browser so later pointer input stays aligned.
+      await tab.screenshot({ path: join(out, `grid-scroll-${view.toLowerCase()}-${width}.png`) });
       // Exercise both a deliberate scroll to midnight and a nonzero position.
       if ((width === 1280 && view === "Day") || (width === 390 && view === "Week")) {
         const top = width === 1280 ? 0 : 173;

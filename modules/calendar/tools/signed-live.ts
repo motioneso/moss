@@ -18,13 +18,14 @@ import { networkInterfaces } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import pg from "pg";
-import { chromium } from "@playwright/test";
+import { chromium, expect } from "@playwright/test";
 import { getMossDatabaseUrls } from "@moss/db";
 import { readHttpOracle } from "./http-oracle.js";
 import { checkStartup } from "./startup-check.js";
 import { checkDetails } from "./details-live.js";
 import { checkGrid } from "./grid-live.js";
 import { checkGridScroll } from "./scroll-live.js";
+import { checkTimezoneScroll } from "./timezone-live.js";
 import { checkMonth } from "./month-live.js";
 import { checkOperationStatus } from "./operation-live.js";
 import { checkDayPlanWrites } from "./day-plan-live.js";
@@ -342,6 +343,13 @@ try {
   );
   // Real synthetic cache rows, read by the installed package. No network interception.
   const today = new Date().toISOString().slice(0, 10);
+  // Pin the primary event after the other timed fixtures. Month must reach it
+  // through overflow regardless of the wall-clock hour running this check.
+  await db.query("UPDATE app.calendar_events SET starts_at=$2,ends_at=$3 WHERE id=$1", [
+    data.event,
+    `${today}T23:00:00Z`,
+    `${today}T23:30:00Z`
+  ]);
   const nextDay = (days: number) =>
     new Date(Date.parse(`${today}T00:00:00Z`) + days * 86400000).toISOString().slice(0, 10);
   const proofEvents = [
@@ -452,6 +460,22 @@ try {
   await checkDetails(tab, local, out, data.event);
   // Keep extra grid fixtures out of the existing Month overflow/detail checks.
   for (const event of proofEvents.slice(3)) await seedProofEvent(event);
+  let timezoneRevision = 0;
+  await checkTimezoneScroll(tab, local, out, async (zone, changeEvents) => {
+    await db.query(
+      "UPDATE app.preferences SET value_json=jsonb_set(value_json,'{timezone}',to_jsonb($1::text)) WHERE owner_user_id=$2 AND key='locale'",
+      [zone, data.actor]
+    );
+    if (changeEvents) {
+      const title = `Timezone retention ${++timezoneRevision}`;
+      await db.query("UPDATE app.calendar_events SET title=$1 WHERE id=$2", [
+        title,
+        proofEvents[3]!.id
+      ]);
+      return title;
+    }
+    return undefined;
+  });
   await checkGridScroll(tab, local, out, async (title) => {
     await db.query("UPDATE app.calendar_events SET title=$1 WHERE id=$2", [
       title,
@@ -528,6 +552,15 @@ try {
       .evaluate((el) => getComputedStyle(el).getPropertyValue("--font-sans").trim()),
     "The shared Park Press stylesheet must load in the opaque frame"
   );
+  const monthToday = frame.locator(".cal-mcell.is-today");
+  assert.equal(
+    await monthToday.getByRole("button", { name: /Calendar package check/ }).count(),
+    0,
+    "The pinned late event must be behind Month's three visible chips"
+  );
+  await expect(frame.getByRole("button", { name: "Today", exact: true })).toBeEnabled();
+  await monthToday.locator(".cal-mmore").click();
+  await frame.locator(".cal-tg__col").waitFor();
   await frame
     .getByRole("button", { name: /Calendar package check/ })
     .first()

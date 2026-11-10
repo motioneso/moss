@@ -1,5 +1,12 @@
 # Calendar package
 
+## 0.19.0
+
+- Recenter Day and Week when a refresh receives a changed saved account timezone.
+- Retain deliberate scrolling through later refreshes in the same timezone.
+- Exercise real saved timezone and cache changes in the installed signed-in screen at desktop and phone widths.
+- Full cutover, provider execution and physical second-device acceptance remain open.
+
 ## 0.18.0
 
 - Open Day and Week with the current time centered in the measured visible grid, matching the existing screen.

@@ -422,5 +422,29 @@ physical second-device trusted HTTPS remain open as listed in the phase report.
 Month now reserves more minimum row height than the existing screen so three
 event chips and the extra-events button stay inside their clipping container.
 The live check verifies the whole overflow control fits before clicking it.
-Re-centering after a saved timezone change remains open. Browser clamping at
-controlled day-boundary times is not covered by the DOM comparison.
+Part 19 below covers re-centering after a saved timezone change. Browser clamping
+at controlled day-boundary times is not covered by the DOM comparison.
+
+## Saved timezone positioning (part 19)
+
+Version 0.19.0 recenters Day and Week around the current time when an ordinary
+refresh receives a changed account timezone, matching the existing Calendar grid.
+It discards the vertical position only for a different effective timezone. Later
+refreshes in that same timezone retain deliberate scroll, including midnight.
+Calendar remains a client of the installed server API through the frame bridge.
+
+The signed-in runner changes the synthetic account's actual saved locale on its
+throwaway database, without substituting responses or changing browser state.
+It exercises Day and Week at desktop and phone widths, timezone-only refreshes,
+a simultaneous cache update, and later same-zone scroll retention. Its screenshots
+and failing-before/passing-after results belong in the task Proof artifact.
+No provider, table, privacy policy, shared host or cross-module adapter changes.
+The complete port and physical second-device trusted HTTPS remain open as listed
+in the main Calendar report.
+
+The Month click investigation captured a browser input offset equal to the clipped
+screenshot's origin, despite correct button geometry and DOM hit testing. Month,
+initial-scroll and timezone checks now capture the full viewport and crop evidence
+off-browser afterward. The checks retain normal pointer clicks and all navigation
+assertions. See the phase report and task Proof for the reproduction and final
+full-gate, installed HTTPS UI and independent-review receipts.
