@@ -188,6 +188,10 @@ fn original_day(host: &impl Host, mut value: Value, timezone_required: bool) -> 
     Ok(value)
 }
 
+fn operation_param(request: &RouteRequest) -> String {
+    request.params.get("operation_id").cloned().unwrap_or_default()
+}
+
 fn route(host: &impl Host, request: RouteRequest) -> Result<Value> {
     let id = request.params.get("id").cloned().unwrap_or_default();
     match (request.method.as_str(), request.path.as_str()) {
@@ -218,6 +222,15 @@ fn route(host: &impl Host, request: RouteRequest) -> Result<Value> {
                 .map(String::as_str)
                 .unwrap_or(""),
         ),
+        ("POST", "/day-plans/:id/operations/:operation_id/retry") => {
+            apply::retry_route(&id, &operation_param(&request), request.body)
+        }
+        ("POST", "/day-plans/:id/operations/:operation_id/recover") => {
+            apply::recover_route(&id, &operation_param(&request), request.body)
+        }
+        ("POST", "/day-plans/:id/operations/:operation_id/confirm") => {
+            apply::confirm_route(&id, &operation_param(&request), request.body)
+        }
         ("GET", "/briefing-settings") => settings::read(host),
         ("PATCH", "/briefing-settings") => {
             settings::save(host, settings_http::normalize(request.body)?)

@@ -5,7 +5,8 @@ body {
 iframe {
   display: block;
   width: 100%;
-  min-height: 160px;
+  /* Screens that size to their viewport (Calendar grids) need a full-height frame. */
+  min-height: 100vh;
   border: 0;
 }
 #failure {
