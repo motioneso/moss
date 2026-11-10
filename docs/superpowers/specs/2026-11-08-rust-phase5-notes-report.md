@@ -1527,3 +1527,52 @@ checkpoint retention, managed publication/fencing, proposals/receipts/reconcilia
 private exports/daily archives, full HTTP/path parity, assembled Settings/chat and
 physical second-device HTTPS proof remain unfinished. No screen changes or live
 assembled UI/device proof are claimed. Do not replace working legacy Notes.
+
+## Part twenty checkpoint — folder failure responses
+
+Folder selection and browsing now match the legacy error responses for missing
+paths inside allowed roots and existing paths outside them. Other in-root vault
+policy refusals retain the general message. Missing paths outside roots still
+differ because vault admission happens before disk resolution. The chooser shows separate
+guidance, keeps the entered path editable and leaves the current link visible after
+a rejected save. Only these fixed errors select specific guidance; unknown errors
+keep the existing generic fallback. The module still reaches preferences and files
+only through server ports. No database or runtime permission
+changes are introduced. The package version, changelog and app map describe the
+updated responses.
+
+The differential gate adds real empty, missing and other-account folder paths
+while retaining an existing saved source. Its 60 cases compare responses, saved
+source and preference revision after every request, so a matching error alone is
+insufficient.
+The same installed-package regression failed against the prior host response.
+The existing preference RLS-removal control must expose the owner's source and
+then restore the denial. Final checks and the independent review are recorded
+in this task's proof artifact.
+
+Builds use task-owned scratch Cargo/Rust homes, separate ordinary and write-tools
+Wasm target folders, the declared Wasm target and approved pinned `wit-bindgen`
+0.57.1. Nothing is installed globally. Database tests use `scripts/run-gate.sh`.
+
+This is a bounded parity checkpoint. The vault still refuses symlink descendants,
+relative paths and traversal; the legacy handler can differ on these inputs and
+on missing paths outside allowed roots and non-directory sources. Locale-sensitive
+directory ordering and other invalid-input HTTP parity remain unfinished. Configured embeddings,
+installed chat approval/write execution, production sync and worker dispatch,
+singleton coalescing and recall warmup, recovery scheduling and retention,
+managed publication and reconciliation, private exports/daily archives,
+assembled Settings/chat and physical second-device HTTPS remain continuation
+work. Do not replace working legacy Notes with this package.
+
+Live browser checks exercised the real signed package on the disposable Rust HTTPS
+fixture: link a folder, reject a missing path on save, reject an existing outside
+path on browse, retain the saved link and entered path, then confirm unlink.
+The missing-save input regained focus. The fixture verified the persisted unlink,
+HTTPS certificate, sign-in redirect and untrusted host/origin refusal. This is a
+package fixture on this machine, not the assembled shell or a second device.
+Screenshots and current command receipts are in the task proof artifact.
+
+Independent review prompted narrower claims for missing paths outside roots and
+general guidance for in-root vault policy refusals. The installed Settings test
+also checks real symlink-descendant refusals through both save and browse routes;
+this is a deliberate vault restriction, not legacy symlink parity.

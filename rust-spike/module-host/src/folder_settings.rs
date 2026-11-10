@@ -121,12 +121,20 @@ impl FolderSettingsPorts {
         let selected = PathBuf::from(text);
         let folder = match VaultContext::at_allowed_root(scope.access(), &selected, &allowed) {
             Ok(folder) => folder,
-            Err(_) => {
+            Err(vault::VaultError::Escape(_))
+                if !roots.iter().any(|root| selected.starts_with(root)) =>
+            {
+                return Ok(error(400, "Path is not within an allowed notes root"))
+            }
+            // Escape can also mean a refused symlink or vault descendant inside a root.
+            // Do not mislabel that policy refusal as an outside-root selection.
+            Err(vault::VaultError::Escape(_)) => {
                 return Ok(error(
                     400,
                     "Path is not an available folder within an allowed notes root",
                 ))
             }
+            Err(_) => return Ok(error(400, "Path does not exist or cannot be resolved")),
         };
         if request.operation == "folder.set" {
             return self.save(scope, &config.path_key, path);

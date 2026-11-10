@@ -1,5 +1,9 @@
 # Notes package
 
+## 0.1.13
+
+- Match legacy responses for missing folders inside allowed roots and existing paths outside them. Missing paths outside roots still differ; vault policy refusals retain general guidance. The chooser explains the reason and keeps the entered path and current folder link after a rejected save. Existing vault path restrictions still apply.
+
 ## 0.1.12
 
 - Bind experimental API sync requests to the selected folder, matching manual sync. Unlinked sources are refused before saving or queueing work; a later folder change cannot redirect a saved request. Installed production sync remains unfinished.

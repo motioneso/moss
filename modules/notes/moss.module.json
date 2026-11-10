@@ -4,7 +4,7 @@
   "name": "Notes",
   "description": "Choose your notes folder, prepare note changes for approval, and search your indexed notes.",
   "publisher": "Moss",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -95,7 +95,7 @@
         {
           "code": "notes-folder-path-refused",
           "class": "prerequisite",
-          "description": "The entered folder is outside the allowed roots, missing or unreadable. The chooser keeps the entered path so it can be corrected.",
+          "description": "Missing paths inside allowed roots and existing paths outside them have distinct API responses and chooser guidance. Other in-root vault policy refusals retain general guidance; missing paths outside roots still differ from legacy. A rejected save keeps the entered path editable and leaves the saved folder link unchanged.",
           "remediationRef": "notes.correct-folder-path"
         },
         {
@@ -114,7 +114,7 @@
       "remediations": [
         {
           "id": "notes.correct-folder-path",
-          "description": "Correct the path or browse an allowed folder, then link it again.",
+          "description": "Correct a missing path or browse an allowed folder, then link it again.",
           "path": "/settings/connections"
         },
         {

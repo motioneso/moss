@@ -642,3 +642,19 @@ resume, with other-owner/admin recovery denial under both runtime roles. Removin
 checkpoint RLS must expose those otherwise denied rows and publications; restoring
 it restores denial. Queue publication and document embeddings remain named
 stand-ins; these checks do not prove the queue's live delivery or phone use.
+
+## Folder failure responses (part twenty)
+
+Installed folder selection and browsing now match legacy responses for missing
+paths inside allowed roots and existing paths outside them. Other in-root vault
+policy refusals retain the general message. The chooser shows separate guidance for these
+fixed failures and keeps its generic fallback for other errors. Rejected saves
+keep the current link, entered path and focus. The expanded legacy differential
+uses real empty, missing and other-account paths with an existing link; it compares
+the saved value and revision as well as each response (60 cases across three users).
+It was observed failing on the earlier generic host response.
+
+Existing vault admission is unchanged: symlink descendants, relative paths and
+traversal remain refused. Missing paths outside roots and non-directory sources
+can still differ from legacy, as can directory ordering and other invalid inputs.
+This does not activate chat, production sync or the assembled settings shell.
