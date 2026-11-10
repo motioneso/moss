@@ -4,7 +4,7 @@
   "name": "Notes",
   "description": "Choose your notes folder, prepare note changes for approval, and search your indexed notes.",
   "publisher": "Moss",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -90,8 +90,14 @@
     },
     {
       "id": "notes.folder-settings",
-      "description": "Settings \u2192 Connections shows the linked folder and its saved last-sync status. Browse allowed folders, enter a path, change the link, or confirm unlinking without deleting files. Saved status may be from an earlier installation; this package does not run manual or scheduled sync or write chat tools. It is not a replacement for legacy Notes. The host must connect the folder settings adapter with account-specific allowed roots. Symlink selections are refused by the current vault adapter.",
+      "description": "Settings \u2192 Connections shows the linked folder and its saved last-sync status. Browse allowed folders, enter a path, change the link, or confirm unlinking without deleting files. Folder requests preserve legacy schema validation and coercion; extra fields are ignored and cannot choose another account. Invalid bodies or repeated directory paths receive the legacy validation response. Relative and symlink path behavior still differs. Saved status may be from an earlier installation; this package does not run manual or scheduled sync or write chat tools. It is not a replacement for legacy Notes. The host must connect the folder settings adapter with account-specific allowed roots. Symlink selections are refused by the current vault adapter.",
       "errors": [
+        {
+          "code": "notes-folder-invalid-input",
+          "class": "prerequisite",
+          "description": "The folder request has an invalid body or path type, or more than one directory path. Validation refuses it before preferences or files are accessed.",
+          "remediationRef": "notes.correct-folder-path"
+        },
         {
           "code": "notes-folder-path-refused",
           "class": "prerequisite",

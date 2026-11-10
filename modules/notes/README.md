@@ -185,7 +185,7 @@ assembled Phase 4 shell or proof from a separate physical device.
 The standard Notes gate now also compares actual legacy Settings handlers with
 installed guest routes and performs a preference RLS removal control. Differential
 coverage is limited to the cases in `tools/settings-oracle.ts`. Symlink descendant
-selection, locale-sensitive directory ordering, invalid-input response parity and
+selection, locale-sensitive directory ordering, complete path/HTTP parity and
 sync scheduling remain unfinished. Existing linked-file platform limits apply.
 
 ## Write-tool parity checkpoint (part five)
@@ -679,7 +679,8 @@ policy refusals retain the general message. The chooser shows separate guidance 
 fixed failures and keeps its generic fallback for other errors. Rejected saves
 keep the current link, entered path and focus. The expanded legacy differential
 uses real empty, missing and other-account paths with an existing link; it compares
-the saved value and revision as well as each response (60 cases across three users).
+the saved value and revision as well as each response (the original 60 cases, extended
+with input-validation cases in part twenty-three).
 It was observed failing on the earlier generic host response.
 
 Existing vault admission is unchanged: symlink descendants, relative paths and
@@ -713,3 +714,32 @@ Legacy direct-handler parity fixtures remain unversioned; the ordinary package
 continues to offer only search. No assembled chat card, live approval endpoint,
 configured model, active queue or second-device HTTPS acceptance is claimed.
 The generic host flag is additive and defaults off for existing packages.
+
+## Folder request input parity (part twenty-three)
+
+The installed folder routes now use the legacy Fastify schema's validation shape
+and coercions. Unknown query/body fields are ignored; they never select an
+account or change the server's roots. Repeated directory paths and invalid body
+or path types return `FST_ERR_VALIDATION` before accessing preferences or files.
+Legacy false, zero and empty-string bodies (including their supported singleton
+array forms) unlink the calling account's folder. Explicit null or a missing
+path also unlinks it. Numeric/boolean path fields become text before vault admission.
+
+`tools/settings-input-parity.ts` records actual legacy Fastify schema behavior
+with an explicit folder-admission echo stand-in. Its native corpus includes
+numeric formatting boundaries, union-type singleton-array coercions and ignored
+fields. The aggregate gate checks that corpus is current. The installed Settings
+oracle separately compares actual legacy handlers, saved source and revision,
+and unchanged other-account preferences on a disposable database. It retains the
+preference RLS-removal control. These are bounded schema/handler cases, not proof
+of every JSON value, malformed JSON/content-type transport behavior or complete
+path parity. In particular scalar paths coerced to relative text still face the
+vault's stricter path policy; their filesystem response parity is not claimed.
+No host additions, permissions, SQL or screen changes are introduced.
+
+Full Notes acceptance still requires assembled chat approval and writes,
+configured embeddings, production manual/scheduled sync and worker delivery,
+singleton coalescing and recall warmup, automatic recovery/retention,
+managed publication/fencing/reconciliation, private exports/daily archives,
+complete path/HTTP parity, assembled Settings/chat and a physical second-device
+HTTPS check. This remains a checkpoint, not a replacement for working legacy Notes.

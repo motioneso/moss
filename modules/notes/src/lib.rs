@@ -5,6 +5,7 @@ pub mod guest;
 pub mod identity;
 pub mod routes;
 pub mod search;
+mod settings_input;
 #[cfg(feature = "write-tools")]
 pub mod sync;
 #[cfg(feature = "write-tools")]
