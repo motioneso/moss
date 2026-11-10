@@ -77,7 +77,7 @@ pub fn render() -> String {
                 <div id="active-tags" class="tasks-actions" role="group" aria-label="Active tag filters"></div>
                 <p id="search-warning" role="status" hidden></p>
                 <div id="search-intent" class="tasks-actions" role="group" aria-label="Interpreted search filters"></div>
-                <p class="jds-caption">"Interpret a phrase into filters, or search by title and description. Interpreted dates use UTC."</p>
+                <p class="jds-caption">"Interpret a phrase into filters, or search by title and description. Interpreted dates use your saved timezone."</p>
                 <p class="jds-caption">"Manual tag picks match any selected tag. Interpreted tag filters require every named tag."</p>
                 <div id="empty" hidden>
                     <EmptyState title="No tasks here" description="Try another filter or add a task."/>
@@ -121,7 +121,7 @@ pub fn render() -> String {
                             <select id="effort" name="effort" class="jds-input"><option value="">"None"</option><option value="quick">"Small"</option><option value="medium">"Medium"</option><option value="large">"Large"</option></select>
                         </Field>
                     </div>
-                    <p class="jds-caption">"Dates are shown in UTC. Unchanged dates keep their saved time."</p>
+                    <p class="jds-caption">"Dates use your saved timezone. Unchanged dates keep their saved time."</p>
                     <div class="tasks-columns">
                         <Field><FormLabel control_id="due-at">"Due date"</FormLabel><input id="due-at" name="dueAt" type="date" class="jds-input"/></Field>
                         <Field><FormLabel control_id="do-at">"Do date"</FormLabel><input id="do-at" name="doAt" type="date" class="jds-input"/></Field>

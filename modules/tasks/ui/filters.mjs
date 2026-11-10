@@ -92,9 +92,10 @@ export function taskFilters(changed, searchIntent = () => null) {
       // Details falls back to the first list; quick capture lets the route choose Personal.
       return captureListId(lists) ?? lists[0]?.id ?? "";
     },
-    apply(tasks, lists) {
+    apply(tasks, lists, timeZone = "UTC") {
       const result = filterTasks(tasks, {
         lists,
+        timeZone,
         listStates,
         tagFilter,
         status: $("status-filter").value,

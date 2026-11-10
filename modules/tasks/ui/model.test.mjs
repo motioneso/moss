@@ -81,3 +81,47 @@ test("saved view values preserve both supported modes and recover unknown values
   assert.equal(viewMode("list"), "priority");
   assert.equal(viewMode(undefined), "priority");
 });
+
+test("saved-zone editing preserves untouched instants and writes selected days at local noon", () => {
+  const previous = {
+    status: "todo",
+    dueAt: "2026-11-08T01:30:45.123Z",
+    doAt: null,
+    recurrence: null
+  };
+  const form = {
+    title: "Evening",
+    description: "",
+    listId: "list",
+    status: "todo",
+    dueAt: "2026-11-07",
+    doAt: "",
+    priority: "",
+    effort: "",
+    repeat: "never"
+  };
+  const zone = "America/Los_Angeles";
+  assert(!Object.hasOwn(taskFields(form, previous, undefined, zone), "dueAt"));
+  assert.equal(
+    taskFields({ ...form, dueAt: "2026-03-08" }, previous, undefined, zone).dueAt,
+    "2026-03-08T19:00:00.000Z"
+  );
+  assert.equal(
+    taskFields({ ...form, dueAt: "2026-11-01" }, previous, undefined, zone).dueAt,
+    "2026-11-01T20:00:00.000Z"
+  );
+  assert.equal(
+    taskFields({ ...form, dueAt: "2026-11-09" }, null, undefined, "Pacific/Kiritimati").dueAt,
+    "2026-11-08T22:00:00.000Z"
+  );
+  assert.equal(
+    taskFields({ ...form, dueAt: "", repeat: "daily" }, null, undefined, zone).recurrence
+      .occurrence_date,
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: zone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).format(new Date())
+  );
+});

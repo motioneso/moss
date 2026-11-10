@@ -31,6 +31,7 @@ test(
           return { tasks: [...parents] };
         }
         if (path === "/tasks/lists") return { lists: [{ id: "list", name: "Inbox" }] };
+        if (path === "/tasks/local-day") return { timezone: "UTC", date: "2026-11-09" };
         if (path === "/tasks/preferences") return { preferences: { defaultView: "priority" } };
         if (path === "/tasks" && method === "POST") {
           const task = {

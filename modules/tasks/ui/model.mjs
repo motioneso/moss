@@ -1,8 +1,8 @@
+import { localDay, localNoon } from "./local-date.mjs";
 import { matchesSearchIntent } from "./search.mjs";
 
 // Keep unchanged timestamps and recurrence rules byte-for-byte on unrelated edits.
-// Date controls currently use UTC until the public actor-locale contract exists.
-export function taskFields(form, previous = null, today = new Date().toISOString().slice(0, 10)) {
+export function taskFields(form, previous = null, today = undefined, timeZone = "UTC") {
   const fields = {
     title: form.title.trim(),
     description: form.description || null,
@@ -12,8 +12,8 @@ export function taskFields(form, previous = null, today = new Date().toISOString
   };
   if (!previous || previous.status !== form.status) fields.status = form.status;
   for (const name of ["dueAt", "doAt"]) {
-    if (!previous || form[name] !== (previous[name]?.slice(0, 10) ?? "")) {
-      fields[name] = form[name] ? `${form[name]}T12:00:00.000Z` : null;
+    if (!previous || form[name] !== localDay(previous[name], timeZone)) {
+      fields[name] = form[name] ? localNoon(form[name], timeZone) : null;
     }
   }
   if (!previous || form.repeat !== (previous.recurrence?.freq ?? "never")) {
@@ -23,7 +23,7 @@ export function taskFields(form, previous = null, today = new Date().toISOString
         : {
             freq: form.repeat,
             interval: 1,
-            occurrence_date: form.dueAt || today
+            occurrence_date: form.dueAt || today || localDay(new Date(), timeZone)
           };
   }
   return fields;
@@ -31,7 +31,15 @@ export function taskFields(form, previous = null, today = new Date().toISOString
 
 export function filterTasks(
   tasks,
-  { lists = [], listStates = {}, status = "todo", tagFilter = [], search = "", searchIntent = null }
+  {
+    lists = [],
+    listStates = {},
+    status = "todo",
+    tagFilter = [],
+    search = "",
+    searchIntent = null,
+    timeZone = "UTC"
+  }
 ) {
   const needle = (searchIntent ? (searchIntent.text ?? "") : search).trim().toLowerCase();
   const soloIds = lists.filter((list) => listStates[list.id] === "solo").map((list) => list.id);
@@ -53,7 +61,8 @@ export function filterTasks(
       !task.description?.toLowerCase().includes(needle)
     )
       continue;
-    if (searchIntent && !matchesSearchIntent(task, searchIntent, quadrant(task))) continue;
+    if (searchIntent && !matchesSearchIntent(task, searchIntent, quadrant(task), timeZone))
+      continue;
     visible.push(task);
   }
   return {

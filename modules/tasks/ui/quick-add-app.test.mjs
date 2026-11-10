@@ -37,6 +37,7 @@ test(
           return { tasks: [...tasks] };
         }
         if (path === "/tasks/lists") return { lists };
+        if (path === "/tasks/local-day") return { timezone: "UTC", date: "2026-11-09" };
         if (path === "/tasks/preferences") return { preferences: { defaultView: "priority" } };
         if (/\/tags$/.test(path)) return { tags: [] };
         if (method === "POST" && path === "/tasks") {

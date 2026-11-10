@@ -79,3 +79,27 @@ pub fn write(folder: &Path, bytes: &[u8], manifest: &Manifest) -> Result<(String
     std::fs::write(folder.join(format!("packages/{digest}.mosspkg")), bytes)?;
     Ok((public(&root), public(&publisher)))
 }
+
+/// Optional synthetic account setup, only for the disposable signed-UI fixture.
+/// Product code still reads the saved preference through the public host port.
+pub fn seed_locale(access: &access_context::AccessContext) -> Result<()> {
+    let Ok(zone) = std::env::var("TASKS_UI_TIMEZONE") else {
+        return Ok(());
+    };
+    anyhow::ensure!(
+        std::env::var("JARVIS_GATE_RUN").as_deref() == Ok("1"),
+        "Use verify-gate"
+    );
+    tokio::runtime::Runtime::new()?.block_on(async {
+        let (db, connection) = tokio_postgres::connect(
+            &std::env::var("TASKS_UI_BOOTSTRAP_URL")?, tokio_postgres::NoTls
+        ).await?;
+        tokio::spawn(async move { let _ = connection.await; });
+        db.execute(
+            "INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'locale',$2) ON CONFLICT(owner_user_id,key) DO UPDATE SET value_json=EXCLUDED.value_json",
+            &[&access.actor_user_id(), &serde_json::json!({"timezone":zone})]
+        ).await?;
+        println!("Synthetic signed-UI account saved timezone initialized");
+        Ok(())
+    })
+}

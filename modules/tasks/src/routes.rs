@@ -46,6 +46,14 @@ fn dispatch<H: Host + ?Sized>(
 ) -> Result<Response> {
     let mut status = 200;
     let body = match (r.method.as_str(), r.path.as_str()) {
+        ("GET", "/tasks/local-day") => {
+            let now = repo
+                .now()?
+                .parse()
+                .map_err(|_| Error::Http(500, "Invalid host time"))?;
+            let day = repo.local_day(now, 0)?;
+            json!({"timezone":day.timezone,"date":day.date.to_string()})
+        }
         ("GET", "/tasks/agency-auto-execute") => repo.policy(None)?,
         ("PATCH", "/tasks/agency-auto-execute") => repo.policy(Some(
             r.body["enabled"]

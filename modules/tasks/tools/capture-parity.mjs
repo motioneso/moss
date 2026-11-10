@@ -62,3 +62,39 @@ for (const names of [
 console.log(
   `PASS ${checks} exact legacy tag suggestion comparisons (new and existing task selections)`
 );
+
+// Keep the package date conversion tied to the unchanged application helpers.
+const { localDay } = await import("../../../packages/shared/src/time.ts");
+const { fromDateInputValue } = await import("../../../apps/web/src/tasks/task-format.ts");
+const { localDay: packageDay, localNoon } = await import("../ui/local-date.mjs");
+let dateChecks = 0;
+for (const zone of [
+  "UTC",
+  "America/Los_Angeles",
+  "Pacific/Kiritimati",
+  "Asia/Kathmandu",
+  "Australia/Lord_Howe"
+])
+  for (const day of [
+    "2026-03-07",
+    "2026-03-08",
+    "2026-03-09",
+    "2026-11-01",
+    "2026-10-04",
+    "2026-11-09",
+    "2024-02-29",
+    "2026-12-31"
+  ]) {
+    const instant = fromDateInputValue(day, zone);
+    assert.equal(localNoon(day, zone), instant);
+    for (const offset of [-43200000, 0, 43200000]) {
+      const nearby = new Date(Date.parse(instant) + offset).toISOString();
+      assert.equal(packageDay(nearby, zone), localDay(nearby, zone));
+      dateChecks++;
+    }
+    assert.equal(packageDay(instant, zone), day);
+    dateChecks += 2;
+  }
+console.log(
+  `PASS ${dateChecks} exact legacy saved-zone date comparisons (DST, fractional offsets, UTC+14 and year/leap boundaries)`
+);

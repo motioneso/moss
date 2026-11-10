@@ -53,6 +53,7 @@ test(
         calls.push({ method, path, body });
         if (path === "/tasks") return { tasks: [task] };
         if (path === "/tasks/lists") return { lists: [{ id: "inbox", name: "Inbox" }] };
+        if (path === "/tasks/local-day") return { timezone: "UTC", date: "2026-11-09" };
         if (path === "/tasks/preferences") return { preferences: { defaultView: "priority" } };
         if (path.endsWith("/subtasks")) return { tasks: [] };
         if (path.endsWith("/tags")) return { tags: [] };

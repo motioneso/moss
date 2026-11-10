@@ -203,6 +203,16 @@ try {
         "PASS browser tag suggestions: stored hash preserved; typed existing tag reused; no duplicate list tag created"
       );
     }
+    if (process.env["TASKS_UI_DATE_PROOF"] === "1") {
+      const dates = await db.query<{ due_at: Date; do_at: Date }>(
+        "select due_at, do_at from app.tasks where title='Browser proof task'"
+      );
+      assert.equal(dates.rows[0]?.due_at.toISOString(), "2026-03-08T19:00:00.000Z");
+      assert.equal(dates.rows[0]?.do_at.toISOString(), "2026-11-01T20:00:00.000Z");
+      console.log(
+        "PASS browser date proof: saved Pacific spring/fall dates persist at local noon, not UTC noon"
+      );
+    }
     if (process.env["TASKS_UI_CAPTURE_PROOF"] === "1") {
       const tags = await db.query<{ name: string }>(
         "select g.name from app.tasks t join app.task_tag_assignments a on a.task_id=t.id join app.task_tags g on g.id=a.tag_id where t.title='Browser proof task' order by g.name"

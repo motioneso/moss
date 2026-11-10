@@ -1,6 +1,6 @@
 /* global document */
-// The route and package currently use UTC; actor-local days await the public locale port.
-export function matchesSearchIntent(task, intent, taskQuadrant) {
+import { localDay } from "./local-date.mjs";
+export function matchesSearchIntent(task, intent, taskQuadrant, timeZone = "UTC") {
   if (intent.status && task.status !== intent.status) return false;
   if (intent.effort && task.effort !== intent.effort) return false;
   if (intent.priority !== null && task.priority !== intent.priority) return false;
@@ -14,8 +14,8 @@ export function matchesSearchIntent(task, intent, taskQuadrant) {
   if (!due) return true;
   if (due.kind === "none") return task.dueAt === null;
   if (!task.dueAt) return false;
-  const today = new Date().toISOString().slice(0, 10);
-  const key = new Date(task.dueAt).toISOString().slice(0, 10);
+  const today = localDay(new Date(), timeZone);
+  const key = localDay(task.dueAt, timeZone);
   if (due.kind === "overdue") return key < today;
   if (due.kind === "today") return key === today;
   if (due.kind === "this_week") {
