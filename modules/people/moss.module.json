@@ -143,7 +143,7 @@
     },
     {
       "id": "people.list-reads",
-      "description": "Contact and link list APIs support limiting returned results. Default-budget probes pass at 100 complete results and exhaust fuel at 200 contacts. Large responses can exceed module budgets and fail; reduce the requested result count where supported. Installed UI and physical-device verification remain open."
+      "description": "Contact and link list APIs support limiting returned results. Default-budget probes pass at 100 complete results and exhaust fuel at 150 contacts. Large responses can exceed module budgets and fail; reduce the requested result count where supported. Installed UI and physical-device verification remain open."
     },
     {
       "id": "people.note-suggestions",

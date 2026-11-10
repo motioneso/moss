@@ -2685,3 +2685,81 @@ intermediate experiment are recorded by the checkpoint commit; no tested runtime
 implementation changed afterward. Full command output is preserved in the task
 proof before scratch cleanup. The earlier privacy proofs are supplemented by
 this fresh ordinary run; none of the open application/device work is waived.
+
+## Part 24 — narrower resource probes (checkpoint)
+
+The branch started from merged People part 23 (`09debddb5`, PR 4154), then
+fast-forwarded to `1382ae2ac` before the final checks. The diagnostic now compares
+29 real legacy cases, adding 150, 175 and 190-person/link limits between the
+existing 100 and 200 boundaries. The ordinary gate still exercises only complete
+100-person and 100-link responses; adding diagnostic cases is not a parity fix.
+
+Release LTO, bulk response construction, a validated UTC timestamp shortcut,
+and direct list serialization were tried separately and in combinations. None
+qualified the 200-contact boundary. All runtime experiments were removed:
+`modules/people/src` matches merged part 23. Host budgets, public interfaces,
+tables, privacy rules and package grants are unchanged. The component frozen
+before experimenting has SHA-256
+`644a4808019754a5a8b0848ac6a72dd9b82154e8108eea3e958af120fb92e73b`.
+
+Builds and gates use task-owned Cargo, rustup and target directories in scratch.
+The pinned toolchain, declared caches and Wasm targets were kept there. The
+already approved `wit-bindgen =0.57.1` was used locally as a declared dependency;
+no global tool or new third-party dependency was installed.
+
+### Acceptance still open
+
+This is an internal diagnostic checkpoint, not completed Phase 5 acceptance.
+Full large-account parity is still red. Complete locale ordering, shipping
+listener/parser qualification, ingest nudges, real provider composition,
+installed scheduling, command retention/quotas and broader backend failures
+remain open. The real Rust application still needs the installed People
+Settings/routes/chat composition. No live UI, sign-in/origin acceptance, or
+second physical-device HTTPS proof was obtained. People remains a client of
+the server API; this checkpoint adds no server or deployment path.
+
+### Part 24 verification receipts
+
+- Expanded diagnostic `20261109-195657-R6AmV8`: **exit 101** (wait exits 1).
+  Complete 100-person and 100-link reads pass; the next request, 150 people,
+  exhausts fuel in the allocator/JSON tree drop stack under `routes::handle`.
+  The 150-link and all later cases are not reached. This narrows the observed
+  failure boundary; it does not identify the smallest possible failing input.
+  The final README, changelog and app map now record 150 rather than 200/250.
+- Restored native People implementation: **34 tests pass**. Scoped Rustfmt,
+  scoped ESLint and scoped Prettier pass; app-map generation passes. A broader
+  module-host `cargo fmt --check` reports existing formatting differences in
+  unchanged `rust-spike/parity/src/dbs.rs`; those were left outside this slice.
+
+The diagnostic receipt identifies base commit `1382ae2ac` with two dirty
+harness files and fingerprint `22eb2325fdfd`. Those exact harness changes are
+committed as `84294875c`; the later edits correct metadata and documentation.
+The final component is the frozen baseline above, with no surviving runtime
+experiment. Full command receipts are retained in the task proof.
+
+The installed fixture gate `20261109-200006-C8J2sV` exits **0**. Signed package
+installation/reload, all four public APIs through an installed consumer, 219
+legacy route replies and all seven table snapshots match. The fifty-reference
+refresh returns 202 in 3,707 ms against the unchanged 5,000 ms deadline. The
+standalone host JSON parser and browser-bridge tests also pass. These are
+fixture checks; they do not establish live application/device acceptance.
+
+That run used package SHA-256
+`4641bbc56cd2f033d448fa0b41d4e71cde8059f6091b96e305a595e88b5997e2`,
+built before the final map/changelog correction. Repacking the corrected metadata
+succeeds with SHA-256
+`b3bc6ed33eac66e3c4bc09d4ff656cb91c91ebf80c0a5693970d2244a2eea3a7`.
+Both contain the same frozen component and Settings assets. The corrected
+package itself was not replayed again; no changed runtime or grants are being
+qualified by reusing the earlier receipt. Root TypeScript and file-size check
+outputs are retained in the proof alongside the scoped formatting/lint checks.
+
+Ordinary gate `20261109-195716-EdCPUG` exits **0**: 11 tests across ten suites,
+including the seven-table app/worker privacy matrix with protections removed
+and restored, owner-only folder settings controls, exact legacy API/tool/job
+comparisons and canonical-note persistence. Both complete 100-row responses
+pass under the unchanged budget. It has the same base commit and fingerprint
+as the expanded diagnostic. The installed gate identifies `84294875c` with
+fingerprint `a9716790b245` and two dirty documentation files. Final metadata and
+receipt edits do not change the tested runtime; these receipts are not a clean
+final-commit full-parity or live-path qualification.
