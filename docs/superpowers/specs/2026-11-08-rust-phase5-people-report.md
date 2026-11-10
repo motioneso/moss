@@ -2988,30 +2988,29 @@ Remaining work is unchanged from part 26 steps 3 and 4.
 - The pre-existing clippy complaint in `folder_sync_status.rs` and rustfmt drift in `linked_notes.rs`
   are outside this change and untouched.
 
-## Part 31: pruning of stored command records
+## Part 31: pruning of stored command records, attempted and reverted
 
-### Built
+### Outcome
 
-- Branch fast-forwarded to origin/main before editing. A full account (10,000 records under one
-  resource) now drops records older than 30 days to make room for a new one, instead of refusing.
-  Nothing is dropped while the account is under the limit, and a job that old is no longer queued.
-  If nothing is old enough the refusal stays.
-- The vault gained a file-age lookup (`modified`) so the host can tell record age.
-- Unit test: a full account stays full while records are fresh, then accepts a new record once the
-  old ones expire, and the expired ones are gone.
+- Age-based pruning (drop records over 30 days old when an account is full) was built, tested and
+  passed the live server gate, then reverted after review. No code change remains from this part.
+- Why: a record's age does not show whether a queued job still needs it. Jobs are claimed with no
+  age cutoff, so a job left pending through a long outage would lose its command and fail with
+  "People command not found". Safe pruning must know which records pending, running or retryable
+  jobs reference. Records live in the account's file store and jobs live in Postgres, so the host
+  needs a read of queue state (or a queue-side release step) before it can delete anything.
 
-### Checked
+### Next step for a later part
 
-- `cargo test --lib command_records` (2 tests) and the vault tests pass.
-- `pnpm test:rust-people-server` through the gate with a freshly built component and package: rc=0
-  (HTTPS sign-in, second-account privacy, create/list/settings on the real server).
+- Add a host call that lists the command ids referenced by non-finished jobs, prune only records
+  outside that set, and test with a pending job whose record is older than the window.
 
 ### Findings
 
 - The legacy "ingest nudge to Memory" has nothing to port: the legacy memory worker performs no
   writes (see `jobs.rs`), so no cross-module path is needed for parity.
+- The 10,000-record refusal from part 30 stays the only bound.
 
 ### Not proven
 
-- Browser screen run not repeated (no screen code changed); second physical device; real source
-  providers; full locale ordering; chat flows; pruning at the real 10,000 limit (tested at 2).
+- Pruning, browser screen run, second physical device, real source providers, locale ordering, chat flows.

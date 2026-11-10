@@ -53,6 +53,8 @@ fn installed_screens_use_verified_versioned_opaque_assets() {
         .unwrap();
     let mut m = common::manifest("1.0.0");
     m.screens.insert("/counter".into(), "ui/index.html".into());
+    m.navigation.push(serde_json::json!({"id":"counter","label":"Counter","path":"/counter","icon":"CheckSquare","order":5}));
+    m.navigation.push(serde_json::json!({"id":"ghost","label":"Ghost","path":"/undeclared","icon":"Ghost"}));
     let mut files = common::files(&m);
     files.insert(
         "ui/index.html".into(),
@@ -70,6 +72,11 @@ fn installed_screens_use_verified_versioned_opaque_assets() {
         true,
     )
     .unwrap();
+    let nav = i.navigation(&access).unwrap();
+    assert_eq!(nav.len(), 1, "an entry without a declared screen is not listed");
+    assert_eq!(nav[0].module, "sample.counter");
+    assert_eq!(nav[0].label, "Counter");
+    assert_eq!(nav[0].icon, "check-square");
     let screen = i.screen(&access, "sample.counter", "/counter").unwrap();
     assert_eq!(screen.sandbox, "allow-scripts allow-forms");
     assert!(screen.src.contains(&digest));
