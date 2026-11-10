@@ -19,6 +19,30 @@ pub struct Screen {
     pub src: String,
     pub sandbox: String,
 }
+/// One main-navigation entry an installed module offers the signed-in account.
+#[derive(Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NavEntry {
+    pub module: String,
+    pub label: String,
+    pub path: String,
+    /// Lucide icon in kebab-case, for example `square-check-big`.
+    pub icon: String,
+}
+fn kebab(name: &str) -> String {
+    let mut out = String::new();
+    for (i, c) in name.chars().enumerate() {
+        if c.is_ascii_uppercase() {
+            if i > 0 {
+                out.push('-');
+            }
+            out.push(c.to_ascii_lowercase());
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
 pub struct Asset {
     pub body: Vec<u8>,
     pub content_type: &'static str,
@@ -86,6 +110,47 @@ impl Installer {
             );
         }
         Ok(package)
+    }
+    /// Navigation entries of installed, enabled modules for this account, ordered by the
+    /// manifest's `order` then label. Only entries that open a declared screen are listed.
+    pub fn navigation(&self, access: &AccessContext) -> Result<Vec<NavEntry>> {
+        let _fence = self
+            .fence
+            .read()
+            .map_err(|_| anyhow::anyhow!("Module changes are busy"))?;
+        let state = self.catalog.load()?;
+        let mut entries: Vec<(i64, NavEntry)> = Vec::new();
+        for (id, installed) in &state.installed {
+            let manifest = &installed.manifest;
+            if installed.disabled.is_some()
+                || !self
+                    .lifecycle
+                    .account_enabled(id, access, manifest.accounts.default_enabled)?
+            {
+                continue;
+            }
+            for value in &manifest.navigation {
+                let text = |key: &str| value.get(key).and_then(|v| v.as_str());
+                let (Some(label), Some(path)) = (text("label"), text("path")) else {
+                    continue;
+                };
+                if !manifest.screens.contains_key(path) {
+                    continue;
+                }
+                let order = value.get("order").and_then(|v| v.as_i64()).unwrap_or(1000);
+                entries.push((
+                    order,
+                    NavEntry {
+                        module: id.clone(),
+                        label: label.into(),
+                        path: path.into(),
+                        icon: kebab(text("icon").unwrap_or("package")),
+                    },
+                ));
+            }
+        }
+        entries.sort_by(|a, b| (a.0, &a.1.label).cmp(&(b.0, &b.1.label)));
+        Ok(entries.into_iter().map(|(_, e)| e).collect())
     }
     /// Called after host sign-in. UI-only packages can open screens without a code handler.
     pub fn screen(&self, access: &AccessContext, id: &str, path: &str) -> Result<Screen> {

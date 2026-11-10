@@ -123,8 +123,14 @@ fn today_subtitle() -> String {
 
 #[component]
 pub fn App() -> impl IntoView {
-    let shell = RwSignal::new(None::<Result<ShellView, String>>);
-    spawn_local(async move { shell.set(Some(api::shell().await)) });
+    let shell = RwSignal::new(None::<Result<(ShellView, Vec<api::ModuleNav>), String>>);
+    spawn_local(async move {
+        let loaded = match api::shell().await {
+            Ok(view) => Ok(merge_modules(view, api::module_navigation().await)),
+            Err(e) => Err(e),
+        };
+        shell.set(Some(loaded))
+    });
 
     view! {
         {move || match shell.get() {
@@ -137,13 +143,43 @@ pub fn App() -> impl IntoView {
                     </section>
                 </main>
             }.into_any(),
-            Some(Ok(view)) => view! { <Frame shell=view /> }.into_any(),
+            Some(Ok((view, modules))) => view! { <Frame shell=view modules=modules /> }.into_any(),
         }}
     }
 }
 
+/// Puts installed modules' links into the navigation. A link whose path the shell already
+/// lists is replaced in place; the others go in a "Modules" section at the end.
+fn merge_modules(mut view: ShellView, modules: Vec<api::ModuleNav>) -> (ShellView, Vec<api::ModuleNav>) {
+    let mut extra = Vec::new();
+    for m in &modules {
+        let link = NavLink {
+            path: m.path.clone(),
+            label: m.label.clone(),
+            icon: m.icon.clone(),
+            unread: 0,
+        };
+        let existing = view
+            .nav
+            .iter_mut()
+            .flat_map(|s| s.links.iter_mut())
+            .find(|l| l.path == m.path);
+        match existing {
+            Some(slot) => *slot = link,
+            None => extra.push(link),
+        }
+    }
+    if !extra.is_empty() {
+        view.nav.insert(
+            view.nav.len(),
+            moss_shell_contract::NavSection { label: Some("Modules".into()), links: extra },
+        );
+    }
+    (view, modules)
+}
+
 #[component]
-fn Frame(shell: ShellView) -> impl IntoView {
+fn Frame(shell: ShellView, modules: Vec<api::ModuleNav>) -> impl IntoView {
     let wide = media_signal(WIDE_QUERY);
     let phone = media_signal(PHONE_QUERY);
     let path = RwSignal::new(current_path());
@@ -481,6 +517,15 @@ fn Frame(shell: ShellView) -> impl IntoView {
                             view! { <TodayPage /> }.into_any()
                         } else if path.get() == "/modules" {
                             view! { <crate::modules_page::ModulesPage /> }.into_any()
+                        } else if let Some(m) = modules.iter().find(|m| m.path == path.get()) {
+                            let src = format!(
+                                "/module-frame?module={}&path={}",
+                                js_sys::encode_uri_component(&m.module),
+                                js_sys::encode_uri_component(&m.path)
+                            );
+                            view! {
+                                <iframe class="module-screen" title=m.label.clone() src=src></iframe>
+                            }.into_any()
                         } else {
                             view! { <NotPortedYet /> }.into_any()
                         }}

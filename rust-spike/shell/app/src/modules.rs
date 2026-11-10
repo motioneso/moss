@@ -1,6 +1,7 @@
 //! Explicit assembly for an existing approved module catalog. Installation/bootstrap
 //! still owns schema creation; the serving process never runs bootstrap SQL.
 use anyhow::Result;
+use moss_calendar_host::CalendarPorts;
 use axum::{
     body::Bytes,
     extract::{Path as UrlPath, Query, State},
@@ -286,6 +287,7 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
         anyhow::ensure!(base.is_absolute(), "Notes base needs an absolute path");
     }
     let preferences_database = database.clone();
+    let calendar_database = database.clone();
     let mut embedding_model = None;
     let generator: Arc<dyn Intelligence> = match &settings.ai_key {
         Some(key) => crate::module_ai::intelligence(
@@ -326,7 +328,8 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
             compiled_cache: None,
             fuel_ceiling: Some(settings.fuel_ceiling.unwrap_or(DEFAULT_FUEL_CEILING)),
         },
-        |services| match notes_base {
+        |services| {
+            let services = match notes_base {
             Some(base) => {
                 let services = match embedding_model {
                     Some(model) => memory(
@@ -347,8 +350,12 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
                     BTreeMap::new(),
                 )?
                 .with_private_export("notes", "private-export", private_base);
-                Ok(Arc::new(LinkedNotesPorts::new(Arc::new(folders), services)))
+                Ok(Arc::new(LinkedNotesPorts::new(Arc::new(folders), services)) as Arc<dyn Ports>)
             }
+            }?;
+            // Calendar keeps its settings in the account's real preferences and reads the
+            // account timezone. The wrapper only answers calls made by the Calendar module.
+            Ok(Arc::new(CalendarPorts::new(calendar_database, services)?) as Arc<dyn Ports>)
         },
     )?;
     Ok(application)
@@ -362,11 +369,21 @@ pub type Slot = Arc<std::sync::Mutex<Option<ServerModules>>>;
 pub fn routes(slot: Slot, web: PathBuf) -> Router {
     Router::new()
         .route("/api/m/{module}/{*path}", any(dispatch))
+        .route("/api/modules/navigation", get(navigation))
         .route("/api/modules/{module}/screen", get(screen))
         .route("/module-ui/{module}/{digest}/{*path}", get(ui_asset))
         .route(
             "/module-frame",
-            get(|| async { Html(include_str!("../../assets/module-frame.html")) }),
+            get(|| async {
+                // Only the app page may frame this one; the page frames its sandboxed screen.
+                (
+                    [(
+                        header::CONTENT_SECURITY_POLICY,
+                        "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'none'",
+                    )],
+                    Html(include_str!("../../assets/module-frame.html")),
+                )
+            }),
         )
         .route(
             "/module-frame.css",
@@ -429,6 +446,20 @@ fn host(slot: &Slot) -> Option<Arc<Application>> {
 #[derive(Deserialize)]
 struct ScreenQuery {
     path: String,
+}
+
+/// Navigation entries from installed modules for the signed-in account.
+async fn navigation(
+    State(api): State<Arc<Api>>,
+    Extension(access): Extension<AccessContext>,
+) -> Response {
+    let Some(application) = host(&api.slot) else {
+        return Json(serde_json::json!({ "links": [] })).into_response();
+    };
+    match tokio::task::spawn_blocking(move || application.installer.navigation(&access)).await {
+        Ok(Ok(links)) => Json(serde_json::json!({ "links": links })).into_response(),
+        _ => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
 }
 
 /// The verified screen address for a signed-in account. Refused if the module is off for it.

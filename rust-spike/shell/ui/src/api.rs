@@ -21,6 +21,28 @@ pub async fn shell() -> Result<ShellView, String> {
     get("/api/shell").await
 }
 
+/// One navigation entry offered by an installed module.
+#[derive(serde::Deserialize, Clone, PartialEq)]
+pub struct ModuleNav {
+    pub module: String,
+    pub label: String,
+    pub path: String,
+    pub icon: String,
+}
+
+#[derive(serde::Deserialize)]
+struct ModuleNavList {
+    links: Vec<ModuleNav>,
+}
+
+/// Installed modules' navigation. A failure means no module links, never a broken app.
+pub async fn module_navigation() -> Vec<ModuleNav> {
+    get::<ModuleNavList>("/api/modules/navigation")
+        .await
+        .map(|l| l.links)
+        .unwrap_or_default()
+}
+
 pub async fn today() -> Result<TodayView, String> {
     get("/api/today").await
 }

@@ -66,12 +66,19 @@ fn installed_tasks_package_serves_routes_and_nightly_job_from_the_real_server() 
         .status()
         .unwrap()
         .success());
-    fs::create_dir(root.join("web")).unwrap();
-    fs::write(
-        root.join("web/index.html"),
-        "<!doctype html><title>Tasks HTTP fixture</title>",
-    )
-    .unwrap();
+    // MOSS_TASKS_WEB points at a built shell web folder for a hands-on browser check.
+    let web = match std::env::var("MOSS_TASKS_WEB") {
+        Ok(folder) => std::path::PathBuf::from(folder),
+        Err(_) => {
+            fs::create_dir(root.join("web")).unwrap();
+            fs::write(
+                root.join("web/index.html"),
+                "<!doctype html><title>Tasks HTTP fixture</title>",
+            )
+            .unwrap();
+            root.join("web")
+        }
+    };
     let app_url = std::env::var("JS43_APP_URL").unwrap();
     let worker_url = std::env::var("JS43_WORKER_URL").unwrap();
     let bootstrap_url = std::env::var("JS43_BOOTSTRAP_URL").unwrap();
@@ -97,7 +104,7 @@ fn installed_tasks_package_serves_routes_and_nightly_job_from_the_real_server() 
             .arg("--network")
             .arg(root.join("network.json"))
             .arg("--web")
-            .arg(root.join("web"));
+            .arg(&web);
         if modules {
             command.arg("--modules").arg(root.join("modules.json"));
         }
@@ -217,6 +224,24 @@ fn installed_tasks_package_serves_routes_and_nightly_job_from_the_real_server() 
         std::thread::sleep(Duration::from_millis(500));
     }
     assert_eq!(call(Method::GET, "/tasks", None, None).0, 401);
+    // The shell lists an installed module's screen in its navigation, only for a signed-in account.
+    let navigation = |cookie: Option<&str>| {
+        let mut request = client
+            .get(format!("{origin}/api/modules/navigation"))
+            .header("origin", &origin);
+        if let Some(cookie) = cookie {
+            request = request.header("cookie", cookie);
+        }
+        let response = request.send().unwrap();
+        (response.status().as_u16(), response.json::<Value>().unwrap_or(Value::Null))
+    };
+    assert_eq!(navigation(None).0, 401);
+    let (status, nav) = navigation(Some(&cookie));
+    assert_eq!(status, 200, "{nav}");
+    assert_eq!(nav["links"][0]["module"], "tasks", "{nav}");
+    assert_eq!(nav["links"][0]["path"], "/tasks");
+    assert_eq!(nav["links"][0]["label"], "Tasks");
+    assert_eq!(nav["links"][0]["icon"], "check-square");
     let created = call(
         Method::POST,
         "/tasks",
@@ -282,5 +307,9 @@ fn installed_tasks_package_serves_routes_and_nightly_job_from_the_real_server() 
     let titles: Vec<_> = list["tasks"].as_array().unwrap().iter().map(|t| t["title"].as_str().unwrap().to_owned()).collect();
     assert!(titles.contains(&"Daily stretch".to_owned()) && titles.contains(&"Water plants".to_owned()), "{list}");
     println!("PASS installed Tasks package over HTTPS: sign-in required, recurring create makes one nightly schedule, the server's own worker ran it and moved 2020-01-01 to {rolled}, and the queued job has retry limit 0 as declared");
+    if let Ok(seconds) = std::env::var("MOSS_TASKS_HOLD_SECONDS") {
+        println!("HOLDING {origin} for {seconds}s (sign in as tasks-owner@example.test)");
+        std::thread::sleep(Duration::from_secs(seconds.parse().unwrap()));
+    }
     println!("NOT PROVEN: native UI, second physical device, second account over HTTP (setup allows one owner)");
 }

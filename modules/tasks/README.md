@@ -82,10 +82,10 @@ on the account's local day, as the legacy server does.
 Part 35 adds the public `prepareTaskAction` call, which builds legacy-format approval cards for the 13 task write tools (route and preferences approval are not ported).
 Part 30 adds the nightly recurrence job: one keyed schedule per account (03:00 UTC)
 runs the same roll-forward in the owner's account, and recurring creates keep it
-registered. Current remaining work (part 33 added per-job retry counts; both queues retry 0; finished-job retention is not ported): full
+registered. Current remaining work (part 34 put the Tasks screen in the shell menu; part 33 added per-job retry counts; both queues retry 0; finished-job retention is not ported): full
 deferred-queue policy and installed worker dispatch, public People linkage,
 policy/feedback orchestration, remaining screen/settings parity, installed chat and summary presentation,
-real application shell integration, performance budgets and physical second-device
+performance budgets and physical second-device
 HTTPS proof. The full endpoint run now matches all 96 existing cases. This is
 coverage of those cases, not full semantic parity: manage-share completion
 retries can still rewrite history, and duplicate HTTP/tool completion returns

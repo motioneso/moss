@@ -49,7 +49,7 @@ pub fn by_name(name: &str) -> &'static str {
     match name {
         "house" => HOUSE,
         "wrench" => WRENCH,
-        "square-check-big" => SQUARE_CHECK_BIG,
+        "square-check-big" | "check-square" => SQUARE_CHECK_BIG,
         "calendar-days" => CALENDAR_DAYS,
         "mic" => MIC,
         "newspaper" => NEWSPAPER,

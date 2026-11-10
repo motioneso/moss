@@ -8,9 +8,8 @@ application still needs to compose that package into its real Settings and chat 
 The normal People gate compares complete 100-person and 100-link lists from a
 1,005-person account against the real legacy handlers, under the unchanged default host budgets.
 The optional 29-case large-account diagnostic also covers links and larger limits, with intermediate 150, 175 and 190-row probes.
-It is **currently red**: both 100-row responses pass, then the 150-person response
-exhausts Wasm fuel while dropping response values. Later cases are not reached;
-large-account parity remains unproved.
+People requests 200M fuel in its manifest (60M fails the 1,005-contact paging cases, 200M passes
+all 29), so large-account parity holds under that request.
 Response conversion reuses database field-name buffers and moves formatted confidence
 and timestamp strings into JSON values; this does not establish a larger supported limit.
 With the task-owned build environment and generated component prepared as below, reproduce

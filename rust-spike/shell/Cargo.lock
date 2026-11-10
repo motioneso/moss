@@ -2550,6 +2550,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "moss-calendar"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "chrono-tz",
+ "moss-module-sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "moss-calendar-host"
+version = "0.1.0"
+dependencies = [
+ "access-context",
+ "anyhow",
+ "moss-calendar",
+ "moss-module-host",
+ "moss-module-sdk",
+ "safety-core",
+ "serde_json",
+ "tokio",
+ "wat",
+]
+
+[[package]]
 name = "moss-module-host"
 version = "0.1.0"
 dependencies = [
@@ -2666,6 +2692,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
+ "moss-calendar-host",
  "moss-module-host",
  "moss-network",
  "moss-platform-adapters",
