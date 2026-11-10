@@ -56,6 +56,16 @@ pub fn handle<H: moss_module_sdk::Host + ?Sized>(
             enum Api {
                 #[serde(rename = "prepareTaskAction")]
                 Prepare(Prepare),
+                #[serde(rename = "prepareTaskRoute")]
+                PrepareRoute(PrepareRoute),
+            }
+            #[derive(serde::Deserialize)]
+            #[serde(rename_all = "camelCase", deny_unknown_fields)]
+            struct PrepareRoute {
+                route: String,
+                params_json: Option<String>,
+                query_json: Option<String>,
+                body_json: Option<String>,
             }
             #[derive(serde::Deserialize)]
             #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -64,8 +74,19 @@ pub fn handle<H: moss_module_sdk::Host + ?Sized>(
                 // A JSON string keeps field order, which sets the card's row order.
                 input_json: String,
             }
-            let Api::Prepare(request) = serde_json::from_str(payload)?;
-            Ok(approval::prepare(host, &request.tool, &request.input_json).to_string())
+            Ok(match serde_json::from_str(payload)? {
+                Api::Prepare(request) => {
+                    approval::prepare(host, &request.tool, &request.input_json)
+                }
+                Api::PrepareRoute(r) => approval::prepare_route(
+                    host,
+                    &r.route,
+                    r.params_json.as_deref(),
+                    r.query_json.as_deref(),
+                    r.body_json.as_deref(),
+                ),
+            }
+            .to_string())
         }
         _ => Err(moss_module_sdk::Error::new("Unsupported Tasks invocation")),
     }
