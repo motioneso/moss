@@ -42,7 +42,7 @@ fn both(filters: Vec<Filter>) -> Filter {
 fn values(value: Value) -> std::collections::BTreeMap<String, Value> {
     value.as_object().unwrap().clone().into_iter().collect()
 }
-fn blocks(host: &impl Host, id: &str) -> Result<Vec<Value>> {
+pub(crate) fn blocks(host: &impl Host, id: &str) -> Result<Vec<Value>> {
     let mut out = vec![];
     loop {
         let q = Query {
@@ -68,7 +68,7 @@ fn blocks(host: &impl Host, id: &str) -> Result<Vec<Value>> {
         }
     }
 }
-fn block_dto(b: &Value) -> Value {
+pub(crate) fn block_dto(b: &Value) -> Value {
     let actual = &b["actual_placement"];
     let actual = actual.as_object().map(|_| {
         json!({

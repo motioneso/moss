@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 fn unreadable() -> Error {
     Error::new(500, "stored apply batch is unreadable")
 }
-fn uuid(value: &str) -> bool {
+pub(crate) fn uuid(value: &str) -> bool {
     value.split('-').map(str::len).eq([8, 4, 4, 4, 12])
         && value.chars().all(|c| c == '-' || c.is_ascii_hexdigit())
 }
@@ -19,7 +19,7 @@ fn selection(value: &Value) -> Result<&str> {
     }
     value["blockId"].as_str().ok_or_else(unreadable)
 }
-fn item_result(value: &Value) -> Result<Value> {
+pub(crate) fn item_result(value: &Value) -> Result<Value> {
     if value.is_null() {
         return Ok(Value::Null);
     }

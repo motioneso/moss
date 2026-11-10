@@ -36,3 +36,7 @@ path = "tests/jobs.rs"
 [[test]]
 name = "operations"
 path = "tests/operations.rs"
+
+[[test]]
+name = "apply"
+path = "tests/apply.rs"

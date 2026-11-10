@@ -486,3 +486,13 @@ remain open. No new dependency, global tool or wit-bindgen is installed.
 
 Malformed/empty JSON transport bodies and JSON `__proto__` parser rejection remain
 unmatched; the settings matrix covers parsed JSON values.
+
+## Apply reservation and route (part 24)
+
+Version 0.22.0 ports the apply-batch reservation (`apply.rs`): the reviewed selection plus
+every pending addition is frozen under one idempotency key, an exact replay returns the stored
+batch after the plan moves on, a changed request or stale revision conflicts, and missing item
+rows are repaired on replay. `POST /day-plans/:id/apply` validates the body and then answers 503
+because execution needs a Connectors package; it writes nothing. The original takes a row lock
+on the plan during reservation; the host runs each database call in its own transaction, so the
+unique idempotency key and the revision check carry that protection instead.
