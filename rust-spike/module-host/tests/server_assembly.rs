@@ -489,7 +489,8 @@ fn module_worker_and_https_feed_assemble_without_a_desktop() {
             .arg("sh").arg(&stub).arg(&log).arg(&app).arg(&data)
             .output().unwrap();
         assert!(ran.status.success(), "{}", String::from_utf8_lossy(&ran.stderr));
-        fs::read_to_string(&log).unwrap().lines().map(|l| serde_json::from_str(l).unwrap()).collect()
+        // The server's own schedule keeps posting its synthetic alert every minute.
+        fs::read_to_string(&log).unwrap().lines().map(|l| serde_json::from_str::<Value>(l).unwrap()).filter(|t| t["title"] != "Synthetic module worker alert").collect()
     };
     runtime.block_on(db.execute("DELETE FROM app.notifications WHERE recipient_user_id=$1", &[&owner])).unwrap();
     let plant = |title: &str, deferred: bool| -> uuid::Uuid {
