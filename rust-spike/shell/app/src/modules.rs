@@ -215,6 +215,15 @@ pub fn routes(slot: Slot, web: PathBuf) -> Router {
             get(|| async { Html(include_str!("../../assets/module-frame.html")) }),
         )
         .route(
+            "/module-frame.css",
+            get(|| async {
+                (
+                    [(header::CONTENT_TYPE, "text/css")],
+                    include_str!("../../assets/module-frame.css"),
+                )
+            }),
+        )
+        .route(
             "/module-frame.js",
             get(|| async {
                 (
@@ -235,6 +244,7 @@ pub fn routes(slot: Slot, web: PathBuf) -> Router {
         .with_state(Arc::new(Api {
             slot,
             slots: Arc::new(tokio::sync::Semaphore::new(4)),
+            asset_slots: Arc::new(tokio::sync::Semaphore::new(4)),
         }))
         .merge(
             // Opaque frames read these files cross-origin, so fonts need a CORS header.
@@ -307,7 +317,11 @@ async fn ui_asset(
         return StatusCode::BAD_REQUEST.into_response();
     };
     let origin = format!("https://{authority}/");
+    let Ok(slot) = api.asset_slots.clone().acquire_owned().await else {
+        return StatusCode::SERVICE_UNAVAILABLE.into_response();
+    };
     match tokio::task::spawn_blocking(move || {
+        let _slot = slot;
         let policy = AssetPolicy::new(&origin)?;
         application
             .installer
@@ -367,6 +381,9 @@ pub fn load_when_ready(
 struct Api {
     slot: Slot,
     slots: Arc<tokio::sync::Semaphore>,
+    /// Bounds concurrent public file reads. Each one verifies the whole package, so waiters
+    /// queue here instead of running together.
+    asset_slots: Arc<tokio::sync::Semaphore>,
 }
 
 async fn dispatch(

@@ -289,6 +289,30 @@ fn installed_people_package_serves_routes_from_the_real_server() {
         .send()
         .unwrap();
     assert_eq!(asset.status(), 200, "screen file without a session");
+    // The opaque-origin exemption covers module files only. Account routes still refuse it,
+    // and a foreign Host never reaches the asset handler.
+    let cross_site_api = client
+        .get(format!("{origin}/api/m/people/people?limit=1"))
+        .header("cookie", &cookie)
+        .header("origin", "null")
+        .header("sec-fetch-site", "cross-site")
+        .send()
+        .unwrap();
+    assert!(
+        cross_site_api.status() == 403 || cross_site_api.status() == 401,
+        "cross-site account route: {}",
+        cross_site_api.status()
+    );
+    let foreign_host = client
+        .get(format!("{origin}{src}"))
+        .header("host", "evil.example")
+        .send()
+        .unwrap();
+    assert!(
+        foreign_host.status().is_client_error(),
+        "foreign host: {}",
+        foreign_host.status()
+    );
     let csp = asset.headers()["content-security-policy"]
         .to_str()
         .unwrap()
