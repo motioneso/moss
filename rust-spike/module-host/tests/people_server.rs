@@ -296,35 +296,15 @@ fn installed_people_package_serves_routes_from_the_real_server() {
         .unwrap()
         .to_owned();
     let person_id = created.1["person"]["id"].as_str().unwrap().to_owned();
+    let safe = json!({"error":"Internal Server Error"});
     let (status, theirs) = call(Method::GET, "/people", Some(&cookie2), None);
     assert_eq!(status, 200, "{theirs}");
     assert!(
-        !theirs.to_string().contains("Ada Lovelace"),
-        "second account must not see the owner's person: {theirs}"
+        theirs["people"].as_array().is_some_and(|p| p.is_empty()),
+        "second account must see none of the owner's people: {theirs}"
     );
-    let (status, direct) = call(
-        Method::GET,
-        &format!("/people/{person_id}"),
-        Some(&cookie2),
-        None,
-    );
-    assert!(
-        status >= 400,
-        "direct read of another account's person must be refused, got {status} {direct}"
-    );
-    assert!(!direct.to_string().contains("Ada Lovelace"), "{direct}");
-    let (status, _) = call(
-        Method::PATCH,
-        &format!("/people/{person_id}"),
-        Some(&cookie2),
-        Some(json!({"displayName":"Hijacked"})),
-    );
-    assert!(status >= 400, "write refused, got {status}");
-    let (_, after) = call(Method::GET, "/people", Some(&cookie), None);
-    assert!(
-        after.to_string().contains("Ada Lovelace") && !after.to_string().contains("Hijacked"),
-        "{after}"
-    );
+    // The second account has its own notes folder before it tries the owner's person,
+    // so the edit reaches the canonical-note path and not the projection-only fallback.
     let saved2 = call(
         Method::PUT,
         "/people/notes-settings",
@@ -332,6 +312,33 @@ fn installed_people_package_serves_routes_from_the_real_server() {
         Some(json!({"folder": root.join("notes").join(second.to_string())})),
     );
     assert_eq!(saved2.0, 200, "second account folder: {}", saved2.1);
+    let note_path = folder.join(created.1["notePath"].as_str().unwrap());
+    let note_before = fs::read(&note_path).unwrap();
+    let (status, direct) = call(
+        Method::GET,
+        &format!("/people/{person_id}"),
+        Some(&cookie2),
+        None,
+    );
+    assert_eq!((status, &direct), (500, &safe), "direct read refused");
+    let (status, patched) = call(
+        Method::PATCH,
+        &format!("/people/{person_id}"),
+        Some(&cookie2),
+        Some(json!({"displayName":"Hijacked"})),
+    );
+    assert_eq!((status, &patched), (500, &safe), "edit refused");
+    assert_eq!(
+        fs::read(&note_path).unwrap(),
+        note_before,
+        "the owner's note file must be unchanged"
+    );
+    let (status, after) = call(Method::GET, "/people", Some(&cookie), None);
+    assert_eq!(status, 200, "{after}");
+    assert!(
+        after.to_string().contains("Ada Lovelace") && !after.to_string().contains("Hijacked"),
+        "{after}"
+    );
     let mine2 = call(
         Method::POST,
         "/people",
@@ -339,9 +346,12 @@ fn installed_people_package_serves_routes_from_the_real_server() {
         Some(json!({"displayName":"Grace Hopper"})),
     );
     assert_eq!(mine2.0, 200, "second account create: {}", mine2.1);
-    let (_, owner_list) = call(Method::GET, "/people", Some(&cookie), None);
+    let second_person = mine2.1["person"]["id"].as_str().unwrap().to_owned();
+    let (status, owner_list) = call(Method::GET, "/people", Some(&cookie), None);
+    assert_eq!(status, 200, "{owner_list}");
     assert!(
-        !owner_list.to_string().contains("Grace Hopper"),
+        owner_list["people"].as_array().is_some_and(|p| !p.is_empty())
+            && !owner_list.to_string().contains(&second_person),
         "owner must not see the second account's person: {owner_list}"
     );
     println!("PASS privacy: second signed-in account sees none of the owner's people, cannot read or edit one by id, and its own person stays hidden from the owner");
