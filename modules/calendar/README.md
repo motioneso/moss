@@ -448,3 +448,20 @@ initial-scroll and timezone checks now capture the full viewport and crop eviden
 off-browser afterward. The checks retain normal pointer clicks and all navigation
 assertions. See the phase report and task Proof for the reproduction and final
 full-gate, installed HTTPS UI and independent-review receipts.
+
+## Toolbar parity (part 20)
+
+Version 0.20.0 restores the existing grouped Day / Week / Month choices and the
+Work week / Full week choices, with their selected states. Compact Previous and
+Next arrows and the small Today button use the published Leptos kit and the
+existing Park Press styles. The screen saves through the installed server API;
+it remains a pure client. Controls wait for initial loading and a pending view save.
+
+The rendered comparison invokes the real production React Calendar page and the
+Rust toolbar for all views and both week choices. The signed-in runner exercises
+Previous / Next / Today, saved Day cursor, Work week and Month after reload,
+five/seven columns, Enter/Space activation and toolbar bounds at desktop and
+phone widths, including 320px. Screenshots capture the viewport; crop outside the
+browser. These checks do not prove all regional labels, full pixel parity,
+full-shell cutover or physical second-device HTTPS. The phase report retains the
+complete remaining list.

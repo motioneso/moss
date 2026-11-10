@@ -17,8 +17,9 @@ export async function checkGridScroll(
       await frame.getByRole("button", { name: view, exact: true }).click();
       await expect(frame.getByRole("button", { name: "Today", exact: true })).toBeEnabled();
       if (view === "Week") {
-        const fullWeek = frame.getByRole("button", { name: "Show full week", exact: true });
-        if (await fullWeek.count()) await fullWeek.click();
+        const fullWeek = frame.getByRole("button", { name: "Full week", exact: true });
+        await expect(fullWeek).toBeEnabled();
+        await fullWeek.click();
         await expect(frame.getByRole("button", { name: "Today", exact: true })).toBeEnabled();
       }
       // A reload opens a new grid with no in-memory user scroll position.

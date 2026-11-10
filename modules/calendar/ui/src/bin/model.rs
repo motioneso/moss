@@ -5,6 +5,14 @@ fn main() {
     for line in io::stdin().lock().lines() {
         let v: Value = serde_json::from_str(&line.unwrap()).unwrap();
         let output = match v["operation"].as_str().unwrap() {
+            "toolbar" => {
+                use leptos::prelude::*;
+                use moss_calendar_ui::toolbar::Toolbar;
+                let selected = v["view"].as_str().unwrap().to_owned();
+                let work = v["work"].as_bool().unwrap();
+                let day = v["cursor"].as_str().unwrap().parse().unwrap();
+                json!(view!{<Toolbar view=Signal::derive(move||selected.clone()) work=Signal::derive(move||work) day=Signal::derive(move||day) disabled=Signal::derive(||false) on_today=Callback::new(|_|{}) on_navigate=Callback::new(|_|{}) on_view=Callback::new(|_|{}) on_work=Callback::new(|_|{})/>}.to_html())
+            }
             "gridScroll" => json!(model::grid_scroll_top(
                 v["minute"].as_u64().unwrap() as u32,
                 v["height"].as_i64().unwrap() as i32,

@@ -1,5 +1,12 @@
 # Calendar package
 
+## 0.20.0
+
+- Restore the authored grouped Day, Week and Month choices and Work week / Full week controls.
+- Use compact arrow buttons and the existing small Today button in the toolbar.
+- Compare rendered controls with the production screen and check installed navigation, keyboard use, saved choices and phone layout.
+- Full cutover, provider execution and physical second-device acceptance remain open.
+
 ## 0.19.0
 
 - Recenter Day and Week when a refresh receives a changed saved account timezone.

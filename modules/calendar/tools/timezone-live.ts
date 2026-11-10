@@ -21,8 +21,9 @@ export async function checkTimezoneScroll(
         await expect(frame.getByRole("button", { name: "Today", exact: true })).toBeEnabled();
         await frame.getByRole("button", { name: "Today", exact: true }).click();
         if (view === "Week") {
-          const fullWeek = frame.getByRole("button", { name: "Show full week", exact: true });
-          if (await fullWeek.count()) await fullWeek.click();
+          const fullWeek = frame.getByRole("button", { name: "Full week", exact: true });
+          await expect(fullWeek).toBeEnabled();
+          await fullWeek.click();
         }
         const scroll = frame.locator(".cal-tg__scroll");
         await frame.locator(".cal-now").waitFor({ state: "attached" });

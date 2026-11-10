@@ -26,6 +26,7 @@ import { checkDetails } from "./details-live.js";
 import { checkGrid } from "./grid-live.js";
 import { checkGridScroll } from "./scroll-live.js";
 import { checkTimezoneScroll } from "./timezone-live.js";
+import { checkToolbar } from "./toolbar-live.js";
 import { checkMonth } from "./month-live.js";
 import { checkOperationStatus } from "./operation-live.js";
 import { checkDayPlanWrites } from "./day-plan-live.js";
@@ -458,6 +459,7 @@ try {
   await frame.getByRole("dialog").filter({ hasText: "Calendar package check" }).waitFor();
   await screenshotDialog("signed-in-linked-event.png");
   await checkDetails(tab, local, out, data.event);
+  await checkToolbar(tab, local, out);
   // Keep extra grid fixtures out of the existing Month overflow/detail checks.
   for (const event of proofEvents.slice(3)) await seedProofEvent(event);
   let timezoneRevision = 0;
