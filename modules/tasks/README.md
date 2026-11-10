@@ -1,5 +1,12 @@
 # Tasks component checkpoint
 
+Part 25 retains a completed recurring task's stored history when its owner
+retries completion alone and the next occurrence already exists. The atomic
+next-occurrence insert decides whether the retry can reuse the completed row;
+if the next occurrence was deleted it is recreated. This applies to the worker,
+HTTP update and status tool paths. Other edits keep using the ordinary update
+path. It does not add lazy advancement, recurrence jobs or installed dispatch.
+
 Part 24 connects date editing, task due-day labels and interpreted-search day
 filters to the saved account timezone through the existing public host calendar
 contract. The package-only `GET /tasks/local-day` route supplies the signed-in
@@ -42,8 +49,10 @@ Current remaining work: lazy recurrence advancement, recurrence jobs, full
 deferred-queue policy and installed worker dispatch, public People linkage,
 policy/feedback orchestration, remaining screen/settings parity, installed chat and summary presentation,
 real application shell integration, performance budgets and physical second-device
-HTTPS proof. The full endpoint run still matches 95 of 96 cases; repeated
-recurring completion differs at the final task-list ordering. Historical
+HTTPS proof. The full endpoint run now matches all 96 existing cases. This is
+coverage of those cases, not full semantic parity: manage-share completion
+retries can still rewrite history, and duplicate HTTP/tool completion returns
+success where the legacy aborted transaction can produce an error. Historical
 checkpoint notes below describe the earlier state.
 
 Part 15 adds list inclusion, show-only and exclusion under **Choose lists**,

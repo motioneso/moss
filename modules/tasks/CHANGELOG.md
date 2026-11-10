@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Retain completed recurring-task history and list order when the same completion is retried; recreate a deleted next occurrence.
+
 - Read and save the existing assistant task-change preference under Task settings.
 - Keep the confirmed value after failed refreshes or saves, with independent load retries. Installed chat actions still ask for approval.
 
