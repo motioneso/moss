@@ -81,18 +81,32 @@ This computer reuses the database supervisor to provision its local server.
 The live provision test is ignored by default and must run through `scripts/run-gate.sh`, with
 `MOSS_CLEAN_INSTALL` pointing at the stage and `MOSS_CLEAN_DATA` at a new scratch folder.
 
-Add `--linux-server-runtime` to include the build machine's headless server ELF dependencies
+For the app's real staged lifecycle check, use task-owned `CARGO_HOME`, `RUSTUP_HOME` and
+`CARGO_TARGET_DIR`, and select an installed toolchain with `RUSTUP_TOOLCHAIN` if that rustup home
+has no default. Set `MOSS_PROOF_PORT` to a claimed devports port and run
+`scripts/run-gate.sh start --gate test:rust-app-runtime-routing`. This ignored test creates two
+independent instances, starts each server sequentially on that port, verifies HTTPS hello and
+bundled libc loading, then stops the server and database. It checks production app functions,
+not the This computer UI or a clean desktop root.
+
+Add `--linux-server-runtime` to include the build machine's app and headless server linked ELF dependencies
 (including PostgreSQL's loadable extensions), OpenSSL executable, public CA bundle and C.UTF-8
-locale data. Run `install/moss-run moss-shell serve ...` or `install/moss-run moss-db ...` to
+locale data. Run `install/moss-run moss-app ...`, `install/moss-run moss-shell serve ...` or `install/moss-run moss-db ...` to
 select those files. The launcher preserves real executable names for supervisor ownership
 checks. It requires a POSIX shell and the build platform's ELF interpreter ABI; this is not a
 cross-distribution compatibility promise. Inputs must be trusted: closure discovery uses `ldd`.
 It copies no OpenSSL host configuration or private keys. `--openssl` and `--ca-bundle` choose
 explicit build inputs. The CA snapshot must be refreshed by restaging when its trust list changes.
 
-This option **does not package the native WebKit app runtime** or change its launcher/autostart.
-Signing, updates, desktop helper/resource closure and general clean-machine app installation
-remain unqualified. It is still one staged install containing both app and server programs.
+The app now uses `moss-run` for local server startup, database lifecycle commands and OpenSSL
+certificate generation when its install contains a runtime folder. Linux start at login also
+records `moss-run moss-app`, preserving the selected install and data paths. Missing launchers
+fail instead of silently choosing direct programs. Unstaged development installs still use direct
+programs and the installed OpenSSL.
+
+This option **does not package native WebKit helpers or desktop resources**. Linked app libraries
+are only part of its runtime. Signing, updates, desktop helper/resource closure and general
+clean-machine app installation remain unqualified. It is still one staged install containing both app and server programs.
 
 To remove a stage, disable Start Moss at login, quit the app and stop its servers. As the
 ordinary install owner, run `python3 /path/to/install/uninstall.py`. Python 3 and Linux `/proc`

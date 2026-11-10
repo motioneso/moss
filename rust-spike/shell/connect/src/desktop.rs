@@ -258,7 +258,7 @@ mod linux {
         }
         std::fs::create_dir_all(path.parent().ok_or("No settings folder")?)
             .map_err(|_| "Cannot create login settings")?;
-        let exe = quoted(&std::env::current_exe().map_err(|_| "Cannot find this app")?)?;
+        let launch = login_command(install)?;
         let data = quoted(&store.data)?;
         let install = quoted(install)?;
         let entry = gio::glib::KeyFile::new();
@@ -267,12 +267,24 @@ mod linux {
         entry.set_string(
             "Desktop Entry",
             "Exec",
-            &format!("{exe} --data {data} --install {install}"),
+            &format!("{launch} --data {data} --install {install}"),
         );
         entry.set_boolean("Desktop Entry", "Terminal", false);
         entry.set_boolean("Desktop Entry", "X-GNOME-Autostart-enabled", true);
         let entry = entry.to_data();
         private_write(&path, entry.as_bytes())
+    }
+
+    pub(super) fn login_command(install: &Path) -> Result<String, String> {
+        if crate::launch::bundled_runtime(install) {
+            let launcher = install.join("moss-run");
+            if !launcher.is_file() {
+                return Err("This copy of Moss is missing its runtime launcher".into());
+            }
+            Ok(format!("{} moss-app", quoted(&launcher)?))
+        } else {
+            quoted(&std::env::current_exe().map_err(|_| "Cannot find this app")?)
+        }
     }
 }
 
@@ -331,6 +343,18 @@ mod identity;
 #[cfg(all(test, target_os = "linux"))]
 mod tests {
     use super::*;
+
+    #[test]
+    fn staged_login_uses_launcher_with_desktop_escaping() {
+        let root = std::env::temp_dir().join(format!("moss login $% {}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(root.join("runtime")).unwrap();
+        assert!(linux::login_command(&root).is_err());
+        std::fs::write(root.join("moss-run"), "launcher").unwrap();
+        let command = linux::login_command(&root).unwrap();
+        assert!(command.ends_with("/moss-run\" moss-app"));
+        assert!(command.contains("\\$%%"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn notification_preferences_default_off_and_persist() {

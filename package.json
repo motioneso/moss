@@ -6,6 +6,7 @@
   "type": "module",
   "packageManager": "pnpm@10.6.2",
   "scripts": {
+    "test:rust-app-runtime-routing": "cargo test --manifest-path rust-spike/shell/Cargo.toml -p moss-app runtime_proof::staged_runtime_provisions_starts_and_stops_local_server -- --ignored --nocapture",
     "test:rust-linux-runtime": "python3 rust-spike/shell/tools/proof_linux_runtime.py",
     "test:module-enqueue-options": "tsx rust-spike/module-host/tools/enqueue-options-gate.ts",
     "lint": "eslint . --max-warnings=0",

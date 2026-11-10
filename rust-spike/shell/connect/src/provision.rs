@@ -18,10 +18,10 @@
 use crate::store::{private_dir, valid_instance, Store};
 use moss_network::config::{private_write, Config};
 use moss_network::instance::NETWORK_FILE;
-use moss_network::tls::local_certificate;
+use moss_network::tls::local_certificate_with_command;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Stdio};
 use std::time::{Duration, Instant};
 
 pub const DATABASE_FOLDER: &str = "database";
@@ -143,13 +143,14 @@ fn prepare(store: &Store, install: &Path, folder: &Path) -> Result<(), Failure> 
         format!("https://127.0.0.1:{port}"),
     ];
     let tls = folder.join("tls");
-    local_certificate(&tls, &origins).map_err(|e| {
-        if e.contains("OpenSSL") {
-            Failure::NeedsOpenssl
-        } else {
-            Failure::Other
-        }
-    })?;
+    local_certificate_with_command(&tls, &origins, crate::launch::command(install, "openssl"))
+        .map_err(|e| {
+            if e.contains("OpenSSL") {
+                Failure::NeedsOpenssl
+            } else {
+                Failure::Other
+            }
+        })?;
     ensure_database(install, folder, true)?;
     let credentials = run_credentials(install, folder)?;
     let credentials_path = folder.join("credentials.json");
@@ -188,7 +189,7 @@ fn free_port(store: &Store) -> Option<(u16, std::net::TcpListener)> {
 static STARTED: std::sync::Mutex<Vec<Child>> = std::sync::Mutex::new(Vec::new());
 
 fn supervisor_running(install: &Path, root: &Path) -> bool {
-    Command::new(program(install))
+    crate::launch::command(install, "moss-db")
         .args(["status", "--root"])
         .arg(root)
         .stdin(Stdio::null())
@@ -220,7 +221,7 @@ pub fn ensure_database(install: &Path, folder: &Path, create: bool) -> Result<()
         }
         options.open(&log_path).map_err(|_| Failure::Other)?
     };
-    let mut command = Command::new(program(install));
+    let mut command = crate::launch::command(install, "moss-db");
     command
         .args(["up", "--root"])
         .arg(&root)
@@ -278,7 +279,7 @@ fn read_event(log: &Path) -> Option<String> {
 }
 
 fn run_credentials(install: &Path, folder: &Path) -> Result<String, Failure> {
-    let output = Command::new(program(install))
+    let output = crate::launch::command(install, "moss-db")
         .args(["credentials", "--root"])
         .arg(folder.join(DATABASE_FOLDER))
         .stdin(Stdio::null())
@@ -304,7 +305,7 @@ pub fn stop_database(install: &Path, folder: &Path) -> Result<(), Failure> {
     if !root.is_dir() || !program(install).is_file() {
         return Ok(());
     }
-    let status = Command::new(program(install))
+    let status = crate::launch::command(install, "moss-db")
         .args(["stop", "--root"])
         .arg(&root)
         .stdin(Stdio::null())

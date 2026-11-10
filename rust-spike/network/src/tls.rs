@@ -102,6 +102,16 @@ pub async fn serve(
 
 /// Uses the operator's installed OpenSSL. Does not install software or machine trust roots.
 pub fn local_certificate(folder: &Path, origins: &[String]) -> Result<(), String> {
+    local_certificate_with_command(folder, origins, Command::new("openssl"))
+}
+
+/// Uses an install-selected OpenSSL command, with the same certificate policy as the CLI.
+/// The caller can select its bundled launcher without changing the process environment.
+pub fn local_certificate_with_command(
+    folder: &Path,
+    origins: &[String],
+    mut command: Command,
+) -> Result<(), String> {
     let refs: Vec<_> = origins.iter().map(String::as_str).collect();
     crate::policy::Policy::new(&refs, false).map_err(str::to_owned)?;
     if folder.exists() {
@@ -137,7 +147,7 @@ pub fn local_certificate(folder: &Path, origins: &[String]) -> Result<(), String
     }
     let key = folder.join("key.pem");
     let cert = folder.join("certificate.pem");
-    let status = Command::new("openssl").args(["req", "-x509", "-newkey", "rsa:3072", "-sha256", "-nodes", "-days", "30", "-subj", "/CN=Moss local", "-addext", &format!("subjectAltName={}", sans.join(",")), "-addext", "basicConstraints=critical,CA:FALSE", "-addext", "extendedKeyUsage=serverAuth", "-keyout"])
+    let status = command.args(["req", "-x509", "-newkey", "rsa:3072", "-sha256", "-nodes", "-days", "30", "-subj", "/CN=Moss local", "-addext", &format!("subjectAltName={}", sans.join(",")), "-addext", "basicConstraints=critical,CA:FALSE", "-addext", "extendedKeyUsage=serverAuth", "-keyout"])
         .arg(&key).arg("-out").arg(&cert).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null())
         .status().map_err(|_| "Local certificates need the installed OpenSSL command; alternatively supply a certificate and key")?;
     if !status.success() {
