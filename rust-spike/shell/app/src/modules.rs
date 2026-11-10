@@ -11,10 +11,13 @@ use axum::{
 };
 use moss_module_host::{
     account_preferences::{AccountPreferencesPorts, Binding},
-    ai::Intelligence,
+    ai::{EmbeddingsOnly, FixedEmbeddings, Intelligence, IntelligenceEmbeddings},
     application::{Application, Configuration},
     folder_settings::{FolderSetting, FolderSettingsPorts},
     linked_notes::{LinkedNotesPorts, PreferenceFolder, PreferenceFolders},
+    memory_cleanup::{MemoryCleanupPorts, MemoryCleanupSource},
+    memory_ingest::{MemoryIngestPorts, MemoryIngestSource},
+    memory_search::MemorySearchPorts,
     runtime::{CallScope, Ports, Request},
     worker::Worker,
 };
@@ -50,6 +53,18 @@ pub struct Settings {
     /// Base folder for per-account notes roots (`<base>/<account id>`). Needed by People.
     #[serde(default)]
     pub(crate) notes_base: Option<PathBuf>,
+    /// One OpenAI-style embeddings endpoint for every account. Absent means embeddings fail closed.
+    #[serde(default)]
+    pub(crate) embeddings: Option<EmbeddingSettings>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EmbeddingSettings {
+    url: String,
+    model: String,
+    #[serde(default)]
+    api_key: String,
 }
 
 // AI configuration is not assembled by this checkpoint. Calls fail closed.
@@ -61,6 +76,53 @@ impl Intelligence for UnconfiguredIntelligence {
     fn embed(&self, _: &CallScope, _: &Request) -> Result<Value> {
         anyhow::bail!("Module embeddings are not configured on this server")
     }
+}
+
+/// Notes indexing and search over the account's folder, using the configured embeddings.
+fn memory(
+    database: Database,
+    base: PathBuf,
+    embeddings: Arc<IntelligenceEmbeddings>,
+    next: Arc<dyn Ports>,
+) -> Result<Arc<dyn Ports>> {
+    let key = ("notes".to_string(), "source".to_string());
+    let cleanup = Arc::new(
+        MemoryCleanupPorts::new(
+            database.clone(),
+            BTreeMap::from([(
+                key.clone(),
+                MemoryCleanupSource {
+                    source_kind: "notes".into(),
+                    preference_key: "notes-source-path".into(),
+                    roots: BTreeMap::new(),
+                },
+            )]),
+            next,
+        )?
+        .with_account_base(base.clone()),
+    );
+    let ingest = Arc::new(
+        MemoryIngestPorts::new(
+            database.clone(),
+            embeddings.clone(),
+            BTreeMap::from([(
+                key.clone(),
+                MemoryIngestSource {
+                    source_kind: "notes".into(),
+                    preference_key: "notes-source-path".into(),
+                    roots: BTreeMap::new(),
+                },
+            )]),
+            cleanup,
+        )?
+        .with_account_base(base),
+    );
+    Ok(Arc::new(MemorySearchPorts::new(
+        database,
+        embeddings,
+        BTreeMap::from([(key, "notes".into())]),
+        ingest,
+    )?))
 }
 
 /// Account preference and linked-notes ports for People. Keys, resources and roots are
@@ -178,6 +240,21 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
         anyhow::ensure!(base.is_absolute(), "Notes base needs an absolute path");
     }
     let preferences_database = database.clone();
+    let mut embedding_model = None;
+    let intelligence: Arc<dyn Intelligence> = match settings.embeddings {
+        Some(e) => {
+            embedding_model = Some(e.model.clone());
+            Arc::new(EmbeddingsOnly::new(FixedEmbeddings::new(
+                e.url
+                    .parse()
+                    .map_err(|_| anyhow::anyhow!("Invalid embeddings url"))?,
+                e.model,
+                e.api_key,
+            ))?)
+        }
+        None => Arc::new(UnconfiguredIntelligence),
+    };
+    let notes_intelligence = intelligence.clone();
     let application = Application::open_extended_with(
         &settings.data,
         database,
@@ -186,13 +263,24 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
             migrations: Secret::new(settings.migrations_url),
             producer: Secret::new(settings.producer_url),
             cipher: Arc::new(cipher),
-            intelligence: Arc::new(UnconfiguredIntelligence),
+            intelligence,
             version: "0.1.0".parse()?,
             compiled_cache: None,
             fuel_ceiling: Some(settings.fuel_ceiling.unwrap_or(DEFAULT_FUEL_CEILING)),
         },
         |services| match notes_base {
-            Some(base) => linked_notes(preferences_database, base, services),
+            Some(base) => {
+                let services = match embedding_model {
+                    Some(model) => memory(
+                        preferences_database.clone(),
+                        base.clone(),
+                        Arc::new(IntelligenceEmbeddings::new(notes_intelligence, model)),
+                        services,
+                    )?,
+                    None => services,
+                };
+                linked_notes(preferences_database, base, services)
+            }
             None => Ok(services),
         },
     )?;

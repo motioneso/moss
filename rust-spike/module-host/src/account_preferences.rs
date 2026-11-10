@@ -30,6 +30,10 @@ pub struct AccountPreferencesPorts {
 /// Per-account notes root under a host-owned base: `<base>/<account id>`, created on demand.
 pub fn account_base_root(base: &std::path::Path, actor: Uuid) -> Result<Vec<PathBuf>> {
     let root = base.join(actor.to_string());
+    // A linked account folder could point outside the base or at another account.
+    if std::fs::symlink_metadata(&root).is_ok_and(|m| m.file_type().is_symlink()) {
+        anyhow::bail!("The notes root could not be prepared");
+    }
     private_dir(&root).context("The notes root could not be prepared")?;
     Ok(vec![root])
 }
@@ -188,5 +192,24 @@ impl Ports for AccountPreferencesPorts {
     }
     fn finish_call(&self, scope: &CallScope, success: bool) -> Result<()> {
         self.next.finish_call(scope, success)
+    }
+}
+
+#[cfg(all(test, unix))]
+mod root_tests {
+    use super::account_base_root;
+    use uuid::Uuid;
+
+    #[test]
+    fn a_linked_account_folder_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = dir.path().join("base");
+        let elsewhere = dir.path().join("elsewhere");
+        std::fs::create_dir_all(&base).unwrap();
+        std::fs::create_dir_all(&elsewhere).unwrap();
+        let actor = Uuid::new_v4();
+        std::os::unix::fs::symlink(&elsewhere, base.join(actor.to_string())).unwrap();
+        assert!(account_base_root(&base, actor).is_err());
+        assert!(account_base_root(&base, Uuid::new_v4()).is_ok());
     }
 }
