@@ -139,7 +139,8 @@ impl TransactionalDatabasePorts {
 impl Ports for TransactionalDatabasePorts {
     fn invoke(&self, scope: &CallScope, port: &str, request: &Request) -> Result<Value> {
         let account = crate::account_contracts::handles(port, request);
-        if !account && (port != "db" || request.operation != "query") {
+        let notification = port == "notify";
+        if !account && !notification && (port != "db" || request.operation != "query") {
             return self.next.invoke(scope, port, request);
         }
         crate::runtime::authorize(scope.module(), port, request)?;
@@ -150,12 +151,17 @@ impl Ports for TransactionalDatabasePorts {
         ensure!(!session.failed, "This database invocation already failed");
         let result = self.runtime.block_on(async {
             tokio::time::timeout(scope.remaining(), async {
-                if account {
+                if account || notification {
                     // A previous typed query may have selected a module role.
                     // Account contracts use the original RLS-bound app/worker
                     // role; the actor and invocation transaction stay unchanged.
                     session.context.db().batch_execute("RESET ROLE").await?;
-                    crate::account_contracts::invoke(&session.context, scope, port, request).await
+                    if notification {
+                        crate::notifications::post(&session.context, scope, request).await
+                    } else {
+                        crate::account_contracts::invoke(&session.context, scope, port, request)
+                            .await
+                    }
                 } else {
                     self.query(&session.context, scope, request).await
                 }
