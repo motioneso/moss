@@ -78,6 +78,12 @@ impl Host for Services {
             }
             ("context", "read", "call") => json!({"now":"2026-11-09T12:00:00Z"}),
             ("context", "uuid", "new") => json!({"id":ID}),
+            ("db", "query", "app.notes_sync_checkpoints")
+                if params["kind"] == "delete" || params["kind"] == "select" =>
+            {
+                // Tick maintenance: retention delete and recovery scan find nothing.
+                json!([])
+            }
             ("db", "query", "app.notes_sync_checkpoints") => {
                 assert_eq!(params["kind"], "insert");
                 assert_eq!(
@@ -189,13 +195,27 @@ fn unlinking_cancels_the_schedule_and_linking_keeps_it() {
                 ("vault", _) => json!({"status":200,"body":null}),
                 ("jobs", "schedule") => json!({"id":ID}),
                 ("jobs", "unschedule") => json!({"cancelled":true}),
+                // Unlink maintenance finds nothing to clean.
+                ("context", "read") => json!({"now":"2026-11-09T12:00:00Z"}),
+                ("db", "query") => json!([]),
                 _ => panic!("unexpected {port}/{op}"),
             })
         }
     }
     for (path, expected) in [
         (json!("/notes"), vec!["vault/folder.set", "jobs/schedule"]),
-        (Value::Null, vec!["vault/folder.set", "jobs/schedule", "jobs/unschedule"]),
+        (
+            Value::Null,
+            vec![
+                "vault/folder.set",
+                "context/read",
+                "db/query",
+                "db/query",
+                "context/read",
+                "jobs/schedule",
+                "jobs/unschedule",
+            ],
+        ),
     ] {
         let host = Calls(RefCell::new(vec![]));
         handle(
@@ -206,4 +226,44 @@ fn unlinking_cancels_the_schedule_and_linking_keeps_it() {
         .unwrap();
         assert_eq!(*host.0.borrow(), expected);
     }
+}
+
+#[test]
+fn tick_deletes_old_checkpoints_and_republishes_unfinished_ones() {
+    struct Maintenance(RefCell<Vec<Value>>);
+    impl Host for Maintenance {
+        fn call(&self, port: &str, op: &str, resource: &str, params: Value) -> Result<Value> {
+            Ok(match (port, op, resource) {
+                ("context", "read", "call") => json!({"now":"2026-11-09T12:00:00Z"}),
+                ("db", "query", "app.notes_sync_checkpoints") if params["kind"] == "delete" => {
+                    self.0.borrow_mut().push(params);
+                    json!([])
+                }
+                ("db", "query", "app.notes_sync_checkpoints") if params["kind"] == "select" => {
+                    json!([
+                        {"id":ID,"checkpoint":{"sourcePath":"/private"}},
+                        {"id":"00000000-0000-4000-8000-000000000002",
+                         "checkpoint":{"workerResult":{"ingested":1,"skipped":0,"errors":0}}}
+                    ])
+                }
+                ("jobs", "enqueue-after-commit", "notes.sync") => {
+                    self.0.borrow_mut().push(params);
+                    json!({"deferred":true})
+                }
+                ("vault", "folder.get", "source") => json!({"status":200,"body":""}),
+                _ => panic!("Unexpected maintenance access: {port}/{op}/{resource}"),
+            })
+        }
+    }
+    let host = Maintenance(RefCell::new(vec![]));
+    let out = handle(&host, "job", r#"{"queue":"notes.sync-tick","parameters":{}}"#).unwrap();
+    assert_eq!(serde_json::from_str::<Value>(&out).unwrap(), json!({"noOp":true}));
+    let calls = host.0.borrow();
+    let delete = &calls[0];
+    assert_eq!(delete["filter"]["column"], "created_at");
+    assert_eq!(delete["filter"]["value"], "2026-11-08T12:00:00Z");
+    // Only the unfinished checkpoint is published again, with its own identity.
+    let publishes: Vec<_> = calls.iter().filter(|c| c.get("idempotencyKey").is_some()).collect();
+    assert_eq!(publishes.len(), 1);
+    assert_eq!(publishes[0]["idempotencyKey"], ID);
 }

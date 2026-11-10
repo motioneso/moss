@@ -754,7 +754,7 @@ No host additions, permissions, SQL or screen changes are introduced.
 
 Full Notes acceptance still requires assembled chat approval and writes,
 configured embeddings, production manual/scheduled sync and worker delivery,
-singleton coalescing and recall warmup, automatic recovery/retention,
+singleton coalescing and recall warmup,
 managed publication/fencing/reconciliation, private exports/daily archives,
 complete path/HTTP parity, assembled Settings/chat and a physical second-device
 HTTPS check. This remains a checkpoint, not a replacement for working legacy Notes.

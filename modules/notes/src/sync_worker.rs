@@ -65,6 +65,8 @@ fn schedule(host: &impl Host) -> Result<Value> {
 /// Cancels the account's schedule when the folder is unlinked. The keyed
 /// schedule call is idempotent and returns the stable row id to cancel.
 pub(crate) fn cancel_schedule(host: &impl Host) {
+    // No tick will run for this account again until it relinks, so clean up now.
+    crate::sync_recovery::maintain(host);
     let Ok(saved) = schedule(host) else { return };
     if let Some(id) = saved["id"].as_str() {
         let _ = host.call("jobs", "unschedule", TICK, json!({"id":id}));
@@ -74,6 +76,7 @@ pub(crate) fn cancel_schedule(host: &impl Host) {
 /// A scheduled tick requests a fresh checkpoint for the linked folder. With no
 /// folder linked it does nothing, so unlinking needs no schedule cancellation.
 fn tick(host: &impl Host) -> Result<String> {
+    crate::sync_recovery::maintain(host);
     let Some(source) = selected_source(host)? else {
         return Ok(json!({"noOp":true}).to_string());
     };

@@ -1,5 +1,9 @@
 # Notes package
 
+## 0.1.20
+
+- Notes now cleans up after itself. Every fifteen minutes it retries any sync request that did not finish starting, and it removes saved sync requests older than a day, so a crash or a brief outage no longer leaves a sync stuck forever.
+
 ## 0.1.19
 
 - The chat module can now save a day's conversations as one file in your linked notes folder. A file of your own with the same name is never changed; the archive is saved beside it instead. Turning this on from chat settings is not available yet.
