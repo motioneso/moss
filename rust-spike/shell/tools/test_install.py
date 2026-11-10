@@ -123,7 +123,7 @@ class InstallTests(unittest.TestCase):
         self.assertEqual(list(self.root.glob(".moss-stage-*")), [])
 
     def test_runtime_executes_real_openssl_with_its_configuration(self):
-        for name in ("moss-shell", "moss-db"):
+        for name in ("moss-app", "moss-shell", "moss-db"):
             shutil.copy2("/bin/true", self.install / name)
         (self.install / "postgres").mkdir()
         stage_runtime(self.install, Path("/usr/bin/openssl"), Path("/etc/ssl/certs/ca-certificates.crt"))
@@ -135,7 +135,7 @@ class InstallTests(unittest.TestCase):
         mixed.write_bytes((self.root / "cert.pem").read_bytes() + (self.root / "key.pem").read_bytes())
         unsafe = self.root / "unsafe"
         unsafe.mkdir()
-        for name in ("moss-shell", "moss-db"):
+        for name in ("moss-app", "moss-shell", "moss-db"):
             shutil.copy2("/bin/true", unsafe / name)
         (unsafe / "postgres").mkdir()
         with self.assertRaisesRegex(ValueError, "public certificate bundle"):
@@ -153,6 +153,21 @@ class InstallTests(unittest.TestCase):
         library.unlink()
         with self.assertRaisesRegex(ValueError, "Unresolved"):
             dependencies(program)
+
+    def test_launcher_runs_app_and_children_with_bundled_environment(self):
+        source = self.root / "environment.c"
+        source.write_text('#include <stdio.h>\n#include <stdlib.h>\nint main(int argc, char **argv) { puts(getenv("LD_LIBRARY_PATH")); puts(getenv("OPENSSL_CONF")); for (int i=1; i<argc; ++i) puts(argv[i]); return 0; }')
+        subprocess.run(["cc", str(source), "-o", str(self.install / "moss-app")], check=True)
+        for name in ("moss-shell", "moss-db"):
+            shutil.copy2(self.install / "moss-app", self.install / name)
+        (self.install / "postgres").mkdir()
+        stage_runtime(self.install, Path("/usr/bin/openssl"), Path("/etc/ssl/certs/ca-certificates.crt"))
+        for name in ("moss-app", "moss-shell", "moss-db"):
+            result = subprocess.run([str(self.install / "moss-run"), name, "--data", "folder with spaces", "$literal"], text=True, capture_output=True, check=True)
+            self.assertEqual(result.stdout.splitlines(), [
+                f"{self.install}/runtime/lib:{self.install}/postgres/lib",
+                f"{self.install}/runtime/ssl/openssl.cnf",
+                "--data", "folder with spaces", "$literal"])
 
     def test_postgres_style_plugin_finds_its_bundled_library(self):
         source = self.root / "plugin.c"

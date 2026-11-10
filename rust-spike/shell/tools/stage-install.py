@@ -80,7 +80,7 @@ def main() -> None:
     for name in ("dist", "postgres", "out"):
         parser.add_argument("--" + name, type=Path, required=True)
     parser.add_argument("--linux-server-runtime", action="store_true",
-                        help="Include the build platform's headless ELF/OpenSSL/CA closure (not WebKit)")
+                        help="Include linked app/server ELF libraries and OpenSSL/CA files (not WebKit helpers/resources)")
     parser.add_argument("--openssl", type=Path, default=Path("/usr/bin/openssl"))
     parser.add_argument("--ca-bundle", type=Path, default=Path("/etc/ssl/certs/ca-certificates.crt"))
     args = parser.parse_args()

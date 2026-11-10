@@ -25,7 +25,8 @@ fn local_start_lock_errors_are_not_reported_as_a_busy_app() {
 #[test]
 fn server_program_uses_the_platform_executable_suffix() {
     let install = Path::new("installation with spaces");
-    let program = server_program(install);
+    let command = crate::launch::command(install, "moss-shell");
+    let program = Path::new(command.get_program());
     assert_eq!(program.parent(), Some(install));
     assert_eq!(program.file_stem().unwrap(), "moss-shell");
     #[cfg(windows)]

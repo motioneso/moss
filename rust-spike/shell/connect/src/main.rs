@@ -6,9 +6,12 @@
 //! page load that arrived over a different one (see `trust_on_linux`).
 
 mod desktop;
+mod launch;
 mod pin;
 mod provision;
 mod reach;
+#[cfg(all(test, target_os = "linux"))]
+mod runtime_proof;
 mod store;
 
 #[cfg(target_os = "linux")]

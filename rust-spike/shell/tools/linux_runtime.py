@@ -1,4 +1,4 @@
-"""Unsigned Linux server runtime closure, assembled from trusted build-machine binaries.
+"""Unsigned Linux linked-library closure from trusted build-machine binaries.
 
 This is not the native WebKit app closure or a cross-distribution installer. The target
 needs the build platform's ELF interpreter ABI and /bin/sh. ldd executes trusted inputs.
@@ -51,7 +51,8 @@ def stage_runtime(install: Path, openssl: Path, ca_bundle: Path) -> None:
     if not locale.is_dir():
         raise ValueError("Build platform has no C.utf8 locale data for PostgreSQL")
     shutil.copytree(locale, runtime / "locale/C.utf8")
-    programs = [install / "moss-shell", install / "moss-db", runtime / "bin/openssl"]
+    programs = [install / name for name in ("moss-app", "moss-shell", "moss-db")]
+    programs += [runtime / "bin/openssl"]
     # PostgreSQL extensions are dlopen inputs, so ldd on postgres alone is insufficient.
     programs += [path for path in (install / "postgres").rglob("*") if elf(path)]
     interpreters = set()
@@ -69,7 +70,8 @@ def stage_runtime(install: Path, openssl: Path, ca_bundle: Path) -> None:
                 interpreters.add(str(dependency))
     (runtime / "closure.json").write_text(json.dumps({
         "format": 1,
-        "scope": "linux-server-only",
+        "scope": "linux-linked-elf",
+        "not_included": ["native WebKit helpers and desktop resources"],
         "kernel_interpreters": sorted(interpreters),
         "requires": ["build-platform ELF interpreter ABI", "/bin/sh"],
         "libraries": sorted(path.name for path in libraries.iterdir()),
@@ -89,9 +91,9 @@ export SSL_CERT_FILE="$root/runtime/ssl/ca-certificates.crt"
 export SSL_CERT_DIR="$root/runtime/ssl"
 export LOCPATH="$root/runtime/locale"
 case "${1-}" in
-  moss-shell|moss-db) program=$1; shift; exec "$root/$program" "$@" ;;
+  moss-app|moss-shell|moss-db) program=$1; shift; exec "$root/$program" "$@" ;;
   openssl) shift; exec "$root/runtime/bin/openssl" "$@" ;;
-  *) echo "usage: moss-run {moss-shell|moss-db|openssl} [arguments...]" >&2; exit 2 ;;
+  *) echo "usage: moss-run {moss-app|moss-shell|moss-db|openssl} [arguments...]" >&2; exit 2 ;;
 esac
 ''')
     launcher.chmod(0o755)

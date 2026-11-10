@@ -342,6 +342,20 @@ fn alive(_pid: u32) -> bool {
 /// retry waits for one that is still starting instead of starting another.
 static STARTED: std::sync::Mutex<Vec<(PathBuf, Child)>> = std::sync::Mutex::new(Vec::new());
 
+#[cfg(all(test, target_os = "linux"))]
+pub(crate) fn stop_test_children(root: &Path) {
+    let mut started = STARTED.lock().unwrap_or_else(|e| e.into_inner());
+    started.retain_mut(|(folder, child)| {
+        if folder.starts_with(root) {
+            let _ = child.kill();
+            let _ = child.wait();
+            false
+        } else {
+            true
+        }
+    });
+}
+
 /// Whether a server this app started for the folder is still running. Reaps those that exited.
 fn still_running(folder: &Path) -> bool {
     let mut started = STARTED.lock().unwrap_or_else(|e| e.into_inner());
@@ -366,7 +380,7 @@ fn start_local(install: &Path, folder: &Path) -> Result<(), Problem> {
             .open(folder.join("server.log"))
             .map_err(|_| Problem::DidNotStart)?
     };
-    let mut command = std::process::Command::new(server_program(install));
+    let mut command = crate::launch::command(install, "moss-shell");
     command
         .arg("serve")
         .arg("--instance")
@@ -405,10 +419,6 @@ fn start_lock(folder: &Path) -> Result<Option<std::fs::File>, Problem> {
     portability::file_lock::try_exclusive(&file)
         .map(|acquired| acquired.then_some(file))
         .map_err(|_| Problem::DidNotStart)
-}
-
-fn server_program(install: &Path) -> PathBuf {
-    install.join(format!("moss-shell{}", std::env::consts::EXE_SUFFIX))
 }
 
 /// Finds the local server, starting it if no one else is. The lock is released on return.
