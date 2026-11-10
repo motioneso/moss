@@ -93,13 +93,15 @@ jobs:
         run: cargo +1.95.0 test --locked --manifest-path rust-spike/Cargo.toml -p bundled-db --lib
       - name: Check the page-link hand-off between alert, notifier and window
         if: runner.os != 'Linux'
-        run: cargo +1.95.0 test --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-app link:: -- --nocapture
+        run: |
+          cargo +1.95.0 test --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-app link:: -- --nocapture
       - name: Check that a clicked Windows balloon asks the window app for its page
         if: runner.os == 'Windows'
         run: cargo +1.95.0 test --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-app balloon_click_opens_the_page_the_alert_carries -- --nocapture
       - name: Check that a clicked macOS alert asks the window app for its page
         if: runner.os == 'macOS'
-        run: cargo +1.95.0 test --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-app desktop::macos::tests -- --nocapture
+        run: |
+          cargo +1.95.0 test --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-app desktop::macos::tests -- --nocapture
       - name: Check the Windows stop request file against a real HTTPS server
         if: runner.os == 'Windows'
         shell: pwsh

@@ -39,7 +39,9 @@ const inst = join(scratch, "instance");
 const data = join(scratch, "app-data");
 const install = join(scratch, "install");
 const certificate = join(inst, "tls/certificate.pem");
-const web = join(scratch, "web");
+// With CLICK_WEB set, the server serves that real web build and the proof reads the real pages.
+const realWeb = process.env.CLICK_WEB;
+const web = realWeb ?? join(scratch, "web");
 const display = `:${90 + (process.pid % 500)}`;
 const bus = `unix:path=${join(scratch, "bus")}`;
 const daemonLog = join(scratch, "alerts.jsonl");
@@ -160,6 +162,19 @@ function pageColour() {
         ? "today"
         : "other";
 }
+// A 32x24 grey thumbnail of the screen, to tell real pages apart without reading their text.
+function signature() {
+  const xwd = join(scratch, "sig.xwd");
+  sh("xwd", ["-root", "-silent", "-out", xwd]);
+  return execFileSync("ffmpeg", [
+    "-loglevel", "error", "-i", xwd, "-vf", "scale=32:24:flags=area,format=gray", "-f", "rawvideo", "-"
+  ]);
+}
+function distance(a: Buffer, b: Buffer) {
+  let total = 0;
+  for (let i = 0; i < a.length; i++) total += Math.abs(a[i] - b[i]);
+  return total / a.length;
+}
 function moss(args: string[], log: string) {
   return launch(join(target, "debug/moss-app"), [...args], log);
 }
@@ -183,13 +198,14 @@ async function startServer() {
 
 try {
   for (const d of [web, install, join(install, "web"), inst]) mkdirSync(d, { recursive: true });
+  if (realWeb) assert(existsSync(join(realWeb, "app.js")) || existsSync(join(realWeb, "index.html")), "CLICK_WEB must hold a built web app");
   mkdirSync(data, { mode: 0o700 }); // the app refuses a data folder others can read
-  writeFileSync(
+  if (!realWeb) writeFileSync(
     join(web, "index.html"),
     `<!doctype html><title>Moss proof page</title><body style="font:64px sans-serif;padding:40px">` +
       `<div>PAGE:</div><div id=p></div><script src="/page.js"></script>`
   );
-  writeFileSync(
+  if (!realWeb) writeFileSync(
     join(web, "page.js"),
     `document.getElementById("p").textContent=location.pathname;` +
       `document.body.style.background=({"/tasks":"#f00","/notes":"#0f0","/today":"#00f"})[location.pathname]||"#fff"`
@@ -303,7 +319,7 @@ try {
 
   // 1. No window is open. A clicked alert starts one on the right server and page.
   await post("Proof one", "/tasks");
-  await post("Proof two", "/notes");
+  await post("Proof two", realWeb ? "/modules" : "/notes");
   const first = await until("first alert", () => alerts().find((a) => a.title === "Proof one"));
   assert.deepEqual(first.actions, ["default", "Open"], "the alert offers a click action");
   assert.equal(windows().length, 0, "no window before the click");
@@ -332,17 +348,49 @@ try {
   }
   await delay(3000);
   shot("2-after-sign-in");
-  assert.equal(pageColour(), "today", "signed in, the window shows the landing page");
+  const todayLook = realWeb ? signature() : undefined;
+  if (!realWeb) assert.equal(pageColour(), "today", "signed in, the window shows the landing page");
 
   // 2. Window open and signed in: a click on a second alert switches the page, no second window.
   const before = windows().length;
-  click(alerts().find((a) => a.title === "Proof two")!.id);
-  await until("page switch", () => !existsSync(requestFile));
-  await delay(2500);
-  shot("3-after-second-click");
-  for (let i = 0; i < 10 && pageColour() !== "notes"; i++) await delay(1000);
-  shot("3b-later");
-  assert.equal(pageColour(), "notes", "the click moved the open window to the alert's page");
+  if (!realWeb) {
+    click(alerts().find((a) => a.title === "Proof two")!.id);
+    await until("page switch", () => !existsSync(requestFile));
+    await delay(2500);
+    shot("3-after-second-click");
+    for (let i = 0; i < 10 && pageColour() !== "notes"; i++) await delay(1000);
+    shot("3b-later");
+    assert.equal(pageColour(), "notes", "the click moved the open window to the alert's page");
+  } else {
+    // The real pages. Each click must change the window to a different page, and the link back
+    // to Today must bring Today back. Pictures are kept for a person to read.
+    const visit = async (title: string, name: string) => {
+      click(alerts().find((a) => a.title === title)!.id);
+      await until(`${name} request taken`, () => !existsSync(requestFile));
+      await delay(4000);
+      shot(name);
+      return signature();
+    };
+    const modulesLook = await visit("Proof two", "3-modules-page");
+    assert(distance(modulesLook, todayLook!) > 2, "the Modules link changed the page");
+    await post("Proof three", "/tasks");
+    await until("third alert", () => alerts().find((a) => a.title === "Proof three"));
+    const tasksLook = await visit("Proof three", "4-tasks-link");
+    assert(distance(tasksLook, modulesLook) > 2, "the Tasks link changed the page again");
+    await post("Proof four", "/today");
+    await until("fourth alert", () => alerts().find((a) => a.title === "Proof four"));
+    const backLook = await visit("Proof four", "5-today-again");
+    assert(distance(backLook, tasksLook) > 2, "the Today link left the Tasks page");
+    assert(distance(backLook, todayLook!) < distance(backLook, modulesLook), "Today came back");
+    console.log(
+      "PAGE-DISTANCES",
+      JSON.stringify({
+        todayVsModules: distance(modulesLook, todayLook!),
+        modulesVsTasks: distance(tasksLook, modulesLook),
+        todayVsBack: distance(backLook, todayLook!)
+      })
+    );
+  }
   assert.equal(windows().length, before, "no second window");
   console.log("PASS click with the window open routes it without a second window");
 
