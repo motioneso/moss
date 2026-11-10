@@ -37,6 +37,7 @@ pub struct MemoryIngestPorts {
     embeddings: Arc<dyn DocumentEmbeddings>,
     sources: BTreeMap<(String, String), MemoryIngestSource>,
     next: Arc<dyn Ports>,
+    account_base: Option<PathBuf>,
 }
 
 #[derive(Deserialize)]
@@ -300,6 +301,11 @@ fn cap_chunk_size(section: &str) -> Vec<String> {
 }
 
 impl MemoryIngestPorts {
+    /// Accounts without explicit roots get `<base>/<account id>`.
+    pub fn with_account_base(mut self, base: PathBuf) -> Self {
+        self.account_base = Some(base);
+        self
+    }
     pub fn new(
         database: Database,
         embeddings: Arc<dyn DocumentEmbeddings>,
@@ -311,6 +317,7 @@ impl MemoryIngestPorts {
             embeddings,
             sources,
             next,
+            account_base: None,
             runtime: tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(2)
                 .enable_all()
@@ -350,11 +357,11 @@ impl MemoryIngestPorts {
                 .map_err(|_| anyhow::anyhow!("Memory commit failed"))?;
             return Ok(None);
         };
-        let roots = source
-            .roots
-            .get(&scope.access().actor_user_id())
-            .cloned()
-            .unwrap_or_default();
+        let roots = account_roots(
+            &source.roots,
+            self.account_base.as_deref(),
+            scope.access().actor_user_id(),
+        );
         ensure!(!roots.is_empty(), "Notes roots are not configured");
         let allowed = AllowedRoots::for_account(scope.access(), roots);
         let folder = VaultContext::at_allowed_root(scope.access(), Path::new(&saved), &allowed)?;
@@ -382,11 +389,11 @@ impl MemoryIngestPorts {
                     return Ok(json!({"sourcePath": null}));
                 };
                 if let Some(path) = input.source_path.as_deref().filter(|p| !p.is_empty()) {
-                    let roots = source
-                        .roots
-                        .get(&scope.access().actor_user_id())
-                        .cloned()
-                        .unwrap_or_default();
+                    let roots = account_roots(
+                        &source.roots,
+                        self.account_base.as_deref(),
+                        scope.access().actor_user_id(),
+                    );
                     ensure!(!roots.is_empty(), "Notes roots are not configured");
                     let allowed = AllowedRoots::for_account(scope.access(), roots);
                     let requested =
@@ -524,7 +531,7 @@ impl MemoryIngestPorts {
                 ).await?.context("Notes source is not configured")?;
                 let saved: Value = row.get(0);
                 let saved = saved.as_str().filter(|s| !s.is_empty()).context("Notes source is not configured")?;
-                let roots = source.roots.get(&actor).cloned().unwrap_or_default();
+                let roots = account_roots(&source.roots, self.account_base.as_deref(), actor);
                 ensure!(!roots.is_empty(), "Notes roots are not configured");
                 let allowed = AllowedRoots::for_account(scope.access(), roots);
                 let folder = VaultContext::at_allowed_root(scope.access(), Path::new(saved), &allowed)?;
@@ -624,6 +631,21 @@ impl Ports for MemoryIngestPorts {
     }
     fn finish_call(&self, scope: &CallScope, success: bool) -> Result<()> {
         self.next.finish_call(scope, success)
+    }
+}
+
+/// Explicit roots win; otherwise the account's own folder under the server's notes base.
+pub(crate) fn account_roots(
+    roots: &BTreeMap<Uuid, Vec<PathBuf>>,
+    base: Option<&Path>,
+    actor: Uuid,
+) -> Vec<PathBuf> {
+    match (roots.get(&actor), base) {
+        (Some(explicit), _) => explicit.clone(),
+        (None, Some(base)) => {
+            crate::account_preferences::account_base_root(base, actor).unwrap_or_default()
+        }
+        _ => Vec::new(),
     }
 }
 
