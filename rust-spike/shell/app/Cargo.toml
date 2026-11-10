@@ -18,3 +18,7 @@ tower-http = { version = "0.6", features = ["fs"] }
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 tokio-postgres = "0.7"
+async-trait = "0.1"
+moss-platform-contracts = { path = "../../module-host/bridges/contracts" }
+moss-platform-routing = { path = "../../module-host/bridges/routing" }
+moss-platform-adapters = { path = "../../module-host/bridges/adapters" }

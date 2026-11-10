@@ -318,6 +318,7 @@ fn credentials(options: &Options) -> Result<ExitCode, String> {
     if options.module_host {
         out["migrations_url"] = json!(url("jarvis_migration_owner")?);
         out["worker_url"] = json!(url("jarvis_worker_runtime")?);
+        out["ai_key"] = json!(generated("ai-key")?);
     }
     // Creating a module's database roles needs more than the migration owner may do, so the
     // one-shot installer asks for the superuser URL. It keeps it in memory and never files it.

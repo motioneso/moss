@@ -12,6 +12,7 @@
     "test:rust-linux-desktop": "python3 rust-spike/shell/tools/proof_linux_desktop.py",
     "test:rust-tasks-jobs": "bash modules/tasks/tools/job-gate.sh",
     "test:rust-people-large": "bash modules/people/tools/large-data-gate.sh",
+    "test:rust-module-ai": "tsx rust-spike/module-host/tools/ai-server-gate.ts",
     "test:rust-tasks-server": "tsx rust-spike/module-host/tools/tasks-server-gate.ts",
     "test:rust-notes-server": "tsx modules/notes/tools/server-gate.ts",
     "test:rust-people-server": "tsx rust-spike/module-host/tools/people-server-gate.ts",

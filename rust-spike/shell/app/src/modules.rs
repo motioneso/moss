@@ -45,6 +45,9 @@ pub struct Settings {
     pub(crate) producer_url: String,
     pub(crate) worker_url: String,
     pub(crate) connector_key: String,
+    /// Opens stored AI provider credentials. Absent means module AI fails closed.
+    #[serde(default)]
+    pub(crate) ai_key: Option<String>,
     #[serde(default)]
     pub(crate) fuel_ceiling: Option<u64>,
     /// Base folder for per-account notes roots (`<base>/<account id>`). Needed by People.
@@ -52,7 +55,7 @@ pub struct Settings {
     pub(crate) notes_base: Option<PathBuf>,
 }
 
-// AI configuration is not assembled by this checkpoint. Calls fail closed.
+// Used when the instance has no AI key. Calls fail closed.
 struct UnconfiguredIntelligence;
 impl Intelligence for UnconfiguredIntelligence {
     fn generate(&self, _: &CallScope, _: &Request) -> Result<Value> {
@@ -178,6 +181,14 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
         anyhow::ensure!(base.is_absolute(), "Notes base needs an absolute path");
     }
     let preferences_database = database.clone();
+    let intelligence: Arc<dyn Intelligence> = match &settings.ai_key {
+        Some(key) => crate::module_ai::intelligence(
+            database.clone(),
+            SecretCipher::ai(&[("JARVIS_AI_SECRET_KEY".into(), key.clone())].into())
+                .map_err(|_| anyhow::anyhow!("Invalid module AI key"))?,
+        )?,
+        None => Arc::new(UnconfiguredIntelligence),
+    };
     let application = Application::open_extended_with(
         &settings.data,
         database,
@@ -186,7 +197,7 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
             migrations: Secret::new(settings.migrations_url),
             producer: Secret::new(settings.producer_url),
             cipher: Arc::new(cipher),
-            intelligence: Arc::new(UnconfiguredIntelligence),
+            intelligence,
             version: "0.1.0".parse()?,
             compiled_cache: None,
             fuel_ceiling: Some(settings.fuel_ceiling.unwrap_or(DEFAULT_FUEL_CEILING)),

@@ -24,6 +24,7 @@ use safety_core::access::AccessContext;
 use tower_http::services::ServeDir;
 
 mod desktop_notices;
+mod module_ai;
 mod module_install;
 mod modules;
 mod runner_data;
