@@ -10,3 +10,4 @@ chmod 700 "$NOTES_UI_OUT"
 cargo +1.95.0 build --locked --offline --manifest-path modules/notes/tools/Cargo.toml --bin notes-ui-check
 python3 rust-spike/module-ui/build-assets.py "$NOTES_UI_OUT/shared"
 pnpm exec tsx modules/notes/tools/ui-gate.ts
+# proof
