@@ -13,6 +13,7 @@
     "test:rust-tasks-jobs": "bash modules/tasks/tools/job-gate.sh",
     "test:rust-people-large": "bash modules/people/tools/large-data-gate.sh",
     "test:rust-tasks-server": "tsx rust-spike/module-host/tools/tasks-server-gate.ts",
+    "test:rust-notes-server": "tsx modules/notes/tools/server-gate.ts",
     "test:rust-people-server": "tsx rust-spike/module-host/tools/people-server-gate.ts",
     "test:rust-module-assembly": "tsx rust-spike/module-host/tools/assembly-gate.ts",
     "test:module-enqueue-options": "tsx rust-spike/module-host/tools/enqueue-options-gate.ts",
