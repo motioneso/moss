@@ -1,5 +1,7 @@
 //! Notes guest. Domain operations are pure; host access uses only the module SDK.
 pub mod blocks;
+#[cfg(feature = "write-tools")]
+pub mod daily_archive;
 pub mod export;
 pub mod guest;
 pub mod identity;

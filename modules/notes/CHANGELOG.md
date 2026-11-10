@@ -1,5 +1,9 @@
 # Notes package
 
+## 0.1.19
+
+- The chat module can now save a day's conversations as one file in your linked notes folder. A file of your own with the same name is never changed; the archive is saved beside it instead. Turning this on from chat settings is not available yet.
+
 ## 0.1.18
 
 - Other modules can now save a versioned private copy of a note into your own private area, and check whether a copy exists. Copies are never overwritten and never appear in your linked notes folder. Indexing of these copies is not available yet.

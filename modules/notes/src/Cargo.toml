@@ -64,3 +64,8 @@ required-features = ["write-tools"]
 name = "private_export"
 path = "tests/private_export.rs"
 required-features = ["write-tools"]
+
+[[test]]
+name = "daily_archive"
+path = "tests/daily_archive.rs"
+required-features = ["write-tools"]
