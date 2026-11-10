@@ -80,7 +80,7 @@ impl ConfigurationStore for AiStore {
             let id: Uuid = p.get(0);
             let active = p.get::<_, String>(1) == "active";
             let assistant = p.get::<_, String>(2) == "assistant";
-            if p.get::<_, bool>(4) && assistant && active {
+            if p.get::<_, bool>(4) && assistant {
                 config.default_provider = Some(id);
             }
             config.providers.push(Provider {

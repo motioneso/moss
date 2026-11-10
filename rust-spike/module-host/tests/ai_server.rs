@@ -314,6 +314,24 @@ fn modules_ask_the_router_and_fail_closed_until_a_provider_exists() {
     let (status, body) = interpret();
     assert_eq!(status, 503, "a disabled provider must fail closed: {body}");
     assert_eq!(requests.lock().unwrap().len(), 1);
+    // A disabled explicit default must not hand the request to another active provider.
+    let other: uuid::Uuid = uuid::Uuid::new_v4();
+    let other_model: uuid::Uuid = uuid::Uuid::new_v4();
+    runtime.block_on(async {
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(async move { let _ = connection.await; });
+        db.execute(
+            "INSERT INTO app.ai_provider_configs(id,owner_user_id,provider_kind,display_name,base_url,encrypted_credential) VALUES($1,$2,'openai-compatible','Second provider',$3,$4)",
+            &[&other, &owner, &format!("http://127.0.0.1:{provider_port}"), &sealed],
+        ).await.unwrap();
+        db.execute(
+            "INSERT INTO app.ai_configured_models(id,provider_config_id,owner_user_id,provider_model_id,display_name,capabilities) VALUES($1,$2,$3,'other-model-189','Other model',ARRAY['chat','json'])",
+            &[&other_model, &other, &owner],
+        ).await.unwrap();
+    });
+    let (status, body) = interpret();
+    assert_eq!(status, 503, "a disabled default must not fall back to another provider: {body}");
+    assert_eq!(requests.lock().unwrap().len(), 1);
     let log = fs::read_to_string(root.join("server.log")).unwrap_or_default();
     assert!(!log.contains("TEST-NOT-A-REAL-KEY-189"));
     println!("PASS module AI over HTTPS: 401 signed out, 503 with no provider (nothing sent), 200 after the owner's provider exists with the stored key opened and the chosen model sent, 503 again once it is disabled");

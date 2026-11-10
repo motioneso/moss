@@ -22,6 +22,10 @@
 - Fixed: provisioning asked for an AI key name the private credential store rejected, so bundled setup would have failed. The name is now allowed and covered by the credential unit test.
 - Kept by design: an account with no provider of its own may use a provider created by an active admin, as the existing database rules and the TypeScript router already allow (admin-owned providers are the shared default). Personal providers stay owner-only.
 
+## Review round 2
+
+- Fixed: a disabled default provider could hand requests to another active admin provider. The default flag is now kept even when disabled, so routing fails closed. The live gate now adds a second active provider and checks for 503.
+
 ## Live proof
 
 Gate `pnpm test:rust-module-ai`, real HTTPS server, throwaway Postgres, local fake provider.
