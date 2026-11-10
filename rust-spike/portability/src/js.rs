@@ -64,14 +64,20 @@ fn hex_digit(c: u8) -> Option<u8> {
 pub fn is_space(c: char) -> bool {
     matches!(
         c,
-        '\t' | '\n' | '\u{b}' | '\u{c}' | '\r' | ' ' | '\u{a0}' | '\u{1680}' | '\u{2000}'
-            ..='\u{200a}'
-                | '\u{2028}'
-                | '\u{2029}'
-                | '\u{202f}'
-                | '\u{205f}'
-                | '\u{3000}'
-                | '\u{feff}'
+        '\t' | '\n'
+            | '\u{b}'
+            | '\u{c}'
+            | '\r'
+            | ' '
+            | '\u{a0}'
+            | '\u{1680}'
+            | '\u{2000}'..='\u{200a}'
+            | '\u{2028}'
+            | '\u{2029}'
+            | '\u{202f}'
+            | '\u{205f}'
+            | '\u{3000}'
+            | '\u{feff}'
     )
 }
 
@@ -88,9 +94,7 @@ pub fn cmp_utf16(a: &str, b: &str) -> Ordering {
 /// `JSON.parse`. Lone surrogates become U+FFFD; the flag says whether that happened.
 pub fn parse_json(text: &str) -> Result<(Value, bool), String> {
     let (text, replaced) = replace_lone_surrogate_escapes(text);
-    serde_json::from_str(&text)
-        .map(|value| (value, replaced))
-        .map_err(|error| error.to_string())
+    serde_json::from_str(&text).map(|value| (value, replaced)).map_err(|error| error.to_string())
 }
 
 /// Rewrites `\uD800`-style escapes that do not form a pair, which `JSON.parse` accepts and
@@ -153,11 +157,7 @@ pub fn entries(object: &Map<String, Value>) -> Vec<(&String, &Value)> {
         }
     }
     indexed.sort_by_key(|(index, _)| *index);
-    indexed
-        .into_iter()
-        .map(|(_, entry)| entry)
-        .chain(named)
-        .collect()
+    indexed.into_iter().map(|(_, entry)| entry).chain(named).collect()
 }
 
 fn array_index(key: &str) -> Option<u32> {
@@ -189,13 +189,7 @@ pub fn to_js_string(value: Option<&Value>) -> String {
         Some(Value::String(text)) => text.clone(),
         Some(Value::Array(items)) => items
             .iter()
-            .map(|item| {
-                if item.is_null() {
-                    String::new()
-                } else {
-                    to_js_string(Some(item))
-                }
-            })
+            .map(|item| if item.is_null() { String::new() } else { to_js_string(Some(item)) })
             .collect::<Vec<_>>()
             .join(","),
         Some(Value::Object(_)) => "[object Object]".to_string(),
@@ -208,7 +202,8 @@ mod tests {
 
     #[test]
     fn lone_surrogate_escapes_become_replacement_characters() {
-        let (value, replaced) = parse_json(r#"{"a":"x\ud800y","b":"😀","c":"\\ud800"}"#).unwrap();
+        let (value, replaced) = parse_json(r#"{"a":"x\ud800y","b":"😀","c":"\\ud800"}"#)
+            .unwrap();
         assert!(replaced);
         assert_eq!(value["a"], "x\u{fffd}y");
         assert_eq!(value["b"], "\u{1f600}");
@@ -219,36 +214,17 @@ mod tests {
     #[test]
     fn object_entries_put_array_indexes_first() {
         let (value, _) = parse_json(r#"{"k1":1,"7":2,"07":3,"4294967295":4,"0":5}"#).unwrap();
-        let keys: Vec<&str> = entries(value.as_object().unwrap())
-            .iter()
-            .map(|(key, _)| key.as_str())
-            .collect();
+        let keys: Vec<&str> =
+            entries(value.as_object().unwrap()).iter().map(|(key, _)| key.as_str()).collect();
         assert_eq!(keys, ["0", "7", "k1", "07", "4294967295"]);
     }
 
     #[test]
     fn javascript_string_conversion() {
-        let (value, _) =
-            parse_json(r#"[2, 1.5, -0, null, true, "x", [1, null, "y"], {}]"#).unwrap();
-        let printed: Vec<String> = value
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|item| to_js_string(Some(item)))
-            .collect();
-        assert_eq!(
-            printed,
-            [
-                "2",
-                "1.5",
-                "0",
-                "null",
-                "true",
-                "x",
-                "1,,y",
-                "[object Object]"
-            ]
-        );
+        let (value, _) = parse_json(r#"[2, 1.5, -0, null, true, "x", [1, null, "y"], {}]"#).unwrap();
+        let printed: Vec<String> =
+            value.as_array().unwrap().iter().map(|item| to_js_string(Some(item))).collect();
+        assert_eq!(printed, ["2", "1.5", "0", "null", "true", "x", "1,,y", "[object Object]"]);
         assert_eq!(to_js_string(None), "undefined");
     }
 }

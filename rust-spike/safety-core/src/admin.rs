@@ -34,10 +34,7 @@ pub fn routes() -> Router<Arc<Platform>> {
         .route("/api/admin/users/{id}/approve", post(approve))
         .route("/api/admin/users/{id}/reactivate", post(reactivate))
         .route("/api/admin/users/{id}/deactivate", post(deactivate))
-        .route(
-            "/api/admin/users/{id}/revoke-sessions",
-            post(revoke_sessions),
-        )
+        .route("/api/admin/users/{id}/revoke-sessions", post(revoke_sessions))
         .route("/api/admin/users/{id}/promote", post(promote))
         .route("/api/admin/users/{id}/demote", post(demote))
         .route("/api/admin/users/{id}/reject", post(reject))
@@ -46,24 +43,14 @@ pub fn routes() -> Router<Arc<Platform>> {
 /// Signs a user out everywhere: browser sessions and linked companion devices.
 pub async fn revoke_user_sessions(auth: &Database, user_id: Uuid) -> Result<u64, ApiError> {
     if auth.role() != RuntimeRole::Auth {
-        return Err(ApiError::Internal(
-            "revoking sessions needs the auth role".into(),
-        ));
+        return Err(ApiError::Internal("revoking sessions needs the auth role".into()));
     }
     let mut client = auth.client().await?;
     let tx = client.transaction().await?;
-    let browser = tx
-        .execute(
-            "DELETE FROM app.better_auth_sessions WHERE user_id = $1",
-            &[&user_id],
-        )
-        .await?;
-    let companion = tx
-        .execute(
-            "DELETE FROM app.companion_devices WHERE user_id = $1",
-            &[&user_id],
-        )
-        .await?;
+    let browser =
+        tx.execute("DELETE FROM app.better_auth_sessions WHERE user_id = $1", &[&user_id]).await?;
+    let companion =
+        tx.execute("DELETE FROM app.companion_devices WHERE user_id = $1", &[&user_id]).await?;
     tx.commit().await?;
     Ok(browser + companion)
 }
@@ -123,21 +110,13 @@ async fn ensure_another_active_admin(cx: &DataContext, excluding: Uuid) -> Resul
 /// taken before the lock cannot skip the check.
 async fn removing_admin_is_safe(cx: &DataContext, target: Uuid) -> Result<(), ApiError> {
     cx.db().execute(LAST_ADMIN_LOCK, &[]).await?;
-    if require_user(cx, target)
-        .await?
-        .get::<_, bool>("is_instance_admin")
-    {
+    if require_user(cx, target).await?.get::<_, bool>("is_instance_admin") {
         ensure_another_active_admin(cx, target).await?;
     }
     Ok(())
 }
 
-async fn audit(
-    cx: &DataContext,
-    action: &str,
-    target: Uuid,
-    metadata: Value,
-) -> Result<(), ApiError> {
+async fn audit(cx: &DataContext, action: &str, target: Uuid, metadata: Value) -> Result<(), ApiError> {
     cx.db()
         .execute(
             "INSERT INTO app.admin_audit_events \
@@ -157,25 +136,14 @@ async fn audit(
 }
 
 /// `setUserStatus`.
-async fn set_status(
-    cx: &DataContext,
-    target: Uuid,
-    status: &str,
-    action: &str,
-) -> Result<Row, ApiError> {
+async fn set_status(cx: &DataContext, target: Uuid, status: &str, action: &str) -> Result<Row, ApiError> {
     let user = require_user(cx, target).await?;
     let deactivating = status == "deactivated";
     if deactivating && user.get::<_, bool>("is_bootstrap_owner") {
-        return Err(ApiError::http(
-            409,
-            "The bootstrap owner cannot be deactivated",
-        ));
+        return Err(ApiError::http(409, "The bootstrap owner cannot be deactivated"));
     }
     if deactivating && target == cx.actor_user_id() {
-        return Err(ApiError::http(
-            422,
-            "You cannot deactivate your own account",
-        ));
+        return Err(ApiError::http(422, "You cannot deactivate your own account"));
     }
     if deactivating {
         removing_admin_is_safe(cx, target).await?;
@@ -202,11 +170,7 @@ async fn set_admin(cx: &DataContext, target: Uuid, is_admin: bool) -> Result<Row
          RETURNING {USER_FIELDS}"
     );
     let updated = cx.db().query_one(&sql, &[&target, &is_admin]).await?;
-    let action = if is_admin {
-        "user.promote"
-    } else {
-        "user.demote"
-    };
+    let action = if is_admin { "user.promote" } else { "user.demote" };
     audit(cx, action, target, json!({ "isInstanceAdmin": is_admin })).await?;
     Ok(updated)
 }
@@ -341,10 +305,7 @@ async fn tear_down(
         ensure_another_active_admin(&cx, target).await?;
     }
     cx.commit().await?;
-    Err(ApiError::http(
-        501,
-        "Deleting an account is not available on this server yet",
-    ))
+    Err(ApiError::http(501, "Deleting an account is not available on this server yet"))
 }
 
 async fn reject(
@@ -369,18 +330,9 @@ mod tests {
 
     #[test]
     fn malformed_ids_name_nobody() {
-        for id in [
-            "",
-            "me",
-            "00000000-0000-0000-0000-00000000000",
-            "{00000000-0000-0000-0000-000000000000}",
-        ] {
+        for id in ["", "me", "00000000-0000-0000-0000-00000000000", "{00000000-0000-0000-0000-000000000000}"] {
             let (status, body) = parse_target(id).unwrap_err().status_and_body();
-            assert_eq!(
-                (status, body),
-                (404, json!({ "error": "User not found" })),
-                "{id}"
-            );
+            assert_eq!((status, body), (404, json!({ "error": "User not found" })), "{id}");
         }
         let id = "0F8FAD5B-D9CB-469F-A165-70867728950E";
         assert_eq!(parse_target(id).unwrap(), Uuid::parse_str(id).unwrap());

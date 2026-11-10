@@ -149,10 +149,7 @@ pub struct Summary {
 /// Bootstrap, passwords and migrations, in the order `scripts/migrate.ts` uses.
 pub fn run(repo: &Path, layout: &Layout, endpoint: &Endpoint) -> Result<Summary, String> {
     let superuser = secrets::password(layout, SUPERUSER).map_err(|e| e.to_string())?;
-    let mut summary = Summary {
-        created_database: ensure_database(endpoint, &superuser)?,
-        ..Summary::default()
-    };
+    let mut summary = Summary { created_database: ensure_database(endpoint, &superuser)?, ..Summary::default() };
     summary.bootstrap_files = bootstrap(repo, layout, endpoint, &superuser)?;
     let owner = secrets::password(layout, "jarvis_migration_owner").map_err(|e| e.to_string())?;
     migrate(repo, endpoint, &owner, &mut summary)?;
@@ -162,31 +159,20 @@ pub fn run(repo: &Path, layout: &Layout, endpoint: &Endpoint) -> Result<Summary,
 fn ensure_database(endpoint: &Endpoint, superuser: &Secret) -> Result<bool, String> {
     let mut client = endpoint.connect(SUPERUSER, superuser, "postgres")?;
     let exists = client
-        .query_opt(
-            "SELECT 1 FROM pg_database WHERE datname = $1",
-            &[&APP_DATABASE],
-        )
+        .query_opt("SELECT 1 FROM pg_database WHERE datname = $1", &[&APP_DATABASE])
         .map_err(|e| db_error(&e))?
         .is_some();
     if !exists {
-        client
-            .batch_execute(&format!("CREATE DATABASE {}", quote_ident(APP_DATABASE)))
-            .map_err(|e| db_error(&e))?;
+        client.batch_execute(&format!("CREATE DATABASE {}", quote_ident(APP_DATABASE))).map_err(|e| db_error(&e))?;
     }
     Ok(!exists)
 }
 
 /// `runSqlFilesWithClient` on the bootstrap folder and `applyRolePasswords`, both under the
 /// cluster DDL lock. The lock lives on the maintenance database, the DDL runs on the app's.
-fn bootstrap(
-    repo: &Path,
-    layout: &Layout,
-    endpoint: &Endpoint,
-    superuser: &Secret,
-) -> Result<usize, String> {
+fn bootstrap(repo: &Path, layout: &Layout, endpoint: &Endpoint, superuser: &Secret) -> Result<usize, String> {
     let mut lock = endpoint.connect(SUPERUSER, superuser, "postgres")?;
-    lock.batch_execute(CLUSTER_DDL_LOCK)
-        .map_err(|e| db_error(&e))?;
+    lock.batch_execute(CLUSTER_DDL_LOCK).map_err(|e| db_error(&e))?;
     let mut ddl = endpoint.connect(SUPERUSER, superuser, APP_DATABASE)?;
 
     let folder = repo.join(BOOTSTRAP);
@@ -199,8 +185,7 @@ fn bootstrap(
     for name in &names {
         let sql = std::fs::read_to_string(folder.join(name)).map_err(|e| format!("{name}: {e}"))?;
         let mut tx = ddl.transaction().map_err(|e| db_error(&e))?;
-        tx.batch_execute(&sql)
-            .map_err(|e| format!("{name}: {}", db_error(&e)))?;
+        tx.batch_execute(&sql).map_err(|e| format!("{name}: {}", db_error(&e)))?;
         tx.commit().map_err(|e| db_error(&e))?;
     }
 
@@ -211,38 +196,24 @@ fn bootstrap(
         if verifier.contains('\'') {
             return Err("unexpected character in a password verifier".into());
         }
-        ddl.batch_execute(&format!(
-            "ALTER ROLE {} WITH LOGIN PASSWORD '{verifier}'",
-            quote_ident(role)
-        ))
-        .map_err(|e| format!("password for {role}: {}", db_error(&e)))?;
+        ddl.batch_execute(&format!("ALTER ROLE {} WITH LOGIN PASSWORD '{verifier}'", quote_ident(role)))
+            .map_err(|e| format!("password for {role}: {}", db_error(&e)))?;
     }
-    lock.batch_execute(CLUSTER_DDL_UNLOCK)
-        .map_err(|e| db_error(&e))?;
+    lock.batch_execute(CLUSTER_DDL_UNLOCK).map_err(|e| db_error(&e))?;
     Ok(names.len())
 }
 
-fn migrate(
-    repo: &Path,
-    endpoint: &Endpoint,
-    owner: &Secret,
-    summary: &mut Summary,
-) -> Result<(), String> {
+fn migrate(repo: &Path, endpoint: &Endpoint, owner: &Secret, summary: &mut Summary) -> Result<(), String> {
     let mut folders = Vec::new();
     for folder in FOLDERS {
         folders.push((folder, load_migration_files(&repo.join(folder))?));
     }
-    let mut all: Vec<MigrationFile> = folders
-        .iter()
-        .flat_map(|(_, files)| files.iter().cloned())
-        .collect();
+    let mut all: Vec<MigrationFile> = folders.iter().flat_map(|(_, files)| files.iter().cloned()).collect();
     all.extend(package_migration_reservations(repo)?);
     assert_unique_versions(&all)?;
 
     let mut client = endpoint.connect("jarvis_migration_owner", owner, APP_DATABASE)?;
-    client
-        .batch_execute(MIGRATIONS_LOCK)
-        .map_err(|e| db_error(&e))?;
+    client.batch_execute(MIGRATIONS_LOCK).map_err(|e| db_error(&e))?;
     client
         .batch_execute(
             r#"CREATE SCHEMA IF NOT EXISTS "app" AUTHORIZATION CURRENT_USER;
@@ -259,26 +230,18 @@ fn migrate(
         let dir = repo.join(folder);
         for file in files {
             let existing = client
-                .query_opt(
-                    r#"SELECT checksum FROM "app"."schema_migrations" WHERE version = $1"#,
-                    &[&file.version],
-                )
+                .query_opt(r#"SELECT checksum FROM "app"."schema_migrations" WHERE version = $1"#, &[&file.version])
                 .map_err(|e| db_error(&e))?;
             if let Some(row) = existing {
                 if row.get::<_, String>(0) != file.checksum {
-                    return Err(format!(
-                        "Migration {} has changed after being applied",
-                        file.name
-                    ));
+                    return Err(format!("Migration {} has changed after being applied", file.name));
                 }
                 summary.skipped += 1;
                 continue;
             }
             let sql = read_unchanged(&dir, file)?;
             let mut tx = client.transaction().map_err(|e| db_error(&e))?;
-            let shim = SHIMS
-                .iter()
-                .find(|shim| shim.name == file.name && shim.checksum == file.checksum);
+            let shim = SHIMS.iter().find(|shim| shim.name == file.name && shim.checksum == file.checksum);
             let mut restore = Vec::new();
             if let Some(shim) = shim {
                 for table in shim.relax_forced_rls {
@@ -287,10 +250,8 @@ fn migrate(
                         .map_err(|e| db_error(&e))?
                         .get(0);
                     if forced {
-                        tx.batch_execute(&format!(
-                            "ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY"
-                        ))
-                        .map_err(|e| db_error(&e))?;
+                        tx.batch_execute(&format!("ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY"))
+                            .map_err(|e| db_error(&e))?;
                         restore.push(*table);
                     }
                 }
@@ -298,15 +259,13 @@ fn migrate(
                     tx.batch_execute(statement).map_err(|e| db_error(&e))?;
                 }
             }
-            tx.batch_execute(&sql)
-                .map_err(|e| format!("{}: {}", file.name, db_error(&e)))?;
+            tx.batch_execute(&sql).map_err(|e| format!("{}: {}", file.name, db_error(&e)))?;
             if let Some(sidecar) = &file.backfill {
                 empty_backfill(&mut tx, &dir, sidecar)?;
                 summary.backfills_on_empty_tables.push(sidecar.clone());
             }
             for table in restore {
-                tx.batch_execute(&format!("ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))
-                    .map_err(|e| db_error(&e))?;
+                tx.batch_execute(&format!("ALTER TABLE {table} FORCE ROW LEVEL SECURITY")).map_err(|e| db_error(&e))?;
             }
             tx.execute(
                 r#"INSERT INTO "app"."schema_migrations" (version, name, checksum) VALUES ($1, $2, $3)"#,
@@ -317,9 +276,7 @@ fn migrate(
             summary.applied += 1;
         }
     }
-    client
-        .batch_execute(MIGRATIONS_UNLOCK)
-        .map_err(|e| db_error(&e))?;
+    client.batch_execute(MIGRATIONS_UNLOCK).map_err(|e| db_error(&e))?;
     Ok(())
 }
 
@@ -329,64 +286,45 @@ fn read_unchanged(dir: &Path, file: &MigrationFile) -> Result<String, String> {
     if hex::encode(Sha256::digest(&bytes)) != file.old_rule_checksum {
         return Err(format!("Migration {} changed while migrating", file.name));
     }
-    String::from_utf8(bytes)
-        .map_err(|_| format!("Migration file {} must contain valid UTF-8", file.name))
+    String::from_utf8(bytes).map_err(|_| format!("Migration file {} must contain valid UTF-8", file.name))
 }
 
-fn empty_backfill(
-    tx: &mut postgres::Transaction<'_>,
-    dir: &Path,
-    sidecar: &str,
-) -> Result<(), String> {
+fn empty_backfill(tx: &mut postgres::Transaction<'_>, dir: &Path, sidecar: &str) -> Result<(), String> {
     let pinned = EMPTY_BACKFILLS
         .iter()
         .find(|backfill| backfill.sidecar == sidecar)
         .ok_or_else(|| format!("backfill {sidecar} has no Rust equivalent"))?;
     let bytes = std::fs::read(dir.join(sidecar)).map_err(|e| format!("{sidecar}: {e}"))?;
     if hex::encode(Sha256::digest(&bytes)) != pinned.sha256 {
-        return Err(format!(
-            "backfill {sidecar} is not the version this spike was written for"
-        ));
+        return Err(format!("backfill {sidecar} is not the version this spike was written for"));
     }
     for table in pinned.reads {
         // Under FORCE the owner sees no rows, so lift it to look, then put it back.
         let forced: bool = tx
-            .query_one(
-                "SELECT relforcerowsecurity FROM pg_class WHERE oid = ($1::text)::regclass",
-                &[table],
-            )
+            .query_one("SELECT relforcerowsecurity FROM pg_class WHERE oid = ($1::text)::regclass", &[table])
             .map_err(|e| db_error(&e))?
             .get(0);
-        tx.batch_execute(&format!("ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY"))
-            .map_err(|e| db_error(&e))?;
+        tx.batch_execute(&format!("ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY")).map_err(|e| db_error(&e))?;
         let has_rows: bool = tx
             .query_one(&format!("SELECT EXISTS (SELECT 1 FROM {table})"), &[])
             .map_err(|e| db_error(&e))?
             .get(0);
         if forced {
-            tx.batch_execute(&format!("ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))
-                .map_err(|e| db_error(&e))?;
+            tx.batch_execute(&format!("ALTER TABLE {table} FORCE ROW LEVEL SECURITY")).map_err(|e| db_error(&e))?;
         }
         if has_rows {
-            return Err(format!(
-                "{table} has rows, so backfill {sidecar} would change data; it is not ported"
-            ));
+            return Err(format!("{table} has rows, so backfill {sidecar} would change data; it is not ported"));
         }
     }
     for statement in pinned.statements {
-        tx.batch_execute(statement)
-            .map_err(|e| format!("{sidecar}: {}", db_error(&e)))?;
+        tx.batch_execute(statement).map_err(|e| format!("{sidecar}: {}", db_error(&e)))?;
     }
     Ok(())
 }
 
 /// Identifiers here are constants; anything outside `[a-z0-9_]` is refused.
 fn quote_ident(name: &str) -> String {
-    assert!(
-        name.bytes()
-            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_'),
-        "unsafe identifier"
-    );
+    assert!(name.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_'), "unsafe identifier");
     format!("\"{name}\"")
 }
 
@@ -415,9 +353,7 @@ mod reservation_tests {
     #[test]
     fn package_sql_reserves_versions_without_entering_execution_folders() {
         let repo = tempfile::tempdir().unwrap();
-        assert!(package_migration_reservations(repo.path())
-            .unwrap()
-            .is_empty());
+        assert!(package_migration_reservations(repo.path()).unwrap().is_empty());
         let package = repo.path().join("modules/notes/sql");
         let core = repo.path().join("infra/postgres/migrations");
         std::fs::create_dir_all(&package).unwrap();

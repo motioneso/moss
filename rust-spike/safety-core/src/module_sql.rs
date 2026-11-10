@@ -82,28 +82,19 @@ impl ModuleManifest {
     /// validator does: `app.<id with - as _>_<name>`, lowercase, at most 32, no repeats.
     pub fn from_json(manifest: &Value) -> Result<Self, Refusal> {
         let bad = |message: String| Refusal::Manifest(message);
-        let id = manifest["id"]
-            .as_str()
-            .ok_or_else(|| bad("the manifest has no id".into()))?;
+        let id = manifest["id"].as_str().ok_or_else(|| bad("the manifest has no id".into()))?;
         if !is_module_id(id) {
-            return Err(bad(format!(
-                "module id {id:?} is not lowercase letters, digits and -"
-            )));
+            return Err(bad(format!("module id {id:?} is not lowercase letters, digits and -")));
         }
         let prefix = format!("{}_", id.replace('-', "_"));
         let tables = match &manifest["database"]["ownedTables"] {
             Value::Null => Vec::new(),
-            Value::Array(tables) => tables
-                .iter()
-                .map(|t| t.as_str().map(str::to_owned))
-                .collect::<Option<Vec<_>>>()
+            Value::Array(tables) => tables.iter().map(|t| t.as_str().map(str::to_owned)).collect::<Option<Vec<_>>>()
                 .ok_or_else(|| bad("ownedTables must hold table names".into()))?,
             _ => return Err(bad("ownedTables must be a list".into())),
         };
         if tables.len() > MAX_OWNED_TABLES {
-            return Err(bad(format!(
-                "a module may own at most {MAX_OWNED_TABLES} tables"
-            )));
+            return Err(bad(format!("a module may own at most {MAX_OWNED_TABLES} tables")));
         }
         let mut owned = Vec::with_capacity(tables.len());
         for table in tables {
@@ -117,11 +108,7 @@ impl ModuleManifest {
             }
             owned.push(entry);
         }
-        Ok(Self {
-            id: id.to_owned(),
-            prefix,
-            owned,
-        })
+        Ok(Self { id: id.to_owned(), prefix, owned })
     }
 
     pub fn id(&self) -> &str {
@@ -151,10 +138,7 @@ pub enum Refusal {
     Manifest(String),
     /// The `sql/` folder is in the wrong place.
     Location(String),
-    File {
-        name: String,
-        reason: String,
-    },
+    File { name: String, reason: String },
     /// An applied file was edited or removed.
     Ledger(String),
 }
@@ -164,9 +148,7 @@ impl fmt::Display for Refusal {
         match self {
             Refusal::Manifest(reason) => write!(f, "module manifest refused: {reason}"),
             Refusal::Location(reason) => write!(f, "module SQL folder refused: {reason}"),
-            Refusal::File { name, reason } => {
-                write!(f, "module migration {name} refused: {reason}")
-            }
+            Refusal::File { name, reason } => write!(f, "module migration {name} refused: {reason}"),
             Refusal::Ledger(reason) => write!(f, "module migration history refused: {reason}"),
         }
     }
@@ -197,20 +179,14 @@ pub struct StatementChecker<'a> {
 
 impl<'a> StatementChecker<'a> {
     pub fn new(manifest: &'a ModuleManifest) -> Self {
-        Self {
-            manifest,
-            created_indexes: HashSet::new(),
-        }
+        Self { manifest, created_indexes: HashSet::new() }
     }
 
     pub fn check(&mut self, sql: &str) -> Result<(), String> {
         let mut statements = Parser::parse_sql(&PostgreSqlDialect {}, &checked_text(sql)?)
             .map_err(|error| format!("not valid SQL: {error}"))?;
         if statements.len() != 1 {
-            return Err(format!(
-                "expected exactly one SQL statement, found {}",
-                statements.len()
-            ));
+            return Err(format!("expected exactly one SQL statement, found {}", statements.len()));
         }
         let statement = statements.remove(0);
         let mut created_index = None;
@@ -239,20 +215,11 @@ impl<'a> StatementChecker<'a> {
                 self.check_delete(delete)?;
                 statement.clone()
             }
-            Statement::Comment {
-                object_type,
-                object_name,
-                ..
-            } => {
+            Statement::Comment { object_type, object_name, .. } => {
                 self.check_comment(object_type, object_name)?;
                 statement.clone()
             }
-            Statement::Drop {
-                object_type: ObjectType::Index,
-                names,
-                cascade,
-                ..
-            } => {
+            Statement::Drop { object_type: ObjectType::Index, names, cascade, .. } => {
                 self.check_drop_index(names, *cascade)?;
                 statement.clone()
             }
@@ -293,10 +260,7 @@ impl<'a> StatementChecker<'a> {
         }
     }
 
-    fn column_options<'o>(
-        &self,
-        options: impl Iterator<Item = &'o ColumnOption>,
-    ) -> Result<(), String> {
+    fn column_options<'o>(&self, options: impl Iterator<Item = &'o ColumnOption>) -> Result<(), String> {
         for option in options {
             if let ColumnOption::ForeignKey(key) = option {
                 self.reference(key)?;
@@ -373,19 +337,14 @@ impl<'a> StatementChecker<'a> {
     /// Returns the index's name, if it has one.
     fn check_create_index(&self, index: &CreateIndex) -> Result<Option<String>, String> {
         self.owned_table(&index.table_name, "index table")?;
-        let Some(name) = &index.name else {
-            return Ok(None);
-        };
+        let Some(name) = &index.name else { return Ok(None) };
         match name.0.as_slice() {
             [ObjectNamePart::Identifier(ident)] => {
                 let name = normalize(ident);
                 if name.starts_with(&self.manifest.prefix) {
                     Ok(Some(name))
                 } else {
-                    Err(format!(
-                        "index {name} must be named {}…",
-                        self.manifest.prefix
-                    ))
+                    Err(format!("index {name} must be named {}…", self.manifest.prefix))
                 }
             }
             _ => Err(format!("index name {name} must be a plain name")),
@@ -422,16 +381,11 @@ impl<'a> StatementChecker<'a> {
         match object_type {
             CommentObject::Table => self.owned_table(name, "table"),
             CommentObject::Column => {
-                let parts = idents(name)
-                    .filter(|parts| parts.len() == 3)
-                    .ok_or_else(|| {
-                        format!("column {name} must be written as app.<table>.<column>")
-                    })?;
+                let parts = idents(name).filter(|parts| parts.len() == 3).ok_or_else(|| {
+                    format!("column {name} must be written as app.<table>.<column>")
+                })?;
                 let table = ObjectName(
-                    parts[..2]
-                        .iter()
-                        .map(|ident| ObjectNamePart::Identifier((*ident).clone()))
-                        .collect(),
+                    parts[..2].iter().map(|ident| ObjectNamePart::Identifier((*ident).clone())).collect(),
                 );
                 self.owned_table(&table, "table")
             }
@@ -450,18 +404,18 @@ impl<'a> StatementChecker<'a> {
                 _ => return Err(format!("index {name} must be app.<index> or a plain name")),
             };
             if !self.created_indexes.contains(&index) {
-                return Err(format!(
-                    "index {index} was not created by this module's own files"
-                ));
+                return Err(format!("index {index} was not created by this module's own files"));
             }
         }
         Ok(())
     }
 
     fn check_relations(&self, statement: &Statement) -> Result<(), String> {
-        let refused = visit_relations(statement, |name| match qualified(name) {
-            Some(table) if self.manifest.owns(&table) => ControlFlow::Continue(()),
-            _ => ControlFlow::Break(name.to_string()),
+        let refused = visit_relations(statement, |name| {
+            match qualified(name) {
+                Some(table) if self.manifest.owns(&table) => ControlFlow::Continue(()),
+                _ => ControlFlow::Break(name.to_string()),
+            }
         });
         match refused {
             ControlFlow::Break(name) => Err(format!("{name} is not a table this module owns")),
@@ -500,10 +454,8 @@ fn checked_text(sql: &str) -> Result<String, String> {
     let tokens = Tokenizer::new(&PostgreSqlDialect {}, sql)
         .tokenize_with_location()
         .map_err(|error| format!("not valid SQL: {error}"))?;
-    let words: Vec<&TokenWithSpan> = tokens
-        .iter()
-        .filter(|token| !matches!(token.token, Token::Whitespace(_)))
-        .collect();
+    let words: Vec<&TokenWithSpan> =
+        tokens.iter().filter(|token| !matches!(token.token, Token::Whitespace(_))).collect();
     let keyword = |index: usize, wanted: &[Keyword]| {
         words.get(index).is_some_and(|token| {
             matches!(&token.token, Token::Word(word)
@@ -519,24 +471,15 @@ fn checked_text(sql: &str) -> Result<String, String> {
             && keyword(start + 1, &[Keyword::DELETE])
             && keyword(start + 2, &[Keyword::SET])
             && keyword(start + 3, &[Keyword::NULL, Keyword::DEFAULT])
-            && matches!(
-                words.get(start + 4).map(|token| &token.token),
-                Some(Token::LParen)
-            );
-        let Some(close) = set_null
-            .then(|| column_list_end(&words, start + 4))
-            .flatten()
-        else {
+            && matches!(words.get(start + 4).map(|token| &token.token), Some(Token::LParen));
+        let Some(close) = set_null.then(|| column_list_end(&words, start + 4)).flatten() else {
             continue;
         };
         let unreadable = || "could not read the SQL".to_owned();
-        let from =
-            byte_offset(sql, &line_starts, words[start + 4].span.start).ok_or_else(unreadable)?;
+        let from = byte_offset(sql, &line_starts, words[start + 4].span.start).ok_or_else(unreadable)?;
         let to = byte_offset(sql, &line_starts, words[close].span.end).ok_or_else(unreadable)?;
-        let blank: String = sql[from..to]
-            .chars()
-            .map(|ch| if ch == '\n' { '\n' } else { ' ' })
-            .collect();
+        let blank: String =
+            sql[from..to].chars().map(|ch| if ch == '\n' { '\n' } else { ' ' }).collect();
         // Same length only if every blanked char was one byte; pad to keep offsets stable.
         let blank = format!("{blank:<width$}", width = to - from);
         text.replace_range(from..to, &blank);
@@ -618,21 +561,13 @@ pub fn plan_module_migrations(
         Err(error) => return Err(location(error.to_string())),
     };
     if shared_migrations.contains(&sql) || sql.contains(shared_migrations) {
-        return Err(location(
-            "module SQL may not live in or around the shared migrations folder".into(),
-        ));
+        return Err(location("module SQL may not live in or around the shared migrations folder".into()));
     }
 
     let mut files = Vec::new();
     let entries = sql.list("").map_err(|error| location(error.to_string()))?;
-    for entry in entries
-        .into_iter()
-        .filter(|entry| entry.name.ends_with(".sql"))
-    {
-        let refuse = |reason: &str| Refusal::File {
-            name: entry.name.clone(),
-            reason: reason.into(),
-        };
+    for entry in entries.into_iter().filter(|entry| entry.name.ends_with(".sql")) {
+        let refuse = |reason: &str| Refusal::File { name: entry.name.clone(), reason: reason.into() };
         match entry.kind {
             EntryKind::File => {}
             EntryKind::Link => return Err(refuse("it is a symbolic link")),
@@ -640,9 +575,7 @@ pub fn plan_module_migrations(
         }
         let version = migration_version(&entry.name)
             .ok_or_else(|| refuse("the name must be <number>_<words>.sql"))?;
-        let text = sql
-            .read_to_string(&entry.name)
-            .map_err(|error| refuse(&error.to_string()))?;
+        let text = sql.read_to_string(&entry.name).map_err(|error| refuse(&error.to_string()))?;
         files.push(PlannedMigration {
             version: version.to_owned(),
             checksum: sha256_hex(text.as_bytes()),
@@ -664,16 +597,12 @@ pub fn plan_module_migrations(
 
     let mut checker = StatementChecker::new(manifest);
     for file in &files {
-        checker.check(&file.sql).map_err(|reason| Refusal::File {
-            name: file.name.clone(),
-            reason,
-        })?;
+        checker
+            .check(&file.sql)
+            .map_err(|reason| Refusal::File { name: file.name.clone(), reason })?;
     }
     let applied: HashSet<&str> = applied.iter().map(|row| row.version.as_str()).collect();
-    Ok(files
-        .into_iter()
-        .filter(|file| !applied.contains(file.version.as_str()))
-        .collect())
+    Ok(files.into_iter().filter(|file| !applied.contains(file.version.as_str())).collect())
 }
 
 /// Every applied file must still be there, unchanged.
@@ -681,10 +610,7 @@ fn ledger(applied: &[AppliedMigration], files: &[PlannedMigration]) -> Result<()
     for row in applied {
         match files.iter().find(|file| file.version == row.version) {
             None => {
-                return Err(Refusal::Ledger(format!(
-                    "applied version {} is missing",
-                    row.version
-                )))
+                return Err(Refusal::Ledger(format!("applied version {} is missing", row.version)))
             }
             Some(file) if file.checksum != row.checksum => {
                 return Err(Refusal::Ledger(format!(
@@ -702,22 +628,14 @@ fn migration_version(name: &str) -> Option<&str> {
     let stem = name.strip_suffix(".sql")?;
     let (version, words) = stem.split_once('_')?;
     let plain = |text: &str, extra: &[char]| {
-        !text.is_empty()
-            && text
-                .chars()
-                .all(|ch| ch.is_ascii_alphanumeric() || extra.contains(&ch))
+        !text.is_empty() && text.chars().all(|ch| ch.is_ascii_alphanumeric() || extra.contains(&ch))
     };
-    (version.chars().all(|ch| ch.is_ascii_digit())
-        && plain(version, &[])
-        && plain(words, &['_', '-']))
-    .then_some(version)
+    (version.chars().all(|ch| ch.is_ascii_digit()) && plain(version, &[]) && plain(words, &['_', '-']))
+        .then_some(version)
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
-    Sha256::digest(bytes)
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
+    Sha256::digest(bytes).iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 #[cfg(test)]
@@ -732,11 +650,7 @@ mod tests {
     }
 
     fn manifest_of(modules: &Root, id: &str) -> ModuleManifest {
-        let text = modules
-            .subdir(id)
-            .unwrap()
-            .read_to_string("jarvis.module.json")
-            .unwrap();
+        let text = modules.subdir(id).unwrap().read_to_string("jarvis.module.json").unwrap();
         ModuleManifest::from_json(&serde_json::from_str(&text).unwrap()).unwrap()
     }
 
@@ -868,36 +782,19 @@ mod tests {
     fn plans_only_unapplied_files_and_refuses_edited_history() {
         let (_dir, root, shared) = module_with(&[
             ("0001_items.sql", CREATE),
-            (
-                "0002_note.sql",
-                "ALTER TABLE app.finance_items ADD COLUMN note text",
-            ),
+            ("0002_note.sql", "ALTER TABLE app.finance_items ADD COLUMN note text"),
         ]);
         let all = plan_module_migrations(&root, &shared, &finance(), &[]).unwrap();
-        let first = AppliedMigration {
-            version: "0001".into(),
-            checksum: all[0].checksum.clone(),
-        };
+        let first = AppliedMigration { version: "0001".into(), checksum: all[0].checksum.clone() };
         let rest = plan_module_migrations(&root, &shared, &finance(), &[first]).unwrap();
-        assert_eq!(
-            rest.iter()
-                .map(|file| file.name.as_str())
-                .collect::<Vec<_>>(),
-            ["0002_note.sql"]
-        );
+        assert_eq!(rest.iter().map(|file| file.name.as_str()).collect::<Vec<_>>(), ["0002_note.sql"]);
 
-        let edited = AppliedMigration {
-            version: "0001".into(),
-            checksum: sha256_hex(b"old text"),
-        };
+        let edited = AppliedMigration { version: "0001".into(), checksum: sha256_hex(b"old text") };
         assert!(matches!(
             plan_module_migrations(&root, &shared, &finance(), &[edited]),
             Err(Refusal::Ledger(_))
         ));
-        let missing = AppliedMigration {
-            version: "0009".into(),
-            checksum: String::new(),
-        };
+        let missing = AppliedMigration { version: "0009".into(), checksum: String::new() };
         assert!(matches!(
             plan_module_migrations(&root, &shared, &finance(), &[missing]),
             Err(Refusal::Ledger(_))
@@ -909,11 +806,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let shared = Root::create(&dir.path().join("infra/postgres/migrations")).unwrap();
         let inside = Root::create(&dir.path().join("infra/postgres/migrations/finance")).unwrap();
-        inside
-            .create_subdir("sql")
-            .unwrap()
-            .write("0001_items.sql", CREATE.as_bytes())
-            .unwrap();
+        inside.create_subdir("sql").unwrap().write("0001_items.sql", CREATE.as_bytes()).unwrap();
         assert!(matches!(
             plan_module_migrations(&inside, &shared, &finance(), &[]),
             Err(Refusal::Location(_))
@@ -925,11 +818,8 @@ mod tests {
     fn refuses_sql_reached_through_a_link() {
         let (dir, root, shared) = module_with(&[]);
         shared.write("0001_core.sql", CREATE.as_bytes()).unwrap();
-        std::os::unix::fs::symlink(
-            shared.path().join("0001_core.sql"),
-            root.path().join("sql/0001_core.sql"),
-        )
-        .unwrap();
+        std::os::unix::fs::symlink(shared.path().join("0001_core.sql"), root.path().join("sql/0001_core.sql"))
+            .unwrap();
         assert!(matches!(
             plan_module_migrations(&root, &shared, &finance(), &[]),
             Err(Refusal::File { .. })
@@ -946,15 +836,9 @@ mod tests {
     #[test]
     fn refuses_bad_file_names_and_repeated_versions() {
         let (_dir, root, shared) = module_with(&[("items.sql", CREATE)]);
-        assert!(matches!(
-            plan_module_migrations(&root, &shared, &finance(), &[]),
-            Err(Refusal::File { .. })
-        ));
+        assert!(matches!(plan_module_migrations(&root, &shared, &finance(), &[]), Err(Refusal::File { .. })));
         let (_dir, root, shared) =
             module_with(&[("0001_items.sql", CREATE), ("0001_again.sql", CREATE)]);
-        assert!(matches!(
-            plan_module_migrations(&root, &shared, &finance(), &[]),
-            Err(Refusal::File { .. })
-        ));
+        assert!(matches!(plan_module_migrations(&root, &shared, &finance(), &[]), Err(Refusal::File { .. })));
     }
 }

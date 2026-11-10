@@ -28,9 +28,7 @@ impl Drop for Bus {
 fn probe_within(limit: Duration, probe: impl FnOnce() -> Keychain + Send + 'static) -> Keychain {
     let (send, answer) = std::sync::mpsc::channel();
     std::thread::spawn(move || send.send(probe()));
-    answer
-        .recv_timeout(limit)
-        .unwrap_or_else(|_| panic!("no result within {limit:?}"))
+    answer.recv_timeout(limit).unwrap_or_else(|_| panic!("no result within {limit:?}"))
 }
 
 /// A session bus with no service folders, or with one holding a single service file.
@@ -73,14 +71,8 @@ fn start_bus(service_file: Option<&str>) -> Bus {
         .spawn()
         .expect("dbus-daemon is installed");
     let mut address = String::new();
-    BufReader::new(daemon.stdout.take().unwrap())
-        .read_line(&mut address)
-        .unwrap();
-    Bus {
-        daemon,
-        address: address.trim().to_string(),
-        dir,
-    }
+    BufReader::new(daemon.stdout.take().unwrap()).read_line(&mut address).unwrap();
+    Bus { daemon, address: address.trim().to_string(), dir }
 }
 
 #[test]
@@ -97,10 +89,7 @@ fn an_empty_or_relative_runtime_folder_falls_back_to_the_login_folder() {
     assert_eq!(runtime_dir(None, 1000), login);
     assert_eq!(runtime_dir(Some("".into()), 1000), login);
     assert_eq!(runtime_dir(Some("run".into()), 1000), login);
-    assert_eq!(
-        runtime_dir(Some("/tmp/session".into()), 1000),
-        PathBuf::from("/tmp/session")
-    );
+    assert_eq!(runtime_dir(Some("/tmp/session".into()), 1000), PathBuf::from("/tmp/session"));
 }
 
 #[test]
@@ -153,12 +142,7 @@ fn a_working_keychain_is_used_and_the_key_file_is_not_offered() {
     let bus = start_bus(None);
     let _held = hold_secret_service(Some(&bus.address), Behaviour::Working).unwrap();
     let result = probe_address(&bus.address);
-    assert_eq!(
-        result,
-        Keychain::Working {
-            already_running: true
-        }
-    );
+    assert_eq!(result, Keychain::Working { already_running: true });
     assert!(!result.allows_key_file());
 }
 
@@ -182,9 +166,7 @@ fn a_keychain_that_never_answers_is_broken_within_seconds() {
 
 #[test]
 fn a_keychain_that_fails_to_start_is_broken() {
-    let bus = start_bus(Some(
-        "[D-BUS Service]\nName=org.freedesktop.secrets\nExec=/bin/false\n",
-    ));
+    let bus = start_bus(Some("[D-BUS Service]\nName=org.freedesktop.secrets\nExec=/bin/false\n"));
     let result = probe_address(&bus.address);
     assert!(matches!(result, Keychain::Broken(_)), "{result:?}");
     assert!(!result.allows_key_file());
@@ -197,10 +179,5 @@ fn a_keychain_started_on_demand_is_used() {
     let bus = start_bus(Some(&format!(
         "[D-BUS Service]\nName=org.freedesktop.secrets\nExec={fake} --working\n"
     )));
-    assert_eq!(
-        probe_address(&bus.address),
-        Keychain::Working {
-            already_running: false
-        }
-    );
+    assert_eq!(probe_address(&bus.address), Keychain::Working { already_running: false });
 }

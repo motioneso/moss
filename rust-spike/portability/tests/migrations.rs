@@ -32,11 +32,8 @@ fn as_json(files: &[MigrationFile]) -> Value {
 
 #[test]
 fn rust_matches_every_repo_migration_checksum() {
-    let text =
-        std::fs::read_to_string(spike_dir().join("fixtures/migrations-manifest.jsonl")).unwrap();
-    let mut lines = text
-        .lines()
-        .map(|line| serde_json::from_str::<Value>(line).unwrap());
+    let text = std::fs::read_to_string(spike_dir().join("fixtures/migrations-manifest.jsonl")).unwrap();
+    let mut lines = text.lines().map(|line| serde_json::from_str::<Value>(line).unwrap());
     let header = lines.next().unwrap();
     let entries: Vec<Value> = lines.collect();
     assert_eq!(header["entries"].as_u64().unwrap() as usize, entries.len());
@@ -47,10 +44,7 @@ fn rust_matches_every_repo_migration_checksum() {
         match entry["runner"].as_str().unwrap() {
             "pinned-shim" => shims.push(entry),
             runner => folders
-                .entry((
-                    runner.to_string(),
-                    entry["dir"].as_str().unwrap().to_string(),
-                ))
+                .entry((runner.to_string(), entry["dir"].as_str().unwrap().to_string()))
                 .or_default()
                 .push(entry),
         }
@@ -68,11 +62,7 @@ fn rust_matches_every_repo_migration_checksum() {
         }
         .unwrap_or_else(|error| panic!("{dir}: {error}"));
         if got.len() != want.len() {
-            failures.push(format!(
-                "{dir}: rust found {} files, node {}",
-                got.len(),
-                want.len()
-            ));
+            failures.push(format!("{dir}: rust found {} files, node {}", got.len(), want.len()));
         }
         for (file, want) in got.iter().zip(want) {
             let mut agrees = file.name == want["name"]
@@ -102,10 +92,7 @@ fn rust_matches_every_repo_migration_checksum() {
         let name = shim["name"].as_str().unwrap();
         let file = core_files.iter().find(|file| file.name == name);
         if file.map(|file| file.checksum.as_str()) != shim["checksum"].as_str() {
-            failures.push(format!(
-                "pinned shim {name}: rust {file:?}, pinned {}",
-                shim["checksum"]
-            ));
+            failures.push(format!("pinned shim {name}: rust {file:?}, pinned {}", shim["checksum"]));
         }
     }
 

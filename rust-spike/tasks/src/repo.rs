@@ -14,10 +14,10 @@ use tokio_postgres::Row;
 use uuid::Uuid;
 
 use crate::dates::js_now;
-use crate::model::{Task, TaskActivity, TaskList, TaskStatus, TaskTag, TASK_COLUMNS};
-use crate::parse::{Patch, TaskFields};
 use safety_core::db::DataContext;
 use safety_core::error::ApiError;
+use crate::model::{Task, TaskActivity, TaskList, TaskStatus, TaskTag, TASK_COLUMNS};
+use crate::parse::{Patch, TaskFields};
 
 const URGENCY_WINDOW_HOURS: i64 = 48;
 const IMPORTANT_PRIORITY_MIN: i16 = 4;
@@ -27,10 +27,7 @@ const DEFAULT_TIMEZONE: &str = "America/Los_Angeles";
 type Param = Box<dyn ToSql + Sync + Send>;
 
 fn refs(params: &[Param]) -> Vec<&(dyn ToSql + Sync)> {
-    params
-        .iter()
-        .map(|param| param.as_ref() as &(dyn ToSql + Sync))
-        .collect()
+    params.iter().map(|param| param.as_ref() as &(dyn ToSql + Sync)).collect()
 }
 
 fn tasks(rows: Vec<Row>) -> Vec<Task> {
@@ -104,8 +101,9 @@ pub async fn list_filtered(
     } else {
         format!("WHERE {}", conditions.join(" AND "))
     };
-    let sql =
-        format!("SELECT {TASK_COLUMNS} FROM app.tasks t {filter} ORDER BY t.updated_at DESC, t.id");
+    let sql = format!(
+        "SELECT {TASK_COLUMNS} FROM app.tasks t {filter} ORDER BY t.updated_at DESC, t.id"
+    );
     Ok(tasks(cx.db().query(sql.as_str(), &refs(&params)).await?))
 }
 
@@ -135,10 +133,7 @@ pub async fn create(cx: &DataContext, input: &TaskFields) -> Result<Task, ApiErr
     }
     if let Patch::Set(parent_id) = &input.parent_task_id {
         if !owned_task_exists(cx, parent_id).await? {
-            return Err(ApiError::http(
-                404,
-                "Parent task not found or not accessible",
-            ));
+            return Err(ApiError::http(404, "Parent task not found or not accessible"));
         }
     }
     let list_id = match &input.list_id {
@@ -203,16 +198,12 @@ struct Assignments {
 
 impl Assignments {
     fn new() -> Self {
-        Self {
-            columns: Vec::new(),
-            params: Vec::new(),
-        }
+        Self { columns: Vec::new(), params: Vec::new() }
     }
 
     fn set(&mut self, column: &str, value: impl ToSql + Sync + Send + 'static, cast: &str) {
         self.params.push(Box::new(value));
-        self.columns
-            .push(format!("{column} = ${}{cast}", self.params.len()));
+        self.columns.push(format!("{column} = ${}{cast}", self.params.len()));
     }
 
     fn set_patch<T>(&mut self, column: &str, patch: &Patch<T>, cast: &str)
@@ -239,10 +230,7 @@ pub async fn update(
     }
     if let Patch::Set(parent_id) = &input.parent_task_id {
         if !owned_task_exists(cx, parent_id).await? {
-            return Err(ApiError::http(
-                404,
-                "Parent task not found or not accessible",
-            ));
+            return Err(ApiError::http(404, "Parent task not found or not accessible"));
         }
     }
 
@@ -262,16 +250,8 @@ pub async fn update(
     }
     set.set_patch("parent_task_id", &input.parent_task_id, "::text::uuid");
     if let Some(status) = input.status {
-        set.set(
-            "status",
-            status.as_str().to_owned(),
-            "::text::app.task_status",
-        );
-        set.set(
-            "completed_at",
-            (status == TaskStatus::Done).then(js_now),
-            "",
-        );
+        set.set("status", status.as_str().to_owned(), "::text::app.task_status");
+        set.set("completed_at", (status == TaskStatus::Done).then(js_now), "");
     }
     match &input.recurrence {
         Patch::Keep => {}
@@ -289,11 +269,7 @@ pub async fn update(
                 .await?;
             let series_id: Option<Uuid> = current.and_then(|row| row.get(0));
             set.set("recurrence", spec.to_json(), "");
-            set.set(
-                "recurrence_series_id",
-                series_id.unwrap_or_else(Uuid::new_v4),
-                "",
-            );
+            set.set("recurrence_series_id", series_id.unwrap_or_else(Uuid::new_v4), "");
         }
     }
 
@@ -307,10 +283,7 @@ pub async fn update(
             .await?;
         let stored = cx
             .db()
-            .query_opt(
-                "SELECT list_id FROM app.tasks WHERE id = $1::text::uuid",
-                &[&task_id],
-            )
+            .query_opt("SELECT list_id FROM app.tasks WHERE id = $1::text::uuid", &[&task_id])
             .await?;
         let moved = stored.is_some_and(|row| row.get::<_, Uuid>(0).to_string() != *list_id);
         let children: Vec<Uuid> = if moved {
@@ -500,9 +473,7 @@ pub async fn tags_for_tasks(
         )
         .await?;
     for row in &rows {
-        map.entry(row.get("task_id"))
-            .or_default()
-            .push(TaskTag::from_row(row));
+        map.entry(row.get("task_id")).or_default().push(TaskTag::from_row(row));
     }
     Ok(map)
 }
@@ -530,10 +501,7 @@ pub async fn get_or_create_list(cx: &DataContext, name: &str) -> Result<TaskList
 }
 
 pub async fn list_lists(cx: &DataContext) -> Result<Vec<TaskList>, ApiError> {
-    let rows = cx
-        .db()
-        .query("SELECT * FROM app.task_lists ORDER BY position, name", &[])
-        .await?;
+    let rows = cx.db().query("SELECT * FROM app.task_lists ORDER BY position, name", &[]).await?;
     Ok(rows.iter().map(TaskList::from_row).collect())
 }
 
@@ -541,19 +509,12 @@ pub async fn list_lists(cx: &DataContext) -> Result<Vec<TaskList>, ApiError> {
 pub async fn list_is_owned(cx: &DataContext, list_id: &str) -> Result<bool, ApiError> {
     let row = cx
         .db()
-        .query_opt(
-            "SELECT id FROM app.task_lists WHERE id = $1::text::uuid",
-            &[&list_id],
-        )
+        .query_opt("SELECT id FROM app.task_lists WHERE id = $1::text::uuid", &[&list_id])
         .await?;
     Ok(row.is_some())
 }
 
-pub async fn rename_list(
-    cx: &DataContext,
-    list_id: &str,
-    name: &str,
-) -> Result<TaskList, ApiError> {
+pub async fn rename_list(cx: &DataContext, list_id: &str, name: &str) -> Result<TaskList, ApiError> {
     let result = cx
         .db()
         .query_opt(
@@ -587,27 +548,18 @@ pub async fn delete_list(
         )
         .await?;
     let all = cx.db().query("SELECT id FROM app.task_lists", &[]).await?;
-    if !all
-        .iter()
-        .any(|row| row.get::<_, Uuid>(0).to_string() == list_id)
-    {
+    if !all.iter().any(|row| row.get::<_, Uuid>(0).to_string() == list_id) {
         return Err(ApiError::http(404, "List not found or not accessible"));
     }
     if reassign_to == Some(list_id) {
-        return Err(ApiError::http(
-            400,
-            "Cannot reassign a list's tasks to itself",
-        ));
+        return Err(ApiError::http(400, "Cannot reassign a list's tasks to itself"));
     }
     if all.len() <= 1 {
         return Err(ApiError::http(409, "Cannot delete your only list"));
     }
     if let Some(destination) = reassign_to {
         if !list_is_owned(cx, destination).await? {
-            return Err(ApiError::http(
-                404,
-                "Destination list not found or not accessible",
-            ));
+            return Err(ApiError::http(404, "Destination list not found or not accessible"));
         }
         cx.db()
             .execute(
@@ -688,10 +640,7 @@ pub async fn rename_tag(
         Err(error) => {
             let error = ApiError::from(error);
             if error.db_message_contains(&["task_tags_list_name_idx", "unique"]) {
-                return Err(ApiError::http(
-                    409,
-                    "A tag with that name already exists in this list",
-                ));
+                return Err(ApiError::http(409, "A tag with that name already exists in this list"));
             }
             Err(error)
         }
@@ -707,8 +656,7 @@ pub async fn delete_tag(cx: &DataContext, list_id: &str, tag_id: &str) -> Result
             &[&tag_id, &list_id],
         )
         .await?;
-    row.map(|_| ())
-        .ok_or_else(|| ApiError::http(404, "Tag not found or not accessible"))
+    row.map(|_| ()).ok_or_else(|| ApiError::http(404, "Tag not found or not accessible"))
 }
 
 pub async fn assign_tag(cx: &DataContext, task_id: &str, tag_id: &str) -> Result<(), ApiError> {
@@ -791,9 +739,7 @@ pub async fn update_preferences(cx: &DataContext, default_view: &str) -> Result<
             &[&default_view, &js_now()],
         )
         .await?;
-    rows.into_iter()
-        .next()
-        .ok_or_else(|| ApiError::Internal("no result: task_preferences".into()))
+    rows.into_iter().next().ok_or_else(|| ApiError::Internal("no result: task_preferences".into()))
 }
 
 // --- Drift: overdue, at risk, focus ---
@@ -802,10 +748,7 @@ pub async fn update_preferences(cx: &DataContext, default_view: &str) -> Result<
 pub async fn actor_timezone(cx: &DataContext) -> Result<String, ApiError> {
     let row = cx
         .db()
-        .query(
-            "SELECT value_json FROM app.preferences WHERE key = 'locale'",
-            &[],
-        )
+        .query("SELECT value_json FROM app.preferences WHERE key = 'locale'", &[])
         .await?
         .into_iter()
         .next();
@@ -840,11 +783,7 @@ async fn query_at_risk(cx: &DataContext, tz: &str) -> Result<Vec<Task>, ApiError
                          WHERE child.parent_task_id = t.id AND child.status = 'done') \
          ORDER BY t.priority DESC, t.due_at ASC"
     );
-    Ok(tasks(
-        cx.db()
-            .query(sql.as_str(), &[&tz, &AT_RISK_DUE_WINDOW_DAYS])
-            .await?,
-    ))
+    Ok(tasks(cx.db().query(sql.as_str(), &[&tz, &AT_RISK_DUE_WINDOW_DAYS]).await?))
 }
 
 pub async fn overdue(cx: &DataContext) -> Result<Vec<Task>, ApiError> {
@@ -862,16 +801,9 @@ pub async fn focus(cx: &DataContext) -> Result<Vec<Task>, ApiError> {
     let overdue = query_overdue(cx, &tz).await?;
     let at_risk = query_at_risk(cx, &tz).await?;
     let mut seen = std::collections::HashSet::new();
-    let mut merged: Vec<Task> = overdue
-        .into_iter()
-        .chain(at_risk)
-        .filter(|task| seen.insert(task.id))
-        .collect();
-    merged.sort_by(|a, b| {
-        focus_order(a)
-            .partial_cmp(&focus_order(b))
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+    let mut merged: Vec<Task> =
+        overdue.into_iter().chain(at_risk).filter(|task| seen.insert(task.id)).collect();
+    merged.sort_by(|a, b| focus_order(a).partial_cmp(&focus_order(b)).unwrap_or(std::cmp::Ordering::Equal));
     Ok(merged)
 }
 
@@ -932,10 +864,8 @@ mod tests {
             task(Some(5), Some(99), None),
         ];
         list.sort_by(|a, b| focus_order(a).partial_cmp(&focus_order(b)).unwrap());
-        let summary: Vec<_> = list
-            .iter()
-            .map(|t| (t.priority, t.due_at.map(millis), t.effort.clone()))
-            .collect();
+        let summary: Vec<_> =
+            list.iter().map(|t| (t.priority, t.due_at.map(millis), t.effort.clone())).collect();
         assert_eq!(
             summary,
             vec![

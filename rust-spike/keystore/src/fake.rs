@@ -36,9 +36,7 @@ impl Refuses {
         _algorithm: &str,
         _input: Value<'_>,
     ) -> zbus::fdo::Result<(OwnedValue, OwnedObjectPath)> {
-        Err(zbus::fdo::Error::Failed(
-            "the keychain refused the session".to_string(),
-        ))
+        Err(zbus::fdo::Error::Failed("the keychain refused the session".to_string()))
     }
 }
 
@@ -53,10 +51,7 @@ impl Silent {
 }
 
 /// Connects to the bus at `address` and holds the Secret Service name until dropped.
-pub fn hold_secret_service(
-    address: Option<&str>,
-    behaviour: Behaviour,
-) -> zbus::Result<Connection> {
+pub fn hold_secret_service(address: Option<&str>, behaviour: Behaviour) -> zbus::Result<Connection> {
     let builder = match address {
         Some(address) => connection::Builder::address(address)?,
         None => connection::Builder::session()?,

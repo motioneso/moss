@@ -22,17 +22,11 @@ fn rust_verifies_app_made_password_hashes() {
             };
             let want = Outcome::expected(&case["expect"]);
             if got != want {
-                failures.push(format!(
-                    "{group}/{}: rust {got:?}, node {want:?}",
-                    label(case)
-                ));
+                failures.push(format!("{group}/{}: rust {got:?}, node {want:?}", label(case)));
             }
         }
     }
-    println!(
-        "passwords: {}/{total} cases agree with Node",
-        total - failures.len()
-    );
+    println!("passwords: {}/{total} cases agree with Node", total - failures.len());
     assert!(failures.is_empty(), "{failures:#?}");
 }
 
@@ -59,9 +53,7 @@ fn nfkc_agrees_with_node_for_every_code_point() {
     let unassigned = node_unassigned(table);
     let is_unassigned = |code_point: u32| {
         let at = unassigned.partition_point(|&(_, high)| high < code_point);
-        unassigned
-            .get(at)
-            .is_some_and(|&(low, _)| low <= code_point)
+        unassigned.get(at).is_some_and(|&(low, _)| low <= code_point)
     };
 
     // Node leaves a code point its Unicode version has not assigned unchanged. The Rust table
@@ -73,9 +65,7 @@ fn nfkc_agrees_with_node_for_every_code_point() {
         let mut hash = Sha256::new();
         for code_point in start..start + block {
             // Surrogates are not chars; the generator skips them too.
-            let Some(c) = char::from_u32(code_point) else {
-                continue;
-            };
+            let Some(c) = char::from_u32(code_point) else { continue };
             let text = c.to_string();
             let mut normalized = nfkc(&text);
             if is_unassigned(code_point) && normalized != text {

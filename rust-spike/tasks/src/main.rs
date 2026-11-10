@@ -24,8 +24,8 @@ use safety_core::db::{Database, RuntimeRole};
 use safety_core::http::{self, Platform};
 use safety_core::origin::TrustedOrigins;
 use safety_core::secret::SecretCipher;
-use serde_json::json;
 use tasks::{jobs, routes};
+use serde_json::json;
 use tokio::signal::unix::{signal, SignalKind};
 
 /// Start-up and serve errors go through the redacting log writer like every other line.
@@ -48,14 +48,8 @@ async fn run() -> Result<(), String> {
     let port: u16 = required(&env, "TASKS_SPIKE_PORT")?
         .parse()
         .map_err(|_| "TASKS_SPIKE_PORT must be a port number".to_owned())?;
-    let host = match env
-        .get("HOST")
-        .map(|host| host.trim())
-        .filter(|host| !host.is_empty())
-    {
-        Some(host) => host
-            .parse()
-            .map_err(|_| "HOST must be an IP address".to_owned())?,
+    let host = match env.get("HOST").map(|host| host.trim()).filter(|host| !host.is_empty()) {
+        Some(host) => host.parse().map_err(|_| "HOST must be an IP address".to_owned())?,
         None => IpAddr::V4(Ipv4Addr::LOCALHOST),
     };
 
@@ -65,25 +59,15 @@ async fn run() -> Result<(), String> {
     let sessions = SessionCookies::from_env(&env)?;
     let connectors = SecretCipher::connectors(&env).map_err(|error| error.to_string())?;
     let origins = TrustedOrigins::from_env(&env, port)?;
-    let platform = Arc::new(Platform {
-        app,
-        auth,
-        sessions,
-        connectors,
-        origins,
-    });
+    let platform = Arc::new(Platform { app, auth, sessions, connectors, origins });
 
     let (stop, stopped) = tokio::sync::watch::channel(false);
     let worker_task = tokio::spawn(jobs::run_worker(worker, stopped));
 
     let address = SocketAddr::new(host, port);
-    let listener = tokio::net::TcpListener::bind(address)
-        .await
-        .map_err(|error| error.to_string())?;
+    let listener = tokio::net::TcpListener::bind(address).await.map_err(|error| error.to_string())?;
     http::log(json!({ "level": "info", "msg": format!("tasks spike listening on {address}") }));
-    let mut tasks = routes::router(routes::AppState {
-        platform: platform.clone(),
-    });
+    let mut tasks = routes::router(routes::AppState { platform: platform.clone() });
     if let Some(dir) = env.get("TASKS_SPIKE_STATIC_DIR") {
         tasks = tasks.fallback_service(tower_http::services::ServeDir::new(dir));
     }
@@ -108,9 +92,7 @@ async fn connect(
 }
 
 fn required<'a>(env: &'a HashMap<String, String>, name: &str) -> Result<&'a str, String> {
-    env.get(name)
-        .map(String::as_str)
-        .ok_or_else(|| format!("{name} is not set"))
+    env.get(name).map(String::as_str).ok_or_else(|| format!("{name} is not set"))
 }
 
 async fn shutdown_signal() {

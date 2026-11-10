@@ -3,9 +3,7 @@ use std::os::unix::fs::{symlink, PermissionsExt};
 
 use keystore::probe::Keychain;
 use keystore::recovery::RecoveryKey;
-use keystore::store::{
-    recover, secure, set_up, status, CredentialKeys, Paths, RecoverError, State,
-};
+use keystore::store::{recover, secure, set_up, status, CredentialKeys, Paths, RecoverError, State};
 
 /// The only state in which setup may write the key file.
 const NO_KEYCHAIN: Keychain = Keychain::NotInstalled;
@@ -24,12 +22,7 @@ fn new_setup() -> Setup {
     let keys = CredentialKeys::generate();
     let fingerprint = keys.fingerprint();
     set_up(&paths, &NO_KEYCHAIN, &recovery, &keys).unwrap();
-    Setup {
-        _dir: dir,
-        paths,
-        recovery,
-        fingerprint,
-    }
+    Setup { _dir: dir, paths, recovery, fingerprint }
 }
 
 fn mode(path: &std::path::Path) -> u32 {
@@ -64,29 +57,18 @@ fn setup_writes_private_files_and_unlocks_at_every_start() {
     assert_eq!(mode(&s.paths.key_folder), 0o700);
     assert_eq!(mode(&s.paths.key_file), 0o600);
     assert_eq!(mode(&s.paths.bundle), 0o600);
-    assert!(!s
-        .paths
-        .key_file
-        .starts_with(s.paths.bundle.parent().unwrap().parent().unwrap()));
+    assert!(!s.paths.key_file.starts_with(s.paths.bundle.parent().unwrap().parent().unwrap()));
     // Each call reads from disk, as a restart would.
     assert_eq!(unlocked_fingerprint(status(&s.paths)), s.fingerprint);
     assert_eq!(unlocked_fingerprint(status(&s.paths)), s.fingerprint);
-    assert!(set_up(
-        &s.paths,
-        &NO_KEYCHAIN,
-        &RecoveryKey::generate(),
-        &CredentialKeys::generate()
-    )
-    .is_err());
+    assert!(set_up(&s.paths, &NO_KEYCHAIN, &RecoveryKey::generate(), &CredentialKeys::generate()).is_err());
 }
 
 #[test]
 fn lost_key_file_comes_back_from_the_words() {
     let s = new_setup();
     fs::remove_file(&s.paths.key_file).unwrap();
-    let State::KeyFileMissing { needs } = status(&s.paths) else {
-        panic!()
-    };
+    let State::KeyFileMissing { needs } = status(&s.paths) else { panic!() };
     assert_eq!(needs, s.recovery.id());
 
     let typed = RecoveryKey::from_bytes(*s.recovery.bytes());
@@ -116,9 +98,7 @@ fn damaged_key_file_is_refused_then_replaced_by_recovery() {
     fs::write(&s.paths.key_file, b"\x00garbage").unwrap();
     assert!(matches!(status(&s.paths), State::KeyFileDamaged { .. }));
 
-    let unlocked = recover(&s.paths, &RecoveryKey::from_bytes(*s.recovery.bytes()))
-        .ok()
-        .unwrap();
+    let unlocked = recover(&s.paths, &RecoveryKey::from_bytes(*s.recovery.bytes())).ok().unwrap();
     assert_eq!(unlocked.keys.fingerprint(), s.fingerprint);
     let kept: Vec<_> = fs::read_dir(&s.paths.key_folder)
         .unwrap()
@@ -136,9 +116,7 @@ fn a_changed_key_with_its_old_name_is_damage() {
     let mut value: serde_json::Value = serde_json::from_str(&text).unwrap();
     value["recoveryKey"] = base64_of(&[9; 32]).into();
     fs::write(&s.paths.key_file, serde_json::to_vec(&value).unwrap()).unwrap();
-    let State::KeyFileDamaged { detail, .. } = status(&s.paths) else {
-        panic!()
-    };
+    let State::KeyFileDamaged { detail, .. } = status(&s.paths) else { panic!() };
     assert_eq!(detail, "the key does not match its name");
 }
 
@@ -156,16 +134,9 @@ fn readable_by_others_is_refused_until_secured() {
             _ => (&s.paths.key_folder, 0o755),
         };
         fs::set_permissions(path, fs::Permissions::from_mode(loose)).unwrap();
-        assert!(
-            matches!(status(&s.paths), State::KeyFileExposed { .. }),
-            "{target}"
-        );
+        assert!(matches!(status(&s.paths), State::KeyFileExposed { .. }), "{target}");
         secure(&s.paths).unwrap();
-        assert_eq!(
-            unlocked_fingerprint(status(&s.paths)),
-            s.fingerprint,
-            "{target}"
-        );
+        assert_eq!(unlocked_fingerprint(status(&s.paths)), s.fingerprint, "{target}");
     }
 }
 
@@ -184,9 +155,7 @@ fn key_file_from_another_setup_is_named_as_such() {
     let a = new_setup();
     let b = new_setup();
     fs::copy(&b.paths.key_file, &a.paths.key_file).unwrap();
-    let State::KeyFileForAnotherKey { has, needs } = status(&a.paths) else {
-        panic!()
-    };
+    let State::KeyFileForAnotherKey { has, needs } = status(&a.paths) else { panic!() };
     assert_eq!((has, needs), (b.recovery.id(), a.recovery.id()));
 }
 
@@ -195,10 +164,7 @@ fn bundle_changes_are_caught() {
     let s = new_setup();
     let text = fs::read_to_string(&s.paths.bundle).unwrap();
     let mut value: serde_json::Value = serde_json::from_str(&text).unwrap();
-    let header = value["header"]
-        .as_str()
-        .unwrap()
-        .replace("\"key-file\"", "\"keychain\"");
+    let header = value["header"].as_str().unwrap().replace("\"key-file\"", "\"keychain\"");
     value["header"] = header.into();
     fs::write(&s.paths.bundle, serde_json::to_vec(&value).unwrap()).unwrap();
     assert!(matches!(status(&s.paths), State::BundleDamaged(_)));
@@ -237,10 +203,7 @@ fn a_failed_setup_leaves_nothing_behind() {
     let recovery = RecoveryKey::generate();
     assert!(set_up(&paths, &NO_KEYCHAIN, &recovery, &CredentialKeys::generate()).is_err());
     let data_folder = paths.bundle.parent().unwrap();
-    let left: Vec<_> = fs::read_dir(data_folder)
-        .unwrap()
-        .map(|entry| entry.unwrap().file_name())
-        .collect();
+    let left: Vec<_> = fs::read_dir(data_folder).unwrap().map(|entry| entry.unwrap().file_name()).collect();
     assert!(left.is_empty(), "{left:?}");
     assert!(matches!(status(&paths), State::NotSetUp));
 
@@ -255,13 +218,7 @@ fn setup_never_replaces_a_key_file_whose_bundle_is_missing() {
     let s = new_setup();
     fs::remove_file(&s.paths.bundle).unwrap();
     let before = fs::read(&s.paths.key_file).unwrap();
-    assert!(set_up(
-        &s.paths,
-        &NO_KEYCHAIN,
-        &RecoveryKey::generate(),
-        &CredentialKeys::generate()
-    )
-    .is_err());
+    assert!(set_up(&s.paths, &NO_KEYCHAIN, &RecoveryKey::generate(), &CredentialKeys::generate()).is_err());
     assert_eq!(fs::read(&s.paths.key_file).unwrap(), before);
     assert!(matches!(status(&s.paths), State::BundleMissing));
 }
@@ -273,38 +230,19 @@ fn a_write_that_fails_late_leaves_no_staging_file() {
     // A folder where the test credential belongs lets the staging file be written, then
     // makes the step that moves it into place fail.
     fs::create_dir_all(&paths.test_credential).unwrap();
-    assert!(set_up(
-        &paths,
-        &NO_KEYCHAIN,
-        &RecoveryKey::generate(),
-        &CredentialKeys::generate()
-    )
-    .is_err());
+    assert!(set_up(&paths, &NO_KEYCHAIN, &RecoveryKey::generate(), &CredentialKeys::generate()).is_err());
     let data_folder = paths.bundle.parent().unwrap();
-    let left: Vec<_> = fs::read_dir(data_folder)
-        .unwrap()
-        .map(|entry| entry.unwrap().file_name())
-        .collect();
+    let left: Vec<_> = fs::read_dir(data_folder).unwrap().map(|entry| entry.unwrap().file_name()).collect();
     assert_eq!(left, ["test-credential.json"]);
 }
 
 #[test]
 fn setup_refuses_the_key_file_while_a_keychain_is_there() {
-    let present = [
-        Keychain::Working {
-            already_running: true,
-        },
-        Keychain::Broken("no answer".into()),
-    ];
+    let present = [Keychain::Working { already_running: true }, Keychain::Broken("no answer".into())];
     for keychain in present {
         let dir = tempfile::tempdir().unwrap();
         let paths = Paths::under(&dir.path().join("config"), &dir.path().join("data"));
-        let result = set_up(
-            &paths,
-            &keychain,
-            &RecoveryKey::generate(),
-            &CredentialKeys::generate(),
-        );
+        let result = set_up(&paths, &keychain, &RecoveryKey::generate(), &CredentialKeys::generate());
         assert!(result.is_err(), "{keychain:?}");
         assert!(matches!(status(&paths), State::NotSetUp));
         assert!(!dir.path().join("config").exists() && !dir.path().join("data").exists());
@@ -331,13 +269,7 @@ fn setup_refuses_a_key_folder_that_is_a_link() {
     fs::create_dir(&elsewhere).unwrap();
     fs::create_dir_all(paths.key_folder.parent().unwrap()).unwrap();
     symlink(&elsewhere, &paths.key_folder).unwrap();
-    assert!(set_up(
-        &paths,
-        &NO_KEYCHAIN,
-        &RecoveryKey::generate(),
-        &CredentialKeys::generate()
-    )
-    .is_err());
+    assert!(set_up(&paths, &NO_KEYCHAIN, &RecoveryKey::generate(), &CredentialKeys::generate()).is_err());
     assert_eq!(fs::read_dir(&elsewhere).unwrap().count(), 0);
     assert!(matches!(status(&paths), State::NotSetUp));
 }
@@ -347,9 +279,7 @@ fn each_damaged_key_file_is_kept_even_within_one_second() {
     let s = new_setup();
     for round in 1..=2 {
         fs::write(&s.paths.key_file, format!("damage {round}")).unwrap();
-        recover(&s.paths, &RecoveryKey::from_bytes(*s.recovery.bytes()))
-            .ok()
-            .unwrap();
+        recover(&s.paths, &RecoveryKey::from_bytes(*s.recovery.bytes())).ok().unwrap();
     }
     let mut kept: Vec<String> = fs::read_dir(&s.paths.key_folder)
         .unwrap()
@@ -366,9 +296,7 @@ fn recovery_makes_a_loose_key_folder_private_first() {
     let s = new_setup();
     fs::remove_file(&s.paths.key_file).unwrap();
     fs::set_permissions(&s.paths.key_folder, fs::Permissions::from_mode(0o755)).unwrap();
-    recover(&s.paths, &RecoveryKey::from_bytes(*s.recovery.bytes()))
-        .ok()
-        .unwrap();
+    recover(&s.paths, &RecoveryKey::from_bytes(*s.recovery.bytes())).ok().unwrap();
     assert_eq!(mode(&s.paths.key_folder), 0o700);
     assert_eq!(unlocked_fingerprint(status(&s.paths)), s.fingerprint);
 }
@@ -383,15 +311,9 @@ fn recovery_never_touches_a_linked_key_folder() {
     assert!(recover(&s.paths, &RecoveryKey::from_bytes(*s.recovery.bytes())).is_err());
 
     // The damaged file is neither moved aside nor replaced.
-    let left: Vec<_> = fs::read_dir(&elsewhere)
-        .unwrap()
-        .map(|entry| entry.unwrap().file_name())
-        .collect();
+    let left: Vec<_> = fs::read_dir(&elsewhere).unwrap().map(|entry| entry.unwrap().file_name()).collect();
     assert_eq!(left, ["recovery-store"]);
-    assert_eq!(
-        fs::read(elsewhere.join("recovery-store")).unwrap(),
-        b"damaged"
-    );
+    assert_eq!(fs::read(elsewhere.join("recovery-store")).unwrap(), b"damaged");
 }
 
 #[test]
@@ -404,8 +326,5 @@ fn securing_a_key_file_swapped_for_a_pipe_fails_instead_of_hanging() {
     let paths = Paths::under(&s._dir.path().join("config"), &s._dir.path().join("data"));
     let (send, answer) = std::sync::mpsc::channel();
     std::thread::spawn(move || send.send(secure(&paths).is_err()));
-    assert_eq!(
-        answer.recv_timeout(std::time::Duration::from_secs(5)),
-        Ok(true)
-    );
+    assert_eq!(answer.recv_timeout(std::time::Duration::from_secs(5)), Ok(true));
 }

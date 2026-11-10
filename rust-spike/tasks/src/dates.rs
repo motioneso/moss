@@ -5,15 +5,11 @@
 //! parser. V8's legacy fallback (free text such as `Nov 7, 2026`, or ISO text padded with
 //! spaces) is not reproduced and parses to `None` here.
 
-use chrono::{
-    DateTime, Duration, LocalResult, NaiveDate, NaiveDateTime, NaiveTime, Offset, TimeZone, Utc,
-};
+use chrono::{DateTime, Duration, LocalResult, NaiveDate, NaiveDateTime, NaiveTime, Offset, TimeZone, Utc};
 
 /// Formats like `Date.prototype.toISOString()`: UTC, three fraction digits, `Z`.
 pub fn to_iso_string(value: DateTime<Utc>) -> String {
-    truncate_ms(value)
-        .format("%Y-%m-%dT%H:%M:%S%.3fZ")
-        .to_string()
+    truncate_ms(value).format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
 }
 
 /// Drops sub-millisecond digits, the precision of a JavaScript `Date`.
@@ -37,11 +33,7 @@ pub fn parse_js_date_in<Tz: TimeZone>(input: &str, local: &Tz) -> Option<DateTim
     let year = cursor.year()?;
     let (month, day) = if cursor.eat(b'-') {
         let month = cursor.digits(2)?;
-        let day = if cursor.eat(b'-') {
-            cursor.digits(2)?
-        } else {
-            1
-        };
+        let day = if cursor.eat(b'-') { cursor.digits(2)? } else { 1 };
         (month, day)
     } else {
         (1, 1)
@@ -74,11 +66,7 @@ pub fn parse_js_date_in<Tz: TimeZone>(input: &str, local: &Tz) -> Option<DateTim
             millis = cursor.fraction_millis()?;
         }
     }
-    if minute > 59
-        || second > 59
-        || hour > 24
-        || (hour == 24 && (minute, second, millis) != (0, 0, 0))
-    {
+    if minute > 59 || second > 59 || hour > 24 || (hour == 24 && (minute, second, millis) != (0, 0, 0)) {
         return None;
     }
 
@@ -124,10 +112,7 @@ struct Cursor<'a> {
 
 impl<'a> Cursor<'a> {
     fn new(input: &'a str) -> Self {
-        Self {
-            bytes: input.as_bytes(),
-            at: 0,
-        }
+        Self { bytes: input.as_bytes(), at: 0 }
     }
 
     fn done(&self) -> bool {
@@ -149,11 +134,7 @@ impl<'a> Cursor<'a> {
             return None;
         }
         self.at += count;
-        Some(
-            slice
-                .iter()
-                .fold(0, |acc, b| acc * 10 + u32::from(b - b'0')),
-        )
+        Some(slice.iter().fold(0, |acc, b| acc * 10 + u32::from(b - b'0')))
     }
 
     fn year(&mut self) -> Option<i32> {

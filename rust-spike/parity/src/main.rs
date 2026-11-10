@@ -38,22 +38,13 @@ fn parse_args() -> Result<Args, String> {
     let mut values: HashMap<String, String> = HashMap::new();
     let mut args = std::env::args().skip(1);
     while let Some(flag) = args.next() {
-        let name = flag
-            .strip_prefix("--")
-            .ok_or_else(|| format!("unexpected argument {flag}"))?;
+        let name = flag.strip_prefix("--").ok_or_else(|| format!("unexpected argument {flag}"))?;
         let value = args.next().ok_or_else(|| format!("{flag} needs a value"))?;
         values.insert(name.to_owned(), value);
     }
-    let take = |name: &str| {
-        values
-            .get(name)
-            .cloned()
-            .ok_or_else(|| format!("--{name} is required"))
-    };
+    let take = |name: &str| values.get(name).cloned().ok_or_else(|| format!("--{name} is required"));
     let port = |name: &str| -> Result<u16, String> {
-        take(name)?
-            .parse()
-            .map_err(|_| format!("--{name} must be a port number"))
+        take(name)?.parse().map_err(|_| format!("--{name} must be a port number"))
     };
     Ok(Args {
         repo: take("repo")?.into(),
@@ -88,9 +79,7 @@ async fn run() -> Result<bool, String> {
     let cases = case::load_dir(&args.cases, args.only.as_deref())?;
     std::fs::create_dir_all(&args.logs).map_err(|error| format!("logs: {error}"))?;
 
-    let spike_sql = args
-        .repo
-        .join("rust-spike/tasks/sql/0001_spike_job_queue.sql");
+    let spike_sql = args.repo.join("rust-spike/tasks/sql/0001_spike_job_queue.sql");
     let copies = Copies::create(&env, &spike_sql).await?;
     let result = run_cases(&args, &env, &copies, &cases).await;
     copies.drop_all(&env).await;
@@ -124,14 +113,8 @@ impl Server {
             .stdout(file)
             .stderr(err)
             .kill_on_drop(true);
-        let child = command
-            .spawn()
-            .map_err(|error| format!("start {name}: {error}"))?;
-        let mut server = Server {
-            name,
-            child,
-            base: format!("http://127.0.0.1:{port}"),
-        };
+        let child = command.spawn().map_err(|error| format!("start {name}: {error}"))?;
+        let mut server = Server { name, child, base: format!("http://127.0.0.1:{port}") };
         server.wait_ready().await?;
         Ok(server)
     }
@@ -141,39 +124,21 @@ impl Server {
         let client = reqwest::Client::new();
         for _ in 0..360 {
             if let Ok(Some(status)) = self.child.try_wait() {
-                return Err(format!(
-                    "{} server exited early ({status}); see its log",
-                    self.name
-                ));
+                return Err(format!("{} server exited early ({status}); see its log", self.name));
             }
-            if client
-                .get(format!("{}/api/tasks", self.base))
-                .send()
-                .await
-                .is_ok()
-            {
+            if client.get(format!("{}/api/tasks", self.base)).send().await.is_ok() {
                 return Ok(());
             }
             tokio::time::sleep(Duration::from_millis(250)).await;
         }
-        Err(format!(
-            "{} server did not answer within 90 seconds",
-            self.name
-        ))
+        Err(format!("{} server did not answer within 90 seconds", self.name))
     }
 
     async fn stop(mut self) {
         if let Some(pid) = self.child.id() {
-            let _ = Command::new("kill")
-                .arg("-TERM")
-                .arg(pid.to_string())
-                .status()
-                .await;
+            let _ = Command::new("kill").arg("-TERM").arg(pid.to_string()).status().await;
         }
-        if tokio::time::timeout(Duration::from_secs(10), self.child.wait())
-            .await
-            .is_err()
-        {
+        if tokio::time::timeout(Duration::from_secs(10), self.child.wait()).await.is_err() {
             let _ = self.child.kill().await;
         }
     }
@@ -253,11 +218,7 @@ async fn run_cases(
     ts.stop().await;
     rs.stop().await;
     let logs = scan_logs(&args.logs);
-    println!(
-        "{} {}",
-        if logs.passed { "PASS" } else { "FAIL" },
-        logs.name
-    );
+    println!("{} {}", if logs.passed { "PASS" } else { "FAIL" }, logs.name);
     for problem in &logs.problems {
         println!("     {problem}");
     }
@@ -316,11 +277,8 @@ async fn run_case(
         },
     ];
 
-    let seed: Result<Vec<String>, String> = case
-        .seed
-        .iter()
-        .map(|sql| vars.fill_string(sql, &HashMap::new()))
-        .collect();
+    let seed: Result<Vec<String>, String> =
+        case.seed.iter().map(|sql| vars.fill_string(sql, &HashMap::new())).collect();
     match seed {
         Ok(seed) => {
             for side in &sides {
@@ -353,10 +311,7 @@ async fn run_case(
                 let text = observed.to_string().to_lowercase();
                 for needle in &step.absent {
                     if text.contains(&needle.to_lowercase()) {
-                        problems.push(format!(
-                            "step {key}: {} output holds {needle:?}",
-                            side.label
-                        ));
+                        problems.push(format!("step {key}: {} output holds {needle:?}", side.label));
                     }
                 }
                 let compared = match &step.compare {
@@ -409,9 +364,7 @@ fn observe(
     problems: &mut Vec<String>,
 ) -> Value {
     result.unwrap_or_else(|error| {
-        problems.push(format!(
-            "step {key}: {label} could not run the step: {error}"
-        ));
+        problems.push(format!("step {key}: {label} could not run the step: {error}"));
         json!({ "harness error": error })
     })
 }
@@ -420,10 +373,7 @@ fn observe(
 fn select(value: &Value, pointers: &[String]) -> Value {
     let mut out = Map::new();
     for pointer in pointers {
-        out.insert(
-            pointer.clone(),
-            value.pointer(pointer).cloned().unwrap_or(Value::Null),
-        );
+        out.insert(pointer.clone(), value.pointer(pointer).cloned().unwrap_or(Value::Null));
     }
     Value::Object(out)
 }
@@ -439,15 +389,10 @@ fn read_cookies(headers: &[String]) -> (Map<String, Value>, Vec<String>) {
             continue;
         };
         let mut attributes = Map::new();
-        attributes.insert(
-            "value".into(),
-            json!(if value.is_empty() { "empty" } else { "set" }),
-        );
+        attributes.insert("value".into(), json!(if value.is_empty() { "empty" } else { "set" }));
         for part in parts.filter(|part| !part.is_empty()) {
             match part.split_once('=') {
-                Some((key, text)) => {
-                    attributes.insert(key.trim().to_ascii_lowercase(), json!(text.trim()))
-                }
+                Some((key, text)) => attributes.insert(key.trim().to_ascii_lowercase(), json!(text.trim())),
                 None => attributes.insert(part.to_ascii_lowercase(), json!(true)),
             };
         }
@@ -516,16 +461,9 @@ async fn perform(
         return Ok(dbs::probe(role, &side.copy.name, actor, &sql).await);
     }
 
-    let method = step
-        .method
-        .as_deref()
-        .ok_or("a step needs method, wait_job or sql")?;
-    let path = vars.fill_string(
-        step.path.as_deref().ok_or("an HTTP step needs a path")?,
-        &side.outputs,
-    )?;
-    let method =
-        reqwest::Method::from_bytes(method.as_bytes()).map_err(|error| error.to_string())?;
+    let method = step.method.as_deref().ok_or("a step needs method, wait_job or sql")?;
+    let path = vars.fill_string(step.path.as_deref().ok_or("an HTTP step needs a path")?, &side.outputs)?;
+    let method = reqwest::Method::from_bytes(method.as_bytes()).map_err(|error| error.to_string())?;
     let mut request = http.request(method, format!("{}{path}", side.server.base));
     if let Some(actor) = step.actor.as_deref() {
         if let Some(token) = actor_token(actor) {
@@ -535,10 +473,7 @@ async fn perform(
         }
     }
     if let Some(name) = &step.cookie {
-        let jar = side
-            .cookies
-            .get(name)
-            .ok_or_else(|| format!("no cookie saved as {name}"))?;
+        let jar = side.cookies.get(name).ok_or_else(|| format!("no cookie saved as {name}"))?;
         request = request.header("cookie", jar.as_str());
     }
     let mut has_content_type = false;
@@ -560,10 +495,7 @@ async fn perform(
         request = request.body(vars.fill_string(raw, &side.outputs)?);
     }
 
-    let response = request
-        .send()
-        .await
-        .map_err(|error| format!("request failed: {error}"))?;
+    let response = request.send().await.map_err(|error| format!("request failed: {error}"))?;
     let status = response.status().as_u16();
     let set_cookies: Vec<String> = response
         .headers()
@@ -571,10 +503,7 @@ async fn perform(
         .iter()
         .filter_map(|value| value.to_str().ok().map(str::to_owned))
         .collect();
-    let text = response
-        .text()
-        .await
-        .map_err(|error| format!("read body: {error}"))?;
+    let text = response.text().await.map_err(|error| format!("read body: {error}"))?;
     let body = if text.is_empty() {
         Value::Null
     } else {
@@ -583,9 +512,7 @@ async fn perform(
     let (cookies, jar) = read_cookies(&set_cookies);
     if let Some(name) = &step.save_cookie {
         if jar.is_empty() {
-            return Err(format!(
-                "the response set no cookie to save as {name} (status {status})"
-            ));
+            return Err(format!("the response set no cookie to save as {name} (status {status})"));
         }
         side.cookies.insert(name.clone(), jar.join("; "));
     }
@@ -641,11 +568,7 @@ mod tests {
     #[test]
     fn selects_parts_by_pointer() {
         let output = json!({ "status": 200, "body": { "token": "x", "user": { "id": 1 } } });
-        let pointers = vec![
-            "/status".to_owned(),
-            "/body/user".to_owned(),
-            "/body/gone".to_owned(),
-        ];
+        let pointers = vec!["/status".to_owned(), "/body/user".to_owned(), "/body/gone".to_owned()];
         assert_eq!(
             select(&output, &pointers),
             json!({ "/status": 200, "/body/user": { "id": 1 }, "/body/gone": null })
@@ -659,17 +582,10 @@ mod tests {
         std::fs::write(dir.join("ts-server.log"), "TS READY 1\n").unwrap();
         std::fs::write(dir.join("rs-server.log"), "listening\n").unwrap();
         assert!(scan_logs(&dir).passed);
-        std::fs::write(
-            dir.join("rs-server.log"),
-            "body {\"password\":\"MOSS-SENTINEL-1\"}\n",
-        )
-        .unwrap();
+        std::fs::write(dir.join("rs-server.log"), "body {\"password\":\"MOSS-SENTINEL-1\"}\n").unwrap();
         let outcome = scan_logs(&dir);
         assert!(!outcome.passed);
-        assert_eq!(
-            outcome.problems,
-            vec!["Rust server log: 1 lines hold MOSS-SENTINEL-"]
-        );
+        assert_eq!(outcome.problems, vec!["Rust server log: 1 lines hold MOSS-SENTINEL-"]);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

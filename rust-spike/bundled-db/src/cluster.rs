@@ -24,9 +24,7 @@ pub struct Bundle {
 
 impl Bundle {
     pub fn new(root: &Path) -> Result<Bundle, String> {
-        let root = root
-            .canonicalize()
-            .map_err(|e| format!("Postgres bundle {}: {e}", root.display()))?;
+        let root = root.canonicalize().map_err(|e| format!("Postgres bundle {}: {e}", root.display()))?;
         let bundle = Bundle { root };
         for tool in ["postgres", "initdb"] {
             if !bundle.bin(tool).is_file() {
@@ -65,12 +63,7 @@ pub struct Endpoint {
 }
 
 impl Endpoint {
-    pub fn connect(
-        &self,
-        role: &str,
-        password: &Secret,
-        database: &str,
-    ) -> Result<postgres::Client, String> {
+    pub fn connect(&self, role: &str, password: &Secret, database: &str) -> Result<postgres::Client, String> {
         let mut config = postgres::Config::new();
         config
             .user(role)
@@ -83,9 +76,7 @@ impl Endpoint {
             Some(dir) => config.host_path(dir),
             None => config.host("127.0.0.1"),
         };
-        config
-            .connect(postgres::NoTls)
-            .map_err(|e| format!("connect as {role}: {}", db_error(&e)))
+        config.connect(postgres::NoTls).map_err(|e| format!("connect as {role}: {}", db_error(&e)))
     }
 
     pub fn to_json(&self) -> Value {
@@ -161,17 +152,13 @@ pub fn initialize(layout: &Layout, bundle: &Bundle) -> Result<bool, String> {
         return Ok(false);
     }
     if std::fs::read_dir(&layout.data).is_ok_and(|mut entries| entries.next().is_some()) {
-        return Err(format!(
-            "{} holds files but no database; refusing to overwrite it",
-            layout.data.display()
-        ));
+        return Err(format!("{} holds files but no database; refusing to overwrite it", layout.data.display()));
     }
     let partial = layout.root.join("db.partial");
     if partial.exists() {
         std::fs::remove_dir_all(&partial).map_err(|e| format!("unfinished first run: {e}"))?;
     }
-    let password =
-        secrets::password(layout, SUPERUSER).map_err(|e| format!("superuser password: {e}"))?;
+    let password = secrets::password(layout, SUPERUSER).map_err(|e| format!("superuser password: {e}"))?;
     let pwfile = layout.secrets.join("initdb-password");
     let _ = std::fs::remove_file(&pwfile);
     private_file(&pwfile)
@@ -183,31 +170,15 @@ pub fn initialize(layout: &Layout, bundle: &Bundle) -> Result<bool, String> {
     initdb
         .arg("-D")
         .arg(&partial)
-        .args([
-            "-U",
-            SUPERUSER,
-            "--encoding=UTF8",
-            "--no-instructions",
-            "--data-checksums",
-        ])
+        .args(["-U", SUPERUSER, "--encoding=UTF8", "--no-instructions", "--data-checksums"])
         .arg(format!("--pwfile={}", pwfile.display()))
         .args(["--auth-local=scram-sha-256", "--auth-host=scram-sha-256"])
         // Sorting and case rules come from ICU, not from the OS's C library. Sorting matches
         // across OSes only when each bundle ships the same ICU version. The spike used each
         // machine's own ICU. The libc ctype stays UTF-8 because Postgres 17 text search still
         // asks libc what a letter is.
-        .args([
-            "--locale-provider=icu",
-            "--icu-locale=und",
-            "--lc-collate=C",
-            "--lc-ctype=C.UTF-8",
-        ])
-        .args([
-            "--lc-messages=C",
-            "--lc-monetary=C",
-            "--lc-numeric=C",
-            "--lc-time=C",
-        ])
+        .args(["--locale-provider=icu", "--icu-locale=und", "--lc-collate=C", "--lc-ctype=C.UTF-8"])
+        .args(["--lc-messages=C", "--lc-monetary=C", "--lc-numeric=C", "--lc-time=C"])
         .stdin(Stdio::null())
         .stdout(log.try_clone().map_err(|e| e.to_string())?)
         .stderr(log);
@@ -232,8 +203,7 @@ pub fn initialize(layout: &Layout, bundle: &Bundle) -> Result<bool, String> {
     if layout.data.exists() {
         std::fs::remove_dir(&layout.data).map_err(|e| format!("{}: {e}", layout.data.display()))?;
     }
-    std::fs::rename(&partial, &layout.data)
-        .map_err(|e| format!("move the new database into place: {e}"))?;
+    std::fs::rename(&partial, &layout.data).map_err(|e| format!("move the new database into place: {e}"))?;
     Ok(true)
 }
 
@@ -255,12 +225,7 @@ enum StartError {
 
 /// Clears leftovers from an earlier crash, then starts Postgres and waits until it accepts
 /// connections.
-pub fn start(
-    layout: &Layout,
-    bundle: &Bundle,
-    listen: &Listen,
-    timeout: Duration,
-) -> Result<Running, String> {
+pub fn start(layout: &Layout, bundle: &Bundle, listen: &Listen, timeout: Duration) -> Result<Running, String> {
     let recovered = clear_leftovers(layout)?;
     let candidates: Vec<u16> = match listen {
         // The port only names the socket file inside the private run folder.
@@ -286,13 +251,7 @@ pub fn start(
                 let socket_dir = matches!(listen, Listen::SocketOnly).then(|| layout.run.clone());
                 let endpoint = Endpoint { socket_dir, port };
                 write_state(layout, pid, &endpoint)?;
-                return Ok(Running {
-                    child,
-                    pid,
-                    endpoint,
-                    recovered,
-                    skipped_ports,
-                });
+                return Ok(Running { child, pid, endpoint, recovered, skipped_ports });
             }
             // Another program took the port between the check and Postgres binding it.
             Err(StartError::PortInUse) => skipped_ports.push(port),
@@ -302,18 +261,10 @@ pub fn start(
     Err(format!("no free port; ports in use: {skipped_ports:?}"))
 }
 
-fn launch(
-    layout: &Layout,
-    bundle: &Bundle,
-    listen: &Listen,
-    port: u16,
-    timeout: Duration,
-) -> Result<Child, StartError> {
+fn launch(layout: &Layout, bundle: &Bundle, listen: &Listen, port: u16, timeout: Duration) -> Result<Child, StartError> {
     let other = StartError::Other;
     let mut log = log_file(layout, "postgres.log").map_err(other)?;
-    let from = log
-        .seek(SeekFrom::End(0))
-        .map_err(|e| other(e.to_string()))?;
+    let from = log.seek(SeekFrom::End(0)).map_err(|e| other(e.to_string()))?;
     let listen_addresses = match listen {
         Listen::SocketOnly => "",
         Listen::Loopback(_) => "127.0.0.1",
@@ -351,10 +302,7 @@ fn launch(
         postgres.pre_exec(move || {
             // Postgres memory holds private rows: never write it to a crash dump. The start
             // fails rather than run without this limit.
-            let none = libc::rlimit {
-                rlim_cur: 0,
-                rlim_max: 0,
-            };
+            let none = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
             if libc::setrlimit(libc::RLIMIT_CORE, &none) != 0 {
                 return Err(io::Error::last_os_error());
             }
@@ -372,21 +320,15 @@ fn launch(
             Ok(())
         });
     }
-    let mut child = postgres
-        .spawn()
-        .map_err(|e| other(format!("start postgres: {e}")))?;
+    let mut child = postgres.spawn().map_err(|e| other(format!("start postgres: {e}")))?;
     let started = Instant::now();
     loop {
         if let Some(status) = child.try_wait().map_err(|e| other(e.to_string()))? {
             let tail = log_tail(&mut log, from);
-            if tail.contains("Address already in use")
-                || tail.contains("could not create any TCP/IP sockets")
-            {
+            if tail.contains("Address already in use") || tail.contains("could not create any TCP/IP sockets") {
                 return Err(StartError::PortInUse);
             }
-            return Err(other(format!(
-                "postgres exited during start ({status}):\n{tail}"
-            )));
+            return Err(other(format!("postgres exited during start ({status}):\n{tail}")));
         }
         if let Some(pidfile) = read_postmaster_pid(layout) {
             if pidfile.pid == child.id() as i32 && pidfile.status == "ready" {
@@ -400,10 +342,7 @@ fn launch(
                 procs::signal(pid, libc::SIGKILL);
                 child.wait().ok()
             });
-            return Err(other(format!(
-                "postgres was not ready after {}s",
-                timeout.as_secs()
-            )));
+            return Err(other(format!("postgres was not ready after {}s", timeout.as_secs())));
         }
         std::thread::sleep(Duration::from_millis(50));
     }
@@ -421,11 +360,7 @@ pub enum StopMode {
     Killed,
 }
 
-pub fn stop(
-    layout: &Layout,
-    running: &mut Running,
-    timeout: Duration,
-) -> Result<(StopMode, ExitStatus), String> {
+pub fn stop(layout: &Layout, running: &mut Running, timeout: Duration) -> Result<(StopMode, ExitStatus), String> {
     let steps = [
         (libc::SIGINT, timeout, StopMode::Clean),
         (libc::SIGQUIT, Duration::from_secs(10), StopMode::Immediate),
@@ -470,10 +405,7 @@ pub fn read_postmaster_pid(layout: &Layout) -> Option<PostmasterPid> {
     Some(PostmasterPid {
         pid: lines.first()?.trim().parse().ok()?,
         data: PathBuf::from(lines.get(1)?.trim()),
-        status: lines
-            .get(7)
-            .map(|s| s.trim().to_string())
-            .unwrap_or_default(),
+        status: lines.get(7).map(|s| s.trim().to_string()).unwrap_or_default(),
     })
 }
 
@@ -488,29 +420,20 @@ pub fn clear_leftovers(layout: &Layout) -> Result<Vec<String>, String> {
     let pidfile = read_postmaster_pid(layout);
     let ours = procs::database_processes(&layout.data, &layout.cluster_name());
     if !ours.is_empty() {
-        let postmaster = pidfile
-            .as_ref()
-            .map(|p| p.pid)
-            .filter(|pid| ours.contains(pid));
+        let postmaster = pidfile.as_ref().map(|p| p.pid).filter(|pid| ours.contains(pid));
         match postmaster {
             Some(pid) => {
                 actions.push(format!("database still running from an earlier session (pid {pid}); stopped it cleanly"));
                 procs::signal(pid, libc::SIGINT);
             }
             None => {
-                actions.push(format!(
-                    "{} server processes outlived a crashed database; ended them",
-                    ours.len()
-                ));
-                ours.iter()
-                    .for_each(|&pid| procs::signal(pid, libc::SIGQUIT));
+                actions.push(format!("{} server processes outlived a crashed database; ended them", ours.len()));
+                ours.iter().for_each(|&pid| procs::signal(pid, libc::SIGQUIT));
             }
         }
         if !wait_gone(layout, Duration::from_secs(30)) {
             actions.push("they did not exit in time; killed them".into());
-            procs::database_processes(&layout.data, &layout.cluster_name())
-                .iter()
-                .for_each(|&pid| procs::signal(pid, libc::SIGKILL));
+            procs::database_processes(&layout.data, &layout.cluster_name()).iter().for_each(|&pid| procs::signal(pid, libc::SIGKILL));
             if !wait_gone(layout, Duration::from_secs(10)) {
                 return Err("old database processes would not exit".into());
             }
@@ -518,17 +441,13 @@ pub fn clear_leftovers(layout: &Layout) -> Result<Vec<String>, String> {
     }
     if let Some(pidfile) = read_postmaster_pid(layout) {
         if procs::alive(pidfile.pid) {
-            std::fs::remove_file(layout.postmaster_pid())
-                .map_err(|e| format!("stale lock file: {e}"))?;
+            std::fs::remove_file(layout.postmaster_pid()).map_err(|e| format!("stale lock file: {e}"))?;
             actions.push(format!(
                 "lock file named pid {}, now an unrelated program; left it alone and removed the stale lock file",
                 pidfile.pid
             ));
         } else {
-            actions.push(format!(
-                "stale lock file from a crash (pid {} is gone); Postgres replaces it",
-                pidfile.pid
-            ));
+            actions.push(format!("stale lock file from a crash (pid {} is gone); Postgres replaces it", pidfile.pid));
         }
     }
     Ok(actions)
@@ -546,34 +465,25 @@ fn wait_gone(layout: &Layout, timeout: Duration) -> bool {
 }
 
 fn write_state(layout: &Layout, pid: i32, endpoint: &Endpoint) -> Result<(), String> {
-    let started = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
+    let started = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
     let state = json!({
         "supervisor_pid": std::process::id(),
         "postgres_pid": pid,
         "endpoint": endpoint.to_json(),
         "started_unix": started,
     });
-    layout
-        .write_state(state.to_string().as_bytes())
-        .map_err(|e| format!("state file: {e}"))
+    layout.write_state(state.to_string().as_bytes()).map_err(|e| format!("state file: {e}"))
 }
 
 /// The running install's state file. The socket folder is checked first, because whoever
 /// controls it chooses the server that the caller then sends a password to.
 pub fn read_state(layout: &Layout) -> Result<Value, String> {
     match layout.check_run() {
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            return Err("the database is not running".into())
-        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Err("the database is not running".into()),
         Err(error) => return Err(error.to_string()),
         Ok(()) => {}
     }
-    let text = layout
-        .read_state()
-        .map_err(|_| "the database is not running".to_string())?;
+    let text = layout.read_state().map_err(|_| "the database is not running".to_string())?;
     serde_json::from_str(&text).map_err(|e| e.to_string())
 }
 
@@ -598,9 +508,7 @@ fn log_file(layout: &Layout, name: &str) -> Result<File, String> {
 /// The last lines Postgres wrote since `from`, for an error message.
 fn log_tail(log: &mut File, from: u64) -> String {
     let mut text = String::new();
-    let _ = log
-        .seek(SeekFrom::Start(from))
-        .and_then(|_| log.read_to_string(&mut text));
+    let _ = log.seek(SeekFrom::Start(from)).and_then(|_| log.read_to_string(&mut text));
     let lines: Vec<&str> = text.lines().collect();
     lines[lines.len().saturating_sub(8)..].join("\n")
 }
@@ -643,10 +551,7 @@ mod tests {
         let dir = private_tempdir();
         let layout = Layout::create(&dir.path().join("install")).unwrap();
         let first = lock(&layout).unwrap();
-        assert_eq!(
-            std::fs::read_to_string(&layout.lock).unwrap(),
-            std::process::id().to_string()
-        );
+        assert_eq!(std::fs::read_to_string(&layout.lock).unwrap(), std::process::id().to_string());
         assert!(lock(&layout).is_err());
         drop(first);
         assert_eq!(holder(&layout).unwrap(), None);
@@ -693,8 +598,7 @@ mod tests {
         assert_eq!(socket.socket_dir.as_deref(), Some(run.as_path()));
         assert_eq!(socket.port, 5432);
 
-        let tcp =
-            Endpoint::from_json(&json!({ "socket_dir": null, "port": 5194 }), &layout.run).unwrap();
+        let tcp = Endpoint::from_json(&json!({ "socket_dir": null, "port": 5194 }), &layout.run).unwrap();
         assert_eq!(tcp.socket_dir, None);
     }
 }

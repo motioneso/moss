@@ -42,17 +42,11 @@ const ACCOUNT_SELECT: &str = "\
       ON definitions.provider_id = accounts.provider_id";
 
 /// Database refusals that mean the request itself was wrong.
-const INVALID_REQUEST_FRAGMENTS: [&str; 3] = [
-    "foreign key",
-    "violates row-level security policy",
-    "duplicate key",
-];
+const INVALID_REQUEST_FRAGMENTS: [&str; 3] =
+    ["foreign key", "violates row-level security policy", "duplicate key"];
 
 pub fn routes() -> Router<Arc<Platform>> {
-    Router::new().route(
-        "/api/connectors/accounts",
-        get(list_accounts).post(create_account),
-    )
+    Router::new().route("/api/connectors/accounts", get(list_accounts).post(create_account))
 }
 
 /// `serializeAccount`.
@@ -143,12 +137,7 @@ fn parse_new_account(body: &Bytes) -> Result<NewAccount, ApiError> {
         Some(Value::Object(payload)) => payload,
         _ => return Err(bad_request("tokenPayload must be a JSON object")),
     };
-    Ok(NewAccount {
-        provider_id,
-        scopes,
-        status,
-        secret: seal_ready(payload)?,
-    })
+    Ok(NewAccount { provider_id, scopes, status, secret: seal_ready(payload)? })
 }
 
 fn seal_ready(payload: Map<String, Value>) -> Result<SecretFields, ApiError> {
@@ -170,10 +159,7 @@ async fn create_account(
     let access = resolve_access(&platform, &headers).await?;
     let account = parse_new_account(&body)?;
     if account.provider_id == OUTLOOK_BROWSER_PROVIDER {
-        return Err(ApiError::http(
-            403,
-            "Use the dedicated Outlook calendar connection.",
-        ));
+        return Err(ApiError::http(403, "Use the dedicated Outlook calendar connection."));
     }
     let sealed = platform.connectors.seal(&account.secret);
     let cx = DataContext::open(&platform.app, &access).await?;
@@ -185,31 +171,17 @@ async fn create_account(
                 created_at, updated_at) \
              VALUES ($1, $2, app.current_actor_user_id(), $3, \
                      ($4::text)::app.connector_account_status, $5, NULL, now(), now())",
-            &[
-                &id,
-                &account.provider_id,
-                &account.scopes,
-                &account.status,
-                &sealed,
-            ],
+            &[&id, &account.provider_id, &account.scopes, &account.status, &sealed],
         )
         .await
         .map_err(ApiError::from)
-        .map_err(
-            |error| match error.db_message_contains(&INVALID_REQUEST_FRAGMENTS) {
-                true => bad_request("Connector account request is invalid"),
-                false => error,
-            },
-        )?;
-    let row = cx
-        .db()
-        .query_one(&format!("{ACCOUNT_SELECT} WHERE accounts.id = $1"), &[&id])
-        .await?;
+        .map_err(|error| match error.db_message_contains(&INVALID_REQUEST_FRAGMENTS) {
+            true => bad_request("Connector account request is invalid"),
+            false => error,
+        })?;
+    let row = cx.db().query_one(&format!("{ACCOUNT_SELECT} WHERE accounts.id = $1"), &[&id]).await?;
     cx.commit().await?;
-    Ok(json_reply(
-        201,
-        &json!({ "account": serialize_account(&row) }),
-    ))
+    Ok(json_reply(201, &json!({ "account": serialize_account(&row) })))
 }
 
 #[cfg(test)]
@@ -228,18 +200,13 @@ mod tests {
 
     #[test]
     fn reads_a_new_account_with_ts_defaults() {
-        let account =
-            parse(json!({ "providerId": "google", "tokenPayload": { "refreshToken": SENTINEL } }))
-                .ok()
-                .unwrap();
+        let account = parse(json!({ "providerId": "google", "tokenPayload": { "refreshToken": SENTINEL } }))
+            .ok()
+            .unwrap();
         assert_eq!(account.provider_id, "google");
         assert!(account.scopes.is_empty());
         assert_eq!(account.status, "active");
-        assert!(account
-            .secret
-            .get("refreshToken")
-            .unwrap()
-            .matches(SENTINEL));
+        assert!(account.secret.get("refreshToken").unwrap().matches(SENTINEL));
     }
 
     #[test]
@@ -247,34 +214,13 @@ mod tests {
         let cases = [
             (json!([]), "Expected JSON object body"),
             (json!({ "tokenPayload": {} }), "providerId is required"),
-            (
-                json!({ "providerId": "", "tokenPayload": {} }),
-                "providerId is required",
-            ),
-            (
-                json!({ "providerId": 7, "tokenPayload": {} }),
-                "providerId must be a string",
-            ),
-            (
-                json!({ "providerId": "g", "scopes": "a", "tokenPayload": {} }),
-                "scopes must be an array",
-            ),
-            (
-                json!({ "providerId": "g", "scopes": [1], "tokenPayload": {} }),
-                "scopes[0] must be a string",
-            ),
-            (
-                json!({ "providerId": "g", "status": "revoked", "tokenPayload": {} }),
-                "status must be active or error",
-            ),
-            (
-                json!({ "providerId": "g" }),
-                "tokenPayload must be a JSON object",
-            ),
-            (
-                json!({ "providerId": "g", "tokenPayload": [] }),
-                "tokenPayload must be a JSON object",
-            ),
+            (json!({ "providerId": "", "tokenPayload": {} }), "providerId is required"),
+            (json!({ "providerId": 7, "tokenPayload": {} }), "providerId must be a string"),
+            (json!({ "providerId": "g", "scopes": "a", "tokenPayload": {} }), "scopes must be an array"),
+            (json!({ "providerId": "g", "scopes": [1], "tokenPayload": {} }), "scopes[0] must be a string"),
+            (json!({ "providerId": "g", "status": "revoked", "tokenPayload": {} }), "status must be active or error"),
+            (json!({ "providerId": "g" }), "tokenPayload must be a JSON object"),
+            (json!({ "providerId": "g", "tokenPayload": [] }), "tokenPayload must be a JSON object"),
         ];
         for (body, message) in cases {
             assert_eq!(parse(body.clone()).err(), Some(refusal(message)), "{body}");

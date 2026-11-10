@@ -28,8 +28,8 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
-mod linked_files;
 mod module_files;
+mod linked_files;
 pub use linked_files::FolderLock;
 
 #[derive(Debug)]
@@ -93,10 +93,7 @@ impl Root {
         if in_vaults(&path) {
             return Err(VaultError::Escape(path.display().to_string()));
         }
-        Ok(Root {
-            path,
-            in_vault: false,
-        })
+        Ok(Root { path, in_vault: false })
     }
 
     /// Creates the directory, private to the owner, if it is missing. Nothing is made when the
@@ -131,10 +128,7 @@ impl Root {
         if !fs::symlink_metadata(&path)?.is_dir() {
             return Err(VaultError::NotFound(relative.to_owned()));
         }
-        Ok(Root {
-            path,
-            in_vault: self.in_vault,
-        })
+        Ok(Root { path, in_vault: self.in_vault })
     }
 
     pub fn create_subdir(&self, relative: &str) -> Result<Root, VaultError> {
@@ -170,10 +164,7 @@ impl Root {
             return Err(VaultError::BadPath(relative.to_owned()));
         }
         static NEXT: AtomicU64 = AtomicU64::new(0);
-        let name = path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("file");
+        let name = path.file_name().and_then(|name| name.to_str()).unwrap_or("file");
         let temp = path.with_file_name(format!(
             ".{name}.tmp-{}-{}",
             std::process::id(),
@@ -214,10 +205,7 @@ impl Root {
             } else {
                 EntryKind::Other
             };
-            entries.push(Entry {
-                name: entry.file_name().to_string_lossy().into_owned(),
-                kind,
-            });
+            entries.push(Entry { name: entry.file_name().to_string_lossy().into_owned(), kind });
         }
         entries.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(entries)
@@ -270,9 +258,7 @@ static VAULT_FOLDERS: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
 
 /// Whether `path` is a vaults folder or inside one.
 fn in_vaults(path: &Path) -> bool {
-    let folders = VAULT_FOLDERS
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let folders = VAULT_FOLDERS.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     folders.iter().any(|folder| path.starts_with(folder))
 }
 
@@ -289,10 +275,7 @@ fn split_relative(relative: &str) -> Result<Vec<&str>, VaultError> {
     {
         return Err(bad());
     }
-    if names
-        .iter()
-        .any(|name| name.is_empty() || *name == "." || *name == "..")
-    {
+    if names.iter().any(|name| name.is_empty() || *name == "." || *name == "..") {
         return Err(bad());
     }
     Ok(names)
@@ -316,18 +299,11 @@ impl Vaults {
         fs::create_dir_all(path)?;
         set_mode(path, 0o700)?;
         let path = fs::canonicalize(path)?;
-        let mut folders = VAULT_FOLDERS
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut folders = VAULT_FOLDERS.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         if !folders.contains(&path) {
             folders.push(path.clone());
         }
-        Ok(Vaults {
-            root: Root {
-                path,
-                in_vault: true,
-            },
-        })
+        Ok(Vaults { root: Root { path, in_vault: true } })
     }
 }
 
@@ -338,11 +314,7 @@ pub struct VaultContext {
 
 impl VaultContext {
     pub fn for_access(vaults: &Vaults, access: &AccessContext) -> Result<VaultContext, VaultError> {
-        Ok(VaultContext {
-            root: vaults
-                .root
-                .create_subdir(&access.actor_user_id().to_string())?,
-        })
+        Ok(VaultContext { root: vaults.root.create_subdir(&access.actor_user_id().to_string())? })
     }
 
     pub fn read(&self, relative: &str) -> Result<Vec<u8>, VaultError> {
@@ -432,12 +404,7 @@ mod tests {
         assert_eq!(vault.read("notes/today.md").unwrap(), b"hello");
         vault.write("notes/today.md", b"again").unwrap();
         assert_eq!(vault.read_to_string("notes/today.md").unwrap(), "again");
-        let names: Vec<_> = vault
-            .list("notes")
-            .unwrap()
-            .into_iter()
-            .map(|e| e.name)
-            .collect();
+        let names: Vec<_> = vault.list("notes").unwrap().into_iter().map(|e| e.name).collect();
         assert_eq!(names, ["today.md"]);
     }
 
@@ -457,14 +424,8 @@ mod tests {
             "a//b".to_owned(),
             String::new(),
         ] {
-            assert!(
-                matches!(a.read(&path), Err(VaultError::BadPath(_))),
-                "read {path:?}"
-            );
-            assert!(
-                matches!(a.write(&path, b"x"), Err(VaultError::BadPath(_))),
-                "write {path:?}"
-            );
+            assert!(matches!(a.read(&path), Err(VaultError::BadPath(_))), "read {path:?}");
+            assert!(matches!(a.write(&path, b"x"), Err(VaultError::BadPath(_))), "write {path:?}");
         }
     }
 
@@ -479,14 +440,8 @@ mod tests {
         std::os::unix::fs::symlink(&outside, a_dir.join("link.txt")).unwrap();
         std::os::unix::fs::symlink(dir.path(), a_dir.join("linkdir")).unwrap();
         assert!(matches!(a.read("link.txt"), Err(VaultError::Escape(_))));
-        assert!(matches!(
-            a.write("link.txt", b"x"),
-            Err(VaultError::Escape(_))
-        ));
-        assert!(matches!(
-            a.read("linkdir/outside.txt"),
-            Err(VaultError::Escape(_))
-        ));
+        assert!(matches!(a.write("link.txt", b"x"), Err(VaultError::Escape(_))));
+        assert!(matches!(a.read("linkdir/outside.txt"), Err(VaultError::Escape(_))));
         assert!(matches!(a.list("linkdir"), Err(VaultError::Escape(_))));
         assert_eq!(fs::read(&outside).unwrap(), b"outside");
     }
@@ -500,10 +455,7 @@ mod tests {
         a.write("secret.md", b"x").unwrap();
         let mode = |path: &Path| fs::metadata(path).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode(&vaults.root.path().join(USER_A)), 0o700);
-        assert_eq!(
-            mode(&vaults.root.path().join(USER_A).join("secret.md")),
-            0o600
-        );
+        assert_eq!(mode(&vaults.root.path().join(USER_A).join("secret.md")), 0o600);
     }
 
     #[test]

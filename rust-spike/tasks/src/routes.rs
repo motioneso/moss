@@ -41,22 +41,13 @@ type Reply = Result<Response, ApiError>;
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/api/tasks", get(list_tasks).post(create_task))
-        .route(
-            "/api/tasks/preferences",
-            get(get_preferences).patch(update_preferences),
-        )
+        .route("/api/tasks/preferences", get(get_preferences).patch(update_preferences))
         .route("/api/tasks/focus", get(focus))
         .route("/api/tasks/at-risk", get(at_risk))
         .route("/api/tasks/overdue", get(overdue))
         .route("/api/tasks/lists", get(list_lists).post(create_list))
-        .route(
-            "/api/tasks/lists/{list_id}",
-            axum::routing::patch(rename_list).delete(delete_list),
-        )
-        .route(
-            "/api/tasks/lists/{list_id}/tags",
-            get(list_tags).post(create_tag),
-        )
+        .route("/api/tasks/lists/{list_id}", axum::routing::patch(rename_list).delete(delete_list))
+        .route("/api/tasks/lists/{list_id}/tags", get(list_tags).post(create_tag))
         .route(
             "/api/tasks/lists/{list_id}/tags/{tag_id}",
             axum::routing::patch(rename_tag).delete(delete_tag),
@@ -64,18 +55,9 @@ pub fn router(state: AppState) -> Router {
         .route("/api/tasks/{id}", get(get_task).patch(update_task))
         .route("/api/tasks/{id}/subtasks", get(list_subtasks))
         .route("/api/tasks/{id}/tags", axum::routing::post(assign_tag))
-        .route(
-            "/api/tasks/{id}/tags/{tag_id}",
-            axum::routing::delete(unassign_tag),
-        )
-        .route(
-            "/api/tasks/{id}/activity",
-            get(list_activity).post(add_activity),
-        )
-        .route(
-            "/api/tasks/{id}/deferred-status",
-            axum::routing::post(deferred_status),
-        )
+        .route("/api/tasks/{id}/tags/{tag_id}", axum::routing::delete(unassign_tag))
+        .route("/api/tasks/{id}/activity", get(list_activity).post(add_activity))
+        .route("/api/tasks/{id}/deferred-status", axum::routing::post(deferred_status))
         .fallback(not_found)
         .method_not_allowed_fallback(not_found)
         .layer(DefaultBodyLimit::max(BODY_LIMIT * 2))
@@ -85,10 +67,7 @@ pub fn router(state: AppState) -> Router {
 /// Fastify's default reply for a request no route matches. It answers 404 for a known path
 /// with an unknown method too.
 async fn not_found(method: Method, uri: Uri) -> Response {
-    let url = uri
-        .path_and_query()
-        .map(|value| value.as_str())
-        .unwrap_or("/");
+    let url = uri.path_and_query().map(|value| value.as_str()).unwrap_or("/");
     json_reply(
         404,
         &json!({
@@ -360,21 +339,11 @@ async fn update_preferences(
     headers: HeaderMap,
     bytes: Bytes,
 ) -> Reply {
-    let body = request_body(
-        &method,
-        &headers,
-        &bytes,
-        Some(schemas::update_preferences()),
-    )?;
+    let body = request_body(&method, &headers, &bytes, Some(schemas::update_preferences()))?;
     let access = resolve_access(&state.platform, &headers).await?;
     let default_view = match require_object(&body)?.get("defaultView") {
         Some(Value::String(view)) if view == "priority" || view == "matrix" => view.clone(),
-        _ => {
-            return Err(ApiError::http(
-                400,
-                "defaultView must be priority or matrix",
-            ))
-        }
+        _ => return Err(ApiError::http(400, "defaultView must be priority or matrix")),
     };
     let cx = DataContext::open(&state.platform.app, &access).await?;
     let row = repo::update_preferences(&cx, &default_view).await?;
@@ -441,10 +410,8 @@ async fn delete_list(
 ) -> Reply {
     let body = request_body(&method, &headers, &bytes, Some(schemas::delete_list()))?;
     let access = resolve_access(&state.platform, &headers).await?;
-    let reassign_to = optional_string(
-        require_object(&body)?.get("reassignToListId"),
-        "reassignToListId",
-    )?;
+    let reassign_to =
+        optional_string(require_object(&body)?.get("reassignToListId"), "reassignToListId")?;
     let cx = DataContext::open(&state.platform.app, &access).await?;
     repo::delete_list(&cx, &list_id, reassign_to.as_deref()).await?;
     cx.commit().await?;

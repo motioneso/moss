@@ -58,9 +58,7 @@ impl Database {
     pub(crate) fn unconnected(url: &str, role: RuntimeRole) -> Self {
         let mut config = Config::new();
         config.url = Some(url.to_owned());
-        let pool = config
-            .create_pool(Some(Runtime::Tokio1), NoTls)
-            .expect("test pool");
+        let pool = config.create_pool(Some(Runtime::Tokio1), NoTls).expect("test pool");
         Self { pool, role }
     }
 
@@ -76,10 +74,7 @@ impl Database {
 
 /// Refuses to run on a role that could read past RLS.
 async fn assert_runtime_role(pool: &Pool, expected: &str) -> Result<(), String> {
-    let client = pool
-        .get()
-        .await
-        .map_err(|error| format!("connect as {expected}: {error}"))?;
+    let client = pool.get().await.map_err(|error| format!("connect as {expected}: {error}"))?;
     let row = client
         .query_one(
             "SELECT current_user::text, r.rolsuper, r.rolbypassrls \
@@ -93,9 +88,7 @@ async fn assert_runtime_role(pool: &Pool, expected: &str) -> Result<(), String> 
         return Err(format!("connected as {name}, expected {expected}"));
     }
     if superuser || bypass {
-        return Err(format!(
-            "role {name} can bypass row-level security; refusing to start"
-        ));
+        return Err(format!("role {name} can bypass row-level security; refusing to start"));
     }
     Ok(())
 }
@@ -110,16 +103,11 @@ pub struct DataContext {
 impl DataContext {
     pub async fn open(database: &Database, access: &AccessContext) -> Result<Self, ApiError> {
         if database.role == RuntimeRole::Auth {
-            return Err(ApiError::Internal(
-                "a data context needs the app or worker role".into(),
-            ));
+            return Err(ApiError::Internal("a data context needs the app or worker role".into()));
         }
         let client = database.client().await?;
         client.batch_execute("BEGIN").await?;
-        let context = DataContext {
-            client: Some(client),
-            access: access.clone(),
-        };
+        let context = DataContext { client: Some(client), access: access.clone() };
         context
             .db()
             .execute(

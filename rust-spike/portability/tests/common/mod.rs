@@ -8,10 +8,7 @@ use std::path::PathBuf;
 use serde_json::Value;
 
 pub fn spike_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .to_path_buf()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf()
 }
 
 pub fn repo_root() -> PathBuf {

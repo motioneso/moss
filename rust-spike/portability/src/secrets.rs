@@ -27,10 +27,7 @@ pub struct Keyring {
 
 impl Keyring {
     fn key(&self, key_id: &str) -> Option<&[u8]> {
-        self.keys
-            .iter()
-            .find(|(id, _)| id == key_id)
-            .map(|(_, key)| key.as_slice())
+        self.keys.iter().find(|(id, _)| id == key_id).map(|(_, key)| key.as_slice())
     }
 }
 
@@ -74,38 +71,28 @@ pub fn resolve_keyring(
     env: &Env,
 ) -> Result<Keyring, String> {
     let current_secret = resolve_moss_env(env, key_env_var);
-    let hardened = env
-        .get("NODE_ENV")
-        .is_some_and(|name| name != "development" && name != "test");
+    let hardened = env.get("NODE_ENV").is_some_and(|name| name != "development" && name != "test");
     let rule = "in production (and any non-development/test NODE_ENV)";
     if hardened && current_secret.map_or(true, str::is_empty) {
         return Err(format!("{key_env_var} is required {rule}"));
     }
     if hardened && current_secret.is_some_and(|secret| secret.len() < 32) {
-        return Err(format!(
-            "{key_env_var} must be at least 32 bytes of key material {rule}"
-        ));
+        return Err(format!("{key_env_var} must be at least 32 bytes of key material {rule}"));
     }
 
     // `??`, not `||`: an empty secret outside a hardened environment is used as is.
     let current_key = sha256(current_secret.unwrap_or(dev_default).as_bytes());
-    let current_key_id = resolve_moss_env(env, key_id_env_var)
-        .unwrap_or("v1")
-        .to_string();
+    let current_key_id = resolve_moss_env(env, key_id_env_var).unwrap_or("v1").to_string();
     let mut keys = vec![(current_key_id.clone(), current_key.clone())];
     let mut legacy_candidates = vec![current_key];
 
     if let Some(text) = resolve_moss_env(env, keys_env_var).filter(|text| !text.is_empty()) {
         let Value::Object(retired) = js::parse_json(text)?.0 else {
-            return Err(format!(
-                "{keys_env_var} must be a JSON object of {{keyId: secret}}"
-            ));
+            return Err(format!("{keys_env_var} must be a JSON object of {{keyId: secret}}"));
         };
         for (id, secret) in js::entries(&retired) {
             let Some(secret) = secret.as_str().filter(|secret| !secret.is_empty()) else {
-                return Err(format!(
-                    "{keys_env_var} entry \"{id}\" must be a non-empty string secret"
-                ));
+                return Err(format!("{keys_env_var} entry \"{id}\" must be a non-empty string secret"));
             };
             if *id == current_key_id {
                 continue;
@@ -116,20 +103,12 @@ pub fn resolve_keyring(
         }
     }
 
-    Ok(Keyring {
-        current_key_id,
-        keys,
-        legacy_candidates,
-    })
+    Ok(Keyring { current_key_id, keys, legacy_candidates })
 }
 
 /// First 16 hex characters of SHA-256 of each legacy candidate, in try order.
 pub fn fingerprints(keyring: &Keyring) -> Vec<String> {
-    keyring
-        .legacy_candidates
-        .iter()
-        .map(|key| hex::encode(sha256(key))[..16].to_string())
-        .collect()
+    keyring.legacy_candidates.iter().map(|key| hex::encode(sha256(key))[..16].to_string()).collect()
 }
 
 enum OpenError {
@@ -144,25 +123,14 @@ fn open(key: &[u8], iv: &[u8], tag: &[u8], ciphertext: &[u8]) -> Result<Vec<u8>,
     // Node also takes other IV lengths and tags cut to 4, 8 or 12 to 15 bytes. The app never
     // writes either, so the port refuses them rather than carry the weaker forms forward.
     if iv.len() != 12 {
-        return Err(OpenError::Other(format!(
-            "GCM IV must be 12 bytes, got {}",
-            iv.len()
-        )));
+        return Err(OpenError::Other(format!("GCM IV must be 12 bytes, got {}", iv.len())));
     }
     if tag.len() != 16 {
-        return Err(OpenError::Other(format!(
-            "GCM tag must be 16 bytes, got {}",
-            tag.len()
-        )));
+        return Err(OpenError::Other(format!("GCM tag must be 16 bytes, got {}", tag.len())));
     }
     let mut buffer = ciphertext.to_vec();
     cipher
-        .decrypt_in_place_detached(
-            Nonce::from_slice(iv),
-            b"",
-            &mut buffer,
-            Tag::from_slice(tag),
-        )
+        .decrypt_in_place_detached(Nonce::from_slice(iv), b"", &mut buffer, Tag::from_slice(tag))
         .map_err(|_| OpenError::WrongKey)?;
     Ok(buffer)
 }
@@ -174,18 +142,12 @@ pub struct JsonSecretCipher {
 
 impl JsonSecretCipher {
     pub fn new(keyring: Keyring, label: &str) -> Self {
-        Self {
-            keyring,
-            label: label.to_string(),
-        }
+        Self { keyring, label: label.to_string() }
     }
 
     fn capitalized_label(&self) -> String {
         let mut chars = self.label.chars();
-        chars
-            .next()
-            .map(|first| first.to_uppercase().chain(chars).collect())
-            .unwrap_or_default()
+        chars.next().map(|first| first.to_uppercase().chain(chars).collect()).unwrap_or_default()
     }
 
     /// `parseEnvelope`: shape checks only, with the app's messages.
@@ -196,17 +158,11 @@ impl JsonSecretCipher {
         };
         let version = candidate.get("version");
         if version.and_then(Value::as_f64) != Some(1.0) {
-            return Err(malformed(format!(
-                "unsupported version {}",
-                js::to_js_string(version)
-            )));
+            return Err(malformed(format!("unsupported version {}", js::to_js_string(version))));
         }
         let algorithm = candidate.get("algorithm");
         if algorithm.and_then(Value::as_str) != Some("aes-256-gcm") {
-            return Err(malformed(format!(
-                "unsupported algorithm {}",
-                js::to_js_string(algorithm)
-            )));
+            return Err(malformed(format!("unsupported algorithm {}", js::to_js_string(algorithm))));
         }
         let key_id = match candidate.get("keyId") {
             None => None,
@@ -217,12 +173,7 @@ impl JsonSecretCipher {
             Some(Value::String(text)) if !text.is_empty() => Ok(text.clone()),
             _ => Err(malformed(format!("{name} must be a non-empty string"))),
         };
-        Ok(Envelope {
-            key_id,
-            iv: field("iv")?,
-            tag: field("tag")?,
-            ciphertext: field("ciphertext")?,
-        })
+        Ok(Envelope { key_id, iv: field("iv")?, tag: field("tag")?, ciphertext: field("ciphertext")? })
     }
 
     /// `decryptJson`. An envelope with no key id tries each legacy candidate and moves on only
@@ -246,10 +197,7 @@ impl JsonSecretCipher {
                     }
                 }
                 opened.ok_or_else(|| {
-                    format!(
-                        "Legacy {} envelope: no key could authenticate it",
-                        self.label
-                    )
+                    format!("Legacy {} envelope: no key could authenticate it", self.label)
                 })?
             }
             Some(key_id) => {
@@ -265,27 +213,16 @@ impl JsonSecretCipher {
         };
 
         // `toString("utf8")` replaces bad bytes rather than failing.
-        let (value, replaced_lone_surrogates) =
-            js::parse_json(&String::from_utf8_lossy(&plaintext))?;
+        let (value, replaced_lone_surrogates) = js::parse_json(&String::from_utf8_lossy(&plaintext))?;
         let Value::Object(value) = value else {
-            return Err(format!(
-                "{} payload must be a JSON object",
-                self.capitalized_label()
-            ));
+            return Err(format!("{} payload must be a JSON object", self.capitalized_label()));
         };
-        Ok(Decrypted {
-            plaintext,
-            value,
-            replaced_lone_surrogates,
-        })
+        Ok(Decrypted { plaintext, value, replaced_lone_surrogates })
     }
 
     /// `encryptJson`: a fresh 12-byte IV, the current key, standard padded base64.
     pub fn encrypt_json(&self, value: &Map<String, Value>) -> Value {
-        let key = self
-            .keyring
-            .key(&self.keyring.current_key_id)
-            .expect("keyring holds its current key");
+        let key = self.keyring.key(&self.keyring.current_key_id).expect("keyring holds its current key");
         let cipher = Aes256Gcm::new_from_slice(key).expect("32-byte key");
         let mut iv = [0u8; 12];
         OsRng.fill_bytes(&mut iv);
@@ -311,23 +248,14 @@ impl JsonSecretCipher {
 /// takes precedence and the development fallback, are plain `resolve_keyring` calls.
 pub fn family_keyring_from_setting(setting: &Value, master: &JsonSecretCipher) -> Option<Keyring> {
     let stored = setting.get("value").filter(|value| !value.is_null())?;
-    let payload = master
-        .parse_envelope(stored)
-        .and_then(|e| master.decrypt_json(&e))
-        .ok()?
-        .value;
+    let payload = master.parse_envelope(stored).and_then(|e| master.decrypt_json(&e)).ok()?.value;
     let key_id = payload.get("keyId")?.as_str()?;
     let secret = payload.get("secret")?.as_str()?;
     let retired: Vec<(&str, &str)> = match payload.get("retired") {
         None => Vec::new(),
         Some(Value::Array(entries)) => entries
             .iter()
-            .filter_map(|entry| {
-                Some((
-                    entry.get("keyId")?.as_str()?,
-                    entry.get("secret")?.as_str()?,
-                ))
-            })
+            .filter_map(|entry| Some((entry.get("keyId")?.as_str()?, entry.get("secret")?.as_str()?)))
             .collect(),
         Some(_) => return None,
     };
@@ -344,11 +272,7 @@ pub fn family_keyring_from_setting(setting: &Value, master: &JsonSecretCipher) -
         keys.push((id.to_string(), previous.clone()));
         legacy_candidates.push(previous);
     }
-    Some(Keyring {
-        current_key_id: key_id.to_string(),
-        keys,
-        legacy_candidates,
-    })
+    Some(Keyring { current_key_id: key_id.to_string(), keys, legacy_candidates })
 }
 
 /// A family key store setting in the shape `generateFamilyKey` writes.

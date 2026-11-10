@@ -8,8 +8,8 @@ use axum::http::header::{CONTENT_LENGTH, CONTENT_TYPE, TRANSFER_ENCODING};
 use axum::http::{HeaderMap, Method};
 use serde_json::{Map, Value};
 
-use crate::schema::{self, Schema};
 use safety_core::error::ApiError;
+use crate::schema::{self, Schema};
 
 /// Fastify's default `bodyLimit`.
 pub const BODY_LIMIT: usize = 1_048_576;
@@ -41,22 +41,15 @@ fn latin1(bytes: &[u8]) -> String {
 }
 
 fn is_js_space(ch: char) -> bool {
-    matches!(
-        ch,
-        '\t' | '\n' | '\u{b}' | '\u{c}' | '\r' | ' ' | '\u{a0}' | '\u{feff}'
-    )
+    matches!(ch, '\t' | '\n' | '\u{b}' | '\u{c}' | '\r' | ' ' | '\u{a0}' | '\u{feff}')
 }
 
 fn is_token(text: &str, allow_trailing_space: bool) -> bool {
-    let text = if allow_trailing_space {
-        text.trim_end_matches(char::is_whitespace)
-    } else {
-        text
-    };
+    let text = if allow_trailing_space { text.trim_end_matches(char::is_whitespace) } else { text };
     !text.is_empty()
-        && text
-            .chars()
-            .all(|ch| ch.is_ascii_alphanumeric() || "_!#$%&'*+.^`|~-".contains(ch))
+        && text.chars().all(|ch| {
+            ch.is_ascii_alphanumeric() || "_!#$%&'*+.^`|~-".contains(ch)
+        })
 }
 
 /// What the `ContentType` class keeps: the media type, and whether any parameter parsed.
@@ -71,10 +64,7 @@ fn parse_content_type(header: &str) -> Option<ContentType> {
         return None;
     }
     let (media, params) = match header.find(';') {
-        Some(semi) => (
-            header[..semi].to_ascii_lowercase(),
-            Some(header[semi + 1..].trim_matches(is_js_space)),
-        ),
+        Some(semi) => (header[..semi].to_ascii_lowercase(), Some(header[semi + 1..].trim_matches(is_js_space))),
         None => (header.to_ascii_lowercase(), None),
     };
     let slash = media.find('/')?;
@@ -87,16 +77,10 @@ fn parse_content_type(header: &str) -> Option<ContentType> {
     let has_params = params.is_some_and(|text| {
         text.split(';').any(|piece| {
             let piece = piece.trim_start_matches(char::is_whitespace);
-            piece
-                .find('=')
-                .is_some_and(|eq| is_token(&piece[..eq], false))
+            piece.find('=').is_some_and(|eq| is_token(&piece[..eq], false))
         })
     });
-    Some(ContentType {
-        media_type: format!("{kind}/{subtype}"),
-        kind: kind.to_owned(),
-        has_params,
-    })
+    Some(ContentType { media_type: format!("{kind}/{subtype}"), kind: kind.to_owned(), has_params })
 }
 
 fn parser_for(header: &str) -> Option<Parser> {
@@ -116,12 +100,8 @@ pub fn read_body(method: &Method, headers: &HeaderMap, bytes: &[u8]) -> Result<B
     if matches!(method.as_str(), "GET" | "HEAD" | "TRACE") {
         return Ok(Body::Undefined);
     }
-    let content_type = headers
-        .get(CONTENT_TYPE)
-        .map(|value| latin1(value.as_bytes()));
-    let content_length = headers
-        .get(CONTENT_LENGTH)
-        .map(|value| latin1(value.as_bytes()));
+    let content_type = headers.get(CONTENT_TYPE).map(|value| latin1(value.as_bytes()));
+    let content_length = headers.get(CONTENT_LENGTH).map(|value| latin1(value.as_bytes()));
     let chunked = headers.contains_key(TRANSFER_ENCODING);
 
     let Some(content_type) = content_type else {
@@ -135,9 +115,7 @@ pub fn read_body(method: &Method, headers: &HeaderMap, bytes: &[u8]) -> Result<B
     }
     let parser = parser_for(&content_type).ok_or_else(unsupported)?;
 
-    let declared: Option<usize> = content_length
-        .as_deref()
-        .and_then(|length| length.parse().ok());
+    let declared: Option<usize> = content_length.as_deref().and_then(|length| length.parse().ok());
     if declared.is_some_and(|length| length > BODY_LIMIT) {
         return Err(ApiError::framework(413, "Request body is too large"));
     }
@@ -174,15 +152,10 @@ fn parse_json(text: &str) -> Result<Value, ApiError> {
             "Body cannot be empty when content-type is set to 'application/json'",
         ));
     }
-    let invalid = || {
-        ApiError::framework(
-            400,
-            "Body is not valid JSON but content-type is set to 'application/json'",
-        )
-    };
+    let invalid =
+        || ApiError::framework(400, "Body is not valid JSON but content-type is set to 'application/json'");
     let text = text.strip_prefix('\u{feff}').unwrap_or(text);
-    let value: Value =
-        serde_json::from_str(&replace_lone_surrogates(text)).map_err(|_| invalid())?;
+    let value: Value = serde_json::from_str(&replace_lone_surrogates(text)).map_err(|_| invalid())?;
     if is_poisoned(&value) {
         return Err(invalid());
     }
@@ -213,8 +186,7 @@ fn replace_lone_surrogates(text: &str) -> std::borrow::Cow<'_, str> {
         } else if byte == b'\\' {
             if let Some(unit) = escape_at(index) {
                 let high = (0xD800..0xDC00).contains(&unit);
-                let low_follows =
-                    escape_at(index + 6).is_some_and(|next| (0xDC00..0xE000).contains(&next));
+                let low_follows = escape_at(index + 6).is_some_and(|next| (0xDC00..0xE000).contains(&next));
                 if high && low_follows {
                     out.push_str(&text[index..index + 12]);
                     index += 12;
@@ -313,11 +285,7 @@ fn percent_decode(text: &str) -> Option<String> {
     while index < bytes.len() {
         if bytes[index] == b'%' {
             let hex = text.get(index + 1..index + 3)?;
-            out.push(
-                u8::from_str_radix(hex, 16)
-                    .ok()
-                    .filter(|_| hex.bytes().all(|b| b.is_ascii_hexdigit()))?,
-            );
+            out.push(u8::from_str_radix(hex, 16).ok().filter(|_| hex.bytes().all(|b| b.is_ascii_hexdigit()))?);
             index += 3;
         } else {
             out.push(bytes[index]);
@@ -351,51 +319,26 @@ mod tests {
 
     #[test]
     fn bodyless_requests() {
-        assert_eq!(
-            read_body(&Method::GET, &headers(&[("content-type", "x/y")]), b"{").unwrap(),
-            Body::Undefined
-        );
+        assert_eq!(read_body(&Method::GET, &headers(&[("content-type", "x/y")]), b"{").unwrap(), Body::Undefined);
         assert_eq!(post(&[], b"").unwrap(), Body::Undefined);
-        assert_eq!(
-            post(&[("content-length", "0")], b"").unwrap(),
-            Body::Undefined
-        );
+        assert_eq!(post(&[("content-length", "0")], b"").unwrap(), Body::Undefined);
         assert_eq!(error(post(&[("content-length", "2")], b"{}")).0, 415);
-        let options =
-            read_body(&Method::OPTIONS, &headers(&[("content-type", "x/y")]), b"").unwrap();
+        let options = read_body(&Method::OPTIONS, &headers(&[("content-type", "x/y")]), b"").unwrap();
         assert_eq!(options, Body::Undefined);
     }
 
     #[test]
     fn content_type_matching() {
         let json_body = |ct: &str| post(&[("content-type", ct)], b"{\"a\":1}");
-        assert_eq!(
-            json_body("application/json").unwrap(),
-            Body::Json(json!({"a": 1}))
-        );
-        assert_eq!(
-            json_body("Application/JSON; charset=utf-8").unwrap(),
-            Body::Json(json!({"a": 1}))
-        );
-        assert_eq!(
-            json_body("application/json ;x").unwrap(),
-            Body::Json(json!({"a": 1}))
-        );
+        assert_eq!(json_body("application/json").unwrap(), Body::Json(json!({"a": 1})));
+        assert_eq!(json_body("Application/JSON; charset=utf-8").unwrap(), Body::Json(json!({"a": 1})));
+        assert_eq!(json_body("application/json ;x").unwrap(), Body::Json(json!({"a": 1})));
         assert_eq!(error(json_body("application/json-patch+json")).0, 415);
         assert_eq!(error(json_body("application /json")).0, 415);
         assert_eq!(error(json_body("json")).0, 415);
-        assert_eq!(
-            json_body("text/plain").unwrap(),
-            Body::Text("{\"a\":1}".into())
-        );
-        assert_eq!(
-            json_body("text/markdown").unwrap(),
-            Body::Text("{\"a\":1}".into())
-        );
-        assert_eq!(
-            json_body("text/markdown;").unwrap(),
-            Body::Text("{\"a\":1}".into())
-        );
+        assert_eq!(json_body("text/plain").unwrap(), Body::Text("{\"a\":1}".into()));
+        assert_eq!(json_body("text/markdown").unwrap(), Body::Text("{\"a\":1}".into()));
+        assert_eq!(json_body("text/markdown;").unwrap(), Body::Text("{\"a\":1}".into()));
         assert_eq!(error(json_body("text/markdown; charset=utf-8")).0, 415);
         assert_eq!(json_body("audio/wav").unwrap(), Body::Bytes);
         assert_eq!(json_body("application/octet-stream").unwrap(), Body::Bytes);
@@ -411,53 +354,27 @@ mod tests {
         let invalid = json!({"error": "Body is not valid JSON but content-type is set to 'application/json'"});
         assert_eq!(error(post(&ct, b"{")).1, invalid);
         assert_eq!(error(post(&ct, br#"{"a":{"__proto__":1}}"#)).1, invalid);
-        assert_eq!(
-            error(post(&ct, br#"[{"constructor":{"prototype":{}}}]"#)).1,
-            invalid
-        );
+        assert_eq!(error(post(&ct, br#"[{"constructor":{"prototype":{}}}]"#)).1, invalid);
         assert_eq!(error(post(&ct, br#"{"constructor":null}"#)).1, invalid);
-        assert_eq!(
-            post(&ct, br#"{"constructor":"x"}"#).unwrap(),
-            Body::Json(json!({"constructor": "x"}))
-        );
-        assert_eq!(
-            post(&ct, "\u{feff}{}".as_bytes()).unwrap(),
-            Body::Json(json!({}))
-        );
-        assert_eq!(
-            post(&ct, br#"{"t":"\ud800x"}"#).unwrap(),
-            Body::Json(json!({"t": "\u{fffd}x"}))
-        );
-        assert_eq!(
-            post(&ct, r#"{"t":"😀"}"#.as_bytes()).unwrap(),
-            Body::Json(json!({"t": "\u{1f600}"}))
-        );
+        assert_eq!(post(&ct, br#"{"constructor":"x"}"#).unwrap(), Body::Json(json!({"constructor": "x"})));
+        assert_eq!(post(&ct, "\u{feff}{}".as_bytes()).unwrap(), Body::Json(json!({})));
+        assert_eq!(post(&ct, br#"{"t":"\ud800x"}"#).unwrap(), Body::Json(json!({"t": "\u{fffd}x"})));
+        assert_eq!(post(&ct, r#"{"t":"😀"}"#.as_bytes()).unwrap(), Body::Json(json!({"t": "\u{1f600}"})));
     }
 
     #[test]
     fn length_checks_count_decoded_bytes() {
         let ct = ("content-type", "text/plain");
         assert_eq!(error(post(&[ct, ("content-length", "1")], b"\xff")).0, 400);
-        assert_eq!(
-            post(&[ct, ("content-length", "4")], b"\xf0\x90\x80A").unwrap(),
-            Body::Text("\u{fffd}A".into())
-        );
-        assert_eq!(
-            error(post(&[ct, ("content-length", "2000000")], b"")).0,
-            413
-        );
+        assert_eq!(post(&[ct, ("content-length", "4")], b"\xf0\x90\x80A").unwrap(), Body::Text("\u{fffd}A".into()));
+        assert_eq!(error(post(&[ct, ("content-length", "2000000")], b"")).0, 413);
     }
 
     #[test]
     fn validation_sees_undefined_as_null() {
         let schema = crate::schemas::delete_list();
-        let (status, body) = validated(Body::Undefined, Some(&schema))
-            .unwrap_err()
-            .status_and_body();
-        assert_eq!(
-            (status, body),
-            (400, json!({"error": "body must be object"}))
-        );
+        let (status, body) = validated(Body::Undefined, Some(&schema)).unwrap_err().status_and_body();
+        assert_eq!((status, body), (400, json!({"error": "body must be object"})));
         assert_eq!(validated(Body::Bytes, Some(&schema)).unwrap(), json!({}));
     }
 

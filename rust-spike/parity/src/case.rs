@@ -156,7 +156,8 @@ pub fn check(case: &Case) -> Result<(), String> {
 }
 
 fn uuids_in(text: &str) -> HashSet<String> {
-    let mut found: HashSet<String> = SEED_IDS.iter().map(|(_, id)| (*id).to_owned()).collect();
+    let mut found: HashSet<String> =
+        SEED_IDS.iter().map(|(_, id)| (*id).to_owned()).collect();
     for token in text.split(|ch: char| !(ch.is_ascii_hexdigit() || ch == '-')) {
         if is_uuid(token) {
             found.insert(token.to_ascii_lowercase());
@@ -175,9 +176,7 @@ impl Vars {
     /// takes that value's JSON type.
     pub fn fill(&self, text: &str, outputs: &HashMap<String, Value>) -> Result<Value, String> {
         let trimmed = text.trim();
-        if trimmed.starts_with("{{")
-            && trimmed.ends_with("}}")
-            && trimmed.matches("{{").count() == 1
+        if trimmed.starts_with("{{") && trimmed.ends_with("}}") && trimmed.matches("{{").count() == 1
         {
             return self.lookup(&trimmed[2..trimmed.len() - 2], outputs);
         }
@@ -185,9 +184,7 @@ impl Vars {
         let mut rest = text;
         while let Some(open) = rest.find("{{") {
             out.push_str(&rest[..open]);
-            let close = rest[open..]
-                .find("}}")
-                .ok_or_else(|| format!("unclosed placeholder in {text}"))?;
+            let close = rest[open..].find("}}").ok_or_else(|| format!("unclosed placeholder in {text}"))?;
             let value = self.lookup(&rest[open + 2..open + close], outputs)?;
             match value {
                 Value::String(text) => out.push_str(&text),
@@ -199,11 +196,7 @@ impl Vars {
         Ok(Value::String(out))
     }
 
-    pub fn fill_string(
-        &self,
-        text: &str,
-        outputs: &HashMap<String, Value>,
-    ) -> Result<String, String> {
+    pub fn fill_string(&self, text: &str, outputs: &HashMap<String, Value>) -> Result<String, String> {
         match self.fill(text, outputs)? {
             Value::String(text) => Ok(text),
             other => Ok(other.to_string()),
@@ -211,18 +204,11 @@ impl Vars {
     }
 
     /// Fills placeholders in every string inside `value`.
-    pub fn fill_json(
-        &self,
-        value: &Value,
-        outputs: &HashMap<String, Value>,
-    ) -> Result<Value, String> {
+    pub fn fill_json(&self, value: &Value, outputs: &HashMap<String, Value>) -> Result<Value, String> {
         Ok(match value {
             Value::String(text) => self.fill(text, outputs)?,
             Value::Array(items) => Value::Array(
-                items
-                    .iter()
-                    .map(|item| self.fill_json(item, outputs))
-                    .collect::<Result<_, _>>()?,
+                items.iter().map(|item| self.fill_json(item, outputs)).collect::<Result<_, _>>()?,
             ),
             Value::Object(map) => {
                 let mut out = Map::new();
@@ -242,14 +228,10 @@ impl Vars {
         }
         if let Some(offset) = name.strip_prefix("now") {
             let time = self.start + parse_offset(offset)?;
-            return Ok(Value::String(
-                time.to_rfc3339_opts(SecondsFormat::Millis, true),
-            ));
+            return Ok(Value::String(time.to_rfc3339_opts(SecondsFormat::Millis, true)));
         }
         if let Some((step, pointer)) = name.split_once(':') {
-            let output = outputs
-                .get(step)
-                .ok_or_else(|| format!("no output from step {step}"))?;
+            let output = outputs.get(step).ok_or_else(|| format!("no output from step {step}"))?;
             return output
                 .pointer(pointer)
                 .cloned()
@@ -270,9 +252,7 @@ fn parse_offset(text: &str) -> Result<Duration, String> {
         _ => return Err(format!("bad time offset {text}")),
     };
     let (number, unit) = rest.split_at(rest.len().saturating_sub(1));
-    let amount: i64 = number
-        .parse()
-        .map_err(|_| format!("bad time offset {text}"))?;
+    let amount: i64 = number.parse().map_err(|_| format!("bad time offset {text}"))?;
     let duration = match unit {
         "d" => Duration::days(amount),
         "h" => Duration::hours(amount),
@@ -290,27 +270,15 @@ mod tests {
 
     #[test]
     fn fills_placeholders() {
-        let vars = Vars {
-            start: "2026-11-07T12:00:00Z".parse().unwrap(),
-        };
-        let outputs: HashMap<String, Value> = [(
-            "make".to_owned(),
-            json!({"body": {"task": {"id": "t1", "priority": 3}}}),
-        )]
-        .into();
+        let vars = Vars { start: "2026-11-07T12:00:00Z".parse().unwrap() };
+        let outputs: HashMap<String, Value> =
+            [("make".to_owned(), json!({"body": {"task": {"id": "t1", "priority": 3}}}))].into();
         assert_eq!(
-            vars.fill("/api/tasks/{{make:/body/task/id}}", &outputs)
-                .unwrap(),
+            vars.fill("/api/tasks/{{make:/body/task/id}}", &outputs).unwrap(),
             json!("/api/tasks/t1")
         );
-        assert_eq!(
-            vars.fill("{{make:/body/task/priority}}", &outputs).unwrap(),
-            json!(3)
-        );
-        assert_eq!(
-            vars.fill("{{now+2d}}", &outputs).unwrap(),
-            json!("2026-11-09T12:00:00.000Z")
-        );
+        assert_eq!(vars.fill("{{make:/body/task/priority}}", &outputs).unwrap(), json!(3));
+        assert_eq!(vars.fill("{{now+2d}}", &outputs).unwrap(), json!("2026-11-09T12:00:00.000Z"));
         assert_eq!(
             vars.fill("owner {{userA}}", &outputs).unwrap(),
             json!("owner 00000000-0000-4000-8000-000000000001")

@@ -25,19 +25,13 @@ impl RecoveryKey {
     }
 
     pub fn words(&self) -> Vec<&'static str> {
-        Mnemonic::from_entropy(&self.0)
-            .expect("32 bytes is a valid length")
-            .words()
-            .collect()
+        Mnemonic::from_entropy(&self.0).expect("32 bytes is a valid length").words().collect()
     }
 
     /// A short name for the key, shown at setup and at recovery, so the owner can match a
     /// sheet to a computer. It reveals nothing useful about the key.
     pub fn id(&self) -> String {
-        let digest = Sha256::new()
-            .chain_update(ID_DOMAIN)
-            .chain_update(self.0)
-            .finalize();
+        let digest = Sha256::new().chain_update(ID_DOMAIN).chain_update(self.0).finalize();
         let hex = hex::encode_upper(&digest[..4]);
         format!("{}-{}", &hex[..4], &hex[4..])
     }
@@ -53,9 +47,7 @@ pub struct UnknownWord {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WordsError {
-    WrongCount {
-        filled: usize,
-    },
+    WrongCount { filled: usize },
     /// Every word not on the list, so the owner sees all typos at once.
     UnknownWords(Vec<UnknownWord>),
     /// Every word is on the list, but the checksum in the last word does not fit.
@@ -90,9 +82,7 @@ fn suggest(typed: &str) -> Option<&'static str> {
             return Some(word);
         }
     }
-    let mut close = word_list()
-        .iter()
-        .filter(|word| one_typo_apart(&typed, word));
+    let mut close = word_list().iter().filter(|word| one_typo_apart(&typed, word));
     let first = close.next()?;
     close.next().is_none().then_some(*first)
 }
@@ -115,9 +105,7 @@ fn one_typo_apart(a: &str, b: &str) -> bool {
     if long.len() != short.len() + 1 {
         return false;
     }
-    let skip = (0..short.len())
-        .find(|&i| long[i] != short[i])
-        .unwrap_or(short.len());
+    let skip = (0..short.len()).find(|&i| long[i] != short[i]).unwrap_or(short.len());
     long[skip + 1..] == short[skip..]
 }
 
@@ -144,10 +132,7 @@ pub fn parse_words(typed: &[String]) -> Result<RecoveryKey, WordsError> {
     }
     let mnemonic = Mnemonic::parse_in_normalized(Language::English, &words.join(" "))
         .map_err(|_| WordsError::DoNotFit)?;
-    let bytes: [u8; 32] = mnemonic
-        .to_entropy()
-        .try_into()
-        .map_err(|_| WordsError::DoNotFit)?;
+    let bytes: [u8; 32] = mnemonic.to_entropy().try_into().map_err(|_| WordsError::DoNotFit)?;
     Ok(RecoveryKey(bytes))
 }
 

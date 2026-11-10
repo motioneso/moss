@@ -41,18 +41,13 @@ pub fn log(mut line: Value) {
 }
 
 fn routes() -> Router<Arc<Platform>> {
-    Router::new()
-        .merge(auth::routes())
-        .merge(admin::routes())
-        .merge(views::routes())
+    Router::new().merge(auth::routes()).merge(admin::routes()).merge(views::routes())
 }
 
 /// The whole server: `extra` (a feature's own routes and fallback) plus every platform route,
 /// with one request log line for each request.
 pub fn app(platform: Arc<Platform>, extra: Router) -> Router {
-    extra
-        .merge(routes().with_state(platform))
-        .layer(middleware::from_fn(request_log))
+    extra.merge(routes().with_state(platform)).layer(middleware::from_fn(request_log))
 }
 
 async fn request_log(request: Request, next: Next) -> Response {
@@ -60,12 +55,7 @@ async fn request_log(request: Request, next: Next) -> Response {
     let path = request.uri().path().to_owned();
     let started = Instant::now();
     let response = next.run(request).await;
-    log(request_line(
-        method.as_str(),
-        &path,
-        response.status().as_u16(),
-        started.elapsed(),
-    ));
+    log(request_line(method.as_str(), &path, response.status().as_u16(), started.elapsed()));
     response
 }
 

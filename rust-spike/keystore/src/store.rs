@@ -39,19 +39,14 @@ impl Paths {
     /// The XDG locations a desktop app uses. A relative or empty variable is ignored, as the
     /// XDG rules say.
     pub fn from_env() -> Paths {
-        let home = std::env::var_os("HOME")
-            .map(PathBuf::from)
-            .unwrap_or_default();
+        let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
         let base = |name: &str, fallback: &str| {
             std::env::var_os(name)
                 .map(PathBuf::from)
                 .filter(|path| path.is_absolute())
                 .unwrap_or_else(|| home.join(fallback))
         };
-        Paths::under(
-            &base("XDG_CONFIG_HOME", ".config"),
-            &base("XDG_DATA_HOME", ".local/share"),
-        )
+        Paths::under(&base("XDG_CONFIG_HOME", ".config"), &base("XDG_DATA_HOME", ".local/share"))
     }
 
     pub fn under(config: &Path, data: &Path) -> Paths {
@@ -103,14 +98,9 @@ impl CredentialKeys {
         .into_iter()
         .map(|(name, value)| (name.to_string(), value.to_string()))
         .collect();
-        let keyring = resolve_keyring(
-            "JARVIS_AI_SECRET_KEY",
-            "JARVIS_AI_SECRET_KEY_ID",
-            "JARVIS_AI_SECRET_KEYS",
-            "",
-            &env,
-        )
-        .expect("a 64-character secret meets the production rules");
+        let keyring =
+            resolve_keyring("JARVIS_AI_SECRET_KEY", "JARVIS_AI_SECRET_KEY_ID", "JARVIS_AI_SECRET_KEYS", "", &env)
+                .expect("a 64-character secret meets the production rules");
         JsonSecretCipher::new(keyring, "AI secret")
     }
 
@@ -137,26 +127,14 @@ pub enum State {
     NotSetUp,
     Unlocked(Unlocked),
     /// The bundle is here, but the key file is not.
-    KeyFileMissing {
-        needs: String,
-    },
-    KeyFileDamaged {
-        needs: String,
-        detail: String,
-    },
+    KeyFileMissing { needs: String },
+    KeyFileDamaged { needs: String, detail: String },
     /// Other accounts could read the key file or its folder.
-    KeyFileExposed {
-        needs: String,
-    },
+    KeyFileExposed { needs: String },
     /// The key file belongs to another account, or is not a plain file.
-    KeyFileNotOurs {
-        detail: String,
-    },
+    KeyFileNotOurs { detail: String },
     /// A sound key file, but for a different recovery key than the bundle needs.
-    KeyFileForAnotherKey {
-        has: String,
-        needs: String,
-    },
+    KeyFileForAnotherKey { has: String, needs: String },
     BundleMissing,
     BundleDamaged(String),
     /// The bundle opened, but the test credential did not open with its keys.
@@ -164,10 +142,7 @@ pub enum State {
 }
 
 pub enum RecoverError {
-    NotThisSetup {
-        typed: String,
-        needs: String,
-    },
+    NotThisSetup { typed: String, needs: String },
     /// The bundle is missing or damaged, or its keys do not open the test credential.
     Unrecoverable(State),
     Io(String),
@@ -191,13 +166,7 @@ fn current_uid() -> u32 {
 fn seal(key: &[u8; 32], aad: &[u8], plaintext: &[u8]) -> Value {
     let nonce: [u8; 12] = rand::random();
     let sealed = Aes256Gcm::new(key.into())
-        .encrypt(
-            Nonce::from_slice(&nonce),
-            Payload {
-                msg: plaintext,
-                aad,
-            },
-        )
+        .encrypt(Nonce::from_slice(&nonce), Payload { msg: plaintext, aad })
         .expect("small messages always seal");
     json!({ "nonce": STANDARD.encode(nonce), "sealed": STANDARD.encode(sealed) })
 }
@@ -211,6 +180,7 @@ fn unseal(key: &[u8; 32], aad: &[u8], sealed: &Value) -> Option<Vec<u8>> {
         .ok()
 }
 
+
 fn read_bundle(paths: &Paths) -> Result<Option<Bundle>, String> {
     let bytes = match fs::read(&paths.bundle) {
         Ok(bytes) => bytes,
@@ -218,11 +188,7 @@ fn read_bundle(paths: &Paths) -> Result<Option<Bundle>, String> {
         Err(error) => return Err(error.to_string()),
     };
     let outer: Value = serde_json::from_slice(&bytes).map_err(|_| "not readable".to_string())?;
-    let header_text = outer
-        .get("header")
-        .and_then(Value::as_str)
-        .ok_or("no header")?
-        .to_string();
+    let header_text = outer.get("header").and_then(Value::as_str).ok_or("no header")?.to_string();
     let header: Value = serde_json::from_str(&header_text).map_err(|_| "header not readable")?;
     let text = |name: &str| header.get(name).and_then(Value::as_str).map(str::to_string);
     if text("kind").as_deref() != Some(BUNDLE_KIND)
@@ -240,30 +206,20 @@ fn read_bundle(paths: &Paths) -> Result<Option<Bundle>, String> {
 }
 
 fn open_bundle(bundle: &Bundle, recovery: &RecoveryKey) -> Option<CredentialKeys> {
-    let data_key: [u8; 32] = unseal(
-        recovery.bytes(),
-        bundle.header_text.as_bytes(),
-        &bundle.data_key,
-    )?
-    .try_into()
-    .ok()?;
+    let data_key: [u8; 32] =
+        unseal(recovery.bytes(), bundle.header_text.as_bytes(), &bundle.data_key)?
+            .try_into()
+            .ok()?;
     let payload = unseal(&data_key, bundle.header_text.as_bytes(), &bundle.payload)?;
     CredentialKeys::from_json(&payload)
 }
 
-fn test_credential_opens(
-    paths: &Paths,
-    keys: &CredentialKeys,
-    installation_id: &str,
-) -> Result<(), String> {
+fn test_credential_opens(paths: &Paths, keys: &CredentialKeys, installation_id: &str) -> Result<(), String> {
     let text = fs::read_to_string(&paths.test_credential).map_err(|error| error.to_string())?;
     let envelope: Value = serde_json::from_str(&text).map_err(|error| error.to_string())?;
     let cipher = keys.ai_cipher();
-    let opened = cipher
-        .parse_envelope(&envelope)
-        .and_then(|envelope| cipher.decrypt_json(&envelope))?;
-    let expected =
-        |name: &str, want: &str| opened.value.get(name).and_then(Value::as_str) == Some(want);
+    let opened = cipher.parse_envelope(&envelope).and_then(|envelope| cipher.decrypt_json(&envelope))?;
+    let expected = |name: &str, want: &str| opened.value.get(name).and_then(Value::as_str) == Some(want);
     if expected("check", TEST_CREDENTIAL) && expected("installationId", installation_id) {
         Ok(())
     } else {
@@ -274,18 +230,11 @@ fn test_credential_opens(
 /// Writes a file only this account can read, replacing any old one in a single step.
 fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let folder = path.parent().expect("files live in a folder");
-    DirBuilder::new()
-        .recursive(true)
-        .mode(0o700)
-        .create(folder)?;
+    DirBuilder::new().recursive(true).mode(0o700).create(folder)?;
     let staging = path.with_extension("staging");
     let _ = fs::remove_file(&staging);
     let staged = (|| {
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .open(&staging)?;
+        let mut file = OpenOptions::new().write(true).create_new(true).mode(0o600).open(&staging)?;
         file.write_all(bytes)?;
         file.sync_all()?;
         fs::rename(&staging, path)
@@ -298,11 +247,7 @@ fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 }
 
 /// An existing key folder is made private first. A link or plain file in its place is refused.
-fn write_key_file(
-    paths: &Paths,
-    recovery: &RecoveryKey,
-    installation_id: &str,
-) -> std::io::Result<()> {
+fn write_key_file(paths: &Paths, recovery: &RecoveryKey, installation_id: &str) -> std::io::Result<()> {
     if fs::symlink_metadata(&paths.key_folder).is_ok() {
         make_private(&paths.key_folder, 0o700, true)
             .map_err(|detail| std::io::Error::other(format!("key folder: {detail}")))?;
@@ -314,10 +259,7 @@ fn write_key_file(
         "recoveryKeyId": recovery.id(),
         "recoveryKey": STANDARD.encode(recovery.bytes()),
     });
-    write_private(
-        &paths.key_file,
-        &serde_json::to_vec_pretty(&contents).unwrap(),
-    )
+    write_private(&paths.key_file, &serde_json::to_vec_pretty(&contents).unwrap())
 }
 
 /// Creates the test credential, the bundle and the key file, in that order. A crash before
@@ -331,13 +273,10 @@ pub fn set_up(
     keys: &CredentialKeys,
 ) -> Result<(), String> {
     if !keychain.allows_key_file() {
-        return Err(format!(
-            "this computer has a keychain, so the key file is not used ({keychain:?})"
-        ));
+        return Err(format!("this computer has a keychain, so the key file is not used ({keychain:?})"));
     }
     // A key file without its bundle may still match a bundle in a backup, so it is never replaced.
-    if fs::symlink_metadata(&paths.bundle).is_ok() || fs::symlink_metadata(&paths.key_file).is_ok()
-    {
+    if fs::symlink_metadata(&paths.bundle).is_ok() || fs::symlink_metadata(&paths.key_file).is_ok() {
         return Err("Moss is already set up on this computer".to_string());
     }
     let installation_id = hex::encode(rand::random::<[u8; 16]>());
@@ -361,12 +300,9 @@ pub fn set_up(
     check.insert("installationId".to_string(), json!(installation_id));
     let test_credential = keys.ai_cipher().encrypt_json(&check);
 
-    let written = write_private(
-        &paths.test_credential,
-        &serde_json::to_vec_pretty(&test_credential).unwrap(),
-    )
-    .and_then(|()| write_private(&paths.bundle, &serde_json::to_vec_pretty(&bundle).unwrap()))
-    .and_then(|()| write_key_file(paths, recovery, &installation_id));
+    let written = write_private(&paths.test_credential, &serde_json::to_vec_pretty(&test_credential).unwrap())
+        .and_then(|()| write_private(&paths.bundle, &serde_json::to_vec_pretty(&bundle).unwrap()))
+        .and_then(|()| write_key_file(paths, recovery, &installation_id));
     written.map_err(|error| {
         for path in [&paths.key_file, &paths.bundle, &paths.test_credential] {
             let _ = fs::remove_file(path);
@@ -386,21 +322,12 @@ pub fn status(paths: &Paths) -> State {
     let needs = bundle.recovery_key_id.clone();
     let file = match fs::symlink_metadata(&paths.key_file) {
         Ok(file) => file,
-        Err(error) if error.kind() == ErrorKind::NotFound => {
-            return State::KeyFileMissing { needs }
-        }
-        Err(error) => {
-            return State::KeyFileDamaged {
-                needs,
-                detail: error.to_string(),
-            }
-        }
+        Err(error) if error.kind() == ErrorKind::NotFound => return State::KeyFileMissing { needs },
+        Err(error) => return State::KeyFileDamaged { needs, detail: error.to_string() },
     };
     let folder = fs::symlink_metadata(&paths.key_folder);
     if !file.file_type().is_file() || file.uid() != current_uid() {
-        return State::KeyFileNotOurs {
-            detail: "not a plain file owned by this account".to_string(),
-        };
+        return State::KeyFileNotOurs { detail: "not a plain file owned by this account".to_string() };
     }
     match folder {
         Ok(folder) if folder.is_dir() && folder.uid() == current_uid() => {
@@ -409,9 +336,7 @@ pub fn status(paths: &Paths) -> State {
             }
         }
         _ => {
-            return State::KeyFileNotOurs {
-                detail: "its folder is not owned by this account".to_string(),
-            }
+            return State::KeyFileNotOurs { detail: "its folder is not owned by this account".to_string() }
         }
     }
 
@@ -420,10 +345,7 @@ pub fn status(paths: &Paths) -> State {
         Err(detail) => return State::KeyFileDamaged { needs, detail },
     };
     if recovery.0 != bundle.installation_id || recovery.1.id() != needs {
-        return State::KeyFileForAnotherKey {
-            has: recovery.1.id(),
-            needs,
-        };
+        return State::KeyFileForAnotherKey { has: recovery.1.id(), needs };
     }
     unlock(paths, &bundle, &recovery.1).unwrap_or_else(|state| state)
 }
@@ -446,9 +368,7 @@ fn read_key_file(paths: &Paths) -> Result<(String, RecoveryKey), String> {
     if text("recoveryKeyId") != Some(recovery.id().as_str()) {
         return Err("the key does not match its name".to_string());
     }
-    let installation_id = text("installationId")
-        .ok_or("no installation id")?
-        .to_string();
+    let installation_id = text("installationId").ok_or("no installation id")?.to_string();
     Ok((installation_id, recovery))
 }
 
@@ -472,10 +392,7 @@ pub fn recover(paths: &Paths, recovery: &RecoveryKey) -> Result<Unlocked, Recove
         Err(detail) => return Err(RecoverError::Unrecoverable(State::BundleDamaged(detail))),
     };
     if recovery.id() != bundle.recovery_key_id {
-        return Err(RecoverError::NotThisSetup {
-            typed: recovery.id(),
-            needs: bundle.recovery_key_id,
-        });
+        return Err(RecoverError::NotThisSetup { typed: recovery.id(), needs: bundle.recovery_key_id });
     }
     let unlocked = match unlock(paths, &bundle, recovery) {
         Ok(State::Unlocked(unlocked)) => unlocked,
@@ -486,8 +403,7 @@ pub fn recover(paths: &Paths, recovery: &RecoveryKey) -> Result<Unlocked, Recove
             .map_err(|detail| RecoverError::Io(format!("key folder: {detail}")))?;
     }
     if fs::symlink_metadata(&paths.key_file).is_ok() {
-        let aside =
-            move_aside(&paths.key_file).map_err(|error| RecoverError::Io(error.to_string()))?;
+        let aside = move_aside(&paths.key_file).map_err(|error| RecoverError::Io(error.to_string()))?;
         let _ = fs::set_permissions(&aside, fs::Permissions::from_mode(0o600));
     }
     write_key_file(paths, recovery, &unlocked.installation_id)
@@ -515,23 +431,15 @@ fn make_private(path: &Path, mode: u32, folder: bool) -> Result<(), String> {
         return Err("it belongs to another account".to_string());
     }
     if folder != metadata.is_dir() || !(folder || metadata.is_file()) {
-        return Err(format!(
-            "it is not a {}",
-            if folder { "folder" } else { "plain file" }
-        ));
+        return Err(format!("it is not a {}", if folder { "folder" } else { "plain file" }));
     }
-    opened
-        .set_permissions(fs::Permissions::from_mode(mode))
-        .map_err(|error| error.to_string())
+    opened.set_permissions(fs::Permissions::from_mode(mode)).map_err(|error| error.to_string())
 }
 
 /// Moves a file to an unused `replaced-<seconds>-<n>` name. Linking fails rather than
 /// replace an earlier kept file.
 fn move_aside(path: &Path) -> std::io::Result<PathBuf> {
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|t| t.as_secs())
-        .unwrap_or(0);
+    let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map(|t| t.as_secs()).unwrap_or(0);
     let mut n = 0;
     loop {
         let aside = path.with_extension(format!("replaced-{stamp}-{n}"));

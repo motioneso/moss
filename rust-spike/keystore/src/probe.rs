@@ -38,12 +38,8 @@ impl Keychain {
 
 /// Probes the session bus this process was started with.
 pub fn probe() -> Keychain {
-    let address = std::env::var("DBUS_SESSION_BUS_ADDRESS")
-        .ok()
-        .filter(|a| !a.is_empty());
-    let folder = runtime_dir(std::env::var_os("XDG_RUNTIME_DIR"), unsafe {
-        libc::geteuid()
-    });
+    let address = std::env::var("DBUS_SESSION_BUS_ADDRESS").ok().filter(|a| !a.is_empty());
+    let folder = runtime_dir(std::env::var_os("XDG_RUNTIME_DIR"), unsafe { libc::geteuid() });
     probe_session(address.as_deref(), &folder)
 }
 
@@ -64,15 +60,10 @@ pub fn probe_session(address: Option<&str>, runtime_dir: &Path) -> Keychain {
     }
     let socket = runtime_dir.join("bus");
     match socket.symlink_metadata() {
-        Ok(_) => probe_with(Ok(
-            Transport::Unix(Unix::new(UnixSocket::File(socket))).into()
-        )),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            Keychain::NoSessionBus(format!(
-                "no bus address is set and {} does not exist",
-                socket.display()
-            ))
-        }
+        Ok(_) => probe_with(Ok(Transport::Unix(Unix::new(UnixSocket::File(socket))).into())),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Keychain::NoSessionBus(
+            format!("no bus address is set and {} does not exist", socket.display()),
+        ),
         Err(error) => Keychain::Broken(format!("{}: {error}", socket.display())),
     }
 }

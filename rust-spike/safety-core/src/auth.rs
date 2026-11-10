@@ -63,10 +63,7 @@ pub struct SessionCookies {
 impl SessionCookies {
     /// `readAuthSecret` and `useSecureCookies` from `createBetterAuthOptions`.
     pub fn from_env(env: &Env) -> Result<Self, String> {
-        Ok(Self {
-            secret: auth_secret(env)?,
-            secure: trust_proxy(env)?,
-        })
+        Ok(Self { secret: auth_secret(env)?, secure: trust_proxy(env)? })
     }
 
     pub fn name(&self) -> &'static str {
@@ -94,23 +91,15 @@ impl SessionCookies {
 
     fn set_cookie(&self, token: &str) -> String {
         let value = encode_uri_component(&format!("{token}.{}", self.sign(token)));
-        format!(
-            "{}={value}; Max-Age={SESSION_SECONDS}; {}",
-            self.name(),
-            self.attributes()
-        )
+        format!("{}={value}; Max-Age={SESSION_SECONDS}; {}", self.name(), self.attributes())
     }
 
     /// `deleteSessionCookie`: clears the session cookie and the two cookies better-auth sets
     /// beside it.
     fn clear_cookies(&self) -> [String; 3] {
         let prefix = if self.secure { "__Secure-" } else { "" };
-        ["session_token", "session_data", "dont_remember"].map(|name| {
-            format!(
-                "{prefix}better-auth.{name}=; Max-Age=0; {}",
-                self.attributes()
-            )
-        })
+        ["session_token", "session_data", "dont_remember"]
+            .map(|name| format!("{prefix}better-auth.{name}=; Max-Age=0; {}", self.attributes()))
     }
 
     /// The session token from a validly signed cookie.
@@ -121,20 +110,14 @@ impl SessionCookies {
         if signature.len() != 44 || !signature.ends_with('=') {
             return None;
         }
-        let valid: bool = self
-            .sign(token)
-            .as_bytes()
-            .ct_eq(signature.as_bytes())
-            .into();
+        let valid: bool = self.sign(token).as_bytes().ct_eq(signature.as_bytes()).into();
         valid.then(|| token.to_owned())
     }
 }
 
 fn auth_secret(env: &Env) -> Result<Secret, String> {
     // `BETTER_AUTH_SECRET ?? AUTH_SECRET`: an empty first value does not fall through.
-    let named = env
-        .get("BETTER_AUTH_SECRET")
-        .or_else(|| env.get("AUTH_SECRET"));
+    let named = env.get("BETTER_AUTH_SECRET").or_else(|| env.get("AUTH_SECRET"));
     if let Some(secret) = named.filter(|secret| !secret.is_empty()) {
         return Ok(Secret::new(secret.as_str()));
     }
@@ -151,36 +134,24 @@ fn auth_secret(env: &Env) -> Result<Secret, String> {
         "msg": "BETTER_AUTH_SECRET is not set; sessions end when this process restarts"
     }));
     let bytes: [u8; 32] = rand::random();
-    Ok(Secret::new(
-        bytes
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>(),
-    ))
+    Ok(Secret::new(bytes.iter().map(|byte| format!("{byte:02x}")).collect::<String>()))
 }
 
 /// `resolveTrustProxy(...) !== false`: secure cookies behind a trusted proxy.
 fn trust_proxy(env: &Env) -> Result<bool, String> {
-    let value = resolve_moss_env(env, "JARVIS_TRUST_PROXY")
-        .unwrap_or_default()
-        .trim();
+    let value = resolve_moss_env(env, "JARVIS_TRUST_PROXY").unwrap_or_default().trim();
     if value.is_empty() {
         return Ok(false);
     }
     if value.eq_ignore_ascii_case("loopback") {
         return Ok(true);
     }
-    if value
-        .split(',')
-        .all(|address| address.trim().parse::<std::net::IpAddr>().is_ok())
-    {
+    if value.split(',').all(|address| address.trim().parse::<std::net::IpAddr>().is_ok()) {
         return Ok(true);
     }
-    Err(
-        "JARVIS_TRUST_PROXY must be unset, \"loopback\", or a comma-separated list of exact IP \
+    Err("JARVIS_TRUST_PROXY must be unset, \"loopback\", or a comma-separated list of exact IP \
          addresses"
-            .into(),
-    )
+        .into())
 }
 
 fn cookie_value<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
@@ -273,25 +244,15 @@ fn is_email(email: &str) -> bool {
     };
     let local_ok = !local.starts_with('.')
         && !local.contains("..")
-        && local
-            .chars()
-            .all(|ch| ch.is_ascii_alphanumeric() || "_'+-.".contains(ch))
-        && local
-            .chars()
-            .last()
-            .is_some_and(|ch| ch.is_ascii_alphanumeric() || "_+-".contains(ch));
+        && local.chars().all(|ch| ch.is_ascii_alphanumeric() || "_'+-.".contains(ch))
+        && local.chars().last().is_some_and(|ch| ch.is_ascii_alphanumeric() || "_+-".contains(ch));
     let labels: Vec<&str> = domain.split('.').collect();
     let Some((top, rest)) = labels.split_last() else {
         return false;
     };
     let label_ok = |label: &&str| {
-        label
-            .chars()
-            .next()
-            .is_some_and(|ch| ch.is_ascii_alphanumeric())
-            && label
-                .chars()
-                .all(|ch| ch.is_ascii_alphanumeric() || ch == '-')
+        label.chars().next().is_some_and(|ch| ch.is_ascii_alphanumeric())
+            && label.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '-')
     };
     local_ok
         && !rest.is_empty()
@@ -301,20 +262,12 @@ fn is_email(email: &str) -> bool {
 }
 
 fn new_session_token() -> String {
-    rand::thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(32)
-        .map(char::from)
-        .collect()
+    rand::thread_rng().sample_iter(&Alphanumeric).take(32).map(char::from).collect()
 }
 
 fn fingerprint(token: &str) -> String {
     let digest = Sha256::digest(token.as_bytes());
-    digest
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>()[..12]
-        .to_owned()
+    digest.iter().map(|byte| format!("{byte:02x}")).collect::<String>()[..12].to_owned()
 }
 
 pub fn iso(time: DateTime<Utc>) -> String {
@@ -338,11 +291,7 @@ pub fn serialize_user(row: &Row) -> Value {
 
 /// A better-auth error reply, `{code, message}`, or an internal error.
 pub enum Failure {
-    Reply {
-        status: u16,
-        code: &'static str,
-        message: Cow<'static, str>,
-    },
+    Reply { status: u16, code: &'static str, message: Cow<'static, str> },
     Internal(ApiError),
 }
 
@@ -355,22 +304,16 @@ impl From<ApiError> for Failure {
 impl IntoResponse for Failure {
     fn into_response(self) -> Response {
         match self {
-            Failure::Reply {
-                status,
-                code,
-                message,
-            } => json_reply(status, &json!({ "code": code, "message": message })),
+            Failure::Reply { status, code, message } => {
+                json_reply(status, &json!({ "code": code, "message": message }))
+            }
             Failure::Internal(error) => error.into_response(),
         }
     }
 }
 
 pub(crate) fn fail(status: u16, code: &'static str, message: &'static str) -> Failure {
-    Failure::Reply {
-        status,
-        code,
-        message: Cow::Borrowed(message),
-    }
+    Failure::Reply { status, code, message: Cow::Borrowed(message) }
 }
 
 fn registration_disabled() -> Failure {
@@ -378,11 +321,7 @@ fn registration_disabled() -> Failure {
 }
 
 fn invalid_credentials() -> Failure {
-    fail(
-        401,
-        "INVALID_EMAIL_OR_PASSWORD",
-        "Invalid email or password",
-    )
+    fail(401, "INVALID_EMAIL_OR_PASSWORD", "Invalid email or password")
 }
 
 /// A user as better-auth returns it.
@@ -428,9 +367,7 @@ impl AuthUser {
 /// A connection on the auth role, the only role that may touch users, accounts and sessions.
 async fn auth_client(auth: &Database) -> Result<deadpool_postgres::Object, ApiError> {
     if auth.role() != RuntimeRole::Auth {
-        return Err(ApiError::Internal(
-            "sign-in tables need the auth role".into(),
-        ));
+        return Err(ApiError::Internal("sign-in tables need the auth role".into()));
     }
     auth.client().await
 }
@@ -438,11 +375,7 @@ async fn auth_client(auth: &Database) -> Result<deadpool_postgres::Object, ApiEr
 async fn user_by_email(auth: &Database, email: &str) -> Result<Option<AuthUser>, ApiError> {
     let client = auth_client(auth).await?;
     let sql = format!("SELECT {AUTH_USER_FIELDS} FROM app.users WHERE email = $1");
-    Ok(client
-        .query_opt(&sql, &[&email])
-        .await?
-        .as_ref()
-        .map(AuthUser::from_row))
+    Ok(client.query_opt(&sql, &[&email]).await?.as_ref().map(AuthUser::from_row))
 }
 
 async fn insert_user(
@@ -457,17 +390,13 @@ async fn insert_user(
            (id, name, email, email_verified, image, created_at, updated_at, is_instance_admin) \
          VALUES ($1, $2, $3, false, $4, $5, $5, false) RETURNING {AUTH_USER_FIELDS}"
     );
-    let row = client
-        .query_one(&sql, &[&Uuid::new_v4(), &name, &email, &image, &Utc::now()])
-        .await?;
+    let row = client.query_one(&sql, &[&Uuid::new_v4(), &name, &email, &image, &Utc::now()]).await?;
     Ok(AuthUser::from_row(&row))
 }
 
 async fn delete_user(auth: &Database, user_id: Uuid) -> Result<(), ApiError> {
     let client = auth_client(auth).await?;
-    client
-        .execute("DELETE FROM app.users WHERE id = $1", &[&user_id])
-        .await?;
+    client.execute("DELETE FROM app.users WHERE id = $1", &[&user_id]).await?;
     Ok(())
 }
 
@@ -478,13 +407,7 @@ async fn insert_credential(auth: &Database, user_id: Uuid, hash: &str) -> Result
             "INSERT INTO app.auth_accounts \
                (id, account_id, provider_id, user_id, password, created_at, updated_at) \
              VALUES ($1, $2, 'credential', $3, $4, $5, $5)",
-            &[
-                &Uuid::new_v4(),
-                &user_id.to_string(),
-                &user_id,
-                &hash,
-                &Utc::now(),
-            ],
+            &[&Uuid::new_v4(), &user_id.to_string(), &user_id, &hash, &Utc::now()],
         )
         .await?;
     Ok(())
@@ -509,9 +432,7 @@ async fn create_session(
 ) -> Result<String, ApiError> {
     let token = new_session_token();
     let now = Utc::now();
-    let user_agent = headers
-        .get(USER_AGENT)
-        .and_then(|value| value.to_str().ok());
+    let user_agent = headers.get(USER_AGENT).and_then(|value| value.to_str().ok());
     let client = auth_client(auth).await?;
     client
         .execute(
@@ -548,9 +469,7 @@ async fn session_user(auth: &Database, token: &str) -> Result<Option<Uuid>, ApiE
         (row.get(0), row.get(1), row.get(2));
     let now = Utc::now();
     if expires_at < now {
-        client
-            .execute("DELETE FROM app.better_auth_sessions WHERE id = $1", &[&id])
-            .await?;
+        client.execute("DELETE FROM app.better_auth_sessions WHERE id = $1", &[&id]).await?;
         return Ok(None);
     }
     let refresh_at =
@@ -568,12 +487,7 @@ async fn session_user(auth: &Database, token: &str) -> Result<Option<Uuid>, ApiE
 
 async fn delete_session(auth: &Database, token: &str) -> Result<(), ApiError> {
     let client = auth_client(auth).await?;
-    client
-        .execute(
-            "DELETE FROM app.better_auth_sessions WHERE token = $1",
-            &[&token],
-        )
-        .await?;
+    client.execute("DELETE FROM app.better_auth_sessions WHERE token = $1", &[&token]).await?;
     Ok(())
 }
 
@@ -590,20 +504,12 @@ async fn bootstrap_owner_exists(db: &Client) -> Result<bool, ApiError> {
 /// `readBooleanSetting` for the settings sign-up may read; both default to on.
 async fn read_flag(db: &Client, key: &'static str) -> Result<bool, ApiError> {
     if !PREAUTH_SETTINGS.contains(&key) {
-        return Err(ApiError::Internal(format!(
-            "pre-auth read not allowed for {key}"
-        )));
+        return Err(ApiError::Internal(format!("pre-auth read not allowed for {key}")));
     }
-    let row = db
-        .query_opt(
-            "SELECT value FROM app.instance_settings WHERE key = $1",
-            &[&key],
-        )
-        .await?;
+    let row =
+        db.query_opt("SELECT value FROM app.instance_settings WHERE key = $1", &[&key]).await?;
     let value = row.map(|row| row.get::<_, Value>(0));
-    Ok(value
-        .and_then(|value| value.get("value").and_then(Value::as_bool))
-        .unwrap_or(true))
+    Ok(value.and_then(|value| value.get("value").and_then(Value::as_bool)).unwrap_or(true))
 }
 
 /// `registrationGate`: once an owner exists, sign-up follows `registration.enabled`. It runs on
@@ -622,18 +528,12 @@ async fn registration_gate(platform: &Platform) -> Result<(), Failure> {
 /// first sign-ups cannot both become the owner.
 async fn bootstrap(platform: &Platform, user: &AuthUser) -> Result<(), Failure> {
     let request_id = format!("bootstrap:{}", user.id);
-    let cx = DataContext::open(
-        &platform.app,
-        &AccessContext::new(user.id, request_id.clone()),
-    )
-    .await?;
+    let cx = DataContext::open(&platform.app, &AccessContext::new(user.id, request_id.clone()))
+        .await?;
     let db = cx.db();
-    db.execute(
-        "SELECT pg_advisory_xact_lock(hashtext('jarv1s:first-user-bootstrap'))",
-        &[],
-    )
-    .await
-    .map_err(ApiError::from)?;
+    db.execute("SELECT pg_advisory_xact_lock(hashtext('jarv1s:first-user-bootstrap'))", &[])
+        .await
+        .map_err(ApiError::from)?;
     let owner = !bootstrap_owner_exists(db).await?;
     let status = if owner {
         "active"
@@ -665,9 +565,7 @@ async fn bootstrap(platform: &Platform, user: &AuthUser) -> Result<(), Failure> 
 }
 
 fn parse_body(body: &Bytes) -> Option<Value> {
-    serde_json::from_slice::<Value>(body)
-        .ok()
-        .filter(Value::is_object)
+    serde_json::from_slice::<Value>(body).ok().filter(Value::is_object)
 }
 
 fn text<'a>(body: &'a Value, name: &str) -> Option<&'a str> {
@@ -731,10 +629,7 @@ fn check_body(body: &Value, schema: &[(&str, Field)]) -> Result<(), Failure> {
                 (Field::OptionalText | Field::OptionalFlag, None)
                 | (Field::OptionalFlag, Some(Value::Bool(_))) => return None,
                 (Field::OptionalFlag, _) => {
-                    format!(
-                        "Invalid input: expected boolean, received {}",
-                        type_name(value)
-                    )
+                    format!("Invalid input: expected boolean, received {}", type_name(value))
                 }
                 (Field::NonEmpty, Some(Value::String(text))) if text.is_empty() => {
                     "Too small: expected string to have >=1 characters".to_owned()
@@ -743,10 +638,7 @@ fn check_body(body: &Value, schema: &[(&str, Field)]) -> Result<(), Failure> {
                     "Invalid email address".to_owned()
                 }
                 (_, Some(Value::String(_))) => return None,
-                _ => format!(
-                    "Invalid input: expected string, received {}",
-                    type_name(value)
-                ),
+                _ => format!("Invalid input: expected string, received {}", type_name(value)),
             };
             Some(format!("[body.{name}] {problem}"))
         })
@@ -842,8 +734,7 @@ async fn sign_in(
     check_body(&body, &SIGN_IN_BODY)?;
 
     // The body check leaves both as strings.
-    let [email, password] =
-        ["email", "password"].map(|field| text(&body, field).unwrap_or_default());
+    let [email, password] = ["email", "password"].map(|field| text(&body, field).unwrap_or_default());
     platform.origins.check_sign_in_form(&headers)?;
     if !is_email(email) {
         return Err(fail(400, "INVALID_EMAIL", "Invalid email"));
@@ -869,10 +760,8 @@ async fn sign_in(
         return Err(invalid_credentials());
     }
     let token = create_session(&platform.auth, user.id, &headers).await?;
-    let reply = json_reply(
-        200,
-        &json!({ "redirect": false, "token": token, "user": user.output() }),
-    );
+    let reply =
+        json_reply(200, &json!({ "redirect": false, "token": token, "user": user.output() }));
     Ok(with_cookie(reply, &platform.sessions.set_cookie(&token))?)
 }
 
@@ -915,21 +804,13 @@ pub async fn resolve_access(
             actor
         }
         None => {
-            let token = platform
-                .sessions
-                .read_token(headers)
-                .ok_or(ApiError::Unauthorized)?;
-            session_user(&platform.auth, &token)
-                .await?
-                .ok_or(ApiError::Unauthorized)?
+            let token = platform.sessions.read_token(headers).ok_or(ApiError::Unauthorized)?;
+            session_user(&platform.auth, &token).await?.ok_or(ApiError::Unauthorized)?
         }
     };
     let client = platform.app.client().await?;
     let row = client
-        .query_opt(
-            "SELECT status FROM app.get_user_by_id($1::uuid)",
-            &[&actor_user_id],
-        )
+        .query_opt("SELECT status FROM app.get_user_by_id($1::uuid)", &[&actor_user_id])
         .await?
         .ok_or(ApiError::Unauthorized)?;
     match row.get::<_, String>(0).as_str() {
@@ -953,10 +834,7 @@ async fn bearer_user(app: &Database, token: &str) -> Result<Uuid, ApiError> {
     let session_id = Uuid::parse_str(token).map_err(|_| ApiError::Unauthorized)?;
     let client = app.client().await?;
     let row = client
-        .query_opt(
-            "SELECT user_id FROM app.resolve_auth_session($1::uuid)",
-            &[&session_id],
-        )
+        .query_opt("SELECT user_id FROM app.resolve_auth_session($1::uuid)", &[&session_id])
         .await?
         .ok_or(ApiError::Unauthorized)?;
     Ok(row.get(0))
@@ -971,19 +849,13 @@ async fn me(
     let access = resolve_access(&platform, &headers).await?;
     let cx = DataContext::open(&platform.app, &access).await?;
     let sql = format!("SELECT {USER_FIELDS} FROM app.get_user_by_id($1::uuid)");
-    let row = cx
-        .db()
-        .query_opt(&sql, &[&access.actor_user_id()])
-        .await?
-        .ok_or(ApiError::Unauthorized)?;
+    let row =
+        cx.db().query_opt(&sql, &[&access.actor_user_id()]).await?.ok_or(ApiError::Unauthorized)?;
 
     // Row-level security limits preferences to the actor's own.
     let addressed = cx
         .db()
-        .query_opt(
-            "SELECT value_json FROM app.preferences WHERE key = 'profile.addressed'",
-            &[],
-        )
+        .query_opt("SELECT value_json FROM app.preferences WHERE key = 'profile.addressed'", &[])
         .await?
         .and_then(|row| row.get::<_, Value>(0).as_str().map(str::to_owned));
     cx.commit().await?;
@@ -1025,17 +897,11 @@ mod tests {
     const NODE_SIGNATURE: &str = "5ozzw4zbLYnn+dL54X0cltoXk59H7NB5pB1OjtYSJQs=";
 
     fn cookies(secure: bool) -> SessionCookies {
-        SessionCookies {
-            secret: Secret::new(TEST_AUTH_SECRET),
-            secure,
-        }
+        SessionCookies { secret: Secret::new(TEST_AUTH_SECRET), secure }
     }
 
     fn env(pairs: &[(&str, &str)]) -> Env {
-        pairs
-            .iter()
-            .map(|(key, value)| (key.to_string(), value.to_string()))
-            .collect()
+        pairs.iter().map(|(key, value)| (key.to_string(), value.to_string())).collect()
     }
 
     fn with_cookie_header(value: &str) -> HeaderMap {
@@ -1069,35 +935,20 @@ mod tests {
         let tampered = good.replacen("5ozz", "5ozy", 1);
         let other_token = good.replacen("AbCd", "AbCe", 1);
         let unpadded = encode_uri_component(&format!("{TOKEN}.{}", &NODE_SIGNATURE[..43]));
-        for value in [
-            tampered.as_str(),
-            other_token.as_str(),
-            unpadded.as_str(),
-            TOKEN,
-            "%zz",
-        ] {
+        for value in [tampered.as_str(), other_token.as_str(), unpadded.as_str(), TOKEN, "%zz"] {
             let headers = with_cookie_header(&format!("{SESSION_COOKIE}={value}"));
             assert_eq!(cookies.read_token(&headers), None, "{value}");
         }
         let plain_name = with_cookie_header(&format!("{SESSION_COOKIE}={good}"));
-        assert_eq!(
-            super::SessionCookies::read_token(&self::cookies(true), &plain_name),
-            None
-        );
+        assert_eq!(super::SessionCookies::read_token(&self::cookies(true), &plain_name), None);
         let secure = with_cookie_header(&format!("{SECURE_SESSION_COOKIE}={good}"));
-        assert_eq!(
-            self::cookies(true).read_token(&secure).as_deref(),
-            Some(TOKEN)
-        );
+        assert_eq!(self::cookies(true).read_token(&secure).as_deref(), Some(TOKEN));
         assert!(self::cookies(true).set_cookie(TOKEN).ends_with("; Secure"));
     }
 
     #[test]
     fn resolves_the_signing_secret_like_typescript() {
-        let named = auth_secret(&env(&[
-            ("BETTER_AUTH_SECRET", "one"),
-            ("AUTH_SECRET", "two"),
-        ]));
+        let named = auth_secret(&env(&[("BETTER_AUTH_SECRET", "one"), ("AUTH_SECRET", "two")]));
         assert!(named.unwrap().matches("one"));
         let fallback = auth_secret(&env(&[("AUTH_SECRET", "two")]));
         assert!(fallback.unwrap().matches("two"));
@@ -1105,34 +956,18 @@ mod tests {
         let empty_first = empty_first.unwrap();
         assert!(!empty_first.matches("two"));
         assert_eq!(empty_first.expose_secret().len(), 64);
-        assert!(auth_secret(&env(&[("VITEST", "true")]))
-            .unwrap()
-            .matches(TEST_AUTH_SECRET));
-        assert!(auth_secret(&env(&[("NODE_ENV", "test")]))
-            .unwrap()
-            .matches(TEST_AUTH_SECRET));
+        assert!(auth_secret(&env(&[("VITEST", "true")])).unwrap().matches(TEST_AUTH_SECRET));
+        assert!(auth_secret(&env(&[("NODE_ENV", "test")])).unwrap().matches(TEST_AUTH_SECRET));
         let production = auth_secret(&env(&[("NODE_ENV", "production")]));
-        assert_eq!(
-            production.err().unwrap(),
-            "BETTER_AUTH_SECRET is required in production"
-        );
+        assert_eq!(production.err().unwrap(), "BETTER_AUTH_SECRET is required in production");
     }
 
     #[test]
     fn reads_trust_proxy_like_typescript() {
         assert_eq!(trust_proxy(&env(&[])), Ok(false));
-        assert_eq!(
-            trust_proxy(&env(&[("JARVIS_TRUST_PROXY", "  ")])),
-            Ok(false)
-        );
-        assert_eq!(
-            trust_proxy(&env(&[("JARVIS_TRUST_PROXY", "Loopback")])),
-            Ok(true)
-        );
-        assert_eq!(
-            trust_proxy(&env(&[("JARVIS_TRUST_PROXY", "10.0.0.1, ::1")])),
-            Ok(true)
-        );
+        assert_eq!(trust_proxy(&env(&[("JARVIS_TRUST_PROXY", "  ")])), Ok(false));
+        assert_eq!(trust_proxy(&env(&[("JARVIS_TRUST_PROXY", "Loopback")])), Ok(true));
+        assert_eq!(trust_proxy(&env(&[("JARVIS_TRUST_PROXY", "10.0.0.1, ::1")])), Ok(true));
         assert!(trust_proxy(&env(&[("JARVIS_TRUST_PROXY", "yes")])).is_err());
         assert!(trust_proxy(&env(&[("JARVIS_TRUST_PROXY", "10.0.0.1,")])).is_err());
         let moss_first = env(&[("MOSS_TRUST_PROXY", ""), ("JARVIS_TRUST_PROXY", "loopback")]);
@@ -1162,24 +997,10 @@ mod tests {
 
     #[test]
     fn checks_emails_like_zod() {
-        for good in [
-            "a@b.co",
-            "first.last+tag@sub.example.org",
-            "o'neil_1@x-y.io",
-        ] {
+        for good in ["a@b.co", "first.last+tag@sub.example.org", "o'neil_1@x-y.io"] {
             assert!(is_email(good), "{good}");
         }
-        for bad in [
-            "a@b",
-            "a..b@c.com",
-            ".a@b.com",
-            "a.@b.com",
-            "a@-b.com",
-            "a@b.c",
-            "a b@c.com",
-            "@b.com",
-            "a@b..com",
-        ] {
+        for bad in ["a@b", "a..b@c.com", ".a@b.com", "a.@b.com", "a@-b.com", "a@b.c", "a b@c.com", "@b.com", "a@b..com"] {
             assert!(!is_email(bad), "{bad}");
         }
     }
@@ -1204,11 +1025,9 @@ mod tests {
     fn checks_bodies_like_better_call() {
         let check = |body: Value, schema: &[(&str, Field)]| match check_body(&body, schema) {
             Ok(()) => None,
-            Err(Failure::Reply {
-                status: 400,
-                code: "VALIDATION_ERROR",
-                message,
-            }) => Some(message.into_owned()),
+            Err(Failure::Reply { status: 400, code: "VALIDATION_ERROR", message }) => {
+                Some(message.into_owned())
+            }
             Err(_) => Some("not a validation reply".to_owned()),
         };
 
@@ -1227,10 +1046,7 @@ mod tests {
             )
         );
         let kelvin = json!({ "name": "N", "email": "\u{212A}@example.com", "password": "x" });
-        assert_eq!(
-            check(kelvin, &SIGN_UP_BODY).as_deref(),
-            Some("[body.email] Invalid email address")
-        );
+        assert_eq!(check(kelvin, &SIGN_UP_BODY).as_deref(), Some("[body.email] Invalid email address"));
         let wrong_types = json!({ "email": ["a@b.co"], "password": 12345678, "callbackURL": {} });
         assert_eq!(
             check(wrong_types, &SIGN_IN_BODY).as_deref(),
@@ -1258,10 +1074,7 @@ mod tests {
     fn round_trips_uri_components() {
         let text = "a+b/c=d é";
         assert_eq!(encode_uri_component(text), "a%2Bb%2Fc%3Dd%20%C3%A9");
-        assert_eq!(
-            decode_uri_component(&encode_uri_component(text)).as_deref(),
-            Some(text)
-        );
+        assert_eq!(decode_uri_component(&encode_uri_component(text)).as_deref(), Some(text));
         assert_eq!(decode_uri_component("%E9"), None);
         assert_eq!(decode_uri_component("%4"), None);
     }

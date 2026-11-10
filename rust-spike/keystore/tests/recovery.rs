@@ -1,6 +1,4 @@
-use keystore::recovery::{
-    full_word, parse_words, split_pasted, RecoveryKey, UnknownWord, WordsError,
-};
+use keystore::recovery::{full_word, parse_words, split_pasted, RecoveryKey, UnknownWord, WordsError};
 
 fn sheet(key: &RecoveryKey) -> Vec<String> {
     key.words().into_iter().map(str::to_string).collect()
@@ -11,10 +9,7 @@ fn twenty_four_words_round_trip() {
     let key = RecoveryKey::generate();
     let words = sheet(&key);
     assert_eq!(words.len(), 24);
-    assert_eq!(
-        parse_words(&words).ok().map(|k| *k.bytes()),
-        Some(*key.bytes())
-    );
+    assert_eq!(parse_words(&words).ok().map(|k| *k.bytes()), Some(*key.bytes()));
 }
 
 #[test]
@@ -38,10 +33,7 @@ fn four_letters_case_and_spaces_are_enough() {
             _ => word.clone(),
         })
         .collect();
-    assert_eq!(
-        parse_words(&typed).ok().map(|k| *k.bytes()),
-        Some(*key.bytes())
-    );
+    assert_eq!(parse_words(&typed).ok().map(|k| *k.bytes()), Some(*key.bytes()));
     assert_eq!(full_word("aban"), Some("abandon"));
     assert_eq!(full_word("aba"), None, "three letters are not enough");
 }
@@ -73,9 +65,7 @@ fn a_dropped_letter_still_gets_a_suggestion() {
     let mut typed = sheet(&key);
     assert_eq!(typed[0], "abandon");
     typed[0] = "abadon".to_string();
-    let Some(WordsError::UnknownWords(unknown)) = parse_words(&typed).err() else {
-        panic!()
-    };
+    let Some(WordsError::UnknownWords(unknown)) = parse_words(&typed).err() else { panic!() };
     assert_eq!(unknown[0].suggestion, Some("abandon"));
 }
 
@@ -84,10 +74,7 @@ fn missing_and_misplaced_words_are_refused() {
     let key = RecoveryKey::from_bytes([7; 32]);
     let mut short = sheet(&key);
     short[23] = String::new();
-    assert_eq!(
-        parse_words(&short).err(),
-        Some(WordsError::WrongCount { filled: 23 })
-    );
+    assert_eq!(parse_words(&short).err(), Some(WordsError::WrongCount { filled: 23 }));
 
     let mut swapped = sheet(&key);
     let other = (1..24).find(|&i| swapped[i] != swapped[0]).unwrap();
