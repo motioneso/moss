@@ -79,7 +79,7 @@ pub fn create_instance(store: &Store, install: &Path, name: &str) -> Result<(), 
     if !valid_instance(name) {
         return Err(Failure::BadName);
     }
-    if !cfg!(unix) {
+    if !cfg!(any(unix, windows)) {
         return Err(Failure::Unsupported);
     }
     if !program(install).is_file() || !install.join("postgres").is_dir() {
