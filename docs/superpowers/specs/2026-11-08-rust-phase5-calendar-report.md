@@ -1005,3 +1005,43 @@ The live runner pins a late-day event and follows Month overflow to Day; the pri
 direct-chip lookup timed out when the current-time fixture sorted past three chips.
 It waits for the view save before following overflow, as the Month checks do.
 See README for commands and remaining full-port and physical-device HTTPS work.
+
+### Part 19 resume checkpoint (2026-11-09, not ready)
+
+Product code is unchanged since c4a20ef90. Final runner commit 03b777eca adds a
+fixed late-day primary event, reaches it through Month overflow and waits for the
+view save before that click. Scoped strict TypeScript, ESLint and formatting pass.
+The full Calendar gate passed on clean 03b777eca, fingerprint f426edd7f7b4,
+log `task_142_rust_port_phase_5_calendar_modu-20261109-161435-KjYTQ5.log`.
+It includes operation comparisons, all-five-table failing-first privacy and tools/jobs.
+Root type checking passed on 4740e9ec3; GitHub static/unit/browser/deployment checks
+were green when checked, with integration jobs still running.
+
+The latest installed HTTPS run is **red**, despite all four saved-timezone and
+all four initial-position cases passing. Its log is
+`task_142_rust_port_phase_5_calendar_modu-20261109-163018-AGoCmz.log`.
+`month-live.ts:68` cannot click today's overflow button at desktop width:
+a neighboring `.cal-mcell` intercepts pointer events. Its geometry assertion
+(the button fits its immediate parent) passed, so it does not prove hit testing.
+`Month` already reserves 144 pixels per row; no layout fix has been made here.
+Do not force the click or drop the check. Inspect actual cell/list/button bounds
+and the hit target on a running instance, then reproduce and fix the real layout.
+
+An earlier run crossed UTC midnight and failed the startup-selected timezone
+shift after both desktop cases passed. Another passed all four timezone cases
+and Month checks, then timed out the newly added overflow-to-Day step before its
+readiness wait existed. These are not complete green live results.
+
+Local scratch state remains in `/tmp/js142-calendar`: `run` provides the task-local
+Rust home, both shared bundles and two-worker-compatible caches; final receipts,
+logs, cropped timezone screenshots, the last Month screenshot, strict TS config,
+and an unpublished Proof draft are there. `build-proof.py` intentionally refuses
+a red live run. Its final review and live-log references must be refreshed before use.
+No new dependency, global tool or wit-bindgen installation occurred.
+
+Resume with the Month hit-target reproduction, then run the full gate and complete
+signed-in live check sequentially on the final commit. Fresh Claude review round
+two remains unused; record it on the final commit. Publish the real Proof, update
+the draft PR and card, and only then run ready. PR #4141 remains a draft; there is
+no final Proof or ready claim. Full-port and physical second-device work above
+remain open. This checkpoint stops at the brief's continuation limit.

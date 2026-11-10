@@ -441,3 +441,8 @@ and failing-before/passing-after results belong in the task Proof artifact.
 No provider, table, privacy policy, shared host or cross-module adapter changes.
 The complete port and physical second-device trusted HTTPS remain open as listed
 in the main Calendar report.
+
+Current part 19 checkpoint is not ready: the full Calendar gate passes and all
+four saved-timezone browser cases pass, but the complete installed UI run fails
+when a neighboring Month cell intercepts the overflow button. See the report's
+resume checkpoint for exact logs, scratch state and remaining review/proof steps.
