@@ -2930,3 +2930,34 @@ Remaining work is unchanged from part 26 steps 3 and 4.
 - Edit and Archive clicks through the UI (the routes are covered by the gate).
 - Ingest nudge to the Memory queue (no cross-module path exists in Rust yet).
 - Chat flows and real source providers.
+
+## Part 29: Edit and Archive through the screen, reached by LAN address
+
+### Built
+
+- The server gate can now be run reachable from other devices. Setting `MOSS_PEOPLE_HOST` to the
+  address a device uses makes the listener bind every interface, trusts that HTTPS origin, issues
+  its certificate and turns sharing on. The test itself stays on the loopback origin, which owner
+  setup and recovery still require. No People, host or server source changed.
+- Run prerequisites: `pnpm install --frozen-lockfile --offline`, and a task-owned toolchain. The
+  scratch Rust copy needed its stale `wasm32-wasip2` metadata removed before the target installed.
+
+### Proven in a real browser (headless Chromium, real server, throwaway database)
+
+- Signing in at the machine's LAN address over HTTPS returns 200 (sharing on, non-loopback peer).
+- The People screen opens in its sandboxed frame at that address and lists the existing person.
+- Create person adds a new row with the "Person created." notice.
+- Edit, change the name, Save name: the row shows the new name and "Name saved."
+- Archive: the row's status changes to archived with "Person archived."
+
+### Findings
+
+- The parent page requests `/app.css`, which the gate's fixture web folder lacks, so the browser logs
+  a MIME refusal. This is a fixture gap, not a shipping defect, and the screen is unaffected.
+- An archived person still shows Edit and Archive buttons. Legacy parity for hiding them is unchecked.
+
+### Not proven
+
+- A second physical device (the check used the same machine at its LAN address).
+- Ingest nudges, real source providers, command retention and quotas, locale ordering, chat flows.
+- Large-account behaviour beyond slice 19's 200M fuel result.
