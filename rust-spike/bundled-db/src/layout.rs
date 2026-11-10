@@ -380,7 +380,7 @@ impl Layout {
 fn check_secret_name(role: &str) -> std::io::Result<()> {
     if !crate::RUNTIME_ROLES.contains(&role)
         && role != crate::SUPERUSER
-        && !["session-signing-secret", "connector-key"].contains(&role)
+        && !["session-signing-secret", "connector-key", "ai-key"].contains(&role)
     {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,

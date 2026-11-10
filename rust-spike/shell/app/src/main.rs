@@ -25,6 +25,7 @@ use tower_http::services::ServeDir;
 
 mod desktop_notices;
 mod module_admin;
+mod module_ai;
 mod module_install;
 mod modules;
 mod runner_data;

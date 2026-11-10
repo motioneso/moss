@@ -63,6 +63,7 @@ mod tests {
             crate::SUPERUSER,
             "session-signing-secret",
             "connector-key",
+            "ai-key",
         ]) {
             let first = password(&layout, name).unwrap();
             assert_eq!(first.expose().len(), 64);

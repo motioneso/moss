@@ -49,6 +49,9 @@ pub struct Settings {
     pub(crate) producer_url: String,
     pub(crate) worker_url: String,
     pub(crate) connector_key: String,
+    /// Opens stored AI provider credentials. Absent means module AI fails closed.
+    #[serde(default)]
+    pub(crate) ai_key: Option<String>,
     #[serde(default)]
     pub(crate) fuel_ceiling: Option<u64>,
     /// Base folder for per-account notes roots (`<base>/<account id>`). Needed by People.
@@ -68,7 +71,7 @@ pub struct EmbeddingSettings {
     api_key: String,
 }
 
-// AI configuration is not assembled by this checkpoint. Calls fail closed.
+// Used when the instance has no AI key. Calls fail closed.
 struct UnconfiguredIntelligence;
 impl Intelligence for UnconfiguredIntelligence {
     fn generate(&self, _: &CallScope, _: &Request) -> Result<Value> {
@@ -124,6 +127,23 @@ fn memory(
         BTreeMap::from([(key, "notes".into())]),
         ingest,
     )?))
+}
+
+// Text generation goes through the router; embeddings use the fixed endpoint when one is set.
+struct SplitIntelligence {
+    generator: Arc<dyn Intelligence>,
+    embedder: Option<Arc<dyn Intelligence>>,
+}
+impl Intelligence for SplitIntelligence {
+    fn generate(&self, scope: &CallScope, request: &Request) -> Result<Value> {
+        self.generator.generate(scope, request)
+    }
+    fn embed(&self, scope: &CallScope, request: &Request) -> Result<Value> {
+        match &self.embedder {
+            Some(embedder) => embedder.embed(scope, request),
+            None => self.generator.embed(scope, request),
+        }
+    }
 }
 
 /// Account preference and linked-notes ports for People. Keys, resources and roots are
@@ -242,19 +262,31 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
     }
     let preferences_database = database.clone();
     let mut embedding_model = None;
-    let intelligence: Arc<dyn Intelligence> = match settings.embeddings {
+    let generator: Arc<dyn Intelligence> = match &settings.ai_key {
+        Some(key) => crate::module_ai::intelligence(
+            database.clone(),
+            SecretCipher::ai(&[("JARVIS_AI_SECRET_KEY".into(), key.clone())].into())
+                .map_err(|_| anyhow::anyhow!("Invalid module AI key"))?,
+        )?,
+        None => Arc::new(UnconfiguredIntelligence),
+    };
+    let embedder: Option<Arc<dyn Intelligence>> = match settings.embeddings {
         Some(e) => {
             embedding_model = Some(e.model.clone());
-            Arc::new(EmbeddingsOnly::new(FixedEmbeddings::new(
+            Some(Arc::new(EmbeddingsOnly::new(FixedEmbeddings::new(
                 e.url
                     .parse()
                     .map_err(|_| anyhow::anyhow!("Invalid embeddings url"))?,
                 e.model,
                 e.api_key,
-            ))?)
+            ))?))
         }
-        None => Arc::new(UnconfiguredIntelligence),
+        None => None,
     };
+    let intelligence: Arc<dyn Intelligence> = Arc::new(SplitIntelligence {
+        generator,
+        embedder,
+    });
     let notes_intelligence = intelligence.clone();
     let application = Application::open_extended_with(
         &settings.data,

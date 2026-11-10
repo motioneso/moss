@@ -2664,9 +2664,13 @@ name = "moss-shell"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum",
  "moss-module-host",
  "moss-network",
+ "moss-platform-adapters",
+ "moss-platform-contracts",
+ "moss-platform-routing",
  "moss-shell-contract",
  "safety-core",
  "serde",

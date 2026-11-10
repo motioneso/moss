@@ -328,6 +328,7 @@ fn run_credentials(install: &Path, folder: &Path) -> Result<(String, String), Fa
         "worker_url": worker_url,
         "connector_key": connector_key,
         "notes_base": folder.join("notes"),
+        "ai_key": field("ai_key"),
     });
     Ok((credentials.to_string(), modules.to_string()))
 }
