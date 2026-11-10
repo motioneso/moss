@@ -1950,3 +1950,17 @@ Checks: six guest tests (layout, blank title and fallback heading, replace own f
 Not proven: the API over HTTP or from chat (no route; the chat settings screen and the daily trigger are not joined), the time label produced by the real chat side, a second signed-in account, native UI, second physical device.
 
 Still open: automatic recovery timer, retention, managed publication and reconciliation, singleton coalescing and recall warmup, the assembled Settings and chat join, second-device HTTPS proof.
+
+## Part thirty-one checkpoint — sync recovery and retention on the tick
+
+Package 0.1.20. The fifteen-minute sync tick now also runs maintenance for its account, before the linked-folder check, and never fails the tick. First it deletes saved sync checkpoints older than 24 hours, finished or not. Then it scans up to forty pages (1000 rows) in stable id order and asks the queue again for every checkpoint that has no saved result. Queue identity is the checkpoint id, so a repeat request is safe. The experimental `recoverNotesSync` API stays for explicit retries. The 24-hour cutoff is computed in the guest from the host's `now` (no timezone or date library is added).
+
+Decisions: retention is time-only, not result-based, because the database filter cannot see inside the saved result. An unfinished checkpoint that survived roughly ninety retries in a day is dropped. Unlinking runs the same maintenance once before cancelling the schedule, so old checkpoints are cleared; rows from the last day stay until the folder is linked again. Recovery also re-requests rows that are still in flight; the queue deduplicates by checkpoint id.
+
+Checks: unit tests for date shifting (day, month, year and leap-day boundaries), and a tick test that the delete carries the right cutoff and only the unfinished checkpoint is requested again. Live (`pnpm test:rust-notes-server`, through the gate, passed): on the real HTTPS server with real Postgres, a finished checkpoint backdated three days and a recent one were inserted, then the account's schedule was made due. The server's own scheduler ran the tick, which indexed the new note as before, deleted the old checkpoint and kept the recent one.
+
+Not proven: a real 24-hour wait (an old row was inserted with a past timestamp), a crash between saving a checkpoint and queueing it, a second account, native UI, second physical device.
+
+Still open: managed publication and reconciliation (needs the Meetings module), singleton coalescing and recall warmup, the assembled Settings and chat join, second-device HTTPS proof.
+
+Review round 1 (Codex): two majors fixed. Recovery covered only 250 rows per tick (now 1000, restarting from the start each tick; a day beyond 1000 rows needs a very large folder and would leave later rows unrecovered, which is a documented limit, not a persisted cursor). Unlinking cancelled the only maintenance entry point, so it now runs maintenance first.
