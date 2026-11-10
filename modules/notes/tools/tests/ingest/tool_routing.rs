@@ -485,7 +485,7 @@ fn installed_tool_dispatch_writes_syncs_and_searches_with_account_approvals() {
                     indexed,
                     "Refused delivery must leave the index unchanged"
                 );
-                assert_eq!(f.status(db.clone(), owner)["lastError"], "notes sync failed (Error)",
+                assert_eq!(f.status(db.clone(), owner)["lastError"], "path is not within the linked notes source",
                     "The Notes worker must record the source refusal, not fail before guest execution");
                 let retry = f.rt.block_on(f.bootstrap.query_one(
                     "SELECT state, attempts, failure_code, run_at >= $3::timestamptz + interval '10 seconds' FROM moss_queue.jobs WHERE actor_user_id=$1 AND idempotency_key=$2",
