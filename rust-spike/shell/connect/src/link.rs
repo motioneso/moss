@@ -93,8 +93,7 @@ pub fn open(data: &Path, request: &Request) -> Result<(), String> {
         .arg("--data")
         .arg(data)
         .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null());
+        .stdout(std::process::Stdio::null());
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;

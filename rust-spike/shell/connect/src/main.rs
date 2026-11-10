@@ -365,8 +365,7 @@ impl App {
                 self.list_servers();
             }
             UserEvent::OpenLink { server, path } => {
-                self.window.set_visible(true);
-                self.window.set_focus();
+                self.bring_forward();
                 let Some(id) = server else { return };
                 self.turn += 1;
                 if self.store.find(&self.servers, &id).is_none() {
@@ -388,8 +387,7 @@ impl App {
                 self.window.set_visible(true);
             }
             UserEvent::Reveal => {
-                self.window.set_visible(true);
-                self.window.set_focus();
+                self.bring_forward();
             }
             UserEvent::Desktop => {
                 self.turn += 1;
@@ -665,6 +663,28 @@ impl App {
             .evaluate_script(&format!("window.moss.show({state})"));
     }
 
+    /// Raises the window. A window that is already visible is only focused, because showing it
+    /// again would also show the web view that is meant to stay hidden.
+    fn bring_forward(&self) {
+        if !self.window.is_visible() {
+            self.window.set_visible(true);
+        }
+        self.window.set_focus();
+        self.restore_views();
+    }
+
+    /// Showing the window shows every web view in it again, so the app's own screen is hidden
+    /// again whenever a server page is the one that should be on top.
+    fn restore_views(&self) {
+        if !self.screen.is_empty() {
+            return;
+        }
+        if let Some(server) = &self.server {
+            let _ = self.connect.set_visible(false);
+            let _ = server.view.set_visible(true);
+        }
+    }
+
     fn connect(&mut self, id: String) {
         if self.stopping.as_deref() == Some(&id) {
             return self.show(json!({"screen":"stopping", "name":"Moss"}));
@@ -829,15 +849,14 @@ impl App {
             self.server = None;
             match self.server_view(&opened, &landing) {
                 Ok(view) => self.server = Some(view),
-                Err(_) => {
+                Err(error) => {
+                    eprintln!("moss-app: cannot open the server's pages ({error})");
                     return self.show(json!({"screen":"problem", "name": opened.name, "reason": "This app could not open the server's pages.", "retry": false}))
                 }
             }
         }
-        let _ = self.connect.set_visible(false);
-        if let Some(server) = &self.server {
-            let _ = server.view.set_visible(true);
-        }
+        self.screen.clear();
+        self.restore_views();
         self.window.set_title(&format!("Moss · {}", opened.name));
         if self.preferences.notifications {
             let _ = desktop::notify("Moss connected", &format!("Connected to {}", opened.name));
