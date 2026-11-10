@@ -1,5 +1,12 @@
 # Tasks component checkpoint
 
+Part 25 retains a completed recurring task's stored history when its owner
+retries completion alone and the next occurrence already exists. The atomic
+next-occurrence insert decides whether the retry can reuse the completed row;
+if the next occurrence was deleted it is recreated. This applies to the worker,
+HTTP update and status tool paths. Other edits keep using the ordinary update
+path. It does not add lazy advancement, recurrence jobs or installed dispatch.
+
 Part 24 connects date editing, task due-day labels and interpreted-search day
 filters to the saved account timezone through the existing public host calendar
 contract. The package-only `GET /tasks/local-day` route supplies the signed-in

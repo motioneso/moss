@@ -169,7 +169,7 @@
     },
     {
       "id": "tasks.package-queue",
-      "description": "Enqueue a status change for a visible task and apply it in the captured account context. The host supplies actor identity and metadata-only parameters. Queue retries and retention use host defaults; legacy queue options, optional request-key retention and recurrence jobs remain unfinished."
+      "description": "Enqueue a status change for a visible task and apply it in the captured account context. The host supplies actor identity and metadata-only parameters. Repeating an owner's completed recurring status keeps the completed history and list position when its next occurrence already exists; a missing next occurrence is recreated. Queue retries and retention use host defaults; legacy queue options, optional request-key retention and recurrence jobs remain unfinished."
     },
     {
       "id": "tasks.package-heartbeat",

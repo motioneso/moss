@@ -1755,3 +1755,40 @@ read-then-write race is not an acceptable substitute. The signed fixture remains
 separate from the application shell. No physical device was attached to the
 existing device bridge during this work; local HTTPS and viewport checks do not
 prove access from another device.
+
+## Tasks part 25 checkpoint (JS-155, Card 526)
+
+Retrying completion alone on an owner's completed recurring task now keeps its
+stored completion and update times when the next occurrence already exists.
+The existing atomic insert and occurrence uniqueness constraint decide this;
+there is no separate existence-check followed by a write. A deleted next
+occurrence is recreated. Ordinary edits continue through the existing update
+path. The early insert is limited to owned tasks, so visibility through a share
+cannot enter it. The package app map describes the retry behavior.
+
+The unchanged TypeScript implementation catches a duplicate next-occurrence
+insert after updating the completed row. PostgreSQL then rolls that transaction
+back. Rust previously ignored the conflict and committed the timestamp update,
+putting the completed original before the next occurrence. The new compiled
+regression was run against the original component and failed on the exact
+completed-task record: both completion and update times had changed. It also
+checks HTTP and tool retries, one next occurrence, list order, missing-occurrence
+repair and an ordinary title edit. Final endpoint, privacy, browser and review
+receipts are attached to this task's proof artifact.
+
+The branch started at main including part 24. Existing scratch Rust 1.95, Wasm
+target, generator and Cargo dependencies were reused offline. The tools lockfile
+was refreshed offline without a byte change. Declared JavaScript dependencies
+were restored offline. Native module tests used a separate target directory.
+No global tool, target, generator or new dependency was installed. Source changes
+stay in Tasks and this report. Workshop and Food remain excluded. Part of #4027;
+release note Category N/A.
+
+This is a bounded checkpoint, not full Phase 5 acceptance. Remaining: lazy
+recurrence advancement; recurrence jobs; deferred-queue retry/retention policy,
+optional request-key retention and installed worker dispatch; public People
+linkage; policy enforcement and feedback orchestration; remaining screen and
+settings parity; installed chat and summary presentation; real application shell
+integration; performance budgets; and physical second-device HTTPS proof.
+The existing device bridge reported no attached physical device during this
+work. A local HTTPS fixture is not another device or the full application shell.
