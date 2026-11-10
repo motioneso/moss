@@ -59,17 +59,51 @@ async fn stop_signal() {
     let _ = tokio::signal::ctrl_c().await;
 }
 
+/// The file the app writes into a server's instance folder to ask it to stop where there is no
+/// termination signal (Windows). It must hold the server's process id, so a leftover request
+/// from an earlier run never stops a newer server.
+pub const STOP_FILE: &str = "stop-request";
+
+/// Resolves when a stop request naming this process appears. Never resolves without a folder.
+async fn stop_requested(folder: Option<&Path>) {
+    let Some(folder) = folder else {
+        return std::future::pending().await;
+    };
+    let path = folder.join(STOP_FILE);
+    loop {
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        let Ok(bytes) = private_read(&path) else { continue };
+        let _ = std::fs::remove_file(&path);
+        let named = String::from_utf8_lossy(&bytes).trim().parse::<u32>().ok();
+        if named == Some(std::process::id()) {
+            return;
+        }
+    }
+}
+
 /// Native TLS; no plaintext listener and no forwarded-header trust path.
 pub async fn serve(
     listener: TcpListener,
     acceptor: TlsAcceptor,
     app: Router,
 ) -> Result<(), String> {
+    serve_in(listener, acceptor, app, None).await
+}
+
+/// Like `serve`, and also stops when the app writes a stop request into `folder`.
+pub async fn serve_in(
+    listener: TcpListener,
+    acceptor: TlsAcceptor,
+    app: Router,
+    folder: Option<&Path>,
+) -> Result<(), String> {
     // Remote connections cannot consume the owner's loopback reserve.
     let local_slots = Arc::new(Semaphore::new(32));
     let remote_slots = Arc::new(Semaphore::new(224));
     let mut connections = tokio::task::JoinSet::new();
-    let stop = stop_signal();
+    let stop = async {
+        tokio::select! { _ = stop_signal() => {}, _ = stop_requested(folder) => {} }
+    };
     tokio::pin!(stop);
     loop {
         tokio::select! {
