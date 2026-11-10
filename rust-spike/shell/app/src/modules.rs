@@ -229,14 +229,27 @@ pub fn routes(slot: Slot, web: PathBuf) -> Router {
                 )
             }),
         )
-        .nest_service(
-            "/module-shared",
-            tower_http::services::ServeDir::new(web.join("module-shared")),
-        )
         .with_state(Arc::new(Api {
             slot,
             slots: Arc::new(tokio::sync::Semaphore::new(4)),
         }))
+        .merge(
+            // Opaque frames read these files cross-origin, so fonts need a CORS header.
+            Router::new()
+                .nest_service(
+                    "/module-shared",
+                    tower_http::services::ServeDir::new(web.join("module-shared")),
+                )
+                .layer(axum::middleware::map_response(
+                    |mut response: Response| async move {
+                        response.headers_mut().insert(
+                            header::ACCESS_CONTROL_ALLOW_ORIGIN,
+                            HeaderValue::from_static("*"),
+                        );
+                        response
+                    },
+                )),
+        )
 }
 
 fn host(slot: &Slot) -> Option<Arc<Application>> {

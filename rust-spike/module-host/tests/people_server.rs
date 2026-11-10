@@ -67,6 +67,15 @@ fn installed_people_package_serves_routes_from_the_real_server() {
         .unwrap()
         .success());
     fs::create_dir(root.join("web")).unwrap();
+    if let Ok(shared) = std::env::var("MOSS_MODULE_SHARED_DIR") {
+        // Generated shared styles and fonts for a manual browser check.
+        let status = Command::new("cp")
+            .args(["-r", &shared])
+            .arg(root.join("web/module-shared"))
+            .status()
+            .unwrap();
+        assert!(status.success());
+    }
     fs::write(
         root.join("web/index.html"),
         "<!doctype html><title>People HTTP fixture</title>",
@@ -292,6 +301,11 @@ fn installed_people_package_serves_routes_from_the_real_server() {
         404
     );
     println!("PASS People screen address and files served over HTTPS");
+    // Optional manual browser check: keep the server up and print where it is.
+    if let Ok(seconds) = std::env::var("MOSS_PEOPLE_HOLD_SECONDS") {
+        println!("HOLD {origin} for {seconds}s");
+        std::thread::sleep(Duration::from_secs(seconds.parse().unwrap_or(0)));
+    }
 
     // Second account. Setup allows one owner over HTTP, so the account is made in the
     // database with the owner's password hash and then signs in through the real route.
