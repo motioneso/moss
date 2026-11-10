@@ -2139,5 +2139,8 @@ name inside the Tasks screen; native app window; retention of finished jobs; ema
 feedback; installed chat and summary presentation; performance budgets. Workshop and Food
 remain excluded. Part of #4027; release note Category N/A.
 
+Known gap from review: the menu reads module screens once at page load, so a module installed
+during a session shows after a reload.
+
 Remaining: per-queue retention in the host; email triage feedback; Today/chat focus links;
 installed chat and summary presentation; performance budgets; physical second-device HTTPS proof.
