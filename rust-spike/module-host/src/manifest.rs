@@ -75,6 +75,9 @@ pub struct Manifest {
     /// Requested per-invocation fuel; the host clamps it to its own ceiling.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fuel_limit: Option<u64>,
+    /// Retry count per declared job; jobs not listed use the host default.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub job_retries: BTreeMap<String, u32>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub policy_routes: BTreeMap<String, crate::account_contracts::PolicyRoute>,
 }
@@ -219,6 +222,8 @@ pub fn relative_path(path: &str) -> bool {
                 )
         })
 }
+/// Largest retry count a manifest may request for one job.
+pub const MAX_JOB_RETRIES: u32 = 10;
 /// Largest compute budget any manifest may request.
 pub const MAX_FUEL_REQUEST: u64 = 2_000_000_000;
 
@@ -229,6 +234,12 @@ impl Manifest {
             ensure!(
                 (1..=MAX_FUEL_REQUEST).contains(&fuel),
                 "The module asks for an unsupported compute budget"
+            );
+        }
+        for (job, retries) in &self.job_retries {
+            ensure!(
+                self.jobs.contains_key(job) && *retries <= MAX_JOB_RETRIES,
+                "The module sets an unsupported retry count"
             );
         }
         ensure!(

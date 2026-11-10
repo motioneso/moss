@@ -62,7 +62,7 @@ pub fn specs(manifest: &Manifest) -> Vec<QueueSpec> {
                         })
                         .collect(),
                 }),
-                retry_limit: 3,
+                retry_limit: manifest.job_retries.get(name).copied().unwrap_or(3),
                 retry_delay_seconds: 10,
                 retry_backoff: true,
                 lease_seconds: 60,
