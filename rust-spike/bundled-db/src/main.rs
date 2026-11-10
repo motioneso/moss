@@ -10,9 +10,13 @@ use std::time::{Duration, Instant};
 
 use bundled_db::cluster::{self, Bundle, Endpoint, Listen, StopMode};
 use bundled_db::layout::Layout;
-use bundled_db::{at_rest, migrate, procs, secrets, APP_DATABASE, SUPERUSER};
+#[cfg(unix)]
+use bundled_db::at_rest;
+use bundled_db::{migrate, procs, secrets, APP_DATABASE, SUPERUSER};
 use serde_json::{json, Value};
+#[cfg(unix)]
 use signal_hook::consts::{SIGCHLD, SIGHUP, SIGINT, SIGTERM};
+#[cfg(unix)]
 use signal_hook::iterator::Signals;
 
 const USAGE: &str = "\
@@ -22,10 +26,15 @@ usage:
   moss-db stop    --root DIR
   moss-db status  --root DIR
   moss-db credentials --root DIR [--module-host]
-  moss-db check   --root DIR [--write NOTE]
-  moss-db hold    --root DIR --seconds N
-  moss-db at-rest [--root DIR] [--path LABEL=DIR]...
+  moss-db check   --root DIR [--write NOTE]       (Unix only)
+  moss-db hold    --root DIR --seconds N          (Unix only)
+  moss-db at-rest [--root DIR] [--path LABEL=DIR]... (Unix only)
 ";
+
+/// Windows has no termination signal for a background program, so Stop is a file in the
+/// install's private run folder that names the supervisor's process id.
+#[cfg(windows)]
+const STOP_REQUEST: &str = "stop-request";
 
 /// `up` exits with this code when Postgres stops without being asked.
 const DATABASE_EXITED: u8 = 3;
@@ -35,6 +44,7 @@ const START_TIMEOUT: Duration = Duration::from_secs(60);
 /// How long a fast shutdown may take before the supervisor escalates.
 const STOP_TIMEOUT: Duration = Duration::from_secs(30);
 
+#[cfg(unix)]
 const PROOF_DATABASE: &str = "moss_proof";
 
 fn main() -> ExitCode {
@@ -60,8 +70,11 @@ fn main() -> ExitCode {
         "stop" => stop(&options),
         "status" => status(&options),
         "credentials" => credentials(&options),
+        #[cfg(unix)]
         "check" => check(&options),
+        #[cfg(unix)]
         "hold" => hold(&options),
+        #[cfg(unix)]
         "at-rest" => at_rest_report(&options),
         _ => {
             eprint!("{USAGE}");
@@ -159,7 +172,7 @@ fn up(options: &Options) -> Result<ExitCode, String> {
     let _lock = cluster::lock(&layout)?;
     let bundle = options.bundle()?;
     let repo = options.repo.as_deref().ok_or("--repo is required")?;
-    let listen = if options.tcp || options.port_range.is_some() {
+    let listen = if cfg!(windows) || options.tcp || options.port_range.is_some() {
         Listen::Loopback(options.port_range)
     } else {
         Listen::SocketOnly
@@ -171,6 +184,7 @@ fn up(options: &Options) -> Result<ExitCode, String> {
 
     // Registered before Postgres starts: a stop request during start-up or migration waits
     // here and is acted on once the cluster can be stopped in order.
+    #[cfg(unix)]
     let mut signals =
         Signals::new([SIGINT, SIGTERM, SIGHUP, SIGCHLD]).map_err(|e| e.to_string())?;
 
@@ -214,6 +228,36 @@ fn up(options: &Options) -> Result<ExitCode, String> {
         "ms": { "initdb": initdb_ms, "start": start_ms, "migrate": migrate_ms },
     }));
 
+    #[cfg(windows)]
+    {
+        let request = layout.run.join(STOP_REQUEST);
+        let ask_me = std::process::id().to_string();
+        loop {
+            if let Ok(Some(status)) = running.child.try_wait() {
+                let _ = std::fs::remove_file(layout.state_file());
+                emit(&json!({ "event": "database-exited", "status": status.to_string() }));
+                return Ok(ExitCode::from(DATABASE_EXITED));
+            }
+            // A request naming another process is left over from an earlier supervisor.
+            if let Ok(text) = std::fs::read_to_string(&request) {
+                let _ = std::fs::remove_file(&request);
+                if text.trim() == ask_me {
+                    let clock = Instant::now();
+                    let (mode, status) = cluster::stop(&layout, &mut running, STOP_TIMEOUT)?;
+                    emit(&json!({
+                        "event": "stopped",
+                        "signal": "stop-request",
+                        "mode": mode_name(mode),
+                        "status": status.to_string(),
+                        "ms": ms(clock),
+                    }));
+                    return Ok(ExitCode::SUCCESS);
+                }
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+    #[cfg(unix)]
     for signal in signals.forever() {
         if signal == SIGCHLD {
             // Any child ending raises this; only the database's own exit matters.
@@ -235,7 +279,8 @@ fn up(options: &Options) -> Result<ExitCode, String> {
         }));
         return Ok(ExitCode::SUCCESS);
     }
-    Err("signal loop ended".into())
+    #[cfg(unix)]
+    return Err("signal loop ended".into());
 }
 
 /// Asks the running supervisor to stop, then waits until it has let go of the install.
@@ -246,7 +291,17 @@ fn stop(options: &Options) -> Result<ExitCode, String> {
         return Ok(ExitCode::SUCCESS);
     };
     let clock = Instant::now();
+    #[cfg(unix)]
     procs::signal(pid, libc::SIGTERM);
+    #[cfg(windows)]
+    {
+        layout.check_run().map_err(|e| e.to_string())?;
+        // Written whole, then renamed into place, so the supervisor never reads it half made.
+        let pending = layout.run.join(format!("{STOP_REQUEST}.tmp"));
+        std::fs::write(&pending, pid.to_string())
+            .and_then(|_| std::fs::rename(&pending, layout.run.join(STOP_REQUEST)))
+            .map_err(|e| format!("stop request: {e}"))?;
+    }
     while cluster::holder(&layout)?.is_some() {
         if clock.elapsed() > STOP_TIMEOUT + Duration::from_secs(30) {
             return Err(format!("supervisor {pid} is still running"));
@@ -329,6 +384,7 @@ fn credentials(options: &Options) -> Result<ExitCode, String> {
     Ok(ExitCode::SUCCESS)
 }
 
+#[cfg(unix)]
 /// Reads back what `up` set up, and runs a vector search. `--write NOTE` also stores a
 /// marked row, so a later check after a restart or a crash can show the row survived.
 fn check(options: &Options) -> Result<ExitCode, String> {
@@ -419,6 +475,7 @@ fn check(options: &Options) -> Result<ExitCode, String> {
     Ok(ExitCode::SUCCESS)
 }
 
+#[cfg(unix)]
 fn vector_proof(
     endpoint: &Endpoint,
     superuser: &secrets::Secret,
@@ -472,6 +529,7 @@ fn vector_proof(
     Ok(json!({ "query": query, "nearest": nearest, "plan": plan, "marks": marks }))
 }
 
+#[cfg(unix)]
 /// Proof helper: one session reads the proof rows into memory, then keeps the CPU busy. It
 /// prints the server process id first, so a crash proof can target that exact process. A busy
 /// loop, unlike `pg_sleep`, does not notice the postmaster dying, which the leftover proof needs.
@@ -501,6 +559,7 @@ fn hold(options: &Options) -> Result<ExitCode, String> {
     Ok(ExitCode::SUCCESS)
 }
 
+#[cfg(unix)]
 /// Disk encryption for the install's folders (with `--root`), any `--path`, swap and crash
 /// dumps. Reads only; creates nothing.
 fn at_rest_report(options: &Options) -> Result<ExitCode, String> {
@@ -540,6 +599,7 @@ fn mode_name(mode: StopMode) -> &'static str {
     }
 }
 
+#[cfg(unix)]
 fn signal_name(signal: i32) -> &'static str {
     match signal {
         SIGINT => "SIGINT",
@@ -559,6 +619,7 @@ fn emit(value: &Value) {
     let _ = out.flush();
 }
 
+#[cfg(unix)]
 fn emit_pretty(value: &Value) {
     let mut out = std::io::stdout().lock();
     let _ = writeln!(

@@ -370,7 +370,29 @@ fn alive(pid: u32) -> bool {
     Path::new("/proc").join(pid.to_string()).exists()
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(windows)]
+fn alive(pid: u32) -> bool {
+    extern "system" {
+        fn OpenProcess(access: u32, inherit: i32, pid: u32) -> isize;
+        fn GetExitCodeProcess(process: isize, code: *mut u32) -> i32;
+        fn CloseHandle(handle: isize) -> i32;
+    }
+    const QUERY_LIMITED: u32 = 0x1000;
+    const STILL_ACTIVE: u32 = 259;
+    // SAFETY: plain handle calls; the handle is closed before return.
+    unsafe {
+        let handle = OpenProcess(QUERY_LIMITED, 0, pid);
+        if handle == 0 {
+            return false;
+        }
+        let mut code = 0u32;
+        let ok = GetExitCodeProcess(handle, &mut code) != 0;
+        CloseHandle(handle);
+        ok && code == STILL_ACTIVE
+    }
+}
+
+#[cfg(not(any(target_os = "linux", windows)))]
 fn alive(_pid: u32) -> bool {
     true
 }
@@ -431,6 +453,12 @@ fn start_local(install: &Path, folder: &Path) -> Result<(), Problem> {
     {
         use std::os::unix::process::CommandExt;
         command.process_group(0);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // Detached, its own group, and no console window, so it outlives the app quietly.
+        command.creation_flags(0x0000_0008 | 0x0000_0200 | 0x0800_0000);
     }
     let child = command.spawn().map_err(|_| Problem::DidNotStart)?;
     STARTED

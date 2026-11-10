@@ -1,20 +1,47 @@
-//! Creating, starting, stopping and recovering the private cluster (Unix).
+//! Creating, starting, stopping and recovering the private cluster.
 
 use std::fs::{File, OpenOptions};
+#[allow(unused_imports)]
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::net::TcpListener;
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
+#[cfg(unix)]
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, ExitStatus, Stdio};
+#[cfg(unix)]
+use std::process::Child;
+use std::process::{Command, ExitStatus, Stdio};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
 
-use crate::layout::{private_file, Layout};
+#[cfg(unix)]
+use crate::layout::private_file;
+use crate::layout::Layout;
 use crate::secrets::{self, Secret};
 use crate::{procs, SUPERUSER};
+
+/// The database process the supervisor owns. On Windows it sits in a kill-on-close job, so the
+/// whole database tree ends if the supervisor does.
+#[cfg(unix)]
+pub type DbChild = Child;
+#[cfg(windows)]
+pub type DbChild = portability::windows_child::Child;
+
+/// A path as the database programs should see it: Windows tools do not take `\\?\` paths.
+fn tool_path(path: &Path) -> PathBuf {
+    #[cfg(windows)]
+    {
+        let text = path.to_string_lossy();
+        if let Some(rest) = text.strip_prefix(r"\\?\") {
+            if !rest.starts_with("UNC\\") {
+                return PathBuf::from(rest);
+            }
+        }
+    }
+    path.to_path_buf()
+}
 
 /// The Postgres build that ships with the app: `bin/`, `lib/` and `share/` side by side.
 #[derive(Debug, Clone)]
@@ -24,7 +51,7 @@ pub struct Bundle {
 
 impl Bundle {
     pub fn new(root: &Path) -> Result<Bundle, String> {
-        let root = root.canonicalize().map_err(|e| format!("Postgres bundle {}: {e}", root.display()))?;
+        let root = tool_path(&root.canonicalize().map_err(|e| format!("Postgres bundle {}: {e}", root.display()))?);
         let bundle = Bundle { root };
         for tool in ["postgres", "initdb"] {
             if !bundle.bin(tool).is_file() {
@@ -35,7 +62,7 @@ impl Bundle {
     }
 
     pub fn bin(&self, name: &str) -> PathBuf {
-        self.root.join("bin").join(name)
+        self.root.join("bin").join(format!("{name}{}", std::env::consts::EXE_SUFFIX))
     }
 
     /// Whether the bundle carries `pg-module/moss_nodump`, which makes Postgres non-dumpable.
@@ -73,7 +100,10 @@ impl Endpoint {
             .connect_timeout(Duration::from_secs(10))
             .port(self.port);
         match &self.socket_dir {
+            #[cfg(unix)]
             Some(dir) => config.host_path(dir),
+            #[cfg(not(unix))]
+            Some(_) => return Err("Unix sockets are not available on this system".into()),
             None => config.host("127.0.0.1"),
         };
         config.connect(postgres::NoTls).map_err(|e| format!("connect as {role}: {}", db_error(&e)))
@@ -116,7 +146,11 @@ const HOLDER_WAIT: Duration = Duration::from_secs(1);
 pub fn holder(layout: &Layout) -> Result<Option<i32>, String> {
     let clock = Instant::now();
     loop {
-        let file = match File::open(&layout.lock) {
+        #[cfg(unix)]
+        let opened = File::open(&layout.lock);
+        #[cfg(windows)]
+        let opened = layout.open_supervisor_lock();
+        let mut file = match opened {
             Ok(file) => file,
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(error) => return Err(format!("lock file: {error}")),
@@ -124,7 +158,8 @@ pub fn holder(layout: &Layout) -> Result<Option<i32>, String> {
         if portability::file_lock::try_shared(&file).map_err(|e| format!("lock file: {e}"))? {
             return Ok(None);
         }
-        let text = std::fs::read_to_string(&layout.lock).map_err(|e| format!("lock file: {e}"))?;
+        let mut text = String::new();
+        file.read_to_string(&mut text).map_err(|e| format!("lock file: {e}"))?;
         let text = text.trim();
         match text.parse::<i32>() {
             Ok(pid) if procs::is_supervisor(pid) => return Ok(Some(pid)),
@@ -143,46 +178,102 @@ host    all   all   127.0.0.1/32   scram-sha-256
 host    all   all   ::1/128        scram-sha-256
 ";
 
+/// Windows clients always arrive over loopback TCP, and a `local` line can stop a build without
+/// Unix sockets from loading the file.
+fn hba() -> String {
+    if cfg!(windows) {
+        HBA.lines().filter(|line| !line.starts_with("local")).collect::<Vec<_>>().join("\n") + "\n"
+    } else {
+        HBA.to_string()
+    }
+}
+
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 /// Creates the cluster on first run. Returns whether it was created.
 ///
 /// `initdb` writes into a side folder that is renamed into place only once it is complete,
 /// so a crash or power cut during the first run leaves nothing half made.
 pub fn initialize(layout: &Layout, bundle: &Bundle) -> Result<bool, String> {
-    if layout.data.join("PG_VERSION").is_file() {
+    // An unfinished first run can leave PG_VERSION behind, so the marker is checked first.
+    #[cfg(windows)]
+    let interrupted = layout.root.join("initdb-unfinished").exists();
+    #[cfg(not(windows))]
+    let interrupted = false;
+    if !interrupted && layout.data.join("PG_VERSION").is_file() {
         return Ok(false);
     }
-    if std::fs::read_dir(&layout.data).is_ok_and(|mut entries| entries.next().is_some()) {
+    // Windows keeps the data folder open as a pinned handle, so it cannot be replaced by a
+    // rename. initdb writes into it directly, and a marker file shows an unfinished first run.
+    #[cfg(windows)]
+    let marker = layout.root.join("initdb-unfinished");
+    #[cfg(windows)]
+    let unfinished = marker.exists();
+    #[cfg(not(windows))]
+    let unfinished = false;
+    if !unfinished && std::fs::read_dir(&layout.data).is_ok_and(|mut entries| entries.next().is_some()) {
         return Err(format!("{} holds files but no database; refusing to overwrite it", layout.data.display()));
     }
+    #[cfg(windows)]
+    {
+        if unfinished {
+            for entry in std::fs::read_dir(&layout.data).map_err(|e| format!("unfinished first run: {e}"))? {
+                let path = entry.map_err(|e| format!("unfinished first run: {e}"))?.path();
+                let gone = if path.is_dir() { std::fs::remove_dir_all(&path) } else { std::fs::remove_file(&path) };
+                gone.map_err(|e| format!("unfinished first run: {e}"))?;
+            }
+        }
+        std::fs::write(&marker, b"initdb running").map_err(|e| format!("first-run marker: {e}"))?;
+    }
+    #[cfg(windows)]
+    let partial = layout.data.clone();
+    #[cfg(not(windows))]
     let partial = layout.root.join("db.partial");
+    #[cfg(not(windows))]
     if partial.exists() {
         std::fs::remove_dir_all(&partial).map_err(|e| format!("unfinished first run: {e}"))?;
     }
     let password = secrets::password(layout, SUPERUSER).map_err(|e| format!("superuser password: {e}"))?;
+    // Windows reads the superuser's own private secret file, so no second copy of it exists.
+    #[cfg(windows)]
+    let pwfile = layout.secrets.join(SUPERUSER);
+    #[cfg(unix)]
     let pwfile = layout.secrets.join("initdb-password");
-    let _ = std::fs::remove_file(&pwfile);
-    private_file(&pwfile)
-        .and_then(|mut file| file.write_all(password.expose().as_bytes()))
-        .map_err(|e| format!("password file: {e}"))?;
+    #[cfg(unix)]
+    {
+        let _ = std::fs::remove_file(&pwfile);
+        private_file(&pwfile)
+            .and_then(|mut file| file.write_all(password.expose().as_bytes()))
+            .map_err(|e| format!("password file: {e}"))?;
+    }
+    #[cfg(windows)]
+    let _ = &password;
 
     let log = log_file(layout, "initdb.log")?;
     let mut initdb = Command::new(bundle.bin("initdb"));
     initdb
         .arg("-D")
-        .arg(&partial)
+        .arg(tool_path(&partial))
         .args(["-U", SUPERUSER, "--encoding=UTF8", "--no-instructions", "--data-checksums"])
-        .arg(format!("--pwfile={}", pwfile.display()))
+        .arg(format!("--pwfile={}", tool_path(&pwfile).display()))
         .args(["--auth-local=scram-sha-256", "--auth-host=scram-sha-256"])
         // Sorting and case rules come from ICU, not from the OS's C library. Sorting matches
         // across OSes only when each bundle ships the same ICU version. The spike used each
         // machine's own ICU. The libc ctype stays UTF-8 because Postgres 17 text search still
         // asks libc what a letter is.
-        .args(["--locale-provider=icu", "--icu-locale=und", "--lc-collate=C", "--lc-ctype=C.UTF-8"])
+        .args(["--locale-provider=icu", "--icu-locale=und", "--lc-collate=C"])
+        .arg(if cfg!(windows) { "--lc-ctype=C" } else { "--lc-ctype=C.UTF-8" })
         .args(["--lc-messages=C", "--lc-monetary=C", "--lc-numeric=C", "--lc-time=C"])
         .stdin(Stdio::null())
         .stdout(log.try_clone().map_err(|e| e.to_string())?)
         .stderr(log);
     clean_env(&mut initdb);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        initdb.creation_flags(CREATE_NO_WINDOW);
+    }
     // Linux: initdb dies with the supervisor. The server initdb starts gets no such signal. It
     // reads its commands from initdb through a pipe, so it should stop soon after initdb, but
     // nothing checks that it has stopped before a later supervisor clears the side folder.
@@ -194,22 +285,31 @@ pub fn initialize(layout: &Layout, bundle: &Bundle) -> Result<bool, String> {
         });
     }
     let status = initdb.status();
+    #[cfg(unix)]
     let _ = std::fs::remove_file(&pwfile);
     let status = status.map_err(|e| format!("initdb: {e}"))?;
     if !status.success() {
         return Err(format!("initdb failed ({status}); see logs/initdb.log"));
     }
-    std::fs::write(partial.join("pg_hba.conf"), HBA).map_err(|e| format!("pg_hba.conf: {e}"))?;
-    if layout.data.exists() {
-        std::fs::remove_dir(&layout.data).map_err(|e| format!("{}: {e}", layout.data.display()))?;
+    std::fs::write(partial.join("pg_hba.conf"), hba()).map_err(|e| format!("pg_hba.conf: {e}"))?;
+    #[cfg(windows)]
+    std::fs::remove_file(&marker).map_err(|e| format!("first-run marker: {e}"))?;
+    #[cfg(not(windows))]
+    {
+        if layout.data.exists() {
+            std::fs::remove_dir(&layout.data).map_err(|e| format!("{}: {e}", layout.data.display()))?;
+        }
+        std::fs::rename(&partial, &layout.data).map_err(|e| format!("move the new database into place: {e}"))?;
     }
-    std::fs::rename(&partial, &layout.data).map_err(|e| format!("move the new database into place: {e}"))?;
     Ok(true)
 }
 
 /// A started cluster, owned by this process.
 pub struct Running {
-    pub child: Child,
+    pub child: DbChild,
+    /// `pg_ctl` asks a Windows database to stop in order, since Windows has no signals for it.
+    #[cfg(windows)]
+    pub pg_ctl: PathBuf,
     pub pid: i32,
     pub endpoint: Endpoint,
     /// What the start had to clean up first, in plain words.
@@ -251,7 +351,15 @@ pub fn start(layout: &Layout, bundle: &Bundle, listen: &Listen, timeout: Duratio
                 let socket_dir = matches!(listen, Listen::SocketOnly).then(|| layout.run.clone());
                 let endpoint = Endpoint { socket_dir, port };
                 write_state(layout, pid, &endpoint)?;
-                return Ok(Running { child, pid, endpoint, recovered, skipped_ports });
+                return Ok(Running {
+                    child,
+                    #[cfg(windows)]
+                    pg_ctl: bundle.bin("pg_ctl"),
+                    pid,
+                    endpoint,
+                    recovered,
+                    skipped_ports,
+                });
             }
             // Another program took the port between the check and Postgres binding it.
             Err(StartError::PortInUse) => skipped_ports.push(port),
@@ -261,7 +369,7 @@ pub fn start(layout: &Layout, bundle: &Bundle, listen: &Listen, timeout: Duratio
     Err(format!("no free port; ports in use: {skipped_ports:?}"))
 }
 
-fn launch(layout: &Layout, bundle: &Bundle, listen: &Listen, port: u16, timeout: Duration) -> Result<Child, StartError> {
+fn launch(layout: &Layout, bundle: &Bundle, listen: &Listen, port: u16, timeout: Duration) -> Result<DbChild, StartError> {
     let other = StartError::Other;
     let mut log = log_file(layout, "postgres.log").map_err(other)?;
     let from = log.seek(SeekFrom::End(0)).map_err(|e| other(e.to_string()))?;
@@ -272,8 +380,6 @@ fn launch(layout: &Layout, bundle: &Bundle, listen: &Listen, port: u16, timeout:
     let mut settings = vec![
         ("listen_addresses", listen_addresses.to_string()),
         ("port", port.to_string()),
-        ("unix_socket_directories", layout.run.display().to_string()),
-        ("unix_socket_permissions", "0700".into()),
         ("ssl", "off".into()),
         ("password_encryption", "scram-sha-256".into()),
         ("max_connections", "50".into()),
@@ -281,46 +387,73 @@ fn launch(layout: &Layout, bundle: &Bundle, listen: &Listen, port: u16, timeout:
         ("logging_collector", "off".into()),
         ("lc_messages", "C".into()),
     ];
+    #[cfg(unix)]
+    {
+        settings.push(("unix_socket_directories", layout.run.display().to_string()));
+        settings.push(("unix_socket_permissions", "0700".into()));
+    }
+    // Windows serves loopback TCP only, so no socket folder is named.
+    #[cfg(windows)]
+    settings.push(("unix_socket_directories", String::new()));
     if bundle.has_nodump() {
         settings.push(("shared_preload_libraries", "moss_nodump".into()));
     }
-    let mut postgres = Command::new(bundle.bin("postgres"));
-    postgres.arg("-D").arg(&layout.data);
-    for (name, value) in settings {
-        postgres.arg("-c").arg(format!("{name}={value}"));
-    }
-    postgres
-        .stdin(Stdio::null())
-        .stdout(log.try_clone().map_err(|e| other(e.to_string()))?)
-        .stderr(log.try_clone().map_err(|e| other(e.to_string()))?)
-        // Its own process group, so a Ctrl-C in the supervisor's terminal reaches only the
-        // supervisor, which then stops Postgres in order.
-        .process_group(0);
-    clean_env(&mut postgres);
-    let supervisor = std::process::id();
-    unsafe {
-        postgres.pre_exec(move || {
-            // Postgres memory holds private rows: never write it to a crash dump. The start
-            // fails rather than run without this limit.
-            let none = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
-            if libc::setrlimit(libc::RLIMIT_CORE, &none) != 0 {
-                return Err(io::Error::last_os_error());
-            }
-            // Linux: if the supervisor dies, Postgres gets a fast shutdown. The signal follows
-            // the thread that spawned it, so only the main thread may call `start`.
-            #[cfg(target_os = "linux")]
-            {
-                libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGINT as libc::c_ulong);
-                if libc::getppid() as u32 != supervisor {
-                    return Err(io::Error::other("supervisor exited during start"));
+    #[cfg(unix)]
+    let mut child = {
+        let mut postgres = Command::new(bundle.bin("postgres"));
+        postgres.arg("-D").arg(&layout.data);
+        for (name, value) in settings {
+            postgres.arg("-c").arg(format!("{name}={value}"));
+        }
+        postgres
+            .stdin(Stdio::null())
+            .stdout(log.try_clone().map_err(|e| other(e.to_string()))?)
+            .stderr(log.try_clone().map_err(|e| other(e.to_string()))?)
+            // Its own process group, so a Ctrl-C in the supervisor's terminal reaches only the
+            // supervisor, which then stops Postgres in order.
+            .process_group(0);
+        clean_env(&mut postgres);
+        let supervisor = std::process::id();
+        unsafe {
+            postgres.pre_exec(move || {
+                // Postgres memory holds private rows: never write it to a crash dump. The start
+                // fails rather than run without this limit.
+                let none = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
+                if libc::setrlimit(libc::RLIMIT_CORE, &none) != 0 {
+                    return Err(io::Error::last_os_error());
                 }
-            }
-            #[cfg(not(target_os = "linux"))]
-            let _ = supervisor;
-            Ok(())
-        });
-    }
-    let mut child = postgres.spawn().map_err(|e| other(format!("start postgres: {e}")))?;
+                // Linux: if the supervisor dies, Postgres gets a fast shutdown. The signal follows
+                // the thread that spawned it, so only the main thread may call `start`.
+                #[cfg(target_os = "linux")]
+                {
+                    libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGINT as libc::c_ulong);
+                    if libc::getppid() as u32 != supervisor {
+                        return Err(io::Error::other("supervisor exited during start"));
+                    }
+                }
+                #[cfg(not(target_os = "linux"))]
+                let _ = supervisor;
+                Ok(())
+            });
+        }
+        postgres.spawn().map_err(|e| other(format!("start postgres: {e}")))?
+    };
+    #[cfg(windows)]
+    let mut child = {
+        let mut args: Vec<std::ffi::OsString> = vec!["-D".into(), tool_path(&layout.data).into()];
+        for (name, value) in settings {
+            args.push("-c".into());
+            args.push(format!("{name}={value}").into());
+        }
+        portability::windows_child::spawn(
+            &bundle.bin("postgres"),
+            &args,
+            &tool_path(&layout.root),
+            &log,
+            &log,
+        )
+        .map_err(|e| other(format!("start postgres: {e}")))?
+    };
     let started = Instant::now();
     loop {
         if let Some(status) = child.try_wait().map_err(|e| other(e.to_string()))? {
@@ -336,12 +469,20 @@ fn launch(layout: &Layout, bundle: &Bundle, listen: &Listen, port: u16, timeout:
             }
         }
         if started.elapsed() > timeout {
-            let pid = child.id() as i32;
-            procs::signal(pid, libc::SIGQUIT);
-            let _ = wait_exit(&mut child, Duration::from_secs(5)).or_else(|| {
-                procs::signal(pid, libc::SIGKILL);
-                child.wait().ok()
-            });
+            #[cfg(unix)]
+            {
+                let pid = child.id() as i32;
+                procs::signal(pid, libc::SIGQUIT);
+                let _ = wait_exit(&mut child, Duration::from_secs(5)).or_else(|| {
+                    procs::signal(pid, libc::SIGKILL);
+                    child.wait().ok()
+                });
+            }
+            #[cfg(windows)]
+            {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
             return Err(other(format!("postgres was not ready after {}s", timeout.as_secs())));
         }
         std::thread::sleep(Duration::from_millis(50));
@@ -360,18 +501,55 @@ pub enum StopMode {
     Killed,
 }
 
+/// One step of an orderly stop, from gentle to forceful.
+#[derive(Clone, Copy)]
+enum Ask {
+    Fast,
+    Immediate,
+    Kill,
+}
+
+fn ask(running: &mut Running, step: Ask) {
+    #[cfg(unix)]
+    {
+        let signal = match step {
+            Ask::Fast => libc::SIGINT,
+            Ask::Immediate => libc::SIGQUIT,
+            Ask::Kill => libc::SIGKILL,
+        };
+        procs::signal(running.pid, signal);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let name = match step {
+            Ask::Fast => "INT",
+            Ask::Immediate => "QUIT",
+            Ask::Kill => return drop(running.child.kill()),
+        };
+        // pg_ctl sends Postgres its signal over the pipe the postmaster listens on.
+        let _ = Command::new(&running.pg_ctl)
+            .args(["kill", name, &running.pid.to_string()])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .creation_flags(CREATE_NO_WINDOW)
+            .status();
+    }
+}
+
 pub fn stop(layout: &Layout, running: &mut Running, timeout: Duration) -> Result<(StopMode, ExitStatus), String> {
     let steps = [
-        (libc::SIGINT, timeout, StopMode::Clean),
-        (libc::SIGQUIT, Duration::from_secs(10), StopMode::Immediate),
-        (libc::SIGKILL, Duration::from_secs(10), StopMode::Killed),
+        (Ask::Fast, timeout, StopMode::Clean),
+        (Ask::Immediate, Duration::from_secs(10), StopMode::Immediate),
+        (Ask::Kill, Duration::from_secs(10), StopMode::Killed),
     ];
     if let Some(status) = running.child.try_wait().map_err(|e| e.to_string())? {
         let _ = std::fs::remove_file(layout.state_file());
         return Ok((StopMode::AlreadyExited, status));
     }
-    for (signal, wait, mode) in steps {
-        procs::signal(running.pid, signal);
+    for (step, wait, mode) in steps {
+        ask(running, step);
         if let Some(status) = wait_exit(&mut running.child, wait) {
             let _ = std::fs::remove_file(layout.state_file());
             return Ok((mode, status));
@@ -380,7 +558,7 @@ pub fn stop(layout: &Layout, running: &mut Running, timeout: Duration) -> Result
     Err("postgres did not exit".into())
 }
 
-fn wait_exit(child: &mut Child, timeout: Duration) -> Option<ExitStatus> {
+fn wait_exit(child: &mut DbChild, timeout: Duration) -> Option<ExitStatus> {
     let started = Instant::now();
     while started.elapsed() < timeout {
         if let Ok(Some(status)) = child.try_wait() {
@@ -417,8 +595,11 @@ pub fn read_postmaster_pid(layout: &Layout) -> Option<PostmasterPid> {
 ///   remove the stale lock file, which Postgres would otherwise refuse to start past.
 pub fn clear_leftovers(layout: &Layout) -> Result<Vec<String>, String> {
     let mut actions = Vec::new();
+    #[cfg(unix)]
     let pidfile = read_postmaster_pid(layout);
+    #[cfg(unix)]
     let ours = procs::database_processes(&layout.data, &layout.cluster_name());
+    #[cfg(unix)]
     if !ours.is_empty() {
         let postmaster = pidfile.as_ref().map(|p| p.pid).filter(|pid| ours.contains(pid));
         match postmaster {
@@ -453,6 +634,7 @@ pub fn clear_leftovers(layout: &Layout) -> Result<Vec<String>, String> {
     Ok(actions)
 }
 
+#[cfg(unix)]
 fn wait_gone(layout: &Layout, timeout: Duration) -> bool {
     let started = Instant::now();
     while started.elapsed() < timeout {
@@ -496,13 +678,11 @@ fn port_is_free(port: u16) -> bool {
 }
 
 fn log_file(layout: &Layout, name: &str) -> Result<File, String> {
-    OpenOptions::new()
-        .read(true)
-        .create(true)
-        .append(true)
-        .mode(0o600)
-        .open(layout.logs.join(name))
-        .map_err(|e| format!("{name}: {e}"))
+    let mut options = OpenOptions::new();
+    options.read(true).create(true).append(true);
+    #[cfg(unix)]
+    options.mode(0o600);
+    options.open(layout.logs.join(name)).map_err(|e| format!("{name}: {e}"))
 }
 
 /// The last lines Postgres wrote since `from`, for an error message.
@@ -516,13 +696,14 @@ fn log_tail(log: &mut File, from: u64) -> String {
 /// Postgres and its tools read `PG*` variables; none from the user's shell may steer them.
 fn clean_env(command: &mut Command) {
     for (name, _) in std::env::vars_os() {
-        if name.to_string_lossy().starts_with("PG") {
+        // Windows names are not case sensitive.
+        if name.to_string_lossy().to_ascii_uppercase().starts_with("PG") {
             command.env_remove(name);
         }
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
     use std::os::unix::fs::PermissionsExt;
