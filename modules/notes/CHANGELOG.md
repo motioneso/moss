@@ -1,5 +1,9 @@
 # Notes package
 
+## 0.1.22
+
+- Pressing Sync now while a sync for the same folder is still waiting no longer stacks another one. The waiting request is reused and still reads the folder when it runs. The fifteen-minute schedule does the same. Saving, editing or deleting a note still asks for its own sync.
+
 ## 0.1.21
 
 - The Notes folder screen now shows the right message when the server refuses a folder (for example one outside your allowed folders) instead of saying it could not check the folder.
