@@ -72,7 +72,9 @@ impl State {
         self.briefing_saved.set(false);
         spawn_local(async move {
             match request("PATCH", "/briefing-settings", body).await {
-                Ok(saved) => {
+                Ok(mut saved) => {
+                    // The settings response carries no switches; keep the ones on screen.
+                    saved["sources"] = self.briefing.get_untracked()["sources"].clone();
                     self.briefing.set(saved);
                     self.briefing_saved.set(true);
                 }
@@ -161,7 +163,10 @@ impl State {
                 };
                 let briefing = if settings() {
                     let mut briefing = request("GET", "/briefing-settings", Value::Null).await?;
-                    briefing["sources"] = request("GET", "/source-behaviors", Value::Null).await?;
+                    // A failed switch read shows both as on rather than failing the screen.
+                    briefing["sources"] = request("GET", "/source-behaviors", Value::Null)
+                        .await
+                        .unwrap_or(Value::Null);
                     Some(briefing)
                 } else {
                     None

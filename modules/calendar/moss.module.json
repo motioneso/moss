@@ -189,6 +189,10 @@
   },
   "features": [
     {
+      "id": "calendar.source-switches",
+      "description": "The Calendar settings screen has two switches, Include in briefings and Use for planning, both on by default. They save to the account's source-behavior preferences and change nothing for other modules. The Briefings module does not read them in this Rust version yet."
+    },
+    {
       "id": "calendar.data",
       "description": "Reads cached events and saves private day-plan drafts. Provider execution is not included in this package checkpoint.",
       "errors": [

@@ -115,6 +115,10 @@ const sources = await context.request.get(`${origin}/api/m/calendar/source-behav
   headers: { origin }
 });
 assert.deepEqual(await sources.json(), { briefings: true, planning: false });
+// Saving another setting must not reset the switch shown on screen.
+await saveSetting("Look ahead", "1");
+assert.equal(await frame.getByLabel("Use for planning", { exact: true }).inputValue(), "off");
+await saveSetting("Look ahead", "0");
 await page.screenshot({ path: join(OUT!, "calendar-settings.png") });
 await page.reload();
 await lookAhead.waitFor({ timeout: 60_000 });
