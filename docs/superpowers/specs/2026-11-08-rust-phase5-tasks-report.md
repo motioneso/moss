@@ -2119,3 +2119,35 @@ excluded. Part of #4027; release note Category N/A.
 Remaining: per-queue retention in the host; email triage feedback; Today/chat focus links;
 installed chat and summary presentation; real shell integration; performance budgets;
 physical second-device HTTPS proof.
+
+## Tasks part 35 checkpoint (JS-204, Card 526)
+
+The Tasks package now offers a public call, `prepareTaskAction`, that turns a pending task
+action into the approval card the chat would show. It covers all 13 write tools (create,
+update, change status, break down, add activity, assign and remove tag, create, rename and
+delete list, create, rename and delete tag). Field labels, order, choice names, "None" for
+cleared values, delete and move warnings, and the version used to detect a changed row all
+follow the legacy module. Names of the task, list or tag come from the real rows. Input that
+is not fully showable (unknown field, wrong type, missing required field, unknown row) gives
+no card. Another account, including an admin, gets no card for rows it cannot see.
+
+A test that had failed in earlier reports for no stated reason had a date baked in. The
+recurring-completion check expected the next day to be 2026-11-09, but the lazy roll-forward
+from part 29 moves a stale series to today, so the check broke once the calendar passed that
+date. It now uses a far-future date.
+
+Checked: six native tests on the new calls pass; the full Tasks gate (`test:rust-tasks`)
+passed, including all 24 compiled-component privacy tests on a real database; the live HTTPS
+gate (`test:rust-tasks-server`) was rerun to confirm the manifest change loads.
+
+Not proven or not built: no HTTP route exposes this call and the Rust chat drawer has no
+approval card yet, so the card was proven against the compiled component and a real
+database, not through the browser; approval for routes and preferences
+(`taskRoutePresentation`, `taskPreferencesPresentation`) is not ported; retention of finished
+jobs; email triage feedback; Today/chat focus links; installed chat and summary
+presentation; real shell integration; performance budgets; second physical device. Workshop
+and Food remain excluded. Part of #4027; release note Category N/A.
+
+Remaining: route and preferences approval presentation; per-queue retention in the host;
+email triage feedback; Today/chat focus links; installed chat and summary presentation; real
+shell integration; performance budgets; physical second-device HTTPS proof.
