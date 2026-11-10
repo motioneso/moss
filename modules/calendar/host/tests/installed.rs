@@ -200,6 +200,40 @@ fn signed_rust_package_reuses_data_and_commits_only_successful_drafts() {
         call(f.a, "GET", "/display-settings", Value::Null)["body"]["view"],
         view
     );
+    // Source behaviors: defaults, one account's toggle, no effect on other accounts.
+    let behavior = |actor, id: &str| {
+        call(actor, "GET", "/source-behaviors", Value::Null)["body"]["sources"][0]["behaviors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|b| b["id"] == id)
+            .unwrap()["enabled"]
+            .clone()
+    };
+    assert_eq!(behavior(f.a, "calendar.briefings"), true);
+    let off = call(
+        f.a,
+        "PUT",
+        "/source-behaviors/calendar.briefings",
+        json!({"enabled":false}),
+    );
+    assert_eq!(off["status"], 200);
+    assert_eq!(behavior(f.a, "calendar.briefings"), false);
+    assert_eq!(behavior(f.a, "calendar.planning"), true);
+    for actor in [f.b, f.admin] {
+        assert_eq!(behavior(actor, "calendar.briefings"), true);
+    }
+    for (id, body, status) in [
+        ("calendar.detect-commitments", json!({"enabled":true}), 422),
+        ("calendar.unknown", json!({"enabled":true}), 404),
+        ("calendar.briefings", json!({"enabled":1}), 400),
+    ] {
+        assert_eq!(
+            call(f.a, "PUT", &format!("/source-behaviors/{id}"), body)["status"],
+            status
+        );
+    }
+    assert_eq!(behavior(f.a, "calendar.briefings"), false);
     assert_eq!(
         call(f.b, "GET", "/briefing-settings", Value::Null)["body"]["settings"]["prepTaskMode"],
         "suggest"

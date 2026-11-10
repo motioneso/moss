@@ -88,7 +88,7 @@ impl Ports for CalendarPorts {
         if port != "kv"
             || !matches!(
                 request.resource.as_str(),
-                "calendar.briefing-settings" | "calendar.chat-context"
+                "calendar.briefing-settings" | "calendar.chat-context" | "calendar.source-behaviors"
             )
         {
             return self.next.invoke(scope, port, request);
@@ -100,6 +100,14 @@ impl Ports for CalendarPorts {
         {
             return self.save_settings(scope, &request.parameters);
         }
+        if scope.module().id == "calendar" && request.resource == "calendar.source-behaviors" {
+            return if request.operation == "set" {
+                self.save_source_behavior(scope, &request.parameters)
+            } else {
+                self.read_source_behaviors(scope, &request.parameters)
+            };
+        }
+
         ensure!(
             scope.module().id == "calendar"
                 && request.operation == "get"

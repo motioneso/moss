@@ -693,3 +693,53 @@ mod provider {
         }
     }
 }
+
+#[test]
+fn source_behaviors_read_defaults_and_write_one_toggle() {
+    struct Store;
+    impl Host for Store {
+        fn call(&self, port: &str, operation: &str, resource: &str, body: Value) -> Result<Value> {
+            assert_eq!((port, resource), ("kv", "calendar.source-behaviors"));
+            if operation == "get" {
+                return Ok(json!({"calendar.planning":false}));
+            }
+            assert_eq!(body, json!({"id":"calendar.briefings","enabled":false}));
+            Ok(json!({"calendar.planning":false,"calendar.briefings":false}))
+        }
+    }
+    let route = |method: &str, path: &str, params: Value, body: Value| -> Value {
+        serde_json::from_str(
+            &handle(
+                &Store,
+                "route",
+                &json!({"method":method,"path":path,"params":params,"query":{},"body":body}).to_string(),
+            )
+            .unwrap(),
+        )
+        .unwrap()
+    };
+    let read = route("GET", "/source-behaviors", json!({}), Value::Null);
+    let rows = &read["body"]["sources"][0]["behaviors"];
+    assert_eq!(rows[0]["enabled"], true);
+    assert_eq!(rows[1]["enabled"], false);
+    assert_eq!(rows[2]["toggleable"], false);
+    assert_eq!(rows[2]["enabled"], false);
+    let saved = route("PUT", "/source-behaviors/:id", json!({"id":"calendar.briefings"}), json!({"enabled":false}));
+    assert_eq!(saved["status"], 200);
+    assert_eq!(saved["body"]["sources"][0]["behaviors"][0]["enabled"], false);
+    for (id, body, status) in [
+        ("calendar.briefings", json!({"enabled":"no"}), 400),
+        ("calendar.briefings", json!({"enabled":true,"x":1}), 400),
+        ("calendar.nope", json!({"enabled":true}), 404),
+        ("calendar.detect-commitments", json!({"enabled":true}), 422),
+    ] {
+        let none = handle(
+            &NoCalls,
+            "route",
+            &json!({"method":"PUT","path":"/source-behaviors/:id","params":{"id":id},"query":{},"body":body}).to_string(),
+        )
+        .unwrap();
+        let none: Value = serde_json::from_str(&none).unwrap();
+        assert_eq!(none["status"], status, "{id}");
+    }
+}

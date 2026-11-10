@@ -34,6 +34,7 @@
       "operations": ["get", "set"],
       "resources": [
         "calendar.briefing-settings",
+        "calendar.source-behaviors",
         "calendar.chat-context",
         "calendar.task-reference",
         "calendar.briefing-reference",
@@ -121,6 +122,16 @@
     {
       "method": "GET",
       "path": "/briefing-settings",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/source-behaviors",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/source-behaviors/:id",
       "signIn": true
     },
     {

@@ -19,6 +19,7 @@ pub mod provider_tools;
 mod saved_read;
 pub mod settings;
 pub mod settings_http;
+mod source_behaviors;
 pub mod visible_events;
 
 #[derive(Debug)]
@@ -238,6 +239,8 @@ fn route(host: &impl Host, request: RouteRequest) -> Result<Value> {
         ("PATCH", "/briefing-settings") => {
             settings::save(host, settings_http::normalize(request.body)?)
         }
+        ("GET", "/source-behaviors") => source_behaviors::read(host),
+        ("PUT", "/source-behaviors/:id") => source_behaviors::save(host, &id, &request.body),
         ("GET", "/display-settings") => display::read(host),
         ("PATCH", "/display-settings") => display::save(host, request.body),
         _ => Err(Error::new(404, "Calendar data operation not found")),

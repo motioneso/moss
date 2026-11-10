@@ -112,5 +112,29 @@ console.log(
   "PASS settings changed in the real control are saved by the server and survive a reload"
 );
 
+// Briefing switch: on by default, saved through the real control, kept after reload.
+const signal = frame.getByLabel("Include calendar signal in briefings", { exact: true });
+await signal.waitFor({ timeout: 60_000 });
+assert.equal(await signal.isChecked(), true, "default is on");
+const toggled = page.waitForResponse(
+  (r) =>
+    r.url().endsWith("/api/m/calendar/source-behaviors/calendar.briefings") &&
+    r.request().method() === "PUT"
+);
+await signal.uncheck();
+assert.equal((await toggled).status(), 200, "briefing switch save");
+await saved.waitFor();
+const behaviors = await context.request.get(`${origin}/api/m/calendar/source-behaviors`, {
+  headers: { origin }
+});
+const rows = (await behaviors.json()).sources[0].behaviors;
+assert.equal(rows.find((b: { id: string }) => b.id === "calendar.briefings").enabled, false);
+assert.equal(rows.find((b: { id: string }) => b.id === "calendar.planning").enabled, true);
+await page.screenshot({ path: join(OUT!, "calendar-briefing-switch.png") });
+await page.reload();
+await signal.waitFor({ timeout: 60_000 });
+assert.equal(await signal.isChecked(), false, "switch stays off after reload");
+console.log("PASS the briefing switch is saved by the server and survives a reload");
+
 assert.deepEqual(failed, [], "server errors during the run");
 await browser.close();
