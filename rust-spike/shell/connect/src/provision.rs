@@ -240,6 +240,12 @@ pub fn ensure_database(install: &Path, folder: &Path, create: bool) -> Result<()
         use std::os::unix::process::CommandExt;
         command.process_group(0);
     }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // Detached, its own group, and no console window, so it outlives the app quietly.
+        command.creation_flags(0x0000_0008 | 0x0000_0200 | 0x0800_0000);
+    }
     let child = command.spawn().map_err(|_| Failure::NoDatabaseProgram)?;
     let mut started = STARTED.lock().unwrap_or_else(|e| e.into_inner());
     started.retain_mut(|c| matches!(c.try_wait(), Ok(None)));

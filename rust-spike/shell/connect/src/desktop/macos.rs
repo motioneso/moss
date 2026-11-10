@@ -11,6 +11,9 @@ static EVENTS: Mutex<Option<Box<dyn Fn(Action) + Send>>> = Mutex::new(None);
 static REGISTER: Once = Once::new();
 static DELEGATE: Once = Once::new();
 /// The data folder that clicked alerts hand their page request to.
+/// Key of the clicked alert inside the launch notification's information.
+const LAUNCH_ALERT_KEY: &str = "NSApplicationLaunchUserNotificationKey";
+
 static CLICK_DATA: Mutex<Option<PathBuf>> = Mutex::new(None);
 const SERVER_KEY: &str = "moss-server";
 const PATH_KEY: &str = "moss-path";
@@ -177,6 +180,39 @@ unsafe extern "C-unwind" fn did_activate(
     }
 }
 
+/// When a click launches the notifier because none was running, the system hands over the
+/// clicked alert in the launch notification instead of calling the delegate.
+unsafe extern "C-unwind" fn did_finish_launching(
+    _: *mut AnyObject,
+    _: Sel,
+    launch: *mut AnyObject,
+) {
+    if launch.is_null() {
+        return;
+    }
+    let info: *mut AnyObject = msg_send![launch, userInfo];
+    if info.is_null() {
+        return;
+    }
+    let alert: *mut AnyObject =
+        msg_send![info, objectForKey: &*NSString::from_str(LAUNCH_ALERT_KEY)];
+    if alert.is_null() {
+        return;
+    }
+    let clicked: *mut AnyObject = msg_send![alert, userInfo];
+    if clicked.is_null() {
+        return;
+    }
+    let data = CLICK_DATA.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    if let Some(data) = data {
+        route_click(
+            &data,
+            string_value(clicked, SERVER_KEY),
+            string_value(clicked, PATH_KEY),
+        );
+    }
+}
+
 /// Alerts show even while the app is frontmost.
 unsafe extern "C-unwind" fn should_present(
     _: *mut AnyObject,
@@ -214,6 +250,16 @@ unsafe fn delegate() -> Option<*mut AnyObject> {
             activate,
             c"v@:@@".as_ptr(),
         );
+        let launched = std::mem::transmute::<
+            unsafe extern "C-unwind" fn(*mut AnyObject, Sel, *mut AnyObject),
+            unsafe extern "C-unwind" fn(),
+        >(did_finish_launching);
+        ffi::class_addMethod(
+            class,
+            sel!(applicationDidFinishLaunching:),
+            launched,
+            c"v@:@".as_ptr(),
+        );
         ffi::class_addMethod(
             class,
             sel!(userNotificationCenter:shouldPresentNotification:),
@@ -241,6 +287,13 @@ pub fn listen_for_clicks(data: &Path) {
         }
         if let Some(delegate) = delegate() {
             let _: () = msg_send![center, setDelegate: delegate];
+            // A cold start from a click arrives as a launch notification, not a delegate call.
+            if let Some(notifications) = AnyClass::get(c"NSNotificationCenter") {
+                let shared: *mut AnyObject = msg_send![notifications, defaultCenter];
+                let name = NSString::from_str("NSApplicationDidFinishLaunchingNotification");
+                let none: *mut AnyObject = std::ptr::null_mut();
+                let _: () = msg_send![shared, addObserver: delegate, selector: sel!(applicationDidFinishLaunching:), name: &*name, object: none];
+            }
         }
     }
 }
@@ -298,6 +351,9 @@ fn deliver(title: &str, body: &str, link: Option<(&str, &str)>) -> Result<(), St
 mod tests {
     use super::*;
 
+    /// The tests share the process-wide click folder, so they run one at a time.
+    static SERIAL: Mutex<()> = Mutex::new(());
+
     fn folder() -> PathBuf {
         let dir = std::env::temp_dir().join(format!("moss click {}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -308,6 +364,7 @@ mod tests {
     /// notification center calls on a click. A real click needs a person at the screen.
     #[test]
     fn click_on_an_alert_asks_the_window_app_for_its_page() {
+        let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
         let dir = folder();
         let _window = crate::link::window_lock(&dir).expect("window lock");
         *CLICK_DATA.lock().unwrap() = Some(dir.clone());
@@ -332,6 +389,46 @@ mod tests {
         let want = crate::link::Request {
             server: Some("s1".into()),
             path: Some("/tasks".into()),
+        };
+        assert_eq!(crate::link::take_request(&dir), Some(want));
+        assert_eq!(crate::link::take_request(&dir), None);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// A click that starts the notifier arrives in the launch notification. This builds that
+    /// notification the way the system does and calls the method the system calls.
+    #[test]
+    fn click_that_launches_the_notifier_opens_its_page() {
+        let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = folder();
+        let _window = crate::link::window_lock(&dir).expect("window lock");
+        *CLICK_DATA.lock().unwrap() = Some(dir.clone());
+        unsafe {
+            let delegate = delegate().expect("delegate class");
+            let alert: *mut AnyObject =
+                msg_send![AnyClass::get(c"NSUserNotification").unwrap(), new];
+            let clicked: *mut AnyObject =
+                msg_send![AnyClass::get(c"NSMutableDictionary").unwrap(), new];
+            for (key, value) in [(SERVER_KEY, "s2"), (PATH_KEY, "/people")] {
+                let _: () = msg_send![clicked, setObject: &*NSString::from_str(value), forKey: &*NSString::from_str(key)];
+            }
+            let _: () = msg_send![alert, setUserInfo: clicked];
+            let launch_info: *mut AnyObject =
+                msg_send![AnyClass::get(c"NSMutableDictionary").unwrap(), new];
+            let _: () = msg_send![launch_info, setObject: alert, forKey: &*NSString::from_str(LAUNCH_ALERT_KEY)];
+            let launch: *mut AnyObject = msg_send![AnyClass::get(c"NSNotification").unwrap(),
+                notificationWithName: &*NSString::from_str("NSApplicationDidFinishLaunchingNotification"),
+                object: std::ptr::null_mut::<AnyObject>(), userInfo: launch_info];
+            let _: () = msg_send![delegate, applicationDidFinishLaunching: launch];
+            // A plain launch (no clicked alert) opens nothing.
+            let plain: *mut AnyObject = msg_send![AnyClass::get(c"NSNotification").unwrap(),
+                notificationWithName: &*NSString::from_str("NSApplicationDidFinishLaunchingNotification"),
+                object: std::ptr::null_mut::<AnyObject>(), userInfo: std::ptr::null_mut::<AnyObject>()];
+            let _: () = msg_send![delegate, applicationDidFinishLaunching: plain];
+        }
+        let want = crate::link::Request {
+            server: Some("s2".into()),
+            path: Some("/people".into()),
         };
         assert_eq!(crate::link::take_request(&dir), Some(want));
         assert_eq!(crate::link::take_request(&dir), None);

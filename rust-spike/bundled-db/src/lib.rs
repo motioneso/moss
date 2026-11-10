@@ -4,12 +4,13 @@
 
 #[cfg(unix)]
 pub mod at_rest;
-#[cfg(unix)]
 pub mod cluster;
 pub mod layout;
-#[cfg(unix)]
 pub mod migrate;
 #[cfg(unix)]
+pub mod procs;
+#[cfg(windows)]
+#[path = "procs_windows.rs"]
 pub mod procs;
 pub mod secrets;
 pub mod supervisor_lock;
