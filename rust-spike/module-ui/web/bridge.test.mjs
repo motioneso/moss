@@ -6,7 +6,8 @@ function setup({
   loadsBeforeConnect = 0,
   request = () => ({ saved: true }),
   keyed = true,
-  connect = true
+  connect = true,
+  theme = () => ({ theme: "sage" })
 } = {}) {
   let listener;
   const replies = [];
@@ -27,7 +28,7 @@ function setup({
       calls.push(args);
       return request(...args);
     },
-    theme: () => ({ theme: "sage" }),
+    theme,
     navigate: () => null,
     chat: () => null
   });
@@ -56,6 +57,17 @@ function setup({
     });
   return { send, replies, calls, frame, dispose, bootstrap };
 }
+test("an async theme callback replies with its value, not a promise", async () => {
+  const s = setup({ theme: async () => ({ theme: "sage", displayName: "Ben" }) });
+  s.send({ type: "theme" });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.deepEqual(s.replies.at(-1), {
+    channel: "moss.module.v1",
+    id: "one",
+    ok: true,
+    result: { theme: "sage", displayName: "Ben" }
+  });
+});
 test("initial frame load before the queued connect message still permits requests", async () => {
   const s = setup({ loadsBeforeConnect: 1 });
   await s.send({ type: "request", method: "GET", path: "/entries" });

@@ -84,7 +84,7 @@ export function connectModuleFrame(
           break;
         }
         case "theme":
-          result = theme();
+          result = await theme();
           break;
         case "navigate": {
           if (

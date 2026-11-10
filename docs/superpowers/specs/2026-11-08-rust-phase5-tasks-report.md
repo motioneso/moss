@@ -2079,6 +2079,8 @@ the signed-in name and the assistant's name along with the theme (read from the 
 own data endpoint); the screen shows "<name> · you" and falls back to "You" and "Moss"
 when the host gives nothing. No route, tool, job, migration or host contract changed.
 
+Review round 1 found the host bridge posted a pending promise when the theme callback was async, so no name would ever arrive. The bridge now waits for the callback (new bridge test fails without the fix), and the app map describes the new field and footer.
+
 Checked: all 42 screen tests pass against the real compiled screen, including a new test
 that feeds a name and an assistant name and checks both strings. On the real HTTPS server
 (signed in as a freshly created owner, real browser) the editor shows the Assigned to
