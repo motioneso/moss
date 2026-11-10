@@ -4,7 +4,7 @@
   "name": "Calendar",
   "description": "Calendar cached-event screens and draft tools; signed-in HTTPS Calendar pages; provider execution and full shell composition remain incomplete.",
   "publisher": "Moss",
-  "version": "0.21.0",
+  "version": "0.22.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -141,6 +141,11 @@
     {
       "method": "GET",
       "path": "/day-plans/:id/operations/:operation_id",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/day-plans/:id/apply",
       "signIn": true
     }
   ],

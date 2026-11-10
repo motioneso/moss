@@ -4,6 +4,7 @@ use serde_json::{json, Value};
 
 #[cfg(target_arch = "wasm32")]
 mod abi;
+pub mod apply;
 mod display;
 mod draft_tool;
 pub mod events;
@@ -207,6 +208,7 @@ fn route(host: &impl Host, request: RouteRequest) -> Result<Value> {
             plans::save(host, input)
         }
         ("POST", "/day-plans/:id/preview") => preview::preview(host, &id, request.body),
+        ("POST", "/day-plans/:id/apply") => apply::route(host, &id, request.body),
         ("GET", "/day-plans/:id/operations/:operation_id") => operations::read(
             host,
             &id,

@@ -1,5 +1,11 @@
 # Calendar package
 
+## 0.22.0
+
+- Add the day-plan apply route. It checks the request shape and answers "day plan apply is unavailable" (503) until a Connectors package can run the change; nothing is written.
+- Add the apply-batch reservation logic (frozen selection, exact replay, conflict on a changed request, repair of missing item rows), covered by guest tests.
+- Provider execution, retry, recovery and confirmation remain open.
+
 ## 0.21.0
 
 - Preserve the original settings API's scalar and singleton-array coercion and removal of extra fields.
