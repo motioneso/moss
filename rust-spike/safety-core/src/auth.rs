@@ -826,6 +826,38 @@ pub async fn resolve_access(
     }
 }
 
+/// Resolves a desktop notifier device token (`Authorization: Bearer`) and its client id to the
+/// device owner. The token is hashed in the database; pending and deactivated accounts are refused.
+pub async fn resolve_notifier_access(
+    platform: &Platform,
+    headers: &HeaderMap,
+    client_id: Uuid,
+) -> Result<AccessContext, ApiError> {
+    let token = read_bearer_token(headers).ok_or(ApiError::Unauthorized)?;
+    if !(32..=128).contains(&token.len()) {
+        return Err(ApiError::Unauthorized);
+    }
+    let db = platform.app.client().await?;
+    let user: Uuid = db
+        .query_opt(
+            "SELECT user_id FROM app.resolve_notifier_device(
+               encode(sha256(convert_to($1::text, 'UTF8')), 'hex'), $2::uuid)",
+            &[&token, &client_id],
+        )
+        .await?
+        .ok_or(ApiError::Unauthorized)?
+        .get(0);
+    let status: String = db
+        .query_opt("SELECT status FROM app.get_user_by_id($1::uuid)", &[&user])
+        .await?
+        .ok_or(ApiError::Unauthorized)?
+        .get(0);
+    if matches!(status.as_str(), "pending" | "deactivated") {
+        return Err(ApiError::Unauthorized);
+    }
+    Ok(AccessContext::new(user, Uuid::new_v4().to_string()))
+}
+
 /// The legacy bearer token is a session id; `app.resolve_auth_session` enforces expiry.
 async fn bearer_user(app: &Database, token: &str) -> Result<Uuid, ApiError> {
     if !is_uuid(token) {

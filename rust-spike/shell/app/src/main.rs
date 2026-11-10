@@ -89,6 +89,12 @@ fn router(data: Arc<Accounts>, web: PathBuf) -> Router {
             get(|State(d): State<Arc<Accounts>>, Extension(access): Extension<AccessContext>| async move { Json::<TodayView>(d.for_actor(&access).today()) }),
         )
         .route("/api/desktop/notices", get(desktop_notices::list).post(desktop_notices::accept))
+        // The notifier program signs in with a device token instead of a session.
+        .route("/api/notifier/notices", get(desktop_notices::list).post(desktop_notices::accept))
+        .route(
+            "/api/desktop/notifier",
+            post(desktop_notices::register_notifier).delete(desktop_notices::remove_notifier),
+        )
         .route(
             "/api/chat/thread",
             get(|State(d): State<Arc<Accounts>>, Extension(access): Extension<AccessContext>| async move { Json::<ChatThread>(d.for_actor(&access).chat_thread()) }),

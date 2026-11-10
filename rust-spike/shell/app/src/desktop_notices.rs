@@ -1,4 +1,6 @@
-//! Notification identities and durable desktop acceptance; never notification reads.
+//! Desktop alerts for the signed-in person's own notifications. Acceptance is durable and
+//! never marks a notification read. The same two handlers serve the web page (session cookie)
+//! and the independent notifier (device token, see `network::web`).
 use axum::{
     extract::{Query, State},
     Extension, Json,
@@ -22,7 +24,19 @@ pub struct Acceptance {
     events: Vec<Uuid>,
 }
 
-/// Identity-only polling remains compatible with older apps which do not send a client ID.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Registration {
+    client: Uuid,
+}
+
+const NO_STORE: [(axum::http::HeaderName, &str); 1] =
+    [(axum::http::header::CACHE_CONTROL, "no-store")];
+
+/// Alertable notifications: unread, not held back by quiet hours. A notification counts as
+/// accepted only when the receipt is newer than its last update, so a keyed notification that
+/// fires again alerts again. Identity-only polling stays compatible with apps that send no
+/// client ID.
 pub async fn list(
     State(data): State<Arc<Accounts>>,
     Extension(access): Extension<AccessContext>,
@@ -35,8 +49,11 @@ pub async fn list(
             "SELECT n.id::text, EXISTS (
            SELECT 1 FROM app.desktop_notification_receipts r
            WHERE r.notification_id=n.id AND r.user_id=$1 AND r.client_id=$2
-         ) FROM app.notifications n
-         WHERE n.recipient_user_id=$1 AND NOT EXISTS (
+             AND r.accepted_at >= n.updated_at
+         ), n.title, n.body, n.href FROM app.notifications n
+         WHERE n.recipient_user_id=$1
+           AND (n.deferred_until IS NULL OR n.deferred_until <= now())
+           AND NOT EXISTS (
            SELECT 1 FROM app.notification_reads r WHERE r.notification_id=n.id AND r.user_id=$1
          ) ORDER BY n.updated_at DESC, n.id DESC LIMIT 100",
             &[&access.actor_user_id(), &client.client],
@@ -48,11 +65,22 @@ pub async fn list(
         .filter(|row| row.get::<_, bool>(1))
         .map(|row| row.get(0))
         .collect();
+    let notices: Vec<serde_json::Value> = rows
+        .iter()
+        .map(|row| {
+            serde_json::json!({
+                "id": row.get::<_, String>(0),
+                "title": row.get::<_, String>(2),
+                "body": row.get::<_, Option<String>>(3),
+                "href": row.get::<_, Option<String>>(4),
+            })
+        })
+        .collect();
     cx.commit().await?;
     Ok((
-        [(axum::http::header::CACHE_CONTROL, "no-store")],
+        NO_STORE,
         Json(
-            serde_json::json!({"account": access.actor_user_id(), "events": events, "acknowledged": acknowledged}),
+            serde_json::json!({"account": access.actor_user_id(), "events": events, "acknowledged": acknowledged, "notices": notices}),
         ),
     ))
 }
@@ -82,13 +110,56 @@ pub async fn accept(
     cx.db()
         .execute(
             "INSERT INTO app.desktop_notification_receipts(user_id,client_id,notification_id)
-         SELECT $1,$2,unnest($3::uuid[]) ON CONFLICT DO NOTHING",
+         SELECT $1,$2,unnest($3::uuid[])
+         ON CONFLICT (user_id, client_id, notification_id) DO UPDATE SET accepted_at=now()",
             &[&access.actor_user_id(), &body.client, &events],
         )
         .await?;
     cx.commit().await?;
     Ok((
-        [(axum::http::header::CACHE_CONTROL, "no-store")],
+        NO_STORE,
         Json(serde_json::json!({"account": access.actor_user_id(), "acknowledged": events})),
     ))
+}
+
+/// Gives the desktop app a fresh device token for its notifier. Registering again for the same
+/// client replaces the old token. The token is shown once and only its hash is stored.
+pub async fn register_notifier(
+    State(data): State<Arc<Accounts>>,
+    Extension(access): Extension<AccessContext>,
+    Json(body): Json<Registration>,
+) -> Result<impl axum::response::IntoResponse, ApiError> {
+    let token = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
+    let cx = safety_core::db::DataContext::open(&data.platform.app, &access).await?;
+    cx.db()
+        .execute(
+            "INSERT INTO app.desktop_notifier_devices(id, user_id, client_id, token_hash)
+         VALUES ($1, $2, $3, encode(sha256(convert_to($4, 'UTF8')), 'hex'))
+         ON CONFLICT (user_id, client_id)
+         DO UPDATE SET token_hash=excluded.token_hash, created_at=now(), last_used_at=NULL",
+            &[&Uuid::new_v4(), &access.actor_user_id(), &body.client, &token],
+        )
+        .await?;
+    cx.commit().await?;
+    Ok((NO_STORE, Json(serde_json::json!({"token": token}))))
+}
+
+/// Revokes the notifier's token, for example when the person signs out of the app.
+pub async fn remove_notifier(
+    State(data): State<Arc<Accounts>>,
+    Extension(access): Extension<AccessContext>,
+    Query(client): Query<Client>,
+) -> Result<impl axum::response::IntoResponse, ApiError> {
+    let client = client
+        .client
+        .ok_or_else(|| ApiError::http(400, "A client ID is required"))?;
+    let cx = safety_core::db::DataContext::open(&data.platform.app, &access).await?;
+    cx.db()
+        .execute(
+            "DELETE FROM app.desktop_notifier_devices WHERE user_id=$1 AND client_id=$2",
+            &[&access.actor_user_id(), &client],
+        )
+        .await?;
+    cx.commit().await?;
+    Ok((NO_STORE, Json(serde_json::json!({"removed": true}))))
 }
