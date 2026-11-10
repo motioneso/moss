@@ -4,7 +4,7 @@
   "name": "Calendar",
   "description": "Calendar cached-event screens and draft tools; signed-in HTTPS Calendar pages; provider execution and full shell composition remain incomplete.",
   "publisher": "Moss",
-  "version": "0.23.0",
+  "version": "0.24.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -37,7 +37,8 @@
         "calendar.chat-context",
         "calendar.task-reference",
         "calendar.briefing-reference",
-        "calendar.ui-view"
+        "calendar.ui-view",
+        "calendar.source-behaviors"
       ]
     }
   ],
@@ -121,6 +122,16 @@
     {
       "method": "GET",
       "path": "/briefing-settings",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/source-behaviors",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/source-behaviors",
       "signIn": true
     },
     {
