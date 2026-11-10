@@ -176,7 +176,7 @@ async fn poll(entry: &Entry, seen: &mut HashSet<(String, String)>) {
         &entry.origin,
         &entry.pin,
         "POST",
-        "/api/notifier/notices",
+        &path,
         &entry.token,
         Some(&body),
     )
