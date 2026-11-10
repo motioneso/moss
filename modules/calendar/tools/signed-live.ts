@@ -26,6 +26,7 @@ import { checkDetails } from "./details-live.js";
 import { checkGrid } from "./grid-live.js";
 import { checkGridScroll } from "./scroll-live.js";
 import { checkTimezoneScroll } from "./timezone-live.js";
+import { checkSettingsContract } from "./settings-contract-live.js";
 import { checkToolbar } from "./toolbar-live.js";
 import { checkMonth } from "./month-live.js";
 import { checkOperationStatus } from "./operation-live.js";
@@ -663,6 +664,7 @@ try {
   assert.equal(await frame.getByLabel("Prep tasks", { exact: true }).inputValue(), "off");
   await context.setOffline(false);
   await saveSetting("Prep tasks", "auto");
+  await checkSettingsContract(tab);
   await tab.setViewportSize({ width: 390, height: 844 });
   await tab.screenshot({ path: join(out, "signed-in-settings-phone-width.png") });
   await tab.setViewportSize({ width: 1280, height: 860 });
