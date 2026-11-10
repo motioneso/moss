@@ -433,6 +433,9 @@ impl Ports for ServicePorts {
         }
         result
     }
+    fn finish_call(&self, scope: &CallScope, success: bool) -> Result<()> {
+        self.next.finish_call(scope, success)
+    }
 }
 fn tool_key(tool: &str, parameters: &Value) -> Result<String> {
     Ok(format!(

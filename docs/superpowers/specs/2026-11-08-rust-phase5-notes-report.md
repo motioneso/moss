@@ -1576,3 +1576,73 @@ Independent review prompted narrower claims for missing paths outside roots and
 general guidance for in-root vault policy refusals. The installed Settings test
 also checks real symlink-descendant refusals through both save and browse routes;
 this is a deliberate vault restriction, not legacy symlink parity.
+
+## Part twenty-one checkpoint — installed tool dispatcher and call finalization
+
+The disposable Notes gate now exercises the existing generic tool dispatcher
+with an installed, signed experimental package, rather than calling only the
+guest's write handlers. Its path is `tools.run`, the real Notes Wasm guest,
+guarded file mutation, a private durable sync request, manual delivery to the
+installed worker, real indexing and indexed search. The test performs create,
+edit and delete and checks their resulting file and search contents. Both app
+and worker database roles use the same path; installer catalog setup still
+uses app credentials. Queue publication is captured and delivery is manual.
+Query and document embeddings use the same named deterministic stand-in.
+
+A synthetic dependent caller also reaches the installed public approval API
+through the actual `api.call` service. Read-only preparation returns an action
+version without changing files or requesting sync; it does not approve the
+subsequent write. Accounts without their own configured source, including an unrelated admin,
+receive the unconfigured-source response; preparation does not select the
+owner's source. A caller without the Notes dependency is refused.
+
+The dispatcher checks cover absent approvals, another account and an unrelated
+admin, changed inputs, another tool, and replay of a consumed approval. A port
+counter requires these refusals before Notes file/database work, so a later
+file conflict cannot falsely count as approval enforcement. The original grant
+must still permit the intended write after rejected attempts. The new write's
+checkpoint has UUID-only queued parameters. Cross-account checkpoint reads,
+updates and deletes are denied; removing RLS must make those assertions fail,
+then restoration must restore the denial. The aggregate gate retains the
+earlier legacy differential and privacy-removal controls as well.
+
+The installed-path regression exposed a host lifecycle bug: account services did
+not forward call finalization, so approval preparation held its folder lock and
+the following approved create failed as busy. `ServicePorts` now forwards
+finalization to its existing downstream adapters. This lets folder cleanup,
+transaction completion, compensation and deferred publication run on their
+existing success/failure paths. The Notes app-map metadata records that preparing
+an action leaves its folder available. No runtime permission, dependency, SQL or
+screen changes; writes and sync remain experimental. The probe is a synthetic caller of the real service, not chat or an approval UI.
+It does not establish approval-version rechecking or permit ordinary-package
+write activation. Cross-account search negatives here supplement the existing
+search gate privacy-removal controls; these actors have no source or index.
+Current command receipts and independent review are attached to the checkpoint
+PR and task proof artifact.
+
+Builds use task-owned scratch Cargo and Rust homes and separate ordinary and
+write-tools guest targets. The declared Wasm target and approved pinned
+`wit-bindgen` dependency are unchanged; nothing is installed globally. A shared
+host target cache may be reused, but the toolchain homes are task-owned and
+survive removal of another task's original folder. Database checks run only
+through `scripts/run-gate.sh`.
+
+Full Notes acceptance remains unfinished: configured embeddings, live installed
+chat and approval freshness/consumption orchestration, production sync and queue
+delivery, singleton coalescing, recall warmup, automatic recovery and retention,
+managed publication/fencing and reconciliation, private exports/daily archives,
+full path/HTTP parity, assembled Settings/chat and physical second-device HTTPS
+proof. This is a bounded integration checkpoint, not a replacement for working
+legacy Notes. Completing that list exceeds this continuation's context scope.
+
+Validation status for this checkpoint: the initial aggregate gate passed its
+earlier suites and six ingest tests, then failed the new dispatcher test because
+the outer host error is deliberately redacted. A test-only observer now checks
+the trusted approval refusal before redaction. The next focused run exposed the
+retained folder lock on approved create, prompting the host finalization fix.
+The focused disposable run then passed the installed export/setup check and
+new dispatcher regression, including both roles and privacy-removal controls.
+Both permitted review rounds were used before these execution findings; the
+corrected commit still requires a fresh review and final aggregate gate before
+Ready. Current passing and failing receipts are attached to the checkpoint PR
+and proof artifact; no full acceptance claim follows from partial gate results.
