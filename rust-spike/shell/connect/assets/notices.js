@@ -44,13 +44,17 @@
         const response = await fetch("/api/desktop/notices", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ client: client(), events: delivery.ids })
+          body: JSON.stringify({
+            client: client(),
+            events: delivery.ids.map((key) => key.split("@")[0]),
+            versions: delivery.ids.map((key) => Number(key.split("@")[1]))
+          })
         });
         if (!response.ok) return;
         const saved = await response.json();
         if (saved.account !== delivery.account || account !== delivery.account) return;
         // A partial or unrecognized acceptance never consumes the pending batch.
-        if (!delivery.ids.every((id) => saved.acknowledged.includes(id))) return;
+        if (!delivery.ids.every((key) => saved.acknowledged.includes(key.split("@")[0]))) return;
       }
       const record = load(account);
       record[delivery.kind].pending = record[delivery.kind].pending.filter(
@@ -102,7 +106,8 @@
   // notifier can keep alerting after the window closes. The notifier shares this client id.
   const enrollKey = "moss.desktop.notifier.v1";
   const enrollNotifier = async () => {
-    if (localStorage.getItem(enrollKey) === client()) return;
+    const who = `${client()}:${account}`;
+    if (localStorage.getItem(enrollKey) === who) return;
     const response = await fetch("/api/desktop/notifier", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -111,7 +116,7 @@
     if (!response.ok) return;
     const saved = await response.json();
     window.ipc.postMessage(JSON.stringify({ client: client(), token: saved.token }));
-    localStorage.setItem(enrollKey, client());
+    localStorage.setItem(enrollKey, who);
   };
 
   const poll = async () => {
@@ -123,6 +128,11 @@
       });
       if (!response.ok) {
         if (response.status === 401) {
+          // Signed out: the background notifier must stop alerting for this server.
+          if (localStorage.getItem(enrollKey) !== null) {
+            localStorage.removeItem(enrollKey);
+            window.ipc.postMessage(JSON.stringify({ forget: true }));
+          }
           account = null;
           inflight.clear();
         }
@@ -133,7 +143,9 @@
       account = data.account;
       window.ipc.postMessage(JSON.stringify({ heartbeat: true }));
       await enrollNotifier();
-      observe("reminder", data.events, data.acknowledged);
+      // A refreshed notification has a new version, so it counts as new for the window too.
+      const keyed = (id) => `${id}@${data.versions?.[id] ?? 0}`;
+      observe("reminder", data.events.map(keyed), data.acknowledged.map(keyed));
       const thread = await fetch("/api/chat/thread", { cache: "no-store" });
       if (thread.ok) {
         const data = await thread.json();

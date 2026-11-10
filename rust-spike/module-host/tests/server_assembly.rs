@@ -366,6 +366,8 @@ fn module_worker_and_https_feed_assemble_without_a_desktop() {
     let deferred = |title: &str| quiet.iter().find(|r| r.get::<_, String>(0) == title).unwrap().get::<_, bool>(4);
     assert!(deferred("Quiet normal"), "a normal alert inside quiet hours waits");
     assert!(!deferred("Quiet urgent"), "an urgent alert is never held back");
+    let forever = runtime.block_on(db.query_one("SELECT deferred_until = 'infinity' FROM app.notifications WHERE recipient_user_id=$1 AND title='Quiet normal'", &[&owner])).unwrap();
+    assert!(forever.get::<_, bool>(0), "start equal to end holds alerts back until quiet hours are switched off");
     runtime.block_on(db.execute("DELETE FROM app.preferences WHERE owner_user_id=$1 AND key='quiet-hours'", &[&owner])).unwrap();
     files.insert("code/module.wasm".into(), fixture(false, DEFAULT_REQUEST));
     manifest.version = "2.0.0".parse().unwrap();
@@ -435,6 +437,24 @@ fn module_worker_and_https_feed_assemble_without_a_desktop() {
         .send()
         .unwrap();
     assert_eq!(accepted.status(), 200);
+    // A receipt for an older version of a notification never covers its newer update.
+    let late = uuid::Uuid::new_v4();
+    let stale = client
+        .post(format!("{origin}/api/desktop/notices"))
+        .header("origin", &origin)
+        .header("cookie", &cookie)
+        .json(&json!({"client":late,"events":[notice_id],"versions":[1]}))
+        .send()
+        .unwrap();
+    assert_eq!(stale.status(), 200);
+    let feed: Value = client
+        .get(format!("{origin}/api/desktop/notices?client={late}"))
+        .header("cookie", &cookie)
+        .send()
+        .unwrap()
+        .json()
+        .unwrap();
+    assert!(!feed["acknowledged"].as_array().unwrap().iter().any(|id| *id == json!(notice_id)), "a late receipt for an old version does not cover the newer one");
     let notification_id = uuid::Uuid::parse_str(&notice_id).unwrap();
     runtime.block_on(async {
         assert_eq!(db.query_one("SELECT count(*) FROM app.desktop_notification_receipts WHERE user_id=$1 AND client_id=$2 AND notification_id=$3", &[&owner, &client_id, &notification_id]).await.unwrap().get::<_,i64>(0), 1);

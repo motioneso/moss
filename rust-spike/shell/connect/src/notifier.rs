@@ -33,6 +33,8 @@ struct Enrolled {
 
 #[derive(Deserialize)]
 struct Notice {
+    #[serde(default)]
+    version: i64,
     id: String,
     title: String,
     body: Option<String>,
@@ -154,24 +156,28 @@ async fn poll(entry: &Entry, seen: &mut HashSet<(String, String)>) {
     let Ok(feed) = serde_json::from_slice::<Feed>(&body) else {
         return;
     };
-    let mut shown = Vec::new();
+    let mut shown: Vec<(String, i64)> = Vec::new();
     for notice in feed.notices {
         if feed.acknowledged.contains(&notice.id) {
             continue;
         }
         let text = notice.body.clone().unwrap_or_default();
-        let key = (entry.server.clone(), notice.id.clone());
+        let key = (entry.server.clone(), format!("{}@{}", notice.id, notice.version));
         // A failed acceptance last round must not show the same alert twice.
         if seen.contains(&key) || crate::desktop::notify(&notice.title, &text).is_ok() {
             seen.insert(key);
-            shown.push(notice.id);
+            shown.push((notice.id, notice.version));
         }
         let _ = notice.href;
     }
     if shown.is_empty() {
         return;
     }
-    let body = serde_json::json!({"client": entry.client, "events": shown}).to_string();
+    let body = serde_json::json!({
+        "client": entry.client,
+        "events": shown.iter().map(|(id, _)| id).collect::<Vec<_>>(),
+        "versions": shown.iter().map(|(_, v)| v).collect::<Vec<_>>(),
+    }).to_string();
     let accepted = reach::request(
         &entry.origin,
         &entry.pin,
@@ -186,7 +192,9 @@ async fn poll(entry: &Entry, seen: &mut HashSet<(String, String)>) {
         eprintln!("moss-app notifier: the server did not accept the receipt ({:?})", accepted.as_ref().map(|(c, _)| *c));
     }
     if matches!(accepted, Ok((200, _))) {
-        seen.retain(|(s, id)| !(s == &entry.server && shown.contains(id)));
+        seen.retain(|(s, key)| {
+            !(s == &entry.server && shown.iter().any(|(id, v)| key == &format!("{id}@{v}")))
+        });
     }
 }
 

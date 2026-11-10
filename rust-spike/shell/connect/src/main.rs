@@ -816,6 +816,10 @@ impl App {
                             if message["heartbeat"].as_bool() == Some(true) {
                                 notifier::mark_app_active(&data, &server);
                             }
+                            // Signing out ends background alerts for this server.
+                            if message["forget"].as_bool() == Some(true) {
+                                let _ = notifier::forget(&data, &server);
+                            }
                             // The page registered a device token for the notifier. The client id
                             // is the page's own, so a receipt from either side covers both.
                             if let (Some(client), Some(token)) =

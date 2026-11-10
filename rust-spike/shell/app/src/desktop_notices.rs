@@ -22,6 +22,9 @@ pub struct Client {
 pub struct Acceptance {
     client: Uuid,
     events: Vec<Uuid>,
+    /// Version of each notification as it was delivered (from the feed), one per event.
+    #[serde(default)]
+    versions: Option<Vec<i64>>,
 }
 
 #[derive(Deserialize)]
@@ -50,7 +53,8 @@ pub async fn list(
            SELECT 1 FROM app.desktop_notification_receipts r
            WHERE r.notification_id=n.id AND r.user_id=$1 AND r.client_id=$2
              AND r.accepted_at >= n.updated_at
-         ), n.title, n.body, n.href FROM app.notifications n
+         ), n.title, n.body, n.href,
+           (extract(epoch from n.updated_at) * 1000000)::bigint FROM app.notifications n
          WHERE n.recipient_user_id=$1
            AND (n.deferred_until IS NULL OR n.deferred_until <= now())
            AND NOT EXISTS (
@@ -73,14 +77,19 @@ pub async fn list(
                 "title": row.get::<_, String>(2),
                 "body": row.get::<_, Option<String>>(3),
                 "href": row.get::<_, Option<String>>(4),
+                "version": row.get::<_, i64>(5),
             })
         })
+        .collect();
+    let versions: serde_json::Map<String, serde_json::Value> = rows
+        .iter()
+        .map(|row| (row.get::<_, String>(0), serde_json::json!(row.get::<_, i64>(5))))
         .collect();
     cx.commit().await?;
     Ok((
         NO_STORE,
         Json(
-            serde_json::json!({"account": access.actor_user_id(), "events": events, "acknowledged": acknowledged, "notices": notices}),
+            serde_json::json!({"account": access.actor_user_id(), "events": events, "acknowledged": acknowledged, "notices": notices, "versions": versions}),
         ),
     ))
 }
@@ -99,22 +108,30 @@ pub async fn accept(
         ));
     }
     let cx = safety_core::db::DataContext::open(&data.platform.app, &access).await?;
+    if body.versions.as_ref().is_some_and(|v| v.len() != body.events.len()) {
+        return Err(ApiError::http(400, "Send one version per notification ID"));
+    }
+    // A receipt carries the version that was shown, so a late receipt for an older version
+    // never covers a newer update. Without versions the receipt is stamped now.
+    let versions: Vec<Option<i64>> = match &body.versions {
+        Some(v) => v.iter().map(|n| Some(*n)).collect(),
+        None => vec![None; body.events.len()],
+    };
     let rows = cx
         .db()
         .query(
-            "SELECT id FROM app.notifications WHERE recipient_user_id=$1 AND id=ANY($2)",
-            &[&access.actor_user_id(), &body.events],
+            "WITH sent AS (SELECT * FROM unnest($2::uuid[], $4::bigint[]) AS t(id, version))
+             INSERT INTO app.desktop_notification_receipts(user_id,client_id,notification_id,accepted_at)
+             SELECT $1,$3,n.id,
+                    COALESCE(least(now(), timestamptz 'epoch' + s.version * interval '1 microsecond'), now())
+               FROM sent s JOIN app.notifications n ON n.id=s.id AND n.recipient_user_id=$1
+             ON CONFLICT (user_id, client_id, notification_id)
+             DO UPDATE SET accepted_at=greatest(app.desktop_notification_receipts.accepted_at, excluded.accepted_at)
+             RETURNING notification_id",
+            &[&access.actor_user_id(), &body.events, &body.client, &versions],
         )
         .await?;
     let events: Vec<Uuid> = rows.iter().map(|row| row.get(0)).collect();
-    cx.db()
-        .execute(
-            "INSERT INTO app.desktop_notification_receipts(user_id,client_id,notification_id)
-         SELECT $1,$2,unnest($3::uuid[])
-         ON CONFLICT (user_id, client_id, notification_id) DO UPDATE SET accepted_at=now()",
-            &[&access.actor_user_id(), &body.client, &events],
-        )
-        .await?;
     cx.commit().await?;
     Ok((
         NO_STORE,

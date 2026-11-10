@@ -73,7 +73,8 @@ pub(crate) async fn post(cx: &DataContext, scope: &CallScope, r: &Request) -> Re
             "WITH win AS (SELECT $8::text AS zone, $9::text::time AS s, $10::text::time AS e),
              here AS (SELECT date_trunc('minute', now() AT TIME ZONE zone) AS l, s, e FROM win WHERE zone IS NOT NULL),
              release AS (
-               SELECT CASE WHEN CASE WHEN s >= e THEN l::time >= s OR l::time < e
+               SELECT CASE WHEN s = e THEN 'infinity'::timestamptz
+                      WHEN CASE WHEN s >= e THEN l::time >= s OR l::time < e
                                      ELSE l::time >= s AND l::time < e END
                       THEN ((l::date + CASE WHEN e <= l::time THEN 1 ELSE 0 END) + e)
                            AT TIME ZONE (SELECT zone FROM win) END AS until
