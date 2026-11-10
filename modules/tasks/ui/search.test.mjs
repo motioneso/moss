@@ -18,6 +18,7 @@ const empty = {
 test("interpreted filters apply status, show removable chips, reset on typing and recover from provider failure", async () => {
   const dom = new JSDOM(`<input id="search"><button id="interpret-search">Interpret search</button>
     <select id="status-filter"><option value="todo">Open</option><option value="done">Done</option></select>
+    <select id="focus-filter"><option value="">No focus</option><option value="priorities">Do First</option></select>
     <p id="search-warning" hidden></p><div id="search-intent"></div>`);
   const old = globalThis.document;
   globalThis.document = dom.window.document;
@@ -49,6 +50,7 @@ test("interpreted filters apply status, show removable chips, reset on typing an
     };
     $("search").value = "completed important tasks";
     $("search").dispatchEvent(new dom.window.Event("input"));
+    $("focus-filter").value = "priorities";
     await interpret();
     assert.deepEqual(calls[0], [
       "POST",
@@ -56,6 +58,7 @@ test("interpreted filters apply status, show removable chips, reset on typing an
       { query: "completed important tasks" }
     ]);
     assert.equal($("status-filter").value, "done");
+    assert.equal($("focus-filter").value, "", "interpreted status must leave focus");
     assert.equal(controller.intent().status, null, "status is controlled by the regular picker");
     assert.equal($("search-warning").textContent, "Unknown list ignored");
     assert.equal($("search-intent").children.length, 3);
@@ -70,14 +73,21 @@ test("interpreted filters apply status, show removable chips, reset on typing an
     assert.equal($("search-warning").hidden, true);
     assert.equal($("status-filter").value, "done");
     response = { intent: { ...empty, effort: "quick" }, warnings: [] };
+    $("focus-filter").value = "priorities";
     $("search").dispatchEvent(
       new dom.window.KeyboardEvent("keydown", { key: "Enter", cancelable: true })
     );
     await pending;
     assert.equal(controller.intent().effort, "quick");
+    assert.equal(
+      $("focus-filter").value,
+      "priorities",
+      "an interpretation without status keeps focus"
+    );
     fail = true;
     await interpret();
     assert.equal(controller.intent(), null);
+    assert.equal($("focus-filter").value, "priorities", "a failed interpretation keeps focus");
     assert.match($("search-warning").textContent, /unavailable/);
     assert.equal($("search").value, "title query", "failed interpretation retains literal search");
     assert.equal($("search-intent").children.length, 0);
