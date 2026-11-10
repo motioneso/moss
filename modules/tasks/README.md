@@ -79,7 +79,7 @@ Part 29 adds lazy recurrence advancement: the list and focus, at-risk and overdu
 reads (routes and tools) first move each stale owned series to its next occurrence
 on the account's local day, as the legacy server does.
 
-Part 35 adds the public `prepareTaskAction` call, which builds legacy-format approval cards for the 13 task write tools (route and preferences approval are not ported).
+Part 35 adds the public `prepareTaskAction` call, which builds legacy-format approval cards for the 13 task write tools Part 36 adds `prepareTaskRoute` for the presented routes and the task-view preference.
 Part 30 adds the nightly recurrence job: one keyed schedule per account (03:00 UTC)
 runs the same roll-forward in the owner's account, and recurring creates keep it
 registered. Current remaining work (part 34 put the Tasks screen in the shell menu; part 33 added per-job retry counts; both queues retry 0; finished-job retention is not ported): full

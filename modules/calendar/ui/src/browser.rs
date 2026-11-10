@@ -73,8 +73,8 @@ impl State {
         spawn_local(async move {
             match request("PATCH", "/briefing-settings", body).await {
                 Ok(mut saved) => {
-                    // The settings response does not carry the briefing switch.
-                    saved["included"] = self.briefing.get_untracked()["included"].clone();
+                    // The settings response carries no switches; keep the ones on screen.
+                    saved["sources"] = self.briefing.get_untracked()["sources"].clone();
                     self.briefing.set(saved);
                     self.briefing_saved.set(true);
                 }
@@ -88,7 +88,7 @@ impl State {
             restore(&focused);
         });
     }
-    fn save_source(self, enabled: bool) {
+    fn save_source(self, body: Value) {
         if self.briefing_saving.get_untracked() || self.loading.get_untracked() != Refresh::Idle {
             return;
         }
@@ -97,16 +97,15 @@ impl State {
         self.briefing_failed.set(false);
         self.briefing_saved.set(false);
         spawn_local(async move {
-            match request("PUT", "/briefing-source", json!({"enabled":enabled})).await {
+            match request("PATCH", "/source-behaviors", body).await {
                 Ok(saved) => {
-                    let mut briefing = self.briefing.get_untracked();
-                    briefing["included"] = saved["enabled"].clone();
-                    self.briefing.set(briefing);
+                    let mut current = self.briefing.get_untracked();
+                    current["sources"] = saved;
+                    self.briefing.set(current);
                     self.briefing_saved.set(true);
                 }
                 Err(_) => {
                     self.briefing_failed.set(true);
-                    // Reapply the confirmed value to the control the browser just flipped.
                     self.briefing.set(self.briefing.get_untracked());
                 }
             }
@@ -164,8 +163,10 @@ impl State {
                 };
                 let briefing = if settings() {
                     let mut briefing = request("GET", "/briefing-settings", Value::Null).await?;
-                    let source = request("GET", "/briefing-source", Value::Null).await?;
-                    briefing["included"] = source["enabled"].clone();
+                    // A failed switch read shows both as on rather than failing the screen.
+                    briefing["sources"] = request("GET", "/source-behaviors", Value::Null)
+                        .await
+                        .unwrap_or(Value::Null);
                     Some(briefing)
                 } else {
                     None
@@ -362,17 +363,6 @@ fn Settings(state: State) -> impl IntoView {
         {move||(state.briefing.get()!=Value::Null).then(||view!{
             <section class="calendar-settings-section" aria-label="Briefings">
                 <h2>"Briefings"</h2>
-                <Field>
-                    <label class="jds-switch" for="calendar-included">
-                        <input id="calendar-included" data-cal-focus="calendar-included" type="checkbox" aria-describedby="included-help"
-                            disabled=move||disabled.get()
-                            prop:checked=move||state.briefing.get()["included"]!=false
-                            on:change=move|event|state.save_source(event_target_checked(&event))/>
-                        <span class="jds-switch__track"><span class="jds-switch__thumb"></span></span>
-                        <span class="jds-switch__label">"Include calendar signal in briefings"</span>
-                    </label>
-                    <p class="jds-hint" id="included-help">"Use calendar-derived readiness signals instead of replaying the whole agenda."</p>
-                </Field>
                 <Field><FormLabel control_id="calendar-lookahead">"Look ahead"</FormLabel>
                     <p class="jds-hint" id="lookahead-help">"Let the briefing flag prep-needed meetings coming up soon."</p>
                     <span class="jds-selectwrap"><select id="calendar-lookahead" data-cal-focus="calendar-lookahead" class="jds-select" aria-describedby="lookahead-help"
@@ -382,6 +372,11 @@ fn Settings(state: State) -> impl IntoView {
                         <option value="0">"Today only"</option><option value="1">"One day"</option><option value="2">"Two days"</option>
                     </select></span>
                 </Field>
+            </section>
+            <section class="calendar-settings-section" aria-label="What your assistant may use">
+                <h2>"What your assistant may use"</h2>
+                <SourceSwitch state=state field="briefings" label="Include in briefings" help="Show today's events in your morning reading."/>
+                <SourceSwitch state=state field="planning" label="Use for planning" help="Let scheduled briefings turn your meetings into saved day-plan blocks."/>
             </section>
             <section class="calendar-settings-section" aria-label="Follow-through">
                 <h2>"Follow-through"</h2>
@@ -414,6 +409,26 @@ fn ModeSetting(state: State, field: &'static str, label: &'static str) -> impl I
             prop:value=move||state.briefing.get()["settings"][field].as_str().unwrap_or("suggest").to_string()
             on:change=move|event|state.save_briefing(json!({(field):event_target_value(&event)}))>
             <option value="off">"Off"</option><option value="suggest">"Suggest"</option><option value="auto">"Auto"</option>
+        </select></span>
+    </Field>}
+}
+
+#[component]
+fn SourceSwitch(
+    state: State,
+    field: &'static str,
+    label: &'static str,
+    help: &'static str,
+) -> impl IntoView {
+    let id = format!("calendar-source-{field}");
+    let help_id = format!("{id}-help");
+    view! {<Field><FormLabel control_id=id.clone()>{label}</FormLabel>
+        <p class="jds-hint" id=help_id.clone()>{help}</p>
+        <span class="jds-selectwrap"><select id=id.clone() data-cal-focus=id class="jds-select" aria-describedby=help_id
+            disabled=move||state.briefing_saving.get() || state.loading.get()!=Refresh::Idle
+            prop:value=move||if state.briefing.get()["sources"][field] == false {"off"} else {"on"}
+            on:change=move|event|state.save_source(json!({(field):event_target_value(&event)=="on"}))>
+            <option value="on">"On"</option><option value="off">"Off"</option>
         </select></span>
     </Field>}
 }

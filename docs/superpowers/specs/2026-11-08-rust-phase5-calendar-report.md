@@ -1319,28 +1319,33 @@ the apply job that would settle the batch, a second account over HTTP, a second 
 adapters, apply execution, retry/recover/confirm running a change, source behavior and
 external-calendar status controls, full shell and chat, old-screen replacement, complete parity.
 
-## JS-214 / part 30: briefing switch on the real server (package 0.25.0)
+## JS-209 / part 28: briefing and planning source switches
 
-Adds the one source-behavior control the original Calendar settings screen carries, "Include
-calendar signal in briefings". The Rust server had no source-behavior storage at all, so the
-Calendar package gets two routes (`GET`/`PUT /briefing-source`) backed by a host binding of the
-same account preference the existing app writes (`sourceBehaviors` entry `calendar.briefings`,
-default on). The key is fixed in the server composition, the guest sends only `{enabled}` and the
-route rejects any other body with 400. The Calendar manifest gains `preference.read` and
-`preference.write` on its key-value permission for one new resource. The shared preference
-wrapper previously claimed every `preference.*` call; it now handles only calls with a binding
-and passes the rest on, so Calendar's wrapper can sit beside People's.
+Package 0.25.0 adds two Calendar switches, "Include in briefings" and "Use for planning", to the
+Calendar settings screen. They read and write the account's existing source-behavior preference
+(entries `calendar.briefings` and `calendar.planning`, both on by default) through a Calendar-only
+host binding. Only those two entries change; other modules' entries in the same preference are kept.
+New routes `GET` and `PATCH /source-behaviors` (signed-in; the guest accepts only the two boolean
+fields and answers 400 otherwise; the host checks again). The "Write events back" behavior is not
+a switch here: it is already controlled by the Time blocks mode, which sets the writeback tier.
 
-Checks: guest test `briefing_source_switch_reads_and_writes_only_the_declared_value`; calendar
-package tests (4), UI tests, host boundaries (17) pass with Rust 1.95.0. Live, through
-`scripts/run-gate.sh` and `pnpm test:rust-calendar-server`: the switch starts on, the real click
-reaches the server (PUT 200, read back off), and it stays off after a reload while Look ahead
-and Prep tasks keep their earlier saved values. The control's input is hidden by the design
-system, so the check clicks the visible track.
+Live (`pnpm test:rust-calendar-server` through `scripts/run-gate.sh`, real HTTPS server, real Chrome,
+nothing rewritten): no sign-in gives 401; defaults read as both on; an unknown field gives 400; the
+browser turns "Use for planning" off through the real control, sees "Settings saved.", reads back
+planning off and briefings on, and the choice survives a reload. Review found that saving another setting reset the on-screen switches to On; fixed, and the gate now changes Look ahead after flipping a switch and checks the switch still reads Off. A failed switch read now shows both as On instead of failing the screen. Guest test
+`source_switch_patch_reaches_the_host_and_bad_bodies_do_not` and the package tests pass.
 
-Review round 1 (codex) found the switch showed On after saving another setting; fixed and now asserted live. Its other finding (Tasks reverted) came from diffing against a newer main and does not appear in the merge-base diff.
+Not proven: the Briefings module honoring the switches (the Rust Briefings package does not exist),
+provider execution, the four provider tools end to end, retry/recover/confirm running a change,
+external-calendar (Outlook) status controls (they belong to the Connectors package, not built), a
+second account, a second physical device over LAN or tailnet. Still required: Connectors, Tasks and
+Briefings adapters, the apply job and execution, full shell and chat, old-screen replacement,
+complete parity.
 
-Not proven: People after the shared wrapper change (its server gate was not rerun; its database
-tests are unchanged), a second account, a second physical device, the other three source
-behaviors, the platform-wide source-behavior list, external-calendar status, provider execution,
-Connectors/Tasks/Briefings adapters, full shell and chat, old-screen replacement.
+## JS-211 / part 29: overlap with part 28, and a test diagnostic
+
+Part 29 first built the briefing switch independently; part 28 (#4211) merged the same feature
+first, so that work was dropped in favor of part 28's version. Part 29's only contribution is that the
+server test now prints the sign-up response body on failure. Observed before the merge: the server
+test failed at sign-up (422 "Failed to create user") when run in the same database right after the
+other Calendar tests, and passed when run alone. Cause not found.

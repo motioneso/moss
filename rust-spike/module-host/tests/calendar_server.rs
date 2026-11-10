@@ -149,7 +149,10 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
     };
     let signup = |email: &str, name: &str| {
         let response = client.post(format!("{origin}/api/auth/sign-up/email")).header("origin", &origin).json(&json!({"name":name,"email":email,"password":"temporary-calendar-password-181-not-a-real-secret"})).send().unwrap();
-        assert_eq!(response.status(), 200);
+        let status = response.status();
+        if status != 200 {
+            panic!("sign-up answered {status}: {}", response.text().unwrap_or_default());
+        }
         response.headers()["set-cookie"]
             .to_str()
             .unwrap()
@@ -396,6 +399,11 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
     assert_eq!((status, bad["code"].as_str()), (400, Some("day_plan_invalid")), "{bad}");
     let (status, settings) = call(Method::GET, "/briefing-settings", Some(&cookie), None);
     println!("briefing settings read -> {status}: {settings}");
+    assert_eq!(call(Method::GET, "/source-behaviors", None, None).0, 401);
+    let (status, sources) = call(Method::GET, "/source-behaviors", Some(&cookie), None);
+    assert_eq!((status, &sources), (200, &json!({"briefings":true,"planning":true})));
+    let (status, bad) = call(Method::PATCH, "/source-behaviors", Some(&cookie), Some(json!({"writeback":true})));
+    assert_eq!(status, 400, "{bad}");
     println!("PASS installed Calendar package served over HTTPS by the real server: sign-in required, owner event list and detail, unknown event 404, day plan create and read, apply route validates and fails closed");
     // The signed-in owner gets the verified screen address; the files need no session.
     let screen_url = format!("{origin}/api/modules/calendar/screen?path=/calendar");

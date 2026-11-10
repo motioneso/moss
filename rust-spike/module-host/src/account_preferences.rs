@@ -184,13 +184,7 @@ impl AccountPreferencesPorts {
 }
 impl Ports for AccountPreferencesPorts {
     fn invoke(&self, scope: &CallScope, port: &str, request: &Request) -> Result<Value> {
-        // Calls for another wrapper's bindings pass through untouched.
-        if port == "kv"
-            && request.operation.starts_with("preference.")
-            && self
-                .bindings
-                .contains_key(&(scope.module().id.clone(), request.resource.clone()))
-        {
+        if port == "kv" && request.operation.starts_with("preference.") {
             self.preference(scope, request)
         } else {
             self.next.invoke(scope, port, request)

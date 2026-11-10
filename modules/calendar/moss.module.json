@@ -31,14 +31,14 @@
     },
     {
       "port": "kv",
-      "operations": ["get", "set", "preference.read", "preference.write"],
+      "operations": ["get", "set"],
       "resources": [
         "calendar.briefing-settings",
         "calendar.chat-context",
         "calendar.task-reference",
         "calendar.briefing-reference",
         "calendar.ui-view",
-        "calendar-briefing-behavior"
+        "calendar.source-behaviors"
       ]
     }
   ],
@@ -126,6 +126,16 @@
     },
     {
       "method": "GET",
+      "path": "/source-behaviors",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/source-behaviors",
+      "signIn": true
+    },
+    {
+      "method": "GET",
       "path": "/display-settings",
       "signIn": true
     },
@@ -137,16 +147,6 @@
     {
       "method": "PATCH",
       "path": "/briefing-settings",
-      "signIn": true
-    },
-    {
-      "method": "GET",
-      "path": "/briefing-source",
-      "signIn": true
-    },
-    {
-      "method": "PUT",
-      "path": "/briefing-source",
       "signIn": true
     },
     {
@@ -190,6 +190,10 @@
     "defaultEnabled": true
   },
   "features": [
+    {
+      "id": "calendar.source-switches",
+      "description": "The Calendar settings screen has two switches, Include in briefings and Use for planning, both on by default. They save to the account's source-behavior preferences and change nothing for other modules. The Briefings module does not read them in this Rust version yet."
+    },
     {
       "id": "calendar.data",
       "description": "Reads cached events and saves private day-plan drafts. Provider execution is not included in this package checkpoint.",
@@ -364,7 +368,7 @@
       "id": "calendar.automation",
       "label": "Calendar",
       "path": "/settings/calendar",
-      "description": "Saved account lookahead, prep-task and time-block choices. Time-block mode also saves the matching writeback permission. Auto grants standing permission also honored by the existing app; Rust action execution remains open; the briefing switch is on the Calendar settings screen.",
+      "description": "Saved account lookahead, prep-task and time-block choices. Time-block mode also saves the matching writeback permission. Auto grants standing permission also honored by the existing app; Rust action execution and source-behavior controls remain open.",
       "scope": "user"
     }
   ]

@@ -10,6 +10,7 @@ use std::{
 
 pub mod package;
 mod settings;
+mod sources;
 #[cfg(feature = "web")]
 pub mod web;
 pub const PREFERENCE_KEYS: [&str; 7] = [
@@ -84,6 +85,13 @@ impl Ports for CalendarPorts {
                 "calendar.briefing-reference" => references.briefing_run(scope, id),
                 _ => unreachable!(),
             };
+        }
+        if port == "kv"
+            && scope.module().id == "calendar"
+            && request.resource == "calendar.source-behaviors"
+        {
+            moss_module_host::runtime::authorize(scope.module(), port, request)?;
+            return self.source_behaviors(scope, request);
         }
         if port != "kv"
             || !matches!(

@@ -41,6 +41,50 @@ fn settings_patch_reaches_the_scoped_host_once() {
 }
 
 #[test]
+fn source_switch_patch_reaches_the_host_and_bad_bodies_do_not() {
+    struct Sources;
+    impl Host for Sources {
+        fn call(&self, port: &str, operation: &str, resource: &str, body: Value) -> Result<Value> {
+            assert_eq!(
+                (port, operation, resource),
+                ("kv", "set", "calendar.source-behaviors")
+            );
+            assert_eq!(body, json!({"planning":false}));
+            Ok(json!({"briefings":true,"planning":false}))
+        }
+    }
+    let route = |host: &dyn Host, body: Value| -> Value {
+        struct Dyn<'a>(&'a dyn Host);
+        impl Host for Dyn<'_> {
+            fn call(&self, a: &str, b: &str, c: &str, d: Value) -> Result<Value> {
+                self.0.call(a, b, c, d)
+            }
+        }
+        serde_json::from_str(
+            &handle(
+                &Dyn(host),
+                "route",
+                &json!({"method":"PATCH","path":"/source-behaviors","params":{},"query":{},"body":body})
+                    .to_string(),
+            )
+            .unwrap(),
+        )
+        .unwrap()
+    };
+    let saved = route(&Sources, json!({"planning":false}));
+    assert_eq!(saved["status"], 200);
+    assert_eq!(saved["body"], json!({"briefings":true,"planning":false}));
+    for bad in [
+        json!({}),
+        json!({"planning":"off"}),
+        json!({"writeback":true}),
+        json!([true]),
+    ] {
+        assert_eq!(route(&NoCalls, bad)["status"], 400);
+    }
+}
+
+#[test]
 fn chat_rejects_provider_effects_and_extra_authority_before_host_access() {
     for key in [
         "startsAt",
@@ -692,44 +736,4 @@ mod provider {
             assert_eq!(raw.unwrap_err(), "Calendar data is unavailable");
         }
     }
-}
-
-#[test]
-fn briefing_source_switch_reads_and_writes_only_the_declared_value() {
-    use std::sync::Mutex;
-    struct Source(Mutex<bool>);
-    impl Host for Source {
-        fn call(&self, port: &str, operation: &str, resource: &str, body: Value) -> Result<Value> {
-            assert_eq!((port, resource), ("kv", "calendar-briefing-behavior"));
-            let mut enabled = self.0.lock().unwrap();
-            if operation == "preference.write" {
-                assert_eq!(body.as_object().unwrap().len(), 1);
-                *enabled = body["enabled"].as_bool().unwrap();
-            } else {
-                assert_eq!(operation, "preference.read");
-                assert_eq!(body, json!({}));
-            }
-            Ok(json!({"enabled":*enabled}))
-        }
-    }
-    let host = Source(Mutex::new(true));
-    let call = |method: &str, body: Value| -> Value {
-        serde_json::from_str(
-            &handle(
-                &host,
-                "route",
-                &json!({"method":method,"path":"/briefing-source","params":{},"query":{},"body":body})
-                    .to_string(),
-            )
-            .unwrap(),
-        )
-        .unwrap()
-    };
-    assert_eq!(call("GET", json!(null))["body"], json!({"enabled":true}));
-    assert_eq!(call("PUT", json!({"enabled":false}))["body"], json!({"enabled":false}));
-    assert_eq!(call("GET", json!(null))["body"], json!({"enabled":false}));
-    for bad in [json!({}), json!({"enabled":"no"}), json!({"enabled":true,"x":1}), json!(null)] {
-        assert_eq!(call("PUT", bad)["status"], 400);
-    }
-    assert_eq!(call("GET", json!(null))["body"], json!({"enabled":false}));
 }
