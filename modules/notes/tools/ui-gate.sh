@@ -6,7 +6,7 @@ cd "$(dirname "$0")/../../.."
 export NOTES_UI_OUT="${NOTES_UI_OUT:-$(mktemp -d "${TMPDIR:-/tmp}/moss-notes-ui.XXXXXX")}"
 mkdir -p "$NOTES_UI_OUT"
 chmod 700 "$NOTES_UI_OUT"
-: "${NOTES_COMPONENT:?Build the Notes guest first}"
+: "${NOTES_TOOL_COMPONENT:?Build the shipped Notes guest with NOTES_TOOL_CHECKPOINT=1 first}"
 cargo +1.95.0 build --locked --offline --manifest-path modules/notes/tools/Cargo.toml --bin notes-ui-check
 python3 rust-spike/module-ui/build-assets.py "$NOTES_UI_OUT/shared"
 pnpm exec tsx modules/notes/tools/ui-gate.ts

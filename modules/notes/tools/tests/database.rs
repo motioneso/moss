@@ -74,7 +74,7 @@ fn installed_notes_export_matches_legacy_and_rls_controls_fail_first() {
         db
     });
     let before = rt.block_on(snapshot(&bootstrap));
-    let manifest = Arc::new(moss_notes_checks::manifest().unwrap());
+    let manifest = Arc::new(moss_notes_checks::read_only_manifest().unwrap());
     let host = Host::new(Limits::default()).unwrap();
     host.validate(&wasm, &manifest).unwrap();
     let mut ports = BTreeMap::<&str, Arc<dyn Ports>>::new();

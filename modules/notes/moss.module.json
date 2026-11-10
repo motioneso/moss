@@ -2,9 +2,9 @@
   "schemaVersion": 2,
   "id": "notes",
   "name": "Notes",
-  "description": "Choose your notes folder, prepare note changes for approval, and search your indexed notes.",
+  "description": "Choose your notes folder, search your indexed notes, and create, edit or delete notes with your approval.",
   "publisher": "Moss",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -30,9 +30,24 @@
         "folder.set",
         "folder.resolve",
         "notes.read",
-        "index.search"
+        "index.search",
+        "notes.compare-write",
+        "notes.remove",
+        "index.sync-open",
+        "index.sync-file",
+        "index.sync-cleanup"
       ],
       "resources": ["source"]
+    },
+    {
+      "port": "jobs",
+      "operations": ["enqueue-after-commit", "enqueue-options"],
+      "resources": ["notes.sync"]
+    },
+    {
+      "port": "context",
+      "operations": ["uuid", "read"],
+      "resources": ["new", "call"]
     }
   ],
   "database": {
@@ -62,7 +77,7 @@
     {
       "id": "notes.source",
       "label": "Notes folder",
-      "description": "Browse, link, change or unlink your allowed notes folder. View saved sync status. Manual and scheduled sync and write chat tools are not available yet.",
+      "description": "Browse, link, change or unlink your allowed notes folder, view saved sync status and sync now. Scheduled sync is not available yet.",
       "path": "/settings/connections",
       "scope": "user",
       "entry": "ui/index.html"
@@ -71,7 +86,7 @@
   "features": [
     {
       "id": "notes.managed-source-export",
-      "description": "The Notes package provides the managed-source account-export section through its public API. It includes saved source status, destination labels, contributions, proposals and operation receipts visible to the calling account. The account export screen is not joined yet; chat tools and sync are unfinished. Notes has no standalone screen or navigation entry.",
+      "description": "The Notes package provides the managed-source account-export section through its public API. It includes saved source status, destination labels, contributions, proposals and operation receipts visible to the calling account. The account export screen is not joined yet. Notes has no standalone screen or navigation entry.",
       "errors": [
         {
           "code": "notes-export-unavailable",
@@ -90,7 +105,7 @@
     },
     {
       "id": "notes.folder-settings",
-      "description": "Settings \u2192 Connections shows the linked folder and its saved last-sync status. Browse allowed folders, enter a path, change the link, or confirm unlinking without deleting files. Folder requests preserve legacy schema validation and coercion; extra fields are ignored and cannot choose another account. Invalid bodies or repeated directory paths receive the legacy validation response. Relative and symlink path behavior still differs. Saved status may be from an earlier installation; this package does not run manual or scheduled sync or write chat tools. It is not a replacement for legacy Notes. The host must connect the folder settings adapter with account-specific allowed roots. Symlink selections are refused by the current vault adapter.",
+      "description": "Settings → Connections shows the linked folder and its saved last-sync status. Browse allowed folders, enter a path, change the link, or confirm unlinking without deleting files. Folder requests preserve legacy schema validation and coercion; extra fields are ignored and cannot choose another account. Invalid bodies or repeated directory paths receive the legacy validation response. Relative and symlink path behavior still differs. Sync now requests an indexing run on the server and the line shows the saved last-sync status. Scheduled sync is not available yet. This package is not yet a replacement for legacy Notes. The host must connect the folder settings adapter with account-specific allowed roots. Symlink selections are refused by the current vault adapter.",
       "errors": [
         {
           "code": "notes-folder-invalid-input",
@@ -137,12 +152,12 @@
     },
     {
       "id": "notes.action-details",
-      "description": "The prepareNoteAction public API prepares legacy create, edit and delete approval details from the calling account's linked folder. It returns the target, ordered fields and current version, including the permanent-delete warning. Preparing details does not grant approval, change files or request sync. Preparing details leaves the folder available for the next approved action. Experimental installed write tools can require a trusted displayed-target version: a changed note or relinked folder is refused before writing or requesting sync. The trusted server must store the displayed version with approval and declare approvalVersion on those tools. Stale grants are consumed, requiring a newly prepared approval. Ordinary installed chat execution remains unfinished. Canonical source identity is used for versions; symlink descendant selections remain refused.",
+      "description": "The prepareNoteAction public API prepares legacy create, edit and delete approval details from the calling account's linked folder. It returns the target, ordered fields and current version, including the permanent-delete warning. Preparing details does not grant approval, change files or request sync. Preparing details leaves the folder available for the next approved action. Create, edit and delete require a trusted displayed-target version: a changed note or relinked folder is refused before writing or requesting sync. The trusted server must store the displayed version with approval and declare approvalVersion on those tools. Stale grants are consumed, requiring a newly prepared approval. Canonical source identity is used for versions; symlink descendant selections remain refused.",
       "errors": [
         {
           "code": "notes-action-stale",
           "class": "transient",
-          "description": "An experimental approved write found a changed note or relinked source. It does not write or request sync, and its approval has been consumed.",
+          "description": "An approved write found a changed note or relinked source. It does not write or request sync, and its approval has been consumed.",
           "remediationRef": "notes.retry-action-details"
         },
         {
@@ -173,7 +188,7 @@
     },
     {
       "id": "notes.sync-ingest",
-      "description": "The host provides core-owned Notes file ingestion (folder walk, legacy document chunking, configured document embeddings, unchanged-file skipping and per-page atomic indexing) behind the sync coordinator's vault ports, plus atomic deleted-note cleanup. Assembly must connect MemoryIngestPorts and MemoryCleanupPorts with the same account-specific roots and notes-source-path preference as folder settings, and supply the account's configured document embedding model. Managed publication snapshots are refused until that join exists. The ordinary package still declares no sync job, schedule, manual sync route or write chat tools, so scheduled and manual sync are not available in the app yet.",
+      "description": "The host provides core-owned Notes file ingestion (folder walk, legacy document chunking, configured document embeddings, unchanged-file skipping and per-page atomic indexing) behind the sync coordinator's vault ports, plus atomic deleted-note cleanup. Assembly must connect MemoryIngestPorts and MemoryCleanupPorts with the same account-specific roots and notes-source-path preference as folder settings, and supply the account's configured document embedding model. Managed publication snapshots are refused until that join exists. The package declares the notes.sync job and the manual sync route. It declares no schedule yet, so scheduled sync is not available.",
       "remediations": [
         {
           "id": "notes.configure-ingest",
@@ -184,7 +199,7 @@
     },
     {
       "id": "notes.semantic-search",
-      "description": "The read-only notes.search tool returns your existing indexed Notes chunks in semantic order, with source paths and line ranges. The host must connect core memory and your configured query embedding service. Sync and automatic chat recall are not implemented yet; file changes are not indexed by this checkpoint. Chat integration must first preserve the legacy schemas and outside-content classification; note text is untrusted data.",
+      "description": "The read-only notes.search tool returns your existing indexed Notes chunks in semantic order, with source paths and line ranges. The host must connect core memory and your configured query embedding service. Automatic chat recall is not implemented yet. File changes are indexed by sync. Chat integration must first preserve the legacy schemas and outside-content classification; note text is untrusted data.",
       "errors": [
         {
           "code": "notes-search-unavailable",
@@ -203,15 +218,15 @@
     },
     {
       "id": "notes.manual-sync-request",
-      "description": "The experimental write-tools component handles POST /notes/sync with the legacy missing-folder response and an accepted durable request ID. It saves the calling account's source preference in the private checkpoint so later folder changes cannot retarget a pending request; queued metadata contains only its ID. Request body and query fields cannot choose another account or source. The surrounding server must commit and publish before returning success. The ordinary package does not declare this route or enable manual sync; installed experimental routing is a test checkpoint, not an assembled app feature. Configured embeddings, worker dispatch, recall preparation and legacy singleton coalescing still need assembly."
+      "description": "Notes handles POST /notes/sync with the legacy missing-folder response and an accepted durable request ID. It saves the calling account's source preference in the private checkpoint so later folder changes cannot retarget a pending request; queued metadata contains only its ID. Request body and query fields cannot choose another account or source. The surrounding server must commit and publish before returning success. Configured embeddings, worker dispatch, recall preparation and legacy singleton coalescing still need assembly."
     },
     {
       "id": "notes.sync-outcomes",
-      "description": "The durable sync test worker records final counts or a safe failure in the calling account's saved last-sync status after database finalization. Deferred pages and ticks after unlinking preserve prior results. Status writes are best effort and never change the sync result. Assembly must wrap the transaction and queue adapters with FolderSyncStatusPorts, bound to notes-last-sync. Manual and scheduled sync are not available in the ordinary package yet."
+      "description": "The durable sync worker records final counts or a safe failure in the calling account's saved last-sync status after database finalization. Deferred pages and ticks after unlinking preserve prior results. Status writes are best effort and never change the sync result. Assembly must wrap the transaction and queue adapters with FolderSyncStatusPorts, bound to notes-last-sync. Scheduled sync is not available yet."
     },
     {
       "id": "notes.sync-checkpoints",
-      "description": "Owner-only durable sync checkpoints keep continuation paths and hashes out of queued job parameters. The write-tools test component can request and resume sync by checkpoint ID. Its requestNotesSync API saves the calling account's selected source in the private request and refuses a missing source before checkpoint or queue creation, matching manual sync. It accepts no account or source override; filesystem resolution remains worker work. Create, edit and delete save the resolved source folder in their private request after file mutation. A changed or unlinked source refuses pending work until the original folder is selected again; queued metadata still contains only the checkpoint ID. This path check does not identify replacement folders at the same path. These tools remain experimental; checkpoint refusal before finalization compensates files, while publication refusal after commit leaves the file and checkpoint available for retry. Successful pages save a result under a transaction row lock; retries return that result and republish the same continuation ID without repeating ingestion. Final and no-op replays keep newer status; failed deferred publication can record a new safe failure. The test-only recoverNotesSync API scans private checkpoints in pages of at most twenty-five rows and requests publication of unfinished IDs without caller-selected accounts or paths. Completed pages are skipped; retries reuse their queue identities. A trusted server timer must follow each cursor only after successful finalization and periodically restart the scan to notice new requests. This is explicit recovery, not an active timer or retry of exhausted queue jobs. The ordinary package still offers no sync job, schedule or manual sync route. Transactional worker assembly with reserved ingestion connection capacity, checkpoint retention and automatic recovery timer assembly remain activation blockers."
+      "description": "Owner-only durable sync checkpoints keep continuation paths and hashes out of queued job parameters. Notes can request and resume sync by checkpoint ID. Its requestNotesSync API saves the calling account's selected source in the private request and refuses a missing source before checkpoint or queue creation, matching manual sync. It accepts no account or source override; filesystem resolution remains worker work. Create, edit and delete save the resolved source folder in their private request after file mutation. A changed or unlinked source refuses pending work until the original folder is selected again; queued metadata still contains only the checkpoint ID. This path check does not identify replacement folders at the same path. Checkpoint refusal before finalization compensates files, while publication refusal after commit leaves the file and checkpoint available for retry. Successful pages save a result under a transaction row lock; retries return that result and republish the same continuation ID without repeating ingestion. Final and no-op replays keep newer status; failed deferred publication can record a new safe failure. The test-only recoverNotesSync API scans private checkpoints in pages of at most twenty-five rows and requests publication of unfinished IDs without caller-selected accounts or paths. Completed pages are skipped; retries reuse their queue identities. A trusted server timer must follow each cursor only after successful finalization and periodically restart the scan to notice new requests. This is explicit recovery, not an active timer or retry of exhausted queue jobs. Transactional worker assembly with reserved ingestion connection capacity, checkpoint retention and automatic recovery timer assembly remain activation blockers."
     }
   ],
   "screens": {
@@ -242,12 +257,39 @@
       "method": "GET",
       "path": "/notes-last-sync",
       "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/notes/sync",
+      "signIn": true
     }
   ],
   "tools": {
     "notes.search": {
-      "description": "Search your indexed notes by meaning. Returns source paths, line ranges and text. New file changes need sync, which is not available in this checkpoint.",
+      "description": "Search your indexed notes by meaning. Returns source paths, line ranges and text. File changes appear after sync.",
       "risk": "read"
+    },
+    "notes.create": {
+      "description": "Create a Markdown note in the linked notes source. Needs your approval.",
+      "risk": "write",
+      "approvalVersion": true
+    },
+    "notes.edit": {
+      "description": "Edit a Markdown note in the linked notes source. Needs your approval.",
+      "risk": "write",
+      "approvalVersion": true
+    },
+    "notes.delete": {
+      "description": "Delete a Markdown note from the linked notes source immediately and permanently. There is no trash or restore. Always asks first.",
+      "risk": "destructive",
+      "approvalVersion": true
+    }
+  },
+  "jobs": {
+    "notes.sync": {
+      "checkpoint-id": {
+        "kind": "id"
+      }
     }
   }
 }

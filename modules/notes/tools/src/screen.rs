@@ -8,14 +8,13 @@ pub fn render() -> String {
     let html = view! {
         <main class="notes-settings" id="notes-app">
             <Masthead title="Connections" eyebrow="Settings" lede="Choose the notes folder on your Moss server."/>
-            <p class="jds-caption">"Notes checkpoint: sync and chat tools are not available yet."</p>
             <p id="notice" role="status" aria-live="polite">"Checking linked folder…"</p>
             <section aria-labelledby="notes-heading" class="notes-section">
                 <h2 id="notes-heading" class="jds-section-head__title">"Notes folder"</h2>
                 <div id="load-error" hidden role="alert"><EmptyState title="Couldn't check linked folder" description="Check your connection and try again before changing the folder."/>{action("reload","Try again")}</div>
                 <div id="folder-state" hidden>
                     <p id="linked-path"></p><p id="sync-status" class="jds-caption"></p>
-                    <div class="notes-actions">{action("browse","Browse…")}{action("unlink","Unlink")}</div>
+                    <div class="notes-actions">{action("browse","Browse…")}{action("sync","Sync now")}{action("unlink","Unlink")}</div>
                 </div>
                 <section id="chooser" hidden aria-labelledby="chooser-heading">
                     <h3 id="chooser-heading" class="jds-section-head__title" tabindex="-1">"Choose a folder"</h3>

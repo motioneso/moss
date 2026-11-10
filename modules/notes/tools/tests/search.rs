@@ -277,7 +277,7 @@ fn installed_search_matches_legacy_and_privacy_controls_fail_first() {
     }
     println!("PASS memory RLS removal control: four cross-account read/update/delete assertions failed without RLS, passed restored; compiled search stayed owner-only with RLS removed");
 
-    let manifest = Arc::new(moss_notes_checks::manifest().unwrap());
+    let manifest = Arc::new(moss_notes_checks::read_only_manifest().unwrap());
     let host = Host::new(Limits::default()).unwrap();
     let missing = make(app.clone(), BTreeMap::new());
     assert!(missing

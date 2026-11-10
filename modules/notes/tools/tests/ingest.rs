@@ -103,7 +103,7 @@ impl Fixture {
             });
             client
         });
-        let mut manifest = moss_notes_checks::manifest().unwrap();
+        let mut manifest = moss_notes_checks::read_only_manifest().unwrap();
         manifest
             .capabilities
             .iter_mut()

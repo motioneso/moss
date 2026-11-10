@@ -49,22 +49,7 @@ impl Ports for CoreStandIn {
 #[test]
 fn actual_wasm_sync_coordinator_matches_legacy_without_wasi() {
     let wasm = std::fs::read(std::env::var_os("NOTES_TOOL_COMPONENT").unwrap()).unwrap();
-    let mut manifest = moss_notes_checks::manifest().unwrap();
-    // Test-only grants. None are added to the ordinary signed package.
-    manifest
-        .capabilities
-        .iter_mut()
-        .find(|c| c.port == "vault")
-        .unwrap()
-        .operations
-        .extend(OPERATIONS.iter().map(|s| s.to_string()));
-    manifest.capabilities.extend(serde_json::from_value::<Vec<_>>(json!([
-        {"port":"context","operations":["read","uuid"],"resources":["call","new"]},
-        {"port":"jobs","operations":["enqueue-after-commit","enqueue-options"],"resources":["notes.sync"]}
-    ])).unwrap());
-    manifest
-        .jobs
-        .insert("notes.sync".into(), Default::default());
+    let manifest = moss_notes_checks::manifest().unwrap();
     let manifest = Arc::new(manifest);
     let host = Host::new(Limits::default()).unwrap();
     let actor = Uuid::new_v4();
@@ -104,7 +89,7 @@ fn actual_wasm_sync_coordinator_matches_legacy_without_wasi() {
     }
     println!("PASS {comparisons} actual-Wasm legacy sync comparisons; core I/O is a named stand-in, no ingestion/queue/installed-chat claim");
     let ordinary = std::fs::read(std::env::var_os("NOTES_COMPONENT").unwrap()).unwrap();
-    let ordinary_manifest = Arc::new(moss_notes_checks::manifest().unwrap());
+    let ordinary_manifest = Arc::new(moss_notes_checks::read_only_manifest().unwrap());
     assert!(ordinary_manifest.jobs.is_empty());
     assert!(OPERATIONS.iter().all(|op| !ordinary_manifest
         .capability("vault")

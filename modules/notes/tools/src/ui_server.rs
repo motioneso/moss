@@ -139,7 +139,7 @@ impl Server {
                 "package files",
                 moss_notes_checks::package_files(
                     &repo,
-                    std::fs::read(std::env::var("NOTES_COMPONENT")?)?,
+                    std::fs::read(std::env::var("NOTES_TOOL_COMPONENT")?)?,
                 ),
             )?;
             let fixture = support::Registry::create(&registry, &files);

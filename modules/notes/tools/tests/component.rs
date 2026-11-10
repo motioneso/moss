@@ -27,7 +27,7 @@ fn actual_guest_runs_without_wasi_and_archive_is_reproducible() {
         std::env::var_os("NOTES_COMPONENT").expect("Build Notes and set NOTES_COMPONENT"),
     )
     .unwrap();
-    let manifest = Arc::new(moss_notes_checks::manifest().unwrap());
+    let manifest = Arc::new(moss_notes_checks::read_only_manifest().unwrap());
     let host = Host::new(Limits::default()).unwrap();
     host.validate(&wasm, &manifest).unwrap();
     for kind in ["health", "install"] {
@@ -113,25 +113,30 @@ fn actual_guest_runs_without_wasi_and_archive_is_reproducible() {
         )
         .is_err());
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-    let files = moss_notes_checks::package_files(&root, wasm.clone()).unwrap();
+    // The signed package ships the write-capable build with the full manifest.
+    let shipped = std::fs::read(
+        std::env::var_os("NOTES_TOOL_COMPONENT").expect("Set NOTES_TOOL_COMPONENT"),
+    )
+    .unwrap();
+    let files = moss_notes_checks::package_files(&root, shipped.clone()).unwrap();
     let bytes = pack(&files).unwrap();
     assert_eq!(bytes, pack(&files).unwrap());
     let package = Package::read(&bytes, &trust::digest(&bytes), &"0.1.0".parse().unwrap()).unwrap();
-    assert_eq!(package.files["code/module.wasm"], wasm);
+    assert_eq!(package.files["code/module.wasm"], shipped);
+    host.validate(&shipped, &Arc::new(package.manifest.clone())).unwrap();
     assert_eq!(package.manifest.database.migrations.len(), 4);
     assert_eq!(package.manifest.database.owned_tables.len(), 7);
     assert!(!package.manifest.accounts.supports_user_disable);
     assert!(package.manifest.navigation.is_empty());
+    let mut tools: Vec<_> = package.manifest.tools.keys().map(String::as_str).collect();
+    tools.sort();
+    assert_eq!(tools, ["notes.create", "notes.delete", "notes.edit", "notes.search"]);
     assert!(
-        package.manifest.tools.len() == 1 && package.manifest.tools["notes.search"].risk == "read",
-        "Only read-only search is offered; unfinished write tools stay unavailable"
+        package.manifest.jobs.contains_key("notes.sync"),
+        "The package declares its sync job"
     );
-    assert!(
-        package.manifest.jobs.is_empty(),
-        "Unfinished sync must not be scheduled"
-    );
-    assert!(package.manifest.capability("jobs").is_err());
-    assert!(!package
+    assert!(package.manifest.capability("jobs").is_ok());
+    assert!(package
         .manifest
         .capability("vault")
         .unwrap()

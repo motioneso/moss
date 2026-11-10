@@ -26,6 +26,8 @@ function render() {
   $("unlink-confirm").hidden = !confirming || !known;
   for (const button of document.querySelectorAll("button")) button.disabled = busy;
   action("browse").disabled = busy || !known;
+  action("sync").hidden = !linked;
+  action("sync").disabled = busy || !known;
   action("unlink").hidden = !linked;
   action("unlink").disabled = busy || !known;
   $("folder-path").disabled = busy;
@@ -126,7 +128,7 @@ async function save(path) {
     browsing = false;
     confirming = false;
     $("sync-status").textContent = linked
-      ? "Folder linked. Sync is not available in this checkpoint."
+      ? "Folder linked. Use Sync now to index your notes."
       : "No folder linked.";
     $("notice").textContent = linked ? "Folder linked" : "Folder unlinked";
     focusAfter = action("browse");
@@ -159,6 +161,21 @@ action("browse").onclick = () =>
     render();
     $("chooser-heading").focus();
     await list(null);
+  });
+action("sync").onclick = () =>
+  run(async () => {
+    if (!known || !linked) return;
+    $("notice").textContent = "";
+    try {
+      await request("POST", "notes/sync");
+      $("notice").textContent = "Sync requested. It finishes in the background.";
+    } catch (error) {
+      $("notice").textContent =
+        error.status === 409
+          ? "Link a notes folder before syncing."
+          : "Couldn't request a sync. Check your connection and try again.";
+    }
+    focusAfter = action("sync");
   });
 action("roots").onclick = () => run(() => list(null));
 action("list-path").onclick = () => run(() => list($("folder-path").value));

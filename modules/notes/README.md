@@ -7,11 +7,21 @@ six arrays and field projection, including exact saved JSON, text and null value
 The guest uses only `moss-module-sdk` database queries on Notes-owned tables.
 
 Notes remains required and has no standalone screen. This package is a continuation
-checkpoint: Connections folder selection and saved sync status now have a package screen and
-installed routes. Read-only indexed search now has a package tool and host adapter. Write tools, actual sync, managed publication, private note export,
+checkpoint: Connections folder selection, saved sync status and Sync now have a package screen and
+installed routes. Search, create, edit and delete are package tools, and the package declares the
+`notes.sync` job and the manual sync route. Scheduled sync, managed publication, private note export,
 daily archives and the account export screen join are unfinished. The Connections
 screen still needs joining into the assembled Phase 4 settings shell. Do not replace a
 working legacy Notes installation with this checkpoint.
+
+## Shipped build and read-only build
+
+The signed package ships the guest built with `NOTES_TOOL_CHECKPOINT=1` (the `write-tools`
+feature) and the full `moss.module.json`. That build is `NOTES_TOOL_COMPONENT`. The build without
+the feature is `NOTES_COMPONENT`; it pairs with `moss_notes_checks::read_only_manifest()` and
+exists so tests can prove the write, sync and job paths stay closed when not granted. Build the
+two into separate target folders. `notes-pack` and the Connections screen check pack the shipped
+build.
 
 ## Build
 
@@ -24,8 +34,9 @@ from the lockfile before using the offline build, and pass its path with
 
 ```sh
 CARGO_TARGET_DIR=/tmp/notes-domain cargo +1.95.0 test --locked --manifest-path modules/notes/src/Cargo.toml
+NOTES_TOOL_CHECKPOINT=1 MOSS_GUEST_CARGO_HOME=/tmp/notes-cargo MOSS_GUEST_RUSTUP_HOME=/tmp/notes-rustup MOSS_HOST_TARGET_DIR=/tmp/notes-host CARGO_TARGET_DIR=/tmp/notes-tools-guest modules/notes/tools/build-component.sh /tmp/notes-tools.wasm
 MOSS_GUEST_CARGO_HOME=/tmp/notes-cargo MOSS_GUEST_RUSTUP_HOME=/tmp/notes-rustup MOSS_HOST_TARGET_DIR=/tmp/notes-host CARGO_TARGET_DIR=/tmp/notes-guest modules/notes/tools/build-component.sh /tmp/notes.wasm
-CARGO_TARGET_DIR=/tmp/notes-host cargo +1.95.0 run --locked --manifest-path modules/notes/tools/Cargo.toml --bin notes-pack -- /tmp/notes.wasm /tmp/notes.mosspkg
+CARGO_TARGET_DIR=/tmp/notes-host cargo +1.95.0 run --locked --manifest-path modules/notes/tools/Cargo.toml --bin notes-pack -- /tmp/notes-tools.wasm /tmp/notes.mosspkg
 NOTES_COMPONENT=/tmp/notes.wasm CARGO_TARGET_DIR=/tmp/notes-host cargo +1.95.0 test --locked --manifest-path modules/notes/tools/Cargo.toml --test component
 ```
 

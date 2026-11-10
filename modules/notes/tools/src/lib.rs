@@ -22,6 +22,35 @@ pub fn manifest() -> Result<Manifest> {
     Ok(manifest)
 }
 
+/// The shipped manifest without write tools, sync job and sync route. Pairs with the
+/// read-only guest build that fixtures use to prove those paths stay closed.
+pub fn read_only_manifest() -> Result<Manifest> {
+    const WRITE_OPERATIONS: [&str; 5] = [
+        "notes.compare-write",
+        "notes.remove",
+        "index.sync-open",
+        "index.sync-file",
+        "index.sync-cleanup",
+    ];
+    let mut manifest = manifest()?;
+    manifest.tools.retain(|name, _| name == "notes.search");
+    manifest.jobs.clear();
+    manifest
+        .routes
+        .retain(|route| !(route.method == "POST" && route.path == "/notes/sync"));
+    manifest
+        .capabilities
+        .retain(|capability| !matches!(capability.port.as_str(), "jobs" | "context"));
+    for capability in &mut manifest.capabilities {
+        if capability.port == "vault" {
+            capability
+                .operations
+                .retain(|operation| !WRITE_OPERATIONS.contains(&operation.as_str()));
+        }
+    }
+    Ok(manifest)
+}
+
 pub fn package_files(root: &Path, component: Vec<u8>) -> Result<BTreeMap<String, Vec<u8>>> {
     let manifest = manifest()?;
     let expected: Vec<_> = legacy::hashes()

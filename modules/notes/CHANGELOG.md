@@ -1,5 +1,9 @@
 # Notes package
 
+## 0.1.16
+
+- Ship the create, edit and delete chat tools, the manual sync request and the sync job in the package itself. Each write waits for your approval of the note as shown, and refuses a changed note or relinked folder. Settings, Connections gains a Sync now button. Scheduled sync and automatic indexing recovery are not available yet.
+
 ## 0.1.15
 
 - Match legacy folder-request validation and coercion, including ignored extra fields and repeated directory-path errors. Invalid requests leave the link untouched; account selection stays with the server. Existing vault path restrictions still apply.
