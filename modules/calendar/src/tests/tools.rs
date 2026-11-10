@@ -379,3 +379,70 @@ fn unavailable_and_mismatched_public_references_keep_the_stored_plan_readable() 
         assert_eq!(out["plan"]["blocks"][0]["title"], "Stored title");
     }
 }
+
+#[test]
+fn visible_events_resolve_named_days_in_the_saved_zone_and_summarize_only_live_answers() {
+    use moss_calendar::visible_events::{project, summarize, window_range};
+    let now = chrono::DateTime::parse_from_rfc3339("2026-11-08T01:00:00Z")
+        .unwrap()
+        .to_utc();
+    let (start, end, label) = window_range("today", now, "America/New_York").unwrap();
+    assert_eq!(label, "today");
+    assert_eq!(start.to_rfc3339(), "2026-11-07T05:00:00+00:00");
+    // The local day is still 7 November in New York and the clocks are on standard time.
+    let (start, end2, _) = window_range("tomorrow", now, "America/New_York").unwrap();
+    assert_eq!(start, end);
+    assert_eq!(end2.to_rfc3339(), "2026-11-09T05:00:00+00:00");
+    assert!(window_range("someday", now, "").is_none());
+
+    let item = |title: &str, source: &str| {
+        json!({"eventKey":"k","account":{"connectorAccountId":"a","providerLabel":"G"},
+            "title":title,"startsAt":"s","endsAt":"e","allDay":false,"location":null,
+            "attendeeCount":0,"flags":[],"source":source,"degradedReason":null})
+    };
+    let live = json!({"items":[item("A","live"),item("B","live")],
+        "accounts":[{"source":"live","degradedReason":null}],"gaps":[]});
+    let out = project(&live, Some("today")).unwrap();
+    assert_eq!(out["data"]["summary"], "2 events today. Next: A; B.");
+    assert_eq!(out["data"]["events"][0]["id"], "k");
+    assert!(project(&live, None).unwrap()["data"]
+        .get("summary")
+        .is_none());
+    let cached =
+        json!({"items":[],"accounts":[{"source":"cache","degradedReason":null}],"gaps":[]});
+    assert!(project(&cached, Some("today")).unwrap()["data"]
+        .get("summary")
+        .is_none());
+    let gap = json!({"items":[],"accounts":[],"gaps":[{}]});
+    assert!(project(&gap, Some("today")).unwrap()["data"]
+        .get("summary")
+        .is_none());
+    assert!(project(&json!({}), None).is_err());
+    assert_eq!(
+        summarize(&[], "today", false, false).unwrap(),
+        "No events today."
+    );
+    assert!(summarize(&[], "today", false, true).is_none());
+    let long = vec![json!({"title":"x".repeat(90)})];
+    assert_eq!(
+        summarize(&long, "today", false, false).unwrap(),
+        format!("1 event today. Next: {}....", "x".repeat(77))
+    );
+}
+
+#[test]
+fn visible_events_fail_closed_without_the_connectors_interface() {
+    struct Missing;
+    impl Host for Missing {
+        fn call(&self, port: &str, _: &str, resource: &str, _: Value) -> Result<Value> {
+            assert_eq!((port, resource), ("api", "connectors"));
+            Err(moss_module_sdk::Error::new("missing"))
+        }
+    }
+    let raw = handle(
+        &Missing,
+        "tool",
+        &json!({"tool":"calendar.listVisibleEvents","parameters":{"startsAfter":"2026-11-08T00:00:00Z"}}).to_string(),
+    );
+    assert_eq!(raw.unwrap_err(), "Calendar data is unavailable");
+}

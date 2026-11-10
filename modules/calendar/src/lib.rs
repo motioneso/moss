@@ -15,6 +15,7 @@ pub mod plans;
 mod preview;
 mod saved_read;
 pub mod settings;
+pub mod visible_events;
 
 #[derive(Debug)]
 pub struct Error {
@@ -65,6 +66,7 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
             serde_json::from_str(payload).map_err(|_| "Invalid calendar tool request")?;
         let result = match input.tool.as_str() {
             "calendar.heartbeatWindow" => heartbeat::read(host, &input.parameters),
+            "calendar.listVisibleEvents" => visible_events::read(host, &input.parameters),
             "calendar.dayPlanDraft" => draft_tool::save(host, &input.parameters),
             _ => Err(Error::new(404, "Calendar tool is unavailable")),
         }
