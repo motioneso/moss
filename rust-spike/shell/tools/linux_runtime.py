@@ -1,7 +1,7 @@
 """Unsigned Linux linked-library closure from trusted build-machine binaries.
 
-This is not the native WebKit app closure or a cross-distribution installer. The target
-needs the build platform's ELF interpreter ABI and /bin/sh. ldd executes trusted inputs.
+The optional desktop payload preserves WebKit's absolute target-root paths. Neither
+mode is a cross-distribution installer. ldd executes trusted build inputs.
 """
 import hashlib
 import json
@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import shlex
 import subprocess
 
 
@@ -29,7 +30,8 @@ def dependencies(path: Path, library_path: Path | None = None) -> list[Path]:
     return [Path(match) for match in re.findall(r"(?:=>\s+|^\s*)(/\S+)\s+\(", result.stdout, re.M)]
 
 
-def stage_runtime(install: Path, openssl: Path, ca_bundle: Path) -> None:
+def stage_runtime(install: Path, openssl: Path, ca_bundle: Path,
+                  desktop: bool = False) -> None:
     runtime = install / "runtime"
     libraries = runtime / "lib"
     libraries.mkdir(parents=True)
@@ -55,6 +57,11 @@ def stage_runtime(install: Path, openssl: Path, ca_bundle: Path) -> None:
     programs += [runtime / "bin/openssl"]
     # PostgreSQL extensions are dlopen inputs, so ldd on postgres alone is insufficient.
     programs += [path for path in (install / "postgres").rglob("*") if elf(path)]
+    fixed_paths = []
+    if desktop:
+        from linux_desktop import desktop_payload
+        native, fixed_paths = desktop_payload(runtime)
+        programs += native
     interpreters = set()
     for program in programs:
         if not elf(program):
@@ -70,15 +77,27 @@ def stage_runtime(install: Path, openssl: Path, ca_bundle: Path) -> None:
                 interpreters.add(str(dependency))
     (runtime / "closure.json").write_text(json.dumps({
         "format": 1,
-        "scope": "linux-linked-elf",
-        "not_included": ["native WebKit helpers and desktop resources"],
+        "scope": "linux-desktop-root" if desktop else "linux-linked-elf",
+        "not_included": (["desktop session, hardware graphics drivers, media plugins, accessibility service"]
+                         if desktop else ["native WebKit helpers and desktop resources"]),
+        "target_root_files": fixed_paths,
         "kernel_interpreters": sorted(interpreters),
-        "requires": ["build-platform ELF interpreter ABI", "/bin/sh"],
-        "libraries": sorted(path.name for path in libraries.iterdir()),
+        "requires": ["build-platform ELF interpreter ABI", "/bin/sh"] + (
+            ["deploy runtime/rootfs at target-root absolute paths", "X11/Wayland desktop session"]
+            if desktop else []),
+        "libraries": sorted(path.name for path in libraries.iterdir() if path.is_file()),
     }, indent=2) + "\n")
     # Keep real binary names and /proc identities intact: never execute via ld-linux.
     # No inherited library search path is allowed to select a different bundled dependency.
     launcher = install / "moss-run"
+    desktop_check = ""
+    if desktop:
+        desktop_check = '\nif [ "${1-}" = moss-app ]; then\n'
+        for path in fixed_paths:
+            desktop_check += (f'  if [ ! -f {shlex.quote(path)} ]; then\n'
+                              '    echo "Moss desktop needs its runtime/rootfs payload installed in the target root" >&2; exit 2\n'
+                              '  fi\n')
+        desktop_check += 'fi\n'
     launcher.write_text('''#!/bin/sh
 set -eu
 case "$0" in */*) script=$0 ;; *) script=$(command -v "$0") ;; esac
@@ -90,7 +109,15 @@ export OPENSSL_CONF="$root/runtime/ssl/openssl.cnf"
 export SSL_CERT_FILE="$root/runtime/ssl/ca-certificates.crt"
 export SSL_CERT_DIR="$root/runtime/ssl"
 export LOCPATH="$root/runtime/locale"
-case "${1-}" in
+if [ -d "$root/runtime/rootfs" ]; then
+  export GIO_MODULE_DIR="$root/runtime/lib/gio/modules"
+  export GSETTINGS_SCHEMA_DIR="$root/runtime/share/glib-2.0/schemas"
+  export XDG_DATA_DIRS="$root/runtime/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+  export FONTCONFIG_FILE="$root/runtime/etc/fonts.conf"
+  export LIBGL_DRIVERS_PATH="$root/runtime/lib/dri"
+  export __EGL_VENDOR_LIBRARY_FILENAMES="$root/runtime/share/glvnd/egl_vendor.d/50_mesa.json"
+fi
+''' + desktop_check + '''case "${1-}" in
   moss-app|moss-shell|moss-db) program=$1; shift; exec "$root/$program" "$@" ;;
   openssl) shift; exec "$root/runtime/bin/openssl" "$@" ;;
   *) echo "usage: moss-run {moss-app|moss-shell|moss-db|openssl} [arguments...]" >&2; exit 2 ;;
