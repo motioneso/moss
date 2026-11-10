@@ -24,6 +24,7 @@ use safety_core::access::AccessContext;
 use tower_http::services::ServeDir;
 
 mod desktop_notices;
+mod modules;
 mod runner_data;
 
 type Data = Arc<dyn ShellData>;
@@ -116,6 +117,7 @@ struct Args {
     instance: Option<PathBuf>,
     web: PathBuf,
     runner: Option<PathBuf>,
+    modules: Option<PathBuf>,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -132,6 +134,7 @@ fn parse_args() -> Result<Args, String> {
         instance: None,
         web: exe_dir.join("web"),
         runner: None,
+        modules: None,
     };
     while let Some(flag) = raw.next() {
         let value = raw.next().ok_or_else(|| format!("{flag} needs a value"))?;
@@ -144,6 +147,7 @@ fn parse_args() -> Result<Args, String> {
             }
             "--web" => args.web = PathBuf::from(value),
             "--runner" => args.runner = Some(PathBuf::from(value)),
+            "--modules" => args.modules = Some(PathBuf::from(value)),
             _ => return Err(format!("unknown option {flag}")),
         }
     }
@@ -203,15 +207,33 @@ fn main() {
             None => None,
         };
         let network = Network::new(platform.clone(), config, args.network)?;
+        // Open last: errors above must not drop the host's runtimes on this executor.
+        let modules = match args.modules {
+            Some(path) => {
+                let database = platform.app.clone();
+                Some(
+                    tokio::task::spawn_blocking(move || modules::open(&path, database))
+                        .await
+                        .map_err(|_| "Cannot start module host")?
+                        .map_err(|_| "Cannot start module host")?,
+                )
+            }
+            None => None,
+        };
         let data = Arc::new(Accounts {
             platform,
             runner: args.runner,
             data: Mutex::new(HashMap::new()),
         });
-        let app = web::router(network, router(data, args.web.clone()), args.web);
-        Ok::<_, String>((listener, acceptor, app, running))
+        let private = router(data, args.web.clone());
+        let private = match &modules {
+            Some(host) => private.merge(modules::routes(host.application.clone())),
+            None => private,
+        };
+        let app = web::router(network, private, args.web);
+        Ok::<_, String>((listener, acceptor, app, running, modules))
     });
-    let (listener, acceptor, app, running) = match prepared {
+    let (listener, acceptor, app, running, modules) = match prepared {
         Ok(parts) => parts,
         Err(_) => {
             eprintln!("moss-shell: could not start secure HTTPS; check private configuration, certificates and runtime database roles");
@@ -225,6 +247,8 @@ fn main() {
         }
     }
     let served = runtime.block_on(tls::serve(listener, acceptor, app));
+    // The host owns blocking runtimes. Drop it outside the asynchronous executor.
+    drop(modules);
     if let Some(folder) = &args.instance {
         instance::Running::remove_if_ours(folder);
     }

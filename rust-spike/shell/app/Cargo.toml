@@ -8,6 +8,8 @@ description = "The Moss server: serves the UI shell to browsers, phones and the 
 [dependencies]
 moss-shell-contract = { path = "../contract", features = ["stub"] }
 moss-network = { path = "../../network" }
+moss-module-host = { path = "../../module-host" }
+anyhow = "1"
 safety-core = { path = "../../safety-core" }
 uuid = "1"
 axum = "0.8"
