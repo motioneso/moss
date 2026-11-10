@@ -1,5 +1,9 @@
 # Notes package
 
+## 0.1.21
+
+- The Notes folder screen now shows the right message when the server refuses a folder (for example one outside your allowed folders) instead of saying it could not check the folder.
+
 ## 0.1.20
 
 - Notes now cleans up after itself. Every fifteen minutes it retries any sync request that did not finish starting, and it removes saved sync requests older than a day, so a crash or a brief outage no longer leaves a sync stuck forever.
