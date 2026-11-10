@@ -51,6 +51,7 @@ pub fn package_files(
         "model.mjs",
         "focus.mjs",
         "local-date.mjs",
+        "row-marks.mjs",
         "capture.mjs",
         "quick-add.mjs",
         "task-tags.mjs",
