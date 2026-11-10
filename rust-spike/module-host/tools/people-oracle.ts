@@ -224,10 +224,7 @@ export async function peopleOracle(): Promise<{ path: string; cleanup(): Promise
     }
     const tools = await toolsOracle(bootstrap, runner, toolActor);
     const jobs = await jobsOracle(bootstrap, runner, jobActor);
-    const paging =
-      process.env.JS139_PEOPLE_PAGING_PROBE === "1"
-        ? await largeDataOracle(bootstrap, runner, pagingActor)
-        : undefined;
+    const paging = await largeDataOracle(bootstrap, runner, pagingActor);
     await writeFile(
       path,
       JSON.stringify({

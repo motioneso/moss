@@ -111,7 +111,7 @@
         },
         {
           "id": "people-retry",
-          "description": "Try again after checking the module and its host services are available.",
+          "description": "Try again after checking the module and its host services are available. Large reads may exceed module limits; request fewer results when supported.",
           "path": "/settings/modules"
         },
         {

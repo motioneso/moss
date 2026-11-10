@@ -4,6 +4,10 @@
 
 Rust component and shared-frame People Settings checkpoint. Complete installed parity and physical-device qualification remain open.
 
+Reuse decoded database rows and move list rows into response envelopes. A complete
+100-person response now matches the legacy handler within the default Wasm budget,
+with an ordinary-gate regression. Larger responses and link reads remain unqualified.
+
 Preserve every canonical accent when sorting People folders, including multiple accents
 on one letter, before comparing case. Comparisons for selected letter families and the installed
 folder replay cover this correction; complete locale collation remains unqualified.

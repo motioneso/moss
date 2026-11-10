@@ -9,7 +9,7 @@ use moss_module_host::{
     transactional_database::TransactionalDatabasePorts,
 };
 use moss_people::repository::TABLES;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -88,12 +88,16 @@ fn compiled_people_read_apis_match_typescript_on_real_database() {
             case["request"]["name"]
         );
     }
-    // Keep the known-red resource-budget probe explicit; it is not a passing parity receipt.
-    if std::env::var("JS139_PEOPLE_PAGING_PROBE").as_deref() == Ok("1") {
+    // Always guard the formerly failing 100-person response. The explicit probe
+    // additionally attempts links and larger reads; those remain unqualified.
+    {
+        let full_probe = std::env::var("JS139_PEOPLE_PAGING_PROBE").as_deref() == Ok("1");
         let paging_actor = Uuid::parse_str(oracle["paging"]["actor"].as_str().unwrap()).unwrap();
         let paging_cases = oracle["paging"]["cases"].as_array().unwrap();
-        assert_eq!(paging_cases.len(), 15, "Keep every paging boundary case");
-        for case in paging_cases {
+        assert_eq!(paging_cases.len(), 21, "Keep every paging boundary case");
+        assert_eq!(paging_cases[0]["count"], 100);
+        assert_eq!(paging_cases[0]["request"]["path"], "/people");
+        for case in paging_cases.iter().take(if full_probe { 21 } else { 1 }) {
             let kind = case["kind"].as_str().unwrap();
             let reply = host
                 .call(
@@ -124,10 +128,18 @@ fn compiled_people_read_apis_match_typescript_on_real_database() {
                 case["request"],
                 case["count"]
             );
+            println!(
+                "PASS People resource probe: {} ({} rows)",
+                case["request"], case["count"]
+            );
         }
-        println!(
-            "PASS People paging: 15 legacy reads at 999/1000/1001/1005/1006/unlimited, exact-page termination, 1005 aliases and emails including a duplicate; default host limits unchanged"
-        );
+        if full_probe {
+            println!(
+                "PASS People paging: 21 legacy reads at 100/250/500/999/1000/1001/1005/1006/unlimited, exact-page termination, 1005 aliases and emails including a duplicate; default host limits unchanged"
+            );
+        } else {
+            println!("PASS default-budget People list: 100 complete legacy rows from a 1005-person account; larger/link reads remain unqualified");
+        }
     }
     // A background job authenticates through the worker pool, not the app pool.
     let worker_db = rt
@@ -169,13 +181,11 @@ fn compiled_people_read_apis_match_typescript_on_real_database() {
         bootstrap
     });
     for reader in [other, admin] {
-        assert!(
-            run(
-                reader,
-                &json!({"name":"getPerson","parameters":{"personId":oracle["personId"]}})
-            )
-            .is_err()
-        );
+        assert!(run(
+            reader,
+            &json!({"name":"getPerson","parameters":{"personId":oracle["personId"]}})
+        )
+        .is_err());
         assert_eq!(
             run(
                 reader,
