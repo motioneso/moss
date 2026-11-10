@@ -244,6 +244,26 @@ fn compiled_recurrence_schedule_is_one_per_account_and_job_rolls_only_that_accou
         )
         .unwrap(),
     )));
+    // Enabling recurrence on an existing task must register the schedule too.
+    let plain = f.route(f.other, "POST", "/tasks", json!({"title":"Plain task"}));
+    let plain_id = plain["body"]["task"]["id"].as_str().unwrap().to_string();
+    let count = |actor: Uuid| -> i64 {
+        f.rt.block_on(f.db.query_one(
+            "SELECT count(*) FROM moss_queue.schedules WHERE actor_user_id=$1 AND queue LIKE '%.tasks-recurrence'",
+            &[&actor],
+        ))
+        .unwrap()
+        .get(0)
+    };
+    assert_eq!(count(f.other), 0);
+    let patched = f.route(
+        f.other,
+        "PATCH",
+        &format!("/tasks/{plain_id}"),
+        json!({"recurrence":{"freq":"daily","interval":1,"occurrence_date":"2099-01-01"}}),
+    );
+    assert_eq!(patched["status"], 200);
+    assert_eq!(count(f.other), 1, "enabling recurrence by update must schedule the job");
     let make = |actor, title: &str| {
         let created = f.route(
             actor,

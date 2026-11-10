@@ -135,6 +135,9 @@ impl<H: Host + ?Sized> Repository<'_, H> {
             .query(TASKS, &Query::update(Filter::eq("id", id), data))?
             .into_iter()
             .next();
+        if updated.is_some() && matches!(&input.recurrence, Patch::Set(_)) {
+            crate::jobs::reconcile_recurrence_schedule(self);
+        }
         if let (Some(task), Some(status)) = (&updated, input.status) {
             let status = status.as_str();
             if task.parent_task_id.is_none() && ["done", "archived"].contains(&status) {
