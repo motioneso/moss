@@ -43,13 +43,20 @@ export async function checkToolbar(tab: Page, base: string, out: string) {
     await views().getByRole("button", { name: "Week", exact: true }).click();
     await ready();
     await weeks().getByRole("button", { name: "Work week", exact: true }).focus();
+    const workSaved = tab.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/m/calendar/display-settings") &&
+        response.request().method() === "PATCH"
+    );
     await tab.keyboard.press("Enter");
+    assert.equal((await workSaved).status(), 200);
     await ready();
     await expect(weeks().getByRole("button", { name: "Work week", exact: true })).toHaveAttribute(
       "aria-pressed",
       "true"
     );
     await expect(frame.locator(".cal-tg__col")).toHaveCount(5);
+    await expect(weeks().getByRole("button", { name: "Work week", exact: true })).toBeFocused();
     await tab.reload();
     frame = tab.frameLocator("#calendar");
     await ready();
@@ -63,13 +70,20 @@ export async function checkToolbar(tab: Page, base: string, out: string) {
     );
     await expect(frame.locator(".cal-tg__col")).toHaveCount(5);
     await weeks().getByRole("button", { name: "Full week", exact: true }).focus();
+    const fullSaved = tab.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/m/calendar/display-settings") &&
+        response.request().method() === "PATCH"
+    );
     await tab.keyboard.press("Space");
+    assert.equal((await fullSaved).status(), 200);
     await ready();
     await expect(frame.locator(".cal-tg__col")).toHaveCount(7);
     await expect(weeks().getByRole("button", { name: "Full week", exact: true })).toHaveAttribute(
       "aria-pressed",
       "true"
     );
+    await expect(weeks().getByRole("button", { name: "Full week", exact: true })).toBeFocused();
     await frame.locator("body").evaluate(() => document.fonts.ready);
     const geometry = await frame.locator(".cal-toolbar").evaluate((toolbar) => {
       const buttons = [...toolbar.querySelectorAll("button")].map((button) => {

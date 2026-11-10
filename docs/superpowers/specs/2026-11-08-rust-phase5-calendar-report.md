@@ -1042,15 +1042,23 @@ Day, Week and Month with both week choices. It was observed failing on the prior
 Rust toolbar's button sizing and grouping before the presentation was replaced.
 The signed-in runner checks navigation, saved Day cursor, saved Work week and
 Month across reloads, five/seven grid columns, Enter/Space activation, selected
-states and control bounds at desktop, 390px and 320px. Evidence and fresh check
+states, focus retained after saves and control bounds at desktop, 390px and
+320px. The same keyboard assertion failed before the focus fix: disabling the
+selected control during a save dropped focus to the document body. The bridge
+restores that connected control only when focus remains in the document, no
+dialog is open and the user has not focused something else. It does not restore
+old scroll positions. Evidence and fresh check
 verdicts, including the full Calendar gate's existing failing-first privacy
 witnesses, are recorded in the task Proof artifact. These tests do not assert
 full pixel parity or every regional label.
 
 Declared JavaScript dependencies are restored offline from the lockfile. Builds
-use copied scratch caches and an existing Rust 1.95.0 home with the declared
-Wasm target. Both shared asset bundles use one scratch directory. No global
-tool, new dependency or wit-bindgen installation is performed.
+use copied scratch caches and a task-owned Rust 1.95.0 home. The prior task
+scratch home disappeared during the first gate, so the declared toolchain and
+Wasm target were restored into this task’s scratch directory. The first gate’s
+test cases passed but its final doctest could not start; that failed receipt is
+not counted as a green gate. Both shared asset bundles use one scratch
+directory. No global tool, new dependency or wit-bindgen installation is performed.
 
 This is another bounded screen checkpoint. Still required: concrete public
 Tasks/Briefings/provider adapters and full provenance; complete validation,

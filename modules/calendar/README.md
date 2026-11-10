@@ -460,8 +460,8 @@ it remains a pure client. Controls wait for initial loading and a pending view s
 The rendered comparison invokes the real production React Calendar page and the
 Rust toolbar for all views and both week choices. The signed-in runner exercises
 Previous / Next / Today, saved Day cursor, Work week and Month after reload,
-five/seven columns, Enter/Space activation and toolbar bounds at desktop and
-phone widths, including 320px. Screenshots capture the viewport; crop outside the
+five/seven columns, Enter/Space activation, focus retained after saves and toolbar
+bounds at desktop and phone widths, including 320px. Screenshots capture the viewport; crop outside the
 browser. These checks do not prove all regional labels, full pixel parity,
 full-shell cutover or physical second-device HTTPS. The phase report retains the
 complete remaining list.

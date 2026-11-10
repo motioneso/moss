@@ -39,6 +39,19 @@ globalThis.calendarBridge = {
     const body = document.querySelector(".cal-body");
     return { active, key: active?.dataset.calFocus, left: body?.scrollLeft, top: body?.scrollTop };
   },
+  restoreFocus(saved) {
+    requestAnimationFrame(() => {
+      if (
+        document.hasFocus() &&
+        document.activeElement === document.body &&
+        saved.active?.isConnected &&
+        !saved.active.disabled &&
+        !document.querySelector("dialog[open]")
+      ) {
+        saved.active.focus({ preventScroll: true });
+      }
+    });
+  },
   restore(saved) {
     requestAnimationFrame(() => {
       const body = document.querySelector(".cal-body");

@@ -21,6 +21,8 @@ extern "C" {
     fn preserve() -> JsValue;
     #[wasm_bindgen(js_namespace=calendarBridge)]
     fn restore(saved: &JsValue);
+    #[wasm_bindgen(js_namespace=calendarBridge, js_name=restoreFocus)]
+    fn restore_focus(saved: &JsValue);
     #[wasm_bindgen(js_namespace=calendarBridge)]
     fn navigate(path: &str) -> js_sys::Promise;
     #[wasm_bindgen(js_namespace=calendarBridge)]
@@ -186,12 +188,14 @@ impl State {
         if self.saving.get_untracked() {
             return;
         }
+        let focused = preserve();
         self.saving.set(true);
         let body = json!({"view":self.view.get_untracked(),"cursor":self.day().to_string(),"workWeek":self.work.get_untracked()});
         spawn_local(async move {
             self.unsaved
                 .set(request("PATCH", "/display-settings", body).await.is_err());
             self.saving.set(false);
+            restore_focus(&focused);
         });
     }
 }

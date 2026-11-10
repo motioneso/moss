@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** Compare the real production Calendar toolbar with the rendered Rust screen. */
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { test, vi } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -57,7 +57,7 @@ test("Calendar toolbar controls and selected states match production React", () 
               createElement(MemoryRouter, {}, createElement(CalendarPage))
             )
           );
-          const result = spawnSync(binary, {
+          const result: SpawnSyncReturns<string> = spawnSync(binary, {
             input:
               JSON.stringify({ operation: "toolbar", cursor: "2026-11-09", view, work }) + "\n",
             encoding: "utf8"
