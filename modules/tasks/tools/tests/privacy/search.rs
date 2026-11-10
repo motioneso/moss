@@ -120,3 +120,71 @@ fn compiled_search_hides_private_vocabulary_and_rejects_foreign_filters() {
     }
     println!("PASS compiled search: private list/tag vocabulary and foreign filters hidden from ordinary/admin accounts; identical assertion fails without RLS and passes after restoration");
 }
+
+// Freeze only the invocation clock; account-local conversion still uses the real
+// host, saved preferences, RLS and the compiled Tasks guest.
+struct SearchClock {
+    next: Arc<dyn Ports>,
+}
+impl Ports for SearchClock {
+    fn invoke(&self, scope: &CallScope, port: &str, r: &Request) -> Result<Value> {
+        if port == "context" && r.operation == "read" {
+            return Ok(json!({"now":"2026-11-09T00:30:00.000Z"}));
+        }
+        self.next.invoke(scope, port, r)
+    }
+    fn finish_call(&self, scope: &CallScope, success: bool) -> Result<()> {
+        self.next.finish_call(scope, success)
+    }
+}
+
+#[test]
+#[ignore = "Database work only through the Tasks verify-gate"]
+fn compiled_search_uses_saved_account_day_in_prompt() {
+    let mut f = Fixture::open_with(true);
+    let provider = Arc::new(SearchProvider {
+        next: Arc::new(SearchClock {
+            next: f.ports.clone(),
+        }),
+        list: Uuid::new_v4().to_string(),
+        tag: "synthetic".into(),
+        prompt: Mutex::new(String::new()),
+    });
+    f.ports = provider.clone();
+    for (zone, day) in [
+        ("America/Los_Angeles", "2026-11-08"),
+        ("Pacific/Kiritimati", "2026-11-09"),
+        ("Invalid/Zone", "2026-11-09"),
+    ] {
+        f.rt.block_on(f.db.execute(
+            "INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'locale',$2) ON CONFLICT(owner_user_id,key) DO UPDATE SET value_json=EXCLUDED.value_json",
+            &[&f.owner, &json!({"timezone":zone})]
+        )).unwrap();
+        let response = f.route(
+            f.owner,
+            "POST",
+            "/tasks/search/interpret",
+            json!({"query":"due today"}),
+        );
+        assert_eq!(response["status"], 200);
+        assert!(
+            provider
+                .prompt
+                .lock()
+                .unwrap()
+                .contains(&format!("Today in the user's locale: {day}.")),
+            "search must use the saved account day for {zone}"
+        );
+        let calendar = f.route(f.owner, "GET", "/tasks/local-day", Value::Null);
+        assert_eq!(calendar["status"], 200);
+        assert_eq!(calendar["body"]["date"], day);
+        assert_eq!(
+            calendar["body"]["timezone"],
+            if zone == "Invalid/Zone" { "UTC" } else { zone }
+        );
+        // Another account has no saved zone and sees its own UTC fallback.
+        let other = f.route(f.other, "GET", "/tasks/local-day", Value::Null);
+        assert_eq!(other["body"], json!({"timezone":"UTC","date":"2026-11-09"}));
+    }
+    println!("PASS compiled search/account calendar: saved local day, opposite UTC boundaries, invalid-zone fallback and independent accounts");
+}

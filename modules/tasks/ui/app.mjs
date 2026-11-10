@@ -1,5 +1,6 @@
 /* global document, window, Option */
 import { moduleClient } from "./guest-bridge.mjs";
+import { localDay } from "./local-date.mjs";
 import { taskFields, taskGroups, viewMode } from "./model.mjs";
 import { taskFilters } from "./filters.mjs";
 import { tagManager } from "./tags.mjs";
@@ -15,6 +16,8 @@ const client = moduleClient();
 const $ = (id) => document.getElementById(id);
 const state = {
   tasks: [],
+  timeZone: null,
+  editorTimeZone: null,
   lists: [],
   editing: null,
   busy: false,
@@ -38,7 +41,8 @@ const capture = captureDraft({
   button,
   focus: (node) => {
     state.focusAfter = node;
-  }
+  },
+  today: () => localDay(new Date(), state.editorTimeZone)
 });
 const activity = taskActivity({
   api,
@@ -165,11 +169,17 @@ async function run(action) {
 async function load() {
   show("page-error", false);
   try {
-    const [tasks, lists, preferences] = await Promise.all([
+    const [tasks, lists, preferences, calendar] = await Promise.all([
       api("GET", "/tasks"),
       api("GET", "/tasks/lists"),
-      api("GET", "/tasks/preferences")
+      api("GET", "/tasks/preferences"),
+      api("GET", "/tasks/local-day")
     ]);
+    // Do not enable date edits without the confirmed account timezone.
+    if (typeof calendar.timezone !== "string" || !calendar.timezone)
+      throw new Error("Account timezone unavailable");
+    localDay(new Date(), calendar.timezone);
+    state.timeZone = calendar.timezone;
     state.tasks = tasks.tasks;
     state.lists = lists.lists;
     options("task-list", state.lists);
@@ -202,7 +212,7 @@ function taskRow(task) {
   const meta = [
     list,
     labels[task.status],
-    task.dueAt ? `Due ${task.dueAt.slice(0, 10)} (UTC)` : "",
+    task.dueAt ? `Due ${localDay(task.dueAt, state.timeZone)} (${state.timeZone})` : "",
     task.recurrence ? `Repeats ${task.recurrence.freq}` : "",
     ...task.tags.map((tag) => `#${tag.name}`)
   ].filter(Boolean);
@@ -226,7 +236,7 @@ function taskRow(task) {
   return row;
 }
 function render() {
-  const tasks = filters.apply(state.tasks, state.lists);
+  const tasks = filters.apply(state.tasks, state.lists, state.timeZone);
   search.render(state.lists);
   const result = $("task-results");
   result.replaceChildren();
@@ -273,9 +283,11 @@ function leaveEditor(action) {
   } else return action();
 }
 async function openEditor(id = null, title = "") {
+  if (!state.timeZone) throw new Error("Reload Tasks to load the saved timezone");
   return leaveEditor(() => editTask(id, title));
 }
 async function editTask(id, title) {
+  state.editorTimeZone = state.timeZone;
   const task = id ? (await api("GET", `/tasks/${id}`)).task : null;
   if ($("editor").hidden) state.returnFocus = state.actionFocus;
   state.editing = task;
@@ -294,8 +306,8 @@ async function editTask(id, title) {
   };
   for (const key of Object.keys(defaults))
     $("task-form").elements.namedItem(key).value = task?.[key] ?? defaults[key];
-  $("due-at").value = task?.dueAt?.slice(0, 10) ?? "";
-  $("do-at").value = task?.doAt?.slice(0, 10) ?? "";
+  $("due-at").value = localDay(task?.dueAt, state.timeZone);
+  $("do-at").value = localDay(task?.doAt, state.timeZone);
   $("repeat").value = task?.recurrence?.freq ?? "never";
   $("editor-heading").textContent = task ? "Task details" : "New task";
   show("overview", false);
@@ -482,7 +494,12 @@ submit("task-form", async () => {
   for (const control of $("task-form").elements)
     if (control.name) form[control.name] = control.value;
   const previous = state.editing;
-  const fields = taskFields(form, previous, previous ? undefined : capture.today());
+  const fields = taskFields(
+    form,
+    previous,
+    previous ? undefined : capture.today(),
+    state.editorTimeZone
+  );
   const response = previous
     ? await api("PATCH", `/tasks/${previous.id}`, fields)
     : await capture.save(fields);

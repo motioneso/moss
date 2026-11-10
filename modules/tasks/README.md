@@ -1,5 +1,15 @@
 # Tasks component checkpoint
 
+Part 24 connects date editing, task due-day labels and interpreted-search day
+filters to the saved account timezone through the existing public host calendar
+contract. The package-only `GET /tasks/local-day` route supplies the signed-in
+account's timezone; callers cannot choose another account or a timezone. A failed
+initial read keeps the date editor closed until Retry succeeds. Selected due and
+do dates save at local noon, including DST and UTC+14. Unrelated edits retain the
+original timestamp. Recurrence starts from the selected due day or the account's
+local day, retaining that day across partial-save retries. The AI search prompt
+uses the same account-local date. This does not add lazy recurrence or workers.
+
 Part 23 adds **Task settings** in the package screen for the existing assistant
 task-change preference. Opening the section reads the saved choice; the switch
 is unavailable until it loads. Failed refreshes or saves keep the last confirmed
@@ -30,8 +40,7 @@ midnights follow DST rather than assuming every day lasts twenty-four hours.
 
 Current remaining work: lazy recurrence advancement, recurrence jobs, full
 deferred-queue policy and installed worker dispatch, public People linkage,
-policy/feedback orchestration, remaining screen/settings parity, interpreted
-search and date editor timezone support, installed chat and summary presentation,
+policy/feedback orchestration, remaining screen/settings parity, installed chat and summary presentation,
 real application shell integration, performance budgets and physical second-device
 HTTPS proof. Historical checkpoint notes below describe the earlier state.
 
@@ -391,3 +400,10 @@ package gate. It was observed failing before this change. Set
 with the button on `Browser proof task`, then finish the gate. The gate asserts
 both exact comment bodies are stored once each. This fixture remains separate
 from the application shell; the full-port and second-device gaps above remain.
+
+The signed UI fixture can seed its synthetic owner's saved timezone with
+`TASKS_UI_TIMEZONE=America/Los_Angeles`. With `TASKS_UI_DATE_PROOF=1`, set the
+browser-created proof task's due date to `2026-03-08` and do date to `2026-11-01`.
+The gate additionally requires their persisted timestamps to be Pacific local
+noon across the spring and fall clock changes. This seeds account preferences
+in the disposable fixture; it does not prove Profile's timezone-setting UI.

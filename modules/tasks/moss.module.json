@@ -96,7 +96,7 @@
     {
       "id": "tasks",
       "label": "Tasks",
-      "description": "View tasks in priority groups or a priority grid, include, show only or hide lists, combine tag filters, edit tasks, and manage subtasks, tags and comments. Date-editor timezone support, People, automatic assistant actions and full background-job parity remain unfinished.",
+      "description": "View tasks in priority groups or a priority grid, include, show only or hide lists, combine tag filters, edit tasks, and manage subtasks, tags and comments. People, automatic assistant actions and full background-job parity remain unfinished.",
       "path": "/tasks",
       "icon": "CheckSquare",
       "order": 30
@@ -135,11 +135,11 @@
     },
     {
       "id": "tasks.package-screens",
-      "description": "Package screen using the shared UI kit, authored typography and parent bridge: task loading; priority groups (Critical through Someday, then No priority) and four-quadrant grid, each ordered by due date then title; status and text search; list inclusion, show-only and exclusion with counts after status and tags but before search; multiple tag filters matching any selected tag, individually removable; Clear filters resets to open tasks across all lists; quick-add a task by title with Enter or Add task in the sole Show only list, otherwise Personal, or choose Details to carry the title into the unsaved editor; create and edit tasks, including draft tags and editable subtasks before saving a new task, offering up to eight unselected tags from the chosen list and refreshing suggestions when switching lists; typed existing tags are reused in task details; retry acknowledged partial saves without recreating the parent, replaying unchanged completion or recurrence, or repeating completed child writes; completion and suggestion review; list creation and renaming; subtasks; tag creation and assignment; activity comments with Enter to post and Shift+Enter for a new line; independent activity read retries preserving loaded comments and failed comment drafts; saved default view. Open Choose lists for list choices; remove tag filters or clear filters to recover hidden tasks. Dates currently display in UTC. Full legacy screen and setting parity is unfinished.",
+      "description": "Package screen using the shared UI kit, authored typography and parent bridge: task loading; priority groups (Critical through Someday, then No priority) and four-quadrant grid, each ordered by due date then title; status and text search; list inclusion, show-only and exclusion with counts after status and tags but before search; multiple tag filters matching any selected tag, individually removable; Clear filters resets to open tasks across all lists; quick-add a task by title with Enter or Add task in the sole Show only list, otherwise Personal, or choose Details to carry the title into the unsaved editor; create and edit tasks, including draft tags and editable subtasks before saving a new task, offering up to eight unselected tags from the chosen list and refreshing suggestions when switching lists; typed existing tags are reused in task details; retry acknowledged partial saves without recreating the parent, replaying unchanged completion or recurrence, or repeating completed child writes; completion and suggestion review; list creation and renaming; subtasks; tag creation and assignment; activity comments with Enter to post and Shift+Enter for a new line; independent activity read retries preserving loaded comments and failed comment drafts; saved default view. Open Choose lists for list choices; remove tag filters or clear filters to recover hidden tasks. Due and do dates use the saved account timezone. Selected dates save at local noon; unrelated edits preserve stored timestamps. Search due-day filters use the same zone. The screen waits for the saved timezone before opening a date editor. Full legacy screen and setting parity is unfinished.",
       "remediations": [
         {
           "id": "reload-tasks",
-          "description": "Retry loading Tasks after checking the connection. Quick capture keeps a failed title; after an acknowledged create with a failed refresh, use Refresh saved task to reload without creating a duplicate. Use Retry activity after a failed activity read; previously loaded comments remain shown. A rejected comment keeps its text; after an acknowledged post, retrying the activity read does not post again. Unsaved editor fields are retained on request failure. If a new task was created before a tag or subtask write failed, retry Save task to finish; its list and child drafts stay locked during that retry. If list tag suggestions fail to load, use Retry list tags or type a tag; other drafts are kept.",
+          "description": "Retry loading Tasks after checking the connection. Quick capture keeps a failed title; after an acknowledged create with a failed refresh, use Refresh saved task to reload without creating a duplicate. Use Retry activity after a failed activity read; previously loaded comments remain shown. A rejected comment keeps its text; after an acknowledged post, retrying the activity read does not post again. Unsaved editor fields are retained on request failure. If a new task was created before a tag or subtask write failed, retry Save task to finish; its list and child drafts stay locked during that retry. If list tag suggestions fail to load, use Retry list tags or type a tag; other drafts are kept. If the account timezone cannot load, retry loading Tasks before editing dates. Change the saved timezone in Profile when the local day is incorrect.",
           "path": "/tasks"
         }
       ],
@@ -203,7 +203,7 @@
     },
     {
       "id": "tasks.package-search-interpretation",
-      "description": "In Tasks, type a phrase and choose Interpret search or press Enter to turn it into list, tag, status, effort, priority, quadrant and due-date filters using the AI service you chose. Queries are limited to 300 characters. Only your own lists and tags are kept in the answer, with a warning for anything unknown. Status moves to the regular picker; the other interpreted filters can be removed individually. Typing again clears the interpretation. Manual tag filters match any tag; interpreted tag filters require every named tag. Clear filters restores open tasks across all lists. If the AI service is unavailable, a message explains that title and description search still work. Dates use UTC until account timezone support arrives."
+      "description": "In Tasks, type a phrase and choose Interpret search or press Enter to turn it into list, tag, status, effort, priority, quadrant and due-date filters using the AI service you chose. Queries are limited to 300 characters. Only your own lists and tags are kept in the answer, with a warning for anything unknown. Status moves to the regular picker; the other interpreted filters can be removed individually. Typing again clears the interpretation. Manual tag filters match any tag; interpreted tag filters require every named tag. Clear filters restores open tasks across all lists. If the AI service is unavailable, a message explains that title and description search still work. Dates and the interpretation prompt use your saved account timezone."
     },
     {
       "id": "tasks.account_policy_routes",
@@ -234,6 +234,11 @@
     "defaultEnabled": true
   },
   "routes": [
+    {
+      "method": "GET",
+      "path": "/tasks/local-day",
+      "signIn": true
+    },
     {
       "method": "GET",
       "path": "/tasks",

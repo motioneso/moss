@@ -77,7 +77,14 @@ export function newTaskSave(api) {
   };
 }
 
-export function captureDraft({ api, run, text, button, focus }) {
+export function captureDraft({
+  api,
+  run,
+  text,
+  button,
+  focus,
+  today = () => new Date().toISOString().slice(0, 10)
+}) {
   const $ = (id) => document.getElementById(id);
   const save = newTaskSave(api);
   let steps = [];
@@ -185,7 +192,7 @@ export function captureDraft({ api, run, text, button, focus }) {
   return {
     lock,
     loadTags,
-    today: () => (firstSaveDay ??= new Date().toISOString().slice(0, 10)),
+    today: () => (firstSaveDay ??= today()),
     started: save.started,
     snapshot: () => JSON.stringify({ steps, tags }),
     reset() {

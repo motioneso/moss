@@ -48,6 +48,7 @@ pub fn package_files(
         "activity.mjs",
         "settings.mjs",
         "model.mjs",
+        "local-date.mjs",
         "capture.mjs",
         "quick-add.mjs",
         "task-tags.mjs",

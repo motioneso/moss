@@ -57,6 +57,7 @@ impl Server {
             .lock()
             .map_err(|_| anyhow::anyhow!("Host busy"))?;
         if app.is_none() {
+            ui_registry::seed_locale(&access)?;
             #[derive(serde::Deserialize)]
             struct Key {
                 connector_key: String,

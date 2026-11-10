@@ -35,6 +35,7 @@ test(
         calls.push({ method, path, body });
         if (path === "/tasks") return { tasks: [] };
         if (path === "/tasks/lists") return { lists: [] };
+        if (path === "/tasks/local-day") return { timezone: "UTC", date: "2026-11-09" };
         if (path === "/tasks/preferences") {
           if (method === "PATCH" && pauseView) {
             await new Promise((resolve) => {

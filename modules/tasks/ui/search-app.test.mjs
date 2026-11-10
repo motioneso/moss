@@ -39,6 +39,7 @@ test(
       async request(method, path, body) {
         if (path === "/tasks") return { tasks: rows };
         if (path === "/tasks/lists") return { lists: [{ id: "list", name: "Inbox" }] };
+        if (path === "/tasks/local-day") return { timezone: "UTC", date: "2026-11-09" };
         if (path === "/tasks/preferences") return { preferences: { defaultView: "priority" } };
         if (path === "/tasks/search/interpret") {
           assert.equal(method, "POST");
