@@ -2961,3 +2961,29 @@ Remaining work is unchanged from part 26 steps 3 and 4.
 - A second physical device (the check used the same machine at its LAN address).
 - Ingest nudges, real source providers, command retention and quotas, locale ordering, chat flows.
 - Large-account behaviour beyond slice 19's 200M fuel result.
+
+## Part 30: bounded command records, live gate re-run
+
+### Built
+
+- The module host now refuses to store a new queue command record once an account holds 10,000 under
+  one resource ("Too many stored commands for this account"). Replaying an existing record still
+  works, so retries of earlier requests are unaffected. This closes the unbounded-growth ship
+  condition from the command-retention item. Pruning of old records is still not built.
+- Unit test covers the refusal and the replay (limit lowered to 2 in the test).
+
+### Checked
+
+- Archive and Edit buttons on archived people: the legacy Settings pane also keeps them visible, so
+  the Rust screen already matches. No change made.
+- `pnpm test:rust-people-server` re-run through the gate on this branch with a freshly built
+  component and package: rc=0 (HTTPS sign-in, second-account privacy, create/list/settings).
+  The module-host command-record integration test passes.
+- Part 29's browser run was not repeated; no screen code changed.
+
+### Not proven
+
+- A second physical device; ingest nudges, real source providers, record pruning, full locale
+  ordering, chat flows.
+- The pre-existing clippy complaint in `folder_sync_status.rs` and rustfmt drift in `linked_notes.rs`
+  are outside this change and untouched.
