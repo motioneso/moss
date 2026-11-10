@@ -26,6 +26,7 @@ pub struct MemoryCleanupPorts {
     runtime: tokio::runtime::Runtime,
     sources: BTreeMap<(String, String), MemoryCleanupSource>,
     next: Arc<dyn Ports>,
+    account_base: Option<PathBuf>,
 }
 
 #[derive(Deserialize)]
@@ -36,6 +37,11 @@ struct Cleanup {
 }
 
 impl MemoryCleanupPorts {
+    /// Accounts without explicit roots get `<base>/<account id>`.
+    pub fn with_account_base(mut self, base: PathBuf) -> Self {
+        self.account_base = Some(base);
+        self
+    }
     pub fn new(
         database: Database,
         sources: BTreeMap<(String, String), MemoryCleanupSource>,
@@ -45,6 +51,7 @@ impl MemoryCleanupPorts {
             database,
             sources,
             next,
+            account_base: None,
             runtime: tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(2)
                 .enable_all()
@@ -74,7 +81,7 @@ impl MemoryCleanupPorts {
                 ).await?.context("Notes source is not configured")?;
                 let saved: Value = row.get(0);
                 let saved = saved.as_str().filter(|s| !s.is_empty()).context("Notes source is not configured")?;
-                let roots = source.roots.get(&scope.access().actor_user_id()).cloned().unwrap_or_default();
+                let roots = crate::memory_ingest::account_roots(&source.roots, self.account_base.as_deref(), scope.access().actor_user_id());
                 ensure!(!roots.is_empty(), "Notes roots are not configured");
                 let allowed = AllowedRoots::for_account(scope.access(), roots);
                 let folder = VaultContext::at_allowed_root(scope.access(), Path::new(saved), &allowed)?;

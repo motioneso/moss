@@ -3,6 +3,7 @@ mod chat;
 mod focus;
 mod frame;
 mod icons;
+mod modules_page;
 mod today;
 
 use wasm_bindgen::JsCast;

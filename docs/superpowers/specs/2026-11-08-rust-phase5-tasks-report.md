@@ -2035,3 +2035,38 @@ Remaining: deferred-queue retry/retention and installed worker dispatch; public 
 linkage; policy enforcement and feedback orchestration; remaining screens/settings and
 Today/chat links; installed chat and summary presentation; real application shell
 integration; performance budgets; physical second-device HTTPS proof.
+
+## Tasks part 31 checkpoint (JS-186, Card 526)
+
+Task rows in the installed package screen now carry the legacy marks: an Overdue or
+At risk pill (account-timezone day buckets; done tasks never drift), the effort label,
+a "From <source>" mark for assistant-made tasks, and the "N tasks it created for you"
+footer. The logic lives in `ui/row-marks.mjs` with its own tests, including a case
+where the account day and the UTC day disagree. The package file list and the screen
+markup gained the new module and footer element. Pnpm scripts `test:rust-tasks` and
+`test:rust-tasks-ui` now name the two gate scripts so `scripts/run-gate.sh` can run them.
+
+Checked: all 39 screen tests pass against the real compiled screen (none skipped). The
+installed-screen gate passed on real HTTPS with sign-in; in a real browser, tasks due
+three days ago and tomorrow showed "Overdue · Large effort" and "At risk · Small
+effort", and a task typed into the real quick-add box persisted exactly once. A task
+due today shows no pill (review fix), and the pill uses the Park Press drift classes.
+The source mark and footer were also seen in the browser ("From email", "From chat",
+"Moss is tracking 2 tasks it created for you"), but those two rows were set to an
+assistant source with a direct database update on the throwaway gate database, because
+HTTP creates always record a user source. That is seeded data, not a chat-made task.
+
+Not proven: a task really created by a chat tool showing the source mark; native app shell, a second
+physical device. The full component gate ran 22 of 23 privacy tests: another account's
+rows were visible in `compiled_tasks_routes_enforce_privacy_and_complete_recurring_tasks`
+and two sibling list/tag cases. This change touches no Rust guest or SQL code, but the
+failure was not re-run on main, so treat it as unexplained. Legacy queue policy
+(retry limit 0, 60-second retention) is not ported: the host fixes retry at 3 for all
+module queues, and the two Tasks jobs are idempotent. Email triage feedback needs the
+unported connectors module. Today/chat focus links need the application shell to pass
+`?focus=` into module screens. Workshop and Food remain excluded. Part of #4027;
+release note Category N/A.
+
+Remaining: footer uses the name "Moss" instead of the user's saved assistant name (review round 2; the package screen has no assistant-name source yet); per-queue retry/retention in the host; public People linkage; email triage
+feedback; Today/chat focus links; installed chat and summary presentation; real shell
+integration; performance budgets; physical second-device HTTPS proof.

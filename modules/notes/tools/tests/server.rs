@@ -47,6 +47,63 @@ impl moss_module_host::ai::Intelligence for NoAi {
         anyhow::bail!("Embeddings are not connected in this check")
     }
 }
+/// A real HTTP embeddings endpoint on this machine (OpenAI-style). It hashes words into a
+/// 768-slot vector, so texts sharing words are close. It stands in for a hosted provider.
+fn embedding_stub(port: &str) {
+    use std::io::{Read, Write};
+    let listener = std::net::TcpListener::bind(format!("127.0.0.1:{port}")).unwrap();
+    std::thread::spawn(move || {
+        for stream in listener.incoming().flatten() {
+            std::thread::spawn(move || {
+                let mut stream = stream;
+                let mut data = Vec::new();
+                let mut buffer = [0u8; 4096];
+                let body = loop {
+                    let n = stream.read(&mut buffer).unwrap_or(0);
+                    if n == 0 {
+                        return;
+                    }
+                    data.extend_from_slice(&buffer[..n]);
+                    let text = String::from_utf8_lossy(&data).to_string();
+                    if let Some(at) = text.find("\r\n\r\n") {
+                        let length = text[..at]
+                            .lines()
+                            .find_map(|l| {
+                                l.to_ascii_lowercase()
+                                    .strip_prefix("content-length:")
+                                    .map(|v| v.trim().parse::<usize>().unwrap())
+                            })
+                            .unwrap_or(0);
+                        if data.len() >= at + 4 + length {
+                            break data[at + 4..at + 4 + length].to_vec();
+                        }
+                    }
+                };
+                let input: Value = serde_json::from_slice(&body).unwrap();
+                let mut vector = vec![0f64; 768];
+                for word in input["input"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_lowercase()
+                    .split(|c: char| !c.is_alphanumeric())
+                    .filter(|w| !w.is_empty())
+                {
+                    let slot = word.bytes().fold(7usize, |h, b| h * 31 + b as usize) % 768;
+                    vector[slot] += 1.0;
+                }
+                let norm = vector.iter().map(|v| v * v).sum::<f64>().sqrt().max(1.0);
+                let vector: Vec<f64> = vector.iter().map(|v| v / norm).collect();
+                let reply = json!({"data":[{"embedding":vector}]}).to_string();
+                let _ = write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                    reply.len(),
+                    reply
+                );
+            });
+        }
+    });
+}
 fn private(path: &Path, value: &Value) {
     use std::io::Write;
     use std::os::unix::fs::OpenOptionsExt;
@@ -258,9 +315,24 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
             .install(&access, &catalog, artifact, true)
             .unwrap();
     }
+    let embedding_port = Port(
+        String::from_utf8(
+            Command::new("devports")
+                .args(["claim", &format!("js187-embed-{}", std::process::id())])
+                .output()
+                .unwrap()
+                .stdout,
+        )
+        .unwrap()
+        .trim()
+        .into(),
+    );
+    assert!(!embedding_port.0.is_empty());
+    embedding_stub(&embedding_port.0);
+    let embedding_url = format!("http://127.0.0.1:{}/v1/embeddings", embedding_port.0);
     private(
         &root.join("modules.json"),
-        &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"notes_base":root.join("notes")}),
+        &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"notes_base":root.join("notes"),"embeddings":{"url":embedding_url,"model":"bag-of-words-768","api_key":"local-stub"}}),
     );
     let _server = start(true);
     let call = |method: reqwest::Method, path: &str, cookie: Option<&str>, body: Option<Value>| {
@@ -285,11 +357,31 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
     use reqwest::Method;
     // The account's notes folder is prepared by the host; the test only adds content.
     let account_root = root.join("notes").join(owner.to_string());
+    // The host opens in the background after the server starts; 503 means not yet.
+    let ready = Instant::now() + Duration::from_secs(120);
+    while call(Method::GET, "/notes-source", Some(&cookie), None).0 == 503 {
+        assert!(
+            Instant::now() < ready,
+            "module host never opened\n{}",
+            fs::read_to_string(root.join("server.log")).unwrap_or_default()
+        );
+        std::thread::sleep(Duration::from_millis(500));
+    }
     assert_eq!(call(Method::GET, "/notes-source", None, None).0, 401);
     let (status, none) = call(Method::GET, "/notes-source", Some(&cookie), None);
     assert_eq!((status, none["path"].clone()), (200, Value::Null), "{none}");
     fs::create_dir_all(account_root.join("Journal")).unwrap();
     fs::write(account_root.join("Journal/day.md"), b"# A day\n").unwrap();
+    fs::write(
+        account_root.join("Journal/coffee.md"),
+        b"# Coffee\nEspresso beans from the corner roaster, ground fresh.\n",
+    )
+    .unwrap();
+    fs::write(
+        account_root.join("Journal/garden.md"),
+        b"# Garden\nTomato seedlings need compost and sunny soil.\n",
+    )
+    .unwrap();
     let (status, roots) = call(
         Method::GET,
         "/notes-source/directories",
@@ -364,6 +456,132 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
     println!("sync request answered {} {}", sync.0, sync.1);
     assert_eq!(sync.0, 202, "{}", sync.1);
     assert!(sync.1["jobId"].is_string(), "{}", sync.1);
+    // The server's own worker runs the sync: wait for the rows it indexed.
+    let rows = |sql: &'static str| -> Vec<String> {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        runtime.block_on(async {
+            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
+                .await
+                .unwrap();
+            tokio::spawn(async move {
+                let _ = connection.await;
+            });
+            db.query(sql, &[&owner])
+                .await
+                .unwrap()
+                .iter()
+                .map(|r| r.get::<_, String>(0))
+                .collect()
+        })
+    };
+    let indexed_sql = "SELECT DISTINCT source_path FROM app.memory_chunks WHERE owner_user_id=$1 AND embedding IS NOT NULL ORDER BY 1";
+    let deadline = Instant::now() + Duration::from_secs(90);
+    let indexed = loop {
+        let found = rows(indexed_sql);
+        if found.len() >= 3 {
+            break found;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "sync did not index the notes: {found:?}\n{}",
+            fs::read_to_string(root.join("server.log")).unwrap_or_default()
+        );
+        std::thread::sleep(Duration::from_millis(500));
+    };
+    println!("indexed by the server worker: {indexed:?}");
+    for name in ["coffee.md", "day.md", "garden.md"] {
+        assert!(indexed.iter().any(|p| p.ends_with(name)), "{indexed:?}");
+    }
+    let (status, state) = call(Method::GET, "/notes-last-sync", Some(&cookie), None);
+    assert_eq!(status, 200, "{state}");
+    println!("last sync status after indexing: {state}");
+    // Search runs through the same host ports in this process (the server has no tool
+    // endpoint yet), against the real index and the same embeddings endpoint.
+    {
+        use moss_module_host::{
+            ai::{EmbeddingsOnly, FixedEmbeddings, IntelligenceEmbeddings},
+            memory_search::MemorySearchPorts,
+        };
+        let ai: Arc<dyn moss_module_host::ai::Intelligence> = Arc::new(
+            EmbeddingsOnly::new(FixedEmbeddings::new(
+                embedding_url.parse().unwrap(),
+                "bag-of-words-768".into(),
+                "local-stub".into(),
+            ))
+            .unwrap(),
+        );
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let app = runtime.block_on(async {
+            safety_core::db::Database::connect(&app_url, 4, safety_core::db::RuntimeRole::App)
+                .await
+                .unwrap()
+        });
+        let search_database = app.clone();
+        let cipher = safety_core::secret::SecretCipher::connectors(
+            &std::collections::HashMap::from([(
+                "JARVIS_CONNECTOR_SECRET_KEY".into(),
+                connector_key.clone(),
+            )]),
+        )
+        .unwrap();
+        let application = Application::open_extended_with(
+            &root.join("data"),
+            app,
+            access.clone(),
+            Configuration {
+                migrations: Secret::new(bootstrap_url.clone()),
+                producer: Secret::new(app_url.clone()),
+                cipher: Arc::new(cipher),
+                intelligence: ai.clone(),
+                version: "0.1.0".parse().unwrap(),
+                compiled_cache: None,
+                fuel_ceiling: None,
+            },
+            |services| {
+                Ok(Arc::new(
+                    MemorySearchPorts::new(
+                        search_database,
+                        Arc::new(IntelligenceEmbeddings::new(ai, "bag-of-words-768".into())),
+                        std::collections::BTreeMap::from([(
+                            ("notes".into(), "source".into()),
+                            "notes".into(),
+                        )]),
+                        services,
+                    )
+                    .unwrap(),
+                ))
+            },
+        )
+        .unwrap();
+        let search = |query: &str| -> Value {
+            serde_json::from_str(
+                &application
+                    .installer
+                    .call(
+                        "notes",
+                        AccessContext::new(owner, "notes-search-live"),
+                        "tool",
+                        &json!({"tool":"notes.search","parameters":{"query":query}}).to_string(),
+                    )
+                    .unwrap(),
+            )
+            .unwrap()
+        };
+        let coffee = search("espresso coffee beans");
+        let garden = search("tomato compost soil");
+        println!("search coffee -> {coffee}");
+        println!("search garden -> {garden}");
+        let top = |v: &Value| {
+            v["data"]["chunks"][0]["sourcePath"]
+                .as_str()
+                .unwrap_or_else(|| panic!("no first chunk: {v}"))
+                .to_owned()
+        };
+        assert!(top(&coffee).ends_with("/Journal/coffee.md"), "{coffee}");
+        assert!(top(&garden).ends_with("/Journal/garden.md"), "{garden}");
+        drop(application);
+        drop(runtime);
+    }
     let unlinked = call(
         Method::PUT,
         "/notes-source",
@@ -376,5 +594,6 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
         "unlinking must keep the files"
     );
     println!("PASS installed Notes package served over HTTPS: sign-in required, folder offered and browsed inside the account root, outside path refused, link saved, status readable, sync requested, unlink keeps files");
-    println!("NOT PROVEN: indexing and search (no embeddings configured), second signed-in account (setup allows one owner), native UI, second physical device");
+    println!("PASS indexing: the server's own worker embedded three real notes through a local HTTP embeddings endpoint, and search returned the matching note first for two queries");
+    println!("NOT PROVEN: a hosted embeddings provider (a local stand-in endpoint was used), search from the chat or any server endpoint, second signed-in account (setup allows one owner), native UI, second physical device");
 }

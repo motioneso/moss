@@ -1191,3 +1191,35 @@ provider tools end to end (no Connectors package), a second account over HTTP, a
 device. Still required: the day-plan apply job, concrete Tasks/Briefings/Connectors adapters,
 apply/retry/recovery/confirm execution, source behavior and external-calendar status controls,
 full shell and chat, old-screen replacement, complete parity.
+
+## JS-185 / part 24: apply-batch reservation and apply route
+
+Adds `modules/calendar/src/apply.rs` (package 0.22.0). `reserve` freezes the reviewed selection plus
+every pending addition under one idempotency key: trimmed, deduplicated, sorted intent; entries in
+plan order; unknown or change-less selected blocks refused (400); stale revision on a new key (409);
+exact replay returns the stored batch even after the plan revision moves; any changed request under
+the same key (409); item rows missing after a partial write are repaired on replay (unique per batch
+and block). `POST /day-plans/:id/apply` is now declared in the manifest. It checks the body (strict
+fields, uuids, key length) and answers 503 "day plan apply is unavailable" without writing, because
+execution needs a Connectors package. The route does not call `reserve` yet, so no pending batch can
+be left that nothing can run.
+
+Review round 1 fixes: the plan revision is re-read after the blocks are read, so a draft save that lands mid-reservation conflicts instead of freezing the newer draft; replay matches items by their frozen change and never recreates an item for a deleted block; the route refuses a null or repeated selection and an empty operation key like the original.
+
+Open after round 2: a draft save raises the revision before it rewrites blocks (existing behavior of the save path), so a reservation that expects the new revision while another save is still rewriting blocks could freeze a half-written draft. The client that made the save only learns the new revision after it finishes, so the window needs two clients. Closing it needs one host transaction across the save and the reservation, which the host does not offer yet. The route does not call `reserve`, so nothing is exposed until that exists.
+
+Differences from the original: the original holds a row lock on the plan while reserving; the host
+runs each database call in its own transaction, so the unique idempotency key, the revision check and
+replay repair carry that protection. The 202 approval gate and tier policy are host work, not built.
+
+Checks: ten guest tests in `tests/apply.rs` (in-memory host) plus the existing guest suites pass with
+Rust 1.95.0. The live gate `pnpm test:rust-calendar-server` passes against the real HTTPS server: apply
+without sign-in 401, valid body 503 with the fail-closed message, unknown field 400 with
+`day_plan_invalid`, plus the earlier event, day-plan and settings checks. The gate now waits for the
+server's background module load (the first module route answered 503 for most of a minute on a cold
+start, then 200); that cold-start delay is worth a look in the host work.
+
+Not proven: Calendar screens on the real server, execution of any apply, retry, recovery or
+confirmation, a second account, a second physical device. Still required: Connectors, Tasks and
+Briefings adapters, the apply job and execution, source behavior and external-calendar status
+controls, full shell and chat, old-screen replacement, complete parity.

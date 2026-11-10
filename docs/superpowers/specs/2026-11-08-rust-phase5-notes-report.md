@@ -1861,3 +1861,26 @@ Settings and chat join, and use from a second physical device over HTTPS.
 
 Scratch Cargo/Rust homes and targets lived on the Downloads SSD scratch (hard-linked from
 the previous part, since /tmp is on a different disk and the NVMe is full).
+
+## Part twenty-seven checkpoint — indexing and search on the real server
+
+The real server now takes an optional `embeddings` block in the modules file (endpoint,
+model, key). When present it composes memory ingest, cleanup and search ports around the
+shared services, so the server's own worker can run the Notes sync job. Ingest and cleanup
+resolve the account folder from `notes_base` the same way folder settings do. A new
+embeddings-only adapter lets the server embed without a chat model.
+
+Live proof (`pnpm test:rust-notes-server`, through the gate): the real HTTPS server is
+started with a local stand-in HTTP embeddings endpoint. After a real sign-up, three notes
+are written into the account folder, the folder is linked and Sync now is requested. The
+server's worker indexes all three notes into `memory_chunks`, and searching through the
+host returns the matching note first for two different queries. The first folder request
+now waits for the background host to open (503 until ready).
+
+Not proven: a hosted embeddings provider (a local stand-in was used), search from chat or
+any server endpoint (search ran through the host inside the test process), a second
+signed-in account, native UI, and a second physical device.
+
+Still open: scheduled sync and recovery timer, retention, managed publication and
+reconciliation, private exports and daily archives, singleton coalescing and recall
+warmup, the assembled Settings and chat join, and second-device HTTPS proof.

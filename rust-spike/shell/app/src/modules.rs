@@ -3,18 +3,22 @@
 use anyhow::Result;
 use axum::{
     body::Bytes,
-    extract::State,
-    http::{header, Method, StatusCode, Uri},
-    response::{IntoResponse, Response},
-    routing::any,
-    Extension, Router,
+    extract::{Path as UrlPath, Query, State},
+    http::{header, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri},
+    response::{Html, IntoResponse, Response},
+    routing::{any, get},
+    Extension, Json, Router,
 };
 use moss_module_host::{
     account_preferences::{AccountPreferencesPorts, Binding},
-    ai::Intelligence,
+    ai::{EmbeddingsOnly, FixedEmbeddings, Intelligence, IntelligenceEmbeddings},
     application::{Application, Configuration},
     folder_settings::{FolderSetting, FolderSettingsPorts},
+    frame::AssetPolicy,
     linked_notes::{LinkedNotesPorts, PreferenceFolder, PreferenceFolders},
+    memory_cleanup::{MemoryCleanupPorts, MemoryCleanupSource},
+    memory_ingest::{MemoryIngestPorts, MemoryIngestSource},
+    memory_search::MemorySearchPorts,
     runtime::{CallScope, Ports, Request},
     worker::Worker,
 };
@@ -53,6 +57,18 @@ pub struct Settings {
     /// Base folder for per-account notes roots (`<base>/<account id>`). Needed by People.
     #[serde(default)]
     pub(crate) notes_base: Option<PathBuf>,
+    /// One OpenAI-style embeddings endpoint for every account. Absent means embeddings fail closed.
+    #[serde(default)]
+    pub(crate) embeddings: Option<EmbeddingSettings>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EmbeddingSettings {
+    url: String,
+    model: String,
+    #[serde(default)]
+    api_key: String,
 }
 
 // Used when the instance has no AI key. Calls fail closed.
@@ -63,6 +79,70 @@ impl Intelligence for UnconfiguredIntelligence {
     }
     fn embed(&self, _: &CallScope, _: &Request) -> Result<Value> {
         anyhow::bail!("Module embeddings are not configured on this server")
+    }
+}
+
+/// Notes indexing and search over the account's folder, using the configured embeddings.
+fn memory(
+    database: Database,
+    base: PathBuf,
+    embeddings: Arc<IntelligenceEmbeddings>,
+    next: Arc<dyn Ports>,
+) -> Result<Arc<dyn Ports>> {
+    let key = ("notes".to_string(), "source".to_string());
+    let cleanup = Arc::new(
+        MemoryCleanupPorts::new(
+            database.clone(),
+            BTreeMap::from([(
+                key.clone(),
+                MemoryCleanupSource {
+                    source_kind: "notes".into(),
+                    preference_key: "notes-source-path".into(),
+                    roots: BTreeMap::new(),
+                },
+            )]),
+            next,
+        )?
+        .with_account_base(base.clone()),
+    );
+    let ingest = Arc::new(
+        MemoryIngestPorts::new(
+            database.clone(),
+            embeddings.clone(),
+            BTreeMap::from([(
+                key.clone(),
+                MemoryIngestSource {
+                    source_kind: "notes".into(),
+                    preference_key: "notes-source-path".into(),
+                    roots: BTreeMap::new(),
+                },
+            )]),
+            cleanup,
+        )?
+        .with_account_base(base),
+    );
+    Ok(Arc::new(MemorySearchPorts::new(
+        database,
+        embeddings,
+        BTreeMap::from([(key, "notes".into())]),
+        ingest,
+    )?))
+}
+
+// Text generation goes through the router; embeddings use the fixed endpoint when one is set.
+struct SplitIntelligence {
+    generator: Arc<dyn Intelligence>,
+    embedder: Option<Arc<dyn Intelligence>>,
+}
+impl Intelligence for SplitIntelligence {
+    fn generate(&self, scope: &CallScope, request: &Request) -> Result<Value> {
+        self.generator.generate(scope, request)
+    }
+    fn embed(&self, scope: &CallScope, request: &Request) -> Result<Value> {
+        match &self.embedder {
+            Some(embedder) => embedder.embed(scope, request),
+            None => self.generator.embed(scope, request),
+        }
     }
 }
 
@@ -181,7 +261,8 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
         anyhow::ensure!(base.is_absolute(), "Notes base needs an absolute path");
     }
     let preferences_database = database.clone();
-    let intelligence: Arc<dyn Intelligence> = match &settings.ai_key {
+    let mut embedding_model = None;
+    let generator: Arc<dyn Intelligence> = match &settings.ai_key {
         Some(key) => crate::module_ai::intelligence(
             database.clone(),
             SecretCipher::ai(&[("JARVIS_AI_SECRET_KEY".into(), key.clone())].into())
@@ -189,6 +270,24 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
         )?,
         None => Arc::new(UnconfiguredIntelligence),
     };
+    let embedder: Option<Arc<dyn Intelligence>> = match settings.embeddings {
+        Some(e) => {
+            embedding_model = Some(e.model.clone());
+            Some(Arc::new(EmbeddingsOnly::new(FixedEmbeddings::new(
+                e.url
+                    .parse()
+                    .map_err(|_| anyhow::anyhow!("Invalid embeddings url"))?,
+                e.model,
+                e.api_key,
+            ))?))
+        }
+        None => None,
+    };
+    let intelligence: Arc<dyn Intelligence> = Arc::new(SplitIntelligence {
+        generator,
+        embedder,
+    });
+    let notes_intelligence = intelligence.clone();
     let application = Application::open_extended_with(
         &settings.data,
         database,
@@ -203,7 +302,18 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
             fuel_ceiling: Some(settings.fuel_ceiling.unwrap_or(DEFAULT_FUEL_CEILING)),
         },
         |services| match notes_base {
-            Some(base) => linked_notes(preferences_database, base, services),
+            Some(base) => {
+                let services = match embedding_model {
+                    Some(model) => memory(
+                        preferences_database.clone(),
+                        base.clone(),
+                        Arc::new(IntelligenceEmbeddings::new(notes_intelligence, model)),
+                        services,
+                    )?,
+                    None => services,
+                };
+                linked_notes(preferences_database, base, services)
+            }
             None => Ok(services),
         },
     )?;
@@ -213,13 +323,146 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
 /// The host once it is running. Empty until the installer has put a module in.
 pub type Slot = Arc<std::sync::Mutex<Option<ServerModules>>>;
 
-pub fn routes(slot: Slot) -> Router {
+/// Module routes. `web` is the shell's web folder; shared screen styles and fonts come from
+/// its `module-shared` folder.
+pub fn routes(slot: Slot, web: PathBuf) -> Router {
     Router::new()
         .route("/api/m/{module}/{*path}", any(dispatch))
+        .route("/api/modules/{module}/screen", get(screen))
+        .route("/module-ui/{module}/{digest}/{*path}", get(ui_asset))
+        .route(
+            "/module-frame",
+            get(|| async { Html(include_str!("../../assets/module-frame.html")) }),
+        )
+        .route(
+            "/module-frame.css",
+            get(|| async {
+                (
+                    [(header::CONTENT_TYPE, "text/css")],
+                    include_str!("../../assets/module-frame.css"),
+                )
+            }),
+        )
+        .route(
+            "/module-frame.js",
+            get(|| async {
+                (
+                    [(header::CONTENT_TYPE, "text/javascript")],
+                    include_str!("../../assets/module-frame.js"),
+                )
+            }),
+        )
+        .route(
+            "/module-shared/host-bridge.mjs",
+            get(|| async {
+                (
+                    [(header::CONTENT_TYPE, "text/javascript")],
+                    include_str!("../../../module-ui/web/host-bridge.mjs"),
+                )
+            }),
+        )
         .with_state(Arc::new(Api {
             slot,
             slots: Arc::new(tokio::sync::Semaphore::new(4)),
+            asset_slots: Arc::new(tokio::sync::Semaphore::new(4)),
         }))
+        .merge(
+            // Opaque frames read these files cross-origin, so fonts need a CORS header.
+            Router::new()
+                .nest_service(
+                    "/module-shared",
+                    tower_http::services::ServeDir::new(web.join("module-shared")),
+                )
+                .layer(axum::middleware::map_response(
+                    |mut response: Response| async move {
+                        response.headers_mut().insert(
+                            header::ACCESS_CONTROL_ALLOW_ORIGIN,
+                            HeaderValue::from_static("*"),
+                        );
+                        response
+                    },
+                )),
+        )
+}
+
+fn host(slot: &Slot) -> Option<Arc<Application>> {
+    slot.lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_ref()
+        .map(|host| host.application.clone())
+}
+
+#[derive(Deserialize)]
+struct ScreenQuery {
+    path: String,
+}
+
+/// The verified screen address for a signed-in account. Refused if the module is off for it.
+async fn screen(
+    State(api): State<Arc<Api>>,
+    Extension(access): Extension<AccessContext>,
+    UrlPath(module): UrlPath<String>,
+    Query(query): Query<ScreenQuery>,
+) -> Response {
+    let Some(application) = host(&api.slot) else {
+        return StatusCode::SERVICE_UNAVAILABLE.into_response();
+    };
+    match tokio::task::spawn_blocking(move || {
+        application.installer.screen(&access, &module, &query.path)
+    })
+    .await
+    {
+        Ok(Ok(screen)) => Json(serde_json::json!({
+            "title": screen.title,
+            "src": screen.src,
+            "sandbox": screen.sandbox,
+        }))
+        .into_response(),
+        _ => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+/// Public static files of an installed screen. The frame is opaque and sends no cookies, so
+/// no account data may be served here. The web origin is the request's own host, which the
+/// network guard has already matched against the trusted origins.
+async fn ui_asset(
+    State(api): State<Arc<Api>>,
+    UrlPath((module, digest, path)): UrlPath<(String, String, String)>,
+    headers: HeaderMap,
+) -> Response {
+    let Some(application) = host(&api.slot) else {
+        return StatusCode::SERVICE_UNAVAILABLE.into_response();
+    };
+    let Some(authority) = headers.get(header::HOST).and_then(|h| h.to_str().ok()) else {
+        return StatusCode::BAD_REQUEST.into_response();
+    };
+    let origin = format!("https://{authority}/");
+    let Ok(slot) = api.asset_slots.clone().acquire_owned().await else {
+        return StatusCode::SERVICE_UNAVAILABLE.into_response();
+    };
+    match tokio::task::spawn_blocking(move || {
+        let _slot = slot;
+        let policy = AssetPolicy::new(&origin)?;
+        application
+            .installer
+            .ui_asset(&module, &digest, &path, &policy)
+    })
+    .await
+    {
+        Ok(Ok(asset)) => {
+            let mut response =
+                ([(header::CONTENT_TYPE, asset.content_type)], asset.body).into_response();
+            for (name, value) in asset.headers {
+                if let (Ok(name), Ok(value)) =
+                    (HeaderName::try_from(name), HeaderValue::try_from(value))
+                {
+                    response.headers_mut().insert(name, value);
+                }
+            }
+            response
+        }
+        _ => StatusCode::NOT_FOUND.into_response(),
+    }
 }
 
 /// Tries to open the host every couple of seconds until it works or `stop` is set, so a module
@@ -258,6 +501,9 @@ pub fn load_when_ready(
 struct Api {
     slot: Slot,
     slots: Arc<tokio::sync::Semaphore>,
+    /// Bounds concurrent public file reads. Each one verifies the whole package, so waiters
+    /// queue here instead of running together.
+    asset_slots: Arc<tokio::sync::Semaphore>,
 }
 
 async fn dispatch(

@@ -24,6 +24,7 @@ use safety_core::access::AccessContext;
 use tower_http::services::ServeDir;
 
 mod desktop_notices;
+mod module_admin;
 mod module_ai;
 mod module_install;
 mod modules;
@@ -34,6 +35,8 @@ type Data = Arc<dyn ShellData>;
 struct Accounts {
     platform: Arc<safety_core::http::Platform>,
     runner: Option<PathBuf>,
+    /// True when the server has an instance folder the module installer can work in.
+    can_install_modules: bool,
     data: Mutex<HashMap<uuid::Uuid, Data>>,
 }
 
@@ -63,9 +66,20 @@ fn router(data: Arc<Accounts>, web: PathBuf) -> Router {
             "/api/shell",
             get(|State(d): State<Arc<Accounts>>, Extension(access): Extension<AccessContext>| async move {
                 let cx = safety_core::db::DataContext::open(&d.platform.app, &access).await?;
-                let row = cx.db().query_one("SELECT name FROM app.get_user_by_id($1::uuid)", &[&access.actor_user_id()]).await?;
+                let row = cx.db().query_one("SELECT name, is_instance_admin FROM app.get_user_by_id($1::uuid)", &[&access.actor_user_id()]).await?;
                 let mut shell = d.for_actor(&access).shell();
                 shell.account.display_name = row.get(0);
+                if d.can_install_modules && row.get::<_, bool>(1) {
+                    shell.nav.push(moss_shell_contract::NavSection {
+                        label: Some("Instance".into()),
+                        links: vec![moss_shell_contract::NavLink {
+                            path: "/modules".into(),
+                            label: "Modules".into(),
+                            icon: "package".into(),
+                            unread: 0,
+                        }],
+                    });
+                }
                 cx.commit().await?;
                 Ok::<_, safety_core::error::ApiError>(Json::<ShellView>(shell))
             }),
@@ -234,14 +248,23 @@ fn main() {
                 modules::load_when_ready(slot, path, database, stop)
             })
         });
+        let admin = args
+            .instance
+            .clone()
+            .map(|folder| Arc::new(module_admin::Admin::new(platform.clone(), folder)));
         let data = Arc::new(Accounts {
             platform,
+            can_install_modules: args.instance.is_some(),
             runner: args.runner,
             data: Mutex::new(HashMap::new()),
         });
         let private = router(data, args.web.clone());
         let private = match &loader {
-            Some(_) => private.merge(modules::routes(modules.clone())),
+            Some(_) => private.merge(modules::routes(modules.clone(), args.web.clone())),
+            None => private,
+        };
+        let private = match admin {
+            Some(admin) => private.merge(module_admin::routes(admin)),
             None => private,
         };
         let app = web::router(network, private, args.web);

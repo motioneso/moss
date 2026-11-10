@@ -2,6 +2,13 @@
 import { moduleClient } from "./guest-bridge.mjs";
 import { localDay } from "./local-date.mjs";
 import { taskFields, taskGroups, viewMode } from "./model.mjs";
+import {
+  assistantTrackedCount,
+  driftMark,
+  effortLabel,
+  isAssistantSource,
+  trackingNote
+} from "./row-marks.mjs";
 import { taskFilters } from "./filters.mjs";
 import { tagManager } from "./tags.mjs";
 import { listDeletion } from "./delete-list.mjs";
@@ -238,6 +245,21 @@ function taskRow(task) {
     ...task.tags.map((tag) => `#${tag.name}`)
   ].filter(Boolean);
   content.append(text("div", meta.join(" · "), "jds-caption"));
+  const drift = driftMark(task, new Date(), state.timeZone);
+  const marks = [
+    effortLabel(task.effort) && `${effortLabel(task.effort)} effort`,
+    isAssistantSource(task.source) && `From ${task.source}`
+  ].filter(Boolean);
+  if (drift || marks.length) {
+    const line = text("div", "", "tasks-row-marks");
+    if (drift) {
+      const pill = text("span", "", `jds-drift jds-drift--${drift.kind}`);
+      pill.append(text("span", "", "jds-drift__dot"), drift.label);
+      line.append(pill);
+    }
+    if (marks.length) line.append(text("span", marks.join(" · "), "jds-caption"));
+    content.append(line);
+  }
   row.append(done, content);
   if (task.status === "suggested") {
     const actions = text("div", "", "tasks-actions");
@@ -263,6 +285,9 @@ function render() {
   result.replaceChildren();
   result.className = $("view").value === "matrix" ? "tasks-matrix" : "";
   show("empty", tasks.length === 0);
+  const tracked = trackingNote(assistantTrackedCount(tasks));
+  $("tracking-note").textContent = tracked;
+  show("tracking-note", tracked !== "");
   for (const { title, subtitle, tasks: grouped } of taskGroups(tasks, $("view").value)) {
     const section = text("section", "", "tasks-section");
     const heading = text("h2", `${title} (${grouped.length})`);

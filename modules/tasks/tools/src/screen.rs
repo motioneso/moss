@@ -103,6 +103,7 @@ pub fn render() -> String {
                     <p id="quick-error" hidden role="alert"></p>
                 </form>
                 <div id="task-results" aria-live="polite"></div>
+                <p id="tracking-note" class="jds-caption" hidden></p>
             </section>
             <section id="editor" hidden aria-labelledby="editor-heading">
                 <h2 id="editor-heading">"Task details"</h2>

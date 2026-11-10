@@ -297,7 +297,15 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
     };
     use reqwest::Method;
     assert_eq!(call(Method::GET, "/events", None, None).0, 401);
-    let (status, events) = call(Method::GET, "/events", Some(&cookie), None);
+    // The server loads modules in the background and answers 503 until the host is ready.
+    let started = std::time::Instant::now();
+    let (status, events) = loop {
+        let answer = call(Method::GET, "/events", Some(&cookie), None);
+        if answer.0 != 503 || started.elapsed() > std::time::Duration::from_secs(60) {
+            break answer;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    };
     assert_eq!(status, 200, "{events}");
     let found = events["events"]
         .as_array()
@@ -344,8 +352,20 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
     );
     assert_eq!(status, 200, "{read}");
     assert_eq!(read["plan"]["localDay"], "2026-11-12", "{read}");
+    let apply = format!("/day-plans/{}/apply", created["plan"]["id"].as_str().unwrap());
+    let good = json!({"expectedRevision":1,"idempotencyKey":"live-apply-1"});
+    assert_eq!(call(Method::POST, &apply, None, Some(good.clone())).0, 401);
+    let (status, refused) = call(Method::POST, &apply, Some(&cookie), Some(good));
+    assert_eq!((status, refused["error"].as_str()), (503, Some("day plan apply is unavailable")), "{refused}");
+    let (status, bad) = call(
+        Method::POST,
+        &apply,
+        Some(&cookie),
+        Some(json!({"expectedRevision":1,"idempotencyKey":"k","surprise":true})),
+    );
+    assert_eq!((status, bad["code"].as_str()), (400, Some("day_plan_invalid")), "{bad}");
     let (status, settings) = call(Method::GET, "/briefing-settings", Some(&cookie), None);
     println!("briefing settings read -> {status}: {settings}");
-    println!("PASS installed Calendar package served over HTTPS by the real server: sign-in required, owner event list and detail, unknown event 404, day plan create and read");
+    println!("PASS installed Calendar package served over HTTPS by the real server: sign-in required, owner event list and detail, unknown event 404, day plan create and read, apply route validates and fails closed");
     println!("NOT PROVEN: Calendar screens on the real server (it serves module routes only), provider tools, second account over HTTP, second physical device");
 }

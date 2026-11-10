@@ -1,0 +1,14 @@
+html,
+body {
+  margin: 0;
+}
+iframe {
+  display: block;
+  width: 100%;
+  min-height: 160px;
+  border: 0;
+}
+#failure {
+  padding: 1rem;
+  font-family: sans-serif;
+}
