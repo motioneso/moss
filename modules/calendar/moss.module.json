@@ -273,12 +273,12 @@
     },
     {
       "id": "calendar.briefing-settings",
-      "description": "Edit and reload account lookahead, prep-task and time-block choices. Both original and installed settings URLs retain legacy scalar and singleton-array coercion, discard unknown fields, and return the original validation error for invalid requests. Only normalized declared fields reach the strict account-scoped preference writer. Settings and the time-block writeback policy save together; failed saves retain confirmed values. Auto grants standing permission also honored by the existing app. This Rust screen does not execute provider actions. A visible startup message remains until the screen mounts. Reload page in the parent retries the current screen and preserves an event link when one is present.",
+      "description": "Edit and reload account lookahead, prep-task and time-block choices. Both original and installed settings URLs retain legacy scalar and singleton-array coercion, discard unknown fields, and return the original validation error for invalid well-formed JSON requests. Only normalized declared fields reach the strict account-scoped preference writer. Settings and the time-block writeback policy save together; failed saves retain confirmed values. Auto grants standing permission also honored by the existing app. This Rust screen does not execute provider actions. A visible startup message remains until the screen mounts. Reload page in the parent retries the current screen and preserves an event link when one is present.",
       "errors": [
         {
           "code": "calendar-settings-request-invalid",
           "class": "validation",
-          "description": "Invalid settings return HTTP 400 with plain field-specific validation text, or body must be object for a non-object. The response has no error code. Use lookahead days zero, one or two, supported automation modes, and boolean legacy flags. Your saved settings are unchanged."
+          "description": "Invalid settings in well-formed JSON bodies return HTTP 400 with plain field-specific validation text, or body must be object for a non-object. The response has no error code. Use lookahead days zero, one or two, supported automation modes, and boolean legacy flags. Your saved settings are unchanged."
         },
         {
           "code": "calendar-settings-save-failed",

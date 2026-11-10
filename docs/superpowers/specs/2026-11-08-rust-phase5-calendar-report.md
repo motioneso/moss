@@ -1115,3 +1115,11 @@ Malformed/empty JSON transport bodies and JSON `__proto__` parser rejection rema
 unmatched and unproven; the request matrix covers parsed JSON values only. The
 validation rules remain in both the HTTP adapter and strict preference writer;
 the production-schema differential guards their intended agreement.
+
+The final installed run exposed one pre-existing privacy assertion that still
+expected an owner-field request to be rejected. After all 759 production comparisons
+passed, that assertion failed because both endpoints correctly discard the field.
+It now expects success while retaining the unchanged-owner-storage assertion; the
+strict host-interface forged-owner rejection remains separate. The app-map wording
+now limits its validation claim to well-formed JSON bodies. These final corrections
+need a further review round; the task's two allowed rounds were already used.

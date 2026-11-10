@@ -123,7 +123,7 @@ pub fn verify(app: &Application, f: &Fixture, captured: &Captured) {
                 "PATCH",
                 json!({"ownerUserId":f.a,"prepTaskMode":"auto"})
             )["status"],
-            400
+            200
         );
         assert_eq!(
             snapshot(f, f.a),
