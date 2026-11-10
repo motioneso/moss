@@ -1806,3 +1806,31 @@ HTTP/path parity, assembled Settings/chat, and use from another physical device
 over HTTPS. This is a bounded parity checkpoint; it must not replace working
 legacy Notes. Completing the remaining list exceeds this continuation's context
 scope.
+
+## Part twenty-five checkpoint — the package ships the four tools and manual sync
+
+The signed Notes package now declares and ships what earlier parts only tested.
+Package 0.1.16 grants the write and sync vault operations, the job and context
+ports, the `notes.sync` job and `POST /notes/sync`, and declares `notes.create`,
+`notes.edit` and `notes.delete` beside `notes.search`. Create and edit are
+`write`, delete is `destructive`, and all three require approval bound to the
+displayed note version. The shipped guest is the write-capable build; the plain
+build and `read_only_manifest()` remain only so tests can prove the write, sync
+and job paths stay closed when not granted. Connections gains a Sync now button
+that posts to the manual sync route and reports a requested sync or the
+no-folder refusal. The app-map data in the manifest and README describe all of it.
+
+Verification replaced test-only grants with the shipped manifest. The write-tools
+fixture and the sync coordinator test now run on the shipped manifest alone, the
+package test packs and validates the write-capable build, and the installed tool
+routing test routes the exact shipped tool declarations. The previous manifest
+failed the new package test (one tool, no job). Notes stays a pure client of the
+server SDK; no shared-host, SQL or dependency change. Builds used task-owned
+Cargo and Rust homes under scratch, separate guest targets and wit-bindgen 0.57.1
+only in that scratch registry.
+
+Still open: scheduled sync and automatic recovery timer, retention, managed
+publication and reconciliation, private exports and daily archives, configured
+embeddings in production, singleton coalescing and recall warmup, remaining
+path/HTTP parity, the assembled Settings and chat join, and use from a second
+physical device over HTTPS (the available second device was unreachable).
