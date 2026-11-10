@@ -1964,3 +1964,15 @@ Not proven: a real 24-hour wait (an old row was inserted with a past timestamp),
 Still open: managed publication and reconciliation (needs the Meetings module), singleton coalescing and recall warmup, the assembled Settings and chat join, second-device HTTPS proof.
 
 Review round 1 (Codex): two majors fixed. Recovery covered only 250 rows per tick (now 1000, restarting from the start each tick; a day beyond 1000 rows needs a very large folder and would leave later rows unrecovered, which is a documented limit, not a persisted cursor). Unlinking cancelled the only maintenance entry point, so it now runs maintenance first.
+
+## Part thirty-five checkpoint — repeat sync requests join the waiting one
+
+The manual Sync now route, the experimental request API and the fifteen-minute tick now look for an unfinished plain request (saved source only, no result yet, created in the last five minutes) for the same folder. When one exists they return its id and publish it again, instead of saving a second request. The queue deduplicates by id, so the repeat publication is safe and also repairs a lost first one. Continuation pages, finished requests, other folders and older requests do not match. Writes and daily archives still queue their own pass, because a running pass may already have scanned past their file. This is the Rust equivalent of the legacy per-account singleton key; it differs by returning the waiting request's id where legacy returned an empty id.
+
+Recall warmup is not ported on purpose. Legacy loaded a local model in the API process on first use. The Rust server embeds through a remote HTTP endpoint, so no model load exists to warm.
+
+Checks: a new unit test covers joined, finished, other-folder, continuation and empty cases and the five-minute cutoff; the Notes suites pass. Live (`pnpm test:rust-notes-server`, through the gate, passed): an unfinished request was saved for the linked folder, Sync now over HTTPS returned that request's id, and the server's worker then indexed the three notes from it.
+
+Not proven: two requests racing in the same instant (both could save a row; indexing is repeatable), a second signed-in account, native UI, a second physical device, the assembled Settings and chat join.
+
+Still open: managed publication and reconciliation (needs Meetings), the assembled Settings and chat join, second-device HTTPS proof.
