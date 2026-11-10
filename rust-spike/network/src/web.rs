@@ -128,6 +128,22 @@ fn public(path: &str) -> bool {
         || path.starts_with("/fonts/")
 }
 
+/// The only route a notifier device token opens. The token and `?client=<uuid>` identify the
+/// device; only the token's SHA-256 is compared, inside the database.
+const NOTIFIER_PATH: &str = "/api/notifier/notices";
+
+async fn notifier_access(
+    platform: &Platform,
+    headers: &HeaderMap,
+    query: Option<&str>,
+) -> Result<AccessContext, ApiError> {
+    let client = query
+        .and_then(|q| q.split('&').find_map(|p| p.strip_prefix("client=")))
+        .and_then(|v| uuid::Uuid::parse_str(v).ok())
+        .ok_or(ApiError::Unauthorized)?;
+    auth::resolve_notifier_access(platform, headers, client).await
+}
+
 fn denied(status: u16, code: &'static str) -> Response {
     (
         StatusCode::from_u16(status).unwrap_or(StatusCode::FORBIDDEN),
@@ -237,7 +253,16 @@ async fn guarded(n: &Arc<Network>, request: &mut Request, next: Next) -> Respons
     } else {
         None
     };
-    if !public(&path) {
+    if path == NOTIFIER_PATH {
+        // The notifier program holds a device token, not a session. The token opens only
+        // this path.
+        match notifier_access(&n.platform, request.headers(), request.uri().query()).await {
+            Ok(access) => {
+                request.extensions_mut().insert(access);
+            }
+            Err(error) => return error.into_response(),
+        }
+    } else if !public(&path) {
         match auth::resolve_access(&n.platform, request.headers()).await {
             Ok(access) => {
                 request.extensions_mut().insert(access);

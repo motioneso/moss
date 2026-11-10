@@ -217,6 +217,43 @@ async fn open(origin: &str, pin: Option<&str>) -> Result<(Tls, Vec<u8>), Result<
     }
 }
 
+/// One HTTPS request over the pinned connection. Used by the notifier, which has no web view.
+/// `Origin` is the server's own origin, as the server requires for writes.
+pub async fn request(
+    origin: &str,
+    pin: &str,
+    method: &str,
+    path: &str,
+    bearer: &str,
+    body: Option<&str>,
+) -> Result<(u16, Vec<u8>), Problem> {
+    let (mut tls, _) = match open(origin, Some(pin)).await {
+        Ok(ok) => ok,
+        Err(Ok(der)) => {
+            return Err(Problem::CertificateChanged {
+                fingerprint: fingerprint(&der),
+            })
+        }
+        Err(Err(problem)) => return Err(problem),
+    };
+    let authority = origin.trim_start_matches("https://");
+    let payload = body.unwrap_or("");
+    let request = format!(
+        "{method} {path} HTTP/1.1\r\nHost: {authority}\r\nOrigin: {origin}\r\nAuthorization: Bearer {bearer}\r\nAccept: application/json\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
+        payload.len()
+    );
+    let mut reply = Vec::new();
+    let exchange = async {
+        tls.write_all(request.as_bytes()).await?;
+        (&mut tls).take(1024 * 1024).read_to_end(&mut reply).await
+    };
+    if !matches!(timeout(Duration::from_secs(10), exchange).await, Ok(Ok(_))) && reply.is_empty() {
+        return Err(Problem::Unreachable);
+    }
+    let (status, body) = split_reply(&reply).ok_or(Problem::NotMoss)?;
+    Ok((status, body.to_vec()))
+}
+
 /// Reads the certificate without trusting it, so the user can compare its code. No request is
 /// sent over the connection.
 pub async fn peek_certificate(origin: &str) -> Result<String, Problem> {

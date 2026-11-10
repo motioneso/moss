@@ -21,7 +21,16 @@ async function client(storage = new Map(), initial = {}) {
     legacyServer: false,
     ...initial
   };
-  const window = { ipc: { postMessage: (s) => sent.push(JSON.parse(s)) } };
+  const background = [];
+  // Only receipt requests count as notices; heartbeat and enrolment go to `background`.
+  const window = {
+    ipc: {
+      postMessage: (s) => {
+        const message = JSON.parse(s);
+        (message.notice ? sent : background).push(message);
+      }
+    }
+  };
   const context = {
     crypto: {
       randomUUID: () =>
@@ -42,6 +51,9 @@ async function client(storage = new Map(), initial = {}) {
     },
     window,
     fetch: async (path, options = {}) => {
+      if (path === "/api/desktop/notifier") {
+        return { ok: true, status: 200, json: async () => ({ token: "t".repeat(64) }) };
+      }
       const key =
         state.account +
         ":" +
@@ -78,6 +90,7 @@ async function client(storage = new Map(), initial = {}) {
   return {
     state,
     sent,
+    background,
     tick: async (elapsed = 5000) => {
       state.now += elapsed;
       await tick();
@@ -297,4 +310,11 @@ test("missing acceptance backs off retries to at most once a minute", async () =
   assert.equal(sent.length, 5);
   await tick();
   assert.equal(sent.length, 6);
+});
+
+test("each poll sends a heartbeat and the notifier is enrolled once per account", async () => {
+  const { background, tick } = await client(new Map(), {});
+  await tick();
+  assert.equal(background.filter((m) => m.heartbeat).length, 2);
+  assert.equal(background.filter((m) => m.token).length, 1);
 });

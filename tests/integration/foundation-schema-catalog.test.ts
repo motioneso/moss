@@ -664,7 +664,8 @@ describe("MVP foundation schema catalog", () => {
         { version: "0357", name: "0357_diagnostic_log_records.sql" },
         { version: "0358", name: "0358_diagnostic_log_platform_text.sql" },
         { version: "0359", name: "0359_push_delivery_claims.sql" },
-        { version: "0361", name: "0361_desktop_notification_receipts.sql" }
+        { version: "0361", name: "0361_desktop_notification_receipts.sql" },
+        { version: "0362", name: "0362_desktop_notifier_devices.sql" }
       ]);
     } finally {
       await client.end();
