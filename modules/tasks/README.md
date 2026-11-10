@@ -49,8 +49,10 @@ Current remaining work: lazy recurrence advancement, recurrence jobs, full
 deferred-queue policy and installed worker dispatch, public People linkage,
 policy/feedback orchestration, remaining screen/settings parity, installed chat and summary presentation,
 real application shell integration, performance budgets and physical second-device
-HTTPS proof. The full endpoint run still matches 95 of 96 cases; repeated
-recurring completion differs at the final task-list ordering. Historical
+HTTPS proof. The full endpoint run now matches all 96 existing cases. This is
+coverage of those cases, not full semantic parity: manage-share completion
+retries can still rewrite history, and duplicate HTTP/tool completion returns
+success where the legacy aborted transaction can produce an error. Historical
 checkpoint notes below describe the earlier state.
 
 Part 15 adds list inclusion, show-only and exclusion under **Choose lists**,

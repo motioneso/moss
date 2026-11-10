@@ -68,10 +68,11 @@ fn compiled_recurring_completion_retry_preserves_history_and_list_order() {
 
     // A completed series whose successor was deleted still needs the legacy repair.
     let next_id = items[0]["id"].as_str().unwrap();
-    assert_eq!(
-        f.route(f.owner, "DELETE", &format!("/tasks/{next_id}"), Value::Null)["status"],
-        200
-    );
+    f.rt.block_on(f.db.execute(
+        "DELETE FROM app.tasks WHERE id=$1 AND owner_user_id=$2",
+        &[&next_id.parse::<Uuid>().unwrap(), &f.owner],
+    ))
+    .unwrap();
     invoke();
     let repaired = f.route(f.owner, "GET", "/tasks", Value::Null);
     let repaired = repaired["body"]["tasks"].as_array().unwrap();

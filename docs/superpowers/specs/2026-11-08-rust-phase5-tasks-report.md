@@ -1776,6 +1776,31 @@ checks HTTP and tool retries, one next occurrence, list order, missing-occurrenc
 repair and an ordinary title edit. Final endpoint, privacy, browser and review
 receipts are attached to this task's proof artifact.
 
+The first review requested a removal control for the new owner guard. The
+compiled test uses a view-shared completed recurring task through HTTP, tool and
+job entry points, with the successor present and missing. It strips the actual
+typed `Owned` predicate, requires the unchanged no-insert assertion to fail,
+then restores the predicate and requires refusal without writes. This does not
+substitute invented database responses. Missing-successor fixtures delete only
+their synthetic row by task and owner IDs; there is no task-delete HTTP route.
+
+The unchanged full endpoint suite reproduced **95/96** on the original component
+and passes **96/96** on the fixed component, with no exclusions, normalization
+or assertion changes. This establishes parity for the existing cases only.
+Two review findings below the required fix bar remain explicit: a manage-share
+completion retry still uses the ordinary update path and may rewrite timestamps;
+and HTTP/tool duplicate retries now return success while the legacy transaction
+can error when a later tag read encounters its aborted transaction. Stored owner
+history matches, but those response semantics are not claimed to match.
+
+Live proof used the real package screen on a fresh signed registry/install Rust
+HTTPS fixture. Owner setup, Manage lists, task creation, recurring completion
+and reload showed one completed original and one next occurrence. The fixture
+verified persistence, certificate verification, sign-in redirect, unknown-host
+refusal and unknown-origin refusal. Browser automation ignored the fixture
+certificate warning as instructed. This is package-screen evidence, separate
+from full shell and physical second-device proof.
+
 The branch started at main including part 24. Existing scratch Rust 1.95, Wasm
 target, generator and Cargo dependencies were reused offline. The tools lockfile
 was refreshed offline without a byte change. Declared JavaScript dependencies
