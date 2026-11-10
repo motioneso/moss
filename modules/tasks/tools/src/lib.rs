@@ -49,6 +49,7 @@ pub fn package_files(
         "details.mjs",
         "settings.mjs",
         "model.mjs",
+        "focus.mjs",
         "local-date.mjs",
         "capture.mjs",
         "quick-add.mjs",

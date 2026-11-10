@@ -1,5 +1,17 @@
 # Tasks component checkpoint
 
+Part 28 adds the legacy screen's **Do First**, **At risk** and **Done today**
+focus presets in List and Grid. Focus replaces status while retaining list, tag
+and search filters. Choosing a status leaves focus; Clear filters returns to
+open tasks across all lists. At risk includes open tasks overdue or due within
+two calendar days in the saved account timezone; Do First uses the existing
+high-priority/forty-eight-hour quadrant rule. These screen presets differ from
+the drift API rules. `tools/focus-parity.mjs` compares the unchanged legacy
+screen model across local-midnight and DST boundaries. This does not connect
+Today/chat links or add lazy recurrence advancement. Set `TASKS_UI_FOCUS_PROOF=1`
+on the signed UI gate and create the three fixtures described in the part 28
+report before finishing its browser check.
+
 Part 27 refreshes untouched editor fields after detail actions while retaining
 unsaved fields and comments. Completing the last subtask updates the parent's
 status in the open editor, so a later save does not reopen it. Refreshed dates

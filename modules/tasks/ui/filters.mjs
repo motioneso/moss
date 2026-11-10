@@ -7,6 +7,16 @@ const $ = (id) => document.getElementById(id);
 export function taskFilters(changed, searchIntent = () => null) {
   let listStates = {};
   let tagFilter = [];
+  $("focus-filter").addEventListener("change", () => {
+    // A preset overrides status, as in the legacy Today links. Choosing a
+    // status explicitly leaves the preset; clearing it returns to open tasks.
+    $("status-filter").value = $("focus-filter").value ? "" : "todo";
+    changed();
+  });
+  $("status-filter").addEventListener("input", () => {
+    $("focus-filter").value = "";
+    changed();
+  });
   $("list-filter").addEventListener("change", () => {
     const id = $("list-filter").value;
     listStates = id ? { [id]: "solo" } : {};
@@ -99,6 +109,7 @@ export function taskFilters(changed, searchIntent = () => null) {
         listStates,
         tagFilter,
         status: $("status-filter").value,
+        focus: $("focus-filter").value || null,
         search: $("search").value,
         searchIntent: searchIntent()
       });
@@ -109,6 +120,7 @@ export function taskFilters(changed, searchIntent = () => null) {
       listStates = {};
       tagFilter = [];
       $("status-filter").value = "todo";
+      $("focus-filter").value = "";
       $("search").value = "";
       changed();
     }

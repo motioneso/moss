@@ -488,7 +488,6 @@ document.querySelectorAll("[data-action]").forEach((node) => {
 $("task-list").addEventListener("change", () => {
   if (!state.editing) void run(() => capture.loadTags($("task-list").value));
 });
-$("status-filter").addEventListener("input", render);
 $("list-options").addEventListener("toggle", () => {
   void client.resize(document.documentElement.scrollHeight).catch(() => {});
 });
