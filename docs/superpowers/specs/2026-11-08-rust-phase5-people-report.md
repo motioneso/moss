@@ -2609,3 +2609,39 @@ The final receipt commit changes only this report; the runtime, manifest and
 gate inputs remain those tested at `bb8e8e168`. The checkpoint PR and recipe
 proof retain the evidence after task scratch is removed. See the Herdr review record and checkpoint PR for the final review verdict.
 The remaining acceptance list above is still open.
+
+## Part 23 — reduce timestamp conversion work (checkpoint)
+
+Before editing, the task branch was fast-forwarded to `4c66ea048`, including
+merged People part 22 (PR 4149). This slice changes People only. It keeps the
+module a client of shared server ports and leaves all host budgets unchanged.
+
+Response conversion recognizes canonical four-digit-year UTC timestamps with
+`Z` or `+00:00`, validates calendar and clock fields, and writes the legacy
+millisecond string directly. Fractions are truncated or padded to three digits.
+Other forms, including offsets and leap seconds, retain the previous Chrono
+conversion. Invalid timestamps retain the previous response behavior. Finished
+timestamp and confidence strings move directly into JSON instead of being
+copied through the JSON macro. Calendar, fraction and fallback comparisons use
+the previous converter as their oracle; the compiled database probe compares
+complete responses with the real legacy handlers.
+
+The unchanged core Wasm was frozen before connecting the new converter:
+SHA-256 `abb4cddc6ecdfcfb24abe34d42605ad9cc2fafccb4dcd3640ced4f2f814cae9b`.
+Verification outcomes and the measured list boundary will be recorded below.
+This paragraph does not claim an improved resource boundary yet.
+
+Builds use task-owned Cargo, rustup and targets in scratch. Existing pinned
+toolchains and declared dependency caches were copied there; missing locked
+dependencies and both declared Wasm targets were fetched there. The already
+approved `wit-bindgen =0.57.1` remains a local project dependency. No global
+tool or new third-party dependency is installed. Limited disk space required
+moving this task's scratch onto available memory-backed storage.
+
+The shipping server router in `rust-spike/shell/app/src/main.rs` still lacks
+the installed People route/frame and chat-tool composition. Real UI acceptance,
+sign-in/origin/privacy acceptance and a second physical device over HTTPS remain
+unproved. Full large-account reads, complete locale ordering, listener parser
+qualification, ingest nudges, real providers, installed scheduling, command
+retention/quotas and broader backend failures also remain open. This is a
+partial parity checkpoint, not completed Phase 5 acceptance.

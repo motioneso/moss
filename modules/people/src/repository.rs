@@ -388,15 +388,13 @@ pub(crate) fn response(mut row: Value, fields: &[(&str, &str)]) -> Value {
         // TypeScript assertion does not convert it, including on Type.Any routes.
         if *field == "confidence" {
             if let Some(number) = value.as_f64() {
-                value = json!(format!("{number:.2}"));
+                value = Value::String(format!("{number:.2}"));
             }
         }
         if field.ends_with("_at") {
             if let Some(text) = value.as_str() {
-                if let Ok(time) = chrono::DateTime::parse_from_rfc3339(text) {
-                    value = json!(time
-                        .with_timezone(&chrono::Utc)
-                        .to_rfc3339_opts(chrono::SecondsFormat::Millis, true));
+                if let Some(timestamp) = crate::response_time::normalize(text) {
+                    value = Value::String(timestamp);
                 }
             }
         }
