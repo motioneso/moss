@@ -405,6 +405,9 @@ impl Fixture {
             jobs: jobs.clone(),
             fail,
         });
+        (self.durable_ports_with_queue(db, queue), jobs)
+    }
+    fn durable_ports_with_queue(&self, db: Database, queue: Arc<dyn Ports>) -> Arc<dyn Ports> {
         let ports = Arc::new(
             TransactionalDatabasePorts::new(
                 db.clone(),
@@ -414,15 +417,14 @@ impl Fixture {
             )
             .unwrap(),
         );
-        let ports = Arc::new(
+        Arc::new(
             FolderSyncStatusPorts::new(
                 db,
                 BTreeMap::from([(("notes".into(), "source".into()), "notes-last-sync".into())]),
                 ports,
             )
             .unwrap(),
-        );
-        (ports, jobs)
+        )
     }
     fn durable_manifest(&self) -> moss_module_host::manifest::Manifest {
         let mut manifest = (*self.manifest).clone();
