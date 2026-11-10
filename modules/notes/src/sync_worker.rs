@@ -165,7 +165,7 @@ pub fn request(host: &impl Host) -> Result<Value> {
 
 /// How long an unfinished request for the same folder absorbs new manual or
 /// scheduled requests, matching the legacy one-queued-sync-per-account rule.
-const COALESCE_SECONDS: i64 = 10 * 60;
+const COALESCE_SECONDS: i64 = 2 * 60;
 
 /// Manual and scheduled syncs reuse a recent unfinished request for the same
 /// folder instead of stacking another. The job reads the folder when it runs, so
@@ -190,7 +190,7 @@ fn pending_request(host: &impl Host, source: &str) -> Result<Option<String>> {
         op: Compare::Ge,
         value: json!(cutoff),
     });
-    query.limit = Some(25);
+    query.limit = Some(100);
     query.order = vec![Order {
         column: "created_at".into(),
         descending: true,
@@ -198,7 +198,9 @@ fn pending_request(host: &impl Host, source: &str) -> Result<Option<String>> {
     let rows = Client(host).query(TABLE, &query)?;
     Ok(rows.iter().find_map(|row| {
         let checkpoint = row.get("checkpoint")?;
-        let open = checkpoint.get("workerResult").is_none();
+        // A continuation page (it names a file) resumes mid-folder and would skip
+        // earlier files, so only a whole-folder request can absorb a new one.
+        let open = checkpoint.get("workerResult").is_none() && checkpoint.get("filePath").is_none();
         (open && checkpoint.get("sourcePath").and_then(Value::as_str) == Some(source))
             .then(|| row.get("id")?.as_str().map(str::to_owned))
             .flatten()

@@ -281,7 +281,7 @@ impl Host for Pending {
             ("context", "read", "call") => json!({"now":"2026-11-09T12:00:00Z"}),
             ("context", "uuid", "new") => json!({"id":ID}),
             ("db", "query", "app.notes_sync_checkpoints") if params["kind"] == "select" => {
-                assert_eq!(params["filter"]["value"], "2026-11-09T11:50:00Z");
+                assert_eq!(params["filter"]["value"], "2026-11-09T11:58:00Z");
                 self.rows.clone()
             }
             ("db", "query", "app.notes_sync_checkpoints") => {
@@ -327,7 +327,9 @@ fn manual_sync_makes_a_new_request_when_nothing_matching_is_waiting() {
         "checkpoint":{"workerResult":{"ingested":1,"skipped":0,"errors":0}}});
     let elsewhere = json!({"id":"33333333-3333-4333-8333-333333333333",
         "checkpoint":{"sourcePath":"/elsewhere"}});
-    for rows in [json!([]), json!([finished, elsewhere])] {
+    let continuation = json!({"id":"44444444-4444-4444-8444-444444444444",
+        "checkpoint":{"sourcePath":"/notes","filePath":"b.md","chunkOffset":0,"fileHash":"h"}});
+    for rows in [json!([]), json!([finished, elsewhere, continuation])] {
         let (out, host) = manual(rows);
         assert_eq!(out, json!({"status":202,"body":{"jobId":ID}}));
         assert_eq!(*host.inserts.borrow(), 1);
