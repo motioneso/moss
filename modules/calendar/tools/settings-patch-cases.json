@@ -1,0 +1,736 @@
+[
+  {},
+  {
+    "ownerUserId": "foreign"
+  },
+  {
+    "lookaheadDays": 1,
+    "unknown": "ignored"
+  },
+  {
+    "timeBlockMode": "auto",
+    "ownerUserId": "foreign"
+  },
+  {
+    "lookaheadDays": null
+  },
+  {
+    "lookaheadDays": false
+  },
+  {
+    "lookaheadDays": true
+  },
+  {
+    "lookaheadDays": 0
+  },
+  {
+    "lookaheadDays": 1
+  },
+  {
+    "lookaheadDays": 2
+  },
+  {
+    "lookaheadDays": 3
+  },
+  {
+    "lookaheadDays": -1
+  },
+  {
+    "lookaheadDays": 1.5
+  },
+  {
+    "lookaheadDays": ""
+  },
+  {
+    "lookaheadDays": "0"
+  },
+  {
+    "lookaheadDays": "1"
+  },
+  {
+    "lookaheadDays": "2"
+  },
+  {
+    "lookaheadDays": "3"
+  },
+  {
+    "lookaheadDays": " 1 "
+  },
+  {
+    "lookaheadDays": "0x1"
+  },
+  {
+    "lookaheadDays": "1e0"
+  },
+  {
+    "lookaheadDays": "false"
+  },
+  {
+    "lookaheadDays": "true"
+  },
+  {
+    "lookaheadDays": "off"
+  },
+  {
+    "lookaheadDays": "suggest"
+  },
+  {
+    "lookaheadDays": "auto"
+  },
+  {
+    "lookaheadDays": "AUTO"
+  },
+  {
+    "lookaheadDays": []
+  },
+  {
+    "lookaheadDays": [1]
+  },
+  {
+    "lookaheadDays": ["true"]
+  },
+  {
+    "lookaheadDays": ["auto"]
+  },
+  {
+    "lookaheadDays": [1, 2]
+  },
+  {
+    "lookaheadDays": {}
+  },
+  {
+    "lookaheadDays": {
+      "x": 1
+    }
+  },
+  {
+    "prepTaskMode": null
+  },
+  {
+    "prepTaskMode": false
+  },
+  {
+    "prepTaskMode": true
+  },
+  {
+    "prepTaskMode": 0
+  },
+  {
+    "prepTaskMode": 1
+  },
+  {
+    "prepTaskMode": 2
+  },
+  {
+    "prepTaskMode": 3
+  },
+  {
+    "prepTaskMode": -1
+  },
+  {
+    "prepTaskMode": 1.5
+  },
+  {
+    "prepTaskMode": ""
+  },
+  {
+    "prepTaskMode": "0"
+  },
+  {
+    "prepTaskMode": "1"
+  },
+  {
+    "prepTaskMode": "2"
+  },
+  {
+    "prepTaskMode": "3"
+  },
+  {
+    "prepTaskMode": " 1 "
+  },
+  {
+    "prepTaskMode": "0x1"
+  },
+  {
+    "prepTaskMode": "1e0"
+  },
+  {
+    "prepTaskMode": "false"
+  },
+  {
+    "prepTaskMode": "true"
+  },
+  {
+    "prepTaskMode": "off"
+  },
+  {
+    "prepTaskMode": "suggest"
+  },
+  {
+    "prepTaskMode": "auto"
+  },
+  {
+    "prepTaskMode": "AUTO"
+  },
+  {
+    "prepTaskMode": []
+  },
+  {
+    "prepTaskMode": [1]
+  },
+  {
+    "prepTaskMode": ["true"]
+  },
+  {
+    "prepTaskMode": ["auto"]
+  },
+  {
+    "prepTaskMode": [1, 2]
+  },
+  {
+    "prepTaskMode": {}
+  },
+  {
+    "prepTaskMode": {
+      "x": 1
+    }
+  },
+  {
+    "timeBlockMode": null
+  },
+  {
+    "timeBlockMode": false
+  },
+  {
+    "timeBlockMode": true
+  },
+  {
+    "timeBlockMode": 0
+  },
+  {
+    "timeBlockMode": 1
+  },
+  {
+    "timeBlockMode": 2
+  },
+  {
+    "timeBlockMode": 3
+  },
+  {
+    "timeBlockMode": -1
+  },
+  {
+    "timeBlockMode": 1.5
+  },
+  {
+    "timeBlockMode": ""
+  },
+  {
+    "timeBlockMode": "0"
+  },
+  {
+    "timeBlockMode": "1"
+  },
+  {
+    "timeBlockMode": "2"
+  },
+  {
+    "timeBlockMode": "3"
+  },
+  {
+    "timeBlockMode": " 1 "
+  },
+  {
+    "timeBlockMode": "0x1"
+  },
+  {
+    "timeBlockMode": "1e0"
+  },
+  {
+    "timeBlockMode": "false"
+  },
+  {
+    "timeBlockMode": "true"
+  },
+  {
+    "timeBlockMode": "off"
+  },
+  {
+    "timeBlockMode": "suggest"
+  },
+  {
+    "timeBlockMode": "auto"
+  },
+  {
+    "timeBlockMode": "AUTO"
+  },
+  {
+    "timeBlockMode": []
+  },
+  {
+    "timeBlockMode": [1]
+  },
+  {
+    "timeBlockMode": ["true"]
+  },
+  {
+    "timeBlockMode": ["auto"]
+  },
+  {
+    "timeBlockMode": [1, 2]
+  },
+  {
+    "timeBlockMode": {}
+  },
+  {
+    "timeBlockMode": {
+      "x": 1
+    }
+  },
+  {
+    "suggestTasks": null
+  },
+  {
+    "suggestTasks": false
+  },
+  {
+    "suggestTasks": true
+  },
+  {
+    "suggestTasks": 0
+  },
+  {
+    "suggestTasks": 1
+  },
+  {
+    "suggestTasks": 2
+  },
+  {
+    "suggestTasks": 3
+  },
+  {
+    "suggestTasks": -1
+  },
+  {
+    "suggestTasks": 1.5
+  },
+  {
+    "suggestTasks": ""
+  },
+  {
+    "suggestTasks": "0"
+  },
+  {
+    "suggestTasks": "1"
+  },
+  {
+    "suggestTasks": "2"
+  },
+  {
+    "suggestTasks": "3"
+  },
+  {
+    "suggestTasks": " 1 "
+  },
+  {
+    "suggestTasks": "0x1"
+  },
+  {
+    "suggestTasks": "1e0"
+  },
+  {
+    "suggestTasks": "false"
+  },
+  {
+    "suggestTasks": "true"
+  },
+  {
+    "suggestTasks": "off"
+  },
+  {
+    "suggestTasks": "suggest"
+  },
+  {
+    "suggestTasks": "auto"
+  },
+  {
+    "suggestTasks": "AUTO"
+  },
+  {
+    "suggestTasks": []
+  },
+  {
+    "suggestTasks": [1]
+  },
+  {
+    "suggestTasks": ["true"]
+  },
+  {
+    "suggestTasks": ["auto"]
+  },
+  {
+    "suggestTasks": [1, 2]
+  },
+  {
+    "suggestTasks": {}
+  },
+  {
+    "suggestTasks": {
+      "x": 1
+    }
+  },
+  {
+    "createTasks": null
+  },
+  {
+    "createTasks": false
+  },
+  {
+    "createTasks": true
+  },
+  {
+    "createTasks": 0
+  },
+  {
+    "createTasks": 1
+  },
+  {
+    "createTasks": 2
+  },
+  {
+    "createTasks": 3
+  },
+  {
+    "createTasks": -1
+  },
+  {
+    "createTasks": 1.5
+  },
+  {
+    "createTasks": ""
+  },
+  {
+    "createTasks": "0"
+  },
+  {
+    "createTasks": "1"
+  },
+  {
+    "createTasks": "2"
+  },
+  {
+    "createTasks": "3"
+  },
+  {
+    "createTasks": " 1 "
+  },
+  {
+    "createTasks": "0x1"
+  },
+  {
+    "createTasks": "1e0"
+  },
+  {
+    "createTasks": "false"
+  },
+  {
+    "createTasks": "true"
+  },
+  {
+    "createTasks": "off"
+  },
+  {
+    "createTasks": "suggest"
+  },
+  {
+    "createTasks": "auto"
+  },
+  {
+    "createTasks": "AUTO"
+  },
+  {
+    "createTasks": []
+  },
+  {
+    "createTasks": [1]
+  },
+  {
+    "createTasks": ["true"]
+  },
+  {
+    "createTasks": ["auto"]
+  },
+  {
+    "createTasks": [1, 2]
+  },
+  {
+    "createTasks": {}
+  },
+  {
+    "createTasks": {
+      "x": 1
+    }
+  },
+  {
+    "suggestTimeBlocks": null
+  },
+  {
+    "suggestTimeBlocks": false
+  },
+  {
+    "suggestTimeBlocks": true
+  },
+  {
+    "suggestTimeBlocks": 0
+  },
+  {
+    "suggestTimeBlocks": 1
+  },
+  {
+    "suggestTimeBlocks": 2
+  },
+  {
+    "suggestTimeBlocks": 3
+  },
+  {
+    "suggestTimeBlocks": -1
+  },
+  {
+    "suggestTimeBlocks": 1.5
+  },
+  {
+    "suggestTimeBlocks": ""
+  },
+  {
+    "suggestTimeBlocks": "0"
+  },
+  {
+    "suggestTimeBlocks": "1"
+  },
+  {
+    "suggestTimeBlocks": "2"
+  },
+  {
+    "suggestTimeBlocks": "3"
+  },
+  {
+    "suggestTimeBlocks": " 1 "
+  },
+  {
+    "suggestTimeBlocks": "0x1"
+  },
+  {
+    "suggestTimeBlocks": "1e0"
+  },
+  {
+    "suggestTimeBlocks": "false"
+  },
+  {
+    "suggestTimeBlocks": "true"
+  },
+  {
+    "suggestTimeBlocks": "off"
+  },
+  {
+    "suggestTimeBlocks": "suggest"
+  },
+  {
+    "suggestTimeBlocks": "auto"
+  },
+  {
+    "suggestTimeBlocks": "AUTO"
+  },
+  {
+    "suggestTimeBlocks": []
+  },
+  {
+    "suggestTimeBlocks": [1]
+  },
+  {
+    "suggestTimeBlocks": ["true"]
+  },
+  {
+    "suggestTimeBlocks": ["auto"]
+  },
+  {
+    "suggestTimeBlocks": [1, 2]
+  },
+  {
+    "suggestTimeBlocks": {}
+  },
+  {
+    "suggestTimeBlocks": {
+      "x": 1
+    }
+  },
+  {
+    "blockTime": null
+  },
+  {
+    "blockTime": false
+  },
+  {
+    "blockTime": true
+  },
+  {
+    "blockTime": 0
+  },
+  {
+    "blockTime": 1
+  },
+  {
+    "blockTime": 2
+  },
+  {
+    "blockTime": 3
+  },
+  {
+    "blockTime": -1
+  },
+  {
+    "blockTime": 1.5
+  },
+  {
+    "blockTime": ""
+  },
+  {
+    "blockTime": "0"
+  },
+  {
+    "blockTime": "1"
+  },
+  {
+    "blockTime": "2"
+  },
+  {
+    "blockTime": "3"
+  },
+  {
+    "blockTime": " 1 "
+  },
+  {
+    "blockTime": "0x1"
+  },
+  {
+    "blockTime": "1e0"
+  },
+  {
+    "blockTime": "false"
+  },
+  {
+    "blockTime": "true"
+  },
+  {
+    "blockTime": "off"
+  },
+  {
+    "blockTime": "suggest"
+  },
+  {
+    "blockTime": "auto"
+  },
+  {
+    "blockTime": "AUTO"
+  },
+  {
+    "blockTime": []
+  },
+  {
+    "blockTime": [1]
+  },
+  {
+    "blockTime": ["true"]
+  },
+  {
+    "blockTime": ["auto"]
+  },
+  {
+    "blockTime": [1, 2]
+  },
+  {
+    "blockTime": {}
+  },
+  {
+    "blockTime": {
+      "x": 1
+    }
+  },
+  {
+    "lookaheadDays": 3,
+    "timeBlockMode": "invalid"
+  },
+  {
+    "createTasks": "yes",
+    "prepTaskMode": true
+  },
+  {
+    "lookaheadDays": "1",
+    "prepTaskMode": ["auto"],
+    "timeBlockMode": ["suggest"],
+    "createTasks": 0,
+    "blockTime": null
+  },
+  {
+    "lookaheadDays": " "
+  },
+  {
+    "lookaheadDays": "﻿1 "
+  },
+  {
+    "lookaheadDays": "1"
+  },
+  {
+    "lookaheadDays": "0b10"
+  },
+  {
+    "lookaheadDays": "0o2"
+  },
+  {
+    "lookaheadDays": "0X02"
+  },
+  {
+    "lookaheadDays": "-0"
+  },
+  {
+    "lookaheadDays": "+2"
+  },
+  {
+    "lookaheadDays": ".0"
+  },
+  {
+    "lookaheadDays": "2.0"
+  },
+  {
+    "lookaheadDays": "2e0"
+  },
+  {
+    "lookaheadDays": "2e-1"
+  },
+  {
+    "lookaheadDays": "-0x1"
+  },
+  {
+    "lookaheadDays": "NaN"
+  },
+  {
+    "lookaheadDays": "Infinity"
+  },
+  {
+    "lookaheadDays": "1_0"
+  },
+  {
+    "lookaheadDays": "０"
+  },
+  {
+    "lookaheadDays": "0x"
+  },
+  {
+    "lookaheadDays": "0b2"
+  },
+  null,
+  [],
+  [{}],
+  "body",
+  0,
+  false
+]

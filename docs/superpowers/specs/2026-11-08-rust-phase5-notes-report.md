@@ -1709,3 +1709,55 @@ complete HTTP/path parity, assembled Settings/chat and real use from another
 physical device over HTTPS. No screen or second-device proof is claimed here.
 Completing that list exceeds this continuation's context scope; this checkpoint
 must not replace working legacy Notes.
+
+## Part twenty-three checkpoint — folder request input parity
+
+The installed Notes folder routes now preserve the legacy Settings schema's
+validation response and coercions. Extra fields are ignored instead of rejecting
+an otherwise valid browse request. They cannot select another account or its
+roots. Invalid bodies, invalid path types and repeated directory paths return the
+legacy validation envelope before any host call. False, zero and empty-string
+bodies, including supported singleton-array forms, unlink the calling account's
+folder, as the legacy validator does. Numeric and boolean path fields become
+text before the existing vault checks. No folder admission policy is relaxed.
+Package 0.1.15, its changelog and module app map describe the behavior and recovery.
+Notes remains a pure client of server SDK ports; no shared-host additions,
+permissions, dependencies or SQL changes are introduced.
+
+The new native regressions failed against the previous route handler: it refused
+legacy unlink coercions and returned a different validation body. The new schema
+corpus executes real Fastify with the authored legacy schemas, Moss's real API
+error handler and an explicit folder-admission echo stand-in. The separate
+installed Settings oracle uses the same error handler and compares
+actual legacy handlers on disposable data, including each saved source/revision
+and unchanged other-account preferences. The existing preference RLS-removal
+control remains required. Command receipts, failing-first output and independent
+review are recorded in this task's proof artifact; no earlier receipt is reused
+as proof of this change. Review found that the initial fixtures had omitted the
+API error handler and agreed on the wrong stock Fastify response. The corrected
+regression was observed failing before the guest response was fixed. Missing-body
+save coverage is retained; duplicate serialized zero cases are removed.
+
+The schema check covers bounded inputs, not every JSON value or malformed
+JSON/content-type transport behavior. Scalar paths coerced to relative text
+still encounter the stricter vault policy; their filesystem response parity is
+not claimed. Symlink descendants, relative/traversal paths, missing paths outside
+roots, non-directory sources and locale-sensitive ordering remain path/HTTP
+parity work. This changes no screen. Any package HTTPS fixture check is on this
+machine, not the assembled Phase 4 shell or another physical device.
+
+Builds use task-owned scratch Cargo and Rust toolchain homes, separate ordinary
+and write-tools guest targets, the declared Wasm target and approved pinned
+wit-bindgen 0.57.1. Only existing lockfile dependencies and the declared target
+were prepared; nothing was installed globally. Host compilation was moved to a
+task-owned target after the initial borrowed cache blocked a sibling's checks.
+Existing artifacts were copied, with subsequent compilation isolated. Database
+tests run only through scripts/run-gate.sh.
+
+This is a bounded checkpoint. Full Notes acceptance still needs live assembled
+chat approval presentation/consumption and writes, configured embeddings,
+production sync/queue delivery, singleton coalescing, recall warmup, automatic
+recovery/retention, managed publication/fencing/reconciliation, private exports
+and daily archives, complete HTTP/path parity, assembled Settings/chat and real
+use from another physical device over HTTPS. Completing that list exceeds this
+continuation's context scope. Do not replace working legacy Notes with this package.

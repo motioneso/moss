@@ -42,6 +42,10 @@ name = "approval_api"
 path = "tests/approval_api.rs"
 
 [[test]]
+name = "settings_input"
+path = "tests/settings_input.rs"
+
+[[test]]
 name = "write_tools"
 path = "tests/write_tools.rs"
 required-features = ["write-tools"]

@@ -147,6 +147,12 @@ fn installed_settings_match_legacy_and_owner_privacy_fails_without_rls() {
         )
         .unwrap()
     };
+    let other_preferences = |actor: Uuid| -> Value {
+        rt.block_on(bootstrap.query_one(
+            "SELECT coalesce(jsonb_agg(to_jsonb(p) ORDER BY owner_user_id,key),'[]'::jsonb) FROM app.preferences p WHERE owner_user_id=ANY($1::uuid[]) AND owner_user_id<>$2",
+            &[&actors, &actor],
+        )).unwrap().get(0)
+    };
     for case in oracle["expected"].as_array().unwrap() {
         let actor: Uuid = case["actor"].as_str().unwrap().parse().unwrap();
         rt.block_on(async {
@@ -155,11 +161,17 @@ fn installed_settings_match_legacy_and_owner_privacy_fails_without_rls() {
                 bootstrap.execute("INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,$2,$3)",&[&actor,&key,value]).await.unwrap();
             }
         });
+        let others_before = other_preferences(actor);
         let actual = call(
             actor,
             case["method"].as_str().unwrap(),
             case["route"].as_str().unwrap(),
             case["body"].clone(),
+        );
+        assert_eq!(
+            other_preferences(actor),
+            others_before,
+            "A request changed another account's preferences: {case}"
         );
         assert_eq!(
             actual, case["expected"],

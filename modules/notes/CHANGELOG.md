@@ -1,5 +1,9 @@
 # Notes package
 
+## 0.1.15
+
+- Match legacy folder-request validation and coercion, including ignored extra fields and repeated directory-path errors. Invalid requests leave the link untouched; account selection stays with the server. Existing vault path restrictions still apply.
+
 ## 0.1.14
 
 - Experimental installed writes can now bind approval to the displayed note version and refuse changed notes or relinked folders before writing or requesting sync. A new approval is needed after refusal. Ordinary chat writes remain unavailable.

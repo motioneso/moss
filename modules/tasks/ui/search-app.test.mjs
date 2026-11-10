@@ -88,9 +88,12 @@ test(
         $("search").dispatchEvent(new dom.window.Event("input"));
       };
       type("done important tasks");
+      $("focus-filter").value = "priorities";
+      $("focus-filter").dispatchEvent(new dom.window.Event("change"));
       $("interpret-search").querySelector("button").click();
       await settled();
       assert.equal($("status-filter").value, "done");
+      assert.equal($("focus-filter").value, "");
       assert.match($("task-results").textContent, /Finished example/);
       assert.doesNotMatch($("task-results").textContent, /Open example|Other example/);
       assert.equal(document.activeElement, $("search"));
