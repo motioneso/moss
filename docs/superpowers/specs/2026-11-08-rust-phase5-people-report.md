@@ -2902,3 +2902,31 @@ this tree with a task-owned toolchain.
   status would be a deliberate difference from the legacy contract.
 
 Remaining work is unchanged from part 26 steps 3 and 4.
+
+## Part 28: People screen on the real server
+
+### Built
+
+- The real server now serves an installed module's screen and files. `GET /api/modules/{id}/screen`
+  returns the frame address and sandbox for a signed-in user (404 otherwise). `/module-ui/...`
+  serves the files with the module's own policy. `/module-frame` is the parent page that loads the
+  screen and bridges its requests to `/api/m/{module}/...` with the user's cookie.
+- Shared fonts and styles are served from `/module-shared` with a cross-origin header, because
+  the sandboxed frame has an opaque origin.
+- Sandboxed frames send `Origin: null`, so the origin check is relaxed for GET on module file
+  paths only. Every other request keeps the full check.
+- The frame sandbox gained `allow-forms`. Without it the browser blocked the Create person form
+  before its handler ran. `form-action 'none'` stays, so a form can never navigate.
+
+### Proven in a real browser (headless Chromium, real HTTPS sign-in, throwaway server and database)
+
+- Sign in, open the People screen in its sandboxed frame, see the notes folder and an existing person.
+- "Refresh from notes" calls the real route and the list reloads.
+- Typing a name and pressing "Create person" posts to the real route and the new person appears.
+
+### Not proven
+
+- A second physical device over LAN or tailnet.
+- Edit and Archive clicks through the UI (the routes are covered by the gate).
+- Ingest nudge to the Memory queue (no cross-module path exists in Rust yet).
+- Chat flows and real source providers.
