@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Fastify from "fastify";
+import { setMossErrorHandler } from "../../../apps/api/src/error-handling.js";
 import pg from "pg";
 import { createDatabase, DataContextRunner, getMossDatabaseUrls } from "@moss/db";
 import { PreferencesRepository } from "../../../packages/structured-state/src/preferences-repository.js";
@@ -50,6 +51,7 @@ export async function settingsOracle() {
       resolveAccessContext: async () => ({ actorUserId: actor }),
       preferencesRepository: new PreferencesRepository()
     });
+    setMossErrorHandler(server);
     await server.ready();
     const expected = [];
     for (const [index, id] of actors.entries()) {
@@ -102,6 +104,45 @@ export async function settingsOracle() {
         },
         { method: "PUT", route: "/notes-source", source: roots[index]!, status: null, body: null },
         { method: "PUT", route: "/notes-source", source: roots[index]!, status: null, body: {} },
+        { method: "PUT", route: "/notes-source", source: roots[index]!, status: null },
+        ...[
+          42,
+          true,
+          false,
+          0,
+          "",
+          "invalid",
+          [],
+          [null],
+          [{}],
+          [false],
+          [0],
+          [""],
+          { path: {} },
+          { path: [] },
+          { path: [null] },
+          { path: [""] },
+          { path: [roots[index]!] },
+          { path: [roots[index]!, roots[index]!] },
+          { path: roots[index]!, actorUserId: actors[(index + 1) % actors.length] },
+          { actorUserId: actors[(index + 1) % actors.length] }
+        ].map((body) => ({
+          method: "PUT",
+          route: "/notes-source",
+          source: roots[index]!,
+          status: null,
+          body
+        })),
+        ...[
+          "?ignored=value",
+          `?path=${encodeURIComponent(roots[index]!)}&actorUserId=${actors[(index + 1) % actors.length]}`,
+          `?path=${encodeURIComponent(roots[index]!)}&path=${encodeURIComponent(roots[index]!)}`
+        ].map((query) => ({
+          method: "GET",
+          route: `/notes-source/directories${query}`,
+          source: roots[index]!,
+          status: null
+        })),
         // Keep an existing link while checking errors: a rejected selection must
         // not silently unlink it. Use real filesystem paths, not error stand-ins.
         ...["", join(roots[index]!, "missing"), roots[(index + 1) % roots.length]!].flatMap(
@@ -136,7 +177,12 @@ export async function settingsOracle() {
         const reply = await server.inject({
           method: entry.method as "GET" | "PUT",
           url: `/api/me${entry.route}`,
-          ...("body" in entry && entry.body !== null ? { payload: entry.body } : {})
+          ...("body" in entry
+            ? {
+                headers: { "content-type": "application/json" },
+                payload: JSON.stringify(entry.body)
+              }
+            : {})
         });
         const saved = await db.query(
           "SELECT value_json,revision FROM app.preferences WHERE owner_user_id=$1 AND key='notes-source-path'",

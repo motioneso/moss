@@ -20,27 +20,17 @@ fn execute(host: &impl Host, request: &RouteRequest) -> Result<Response> {
         ("GET", "/notes-source") => ("folder.get", json!({})),
         ("GET", "/notes-last-sync") => ("folder.status", json!({})),
         ("GET", "/notes-source/directories") => {
-            if request.query.keys().any(|k| k != "path")
-                || request.query.get("path").is_some_and(|v| !v.is_string())
-            {
-                return Ok(Response::new(400, json!({"error":"Invalid folder query"})));
-            }
-            ("folder.list", json!({"path":request.query.get("path")}))
+            let path = match crate::settings_input::query_path(request.query.get("path")) {
+                Ok(path) => path,
+                Err(message) => return Ok(crate::settings_input::validation(message)),
+            };
+            ("folder.list", json!({"path":path}))
         }
         ("PUT", "/notes-source") => {
-            if !request.body.is_null() && !request.body.is_object() {
-                return Ok(Response::new(
-                    400,
-                    json!({"error":"Invalid folder selection"}),
-                ));
-            }
-            let path = request.body.get("path").unwrap_or(&Value::Null);
-            if !path.is_null() && !path.is_string() {
-                return Ok(Response::new(
-                    400,
-                    json!({"error":"Invalid folder selection"}),
-                ));
-            }
+            let path = match crate::settings_input::folder_path(&request.body) {
+                Ok(path) => path,
+                Err(message) => return Ok(crate::settings_input::validation(message)),
+            };
             ("folder.set", json!({"path":path}))
         }
         _ => return Ok(Response::new(404, json!({"error":"Not Found"}))),
