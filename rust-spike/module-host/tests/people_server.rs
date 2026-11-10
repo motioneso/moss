@@ -254,6 +254,39 @@ fn installed_people_package_serves_routes_from_the_real_server() {
     assert_eq!(status, 200, "{settings}");
     println!("PASS installed People package served over HTTPS: sign-in required, create writes a note in the account folder, list, notes settings reachable");
 
+    // The signed-in account gets the verified screen address. The screen's own files are
+    // public, carry the module policy and never need the session cookie.
+    let screen_url = format!("{origin}/api/modules/people/screen?path=/settings/memory/people");
+    assert_eq!(client.get(&screen_url).send().unwrap().status(), 401);
+    let screen: Value = client
+        .get(&screen_url)
+        .header("cookie", &cookie)
+        .send()
+        .unwrap()
+        .json()
+        .unwrap();
+    let src = screen["src"].as_str().expect("screen address");
+    assert!(src.starts_with("/module-ui/people/"), "{screen}");
+    let asset = client
+        .get(format!("{origin}{src}"))
+        .header("origin", "null")
+        .header("sec-fetch-site", "cross-site")
+        .send()
+        .unwrap();
+    assert_eq!(asset.status(), 200, "screen file without a session");
+    let csp = asset.headers()["content-security-policy"].to_str().unwrap().to_owned();
+    assert!(csp.contains("sandbox allow-scripts") && csp.contains(&origin), "{csp}");
+    assert_eq!(
+        client
+            .get(format!("{origin}/api/modules/people/screen?path=/nope"))
+            .header("cookie", &cookie)
+            .send()
+            .unwrap()
+            .status(),
+        404
+    );
+    println!("PASS People screen address and files served over HTTPS");
+
     // Second account. Setup allows one owner over HTTP, so the account is made in the
     // database with the owner's password hash and then signs in through the real route.
     let second: uuid::Uuid = runtime.block_on(async {

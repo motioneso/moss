@@ -3,17 +3,18 @@
 use anyhow::Result;
 use axum::{
     body::Bytes,
-    extract::State,
-    http::{header, Method, StatusCode, Uri},
-    response::{IntoResponse, Response},
-    routing::any,
-    Extension, Router,
+    extract::{Path as UrlPath, Query, State},
+    http::{header, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri},
+    response::{Html, IntoResponse, Response},
+    routing::{any, get},
+    Extension, Json, Router,
 };
 use moss_module_host::{
     account_preferences::{AccountPreferencesPorts, Binding},
     ai::Intelligence,
     application::{Application, Configuration},
     folder_settings::{FolderSetting, FolderSettingsPorts},
+    frame::AssetPolicy,
     linked_notes::{LinkedNotesPorts, PreferenceFolder, PreferenceFolders},
     runtime::{CallScope, Ports, Request},
     worker::Worker,
@@ -202,13 +203,121 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
 /// The host once it is running. Empty until the installer has put a module in.
 pub type Slot = Arc<std::sync::Mutex<Option<ServerModules>>>;
 
-pub fn routes(slot: Slot) -> Router {
+/// Module routes. `web` is the shell's web folder; shared screen styles and fonts come from
+/// its `module-shared` folder.
+pub fn routes(slot: Slot, web: PathBuf) -> Router {
     Router::new()
         .route("/api/m/{module}/{*path}", any(dispatch))
+        .route("/api/modules/{module}/screen", get(screen))
+        .route("/module-ui/{module}/{digest}/{*path}", get(ui_asset))
+        .route("/module-frame", get(|| async { Html(include_str!("../../assets/module-frame.html")) }))
+        .route(
+            "/module-frame.js",
+            get(|| async {
+                (
+                    [(header::CONTENT_TYPE, "text/javascript")],
+                    include_str!("../../assets/module-frame.js"),
+                )
+            }),
+        )
+        .route(
+            "/module-shared/host-bridge.mjs",
+            get(|| async {
+                (
+                    [(header::CONTENT_TYPE, "text/javascript")],
+                    include_str!("../../../module-ui/web/host-bridge.mjs"),
+                )
+            }),
+        )
+        .nest_service(
+            "/module-shared",
+            tower_http::services::ServeDir::new(web.join("module-shared")),
+        )
         .with_state(Arc::new(Api {
             slot,
             slots: Arc::new(tokio::sync::Semaphore::new(4)),
         }))
+}
+
+fn host(slot: &Slot) -> Option<Arc<Application>> {
+    slot.lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_ref()
+        .map(|host| host.application.clone())
+}
+
+#[derive(Deserialize)]
+struct ScreenQuery {
+    path: String,
+}
+
+/// The verified screen address for a signed-in account. Refused if the module is off for it.
+async fn screen(
+    State(api): State<Arc<Api>>,
+    Extension(access): Extension<AccessContext>,
+    UrlPath(module): UrlPath<String>,
+    Query(query): Query<ScreenQuery>,
+) -> Response {
+    let Some(application) = host(&api.slot) else {
+        return StatusCode::SERVICE_UNAVAILABLE.into_response();
+    };
+    match tokio::task::spawn_blocking(move || {
+        application
+            .installer
+            .screen(&access, &module, &query.path)
+    })
+    .await
+    {
+        Ok(Ok(screen)) => Json(serde_json::json!({
+            "title": screen.title,
+            "src": screen.src,
+            "sandbox": screen.sandbox,
+        }))
+        .into_response(),
+        _ => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+/// Public static files of an installed screen. The frame is opaque and sends no cookies, so
+/// no account data may be served here. The web origin is the request's own host, which the
+/// network guard has already matched against the trusted origins.
+async fn ui_asset(
+    State(api): State<Arc<Api>>,
+    UrlPath((module, digest, path)): UrlPath<(String, String, String)>,
+    headers: HeaderMap,
+) -> Response {
+    let Some(application) = host(&api.slot) else {
+        return StatusCode::SERVICE_UNAVAILABLE.into_response();
+    };
+    let Some(authority) = headers.get(header::HOST).and_then(|h| h.to_str().ok()) else {
+        return StatusCode::BAD_REQUEST.into_response();
+    };
+    let origin = format!("https://{authority}/");
+    match tokio::task::spawn_blocking(move || {
+        let policy = AssetPolicy::new(&origin)?;
+        application
+            .installer
+            .ui_asset(&module, &digest, &path, &policy)
+    })
+    .await
+    {
+        Ok(Ok(asset)) => {
+            let mut response = (
+                [(header::CONTENT_TYPE, asset.content_type)],
+                asset.body,
+            )
+                .into_response();
+            for (name, value) in asset.headers {
+                if let (Ok(name), Ok(value)) =
+                    (HeaderName::try_from(name), HeaderValue::try_from(value))
+                {
+                    response.headers_mut().insert(name, value);
+                }
+            }
+            response
+        }
+        _ => StatusCode::NOT_FOUND.into_response(),
+    }
 }
 
 /// Tries to open the host every couple of seconds until it works or `stop` is set, so a module
