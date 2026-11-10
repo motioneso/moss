@@ -90,7 +90,11 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
         .unwrap()
         .success());
     fs::create_dir(root.join("web")).unwrap();
-    fs::write(root.join("web/index.html"), "<!doctype html><title>Notes</title>").unwrap();
+    fs::write(
+        root.join("web/index.html"),
+        "<!doctype html><title>Notes</title>",
+    )
+    .unwrap();
     let app_url = std::env::var("JS43_APP_URL").unwrap();
     let worker_url = std::env::var("JS43_WORKER_URL").unwrap();
     let bootstrap_url = std::env::var("JS43_BOOTSTRAP_URL").unwrap();
@@ -135,7 +139,10 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
         );
         let deadline = Instant::now() + Duration::from_secs(60);
         loop {
-            assert!(server.0.try_wait().unwrap().is_none(), "server startup failed");
+            assert!(
+                server.0.try_wait().unwrap().is_none(),
+                "server startup failed"
+            );
             if client
                 .get(format!("{origin}/api/hello"))
                 .send()
@@ -190,13 +197,9 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
             .get(0);
         (
             owner,
-            safety_core::db::Database::connect(
-                &app_url,
-                4,
-                safety_core::db::RuntimeRole::App,
-            )
-            .await
-            .unwrap(),
+            safety_core::db::Database::connect(&app_url, 4, safety_core::db::RuntimeRole::App)
+                .await
+                .unwrap(),
         )
     });
     drop(runtime);
@@ -287,7 +290,12 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
     assert_eq!((status, none["path"].clone()), (200, Value::Null), "{none}");
     fs::create_dir_all(account_root.join("Journal")).unwrap();
     fs::write(account_root.join("Journal/day.md"), b"# A day\n").unwrap();
-    let (status, roots) = call(Method::GET, "/notes-source/directories", Some(&cookie), None);
+    let (status, roots) = call(
+        Method::GET,
+        "/notes-source/directories",
+        Some(&cookie),
+        None,
+    );
     assert_eq!(status, 200, "{roots}");
     assert!(
         roots.to_string().contains(&owner.to_string()),
@@ -315,7 +323,13 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
         Some(&cookie),
         Some(json!({"path":journal})),
     );
-    assert_eq!(saved.0, 200, "{}\n{}", saved.1, fs::read_to_string(root.join("server.log")).unwrap_or_default());
+    assert_eq!(
+        saved.0,
+        200,
+        "{}\n{}",
+        saved.1,
+        fs::read_to_string(root.join("server.log")).unwrap_or_default()
+    );
     let (status, got) = call(Method::GET, "/notes-source", Some(&cookie), None);
     assert_eq!(status, 200, "{got}");
     assert_eq!(got["path"], json!(journal), "{got}");

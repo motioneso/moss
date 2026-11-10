@@ -192,7 +192,11 @@ impl Ports for FolderSettingsPorts {
     }
 }
 /// Explicit roots win; otherwise the host-owned per-account base (created on demand).
-fn roots_for(config: &FolderSetting, base: Option<&std::path::Path>, scope: &CallScope) -> Vec<PathBuf> {
+fn roots_for(
+    config: &FolderSetting,
+    base: Option<&std::path::Path>,
+    scope: &CallScope,
+) -> Vec<PathBuf> {
     let actor = scope.access().actor_user_id();
     match (config.roots.get(&actor), base) {
         (Some(roots), _) => roots.clone(),

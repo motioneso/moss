@@ -10,9 +10,9 @@ use axum::{
     Extension, Router,
 };
 use moss_module_host::{
+    account_preferences::{AccountPreferencesPorts, Binding},
     ai::Intelligence,
     application::{Application, Configuration},
-    account_preferences::{AccountPreferencesPorts, Binding},
     folder_settings::{FolderSetting, FolderSettingsPorts},
     linked_notes::{LinkedNotesPorts, PreferenceFolder, PreferenceFolders},
     runtime::{CallScope, Ports, Request},
@@ -63,11 +63,7 @@ impl Intelligence for UnconfiguredIntelligence {
 
 /// Account preference and linked-notes ports for People. Keys, resources and roots are
 /// fixed here, never chosen by the guest.
-fn linked_notes(
-    database: Database,
-    base: PathBuf,
-    next: Arc<dyn Ports>,
-) -> Result<Arc<dyn Ports>> {
+fn linked_notes(database: Database, base: PathBuf, next: Arc<dyn Ports>) -> Result<Arc<dyn Ports>> {
     let preferences = AccountPreferencesPorts::new(
         database.clone(),
         BTreeMap::from([
