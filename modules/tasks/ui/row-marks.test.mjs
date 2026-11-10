@@ -17,12 +17,13 @@ test("drift follows the account day, not UTC", () => {
     driftMark(task("2026-11-10T03:00:00Z"), now, "America/Los_Angeles")?.kind,
     "overdue"
   );
-  assert.equal(driftMark(task("2026-11-10T03:00:00Z"), now, "UTC")?.kind, "atrisk");
+  assert.equal(driftMark(task("2026-11-10T03:00:00Z"), now, "UTC"), null);
 });
 
 test("drift windows", () => {
   assert.equal(driftMark(task("2026-11-09T12:00:00Z"), now)?.label, "Overdue");
   assert.equal(driftMark(task("2026-11-12T12:00:00Z"), now)?.label, "At risk");
+  assert.equal(driftMark(task("2026-11-10T12:00:00Z"), now), null);
   assert.equal(driftMark(task("2026-11-13T12:00:00Z"), now), null);
   assert.equal(driftMark(task(null), now), null);
   assert.equal(driftMark(task("2026-11-01T12:00:00Z", "done"), now), null);

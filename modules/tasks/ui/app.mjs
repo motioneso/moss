@@ -245,12 +245,21 @@ function taskRow(task) {
     ...task.tags.map((tag) => `#${tag.name}`)
   ].filter(Boolean);
   content.append(text("div", meta.join(" · "), "jds-caption"));
+  const drift = driftMark(task, new Date(), state.timeZone);
   const marks = [
-    driftMark(task, new Date(), state.timeZone)?.label,
     effortLabel(task.effort) && `${effortLabel(task.effort)} effort`,
     isAssistantSource(task.source) && `From ${task.source}`
   ].filter(Boolean);
-  if (marks.length) content.append(text("div", marks.join(" · "), "jds-caption tasks-row-marks"));
+  if (drift || marks.length) {
+    const line = text("div", "", "tasks-row-marks");
+    if (drift) {
+      const pill = text("span", "", `jds-drift jds-drift--${drift.kind}`);
+      pill.append(text("span", "", "jds-drift__dot"), drift.label);
+      line.append(pill);
+    }
+    if (marks.length) line.append(text("span", marks.join(" · "), "jds-caption"));
+    content.append(line);
+  }
   row.append(done, content);
   if (task.status === "suggested") {
     const actions = text("div", "", "tasks-actions");

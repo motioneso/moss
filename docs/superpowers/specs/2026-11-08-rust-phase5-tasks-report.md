@@ -2049,10 +2049,14 @@ markup gained the new module and footer element. Pnpm scripts `test:rust-tasks` 
 Checked: all 39 screen tests pass against the real compiled screen (none skipped). The
 installed-screen gate passed on real HTTPS with sign-in; in a real browser, tasks due
 three days ago and tomorrow showed "Overdue · Large effort" and "At risk · Small
-effort", and a task typed into the real quick-add box persisted exactly once.
+effort", and a task typed into the real quick-add box persisted exactly once. A task
+due today shows no pill (review fix), and the pill uses the Park Press drift classes.
+The source mark and footer were also seen in the browser ("From email", "From chat",
+"Moss is tracking 2 tasks it created for you"), but those two rows were set to an
+assistant source with a direct database update on the throwaway gate database, because
+HTTP creates always record a user source. That is seeded data, not a chat-made task.
 
-Not proven: the "From <source>" mark and footer in a browser (HTTP creates always
-record a user source; only chat tools set another one); native app shell, a second
+Not proven: a task really created by a chat tool showing the source mark; native app shell, a second
 physical device. The full component gate ran 22 of 23 privacy tests: another account's
 rows were visible in `compiled_tasks_routes_enforce_privacy_and_complete_recurring_tasks`
 and two sibling list/tag cases. This change touches no Rust guest or SQL code, but the

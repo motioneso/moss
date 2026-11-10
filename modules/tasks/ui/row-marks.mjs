@@ -18,7 +18,7 @@ export function driftMark(task, now = new Date(), timeZone = "UTC") {
   const due = localDay(task.dueAt, timeZone);
   if (due < today) return { kind: "overdue", label: "Overdue" };
   const days = (Date.parse(`${due}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000;
-  return days <= 2 ? { kind: "atrisk", label: "At risk" } : null;
+  return days > 0 && days <= 2 ? { kind: "atrisk", label: "At risk" } : null;
 }
 
 export function assistantTrackedCount(tasks) {
