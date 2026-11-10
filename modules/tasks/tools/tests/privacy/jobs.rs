@@ -4,6 +4,104 @@ use safety_core::secret::Secret;
 
 #[test]
 #[ignore = "Database work only through the Tasks verify-gate"]
+fn compiled_recurring_completion_retry_preserves_history_and_list_order() {
+    let f = Fixture::open_with(true);
+    let task = f.route(
+        f.owner,
+        "POST",
+        "/tasks",
+        json!({
+            "title":"Repeat completion history", "dueAt":"2099-05-01T15:30:00.000Z",
+            "recurrence":{"freq":"monthly","interval":1,"occurrence_date":"2099-05-01"}
+        }),
+    );
+    assert_eq!(task["status"], 201);
+    let id = task["body"]["task"]["id"].as_str().unwrap();
+    let request = json!({"queue":"tasks-deferred-status","parameters":{
+        "task-id":id,"requested-status":"done"
+    }})
+    .to_string();
+    let invoke = || {
+        let output = f
+            .host
+            .call(
+                &f.wasm,
+                f.manifest.clone(),
+                AccessContext::new(f.owner, "repeat-completion"),
+                f.ports.clone(),
+                "job",
+                &request,
+            )
+            .unwrap();
+        assert_eq!(
+            serde_json::from_str::<Value>(&output).unwrap(),
+            json!({"taskId":id,"updated":true,"status":"done"})
+        );
+    };
+    invoke();
+    let path = format!("/tasks/{id}");
+    let completed = f.route(f.owner, "GET", &path, Value::Null);
+    // Ensure a rewritten timestamp cannot happen to compare equal within one millisecond.
+    std::thread::sleep(std::time::Duration::from_millis(10));
+    invoke();
+    assert_eq!(
+        f.route(f.owner, "GET", &path, Value::Null),
+        completed,
+        "a repeated recurring completion must retain the completed history"
+    );
+    let tasks = f.route(f.owner, "GET", "/tasks", Value::Null);
+    let items = tasks["body"]["tasks"].as_array().unwrap();
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0]["source"], "recurrence");
+    assert_eq!(items[0]["recurrence"]["occurrence_date"], "2099-06-01");
+    assert_eq!(items[1]["id"], id);
+    let retry = f.route(f.owner, "PATCH", &path, json!({"status":"done"}));
+    assert_eq!(retry, completed);
+    let retry = f
+        .tool(
+            f.owner,
+            "tasks.updateStatus",
+            json!({"taskId":id,"status":"done"}),
+        )
+        .unwrap();
+    assert_eq!(retry["data"]["task"], completed["body"]["task"]);
+
+    // A completed series whose successor was deleted still needs the legacy repair.
+    let next_id = items[0]["id"].as_str().unwrap();
+    f.rt.block_on(f.db.execute(
+        "DELETE FROM app.tasks WHERE id=$1 AND owner_user_id=$2",
+        &[&next_id.parse::<Uuid>().unwrap(), &f.owner],
+    ))
+    .unwrap();
+    invoke();
+    let repaired = f.route(f.owner, "GET", "/tasks", Value::Null);
+    let repaired = repaired["body"]["tasks"].as_array().unwrap();
+    assert_eq!(repaired.len(), 2);
+    assert_eq!(
+        repaired
+            .iter()
+            .filter(|t| t["recurrence"]["occurrence_date"] == "2099-06-01")
+            .count(),
+        1
+    );
+    let edited = f.route(
+        f.owner,
+        "PATCH",
+        &path,
+        json!({"title":"Edited completed task"}),
+    );
+    assert_eq!(edited["status"], 200);
+    assert_eq!(
+        f.route(f.owner, "GET", &path, Value::Null)["body"]["task"]["title"],
+        "Edited completed task"
+    );
+    println!(
+        "PASS repeat completion: exact completed history, one successor, next occurrence first"
+    );
+}
+
+#[test]
+#[ignore = "Database work only through the Tasks verify-gate"]
 fn compiled_deferred_status_uses_real_queue_and_captured_actor() {
     let mut f = Fixture::open_with(true);
     f.sql(moss_platform_jobs::MIGRATION);

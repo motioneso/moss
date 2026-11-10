@@ -94,6 +94,24 @@ impl<H: Host + ?Sized> Repository<'_, H> {
             }
             Patch::Keep => {}
         }
+        // Legacy duplicate-successor handling rolls back the repeated completion's
+        // write. Preserve that stored history for an owner's status-only retry,
+        // without aborting this invocation's transaction. The INSERT decides whether
+        // the successor exists atomically; a missing successor is still repaired.
+        // Never take this insert-before-update path for a merely visible shared task.
+        if prior.status == "done"
+            && prior.recurrence_series_id.is_some()
+            && input.status == Some(crate::task_fields::TaskStatus::Done)
+            && data
+                .keys()
+                .all(|key| matches!(key.as_str(), "updated_at" | "status" | "completed_at"))
+            && self
+                .first::<Task>(TASKS, and(vec![Filter::Owned, Filter::eq("id", id)]))?
+                .is_some()
+            && self.generate_next(&prior)? == Some(false)
+        {
+            return Ok(Some(prior));
+        }
         if let Some(list) = &input.list_id {
             self.drop_foreign_tags(id, list)?;
             if list != &prior.list_id {
@@ -157,7 +175,7 @@ impl<H: Host + ?Sized> Repository<'_, H> {
                         )?;
                     }
                 }
-                self.generate_next(task)?;
+                let _ = self.generate_next(task)?;
             }
         }
         Ok(updated)
@@ -176,12 +194,13 @@ impl<H: Host + ?Sized> Repository<'_, H> {
         }
         Ok(())
     }
-    fn generate_next(&self, task: &Task) -> Result<()> {
+    // None means non-recurring; Some(false) means the occurrence already exists.
+    fn generate_next(&self, task: &Task) -> Result<Option<bool>> {
         let Some(series) = &task.recurrence_series_id else {
-            return Ok(());
+            return Ok(None);
         };
         let Some(mut spec) = task.recurrence.as_ref().and_then(crate::recurrence::parse) else {
-            return Ok(());
+            return Ok(None);
         };
         let next = spec
             .next()
@@ -199,8 +218,8 @@ impl<H: Host + ?Sized> Repository<'_, H> {
             "recurrence":spec.dto(),"recurrence_series_id":series,"completed_at":null,"created_at":now,"updated_at":now
         })));
         q.conflict = Conflict::Ignore;
-        let _: Vec<Task> = self.query(TASKS, &q)?;
-        Ok(())
+        let inserted: Vec<Task> = self.query(TASKS, &q)?;
+        Ok(Some(!inserted.is_empty()))
     }
 }
 

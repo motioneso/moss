@@ -31,6 +31,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       docs_only: ${{ steps.scope.outputs.docs_only }}
+      rust_only: ${{ steps.scope.outputs.rust_only }}
 
     steps:
       - name: Classify changed paths
@@ -42,23 +43,59 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
           REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" != "pull_request" ] && [ -z "${PR_NUMBER:-}" ]; then
-            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          # Both outputs default to the full gate; any early exit below keeps them false.
+          echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          echo "rust_only=false" >> "$GITHUB_OUTPUT"
+          # Push events have no pull request file list, so look up the PR that produced the
+          # commit. That PR only covers the whole push when the push is exactly one commit
+          # (squash merges), so a longer range, a failed compare or an empty lookup runs the
+          # full gate.
+          if [ "$EVENT_NAME" = "push" ]; then
+            count=$(gh api "repos/$REPO/compare/$BEFORE_SHA...$SHA" --jq '.total_commits' || true)
+            if [ "${count:-0}" != "1" ]; then
+              echo "Push is not exactly one commit (${count:-unknown}) — running the full gate."
+              exit 0
+            fi
+            PR_NUMBER=$(gh api "repos/$REPO/commits/$SHA/pulls" --jq '.[0].number // empty' || true)
+            if [ -z "${PR_NUMBER:-}" ]; then
+              echo "No merged PR found for $SHA — running the full gate."
+              exit 0
+            fi
+          elif [ "$EVENT_NAME" != "pull_request" ] && [ -z "${PR_NUMBER:-}" ]; then
             echo "Not a pull request and no PR number provided — running the full gate."
             exit 0
           fi
+          # Renames list both the new and the old path, so moving a file into a Rust tree
+          # still counts the path it left.
           # The API file list avoids fetch-depth games and merge-base guesswork.
-          gh api "repos/$REPO/pulls/$PR_NUMBER/files" --paginate --jq '.[].filename' > files.txt
+          if ! gh api "repos/$REPO/pulls/$PR_NUMBER/files" --paginate --jq '.[] | .filename, (.previous_filename // empty)' > files.txt; then
+            echo "File list lookup failed — running the full gate."
+            exit 0
+          fi
           echo "Changed files:"; cat files.txt
+          if [ ! -s files.txt ]; then
+            echo "No changed files listed — running the full gate."
+            exit 0
+          fi
+          # rust_only == every changed path is docs or Rust. Rust means everything under
+          # rust-spike/, Rust sources and Cargo files under modules/, and the rust-*.yml
+          # workflows. Anything unsure (TypeScript, sql, css, package.json, other
+          # .github/**) counts as not Rust. Counted rather than exit-code-tested: the safe
+          # direction of a mistake here is "run the full gate".
+          non_rust=$(grep -vcE '(^docs/|\.md$|^rust-spike/|^modules/.*(\.rs|/Cargo\.toml|/Cargo\.lock)$|^\.github/workflows/rust-[^/]*\.yml$)' files.txt || true)
+          if [ "${non_rust:-1}" -eq 0 ]; then
+            echo "rust_only=true" >> "$GITHUB_OUTPUT"
+            echo "Rust-only change — the old browser tests are skipped."
+          fi
+          # Pushes never skip the other jobs, so docs_only stays false for them.
+          if [ "$EVENT_NAME" = "push" ]; then exit 0; fi
           # docs-only == every changed path is under docs/ or is a markdown file.
-          # Anything else (source, sql, css, package.json, .github/**) forces the full gate.
-          # Counted rather than exit-code-tested: `grep -v … >/dev/null` is easy to get
-          # subtly wrong, and the safe direction of a mistake here is "run the full gate".
           non_docs=$(grep -vcE '(^docs/|\.md$)' files.txt || true)
-          if [ ! -s files.txt ] || [ "${non_docs:-1}" -gt 0 ]; then
-            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          if [ "${non_docs:-1}" -gt 0 ]; then
             echo "$non_docs non-doc file(s) changed — running the full gate."
           else
             echo "docs_only=true" >> "$GITHUB_OUTPUT"
@@ -270,7 +307,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs: changes
-    if: needs.changes.outputs.docs_only != 'true'
+    if: needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.rust_only != 'true'
     # Keep each complete shard inside the existing phase budget; do not cancel its sibling.
     strategy:
       fail-fast: false
@@ -449,7 +486,7 @@ jobs:
         run: JARVIS_IMAGE_TAG=ci-${{ github.run_id }} JARVIS_ENV_FILE=./env.production.local POSTGRES_PASSWORD=postgres JARVIS_CLI_RUNNER_RPC_SECRET=ci-smoke-only-not-real docker compose -p jarv1s-prod-smoke -f infra/docker-compose.prod.yml down -v
 
   # #895: the single required status check. Every heavy job is conditional on
-  # `docs_only`, so naming an
+  # `docs_only` (and browser on `rust_only`), so naming an
   # individual job as required would deadlock whichever path skips it. This job
   # aggregates all of them under one name that is correct on both paths and fails
   # closed on `cancelled` (a 35-minute job timeout in this repo, not a benign skip).
@@ -487,7 +524,13 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     needs: [verify, unit, integration, browser, compose-smoke, prod-compose-smoke]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # always() so a skipped browser job (Rust-only push) still builds the image.
+    if: >-
+      always() && github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      needs.verify.result == 'success' && needs.unit.result == 'success' &&
+      needs.integration.result == 'success' && needs.compose-smoke.result == 'success' &&
+      needs.prod-compose-smoke.result == 'success' &&
+      (needs.browser.result == 'success' || needs.browser.result == 'skipped')
     strategy:
       fail-fast: true
       matrix:

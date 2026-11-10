@@ -62,7 +62,8 @@ pub fn interpret<H: Host + ?Sized>(
         .map(|l| json!({"id":l.id,"name":l.name}))
         .collect();
     let tag_vocabulary: Vec<&String> = tag_names.iter().take(MAX_TAGS).collect();
-    let today = repo.now()?.get(..10).unwrap_or_default().to_owned();
+    let now = repo.now()?.parse().map_err(|_| Error::Http(500, "Invalid host time"))?;
+    let today = repo.local_day(now, 0)?.date;
     let prompt = [
         "Convert the user's task search phrase into JSON only.".to_owned(),
         r#"Allowed shape: {"text":string|null,"status":"todo|done|archived"|null,"effort":"quick|medium|large"|null,"priority":1-5|null,"listIds":string[],"tagNames":string[],"quadrant":"do|schedule|delegate|eliminate"|null,"due":{"kind":"none|overdue|today|this_week"}|{"kind":"range","dueAfter":string|null,"dueBefore":string|null}|null}."#.to_owned(),

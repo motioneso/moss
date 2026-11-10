@@ -107,17 +107,14 @@ fn heartbeat_projection_tracks_material_change_and_bounded_boundaries() {
 }
 
 #[test]
-fn settings_reject_unknown_owners_and_invalid_values_before_host_access() {
+fn settings_reject_invalid_values_before_host_access() {
     for body in [
         json!(null),
         json!([]),
-        json!({"ownerUserId":"foreign"}),
         json!({"lookaheadDays":3}),
-        json!({"lookaheadDays":null}),
         json!({"prepTaskMode":"trusted_auto"}),
         json!({"timeBlockMode":true}),
         json!({"createTasks":"yes"}),
-        json!({"blockTime":null}),
     ] {
         let response: Value = serde_json::from_str(
             &handle(
@@ -456,4 +453,46 @@ fn visible_events_fail_closed_without_the_connectors_interface() {
         &json!({"tool":"calendar.listVisibleEvents","parameters":{"startsAfter":"2026-11-08T00:00:00Z"}}).to_string(),
     );
     assert_eq!(raw.unwrap_err(), "Calendar data is unavailable");
+}
+
+#[test]
+fn trusted_settings_port_stays_strict_despite_http_coercion() {
+    for body in [
+        json!({"ownerUserId":"foreign"}),
+        json!({"lookaheadDays":"1"}),
+        json!({"blockTime":null}),
+        json!({"timeBlockMode":["auto"]}),
+    ] {
+        assert!(moss_calendar::settings::patch(&body).is_err());
+    }
+}
+
+#[test]
+fn http_settings_normalize_before_the_scoped_host_call() {
+    struct Settings;
+    impl Host for Settings {
+        fn call(&self, _: &str, _: &str, _: &str, body: Value) -> Result<Value> {
+            assert_eq!(
+                body,
+                json!({"lookaheadDays":1,"timeBlockMode":"auto","blockTime":false})
+            );
+            Ok(json!({}))
+        }
+    }
+    let response: Value = serde_json::from_str(
+        &handle(
+            &Settings,
+            "route",
+            &json!({
+                "method":"PATCH", "path":"/briefing-settings", "body":{
+                    "lookaheadDays":"1", "timeBlockMode":["auto"], "blockTime":null,
+                    "ownerUserId":"foreign", "unrecognized":{"timeBlockMode":"auto"}
+                }
+            })
+            .to_string(),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(response["status"], 200);
 }

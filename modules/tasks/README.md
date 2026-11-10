@@ -1,5 +1,52 @@
 # Tasks component checkpoint
 
+Part 28 adds the legacy screen's **Do First**, **At risk** and **Done today**
+focus presets in List and Grid. Focus replaces status while retaining list, tag
+and search filters. Choosing a status (including one from interpreted search) leaves focus. Removing
+the focus chip returns to open tasks; Clear filters returns to
+open tasks across all lists. At risk includes open tasks overdue or due within
+two calendar days in the saved account timezone; Do First uses the existing
+high-priority/forty-eight-hour quadrant rule. These screen presets differ from
+the drift API rules. `tools/focus-parity.mjs` compares the unchanged legacy
+screen model across local-midnight and DST boundaries. This does not connect
+Today/chat links or add lazy recurrence advancement. Set `TASKS_UI_FOCUS_PROOF=1`
+on the signed UI gate and create the three fixtures described in the part 28
+report before finishing its browser check.
+
+Part 27 refreshes untouched editor fields after detail actions while retaining
+unsaved fields and comments. Completing the last subtask updates the parent's
+status in the open editor, so a later save does not reopen it. Refreshed dates
+use the editor's saved timezone and retain exact stored timestamps on unrelated
+saves. Saved subtask checkboxes do not count as unsaved drafts. Set
+`TASKS_UI_REFRESH_PROOF=1` on the signed UI gate, create `Browser proof task`
+with `Last proof subtask`, type description `Draft kept across completion`,
+complete the subtask, then save the parent. The gate requires the exact draft
+and both completed states in the database. This changes no route, tool, job,
+migration or host contract.
+
+Part 26 loads subtasks, list tags and activity independently in task details. Each
+panel has its own loading, empty and retry state. Failed refreshes retain loaded
+rows and unsaved editor fields. Assigned tags remain usable if list suggestions
+cannot load. Retrying a read does not repeat a completed write. This adds no
+route, tool, job kind or host contract.
+
+Part 25 retains a completed recurring task's stored history when its owner
+retries completion alone and the next occurrence already exists. The atomic
+next-occurrence insert decides whether the retry can reuse the completed row;
+if the next occurrence was deleted it is recreated. This applies to the worker,
+HTTP update and status tool paths. Other edits keep using the ordinary update
+path. It does not add lazy advancement, recurrence jobs or installed dispatch.
+
+Part 24 connects date editing, task due-day labels and interpreted-search day
+filters to the saved account timezone through the existing public host calendar
+contract. The package-only `GET /tasks/local-day` route supplies the signed-in
+account's timezone; callers cannot choose another account or a timezone. A failed
+initial read keeps the date editor closed until Retry succeeds. Selected due and
+do dates save at local noon, including DST and UTC+14. Unrelated edits retain the
+original timestamp. Recurrence starts from the selected due day or the account's
+local day, retaining that day across partial-save retries. The AI search prompt
+uses the same account-local date. This does not add lazy recurrence or workers.
+
 Part 23 adds **Task settings** in the package screen for the existing assistant
 task-change preference. Opening the section reads the saved choice; the switch
 is unavailable until it loads. Failed refreshes or saves keep the last confirmed
@@ -30,10 +77,13 @@ midnights follow DST rather than assuming every day lasts twenty-four hours.
 
 Current remaining work: lazy recurrence advancement, recurrence jobs, full
 deferred-queue policy and installed worker dispatch, public People linkage,
-policy/feedback orchestration, remaining screen/settings parity, interpreted
-search and date editor timezone support, installed chat and summary presentation,
+policy/feedback orchestration, remaining screen/settings parity, installed chat and summary presentation,
 real application shell integration, performance budgets and physical second-device
-HTTPS proof. Historical checkpoint notes below describe the earlier state.
+HTTPS proof. The full endpoint run now matches all 96 existing cases. This is
+coverage of those cases, not full semantic parity: manage-share completion
+retries can still rewrite history, and duplicate HTTP/tool completion returns
+success where the legacy aborted transaction can produce an error. Historical
+checkpoint notes below describe the earlier state.
 
 Part 15 adds list inclusion, show-only and exclusion under **Choose lists**,
 alongside the compact list picker. Tags can be combined (any selected tag
@@ -391,3 +441,10 @@ package gate. It was observed failing before this change. Set
 with the button on `Browser proof task`, then finish the gate. The gate asserts
 both exact comment bodies are stored once each. This fixture remains separate
 from the application shell; the full-port and second-device gaps above remain.
+
+The signed UI fixture can seed its synthetic owner's saved timezone with
+`TASKS_UI_TIMEZONE=America/Los_Angeles`. With `TASKS_UI_DATE_PROOF=1`, set the
+browser-created proof task's due date to `2026-03-08` and do date to `2026-11-01`.
+The gate additionally requires their persisted timestamps to be Pacific local
+noon across the spring and fall clock changes. This seeds account preferences
+in the disposable fixture; it does not prove Profile's timezone-setting UI.

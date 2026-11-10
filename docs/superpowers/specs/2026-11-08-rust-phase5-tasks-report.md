@@ -1674,3 +1674,313 @@ HTTPS proof. The signed fixture exercises installation, TLS and sign-in but
 remains separate from the application shell. No physical device was attached to
 the existing device bridge during this work; a narrow viewport is not evidence
 of second-device access.
+
+## Tasks part 24 checkpoint (JS-151, Card 526)
+
+Date editing, due-day labels and interpreted-search day filters now use the
+saved account timezone. The authenticated package-only `GET /tasks/local-day`
+route uses the existing public host calendar service; it accepts no account or
+timezone selector. Search uses that same service for the date in the AI prompt.
+Tasks product code does not query core preferences or People internals.
+
+The screen waits for a valid saved timezone before opening an editor. An initial
+read failure shows the existing page recovery; Retry reloads the account calendar.
+Due and do inputs show local days. Changed days save at local noon using the
+unchanged application's wall-time algorithm; untouched fields omit the timestamp
+from updates. An open editor retains its timezone for partial-save retries, and
+new recurring drafts retain their first-save local day. The module's app-map
+metadata now describes these behaviors and recovery.
+
+Two regressions were observed failing before the fix. The date-model check
+failed when a timestamp near UTC midnight was treated as a changed local day.
+The compiled guest check failed because an AI prompt used November 9 for a
+Pacific account whose day was still November 8. The fixed check freezes only
+the invocation clock; saved preferences and account-local conversion still use
+the real host and disposable database. It also checks UTC+14, the existing invalid-zone Pacific
+fallback and an independent account.
+
+Repository lint, type checks, changed-file formatting, file-size, UI-class and
+static guard checks pass. The first full package run passed 19 of 20 database
+checks; the new check assumed UTC fallback where the existing app uses Pacific.
+That fixture expectation was corrected and the independent account was given
+an explicit UTC preference. A focused verify-gate rerun passed the corrected test; the 19 successful
+checks were retained. Remaining package tool and integration receipts are
+recorded in the task proof artifact. Differential checks compare the unchanged app
+with the package over 200 saved-zone date conversions, including spring/fall DST,
+fractional offsets, UTC+14 and leap/year boundaries; 5,520 interpreted-filter
+combinations over four zones; 91 search helpers; 800 list/tag/filter combinations;
+20 capture drafts; 24 tag suggestions; and ten views. All 29 real-markup
+controller tests and 19 native guest tests pass. The controller tests mock the
+bridge and are not live failure proof.
+
+The full endpoint comparison ran every unchanged historical and package case:
+**95 of 96 match**. The sole failure remains `component deferred status: recurring
+completion is idempotent and rejects children`, step 7's final task-list response.
+TypeScript lists the next occurrence before the completed original; Rust reverses
+that order. This checkpoint does not change completion, queue or recurrence code,
+exclude cases, sort away differences or relax assertions. Normal harness startup
+succeeded this time; no scratch startup extension was needed.
+
+Live proof used a fresh signed package installed from the disposable registry on
+the Rust HTTPS fixture. Owner setup, list creation through Manage lists, task
+creation, date entry, save, reload and reopen used the real package screen. Due
+March 8 and do November 1 remained those days in Pacific time after an unrelated
+description edit and another reload. The fixture verified exact stored instants
+`2026-03-08T19:00:00.000Z` and `2026-11-01T20:00:00.000Z`, and one proof task.
+Its synthetic owner's timezone is seeded only in the gate fixture; this does not
+prove Profile's setting screen. TLS certificate verification, sign-in redirect,
+unknown-host refusal and unknown-origin refusal passed independently. Browser
+automation ignored the fixture certificate warning. Screenshots and command
+receipts are in the task proof artifact, outside Git.
+
+The branch was fast-forwarded to main including part 23 after explicit approval.
+Existing scratch Rust 1.95, Wasm target and Cargo registry caches were reused
+offline, including the pinned wit-bindgen graph approved on 2026-11-08. The tools
+lockfile was refreshed offline without a byte change. Declared JavaScript
+dependencies were restored offline. A native-only test run sharing the tools target cache caused mismatched crate
+artifacts between the two lockfiles; clearing only this task's module artifacts
+restored the tools build. Keep native module tests in a separate target directory.
+No global tool, target, generator or new dependency was installed. Workshop and Food remain excluded. Part of #4027;
+release note Category N/A.
+
+This remains a bounded checkpoint, not full Phase 5 acceptance. Remaining:
+lazy recurrence advancement; recurrence jobs; deferred-queue retry/retention
+policy, optional request-key retention and installed worker dispatch; public
+People linkage; policy enforcement and feedback orchestration; remaining screen
+and settings parity; installed chat and summary presentation; real application
+shell integration; performance budgets; the endpoint ordering mismatch; and
+physical second-device HTTPS proof. Lazy advancement needs guarded occurrence
+updates and conflict recovery beyond the current guest query interface; a
+read-then-write race is not an acceptable substitute. The signed fixture remains
+separate from the application shell. No physical device was attached to the
+existing device bridge during this work; local HTTPS and viewport checks do not
+prove access from another device.
+
+## Tasks part 25 checkpoint (JS-155, Card 526)
+
+Retrying completion alone on an owner's completed recurring task now keeps its
+stored completion and update times when the next occurrence already exists.
+The existing atomic insert and occurrence uniqueness constraint decide this;
+there is no separate existence-check followed by a write. A deleted next
+occurrence is recreated. Ordinary edits continue through the existing update
+path. The early insert is limited to owned tasks, so visibility through a share
+cannot enter it. The package app map describes the retry behavior.
+
+The unchanged TypeScript implementation catches a duplicate next-occurrence
+insert after updating the completed row. PostgreSQL then rolls that transaction
+back. Rust previously ignored the conflict and committed the timestamp update,
+putting the completed original before the next occurrence. The new compiled
+regression was run against the original component and failed on the exact
+completed-task record: both completion and update times had changed. It also
+checks HTTP and tool retries, one next occurrence, list order, missing-occurrence
+repair and an ordinary title edit. Final endpoint, privacy, browser and review
+receipts are attached to this task's proof artifact.
+
+The first review requested a removal control for the new owner guard. The
+compiled test uses a view-shared completed recurring task through HTTP, tool and
+job entry points, with the successor present and missing. It strips the actual
+typed `Owned` predicate, requires the unchanged no-insert assertion to fail,
+then restores the predicate and requires refusal without writes. This does not
+substitute invented database responses. Missing-successor fixtures delete only
+their synthetic row by task and owner IDs; there is no task-delete HTTP route.
+
+The unchanged full endpoint suite reproduced **95/96** on the original component
+and passes **96/96** on the fixed component, with no exclusions, normalization
+or assertion changes. This establishes parity for the existing cases only.
+Two review findings below the required fix bar remain explicit: a manage-share
+completion retry still uses the ordinary update path and may rewrite timestamps;
+and HTTP/tool duplicate retries now return success while the legacy transaction
+can error when a later tag read encounters its aborted transaction. Stored owner
+history matches, but those response semantics are not claimed to match.
+
+Live proof used the real package screen on a fresh signed registry/install Rust
+HTTPS fixture. Owner setup, Manage lists, task creation, recurring completion
+and reload showed one completed original and one next occurrence. The fixture
+verified persistence, certificate verification, sign-in redirect, unknown-host
+refusal and unknown-origin refusal. Browser automation ignored the fixture
+certificate warning as instructed. This is package-screen evidence, separate
+from full shell and physical second-device proof.
+
+The branch started at main including part 24. Existing scratch Rust 1.95, Wasm
+target, generator and Cargo dependencies were reused offline. The tools lockfile
+was refreshed offline without a byte change. Declared JavaScript dependencies
+were restored offline. Native module tests used a separate target directory.
+No global tool, target, generator or new dependency was installed. Source changes
+stay in Tasks and this report. Workshop and Food remain excluded. Part of #4027;
+release note Category N/A.
+
+This is a bounded checkpoint, not full Phase 5 acceptance. Remaining: lazy
+recurrence advancement; recurrence jobs; deferred-queue retry/retention policy,
+optional request-key retention and installed worker dispatch; public People
+linkage; policy enforcement and feedback orchestration; remaining screen and
+settings parity; installed chat and summary presentation; real application shell
+integration; performance budgets; and physical second-device HTTPS proof.
+The existing device bridge reported no attached physical device during this
+work. A local HTTPS fixture is not another device or the full application shell.
+
+## Tasks part 26 checkpoint (JS-158, Card 526)
+
+Task details now load subtasks, list tags and activity independently. A failed
+read has its own retry control and does not hide the other panels. Failed
+refreshes keep loaded children and tags; assigned tags remain available even
+when list suggestions cannot load. Each panel distinguishes a successful empty
+read from a failure. Opening another task clears the prior task's detail rows.
+Retries keep unsaved fields and perform reads only, without repeating an
+acknowledged completion. Stale subtask controls stay unavailable until a successful read, and a successful
+retry returns focus to the panel input. Detail refresh still runs if the page-wide
+task reload fails; both finish before the write guard is released. The module's
+app map describes this recovery.
+
+Two real-markup controller regressions were observed failing on the original
+screen: either a rejected subtask read or a rejected tag read hid every detail
+panel. These checks use the actual Rust-rendered markup and controller with a
+labeled bridge stand-in; they are not live browser evidence. Current controller,
+endpoint, privacy and signed-screen run receipts accompany this checkpoint in
+its task proof artifact. Passing the existing endpoint cases does not establish
+full feature parity.
+
+The existing scratch Rust toolchain, Wasm target, approved generator graph and
+Cargo dependencies were reused offline. The tools lockfile was refreshed offline
+without a byte change. Declared JavaScript dependencies were restored offline.
+No global tool or new dependency was installed. The signed HTTPS fixture is
+separate from the real application shell. The existing device bridge reported
+no attached physical device; local browser checks do not prove another device.
+
+This checkpoint adds no HTTP route, tool, job kind, migration or host contract.
+Remaining Phase 5 work: lazy recurrence advancement; recurrence jobs;
+deferred-queue retry/retention policy, optional request-key retention and
+installed worker dispatch; public People linkage; policy enforcement and
+feedback orchestration; remaining screen and settings parity; installed chat
+and summary presentation; real application shell integration; performance
+budgets; and physical second-device HTTPS proof. The previously documented
+manage-share retry and duplicate-response differences are unchanged. Workshop
+and Food remain excluded. Part of #4027; release note Category N/A.
+
+## Tasks part 27 checkpoint (JS-162, Card 526)
+
+After a detail action, the open task editor now refreshes untouched fields from
+the saved task while keeping locally edited fields and comment drafts. Completing
+the final subtask can complete its parent; the editor now shows that completion,
+so a later unrelated save does not reopen the parent. An explicitly edited status
+or date still wins over a refresh. Refreshed dates use the editor's saved account
+timezone, and unrelated saves keep the exact stored timestamp. Saved subtask
+checkboxes no longer count as unsaved editor drafts or cause a discard prompt.
+The package app map and changelog describe this behavior.
+
+The same three real-markup controller regressions fail on the original controller
+and pass on the change. They cover untouched authoritative fields, edited status
+and date drafts, retained title/comment text, exact timestamp preservation and
+clean-versus-dirty leave prompts. All 34 controller checks and 19 native guest
+checks pass. These controller checks use an explicit bridge stand-in; live
+installed-screen proof is separate. The optional signed UI gate receipt
+`TASKS_UI_REFRESH_PROOF=1` checks the exact saved description and completed
+parent/child states after the real screen flow. Final gate and review receipts
+are attached to this task's proof artifact.
+
+The full unchanged endpoint comparison passes **96 of 96 cases**, with no
+case exclusions or relaxed assertions. The signed HTTPS fixture installed the
+package from its disposable registry. Through its real screen, owner setup was
+followed by Manage lists, task creation with one subtask, opening the editor,
+typing description and comment drafts, and completing the final subtask. The
+parent status changed to Done while both drafts stayed. Saving and reopening
+retained the description and both completed states. Leaving the clean editor
+showed the task list without a discard prompt. The gate checked the exact saved
+description, one completed child and one completed parent in the real tables,
+and exactly one proof task. Desktop and narrow viewport screenshots accompany
+the task proof. The narrow viewport is not another device.
+
+Certificate verification, sign-in redirect, unknown-host refusal and
+unknown-origin refusal passed independently. Browser automation ignored the
+fixture certificate warning as instructed. A slow first package load required
+a page reload; only the hydrated, exercised screen is counted as live proof.
+The fixture does not connect real AI or chat. Full shell and physical device
+access remain unproven.
+
+The branch was fast-forwarded to main including part 26. Declared JavaScript
+dependencies were restored offline and the tools lockfile was refreshed offline
+without a byte change. The previous scratch toolchain path no longer contained
+the Wasm target, so the first package and endpoint attempts stopped before tests;
+the initial UI run was stopped. An already provisioned scratch Rust 1.95 toolchain
+with its Wasm target was then copied into this task's scratch folder. The approved
+wit-bindgen dependency graph and existing Cargo cache were reused offline. No
+global tool or new dependency was installed. Native guest tests used a separate
+target directory from host tools.
+
+This is a bounded checkpoint, not full Phase 5 acceptance. It changes no route,
+tool, job kind, migration or host contract. Remaining: lazy recurrence advancement;
+recurrence jobs; deferred-queue retry/retention policy, optional request-key
+retention and installed worker dispatch; public People linkage; policy enforcement
+and feedback orchestration; remaining screen and settings parity; installed chat
+and summary presentation; real application shell integration; performance budgets;
+and physical second-device HTTPS proof. The signed fixture is separate from the
+application shell. The existing device bridge reported no attached physical
+device during this work, so local HTTPS cannot prove access from another device.
+The previously recorded manage-share retry and duplicate-response differences
+remain. Workshop and Food remain excluded. Part of #4027; release note Category N/A.
+
+## Tasks part 28 checkpoint (JS-165, Card 526)
+
+The installed package screen now offers the existing **Do First**, **At risk**
+and **Done today** focus presets in List and Grid. A preset replaces the status
+filter while retaining list choices, selected tags and search. List counts follow
+focus and tags before search, matching the legacy screen. Choosing a status
+leaves focus; removing its chip, choosing No focus or Clear filters returns to open tasks. Clear
+filters also resets lists, tags and search. Filtering reads loaded account data
+and does not call a mutation route. The package includes the new controller
+asset, and its app map and changelog describe the controls.
+
+These are the legacy screen presets, not aliases for the drift API endpoints.
+Do First uses the open, high-priority, forty-eight-hour quadrant rule, including
+overdue tasks. At risk includes open tasks overdue or due within two calendar
+days in the saved account timezone. Done today checks completion on the current
+calendar day in that timezone. Subtasks remain outside the top-level results.
+This checkpoint does not connect Today or chat deep links to the package frame.
+
+The new differential check was observed failing on the original package model:
+focus was ignored and the first Do First comparison returned unrelated rows and
+incorrect list counts. The port passes **3,645 exact comparisons** against the
+unchanged legacy screen model, across three clocks (including both Pacific DST
+changes), three account timezones, all statuses, list choices, tags and searches.
+It checks the entire filter result and verifies source rows are unchanged. The
+real-markup controller regression checks focus/status transitions, chip removal, retained
+filters, counts before search, both layouts and Clear filters, with an explicitly
+labeled bridge stand-in. That controller check is separate from installed live
+proof. Gate and browser receipts belong to this task's proof artifact.
+
+The signed UI gate has an optional `TASKS_UI_FOCUS_PROOF=1` persistence receipt.
+Create a list through Manage lists, then create `Browser proof task` as an open
+Critical task due today; `Finished focus proof` as Done without dates or priority;
+and `Undated focus proof` as open without dates or priority. Exercise all three
+focus choices, both layouts, explicit status changes and Clear filters through
+the real screen before writing its `finished` receipt. The gate verifies the
+three saved statuses, priorities and date-presence values. UI result assertions and screenshots must come
+from the actual browser session; the persistence receipt alone does not prove
+filter rendering.
+
+The branch was fast-forwarded to main including part 27. Declared JavaScript
+dependencies were restored offline. The tools lockfile was regenerated offline
+from the existing scratch cache without a byte change. Existing Rust 1.95,
+Wasm target and approved wit-bindgen dependency graph were copied into this
+task's scratch folders and reused; no global tool, compiler target, generator
+or new dependency was installed. Native guest tests use a separate target from
+host tools. Independent review found that an interpreted search supplying a status
+left focus active and silently overrode that status. A regression failed before
+the fix; successful interpretations with a status now leave focus, while a reply
+without a status or a failed interpretation preserves it. The real-markup
+search test also exercises this transition. Review
+also identified the missing removable focus chip, which was added. Broad Rust formatting also reports pre-existing differences in
+unchanged spike sources; the changed Rust files pass the scoped check.
+
+This is a bounded screen-parity checkpoint, not full Phase 5 acceptance. It
+changes no HTTP route, tool, job kind, migration or host contract. Remaining:
+lazy recurrence advancement; recurrence jobs; deferred-queue retry/retention
+policy, optional request-key retention and installed worker dispatch; public
+People linkage; policy enforcement and feedback orchestration; remaining
+screen/settings parity and Today/chat focus links; installed chat and summary
+presentation; real application shell integration; performance budgets; and
+physical second-device HTTPS proof. The available device bridge reported no
+attached device during this work. The signed fixture remains separate from the
+application shell; a local browser or narrow viewport is not another physical
+device. The previously recorded manage-share retry and duplicate-response
+differences remain. Workshop and Food remain excluded. Part of #4027;
+release note Category N/A.

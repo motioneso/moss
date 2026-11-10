@@ -41,6 +41,7 @@ test(
               { id: "b", name: "Home" }
             ]
           };
+        if (path === "/tasks/local-day") return { timezone: "UTC", date: "2026-11-09" };
         if (path === "/tasks/preferences") return { preferences: { defaultView: "priority" } };
         if (path === "/tasks/lists/a/tags" && method === "GET") {
           if (fail) throw new Error("connection unavailable");

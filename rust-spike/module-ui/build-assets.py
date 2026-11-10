@@ -23,6 +23,7 @@ def build(out: Path) -> None:
     css = "\n".join(flatten(p, seen) for p in [
         ROOT / "apps/web/src/styles/boot.css",
         ROOT / "packages/ui/src/styles.css",
+        ROOT / "apps/web/src/styles/components-forms.css",
         ROOT / "rust-spike/module-ui/web/base.css",
         ROOT / "rust-spike/module-ui/web/document.css",
     ])

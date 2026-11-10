@@ -2,6 +2,8 @@
 //! layout only. Options mirror packages/ui, and no private data or direct HTTP client lives here.
 use leptos::prelude::*;
 pub mod calendar;
+mod controls;
+pub use controls::{IconButton, Segmented};
 #[derive(Clone, Copy, Default)]
 pub enum ButtonVariant {
     #[default]

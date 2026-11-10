@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add Do First, At risk and Done today focus presets in both task views, using the saved account timezone for day filters. Presets replace status; choosing a status or clearing filters leaves focus.
+
+- Keep task editor drafts while refreshing untouched fields after detail actions, including parent completion from the last subtask.
+
+- Load task-detail panels independently, retry failed subtask and list-tag reads, and keep loaded details and unsaved drafts.
+
+- Retain completed recurring-task history and list order when the same completion is retried; recreate a deleted next occurrence.
+
 - Read and save the existing assistant task-change preference under Task settings.
 - Keep the confirmed value after failed refreshes or saves, with independent load retries. Installed chat actions still ask for approval.
 

@@ -18,7 +18,8 @@ from linux_runtime import stage_runtime
 
 def stage(dist: Path, postgres: Path, out: Path, server_runtime: bool = False,
           openssl: Path = Path("/usr/bin/openssl"),
-          ca_bundle: Path = Path("/etc/ssl/certs/ca-certificates.crt")) -> None:
+          ca_bundle: Path = Path("/etc/ssl/certs/ca-certificates.crt"),
+          desktop_runtime: bool = False) -> None:
     repo = Path(__file__).resolve().parents[3]
     if out.exists():
         raise ValueError("Output already exists; choose a new folder")
@@ -57,8 +58,8 @@ def stage(dist: Path, postgres: Path, out: Path, server_runtime: bool = False,
                 if file.is_file() and file.name.endswith((".sql", ".mjs")):
                     shutil.copy2(file, target / file.name)
         shutil.copy2(Path(__file__).with_name("uninstall.py"), temporary / "uninstall.py")
-        if server_runtime:
-            stage_runtime(temporary, openssl, ca_bundle)
+        if server_runtime or desktop_runtime:
+            stage_runtime(temporary, openssl, ca_bundle, desktop_runtime)
         # No source folders, instance data, credentials or toolchain caches are copied.
         entries = {}
         for file in sorted(temporary.rglob("*")):
@@ -81,11 +82,14 @@ def main() -> None:
         parser.add_argument("--" + name, type=Path, required=True)
     parser.add_argument("--linux-server-runtime", action="store_true",
                         help="Include linked app/server ELF libraries and OpenSSL/CA files (not WebKit helpers/resources)")
+    parser.add_argument("--linux-desktop-runtime", action="store_true",
+                        help="Also stage WebKit fixed-path target-root payload, GIO TLS, schemas, MIME and fonts; not an installer")
     parser.add_argument("--openssl", type=Path, default=Path("/usr/bin/openssl"))
     parser.add_argument("--ca-bundle", type=Path, default=Path("/etc/ssl/certs/ca-certificates.crt"))
     args = parser.parse_args()
     stage(args.dist.resolve(), args.postgres.resolve(), args.out.resolve(),
-          args.linux_server_runtime, args.openssl.resolve(), args.ca_bundle.resolve())
+          args.linux_server_runtime, args.openssl.resolve(), args.ca_bundle.resolve(),
+          args.linux_desktop_runtime)
     print("Staged unsigned Moss app, server, database supervisor, PostgreSQL and schema")
 
 

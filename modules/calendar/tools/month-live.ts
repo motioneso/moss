@@ -56,14 +56,9 @@ export async function checkMonth(tab: Page, out: string) {
         })
       )
       .toBe(true);
-    // Element capture scrolls nested clipping containers and changes hit testing.
-    // Capture the visible region without moving the opaque frame's scroll state.
-    const bounds = await frame.locator(".cal-body").boundingBox();
-    assert(bounds);
-    await tab.screenshot({
-      path: join(out, `month-${width}.png`),
-      clip: { ...bounds, height: Math.min(bounds.height, 860 - bounds.y) }
-    });
+    // A clipped capture shifted delivered pointer coordinates by the clip origin
+    // in the task browser. Capture the viewport; crop evidence off-browser later.
+    await tab.screenshot({ path: join(out, `month-${width}.png`) });
     await expect(frame.getByRole("button", { name: "Today", exact: true })).toBeEnabled();
     await more.click();
     await frame.locator(".cal-tg__col").waitFor();

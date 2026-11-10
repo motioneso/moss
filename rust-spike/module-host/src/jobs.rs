@@ -183,6 +183,9 @@ impl Installer {
             Role::Worker,
             declarations,
         ))?;
+        // Scheduling belongs to the server worker, not a connected desktop page. Use the
+        // same active declarations and database fences for ticking and claiming work.
+        runtime.block_on(queue.tick())?;
         let Some(job) = runtime.block_on(queue.claim())? else {
             return Ok(false);
         };

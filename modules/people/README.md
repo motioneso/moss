@@ -5,11 +5,12 @@ two job handlers, route envelopes and a packaged Leptos Settings pane. The insta
 gate exercises signed registry installation, reload, route replay and all four public lookup
 APIs through an installed consumer fixture; the report records the current result. The authenticated Rust
 application still needs to compose that package into its real Settings and chat flows.
-The normal People gate compares a complete 100-person list from a 1,005-person
-account against the real legacy handler, under the unchanged default host budgets.
-The optional 21-case large-account diagnostic also covers links and larger limits.
-It is **currently red**: 100 people pass, then the 100-link response exhausts Wasm
-fuel. Larger cases are not reached; large-account parity remains unproved.
+The normal People gate compares complete 100-person and 100-link lists from a
+1,005-person account against the real legacy handlers, under the unchanged default host budgets.
+The optional 29-case large-account diagnostic also covers links and larger limits, with intermediate 150, 175 and 190-row probes.
+It is **currently red**: both 100-row responses pass, then the 150-person response
+exhausts Wasm fuel while dropping response values. Later cases are not reached;
+large-account parity remains unproved.
 With the task-owned build environment and generated component prepared as below, reproduce
 through verify-gate:
 

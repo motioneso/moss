@@ -8,6 +8,7 @@ import { taskFilters } from "./filters.mjs";
 test("custom list choices keep New task on a real list, and reset restores open tasks", () => {
   const dom = new JSDOM(`<select id="list-filter"></select><select id="tag-filter"></select>
     <select id="status-filter"><option value="todo">Open</option><option value="all">All</option></select>
+    <select id="focus-filter"><option value="">No focus</option></select><div id="active-focus"></div>
     <input id="search"><div id="list-selection"></div><div id="active-tags"></div>`);
   const previous = { document: globalThis.document, Option: globalThis.Option };
   globalThis.document = dom.window.document;

@@ -54,32 +54,41 @@ const intents = [
 ];
 const before = structuredClone(tasks);
 let checks = 0;
-for (const searchIntent of intents)
-  for (const status of ["all", "todo", "done", "suggested", "archived"])
-    for (const listStates of [{}, { home: "solo" }, { work: "excluded" }])
-      for (const tagFilter of [[], ["red", "blue"]])
-        for (const search of ["", "missing literal query"]) {
-          const input = {
-            tasks,
-            lists,
-            statusFilter: status,
-            focus: null,
-            listStates,
-            tagFilter,
-            search,
-            searchIntent,
-            timeZone: "UTC"
-          };
-          assert.deepEqual(
-            filterTasks(tasks, { lists, status, listStates, tagFilter, search, searchIntent }),
-            legacy(input),
-            JSON.stringify(input.searchIntent)
-          );
-          checks++;
-        }
+for (const timeZone of ["UTC", "America/Los_Angeles", "Pacific/Kiritimati", "Asia/Kathmandu"])
+  for (const searchIntent of intents)
+    for (const status of ["all", "todo", "done", "suggested", "archived"])
+      for (const listStates of [{}, { home: "solo" }, { work: "excluded" }])
+        for (const tagFilter of [[], ["red", "blue"]])
+          for (const search of ["", "missing literal query"]) {
+            const input = {
+              tasks,
+              lists,
+              statusFilter: status,
+              focus: null,
+              listStates,
+              tagFilter,
+              search,
+              searchIntent,
+              timeZone
+            };
+            assert.deepEqual(
+              filterTasks(tasks, {
+                lists,
+                status,
+                listStates,
+                tagFilter,
+                search,
+                searchIntent,
+                timeZone
+              }),
+              legacy(input),
+              JSON.stringify(input.searchIntent)
+            );
+            checks++;
+          }
 assert.deepEqual(tasks, before);
 console.log(
-  `PASS ${checks} exact legacy interpreted-filter comparisons (UTC); source rows unchanged`
+  `PASS ${checks} exact legacy interpreted-filter comparisons (four saved zones); source rows unchanged`
 );
 
 // These helpers are private to the legacy page. Extract their unchanged AST

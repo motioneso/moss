@@ -8,6 +8,8 @@
   "scripts": {
     "test:rust-app-runtime-routing": "cargo test --manifest-path rust-spike/shell/Cargo.toml -p moss-app runtime_proof::staged_runtime_provisions_starts_and_stops_local_server -- --ignored --nocapture",
     "test:rust-linux-runtime": "python3 rust-spike/shell/tools/proof_linux_runtime.py",
+    "test:rust-linux-creation": "python3 -B rust-spike/shell/tools/proof_linux_creation.py",
+    "test:rust-linux-desktop": "python3 rust-spike/shell/tools/proof_linux_desktop.py",
     "test:module-enqueue-options": "tsx rust-spike/module-host/tools/enqueue-options-gate.ts",
     "lint": "eslint . --max-warnings=0",
     "format": "prettier --write .",

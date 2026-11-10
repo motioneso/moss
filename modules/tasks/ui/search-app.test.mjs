@@ -39,6 +39,7 @@ test(
       async request(method, path, body) {
         if (path === "/tasks") return { tasks: rows };
         if (path === "/tasks/lists") return { lists: [{ id: "list", name: "Inbox" }] };
+        if (path === "/tasks/local-day") return { timezone: "UTC", date: "2026-11-09" };
         if (path === "/tasks/preferences") return { preferences: { defaultView: "priority" } };
         if (path === "/tasks/search/interpret") {
           assert.equal(method, "POST");
@@ -87,9 +88,12 @@ test(
         $("search").dispatchEvent(new dom.window.Event("input"));
       };
       type("done important tasks");
+      $("focus-filter").value = "priorities";
+      $("focus-filter").dispatchEvent(new dom.window.Event("change"));
       $("interpret-search").querySelector("button").click();
       await settled();
       assert.equal($("status-filter").value, "done");
+      assert.equal($("focus-filter").value, "");
       assert.match($("task-results").textContent, /Finished example/);
       assert.doesNotMatch($("task-results").textContent, /Open example|Other example/);
       assert.equal(document.activeElement, $("search"));

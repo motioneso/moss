@@ -158,6 +158,39 @@ try {
       "select count(*)::text as count from app.tasks where title = 'Browser proof task'"
     );
     assert.equal(result.rows[0]?.count, "1", "The real UI must create the proof task exactly once");
+    if (process.env["TASKS_UI_FOCUS_PROOF"] === "1") {
+      const rows = await db.query<{
+        title: string;
+        status: string;
+        priority: number | null;
+        dated: boolean;
+      }>(
+        "select title, status, priority, due_at is not null as dated from app.tasks where title in ('Browser proof task', 'Finished focus proof', 'Undated focus proof') order by title"
+      );
+      assert.deepEqual(rows.rows, [
+        { title: "Browser proof task", status: "todo", priority: 5, dated: true },
+        { title: "Finished focus proof", status: "done", priority: null, dated: false },
+        { title: "Undated focus proof", status: "todo", priority: null, dated: false }
+      ]);
+      console.log(
+        "PASS browser focus fixtures: high-priority dated open task, completed task and undated open task persisted with exact final states"
+      );
+    }
+    if (process.env["TASKS_UI_REFRESH_PROOF"] === "1") {
+      const parent = await db.query<{ status: string; description: string }>(
+        "select status, description from app.tasks where title = 'Browser proof task'"
+      );
+      assert.deepEqual(parent.rows, [
+        { status: "done", description: "Draft kept across completion" }
+      ]);
+      const children = await db.query<{ title: string; status: string }>(
+        "select c.title, c.status from app.tasks c join app.tasks p on p.id=c.parent_task_id where p.title='Browser proof task'"
+      );
+      assert.deepEqual(children.rows, [{ title: "Last proof subtask", status: "done" }]);
+      console.log(
+        "PASS browser editor refresh: completed child and parent remain done after saving the preserved description draft"
+      );
+    }
     if (process.env["TASKS_UI_ACTIVITY_PROOF"] === "1") {
       const comments = await db.query<{ body: string }>(
         "select a.body from app.task_activity a join app.tasks t on t.id=a.task_id where t.title='Browser proof task' and a.activity_type='comment' order by a.created_at, a.id"
@@ -201,6 +234,16 @@ try {
       );
       console.log(
         "PASS browser tag suggestions: stored hash preserved; typed existing tag reused; no duplicate list tag created"
+      );
+    }
+    if (process.env["TASKS_UI_DATE_PROOF"] === "1") {
+      const dates = await db.query<{ due_at: Date; do_at: Date }>(
+        "select due_at, do_at from app.tasks where title='Browser proof task'"
+      );
+      assert.equal(dates.rows[0]?.due_at.toISOString(), "2026-03-08T19:00:00.000Z");
+      assert.equal(dates.rows[0]?.do_at.toISOString(), "2026-11-01T20:00:00.000Z");
+      console.log(
+        "PASS browser date proof: saved Pacific spring/fall dates persist at local noon, not UTC noon"
       );
     }
     if (process.env["TASKS_UI_CAPTURE_PROOF"] === "1") {

@@ -5,8 +5,12 @@
 Rust component and shared-frame People Settings checkpoint. Complete installed parity and physical-device qualification remain open.
 
 Reuse decoded database rows and move list rows into response envelopes. A complete
-100-person response now matches the legacy handler within the default Wasm budget,
-with an ordinary-gate regression. Larger responses and link reads remain unqualified.
+100-person response matches the legacy handler within the default Wasm budget.
+Consume response fields and use explicit wire names instead of copying values and
+rebuilding each key. Complete 100-person and 100-link responses now have ordinary-gate
+regressions. The expanded diagnostic now exhausts fuel at 150 people during response teardown;
+larger reads remain unqualified. Intermediate probes narrow the known failure
+boundary without changing runtime code or host budgets.
 
 Preserve every canonical accent when sorting People folders, including multiple accents
 on one letter, before comparing case. Comparisons for selected letter families and the installed

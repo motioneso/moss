@@ -7,6 +7,16 @@ const $ = (id) => document.getElementById(id);
 export function taskFilters(changed, searchIntent = () => null) {
   let listStates = {};
   let tagFilter = [];
+  $("focus-filter").addEventListener("change", () => {
+    // A preset overrides status, as in the legacy Today links. Choosing a
+    // status explicitly leaves the preset; clearing it returns to open tasks.
+    $("status-filter").value = $("focus-filter").value ? "" : "todo";
+    changed();
+  });
+  $("status-filter").addEventListener("input", () => {
+    $("focus-filter").value = "";
+    changed();
+  });
   $("list-filter").addEventListener("change", () => {
     const id = $("list-filter").value;
     listStates = id ? { [id]: "solo" } : {};
@@ -19,6 +29,22 @@ export function taskFilters(changed, searchIntent = () => null) {
   });
 
   function render(lists, result) {
+    const focus = $("focus-filter");
+    $("active-focus").replaceChildren();
+    if (focus.value) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "jds-btn jds-btn--secondary";
+      button.textContent = `${focus.selectedOptions[0].textContent} ×`;
+      button.setAttribute("aria-label", "Clear focus");
+      button.addEventListener("click", () => {
+        focus.value = "";
+        $("status-filter").value = "todo";
+        changed();
+        focus.focus();
+      });
+      $("active-focus").append(button);
+    }
     const changedLists = lists.filter(
       (list) => listStates[list.id] && listStates[list.id] !== "included"
     );
@@ -92,12 +118,14 @@ export function taskFilters(changed, searchIntent = () => null) {
       // Details falls back to the first list; quick capture lets the route choose Personal.
       return captureListId(lists) ?? lists[0]?.id ?? "";
     },
-    apply(tasks, lists) {
+    apply(tasks, lists, timeZone = "UTC") {
       const result = filterTasks(tasks, {
         lists,
+        timeZone,
         listStates,
         tagFilter,
         status: $("status-filter").value,
+        focus: $("focus-filter").value || null,
         search: $("search").value,
         searchIntent: searchIntent()
       });
@@ -108,6 +136,7 @@ export function taskFilters(changed, searchIntent = () => null) {
       listStates = {};
       tagFilter = [];
       $("status-filter").value = "todo";
+      $("focus-filter").value = "";
       $("search").value = "";
       changed();
     }

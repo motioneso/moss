@@ -124,7 +124,36 @@ signed package from a temporary folder registry with the real PostgreSQL lifecyc
 and checks dispatch, required-module disable refusal, saved rows and ledger identity.
 The second gate remains the two-server SQL-only comparison; it is not Notes HTTP parity.
 
-## Limits
+## Installed tool-dispatch checks (part twenty-one)
+
+The host's account-services adapter now forwards end-of-call finalization. Without
+this, installed approval preparation retained a folder lock and the next approved
+write failed as busy. The integration test reproduced that failure. Finalization
+also reaches the existing transaction, compensation and deferred-job adapters.
+Guest errors remain redacted; the test observes trusted service failures before
+that boundary to distinguish approval refusals from unrelated errors.
+
+The disposable aggregate gate now joins the existing generic `tools.run` service
+to an installed, signed experimental Notes guest for create, edit, delete and
+indexed search. A WAT probe only forwards the outer service request; the Notes
+handler, linked files, private sync checkpoints, indexing and retrieval use the
+real Rust implementations. Queue delivery is manual and both embedding adapters
+use the named deterministic test provider. The fixture declares write tools only
+in its experimental manifest; the ordinary package remains read-only.
+The same service probe calls the installed read-only approval-preparation API;
+callers without the declared Notes dependency are refused. Preparation supplies
+an action version but grants no approval and makes no file or sync change.
+
+The checks distinguish approval refusal from a later Notes conflict by counting
+downstream port calls. They exercise wrong accounts (including an unrelated
+admin), changed parameters, a different tool and grant replay before file or
+database access, then the original approved write. They also remove checkpoint
+RLS to observe cross-account read/update/delete denial assertions fail, restore
+it and repeat. These checks remain installed service integration; part twenty-two adds target
+freshness. An active queue, configured models, assembled chat and second-device
+proof remain unfinished.
+
+## Export limits
 
 The host uses its ordinary transaction isolation. This is not a point-in-time
 snapshot across all pages/tables while another process changes data. Paging,
@@ -156,7 +185,7 @@ assembled Phase 4 shell or proof from a separate physical device.
 The standard Notes gate now also compares actual legacy Settings handlers with
 installed guest routes and performs a preference RLS removal control. Differential
 coverage is limited to the cases in `tools/settings-oracle.ts`. Symlink descendant
-selection, locale-sensitive directory ordering, invalid-input response parity and
+selection, locale-sensitive directory ordering, complete path/HTTP parity and
 sync scheduling remain unfinished. Existing linked-file platform limits apply.
 
 ## Write-tool parity checkpoint (part five)
@@ -178,8 +207,7 @@ failure after finalization can leave the file saved without sync; no atomic
 filesystem/database/queue guarantee is made.
 
 Read-only approval preparation matches the legacy card fields and version for
-ordinary canonical POSIX folder preferences. It grants no approval. Its version
-must be rechecked after approval and before writing in the future host join.
+ordinary canonical POSIX folder preferences. It grants no approval. The experimental installed dispatcher can now carry its version in a trusted grant and recheck it before writing; see part twenty-two below.
 Delete and overwrite must still require explicit approval even with a trusted
 write policy. Neither approval consumption nor that orchestration is implemented
 here. Source aliases, Windows paths, symlink selection, missing-file error parity,
@@ -651,10 +679,70 @@ policy refusals retain the general message. The chooser shows separate guidance 
 fixed failures and keeps its generic fallback for other errors. Rejected saves
 keep the current link, entered path and focus. The expanded legacy differential
 uses real empty, missing and other-account paths with an existing link; it compares
-the saved value and revision as well as each response (60 cases across three users).
+the saved value and revision as well as each response (the original 60 cases, extended
+with input-validation cases in part twenty-three).
 It was observed failing on the earlier generic host response.
 
 Existing vault admission is unchanged: symlink descendants, relative paths and
 traversal remain refused. Missing paths outside roots and non-directory sources
 can still differ from legacy, as can directory ordering and other invalid inputs.
 This does not activate chat, production sync or the assembled settings shell.
+
+## Displayed-target approvals (part twenty-two)
+
+Experimental tool declarations opt into `"approvalVersion": true`. The trusted
+server prepares the existing `prepareNoteAction` API, shows its details to the
+account, and saves the version that was shown with
+`ServicePorts::approve_tool_at_version`. Plain approvals are refused for these
+tools. The dispatcher obtains the version only from that account's saved grant;
+caller-supplied envelope versions are ignored. It consumes the grant before
+calling Notes, retaining the existing account/tool/input binding and expiry.
+
+Notes compares that version to its current resolved source, relative path and
+exact file content before create/edit/delete. It also checks that the returned destination matches
+the resolved source, refusing a folder switch between resolving and reading.
+The linked-folder adapter retains
+its existing call lock from notes.read through comparison and guarded mutation;
+the earlier folder resolution itself is not locked. external writers
+are still fenced by the adapter's exact expected-text comparison. Changed content
+or a different source refuses the action without saving a sync checkpoint. A
+fresh preparation and approval are required after refusal. This detects state
+changes, not filesystem identity replacement at the same path with the same text.
+
+Only the signed experimental integration fixture declares these write tools.
+Legacy direct-handler parity fixtures remain unversioned; the ordinary package
+continues to offer only search. No assembled chat card, live approval endpoint,
+configured model, active queue or second-device HTTPS acceptance is claimed.
+The generic host flag is additive and defaults off for existing packages.
+
+## Folder request input parity (part twenty-three)
+
+The installed folder routes now use the legacy Fastify schema's validation shape
+and coercions. Unknown query/body fields are ignored; they never select an
+account or change the server's roots. Repeated directory paths and invalid body
+or path types return the legacy 400 response with its specific reason before
+accessing preferences or files.
+Legacy false, zero and empty-string bodies (including their supported singleton
+array forms) unlink the calling account's folder. Explicit null or a missing
+path also unlinks it. Numeric/boolean path fields become text before vault admission.
+
+`tools/settings-input-parity.ts` records actual legacy Fastify schema behavior
+and Moss's real API error handler, with an explicit folder-admission echo stand-in.
+Its native corpus includes
+numeric formatting boundaries, union-type singleton-array coercions and ignored
+fields. The aggregate gate checks that corpus is current. The installed Settings
+oracle separately uses the same error handler and compares actual legacy routes,
+saved source and revision,
+and unchanged other-account preferences on a disposable database. It retains the
+preference RLS-removal control. These are bounded schema/handler cases, not proof
+of every JSON value, malformed JSON/content-type transport behavior or complete
+path parity. In particular scalar paths coerced to relative text still face the
+vault's stricter path policy; their filesystem response parity is not claimed.
+No host additions, permissions, SQL or screen changes are introduced.
+
+Full Notes acceptance still requires assembled chat approval and writes,
+configured embeddings, production manual/scheduled sync and worker delivery,
+singleton coalescing and recall warmup, automatic recovery/retention,
+managed publication/fencing/reconciliation, private exports/daily archives,
+complete path/HTTP parity, assembled Settings/chat and a physical second-device
+HTTPS check. This remains a checkpoint, not a replacement for working legacy Notes.

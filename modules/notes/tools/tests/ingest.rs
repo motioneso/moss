@@ -32,6 +32,8 @@ mod manual_sync;
 mod recovery;
 #[path = "support/mod.rs"]
 mod support;
+#[path = "ingest/tool_routing.rs"]
+mod tool_routing;
 
 struct MutatingStub {
     file: PathBuf,

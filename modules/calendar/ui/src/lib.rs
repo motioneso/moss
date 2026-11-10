@@ -3,6 +3,7 @@
 mod browser;
 mod event_details;
 pub mod model;
+pub mod toolbar;
 pub mod views;
 
 #[cfg(target_arch = "wasm32")]

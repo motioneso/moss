@@ -190,13 +190,39 @@ impl ServicePorts {
         tool: &str,
         parameters: &Value,
     ) -> Result<()> {
+        self.save_tool_approval(access, module, tool, parameters, None)
+    }
+    /// Trusted approval UI supplies the opaque version shown to the account.
+    /// The module rechecks it under its mutation lock before changing the target.
+    pub fn approve_tool_at_version(
+        &self,
+        access: &AccessContext,
+        module: &str,
+        tool: &str,
+        parameters: &Value,
+        version: &str,
+    ) -> Result<()> {
+        ensure!(
+            !version.is_empty() && version.len() <= 256,
+            "Invalid approval version"
+        );
+        self.save_tool_approval(access, module, tool, parameters, Some(version))
+    }
+    fn save_tool_approval(
+        &self,
+        access: &AccessContext,
+        module: &str,
+        tool: &str,
+        parameters: &Value,
+        version: Option<&str>,
+    ) -> Result<()> {
         let _guard = self.serial_lock()?;
         let key = tool_key(tool, parameters)?;
         self.write(
             module,
             access,
             &key,
-            &json!({"expires":chrono::Utc::now().timestamp()+300}),
+            &json!({"expires":chrono::Utc::now().timestamp()+300,"version":version}),
         )
     }
     pub fn set_action_policy(
@@ -268,10 +294,12 @@ impl ServicePorts {
                             .get("parameters")
                             .cloned()
                             .unwrap_or_else(|| json!({}));
-                        let required = tool.risk != "read"
+                        let required = tool.approval_version
+                            || tool.risk != "read"
                             || self.read(id, access, "action-policy")?[&r.resource]
                                 .as_bool()
                                 .unwrap_or(true);
+                        let mut payload = json!({"tool":r.resource,"parameters":params});
                         if required {
                             let _guard = self.serial_lock()?;
                             let key = tool_key(&r.resource, &params)?;
@@ -282,15 +310,16 @@ impl ServicePorts {
                                     .is_some_and(|t| t > chrono::Utc::now().timestamp()),
                                 "This tool needs the account's approval"
                             );
+                            if tool.approval_version {
+                                let version = grant["version"].as_str()
+                                    .filter(|v| !v.is_empty() && v.len() <= 256)
+                                    .context("This tool needs the account's approval at its displayed version")?;
+                                payload["approvalVersion"] = json!(version);
+                            }
                             self.write(id, access, &key, &Value::Null)?;
                         }
                         self.host()?
-                            .invoke_public(
-                                id,
-                                access.clone(),
-                                "tool",
-                                &json!({"tool":r.resource,"parameters":params}).to_string(),
-                            )
+                            .invoke_public(id, access.clone(), "tool", &payload.to_string())
                             .and_then(|s| Ok(serde_json::from_str(&s)?))
                     }
                     _ => bail!("Unknown tool operation"),
@@ -432,6 +461,9 @@ impl Ports for ServicePorts {
             );
         }
         result
+    }
+    fn finish_call(&self, scope: &CallScope, success: bool) -> Result<()> {
+        self.next.finish_call(scope, success)
     }
 }
 fn tool_key(tool: &str, parameters: &Value) -> Result<String> {

@@ -181,6 +181,36 @@ class InstallTests(unittest.TestCase):
             dependencies(program)
         self.assertIn(library, dependencies(program, self.root))
 
+    def test_desktop_runtime_inventories_fixed_helpers_and_selects_resources(self):
+        source = self.root / "desktop-environment.c"
+        variables = ["GIO_MODULE_DIR", "GSETTINGS_SCHEMA_DIR", "FONTCONFIG_FILE",
+                     "LIBGL_DRIVERS_PATH", "__EGL_VENDOR_LIBRARY_FILENAMES"]
+        source.write_text('#include <stdio.h>\n#include <stdlib.h>\nint main(void) {\n' +
+                          ''.join(f'puts(getenv("{name}"));\n' for name in variables) + 'return 0; }')
+        subprocess.run(["cc", str(source), "-o", str(self.install / "moss-app")], check=True)
+        for name in ("moss-shell", "moss-db"):
+            shutil.copy2("/bin/true", self.install / name)
+        (self.install / "postgres").mkdir()
+        stage_runtime(self.install, Path("/usr/bin/openssl"),
+                      Path("/etc/ssl/certs/ca-certificates.crt"), desktop=True)
+        runtime = self.install / "runtime"
+        closure = json.loads((runtime / "closure.json").read_text())
+        self.assertEqual(closure["scope"], "linux-desktop-root")
+        self.assertEqual(len(closure["target_root_files"]), 4)
+        for absolute in closure["target_root_files"]:
+            helper = runtime / "rootfs" / absolute.lstrip("/")
+            self.assertTrue(helper.is_file())
+            for dependency in dependencies(helper, runtime / "lib"):
+                self.assertTrue((runtime / "lib" / dependency.name).is_file())
+        result = subprocess.run([str(self.install / "moss-run"), "moss-app"],
+                                check=True, capture_output=True, text=True)
+        self.assertEqual(result.stdout.splitlines(), [str(runtime / name) for name in (
+            "lib/gio/modules", "share/glib-2.0/schemas", "etc/fonts.conf", "lib/dri",
+            "share/glvnd/egl_vendor.d/50_mesa.json")])
+        self.assertTrue((runtime / "share/fonts/DejaVuSans.ttf").is_file())
+        self.assertTrue((runtime / "lib/gio/modules/giomodule.cache").is_file())
+        self.assertTrue((runtime / "share/glib-2.0/schemas/gschemas.compiled").is_file())
+
 
 if __name__ == "__main__":
     unittest.main()

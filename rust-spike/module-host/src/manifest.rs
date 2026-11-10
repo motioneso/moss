@@ -143,6 +143,19 @@ pub struct Exchange {
 pub struct Tool {
     pub description: String,
     pub risk: String,
+    /// Require a trusted approval target version in addition to exact inputs.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub approval_version: bool,
+}
+impl Tool {
+    fn permission_label(&self, name: &str) -> String {
+        let target = if self.approval_version {
+            "; displayed target approval required"
+        } else {
+            ""
+        };
+        format!("Tool {name}: {}{target}", self.risk)
+    }
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "kebab-case")]
@@ -448,16 +461,12 @@ impl Manifest {
                         serde_json::to_string(route).expect("policy")
                     )
                 })
-                .chain(
-                    self.tools
-                        .iter()
-                        .map(|(name, t)| format!("Tool {name}: {}", t.risk)),
-                )
+                .chain(self.tools.iter().map(|(name, t)| t.permission_label(name)))
                 .collect(),
             "tools" | "action-policy" => self
                 .tools
                 .iter()
-                .map(|(name, t)| format!("Tool {name}: {}", t.risk))
+                .map(|(name, t)| t.permission_label(name))
                 .collect(),
             "db" => vec![format!(
                 "Sharing: {}",

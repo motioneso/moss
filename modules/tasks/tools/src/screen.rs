@@ -29,9 +29,16 @@ pub fn render() -> String {
                     </Field>
                     <Field><FormLabel control_id="status-filter">"Status"</FormLabel>
                         <select id="status-filter" class="jds-input">
+                            <option value="" disabled>"Using focus"</option>
                             <option value="todo">"To do"</option><option value="all">"All"</option>
                             <option value="done">"Done"</option>
                             <option value="suggested">"Suggested"</option><option value="archived">"Archived"</option>
+                        </select>
+                    </Field>
+                    <Field><FormLabel control_id="focus-filter">"Focus"</FormLabel>
+                        <select id="focus-filter" class="jds-input" aria-describedby="focus-description">
+                            <option value="">"No focus"</option><option value="priorities">"Do First"</option>
+                            <option value="atrisk">"At risk"</option><option value="donetoday">"Done today"</option>
                         </select>
                     </Field>
                     <Field><FormLabel control_id="tag-filter">"Tags"</FormLabel>
@@ -75,9 +82,11 @@ pub fn render() -> String {
                     </div>
                 </details>
                 <div id="active-tags" class="tasks-actions" role="group" aria-label="Active tag filters"></div>
+                <div id="active-focus" class="tasks-actions" role="group" aria-label="Active focus"></div>
+                <p id="focus-description" class="jds-caption">"Focus replaces the status filter. Do First shows open high-priority tasks due within forty-eight hours; At risk shows open tasks overdue or due within two local days. Done today uses your saved timezone. Choose a status or clear filters to leave focus."</p>
                 <p id="search-warning" role="status" hidden></p>
                 <div id="search-intent" class="tasks-actions" role="group" aria-label="Interpreted search filters"></div>
-                <p class="jds-caption">"Interpret a phrase into filters, or search by title and description. Interpreted dates use UTC."</p>
+                <p class="jds-caption">"Interpret a phrase into filters, or search by title and description. Interpreted dates use your saved timezone."</p>
                 <p class="jds-caption">"Manual tag picks match any selected tag. Interpreted tag filters require every named tag."</p>
                 <div id="empty" hidden>
                     <EmptyState title="No tasks here" description="Try another filter or add a task."/>
@@ -121,7 +130,7 @@ pub fn render() -> String {
                             <select id="effort" name="effort" class="jds-input"><option value="">"None"</option><option value="quick">"Small"</option><option value="medium">"Medium"</option><option value="large">"Large"</option></select>
                         </Field>
                     </div>
-                    <p class="jds-caption">"Dates are shown in UTC. Unchanged dates keep their saved time."</p>
+                    <p class="jds-caption">"Dates use your saved timezone. Unchanged dates keep their saved time."</p>
                     <div class="tasks-columns">
                         <Field><FormLabel control_id="due-at">"Due date"</FormLabel><input id="due-at" name="dueAt" type="date" class="jds-input"/></Field>
                         <Field><FormLabel control_id="do-at">"Do date"</FormLabel><input id="do-at" name="doAt" type="date" class="jds-input"/></Field>
@@ -155,13 +164,26 @@ pub fn render() -> String {
                 </form>
                 <div id="task-extras" hidden class="tasks-fields">
                     <section aria-labelledby="subtasks-heading"><h3 id="subtasks-heading">"Subtasks"</h3>
+                        <p id="subtasks-loading" hidden role="status">"Loading subtasks…"</p>
+                        <div id="subtasks-error" hidden role="alert">
+                            <p>"Could not load subtasks. Previously loaded subtasks may be out of date. Retry before changing them."</p>
+                            {action("retry-subtasks", "Retry subtasks")}
+                        </div>
+                        <p id="subtasks-empty" hidden role="status">"No subtasks yet."</p>
                         <div id="subtasks"></div>
                         <form id="subtask-form" class="tasks-inline">
                             <Field><FormLabel control_id="subtask-title">"New subtask"</FormLabel><input id="subtask-title" class="jds-input" required maxlength="500"/></Field>
                             <Button kind=ButtonType::Submit variant=ButtonVariant::Secondary>"Add subtask"</Button>
                         </form>
                     </section>
-                    <section aria-labelledby="tags-heading"><h3 id="tags-heading">"Tags"</h3><div id="task-tags" class="tasks-actions"></div>
+                    <section aria-labelledby="tags-heading"><h3 id="tags-heading">"Tags"</h3>
+                        <p id="task-tags-loading" hidden role="status">"Loading list tags…"</p>
+                        <div id="task-tags-error" hidden role="alert">
+                            <p>"Could not load list tags. Assigned tags and previously loaded choices are still shown."</p>
+                            {action("retry-task-tags", "Retry list tags")}
+                        </div>
+                        <p id="task-tags-empty" hidden role="status">"No tags in this list yet."</p>
+                        <div id="task-tags" class="tasks-actions"></div>
                         <form id="tag-form" class="tasks-inline">
                             <Field><FormLabel control_id="tag-name">"New tag"</FormLabel><input id="tag-name" class="jds-input" required maxlength="100"/></Field>
                             <Button kind=ButtonType::Submit variant=ButtonVariant::Secondary>"Create and assign tag"</Button>

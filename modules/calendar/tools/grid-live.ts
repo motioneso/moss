@@ -1,7 +1,7 @@
 /** Exercise real installed event chips with synthetic cache rows, without network substitution. */
 import assert from "node:assert/strict";
 import { join } from "node:path";
-import type { Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
 export async function checkGrid(tab: Page, base: string, out: string, linkedEvent: string) {
   for (const width of [1280, 390]) {
@@ -43,8 +43,9 @@ export async function checkGrid(tab: Page, base: string, out: string, linkedEven
     await dialog.waitFor({ state: "detached" });
     await frame.getByRole("button", { name: "Week", exact: true }).click();
     // The saved account may use a work week which excludes the fixture's Sunday.
-    const fullWeek = frame.getByRole("button", { name: "Show full week", exact: true });
-    if (await fullWeek.count()) await fullWeek.click();
+    const fullWeek = frame.getByRole("button", { name: "Full week", exact: true });
+    await expect(fullWeek).toBeEnabled();
+    await fullWeek.click();
     await held.waitFor();
     assert.equal(await held.locator(".cal-ev__where").count(), 0);
     assert.equal(await held.locator(".cal-ev__meta").count(), 1);

@@ -1,5 +1,27 @@
 # Calendar package
 
+## 0.21.0
+
+- Preserve the original settings API's scalar and singleton-array coercion and removal of extra fields.
+- Return the original field-specific validation messages for invalid settings, without changing saved preferences or writeback policy.
+- Compare normalization with the production schema and installed writes with the original handler for owner, other user and administrator.
+- Full cutover, provider execution and physical second-device acceptance remain open.
+
+## 0.20.0
+
+- Retain keyboard focus on the selected toolbar control after its view save finishes.
+- Restore the authored grouped Day, Week and Month choices and Work week / Full week controls.
+- Use compact arrow buttons and the existing small Today button in the toolbar.
+- Compare rendered controls with the production screen and check installed navigation, keyboard use, saved choices and phone layout.
+- Full cutover, provider execution and physical second-device acceptance remain open.
+
+## 0.19.0
+
+- Recenter Day and Week when a refresh receives a changed saved account timezone.
+- Retain deliberate scrolling through later refreshes in the same timezone.
+- Exercise real saved timezone and cache changes in the installed signed-in screen at desktop and phone widths.
+- Full cutover, provider execution and physical second-device acceptance remain open.
+
 ## 0.18.0
 
 - Open Day and Week with the current time centered in the measured visible grid, matching the existing screen.

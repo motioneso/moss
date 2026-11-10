@@ -1,5 +1,6 @@
 /* global document, window, Option */
 import { moduleClient } from "./guest-bridge.mjs";
+import { localDay } from "./local-date.mjs";
 import { taskFields, taskGroups, viewMode } from "./model.mjs";
 import { taskFilters } from "./filters.mjs";
 import { tagManager } from "./tags.mjs";
@@ -10,11 +11,14 @@ import { interpretedSearch } from "./search.mjs";
 import { quickCapture } from "./quick-add.mjs";
 import { taskActivity } from "./activity.mjs";
 import { taskSettings } from "./settings.mjs";
+import { taskDetails } from "./details.mjs";
 
 const client = moduleClient();
 const $ = (id) => document.getElementById(id);
 const state = {
   tasks: [],
+  timeZone: null,
+  editorTimeZone: null,
   lists: [],
   editing: null,
   busy: false,
@@ -38,7 +42,8 @@ const capture = captureDraft({
   button,
   focus: (node) => {
     state.focusAfter = node;
-  }
+  },
+  today: () => localDay(new Date(), state.editorTimeZone)
 });
 const activity = taskActivity({
   api,
@@ -49,6 +54,25 @@ const activity = taskActivity({
   focus: (node) => {
     state.focusAfter = node;
   }
+});
+const details = taskDetails({
+  api,
+  run,
+  taskRow,
+  isBusy: () => state.busy,
+  focus: (node) => {
+    state.focusAfter = node;
+  },
+  tagButton: (tag, assigned) =>
+    button(
+      `#${tag.name}`,
+      async () => {
+        if (assigned) await api("DELETE", `/tasks/${state.editing.id}/tags/${tag.id}`);
+        else await api("POST", `/tasks/${state.editing.id}/tags`, { tagId: tag.id });
+        await refreshDetails();
+      },
+      { pressed: assigned, variant: assigned ? "primary" : "secondary" }
+    )
 });
 const labels = { todo: "Open", done: "Done", suggested: "Suggested", archived: "Archived" };
 const search = interpretedSearch({
@@ -156,6 +180,7 @@ async function run(action) {
     search.sync();
     activity.sync();
     settings.sync();
+    details.sync();
     $("tasks-app").removeAttribute("aria-busy");
     state.focusAfter?.focus();
     state.focusAfter = null;
@@ -165,11 +190,17 @@ async function run(action) {
 async function load() {
   show("page-error", false);
   try {
-    const [tasks, lists, preferences] = await Promise.all([
+    const [tasks, lists, preferences, calendar] = await Promise.all([
       api("GET", "/tasks"),
       api("GET", "/tasks/lists"),
-      api("GET", "/tasks/preferences")
+      api("GET", "/tasks/preferences"),
+      api("GET", "/tasks/local-day")
     ]);
+    // Do not enable date edits without the confirmed account timezone.
+    if (typeof calendar.timezone !== "string" || !calendar.timezone)
+      throw new Error("Account timezone unavailable");
+    localDay(new Date(), calendar.timezone);
+    state.timeZone = calendar.timezone;
     state.tasks = tasks.tasks;
     state.lists = lists.lists;
     options("task-list", state.lists);
@@ -192,8 +223,8 @@ function taskRow(task) {
     done.checked = task.status === "done";
     void run(async () => {
       await api("PATCH", `/tasks/${task.id}`, { status: task.status === "done" ? "todo" : "done" });
-      await load();
-      if (state.editing) await extras();
+      if (state.editing) await refreshDetails();
+      else await load();
     });
   });
   const content = text("div", "", "tasks-row-title");
@@ -202,7 +233,7 @@ function taskRow(task) {
   const meta = [
     list,
     labels[task.status],
-    task.dueAt ? `Due ${task.dueAt.slice(0, 10)} (UTC)` : "",
+    task.dueAt ? `Due ${localDay(task.dueAt, state.timeZone)} (${state.timeZone})` : "",
     task.recurrence ? `Repeats ${task.recurrence.freq}` : "",
     ...task.tags.map((tag) => `#${tag.name}`)
   ].filter(Boolean);
@@ -226,7 +257,7 @@ function taskRow(task) {
   return row;
 }
 function render() {
-  const tasks = filters.apply(state.tasks, state.lists);
+  const tasks = filters.apply(state.tasks, state.lists, state.timeZone);
   search.render(state.lists);
   const result = $("task-results");
   result.replaceChildren();
@@ -245,7 +276,9 @@ function render() {
 }
 function draftSnapshot() {
   return JSON.stringify(
-    [...document.querySelectorAll("#editor input, #editor select, #editor textarea")]
+    // Rendered subtask checkboxes are saved actions, not editor draft fields.
+    // Capture's editable subtask rows are tracked in its own snapshot below.
+    [...document.querySelectorAll("#editor input[id], #editor select[id], #editor textarea[id]")]
       .map((node) => [node.id, node.value])
       .concat([["capture-draft", capture.snapshot()]])
   );
@@ -273,30 +306,22 @@ function leaveEditor(action) {
   } else return action();
 }
 async function openEditor(id = null, title = "") {
+  if (!state.timeZone) throw new Error("Reload Tasks to load the saved timezone");
   return leaveEditor(() => editTask(id, title));
 }
 async function editTask(id, title) {
+  state.editorTimeZone = state.timeZone;
   const task = id ? (await api("GET", `/tasks/${id}`)).task : null;
   if ($("editor").hidden) state.returnFocus = state.actionFocus;
   state.editing = task;
   state.pendingTag = null;
   activity.reset(task?.id ?? null);
+  details.reset(task);
   $("task-form").reset();
   capture.reset();
   show("new-task-extras", !task);
-  const defaults = {
-    title: "",
-    description: "",
-    status: "todo",
-    priority: "",
-    effort: "",
-    listId: filters.defaultListId(state.lists)
-  };
-  for (const key of Object.keys(defaults))
-    $("task-form").elements.namedItem(key).value = task?.[key] ?? defaults[key];
-  $("due-at").value = task?.dueAt?.slice(0, 10) ?? "";
-  $("do-at").value = task?.doAt?.slice(0, 10) ?? "";
-  $("repeat").value = task?.recurrence?.freq ?? "never";
+  for (const [name, value] of Object.entries(editorValues(task)))
+    $("task-form").elements.namedItem(name).value = value;
   $("editor-heading").textContent = task ? "Task details" : "New task";
   show("overview", false);
   show("editor", true);
@@ -318,33 +343,44 @@ function closeEditor() {
   if (state.returnFocus?.isConnected) state.focusAfter = state.returnFocus;
 }
 async function extras() {
-  const task = state.editing;
-  const [subtasks, tags] = await Promise.all([
-    api("GET", `/tasks/${task.id}/subtasks`),
-    api("GET", `/tasks/lists/${task.listId}/tags`),
-    activity.load()
-  ]);
-  $("subtasks").replaceChildren(...subtasks.tasks.map(taskRow));
-  const assigned = new Set(task.tags.map((tag) => tag.id));
-  $("task-tags").replaceChildren(
-    ...tags.tags.map((tag) =>
-      button(
-        `#${tag.name}`,
-        async () => {
-          if (assigned.has(tag.id)) await api("DELETE", `/tasks/${task.id}/tags/${tag.id}`);
-          else await api("POST", `/tasks/${task.id}/tags`, { tagId: tag.id });
-          await refreshEditor();
-        },
-        { pressed: assigned.has(tag.id), variant: assigned.has(tag.id) ? "primary" : "secondary" }
-      )
-    )
-  );
   show("task-extras", true);
+  await Promise.all([details.load(state.editing), activity.load()]);
 }
-async function refreshEditor() {
-  state.editing = (await api("GET", `/tasks/${state.editing.id}`)).task;
-  await load();
-  await extras();
+function editorValues(task) {
+  return {
+    title: task?.title ?? "",
+    description: task?.description ?? "",
+    status: task?.status ?? "todo",
+    priority: String(task?.priority ?? ""),
+    effort: task?.effort ?? "",
+    listId: task?.listId ?? filters.defaultListId(state.lists),
+    dueAt: localDay(task?.dueAt, state.editorTimeZone),
+    doAt: localDay(task?.doAt, state.editorTimeZone),
+    repeat: task?.recurrence?.freq ?? "never"
+  };
+}
+function reconcileEditor(task) {
+  const values = editorValues(task);
+  const baseline = new Map(JSON.parse(state.baseline));
+  for (const [name, value] of Object.entries(values)) {
+    const control = $("task-form").elements.namedItem(name);
+    // Only untouched controls follow server changes. Keep the latest server value
+    // as the baseline even when a local draft wins, so discard detection stays true.
+    if (control.value === baseline.get(control.id)) control.value = value;
+    baseline.set(control.id, value);
+  }
+  state.baseline = JSON.stringify([...baseline]);
+  state.editing = task;
+}
+async function refreshDetails() {
+  // A child completion can also complete its parent. Re-read it before updating
+  // panels; a later form save must not write an obsolete status back over it.
+  const current = await Promise.allSettled([api("GET", `/tasks/${state.editing.id}`)]);
+  if (current[0].status === "fulfilled") reconcileEditor(current[0].value.task);
+  // Even a failed task/overview refresh must not hide independently loaded panels.
+  const results = await Promise.allSettled([load(), extras()]);
+  const failed = [...current, ...results].find((result) => result.status === "rejected");
+  if (failed) throw failed.reason;
 }
 function manageLists() {
   deleting.close();
@@ -452,7 +488,6 @@ document.querySelectorAll("[data-action]").forEach((node) => {
 $("task-list").addEventListener("change", () => {
   if (!state.editing) void run(() => capture.loadTags($("task-list").value));
 });
-$("status-filter").addEventListener("input", render);
 $("list-options").addEventListener("toggle", () => {
   void client.resize(document.documentElement.scrollHeight).catch(() => {});
 });
@@ -482,7 +517,12 @@ submit("task-form", async () => {
   for (const control of $("task-form").elements)
     if (control.name) form[control.name] = control.value;
   const previous = state.editing;
-  const fields = taskFields(form, previous, previous ? undefined : capture.today());
+  const fields = taskFields(
+    form,
+    previous,
+    previous ? undefined : capture.today(),
+    state.editorTimeZone
+  );
   const response = previous
     ? await api("PATCH", `/tasks/${previous.id}`, fields)
     : await capture.save(fields);
@@ -498,7 +538,7 @@ submit("subtask-form", async () => {
   });
   $("subtask-title").value = "";
   savedExtra("subtask-title");
-  await refreshEditor();
+  await refreshDetails();
 });
 submit("tag-form", async () => {
   const name = $("tag-name").value.trim().replace(/^#/, "").toLowerCase();
@@ -509,7 +549,7 @@ submit("tag-form", async () => {
   state.pendingTag = null;
   $("tag-name").value = "";
   savedExtra("tag-name");
-  await refreshEditor();
+  await refreshDetails();
 });
 submit("list-form", async () => {
   await api("POST", "/tasks/lists", { name: $("list-name").value });

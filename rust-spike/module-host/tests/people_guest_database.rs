@@ -88,16 +88,27 @@ fn compiled_people_read_apis_match_typescript_on_real_database() {
             case["request"]["name"]
         );
     }
-    // Always guard the formerly failing 100-person response. The explicit probe
-    // additionally attempts links and larger reads; those remain unqualified.
+    // Guard complete 100-person and 100-link responses against the legacy handlers.
+    // The explicit probe additionally attempts larger reads; those remain unqualified.
     {
         let full_probe = std::env::var("JS139_PEOPLE_PAGING_PROBE").as_deref() == Ok("1");
         let paging_actor = Uuid::parse_str(oracle["paging"]["actor"].as_str().unwrap()).unwrap();
         let paging_cases = oracle["paging"]["cases"].as_array().unwrap();
-        assert_eq!(paging_cases.len(), 21, "Keep every paging boundary case");
+        assert_eq!(paging_cases.len(), 29, "Keep every paging boundary case");
         assert_eq!(paging_cases[0]["count"], 100);
         assert_eq!(paging_cases[0]["request"]["path"], "/people");
-        for case in paging_cases.iter().take(if full_probe { 21 } else { 1 }) {
+        assert_eq!(paging_cases[1]["count"], 100);
+        assert_eq!(paging_cases[1]["request"]["path"], "/people/:id/links");
+        for (index, count) in [(2, 150), (4, 175), (6, 190), (8, 200)] {
+            assert_eq!(paging_cases[index]["count"], count);
+            assert_eq!(paging_cases[index]["request"]["path"], "/people");
+            assert_eq!(paging_cases[index + 1]["count"], count);
+            assert_eq!(
+                paging_cases[index + 1]["request"]["path"],
+                "/people/:id/links"
+            );
+        }
+        for case in paging_cases.iter().take(if full_probe { 29 } else { 2 }) {
             let kind = case["kind"].as_str().unwrap();
             let reply = host
                 .call(
@@ -135,10 +146,10 @@ fn compiled_people_read_apis_match_typescript_on_real_database() {
         }
         if full_probe {
             println!(
-                "PASS People paging: 21 legacy reads at 100/250/500/999/1000/1001/1005/1006/unlimited, exact-page termination, 1005 aliases and emails including a duplicate; default host limits unchanged"
+                "PASS People paging: 29 legacy reads at 100/150/175/190/200/250/500/999/1000/1001/1005/1006/unlimited, exact-page termination, 1005 aliases and emails including a duplicate; default host limits unchanged"
             );
         } else {
-            println!("PASS default-budget People list: 100 complete legacy rows from a 1005-person account; larger/link reads remain unqualified");
+            println!("PASS default-budget People lists: 100 complete people and links from a 1005-person account; larger reads remain unqualified");
         }
     }
     // A background job authenticates through the worker pool, not the app pool.

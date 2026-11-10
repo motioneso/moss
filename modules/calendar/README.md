@@ -422,5 +422,67 @@ physical second-device trusted HTTPS remain open as listed in the phase report.
 Month now reserves more minimum row height than the existing screen so three
 event chips and the extra-events button stay inside their clipping container.
 The live check verifies the whole overflow control fits before clicking it.
-Re-centering after a saved timezone change remains open. Browser clamping at
-controlled day-boundary times is not covered by the DOM comparison.
+Part 19 below covers re-centering after a saved timezone change. Browser clamping
+at controlled day-boundary times is not covered by the DOM comparison.
+
+## Saved timezone positioning (part 19)
+
+Version 0.19.0 recenters Day and Week around the current time when an ordinary
+refresh receives a changed account timezone, matching the existing Calendar grid.
+It discards the vertical position only for a different effective timezone. Later
+refreshes in that same timezone retain deliberate scroll, including midnight.
+Calendar remains a client of the installed server API through the frame bridge.
+
+The signed-in runner changes the synthetic account's actual saved locale on its
+throwaway database, without substituting responses or changing browser state.
+It exercises Day and Week at desktop and phone widths, timezone-only refreshes,
+a simultaneous cache update, and later same-zone scroll retention. Its screenshots
+and failing-before/passing-after results belong in the task Proof artifact.
+No provider, table, privacy policy, shared host or cross-module adapter changes.
+The complete port and physical second-device trusted HTTPS remain open as listed
+in the main Calendar report.
+
+The Month click investigation captured a browser input offset equal to the clipped
+screenshot's origin, despite correct button geometry and DOM hit testing. Month,
+initial-scroll and timezone checks now capture the full viewport and crop evidence
+off-browser afterward. The checks retain normal pointer clicks and all navigation
+assertions. See the phase report and task Proof for the reproduction and final
+full-gate, installed HTTPS UI and independent-review receipts.
+
+## Toolbar parity (part 20)
+
+Version 0.20.0 restores the existing grouped Day / Week / Month choices and the
+Work week / Full week choices, with their selected states. Compact Previous and
+Next arrows and the small Today button use the published Leptos kit and the
+existing Park Press styles. The screen saves through the installed server API;
+it remains a pure client. Controls wait for initial loading and a pending view save.
+
+The rendered comparison invokes the real production React Calendar page and the
+Rust toolbar for all views and both week choices. The signed-in runner exercises
+Previous / Next / Today, saved Day cursor, Work week and Month after reload,
+five/seven columns, Enter/Space activation, focus retained after saves and toolbar
+bounds at desktop and phone widths, including 320px. Screenshots capture the viewport; crop outside the
+browser. These checks do not prove all regional labels, full pixel parity,
+full-shell cutover or physical second-device HTTPS. The phase report retains the
+complete remaining list.
+
+## Settings request validation parity (part 21)
+
+Version 0.21.0 restores the original briefing-settings PATCH request normalization
+on both original and installed URLs: scalar and singleton-array coercion, removal
+of unknown fields, and the original field-specific validation messages. This normalization
+belongs only to the HTTP guest route. The trusted preference port continues to
+accept declared, typed fields only; it never accepts a request-supplied owner.
+
+The pure schema differential covers 242 requests using Moss’s production central error handler. The installed matrix adds those
+to the existing write sequences for owner, another user and administrator, compares
+complete response bodies, final stored values/revisions/policy, and checks each
+rejected request leaves storage unchanged. Existing failing-first privacy witnesses
+remain in the full gate. The signed-in runner checks both URL prefixes from the
+browser and reloads the real settings controls after accepted and rejected writes.
+These are settings-contract checks; provider execution, full shell/chat, old-screen
+replacement, complete Calendar parity and physical second-device trusted HTTPS
+remain open. No new dependency, global tool or wit-bindgen is installed.
+
+Malformed/empty JSON transport bodies and JSON `__proto__` parser rejection remain
+unmatched; the settings matrix covers parsed JSON values.
