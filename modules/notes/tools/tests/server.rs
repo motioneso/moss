@@ -509,6 +509,7 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
     // request that was never published (should be republished and finished by the worker).
     const OLD_FINISHED: &str = "00000000-0000-4000-8000-00000000a001";
     const NEVER_PUBLISHED: &str = "00000000-0000-4000-8000-00000000a002";
+    const LATE_FINISHED: &str = "00000000-0000-4000-8000-00000000a003";
     {
         let runtime = tokio::runtime::Runtime::new().unwrap();
         runtime.block_on(async {
@@ -521,6 +522,12 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
             db.execute(
                 "INSERT INTO app.notes_sync_checkpoints(id, owner_user_id, checkpoint, created_at) VALUES ($1::text::uuid, $2, $3::text::jsonb, now()-interval '10 days')",
                 &[&OLD_FINISHED, &owner, &json!({"workerResult":{"ingested":1,"skipped":0,"errors":0}}).to_string()],
+            )
+            .await
+            .unwrap();
+            db.execute(
+                "INSERT INTO app.notes_sync_checkpoints(id, owner_user_id, checkpoint, created_at) VALUES ($1::text::uuid, $2, $3::text::jsonb, now()-interval '10 days')",
+                &[&LATE_FINISHED, &owner, &json!({"workerResult":{"ingested":1,"skipped":0,"errors":0},"completedAt":"2999-01-01T00:00:00Z"}).to_string()],
             )
             .await
             .unwrap();
@@ -583,7 +590,12 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
                     .query("SELECT 1 FROM app.notes_sync_checkpoints WHERE id=$1::text::uuid AND checkpoint ? 'workerResult'", &[&NEVER_PUBLISHED])
                     .await
                     .unwrap();
+                let late = db
+                    .query("SELECT 1 FROM app.notes_sync_checkpoints WHERE id=$1::text::uuid", &[&LATE_FINISHED])
+                    .await
+                    .unwrap();
                 if old.is_empty() && !recovered.is_empty() {
+                    assert!(!late.is_empty(), "a request completed recently was deleted by creation age");
                     break;
                 }
                 assert!(
@@ -596,7 +608,7 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
             }
         });
     }
-    println!("PASS recovery: the tick republished a never-published request (the worker finished it) and deleted a finished checkpoint older than a week");
+    println!("PASS recovery: the tick republished a never-published request (the worker finished it) and deleted a checkpoint finished over two days ago while keeping one created long ago but finished recently");
     // Search runs through the same host ports in this process (the server has no tool
     // endpoint yet), against the real index and the same embeddings endpoint.
     {

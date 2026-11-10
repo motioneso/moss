@@ -9,7 +9,8 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 const MAX_PAGES: usize = 8;
-const RETENTION_DAYS: i64 = 7;
+// A queue retry waits at most a day, so two days after completion is safe.
+const RETENTION_DAYS: i64 = 2;
 
 const PAGE_SIZE: u32 = 25;
 
@@ -66,50 +67,93 @@ fn unavailable() -> Error {
     Error::new("Notes sync recovery is unavailable")
 }
 
-/// Runs from the fifteen-minute tick. Republishes unfinished requests, then
-/// deletes finished checkpoints older than the retention window. Failures are
-/// ignored so maintenance never blocks the sync itself.
+/// Runs from the fifteen-minute tick. One scan over the account's saved
+/// requests republishes unfinished ones and deletes finished ones whose
+/// completion is older than the retention window. The scan starts at a random
+/// id and wraps, so a large backlog is still reached across ticks. Failures
+/// are ignored so maintenance never blocks the sync itself.
 pub(crate) fn sweep(host: &impl Host) {
-    let mut after = None;
-    for _ in 0..MAX_PAGES {
-        let Ok(page) = recover(host, Recovery { after }) else {
-            break;
-        };
-        after = page["nextCursor"].as_str().map(str::to_owned);
-        if after.is_none() {
-            break;
-        }
-    }
-    let _ = expire_finished(host);
+    let _ = scan(host);
 }
 
-fn expire_finished(host: &impl Host) -> Result<()> {
+fn scan(host: &impl Host) -> Result<()> {
     let context = host.call("context", "read", "call", json!({}))?;
-    let cutoff = cutoff(context["now"].as_str().ok_or_else(unavailable)?)?;
-    let mut query = Query::select(Filter::Compare {
-        column: "created_at".into(),
-        op: Compare::Lt,
-        value: json!(cutoff),
+    let now = context["now"].as_str().ok_or_else(unavailable)?;
+    let cutoff = cutoff(now)?;
+    let start = host.call("context", "uuid", "new", json!({}))?;
+    let start = start["id"].as_str().ok_or_else(unavailable)?.to_owned();
+    uuid::Uuid::parse_str(&start).map_err(|_| unavailable())?;
+    let mut budget = MAX_PAGES;
+    // First from the random start to the end, then from the beginning up to it.
+    for (from, until) in [(Some(start.clone()), None), (None, Some(start))] {
+        let mut after = from;
+        while budget > 0 {
+            budget -= 1;
+            let (rows, last) = page(host, after.as_deref(), now, &cutoff, until.as_deref())?;
+            match last {
+                Some(id) if rows == PAGE_SIZE as usize => after = Some(id),
+                _ => break,
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Handles one page. Returns how many rows were read and the last id read.
+fn page(
+    host: &impl Host,
+    after: Option<&str>,
+    now: &str,
+    cutoff: &str,
+    until: Option<&str>,
+) -> Result<(usize, Option<String>)> {
+    let mut filters = vec![];
+    if let Some(after) = after {
+        filters.push(Filter::Compare {
+            column: "id".into(),
+            op: Compare::Gt,
+            value: json!(after),
+        });
+    }
+    if let Some(until) = until {
+        filters.push(Filter::Compare {
+            column: "id".into(),
+            op: Compare::Le,
+            value: json!(until),
+        });
+    }
+    let mut query = Query::select(match filters.len() {
+        0 => Filter::All,
+        _ => Filter::And { filters },
     });
     query.limit = Some(PAGE_SIZE);
     query.order = vec![Order {
-        column: "created_at".into(),
+        column: "id".into(),
         descending: false,
     }];
-    for row in Client(host).query(crate::sync_worker::TABLE, &query)? {
-        let finished = row["checkpoint"]
-            .as_object()
-            .is_some_and(|c| c.contains_key("workerResult"));
+    let rows = Client(host).query(crate::sync_worker::TABLE, &query)?;
+    for row in &rows {
         let id = row["id"].as_str().ok_or_else(unavailable)?;
-        if finished {
-            uuid::Uuid::parse_str(id).map_err(|_| unavailable())?;
+        uuid::Uuid::parse_str(id).map_err(|_| unavailable())?;
+        let checkpoint = row["checkpoint"].as_object().ok_or_else(unavailable)?;
+        if !checkpoint.contains_key("workerResult") {
+            crate::sync_worker::publish(host, id, now)?;
+            continue;
+        }
+        // Age counts from completion, so a late-finishing request is kept long
+        // enough for a queue retry to replay its saved result.
+        let finished = checkpoint
+            .get("completedAt")
+            .or_else(|| row.get("created_at"))
+            .and_then(Value::as_str);
+        if finished.is_some_and(|at| at < cutoff) {
             Client(host).query(
                 crate::sync_worker::TABLE,
                 &Query::delete(Filter::eq("id", json!(id))),
             )?;
         }
     }
-    Ok(())
+    Ok((rows.len(), rows.last().and_then(|r| r["id"].as_str().map(str::to_owned))))
 }
 
 /// The UTC midnight `RETENTION_DAYS` before the given RFC 3339 timestamp.
@@ -143,11 +187,11 @@ fn cutoff(now: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn cutoff_is_seven_days_back_across_month_and_leap_year() {
-        assert_eq!(super::cutoff("2026-11-10T08:00:00Z").unwrap(), "2026-11-03T00:00:00Z");
-        assert_eq!(super::cutoff("2026-03-03T00:00:00Z").unwrap(), "2026-02-24T00:00:00Z");
-        assert_eq!(super::cutoff("2028-03-03T00:00:00Z").unwrap(), "2028-02-25T00:00:00Z");
-        assert_eq!(super::cutoff("2027-01-02T23:59:59Z").unwrap(), "2026-12-26T00:00:00Z");
+    fn cutoff_is_two_days_back_across_month_and_leap_year() {
+        assert_eq!(super::cutoff("2026-11-10T08:00:00Z").unwrap(), "2026-11-08T00:00:00Z");
+        assert_eq!(super::cutoff("2027-03-01T00:00:00Z").unwrap(), "2027-02-27T00:00:00Z");
+        assert_eq!(super::cutoff("2028-03-01T00:00:00Z").unwrap(), "2028-02-28T00:00:00Z");
+        assert_eq!(super::cutoff("2027-01-01T23:59:59Z").unwrap(), "2026-12-30T00:00:00Z");
         assert!(super::cutoff("garbage").is_err());
     }
 }

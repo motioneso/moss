@@ -29,6 +29,9 @@ struct PageResult {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct SavedPage {
     worker_result: PageResult,
+    /// When the result was saved; retention counts from here.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    completed_at: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -223,6 +226,10 @@ fn resume(host: &impl Host, input: Resume) -> Result<String> {
     }
     let saved = SavedPage {
         worker_result: serde_json::from_value(result.clone()).map_err(|_| unavailable())?,
+        completed_at: host
+            .call("context", "read", "call", json!({}))
+            .ok()
+            .and_then(|c| c["now"].as_str().map(str::to_owned)),
     };
     let updated = Client(host).query(
         TABLE,

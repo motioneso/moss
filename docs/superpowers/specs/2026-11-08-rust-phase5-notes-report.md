@@ -1953,29 +1953,40 @@ Still open: automatic recovery timer, retention, managed publication and reconci
 
 ## Part thirty-one checkpoint — automatic recovery and retention
 
-Package 0.1.20. Each fifteen-minute tick (only while a folder is linked) now first runs a
+Package 0.1.20. Each fifteen-minute tick (only while a folder is linked) first runs a
 maintenance sweep, then requests its normal sync.
 
-- Recovery: the sweep scans the account's saved sync requests in id order, at most 25 per page
-  and 8 pages per tick, and republishes any request that has no saved result. Queue idempotency
-  keeps a repeat harmless. A page that fails stops the scan and is retried on the next tick.
-- Retention: finished requests (those with a saved result) older than seven days are deleted,
-  at most 25 per tick. Unfinished requests are never deleted, whatever their age.
+- Scan: one pass over the account's saved sync requests in id order, 25 per page, at most 8
+  pages per tick. It starts at a random id and wraps to the start, so a backlog larger than the
+  budget is still reached across ticks.
+- Recovery: a request with no saved result is republished. Queue idempotency keeps a repeat
+  harmless. A failing page stops the scan until the next tick.
+- Retention: a finished request is deleted two days after it completed. The worker now saves a
+  completion time with each result; older rows without one fall back to their creation time.
+  A queue retry waits at most one day, so a retry can always replay its saved result. Unfinished
+  requests are never deleted, whatever their age.
 - Maintenance errors are ignored, so they never fail or delay the sync itself.
 
-Checks: a unit test for the seven-day date arithmetic (month, leap year, year boundary) and a
-tick test showing the unfinished row is republished and only the old finished row is deleted;
-all other Notes suites pass.
+Review round 1 (Codex) found three major problems in the first version (a fixed seven days from
+creation could delete a request that finished late and was about to be retried; a scan that always
+started at the same id never reached rows past the first 200; the delete query stopped at the first
+25 old rows even when they were unfinished). All three are fixed as described above.
 
-Live (`pnpm test:rust-notes-server`, through the gate, passed): on the real HTTPS server with
-real Postgres, a finished checkpoint dated ten days ago and a saved request that had never been
-published were inserted for the signed-up account. When the schedule came due, the server's own
-scheduler ran the tick; the old finished row was deleted and the never-published request was
-republished and finished by the worker, with no manual action. The gate ran on 0.1.19 metadata;
-only the version number and app-map text changed afterwards.
+Checks: a unit test for the date arithmetic (month, leap year, year boundary) and a tick test
+with four rows showing the wrap-around scan, the unfinished row republished, an old finished row
+and a legacy row without a completion time deleted, and a row created long ago but completed
+yesterday kept; all other Notes suites pass.
 
-Not proven: more than 8 pages of backlog in one tick (the rest waits for the next tick), crash
-recovery of a request saved by a process that died mid-write, native UI, a second device.
+Live (`pnpm test:rust-notes-server`, through the gate): on the real HTTPS server with real
+Postgres, three rows were inserted for the signed-up account (finished ten days ago, never
+published, and created ten days ago but finished recently). When the schedule came due, the
+server's own scheduler ran the tick; the old finished row was deleted, the recently finished row
+was kept, and the never-published request was republished and finished by the worker, with no
+manual action.
+
+Not proven: a backlog larger than the per-tick budget (covered only by the wrap-around unit
+test), crash recovery of a request saved by a process that died mid-write, native UI, a second
+device.
 
 Still open: managed publication and reconciliation, singleton coalescing and recall warmup, the
 assembled Settings and chat join, second-device HTTPS proof.

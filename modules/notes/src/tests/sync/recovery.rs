@@ -157,11 +157,32 @@ fn tick_republishes_unfinished_and_deletes_only_old_finished_checkpoints() {
                         json!([])
                     }
                     "insert" => json!([p["values"]]),
-                    _ if p["filter"]["column"] == "created_at" => {
-                        assert_eq!(p["filter"]["value"], "2026-11-03T00:00:00Z");
-                        json!(self.old)
+                    _ => {
+                        // Honour the id bounds the scan sends (greater-than and at-most).
+                        let mut lo = String::new();
+                        let mut hi = "\u{10ffff}".to_owned();
+                        let filters = match &p["filter"]["type"] {
+                            t if t == "and" => p["filter"]["filters"].as_array().unwrap().clone(),
+                            t if t == "compare" => vec![p["filter"].clone()],
+                            _ => vec![],
+                        };
+                        for f in filters {
+                            let v = f["value"].as_str().unwrap().to_owned();
+                            match f["op"].as_str().unwrap() {
+                                "gt" => lo = v,
+                                "le" => hi = v,
+                                op => panic!("unexpected op {op}"),
+                            }
+                        }
+                        json!(self
+                            .old
+                            .iter()
+                            .filter(|r| {
+                                let id = r["id"].as_str().unwrap();
+                                id > lo.as_str() && id <= hi.as_str()
+                            })
+                            .collect::<Vec<_>>())
                     }
-                    _ => json!(self.old),
                 },
                 _ => panic!("unexpected {port}/{op}"),
             })
@@ -169,8 +190,10 @@ fn tick_republishes_unfinished_and_deletes_only_old_finished_checkpoints() {
     }
     let host = Tick {
         old: vec![
-            json!({"id":"00000000-0000-4000-8000-000000000001","checkpoint":{"workerResult":{"ingested":1,"skipped":0,"errors":0}}}),
+            json!({"id":"00000000-0000-4000-8000-000000000001","created_at":"2026-11-01T00:00:00Z","checkpoint":{"workerResult":{"ingested":1,"skipped":0,"errors":0},"completedAt":"2026-11-07T23:00:00Z"}}),
             json!({"id":"00000000-0000-4000-8000-000000000002","checkpoint":{"sourcePath":"/n"}}),
+            json!({"id":"00000000-0000-4000-8000-000000000003","created_at":"2026-10-01T00:00:00Z","checkpoint":{"workerResult":{"ingested":1,"skipped":0,"errors":0},"completedAt":"2026-11-09T12:00:00Z"}}),
+            json!({"id":"00000000-0000-4000-8000-000000000004","created_at":"2026-11-01T00:00:00Z","checkpoint":{"workerResult":{"ingested":1,"skipped":0,"errors":0}}}),
         ],
         jobs: RefCell::new(vec![]),
         deleted: RefCell::new(vec![]),
@@ -186,7 +209,7 @@ fn tick_republishes_unfinished_and_deletes_only_old_finished_checkpoints() {
     assert_eq!(ids, vec!["00000000-0000-4000-8000-000000000002", NEW]);
     assert_eq!(
         *host.deleted.borrow(),
-        vec![json!("00000000-0000-4000-8000-000000000001")],
-        "only the finished old row is deleted"
+        vec![json!("00000000-0000-4000-8000-000000000001"), json!("00000000-0000-4000-8000-000000000004")],
+        "rows finished over two days ago are deleted (older created_at only when no completion time); a row completed yesterday is kept even though it was created long ago"
     );
 }

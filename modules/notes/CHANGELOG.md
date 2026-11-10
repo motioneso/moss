@@ -2,7 +2,7 @@
 
 ## 0.1.20
 
-- Notes now repairs itself. Every fifteen minutes it picks up any sync request that was saved but never started, and it clears finished sync records older than a week.
+- Notes now repairs itself. Every fifteen minutes it picks up any sync request that was saved but never started, and it clears finished sync records two days after they complete.
 
 ## 0.1.19
 
