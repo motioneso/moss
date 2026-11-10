@@ -40,7 +40,7 @@ try {
     request,
     theme: () => ({ theme: "park-press", colorMode: dark ? "dark" : "light" }),
     navigate: async (path) => {
-      (window.top ?? window).location.assign(path);
+      (globalThis.top ?? globalThis).location.assign(path);
       return null;
     },
     chat: async () => {
