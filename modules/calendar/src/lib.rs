@@ -5,6 +5,7 @@ use serde_json::{json, Value};
 #[cfg(target_arch = "wasm32")]
 mod abi;
 pub mod apply;
+pub mod auto_plan;
 mod display;
 mod draft_tool;
 pub mod events;
@@ -129,6 +130,8 @@ fn api(host: &impl Host, name: &str, input: Value) -> Result<Value> {
         "getPlan" => plans::get_for_day(host, serde_json::from_value(input)?),
         "createPlan" => plans::create(host, serde_json::from_value(input)?),
         "saveDraft" => plans::save(host, serde_json::from_value(input)?),
+        "reserveAutoPlan" => Ok(json!({"reservation":auto_plan::reserve(host, serde_json::from_value(input)?)?})),
+        "findUnfinishedBatch" => auto_plan::find_unfinished(host, serde_json::from_value(input)?),
         _ => Err(Error::new(404, "Calendar data operation not found")),
     }
 }

@@ -4,7 +4,7 @@
   "name": "Calendar",
   "description": "Calendar cached-event screens and draft tools; signed-in HTTPS Calendar pages; provider execution and full shell composition remain incomplete.",
   "publisher": "Moss",
-  "version": "0.24.0",
+  "version": "0.25.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -180,7 +180,9 @@
     "getEvent": "1.0.0",
     "getPlan": "1.0.0",
     "createPlan": "1.0.0",
-    "saveDraft": "1.0.0"
+    "saveDraft": "1.0.0",
+    "reserveAutoPlan": "1.0.0",
+    "findUnfinishedBatch": "1.0.0"
   },
   "icons": ["icons/calendar.svg"],
   "accounts": {

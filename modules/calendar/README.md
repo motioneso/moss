@@ -11,7 +11,7 @@ horizontal position. Day, Week and Month screens, saved views and editable brief
 Full shell composition, the source-behavior switch, the remaining four chat tools, jobs,
 provider execution and the assembled HTTP/UI parity gate remain open.
 
-Version 0.24.0 adds the Briefings and Planning source switches on the settings screen. Version 0.2.0 adds `calendar.heartbeatWindow` (owned cache reads) and
+Version 0.25.0 adds the Briefings and Planning source switches on the settings screen. Version 0.2.0 adds `calendar.heartbeatWindow` (owned cache reads) and
 `calendar.dayPlanDraft` (typed evening intent and untimed task proposals). The latter
 retains recorded placement and requires an actor-scoped public Tasks projection for
 new task references. Neither tool calls a provider. The package advertises only these

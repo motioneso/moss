@@ -83,3 +83,31 @@ pub fn get(host: &impl Host, id: &str) -> Result<Option<Value>> {
     q.limit = Some(1);
     Ok(query(host, TABLE, &q)?.first().map(serialize))
 }
+
+/// Cached rows Moss created for one follow-through reference, ordered by id. A row counts
+/// only when `jarvisCreated` is true and the stored reference matches exactly.
+pub fn follow_through(host: &impl Host, target_ref: &str) -> Result<Vec<Value>> {
+    let mut found = vec![];
+    let mut offset = 0;
+    loop {
+        let q = Query {
+            order: vec![Order {
+                column: "id".into(),
+                descending: false,
+            }],
+            limit: Some(1000),
+            offset,
+            ..Query::default()
+        };
+        let page = query(host, TABLE, &q)?;
+        offset += page.len() as u32;
+        let done = page.len() < 1000;
+        found.extend(page.into_iter().filter(|row| {
+            let md = &row["external_metadata"];
+            md["jarvisCreated"] == true && md["followThroughTargetRef"] == target_ref
+        }));
+        if done {
+            return Ok(found);
+        }
+    }
+}
