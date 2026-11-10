@@ -1855,3 +1855,65 @@ and summary presentation; real application shell integration; performance
 budgets; and physical second-device HTTPS proof. The previously documented
 manage-share retry and duplicate-response differences are unchanged. Workshop
 and Food remain excluded. Part of #4027; release note Category N/A.
+
+## Tasks part 27 checkpoint (JS-162, Card 526)
+
+After a detail action, the open task editor now refreshes untouched fields from
+the saved task while keeping locally edited fields and comment drafts. Completing
+the final subtask can complete its parent; the editor now shows that completion,
+so a later unrelated save does not reopen the parent. An explicitly edited status
+or date still wins over a refresh. Refreshed dates use the editor's saved account
+timezone, and unrelated saves keep the exact stored timestamp. Saved subtask
+checkboxes no longer count as unsaved editor drafts or cause a discard prompt.
+The package app map and changelog describe this behavior.
+
+The same three real-markup controller regressions fail on the original controller
+and pass on the change. They cover untouched authoritative fields, edited status
+and date drafts, retained title/comment text, exact timestamp preservation and
+clean-versus-dirty leave prompts. All 34 controller checks and 19 native guest
+checks pass. These controller checks use an explicit bridge stand-in; live
+installed-screen proof is separate. The optional signed UI gate receipt
+`TASKS_UI_REFRESH_PROOF=1` checks the exact saved description and completed
+parent/child states after the real screen flow. Final gate and review receipts
+are attached to this task's proof artifact.
+
+The full unchanged endpoint comparison passes **96 of 96 cases**, with no
+case exclusions or relaxed assertions. The signed HTTPS fixture installed the
+package from its disposable registry. Through its real screen, owner setup was
+followed by Manage lists, task creation with one subtask, opening the editor,
+typing description and comment drafts, and completing the final subtask. The
+parent status changed to Done while both drafts stayed. Saving and reopening
+retained the description and both completed states. Leaving the clean editor
+showed the task list without a discard prompt. The gate checked the exact saved
+description, one completed child and one completed parent in the real tables,
+and exactly one proof task. Desktop and narrow viewport screenshots accompany
+the task proof. The narrow viewport is not another device.
+
+Certificate verification, sign-in redirect, unknown-host refusal and
+unknown-origin refusal passed independently. Browser automation ignored the
+fixture certificate warning as instructed. A slow first package load required
+a page reload; only the hydrated, exercised screen is counted as live proof.
+The fixture does not connect real AI or chat. Full shell and physical device
+access remain unproven.
+
+The branch was fast-forwarded to main including part 26. Declared JavaScript
+dependencies were restored offline and the tools lockfile was refreshed offline
+without a byte change. The previous scratch toolchain path no longer contained
+the Wasm target, so the first package and endpoint attempts stopped before tests;
+the initial UI run was stopped. An already provisioned scratch Rust 1.95 toolchain
+with its Wasm target was then copied into this task's scratch folder. The approved
+wit-bindgen dependency graph and existing Cargo cache were reused offline. No
+global tool or new dependency was installed. Native guest tests used a separate
+target directory from host tools.
+
+This is a bounded checkpoint, not full Phase 5 acceptance. It changes no route,
+tool, job kind, migration or host contract. Remaining: lazy recurrence advancement;
+recurrence jobs; deferred-queue retry/retention policy, optional request-key
+retention and installed worker dispatch; public People linkage; policy enforcement
+and feedback orchestration; remaining screen and settings parity; installed chat
+and summary presentation; real application shell integration; performance budgets;
+and physical second-device HTTPS proof. The signed fixture is separate from the
+application shell. The existing device bridge reported no attached physical
+device during this work, so local HTTPS cannot prove access from another device.
+The previously recorded manage-share retry and duplicate-response differences
+remain. Workshop and Food remain excluded. Part of #4027; release note Category N/A.

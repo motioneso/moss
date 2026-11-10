@@ -69,7 +69,7 @@ const details = taskDetails({
       async () => {
         if (assigned) await api("DELETE", `/tasks/${state.editing.id}/tags/${tag.id}`);
         else await api("POST", `/tasks/${state.editing.id}/tags`, { tagId: tag.id });
-        await refreshEditor();
+        await refreshDetails();
       },
       { pressed: assigned, variant: assigned ? "primary" : "secondary" }
     )
@@ -276,7 +276,9 @@ function render() {
 }
 function draftSnapshot() {
   return JSON.stringify(
-    [...document.querySelectorAll("#editor input, #editor select, #editor textarea")]
+    // Rendered subtask checkboxes are saved actions, not editor draft fields.
+    // Capture's editable subtask rows are tracked in its own snapshot below.
+    [...document.querySelectorAll("#editor input[id], #editor select[id], #editor textarea[id]")]
       .map((node) => [node.id, node.value])
       .concat([["capture-draft", capture.snapshot()]])
   );
@@ -318,19 +320,8 @@ async function editTask(id, title) {
   $("task-form").reset();
   capture.reset();
   show("new-task-extras", !task);
-  const defaults = {
-    title: "",
-    description: "",
-    status: "todo",
-    priority: "",
-    effort: "",
-    listId: filters.defaultListId(state.lists)
-  };
-  for (const key of Object.keys(defaults))
-    $("task-form").elements.namedItem(key).value = task?.[key] ?? defaults[key];
-  $("due-at").value = localDay(task?.dueAt, state.timeZone);
-  $("do-at").value = localDay(task?.doAt, state.timeZone);
-  $("repeat").value = task?.recurrence?.freq ?? "never";
+  for (const [name, value] of Object.entries(editorValues(task)))
+    $("task-form").elements.namedItem(name).value = value;
   $("editor-heading").textContent = task ? "Task details" : "New task";
   show("overview", false);
   show("editor", true);
@@ -355,14 +346,40 @@ async function extras() {
   show("task-extras", true);
   await Promise.all([details.load(state.editing), activity.load()]);
 }
-async function refreshEditor() {
-  state.editing = (await api("GET", `/tasks/${state.editing.id}`)).task;
-  await refreshDetails();
+function editorValues(task) {
+  return {
+    title: task?.title ?? "",
+    description: task?.description ?? "",
+    status: task?.status ?? "todo",
+    priority: String(task?.priority ?? ""),
+    effort: task?.effort ?? "",
+    listId: task?.listId ?? filters.defaultListId(state.lists),
+    dueAt: localDay(task?.dueAt, state.editorTimeZone),
+    doAt: localDay(task?.doAt, state.editorTimeZone),
+    repeat: task?.recurrence?.freq ?? "never"
+  };
+}
+function reconcileEditor(task) {
+  const values = editorValues(task);
+  const baseline = new Map(JSON.parse(state.baseline));
+  for (const [name, value] of Object.entries(values)) {
+    const control = $("task-form").elements.namedItem(name);
+    // Only untouched controls follow server changes. Keep the latest server value
+    // as the baseline even when a local draft wins, so discard detection stays true.
+    if (control.value === baseline.get(control.id)) control.value = value;
+    baseline.set(control.id, value);
+  }
+  state.baseline = JSON.stringify([...baseline]);
+  state.editing = task;
 }
 async function refreshDetails() {
-  // Wait for both before releasing the page's write guard, even if one rejects.
+  // A child completion can also complete its parent. Re-read it before updating
+  // panels; a later form save must not write an obsolete status back over it.
+  const current = await Promise.allSettled([api("GET", `/tasks/${state.editing.id}`)]);
+  if (current[0].status === "fulfilled") reconcileEditor(current[0].value.task);
+  // Even a failed task/overview refresh must not hide independently loaded panels.
   const results = await Promise.allSettled([load(), extras()]);
-  const failed = results.find((result) => result.status === "rejected");
+  const failed = [...current, ...results].find((result) => result.status === "rejected");
   if (failed) throw failed.reason;
 }
 function manageLists() {
@@ -522,7 +539,7 @@ submit("subtask-form", async () => {
   });
   $("subtask-title").value = "";
   savedExtra("subtask-title");
-  await refreshEditor();
+  await refreshDetails();
 });
 submit("tag-form", async () => {
   const name = $("tag-name").value.trim().replace(/^#/, "").toLowerCase();
@@ -533,7 +550,7 @@ submit("tag-form", async () => {
   state.pendingTag = null;
   $("tag-name").value = "";
   savedExtra("tag-name");
-  await refreshEditor();
+  await refreshDetails();
 });
 submit("list-form", async () => {
   await api("POST", "/tasks/lists", { name: $("list-name").value });

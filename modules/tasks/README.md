@@ -1,5 +1,16 @@
 # Tasks component checkpoint
 
+Part 27 refreshes untouched editor fields after detail actions while retaining
+unsaved fields and comments. Completing the last subtask updates the parent's
+status in the open editor, so a later save does not reopen it. Refreshed dates
+use the editor's saved timezone and retain exact stored timestamps on unrelated
+saves. Saved subtask checkboxes do not count as unsaved drafts. Set
+`TASKS_UI_REFRESH_PROOF=1` on the signed UI gate, create `Browser proof task`
+with `Last proof subtask`, type description `Draft kept across completion`,
+complete the subtask, then save the parent. The gate requires the exact draft
+and both completed states in the database. This changes no route, tool, job,
+migration or host contract.
+
 Part 26 loads subtasks, list tags and activity independently in task details. Each
 panel has its own loading, empty and retry state. Failed refreshes retain loaded
 rows and unsaved editor fields. Assigned tags remain usable if list suggestions
