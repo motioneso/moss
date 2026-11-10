@@ -1129,3 +1129,28 @@ The first live run reached the settings contract helper and exposed TSX's genera
 direct request loop without a nested function; the API assertions are unchanged.
 The failed live receipt is retained as failing-first evidence, and a fresh live
 run and final review are required for this browser-only test correction.
+Re-centering after a saved timezone change remains open; this slice covers initial positioning.
+
+## JS-173 / part 22: upcoming-events tool checkpoint
+
+Adds the guest logic for `calendar.listVisibleEvents` and routes the tool name in the
+package handler. It reads only through a public Connectors call (`listCalendarContext`),
+resolves the named windows today and tomorrow in the saved account timezone (default
+unchanged), projects events, accounts and gaps with the original field names and writes the
+one-sentence summary only when the answer is complete and live (no cache, gap or truncation).
+Saved zones may be IANA names or fixed offsets such as +05:30; a zone this build cannot read
+fails closed instead of guessing a day. A missing Connectors package makes the call fail closed with the standard unavailable error.
+
+The manifest does not advertise the tool or declare the Connectors requirement yet. A hard
+requirement would stop Calendar installing until a Rust Connectors package exists, and the
+host refuses the call without it. Enabling it is a manifest-only change (add the `connectors`
+requirement, the `api` call capability and the tool entry) once that package ships.
+
+Checks: Calendar guest tests (12 in the tools suite, including day-boundary and
+fail-closed cases) pass offline with Rust 1.95.0. No new dependency, no wit-bindgen use.
+
+Still required: the other three provider tools (create, delete, reschedule) and the day-plan
+apply job; concrete public Tasks, Briefings and Connectors adapters; apply/retry/recovery/
+confirm execution; source behavior and external-calendar status controls; full shell and chat;
+old-screen replacement; complete assembled parity; physical second-device trusted HTTPS.
+Nothing in this slice was exercised through a live UI or second device.

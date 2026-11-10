@@ -4,14 +4,15 @@ use chrono::DateTime;
 use moss_module_sdk::Host;
 use serde_json::{json, Value};
 
-fn trim(value: &str) -> &str {
+/// JavaScript `String.prototype.trim`.
+pub(crate) fn trim(value: &str) -> &str {
     value.trim_matches(|c: char| c == '\u{feff}' || (c != '\u{85}' && c.is_whitespace()))
 }
 fn invalid(message: impl Into<String>) -> Error {
     Error::new(400, message)
 }
 
-fn actor_day(now: DateTime<chrono::FixedOffset>, saved_zone: &str) -> chrono::NaiveDate {
+pub(crate) fn actor_zone(saved_zone: &str) -> chrono_tz::Tz {
     // resolveEffectiveLocale validates the stored value before trimming it. IANA names
     // contain no surrounding whitespace, and the preference contract caps them at 100.
     let saved_zone = if saved_zone.len() <= 100 {
@@ -19,7 +20,7 @@ fn actor_day(now: DateTime<chrono::FixedOffset>, saved_zone: &str) -> chrono::Na
     } else {
         ""
     };
-    let zone = saved_zone
+    saved_zone
         .parse::<chrono_tz::Tz>()
         .ok()
         .or_else(|| {
@@ -28,8 +29,11 @@ fn actor_day(now: DateTime<chrono::FixedOffset>, saved_zone: &str) -> chrono::Na
                 .copied()
                 .find(|zone| zone.name().eq_ignore_ascii_case(saved_zone))
         })
-        .unwrap_or(chrono_tz::America::Los_Angeles);
-    now.with_timezone(&zone).date_naive()
+        .unwrap_or(chrono_tz::America::Los_Angeles)
+}
+
+fn actor_day(now: DateTime<chrono::FixedOffset>, saved_zone: &str) -> chrono::NaiveDate {
+    now.with_timezone(&actor_zone(saved_zone)).date_naive()
 }
 
 pub fn save(host: &impl Host, input: &Value) -> Result<Value> {
