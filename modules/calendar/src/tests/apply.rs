@@ -229,17 +229,17 @@ fn retry_recover_and_confirm_validate_then_fail_closed() {
     assert!(call("retry", PLAN, op, json!({"itemIds":[A,B]})).contains(closed));
     assert!(call("recover", PLAN, op, Value::Null).contains(closed));
     assert!(call("recover", PLAN, op, json!({})).contains(closed));
-    assert!(call("confirm", PLAN, op, json!({"approvalId":"x"})).contains(closed));
+    assert!(call("confirm", PLAN, op, json!({"approvalId":A})).contains(closed));
     let bad = "\"status\":400";
     for body in [json!({}), json!({"itemIds":[]}), json!({"itemIds":["no"]}), json!({"itemIds":[A,A]}), json!({"itemIds":[A],"x":1}), json!([])] {
         assert!(call("retry", PLAN, op, body.clone()).contains(bad), "{body}");
     }
     assert!(call("recover", PLAN, op, json!({"x":1})).contains(bad));
     assert!(call("recover", PLAN, op, json!([])).contains(bad));
-    for body in [json!({}), json!({"approvalId":" "}), json!({"approvalId":"x","y":1})] {
+    for body in [json!({}), json!({"approvalId":" "}), json!({"approvalId":A,"y":1}), json!({"approvalId":"x"})] {
         assert!(call("confirm", PLAN, op, body.clone()).contains(bad), "{body}");
     }
     assert!(call("retry", "nope", op, json!({"itemIds":[A]})).contains(bad));
-    assert!(call("confirm", PLAN, "nope", json!({"approvalId":"x"})).contains(bad));
+    assert!(call("confirm", PLAN, "nope", json!({"approvalId":A})).contains(bad));
     assert_eq!(*h.inserts.borrow(), 0);
 }

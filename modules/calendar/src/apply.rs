@@ -334,8 +334,8 @@ pub fn recover_route(plan_id: &str, operation_id: &str, body: Value) -> Result<V
 /// Confirm needs a stored approval to match, which the host does not offer yet.
 pub fn confirm_route(plan_id: &str, operation_id: &str, body: Value) -> Result<Value> {
     only_keys(&body, &["approvalId"])?;
-    if !body["approvalId"].as_str().is_some_and(|id| !id.trim().is_empty()) {
-        return Err(invalid("approvalId must be a non-empty string"));
+    if !body["approvalId"].as_str().is_some_and(operations::uuid) {
+        return Err(invalid("approvalId must be an id"));
     }
     operation_ids(plan_id, operation_id)?;
     Err(Error::new(503, "day plan apply is unavailable"))

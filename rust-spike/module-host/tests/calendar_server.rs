@@ -385,7 +385,7 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
     for (action, body) in [
         ("retry", json!({"itemIds":[item]})),
         ("recover", json!({})),
-        ("confirm", json!({"approvalId":"approval-1"})),
+        ("confirm", json!({"approvalId":uuid::Uuid::new_v4()})),
     ] {
         let path = operation_path(action);
         assert_eq!(call(Method::POST, &path, None, Some(body.clone())).0, 401, "{action}");
@@ -406,7 +406,8 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
     assert_eq!(client.get(format!("{origin}{src}")).header("origin", "null").header("sec-fetch-site", "cross-site").send().unwrap().status(), 200);
     println!("PASS Calendar screen address and files served over HTTPS");
     // Real-browser check of the Calendar screens against this server.
-    if let Ok(script) = std::env::var("MOSS_CALENDAR_BROWSER_SCRIPT") {
+    {
+        let script = std::env::var("MOSS_CALENDAR_BROWSER_SCRIPT").expect("the gate must supply the browser script");
         let out = std::env::var("MOSS_CALENDAR_BROWSER_OUT").unwrap_or_else(|_| root.display().to_string());
         let status = Command::new("pnpm")
             .args(["exec", "tsx", &script])

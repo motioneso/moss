@@ -8,6 +8,14 @@ for (const name of ["CARGO_HOME", "RUSTUP_HOME", "CARGO_TARGET_DIR", "JS181_CALE
   if (!process.env[name]) throw new Error(`Set ${name}`);
 }
 const urls = getMossDatabaseUrls();
+// The browser check and the shared screen styles are part of the gate.
+const sharedDir = join(process.env.CARGO_TARGET_DIR!, "calendar-shared");
+if (
+  spawnSync("python3", ["rust-spike/module-ui/build-assets.py", sharedDir], { stdio: "inherit" })
+    .status !== 0
+) {
+  throw new Error("shared screen assets did not build");
+}
 function cargo(args: string[], extra: Record<string, string> = {}) {
   const result = spawnSync("cargo", ["+1.95.0", ...args], {
     stdio: "inherit",
@@ -47,6 +55,11 @@ cargo(
     "--nocapture"
   ],
   {
+    MOSS_MODULE_SHARED_DIR: sharedDir,
+    MOSS_CALENDAR_BROWSER_SCRIPT: join(process.cwd(), "modules/calendar/tools/server-browser.ts"),
+    MOSS_CALENDAR_BROWSER_OUT:
+      process.env.MOSS_CALENDAR_BROWSER_OUT ??
+      join(process.env.CARGO_TARGET_DIR!, "calendar-shots"),
     JS43_APP_URL: urls.app,
     JS43_WORKER_URL: urls.worker,
     JS43_BOOTSTRAP_URL: urls.bootstrap,
