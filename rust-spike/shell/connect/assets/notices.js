@@ -142,10 +142,11 @@
       if (account !== data.account) inflight.clear();
       account = data.account;
       window.ipc.postMessage(JSON.stringify({ heartbeat: true }));
-      await enrollNotifier();
+      // Background-alert enrolment must never block in-window delivery.
+      await enrollNotifier().catch(() => {});
       // A refreshed notification has a new version, so it counts as new for the window too.
       const keyed = (id) => `${id}@${data.versions?.[id] ?? 0}`;
-      observe("reminder", data.events.map(keyed), data.acknowledged.map(keyed));
+      observe("reminder", data.events.map(keyed), data.acknowledged?.map(keyed));
       const thread = await fetch("/api/chat/thread", { cache: "no-store" });
       if (thread.ok) {
         const data = await thread.json();
