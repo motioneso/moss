@@ -79,3 +79,4 @@ function legacyCopy(markdown: string): void {
     document.body.removeChild(textArea);
   }
 }
+// proof
