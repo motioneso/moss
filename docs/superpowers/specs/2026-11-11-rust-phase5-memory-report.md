@@ -38,6 +38,19 @@ Part of https://github.com/motioneso/moss/issues/4027. Task JS-229. Plan: `2026-
 - The manifest lists all 22 SQL files. The old manifest lists 7 plus a folder. Listing all 22
   keeps every applied file safe and checked.
 
+## Review round 1 (Codex), all fixed
+
+- Embedding activity rows now belong to the person whose note was embedded (they were ownerless,
+  which let an admin read them). The live check now filters on ownership.
+- Changing the address no longer keeps the old key. The save is refused until a key (or an empty
+  key, meaning none) is given, and the screen says so.
+- Plain http is accepted only for this machine (localhost, 127.x, ::1). Everything else needs https.
+- Turning embeddings off now stores an explicit off state, so the server file is not used instead.
+  If an address was never saved, the modules-file address still applies.
+- Ingest checks the model is unchanged just before writing, so one call cannot mix models. A change
+  inside the few moments between that check and the write is not covered.
+- A required module cannot be removed even if its manifest also says removable.
+
 ## Proof
 
 | Claim                                                            | Evidence                                                                                                                                                    |
