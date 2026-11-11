@@ -931,6 +931,7 @@ pub fn parse_crash_dump_enabled(text: &str) -> Option<u32> {
 pub fn crash_dump_verdict_from(text: &str, system_drive: &str, drive: &dyn Fn(&str) -> Verdict) -> Verdict {
     let mut kind = None;
     let (mut dump_file, mut mini_dir) = (None, None);
+    let mut dedicated = None;
     let mut local = false;
     let mut local_folders: Vec<String> = Vec::new();
     for line in text.lines() {
@@ -940,6 +941,7 @@ pub fn crash_dump_verdict_from(text: &str, system_drive: &str, drive: &dyn Fn(&s
             "kind" => kind = parse_crash_dump_enabled(value),
             "dumpfile" if !value.is_empty() => dump_file = Some(value.to_string()),
             "minidir" if !value.is_empty() => mini_dir = Some(value.to_string()),
+            "dedicated" if !value.is_empty() => dedicated = Some(value.to_string()),
             "localdumps" => local = value == "present",
             "localfolder" if !value.is_empty() => local_folders.push(value.to_string()),
             _ => {}
@@ -956,6 +958,10 @@ pub fn crash_dump_verdict_from(text: &str, system_drive: &str, drive: &dyn Fn(&s
             ("dump file", dump_file)
         };
         places.push((format!("system crash dump (type {kind}) {label}"), path.unwrap_or_else(|| system_drive.to_string())));
+        // Windows may write memory to a dedicated file first, on another volume.
+        if let Some(path) = dedicated {
+            places.push(("dedicated dump file".into(), path));
+        }
     }
     if local {
         if local_folders.is_empty() {
@@ -1104,6 +1110,7 @@ $cc = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\CrashControl'
 "kind=$($cc.CrashDumpEnabled)"
 "dumpfile=$([Environment]::ExpandEnvironmentVariables([string]$cc.DumpFile))"
 "minidir=$([Environment]::ExpandEnvironmentVariables([string]$cc.MinidumpDir))"
+"dedicated=$([Environment]::ExpandEnvironmentVariables([string]$cc.DedicatedDumpFile))"
 $default = Join-Path $env:LOCALAPPDATA 'CrashDumps'
 $local = $false
 foreach ($root in 'HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps', 'HKCU:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps') {
@@ -1472,6 +1479,22 @@ mod windows_tests {
         assert_eq!(home.status, Status::Verified);
         let mini = crash_dump_verdict_from("kind=3\nminidir=D:\\mini\nlocaldumps=none\n", "C:", &fake);
         assert_eq!(mini.status, Status::Off);
+    }
+
+    #[test]
+    fn dedicated_dump_file_on_another_drive_is_judged_too() {
+        let split = crash_dump_verdict_from(
+            "kind=2\ndumpfile=C:\\Windows\\MEMORY.DMP\ndedicated=D:\\DedicatedDump.sys\nlocaldumps=none\n",
+            "C:",
+            &fake,
+        );
+        assert_eq!(split.status, Status::Off);
+        let same = crash_dump_verdict_from(
+            "kind=2\ndumpfile=C:\\Windows\\MEMORY.DMP\ndedicated=C:\\DedicatedDump.sys\nlocaldumps=none\n",
+            "C:",
+            &fake,
+        );
+        assert_eq!(same.status, Status::Verified);
     }
 
     #[test]

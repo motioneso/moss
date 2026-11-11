@@ -12,6 +12,10 @@ open when this work started. Items below come from slice 27's Not proven list.
   - An administrator gets the full BitLocker answer. A standard user gets the answer Windows
     shows in its shell for that drive, or "unknown". Unknown never produces an "encrypted" claim.
   - Crash dumps are read from the registry, paging files from Windows management data.
+  - Every place a crash dump can land is judged on its own drive: the system dump file or
+    minidump folder, the dedicated dump file, and user-mode dump folders. One unprotected
+    place makes the answer "off", and a place that cannot be placed on a lettered drive
+    makes it "unknown".
 - OpenSSL ships inside a Windows install, in an `openssl` folder beside the app. Setup uses that
   copy first and falls back to the search path only when the folder is missing. Setup no longer
   stops at "needs openssl" on a machine that has none.
