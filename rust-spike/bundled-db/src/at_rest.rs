@@ -924,6 +924,74 @@ pub fn parse_crash_dump_enabled(text: &str) -> Option<u32> {
     text.trim().parse().ok()
 }
 
+/// Judges every place Windows can write a crash dump. `text` has one `key=value` line per fact
+/// (`kind`, `dumpfile`, `minidir`, `localdumps`, `localfolder`), with environment variables
+/// already expanded. Dumps count as off only when both system dumps and user-mode dumps are
+/// disabled. Any destination that cannot be placed on a drive leaves the answer unknown.
+pub fn crash_dump_verdict_from(text: &str, system_drive: &str, drive: &dyn Fn(&str) -> Verdict) -> Verdict {
+    let mut kind = None;
+    let (mut dump_file, mut mini_dir) = (None, None);
+    let mut local = false;
+    let mut local_folders: Vec<String> = Vec::new();
+    for line in text.lines() {
+        let Some((key, value)) = line.split_once('=') else { continue };
+        let value = value.trim();
+        match key.trim() {
+            "kind" => kind = parse_crash_dump_enabled(value),
+            "dumpfile" if !value.is_empty() => dump_file = Some(value.to_string()),
+            "minidir" if !value.is_empty() => mini_dir = Some(value.to_string()),
+            "localdumps" => local = value == "present",
+            "localfolder" if !value.is_empty() => local_folders.push(value.to_string()),
+            _ => {}
+        }
+    }
+    let Some(kind) = kind else {
+        return Verdict::unknown("could not read the crash dump setting".into());
+    };
+    let mut places: Vec<(String, String)> = Vec::new();
+    if kind != 0 {
+        let (label, path) = if kind == 3 {
+            ("minidump folder", mini_dir)
+        } else {
+            ("dump file", dump_file)
+        };
+        places.push((format!("system crash dump (type {kind}) {label}"), path.unwrap_or_else(|| system_drive.to_string())));
+    }
+    if local {
+        if local_folders.is_empty() {
+            places.push(("user-mode crash dumps".into(), String::new()));
+        }
+        for folder in local_folders {
+            places.push(("user-mode crash dumps".into(), folder));
+        }
+    }
+    if places.is_empty() {
+        return Verdict::verified("crash dumps off", "Windows saves no system crash dump and no user-mode dumps are configured".into());
+    }
+    let mut verdicts = Vec::new();
+    for (what, path) in places {
+        match windows_drive(&path) {
+            Some(d) => {
+                let v = drive(&d);
+                verdicts.push((format!("{what} on {d}: {}", v.evidence.join("; ")), v.status));
+            }
+            None => verdicts.push((format!("{what}: its folder is not on a lettered drive or is not known"), Status::Unknown)),
+        }
+    }
+    let status = if verdicts.iter().any(|(_, s)| *s == Status::Off) {
+        Status::Off
+    } else if verdicts.iter().all(|(_, s)| *s == Status::Verified) {
+        Status::Verified
+    } else {
+        Status::Unknown
+    };
+    Verdict {
+        status,
+        method: (status == Status::Verified).then(|| "BitLocker".to_string()),
+        evidence: verdicts.into_iter().map(|(e, _)| e).collect(),
+    }
+}
+
 /// The drive letter ("C:") a Windows path starts on, whether written `C:\x` or `\\?\C:\x`.
 pub fn windows_drive(path: &str) -> Option<String> {
     let trimmed = path.strip_prefix("\\\\?\\").unwrap_or(path);
@@ -1027,27 +1095,33 @@ pub mod windows {
         }
     }
 
-    /// Windows saves a crash dump unless CrashDumpEnabled is 0. A saved dump lands on the system drive.
+    /// System dumps (CrashControl) and user-mode dumps (Windows Error Reporting LocalDumps) both
+    /// write process memory to disk. Each configured destination must be on an encrypted drive.
     fn crash_dump_verdict() -> Verdict {
-        let setting = powershell(
-            "(Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\CrashControl').CrashDumpEnabled",
-        )
-        .and_then(|text| parse_crash_dump_enabled(&text));
-        match setting {
-            Some(0) => Verdict::verified("crash dumps off", "Windows is set to save no crash dump".into()),
-            Some(kind) => {
-                let drive = windows_drive(&std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into()));
-                match drive {
-                    Some(drive) => {
-                        let mut verdict = drive_verdict(&drive);
-                        verdict.evidence.insert(0, format!("Windows saves crash dumps (type {kind}) on {drive}"));
-                        verdict
-                    }
-                    None => Verdict::unknown("crash dumps are saved but the system drive is unknown".into()),
-                }
-            }
-            None => Verdict::unknown("could not read the crash dump setting".into()),
-        }
+        const SCRIPT: &str = r#"
+$ErrorActionPreference = 'Stop'
+$cc = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\CrashControl'
+"kind=$($cc.CrashDumpEnabled)"
+"dumpfile=$([Environment]::ExpandEnvironmentVariables([string]$cc.DumpFile))"
+"minidir=$([Environment]::ExpandEnvironmentVariables([string]$cc.MinidumpDir))"
+$default = Join-Path $env:LOCALAPPDATA 'CrashDumps'
+$local = $false
+foreach ($root in 'HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps', 'HKCU:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps') {
+    if (-not (Test-Path $root)) { continue }
+    $local = $true
+    foreach ($key in @(Get-Item $root) + @(Get-ChildItem $root)) {
+        $folder = $key.GetValue('DumpFolder', $null, 'DoNotExpandEnvironmentNames')
+        if ($folder) { "localfolder=$([Environment]::ExpandEnvironmentVariables([string]$folder))" }
+    }
+    "localfolder=$default"
+}
+"localdumps=$(if ($local) { 'present' } else { 'none' })"
+"#;
+        let Some(text) = powershell(SCRIPT) else {
+            return Verdict::unknown("could not read the crash dump settings".into());
+        };
+        let system = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into());
+        crash_dump_verdict_from(&text, &system, &|d| drive_verdict(d))
     }
 }
 
@@ -1369,6 +1443,41 @@ mod tests {
 #[cfg(test)]
 mod windows_tests {
     use super::*;
+
+    fn fake(drive: &str) -> Verdict {
+        match drive {
+            "C:" => Verdict::verified("BitLocker", "C: protected".into()),
+            "D:" => Verdict::off("D: not protected".into()),
+            _ => Verdict::unknown("unknown drive".into()),
+        }
+    }
+
+    #[test]
+    fn dumps_off_only_when_system_and_user_dumps_are_off() {
+        let off = crash_dump_verdict_from("kind=0\nlocaldumps=none\n", "C:", &fake);
+        assert_eq!(off.status, Status::Verified);
+        let user = crash_dump_verdict_from("kind=0\nlocaldumps=present\nlocalfolder=D:\\dumps\n", "C:", &fake);
+        assert_eq!(user.status, Status::Off);
+    }
+
+    #[test]
+    fn redirected_system_dump_is_judged_on_its_own_drive() {
+        let moved = crash_dump_verdict_from("kind=2\ndumpfile=D:\\MEMORY.DMP\nlocaldumps=none\n", "C:", &fake);
+        assert_eq!(moved.status, Status::Off);
+        let home = crash_dump_verdict_from("kind=2\ndumpfile=C:\\Windows\\MEMORY.DMP\nlocaldumps=none\n", "C:", &fake);
+        assert_eq!(home.status, Status::Verified);
+        let mini = crash_dump_verdict_from("kind=3\nminidir=D:\\mini\nlocaldumps=none\n", "C:", &fake);
+        assert_eq!(mini.status, Status::Off);
+    }
+
+    #[test]
+    fn unplaceable_or_unreadable_dump_settings_stay_unknown() {
+        let unc = crash_dump_verdict_from("kind=2\ndumpfile=\\\\server\\share\\x.dmp\n", "C:", &fake);
+        assert_eq!(unc.status, Status::Unknown);
+        assert_eq!(crash_dump_verdict_from("", "C:", &fake).status, Status::Unknown);
+        let default_user = crash_dump_verdict_from("kind=0\nlocaldumps=present\nlocalfolder=\n", "C:", &fake);
+        assert_eq!(default_user.status, Status::Unknown);
+    }
 
     const ON: &str = "Volume C: [OS]\n    Conversion Status:    Fully Encrypted\n    Protection Status:    Protection On\n";
     const OFF: &str = "Volume C: [OS]\n    Conversion Status:    Fully Decrypted\n    Protection Status:    Protection Off\n";

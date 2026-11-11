@@ -96,7 +96,7 @@ try {
         $inner = Join-Path $PSScriptRoot 'windows-buttons-inner.ps1'
         & icacls $PSScriptRoot /grant ('*' + $user.SID.Value + ':(OI)(CI)RX') /Q | Out-Null
         $buttons = Start-Process -FilePath 'powershell.exe' -Credential $credential -LoadUserProfile -WorkingDirectory $work `
-            -Environment @{ TEMP = $temp; TMP = $temp } `
+            -Environment @{ TEMP = $temp; TMP = $temp; GITHUB_ACTIONS = 'true'; RUNNER_OS = 'Windows' } `
             -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $inner, '-Install', $install, '-Data', $buttonsData, '-Work', $work) `
             -RedirectStandardOutput $buttonsOut -RedirectStandardError $buttonsErr -PassThru
         $script:process = $buttons

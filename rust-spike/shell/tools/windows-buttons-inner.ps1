@@ -7,6 +7,9 @@ param(
 # Runs as the throwaway standard user. Starts the real app window, then drives its own screens
 # through the browser engine's debugging port: real buttons, real page, real server.
 $ErrorActionPreference = 'Stop'
+if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_OS -ne 'Windows') {
+    throw 'This proof starts and stops processes and runs only on a GitHub Windows runner'
+}
 $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=$DebugPort --remote-allow-origins=*"
 $folder = Join-Path $Data 'servers\default'
 
