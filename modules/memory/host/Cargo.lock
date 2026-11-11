@@ -1291,6 +1291,7 @@ dependencies = [
  "moss-module-host",
  "safety-core",
  "serde_json",
+ "sha2 0.10.9",
  "tokio",
  "tokio-postgres",
  "uuid",

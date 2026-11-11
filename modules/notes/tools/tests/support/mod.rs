@@ -19,6 +19,10 @@ pub struct Registry {
 }
 impl Registry {
     pub fn create(folder: &Path, files: &BTreeMap<String, Vec<u8>>) -> Self {
+        Self::create_all(folder, &[files])
+    }
+    /// One signed registry holding several packages.
+    pub fn create_all(folder: &Path, packages: &[&BTreeMap<String, Vec<u8>>]) -> Self {
         let key = Ed25519KeyPair::from_pkcs8(
             Ed25519KeyPair::generate_pkcs8(&SystemRandom::new())
                 .unwrap()
@@ -26,26 +30,33 @@ impl Registry {
         )
         .unwrap();
         let public = STANDARD.encode(key.public_key().as_ref());
-        let manifest: moss_module_host::manifest::Manifest =
-            serde_json::from_slice(&files["moss.module.json"]).unwrap();
-        let bytes = pack(files).unwrap();
-        let digest = trust::digest(&bytes);
-        let artifact = Artifact {
-            id: manifest.id,
-            version: manifest.version,
-            digest: digest.clone(),
-            size: bytes.len() as u64,
-            publisher_key: "notes-test".into(),
-            signature: STANDARD.encode(key.sign(digest.as_bytes()).as_ref()),
-            requires_moss: manifest.requires_moss,
-            abi: manifest.abi,
-            capabilities: manifest.capabilities,
-            migrations: manifest.database.migrations,
-            requires: manifest.requires,
-            changelog: "Notes guest export checkpoint".into(),
-            channel: Channel::Stable,
-            urgent: false,
-        };
+        std::fs::create_dir_all(folder.join("packages")).unwrap();
+        let mut artifacts = Vec::new();
+        for files in packages {
+            let manifest: moss_module_host::manifest::Manifest =
+                serde_json::from_slice(&files["moss.module.json"]).unwrap();
+            let bytes = pack(files).unwrap();
+            let digest = trust::digest(&bytes);
+            let artifact = Artifact {
+                id: manifest.id,
+                version: manifest.version,
+                digest: digest.clone(),
+                size: bytes.len() as u64,
+                publisher_key: "notes-test".into(),
+                signature: STANDARD.encode(key.sign(digest.as_bytes()).as_ref()),
+                requires_moss: manifest.requires_moss,
+                abi: manifest.abi,
+                capabilities: manifest.capabilities,
+                migrations: manifest.database.migrations,
+                requires: manifest.requires,
+                changelog: "Notes guest export checkpoint".into(),
+                channel: Channel::Stable,
+                urgent: false,
+            };
+            std::fs::write(folder.join(format!("packages/{digest}.mosspkg")), bytes).unwrap();
+            artifacts.push(artifact);
+        }
+        let artifact = artifacts[0].clone();
         let identity = RegistryIdentity {
             id: "notes-test-registry".into(),
             name: "Synthetic Notes registry".into(),
@@ -68,10 +79,9 @@ impl Registry {
                 .unwrap()
                 .into(),
             signing_key: "notes-test".into(),
-            modules: vec![artifact.clone()],
+            modules: artifacts,
             revoked: vec![],
         };
-        std::fs::create_dir_all(folder.join("packages")).unwrap();
         for (name, data) in [
             ("registry.json", serde_json::to_vec(&identity).unwrap()),
             ("index.json", serde_json::to_vec(&index).unwrap()),
@@ -83,7 +93,6 @@ impl Registry {
             )
             .unwrap();
         }
-        std::fs::write(folder.join(format!("packages/{digest}.mosspkg")), bytes).unwrap();
         Self { public, artifact }
     }
 }

@@ -1,4 +1,4 @@
-//! Canonical ABI bridge for the JSON host port. No WASI imports.
+//! Canonical ABI bridge for the JSON host ports (kv, db, vault, jobs, context). No WASI imports.
 use moss_module_sdk::{Error, Host, Result};
 use serde_json::{json, Value};
 use std::alloc::{alloc, realloc, Layout};
@@ -6,6 +6,10 @@ use std::alloc::{alloc, realloc, Layout};
 #[link(wasm_import_module = "ports")]
 extern "C" {
     fn kv(ptr: *const u8, len: usize, out: *mut usize);
+    fn db(ptr: *const u8, len: usize, out: *mut usize);
+    fn vault(ptr: *const u8, len: usize, out: *mut usize);
+    fn jobs(ptr: *const u8, len: usize, out: *mut usize);
+    fn context(ptr: *const u8, len: usize, out: *mut usize);
 }
 struct Bridge;
 impl Host for Bridge {
@@ -16,6 +20,10 @@ impl Host for Bridge {
         unsafe {
             let call = match port {
                 "kv" => kv,
+                "db" => db,
+                "vault" => vault,
+                "jobs" => jobs,
+                "context" => context,
                 _ => return Err(Error::new("Undeclared Memory port")),
             };
             call(request.as_ptr(), request.len(), out.as_mut_ptr());

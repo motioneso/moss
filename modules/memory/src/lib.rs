@@ -1,6 +1,7 @@
 //! Memory guest. It validates requests, scores recall results and shapes responses. SQL, the
 //! acting person, row-level security and the embedding service belong to the host, so no
-//! vector or credential reaches this code. Candidates, lifecycle and screens are later parts.
+//! vector or credential reaches this code. It also runs the vault index jobs. Candidates,
+//! lifecycle and screens are later parts.
 use moss_module_sdk::{Host, Response, RouteRequest};
 use serde_json::{json, Value};
 
@@ -10,6 +11,7 @@ pub mod graph;
 pub mod schema;
 pub mod score;
 pub mod testing;
+mod vault_index;
 
 #[derive(Debug)]
 pub struct Error {
@@ -40,6 +42,12 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
         "health" | "install" => Ok("{}".into()),
         "route" => {
             let response = match serde_json::from_str::<RouteRequest>(payload) {
+                Ok(request) if request.method == "POST" && request.path == "/vault-index/start" => {
+                    match vault_index::handle_job(host, r#"{"queue":"memory.vault-ingest-tick","parameters":{}}"#) {
+                        Ok(_) => Response::new(202, json!({"started":true})),
+                        Err(_) => Response::new(503, json!({"error":"Memory index is unavailable"})),
+                    }
+                }
                 Ok(request) => match route(host, request) {
                     Ok(body) => Response::new(200, body),
                     Err(error) => Response::new(error.status, json!({"error": error.message})),
@@ -63,6 +71,20 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
             };
             let value = result.map_err(|e| e.message)?;
             serde_json::to_string(&value).map_err(|_| "Invalid memory response".into())
+        }
+        "job" => vault_index::handle_job(host, payload).map_err(|e| e.message),
+        "api" => {
+            #[derive(serde::Deserialize)]
+            #[serde(tag = "name", content = "parameters", deny_unknown_fields)]
+            enum Api {
+                #[serde(rename = "requestVaultIndex")]
+                RequestVaultIndex(vault_index::NudgeRequest),
+            }
+            let Api::RequestVaultIndex(input) =
+                serde_json::from_str(payload).map_err(|_| "Invalid memory request".to_owned())?;
+            vault_index::request(host, input)
+                .map(|v| v.to_string())
+                .map_err(|e| e.message)
         }
         _ => Err("Memory handler is unavailable".into()),
     }

@@ -1807,6 +1807,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "moss-memory-host"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "moss-module-host",
+ "serde_json",
+ "wat",
+]
+
+[[package]]
 name = "moss-module-host"
 version = "0.1.0"
 dependencies = [
@@ -1884,6 +1894,7 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "leptos",
+ "moss-memory-host",
  "moss-module-host",
  "moss-module-sdk",
  "moss-module-ui",

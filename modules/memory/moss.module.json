@@ -12,6 +12,35 @@
       "port": "kv",
       "operations": ["get", "set"],
       "resources": ["memory.recall", "memory.core", "memory.entity", "memory.fact", "memory.index"]
+    },
+    {
+      "port": "db",
+      "operations": ["query"],
+      "resources": ["app.memory_ingest_nudges"]
+    },
+    {
+      "port": "vault",
+      "operations": [
+        "index.vault-list",
+        "index.vault-file",
+        "index.vault-remove",
+        "index.vault-purge"
+      ],
+      "resources": ["vault-index"]
+    },
+    {
+      "port": "jobs",
+      "operations": ["enqueue-after-commit", "enqueue-options", "schedule"],
+      "resources": [
+        "memory.vault-ingest-tick",
+        "memory.vault-ingest-sweep",
+        "memory.vault-ingest-nudge"
+      ]
+    },
+    {
+      "port": "context",
+      "operations": ["uuid", "read"],
+      "resources": ["new", "call"]
     }
   ],
   "database": {
@@ -37,7 +66,8 @@
       "sql/0301_superseded_by_set_null_on_delete.sql",
       "sql/0338_memory_managed_note_snapshots.sql",
       "sql/0339_memory_recording_lineage.sql",
-      "sql/0341_memory_recording_cleanup.sql"
+      "sql/0341_memory_recording_cleanup.sql",
+      "sql/0363_memory_ingest_nudges.sql"
     ],
     "ownedTables": [
       "app.memory_chunks",
@@ -55,7 +85,8 @@
       "app.memory_candidates",
       "app.memory_recording_fact_versions",
       "app.memory_recording_receipts",
-      "app.memory_recording_proposals"
+      "app.memory_recording_proposals",
+      "app.memory_ingest_nudges"
     ],
     "ledger": "core-legacy",
     "access": {
@@ -106,6 +137,9 @@
       },
       "app.memory_recording_proposals": {
         "access": "owner-only"
+      },
+      "app.memory_ingest_nudges": {
+        "access": "owner-only"
       }
     }
   },
@@ -129,10 +163,17 @@
       "method": "POST",
       "path": "/graph/facts",
       "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/vault-index/start",
+      "signIn": true
     }
   ],
   "requires": {},
-  "provides": {},
+  "provides": {
+    "requestVaultIndex": "1.0.0"
+  },
   "icons": ["icons/memory.svg"],
   "accounts": {
     "supportsUserDisable": false,
@@ -144,6 +185,25 @@
     "removable": false
   },
   "features": [
+    {
+      "id": "memory.vault-index",
+      "description": "Each account's notes are split into searchable pieces and indexed every fifteen minutes, covering the private note copies Moss saves and the folder named in the account's people notes preference. The Attachments and Exports folders are never indexed. Changed files are re-indexed, deleted files are dropped, and a change of search model re-indexes everything once. A restart does not re-index. Other modules can ask for one saved note copy to be indexed sooner through the requestVaultIndex API. Search and the Memory screen are not part of this package yet.",
+      "errors": [
+        {
+          "code": "memory-index-unavailable",
+          "class": "transient",
+          "description": "A note could not be indexed this time. The next scheduled run tries it again.",
+          "remediationRef": "memory-set-up-embedding"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "memory-set-up-embedding",
+          "description": "Check the search model settings",
+          "path": "/settings/memory"
+        }
+      ]
+    },
     {
       "id": "memory.embedding",
       "description": "Sets the model that turns note text into searchable vectors. Admins save an endpoint address, a model name and an optional key. The key is sealed on save and never shown again. Note text is sent to that endpoint, and the screen says so before saving. Running the model on this device is not available yet.",
@@ -234,7 +294,19 @@
       "risk": "write"
     }
   },
-  "jobs": {},
+  "jobs": {
+    "memory.vault-ingest-tick": {},
+    "memory.vault-ingest-sweep": {
+      "offset": {
+        "kind": "count"
+      }
+    },
+    "memory.vault-ingest-nudge": {
+      "nudge-id": {
+        "kind": "id"
+      }
+    }
+  },
   "screens": {
     "/settings/memory": "ui/index.html"
   },
