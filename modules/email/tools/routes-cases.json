@@ -1,0 +1,28 @@
+[
+  { "seed": { "id": "m1", "subject": "First" } },
+  { "seed": { "id": "m2", "subject": "Second" } },
+  { "method": "GET", "url": "/api/email/messages" },
+  { "method": "GET", "url": "/api/email/messages/m1" },
+  { "method": "GET", "url": "/api/email/messages/missing" },
+  { "method": "GET", "url": "/api/email/briefing-settings" },
+  { "method": "PATCH", "url": "/api/email/briefing-settings", "body": {} },
+  { "method": "PATCH", "url": "/api/email/briefing-settings", "body": { "autoSend": true } },
+  { "method": "GET", "url": "/api/email/briefing-settings" },
+  {
+    "method": "PATCH",
+    "url": "/api/email/briefing-settings",
+    "body": { "createTasks": false, "suggestReplies": "false", "extra": 1 }
+  },
+  { "method": "PATCH", "url": "/api/email/briefing-settings", "body": { "draftReplies": 1 } },
+  { "method": "PATCH", "url": "/api/email/briefing-settings", "body": { "autoSend": "maybe" } },
+  { "method": "PATCH", "url": "/api/email/briefing-settings", "body": { "createTasks": null } },
+  { "method": "PATCH", "url": "/api/email/briefing-settings" },
+  { "method": "GET", "url": "/api/email/task-creation-mode" },
+  { "method": "PUT", "url": "/api/email/task-creation-mode", "body": { "mode": "auto_safe" } },
+  { "method": "GET", "url": "/api/email/task-creation-mode" },
+  { "method": "PUT", "url": "/api/email/task-creation-mode", "body": { "mode": "off" } },
+  { "method": "PUT", "url": "/api/email/task-creation-mode", "body": { "mode": "loud" } },
+  { "method": "PUT", "url": "/api/email/task-creation-mode", "body": {} },
+  { "method": "PUT", "url": "/api/email/task-creation-mode", "body": { "mode": 5 } },
+  { "method": "PUT", "url": "/api/email/task-creation-mode" }
+]

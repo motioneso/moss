@@ -44,7 +44,11 @@ pub fn owns(module: &str, table: &str) -> bool {
 }
 /// Reviewed pre-package sharing identity. It cannot be chosen by downloaded SQL.
 pub fn sharing(module: &str, table: &str, resource: &str, key: &str) -> bool {
-    (module, table, resource, key) == ("calendar", "app.calendar_events", "calendar_event", "id")
+    matches!(
+        (module, table, resource, key),
+        ("calendar", "app.calendar_events", "calendar_event", "id")
+            | ("email", "app.email_messages", "email_message", "id")
+    )
 }
 pub fn entry(module: &str, path: &str) -> Option<&'static File> {
     inventory()

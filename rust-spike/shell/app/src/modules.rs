@@ -3,6 +3,7 @@
 use anyhow::Result;
 use moss_calendar_host::CalendarPorts;
 use moss_connectors_host::ConnectorsPorts;
+use moss_email_host::EmailPorts;
 use axum::{
     body::Bytes,
     extract::{Path as UrlPath, Query, State},
@@ -291,6 +292,7 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
     let preferences_database = database.clone();
     let calendar_database = database.clone();
     let connectors_database = database.clone();
+    let email_database = database.clone();
     let mut embedding_model = None;
     let generator: Arc<dyn Intelligence> = match &settings.ai_key {
         Some(key) => crate::module_ai::intelligence(
@@ -361,7 +363,9 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
             let services = Arc::new(CalendarPorts::new(calendar_database, services)?) as Arc<dyn Ports>;
             // Connectors answers only its own account calls and seals secrets with the
             // connector key. Every other call passes through.
-            Ok(Arc::new(ConnectorsPorts::new(connectors_database, services, &connectors_key)?) as Arc<dyn Ports>)
+            let services = Arc::new(ConnectorsPorts::new(connectors_database, services, &connectors_key)?) as Arc<dyn Ports>;
+            // Email answers only its own cached-message and preference calls.
+            Ok(Arc::new(EmailPorts::new(email_database, services)?) as Arc<dyn Ports>)
         },
     )?;
     Ok(application)
