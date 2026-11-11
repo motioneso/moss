@@ -174,8 +174,9 @@ pub fn private_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
                     let _ = e;
                     std::thread::sleep(std::time::Duration::from_millis(100));
                 }
-                Err(e) if cfg!(windows) => {
-                    // Something keeps the new file open. Write the final file in place.
+                // Only a file that does not exist yet is written in place. An existing file
+                // keeps its old content, since a failed in-place write would truncate it.
+                Err(e) if cfg!(windows) && !path.exists() => {
                     break fs::write(path, bytes)
                         .map_err(|w| format!("Cannot replace private configuration ({e}; {w})"));
                 }
@@ -183,7 +184,8 @@ pub fn private_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
             }
         }
     })();
-    if result.is_err() {
+    // Also covers the in-place fallback, which leaves the temporary copy behind.
+    if result.is_err() || tmp.exists() {
         let _ = fs::remove_file(tmp);
     }
     result

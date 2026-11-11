@@ -149,7 +149,42 @@ fn make_private_folder(path: &Path) -> Result<(), Failure> {
             eprintln!("moss-app setup: instance folder: {e}");
             Failure::Other
         }
-    })
+    })?;
+    owner_only_acl(path)
+}
+
+/// Windows folders inherit their parent's access list. Drop the inherited entries and leave only
+/// the signed-in user and SYSTEM, so the secrets written below are private. Setup stops if this
+/// fails.
+#[cfg(windows)]
+fn owner_only_acl(path: &Path) -> Result<(), Failure> {
+    let user = match (std::env::var("USERDOMAIN"), std::env::var("USERNAME")) {
+        (Ok(domain), Ok(name)) if !domain.is_empty() => format!("{domain}\\{name}"),
+        (_, Ok(name)) => name,
+        _ => return Err(Failure::Other),
+    };
+    let status = std::process::Command::new("icacls")
+        .arg(path)
+        .args(["/inheritance:r", "/grant:r"])
+        .arg(format!("{user}:(OI)(CI)F"))
+        .arg("/grant:r")
+        .arg("SYSTEM:(OI)(CI)F")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+    match status {
+        Ok(s) if s.success() => Ok(()),
+        _ => {
+            eprintln!("moss-app setup: could not restrict the instance folder to its owner");
+            Err(Failure::Other)
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn owner_only_acl(_path: &Path) -> Result<(), Failure> {
+    Ok(())
 }
 
 fn prepare(store: &Store, install: &Path, folder: &Path) -> Result<(), Failure> {
