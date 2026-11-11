@@ -153,8 +153,13 @@ try {
     Log "FAILED: $($_.Exception.Message)"
     Log "app exited: $($app.HasExited)"
     foreach ($f in 'app.out', 'app.err') { $p = Join-Path $Work $f; if (Test-Path $p) { Log "--- $f"; Get-Content $p -Tail 30 } }
-    Log '--- listening ports'
-    Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.OwningProcess -ne 4 } | ForEach-Object { "{0}:{1} pid {2}" -f $_.LocalAddress, $_.LocalPort, $_.OwningProcess } | Sort-Object -Unique | Select-Object -First 30
+    Log '--- ports held by the app and its web engine'
+    $ids = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'moss|msedgewebview2' } | ForEach-Object { $_.Id })
+    Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $ids -contains $_.OwningProcess } | ForEach-Object { "{0}:{1} pid {2}" -f $_.LocalAddress, $_.LocalPort, $_.OwningProcess }
+    Log '--- what the debugging port answers'
+    try { (Invoke-WebRequest "http://127.0.0.1:$DebugPort/json" -UseBasicParsing -TimeoutSec 3).Content.Substring(0, 400) } catch { "no answer: $($_.Exception.Message)" }
+    Log '--- web engine command lines'
+    Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | Select-Object -First 2 | ForEach-Object { $_.CommandLine.Substring(0, [Math]::Min(500, $_.CommandLine.Length)) }
     Log '--- processes'
     Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'moss|webview|msedge' } | ForEach-Object { "$($_.Name) $($_.Id)" }
     $global:LASTEXITCODE = 1
