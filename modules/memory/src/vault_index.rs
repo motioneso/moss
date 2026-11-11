@@ -256,6 +256,63 @@ fn shift_seconds(time: &str, delta: i64) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::RefCell;
+
+    const ID: &str = "11111111-2222-3333-4444-555555555555";
+    const MARKER: &str = "PLANTED-MARKER-7f3a";
+
+    /// Records every port call and answers from a small in-memory script.
+    #[derive(Default)]
+    struct Fake {
+        calls: RefCell<Vec<(String, String, String, Value)>>,
+        files: Vec<String>,
+        rows: RefCell<Vec<Value>>,
+        next_id: RefCell<u32>,
+    }
+    impl Host for Fake {
+        fn call(&self, port: &str, op: &str, resource: &str, params: Value) -> Result<Value> {
+            self.calls
+                .borrow_mut()
+                .push((port.into(), op.into(), resource.into(), params.clone()));
+            Ok(match (port, op) {
+                ("context", "read") => json!({"now":"2026-11-11T10:00:00.000Z"}),
+                ("context", "uuid") => {
+                    *self.next_id.borrow_mut() += 1;
+                    json!({"id":format!("00000000-0000-4000-8000-{:012}", self.next_id.borrow())})
+                }
+                ("vault", "index.vault-list") => json!({"files":self.files}),
+                ("vault", "index.vault-file") => json!({"status":"ingested","chunksProcessed":1}),
+                ("vault", _) => json!({"removed":true}),
+                ("jobs", "enqueue-after-commit") => json!({"deferred":true}),
+                ("jobs", _) => json!({"id":ID}),
+                ("db", _) => match params["kind"].as_str() {
+                    Some("insert") => {
+                        self.rows.borrow_mut().push(params["values"].clone());
+                        json!([])
+                    }
+                    Some("delete") => {
+                        self.rows.borrow_mut().clear();
+                        json!([])
+                    }
+                    _ => json!(self.rows.borrow().clone()),
+                },
+                _ => json!({}),
+            })
+        }
+    }
+
+    fn jobs(fake: &Fake) -> Vec<(String, Value)> {
+        fake.calls
+            .borrow()
+            .iter()
+            .filter(|c| c.0 == "jobs")
+            .map(|c| (c.1.clone(), c.3.clone()))
+            .collect()
+    }
+
+    fn payload(queue: &str, parameters: Value) -> String {
+        json!({"queue":queue,"parameters":parameters}).to_string()
+    }
 
     #[test]
     fn only_export_paths_are_accepted() {
@@ -278,5 +335,80 @@ mod tests {
             shift_seconds("2026-11-10T00:02:00.123Z", -300).unwrap(),
             "2026-11-09T23:57:00Z"
         );
+    }
+
+    #[test]
+    fn a_tick_keeps_one_keyed_fifteen_minute_schedule_and_starts_a_sweep() {
+        let fake = Fake::default();
+        handle_job(&fake, &payload(TICK, json!({}))).unwrap();
+        handle_job(&fake, &payload(TICK, json!({}))).unwrap();
+        let calls = jobs(&fake);
+        let schedules: Vec<_> = calls.iter().filter(|c| c.0 == "schedule").collect();
+        assert_eq!(schedules.len(), 2);
+        for (_, params) in schedules {
+            assert_eq!(params["cron"], "*/15 * * * *");
+            assert_eq!(params["timezone"], "UTC");
+            assert_eq!(params["key"], "memory-vault-ingest");
+            assert_eq!(params["params"], json!({}));
+        }
+        let sweeps = calls.iter().filter(|c| c.0 == "enqueue-options").count();
+        assert_eq!(sweeps, 2);
+    }
+
+    #[test]
+    fn a_sweep_pages_by_count_and_purges_only_on_the_last_page() {
+        let mut fake = Fake::default();
+        fake.files = (0..45).map(|i| format!("notes/n{i}.md")).collect();
+        let out = handle_job(&fake, &payload(SWEEP, json!({"offset":0}))).unwrap();
+        assert!(out.contains("\"more\":true"));
+        assert!(!fake.calls.borrow().iter().any(|c| c.1 == "index.vault-purge"));
+        let next = jobs(&fake).pop().unwrap().1;
+        assert_eq!(next["params"], json!({"offset":20}));
+        handle_job(&fake, &payload(SWEEP, json!({"offset":40}))).unwrap();
+        assert_eq!(
+            fake.calls.borrow().iter().filter(|c| c.1 == "index.vault-purge").count(),
+            1
+        );
+    }
+
+    #[test]
+    fn no_job_call_carries_a_note_path() {
+        let mut fake = Fake::default();
+        fake.files = (0..25).map(|i| format!("notes/{MARKER}-{i}.md")).collect();
+        handle_job(&fake, &payload(TICK, json!({}))).unwrap();
+        handle_job(&fake, &payload(SWEEP, json!({"offset":0}))).unwrap();
+        let path = format!("notes/generated/{ID}/v1.md");
+        request(&fake, NudgeRequest { source_path: path, op: "upsert".into() }).unwrap();
+        handle_job(&fake, &payload(NUDGE, json!({"nudge-id":ID}))).unwrap();
+        let calls = jobs(&fake);
+        assert!(calls.len() >= 5, "the flows must have queued work");
+        for (op, params) in &calls {
+            let text = params.to_string();
+            assert!(!text.contains(MARKER), "{op} leaked a path: {text}");
+            assert!(!text.contains("notes/generated"), "{op} leaked a path: {text}");
+        }
+    }
+
+    #[test]
+    fn a_repeat_nudge_is_absorbed_and_a_bad_path_is_refused() {
+        let fake = Fake::default();
+        let path = format!("notes/generated/{ID}/v2.md");
+        let ask = || request(&fake, NudgeRequest { source_path: path.clone(), op: "upsert".into() });
+        assert_eq!(ask().unwrap()["queued"], true);
+        assert_eq!(ask().unwrap()["queued"], false);
+        assert_eq!(
+            jobs(&fake).iter().filter(|c| c.0 == "enqueue-after-commit").count(),
+            1
+        );
+        let bad = NudgeRequest { source_path: "attachments/a/v1.md".into(), op: "upsert".into() };
+        assert!(request(&fake, bad).is_err());
+    }
+
+    #[test]
+    fn a_nudge_that_was_already_handled_does_nothing() {
+        let fake = Fake::default();
+        let out = handle_job(&fake, &payload(NUDGE, json!({"nudge-id":ID}))).unwrap();
+        assert!(out.contains("noOp"));
+        assert!(!fake.calls.borrow().iter().any(|c| c.0 == "vault"));
     }
 }
