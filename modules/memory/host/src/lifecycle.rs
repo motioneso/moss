@@ -26,7 +26,9 @@ struct Existing {
     superseded_by: Option<String>,
 }
 
+/// Locks the fact's whole conflict group first (see `lock_family`), then reads the fact.
 async fn existing(cx: &DataContext, id: &str) -> Result<Option<Existing>> {
+    lock_family(cx, id).await?;
     Ok(cx
         .db()
         .query_opt(
@@ -224,7 +226,6 @@ async fn lock_family(cx: &DataContext, id: &str) -> Result<()> {
 
 async fn confirm(cx: &DataContext, p: &Value) -> Result<Value> {
     let id = id_of(p)?;
-    lock_family(cx, id).await?;
     let Some(found) = existing(cx, id).await? else {
         return Ok(refused(404, NOT_FOUND));
     };
@@ -270,7 +271,6 @@ async fn first_episode(cx: &DataContext, id: &str) -> Result<Option<String>> {
 async fn correct(cx: &DataContext, p: &Value) -> Result<Value> {
     let id = id_of(p)?;
     let replacement = p["replacementText"].as_str().ok_or_else(|| anyhow!("Missing replacementText"))?;
-    lock_family(cx, id).await?;
     let Some(found) = existing(cx, id).await? else {
         return Ok(refused(404, NOT_FOUND));
     };
@@ -391,7 +391,6 @@ async fn release_sole_sibling(cx: &DataContext, group: &str, deleted: &str) -> R
 
 /// Removes one fact, releasing a lone conflict sibling first. False when nothing was deleted.
 async fn remove(cx: &DataContext, id: &str, xmin: Option<&str>) -> Result<bool> {
-    lock_family(cx, id).await?;
     let Some(found) = existing(cx, id).await? else {
         return Ok(false);
     };
@@ -456,6 +455,7 @@ async fn forget_approved(cx: &DataContext, p: &Value) -> Result<Value> {
     let Some(row) = cx.db().query_opt(TARGET, &[&id]).await? else {
         return Ok(json!({"deleted": false}));
     };
+    lock_family(cx, id).await?;
     let entities: Vec<String> = [row.get::<_, Option<String>>(3), row.get::<_, Option<String>>(4)]
         .into_iter()
         .flatten()
@@ -468,7 +468,6 @@ async fn forget_approved(cx: &DataContext, p: &Value) -> Result<Value> {
             &[&entities],
         )
         .await?;
-    lock_family(cx, id).await?;
     let Some(row) = cx.db().query_opt(TARGET, &[&id]).await? else {
         return Ok(json!({"deleted": false}));
     };
