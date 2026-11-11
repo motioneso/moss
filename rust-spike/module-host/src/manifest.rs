@@ -66,6 +66,9 @@ pub struct Manifest {
     pub screens: BTreeMap<String, String>,
     pub icons: Vec<String>,
     pub accounts: Accounts,
+    /// Core modules ship with the host and cannot be removed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lifecycle: Option<Lifecycle>,
     #[serde(default)]
     pub credentials: BTreeMap<String, Credential>,
     #[serde(default)]
@@ -122,6 +125,18 @@ pub struct Route {
     pub method: String,
     pub path: String,
     pub sign_in: bool,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Lifecycle {
+    pub required: bool,
+    pub bundled: bool,
+    pub removable: bool,
+}
+impl Manifest {
+    pub fn removable(&self) -> bool {
+        self.lifecycle.as_ref().is_none_or(|l| l.removable)
+    }
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
