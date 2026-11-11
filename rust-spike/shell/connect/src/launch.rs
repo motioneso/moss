@@ -50,9 +50,16 @@ mod windows_tests {
         std::fs::create_dir_all(root.join("openssl")).unwrap();
         assert_eq!(windows_openssl(&root), None);
         std::fs::write(root.join("openssl").join("openssl.exe"), b"x").unwrap();
-        assert_eq!(windows_openssl(&root), Some(root.join("openssl").join("openssl.exe")));
+        assert_eq!(
+            windows_openssl(&root),
+            Some(root.join("openssl").join("openssl.exe"))
+        );
         let command = bundled_openssl_command(&root.join("openssl").join("openssl.exe"));
-        let conf = command.get_envs().find(|(k, _)| *k == "OPENSSL_CONF").and_then(|(_, v)| v).unwrap();
+        let conf = command
+            .get_envs()
+            .find(|(k, _)| *k == "OPENSSL_CONF")
+            .and_then(|(_, v)| v)
+            .unwrap();
         assert_eq!(Path::new(conf), root.join("openssl").join("openssl.cnf"));
         std::fs::remove_dir_all(root).unwrap();
     }
