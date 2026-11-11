@@ -290,7 +290,7 @@
         },
         {
           "code": "memory-recording-changed",
-          "class": "conflict",
+          "class": "validation",
           "description": "This recording's memory has changed or is being removed; refresh its saved state before continuing"
         }
       ],
@@ -308,7 +308,7 @@
       "errors": [
         {
           "code": "memory-changed-since-approval",
-          "class": "conflict",
+          "class": "validation",
           "description": "The memory changed or is no longer available. Find it again and review a new request."
         },
         {

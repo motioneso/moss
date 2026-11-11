@@ -59,6 +59,9 @@ fn the_package_asks_only_for_its_own_memory_resources() {
         ("set", "memory.entity"),
         ("set", "memory.fact"),
         ("set", "memory.index"),
+        ("set", "memory.lifecycle"),
+        ("get", "memory.target"),
+        ("set", "memory.forget"),
     ] {
         ask("kv", operation, resource).unwrap();
     }
@@ -70,7 +73,7 @@ fn the_package_asks_only_for_its_own_memory_resources() {
 }
 
 #[test]
-fn the_four_routes_and_two_tools_are_declared() {
+fn the_eleven_routes_and_three_tools_are_declared() {
     let manifest = moss_memory_host::package::manifest().unwrap();
     let routes: Vec<_> = manifest.routes.iter().map(|r| (r.method.as_str(), r.path.as_str())).collect();
     assert_eq!(
@@ -79,17 +82,25 @@ fn the_four_routes_and_two_tools_are_declared() {
             ("GET", "/graph/recall"),
             ("GET", "/graph/core"),
             ("POST", "/graph/entities"),
-            ("POST", "/graph/facts")
+            ("POST", "/graph/facts"),
+            ("POST", "/graph/facts/:id/pin"),
+            ("POST", "/graph/facts/:id/confirm"),
+            ("POST", "/graph/facts/:id/correct"),
+            ("POST", "/graph/facts/:id/status"),
+            ("POST", "/graph/facts/:id/mark-stale"),
+            ("POST", "/graph/facts/:id/supersede"),
+            ("DELETE", "/graph/facts/:id")
         ]
     );
     assert!(manifest.routes.iter().all(|r| r.sign_in));
     let mut tools: Vec<_> = manifest.tools.keys().map(String::as_str).collect();
     tools.sort();
-    assert_eq!(tools, ["memory.recall", "memory.remember"]);
+    assert_eq!(tools, ["memory.forget", "memory.recall", "memory.remember"]);
     assert_eq!(manifest.tools["memory.recall"].risk, "read");
     assert_eq!(manifest.tools["memory.remember"].risk, "write");
+    assert_eq!(manifest.tools["memory.forget"].risk, "destructive");
     let features: Vec<_> = manifest.features.iter().filter_map(|f| f["id"].as_str()).collect();
-    for id in ["memory.recall", "memory.remember"] {
+    for id in ["memory.recall", "memory.remember", "memory.lifecycle", "memory.conflict_groups", "memory.forget_approval"] {
         assert!(features.contains(&id), "{id} must be in the app map");
     }
 }
