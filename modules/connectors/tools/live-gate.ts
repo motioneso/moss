@@ -41,6 +41,15 @@ cargo([
   "--bin",
   "moss-network"
 ]);
+cargo([
+  "build",
+  "--offline",
+  "--locked",
+  "--manifest-path",
+  "rust-spike/standins/Cargo.toml",
+  "--bin",
+  "fake-google"
+]);
 cargo(
   [
     "test",
@@ -66,6 +75,7 @@ cargo(
     JS43_WORKER_URL: urls.worker,
     JS43_BOOTSTRAP_URL: urls.bootstrap,
     JS170_AUTH_URL: urls.auth,
+    JS230_FAKE_GOOGLE: join(target, "debug/fake-google"),
     JS170_SERVER: join(target, "debug/moss-shell"),
     JS170_CERTIFICATE: join(target, "debug/moss-network")
   }
