@@ -2,12 +2,27 @@
   "schemaVersion": 2,
   "id": "memory",
   "name": "Memory",
-  "description": "Keeps what Moss remembers for each account and sets up the model that turns note text into searchable vectors. Graph access, recall, remembering and the Memory screen are not part of this package yet.",
+  "description": "Keeps what Moss remembers for each account, recalls it for a question, remembers new facts, and sets up the model that turns text into searchable vectors. Pinning, confirming, correcting and forgetting facts, suggestions, the Memory screen and the search index jobs are not part of this package yet.",
   "publisher": "Moss",
   "version": "0.1.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
-  "capabilities": [],
+  "capabilities": [
+    {
+      "port": "kv",
+      "operations": [
+        "get",
+        "set"
+      ],
+      "resources": [
+        "memory.recall",
+        "memory.core",
+        "memory.entity",
+        "memory.fact",
+        "memory.index"
+      ]
+    }
+  ],
   "database": {
     "migrations": [
       "sql/0030_memory_index.sql",
@@ -103,10 +118,33 @@
       }
     }
   },
-  "routes": [],
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/graph/recall",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/graph/core",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/graph/entities",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/graph/facts",
+      "signIn": true
+    }
+  ],
   "requires": {},
   "provides": {},
-  "icons": ["icons/memory.svg"],
+  "icons": [
+    "icons/memory.svg"
+  ],
   "accounts": {
     "supportsUserDisable": false,
     "defaultEnabled": true
@@ -141,9 +179,72 @@
           "path": "/settings/memory"
         }
       ]
+    },
+    {
+      "id": "memory.recall",
+      "description": "Finds the facts the signed-in person has saved that fit a question, best match first, each with its sources and how sure Moss is. Also lists the always-relevant facts. Recall uses the configured embedding model to match meaning, and sends the question text to that endpoint. Only the person's own facts are ever read.",
+      "errors": [
+        {
+          "code": "memory-query-required",
+          "class": "validation",
+          "description": "q is required"
+        },
+        {
+          "code": "embedding-not-set-up",
+          "class": "validation",
+          "description": "No embedding model is set up",
+          "remediationRef": "memory-set-up-embedding"
+        },
+        {
+          "code": "memory-search-unavailable",
+          "class": "transient",
+          "description": "Memory search is unavailable",
+          "remediationRef": "memory-set-up-embedding"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "memory-set-up-embedding",
+          "description": "Set up an embedding model",
+          "path": "/settings/memory"
+        }
+      ]
+    },
+    {
+      "id": "memory.remember",
+      "description": "Saves a fact, or an entity such as a person or project, for the signed-in person, with the note, chat or other source it came from. The fact is saved first. Its search vector is made afterwards using the configured embedding model, which receives the fact text. If that fails the fact stays saved and the answer says the search entry is still pending.",
+      "errors": [
+        {
+          "code": "memory-one-object-target",
+          "class": "validation",
+          "description": "memory fact requires exactly one object target"
+        },
+        {
+          "code": "memory-search-pending",
+          "class": "transient",
+          "description": "The fact is saved but its search entry is not made yet",
+          "remediationRef": "memory-set-up-embedding"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "memory-set-up-embedding",
+          "description": "Set up an embedding model",
+          "path": "/settings/memory"
+        }
+      ]
     }
   ],
-  "tools": {},
+  "tools": {
+    "memory.recall": {
+      "description": "Recall source-backed graph memory owned by the active actor.",
+      "risk": "read"
+    },
+    "memory.remember": {
+      "description": "Create a source-backed graph memory fact for the active actor.",
+      "risk": "write"
+    }
+  },
   "jobs": {},
   "screens": {
     "/settings/memory": "ui/index.html"
