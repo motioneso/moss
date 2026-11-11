@@ -148,6 +148,7 @@ pub fn private_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
         .parent()
         .ok_or("A private file needs a parent folder")?;
     let tmp = parent.join(format!(".moss-{}.tmp", uuid::Uuid::new_v4()));
+    let mut keep_tmp = false;
     let result: Result<(), String> = (|| {
         let mut options = OpenOptions::new();
         options.write(true).create_new(true);
@@ -174,18 +175,20 @@ pub fn private_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
                     let _ = e;
                     std::thread::sleep(std::time::Duration::from_millis(100));
                 }
-                // Only a file that does not exist yet is written in place. An existing file
-                // keeps its old content, since a failed in-place write would truncate it.
-                Err(e) if cfg!(windows) && !path.exists() => {
-                    break fs::write(path, bytes)
-                        .map_err(|w| format!("Cannot replace private configuration ({e}; {w})"));
+                // Windows can keep refusing to replace a file a scanner holds. Write in place,
+                // and keep the complete temporary copy if that write fails.
+                Err(e) if cfg!(windows) => {
+                    break fs::write(path, bytes).map_err(|w| {
+                        keep_tmp = true;
+                        format!("Cannot replace private configuration ({e}; {w})")
+                    });
                 }
                 Err(e) => break Err(format!("Cannot replace private configuration ({e})")),
             }
         }
     })();
     // Also covers the in-place fallback, which leaves the temporary copy behind.
-    if result.is_err() || tmp.exists() {
+    if !keep_tmp {
         let _ = fs::remove_file(tmp);
     }
     result
