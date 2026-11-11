@@ -1,0 +1,41 @@
+/* Module-owned layout only; identity comes from the shared Park Press stylesheet. */
+body {
+  margin: 0;
+}
+.conn {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: var(--space-5, 24px) var(--space-4, 16px);
+}
+.conn-list {
+  list-style: none;
+  margin: var(--space-4, 16px) 0 0;
+  padding: 0;
+}
+.conn-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3, 12px) var(--space-4, 16px);
+  padding: var(--space-3, 12px) 0;
+  border-top: 1px solid var(--hairline, currentColor);
+}
+.conn-row__main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3, 12px);
+  flex: 1 1 220px;
+}
+.conn-row__name {
+  margin: 0;
+}
+.conn-row__switches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4, 16px);
+}
+@media (max-width: 620px) {
+  .conn-row__actions {
+    width: 100%;
+  }
+}
