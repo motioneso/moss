@@ -35,7 +35,7 @@ message, revoke a token, switch on a rate limit) and read back what was sent.
 - Wrong-password path seen failing first: with the password check removed, the IMAP test failed
   because the server answered `OK ... Logged in`; with the check restored it passes.
 - Response shapes: tests compare the key set of each served reply with the matching fixture.
-- Fixtures: a test scans every fixture and fails on any address that is not `example.com`.
+- Fixtures: a test scans every fixture and fails on any address outside `example.com` (one invented Google calendar id at `google.com` is allowed).
 - No new crate. Every package in the crate's lock file already appears in another lock file in
   the repo (checked by comparing package names). The IMAP and SMTP servers are hand-written line
   protocols over TCP.
