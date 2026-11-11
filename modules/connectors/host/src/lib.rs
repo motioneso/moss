@@ -118,7 +118,11 @@ impl Ports for ConnectorsPorts {
                 let cx = DataContext::open_bounded(&self.database, scope.access(), scope.remaining())
                     .await
                     .map_err(|_| anyhow::anyhow!("Connectors data unavailable"))?;
-                let result = store::run(&cx, &self.cipher, request).await?;
+                let result = if request.resource.starts_with("connectors.google-") {
+                    google::run(&cx, &self.cipher, &self.google, request).await?
+                } else {
+                    store::run(&cx, &self.cipher, request).await?
+                };
                 cx.commit_bounded(scope.remaining())
                     .await
                     .map_err(|_| anyhow::anyhow!("Connectors data unavailable"))?;
