@@ -41,6 +41,7 @@ Commands: `pnpm test:rust-connectors` (through the gate script) and
 - A second physical device. The live run used one browser on this machine.
 - A second person over the network. Setup allows one owner, so the second person is proven in the
   database test only.
+- The marker search ran before the browser opened the screen. Responses the browser fetched, and log lines written after, were not searched; the screen text was.
 - The marker search over logs covers the server log of the live run. No other log source exists in
   part 1, and part 1 queues no jobs.
 - Revoke does not cancel sync jobs, because part 1 has none. The sync part must do this.

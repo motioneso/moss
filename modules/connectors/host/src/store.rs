@@ -50,19 +50,25 @@ const COUNT_KEYS: [&str; 7] = [
 
 /// The response schema lists the sync counts it allows. Anything else is dropped.
 fn scrub_counts(account: &mut Value) {
+    if account["lastSyncCounts"].is_array() {
+        account["lastSyncCounts"] = Value::Object(Map::new());
+        return;
+    }
     let Some(counts) = account["lastSyncCounts"].as_object() else {
         return;
     };
+    // Counts are numbers or flags and error details are short scalars. Nested values are dropped.
+    let scalar = |value: &Value| value.is_number() || value.is_boolean() || value.is_string();
     let mut kept = Map::new();
     for key in COUNT_KEYS {
-        if let Some(value) = counts.get(key) {
+        if let Some(value) = counts.get(key).filter(|v| v.is_number() || v.is_boolean()) {
             kept.insert(key.into(), value.clone());
         }
     }
     if let Some(detail) = counts.get("emailErrorDetail").and_then(Value::as_object) {
         let mut inner = Map::new();
         for key in ["status", "reason", "operation"] {
-            if let Some(value) = detail.get(key) {
+            if let Some(value) = detail.get(key).filter(|v| scalar(v)) {
                 inner.insert(key.into(), value.clone());
             }
         }
@@ -107,7 +113,11 @@ pub async fn run(cx: &DataContext, cipher: &JsonSecretCipher, request: &Request)
         ("get", "connectors.providers") => providers(cx).await,
         ("get", "connectors.accounts") => {
             let rows = match p["id"].as_str() {
-                Some(id) => accounts(cx, "WHERE a.id::text = $1::text", Some(id)).await?,
+                Some(id) => {
+                    // Any valid spelling of the id finds the account, so route guards see it.
+                    let id = id.parse::<Uuid>().map(|u| u.to_string()).unwrap_or_else(|_| id.to_owned());
+                    accounts(cx, "WHERE a.id::text = $1::text", Some(&id)).await?
+                }
                 None => accounts(cx, "", None).await?,
             };
             Ok(Value::Array(rows))

@@ -191,3 +191,28 @@ fn update_clears_revoked_state_and_admin_list_checks_the_admin() {
     assert_eq!(f.call(f.a, "get", "connectors.admin-accounts", json!({}))["status"], "ok");
     assert_eq!(f.call(f.b, "get", "connectors.admin-accounts", json!({}))["status"], "forbidden");
 }
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn sync_counts_keep_numbers_only_and_an_uppercase_id_finds_the_account() {
+    let f = Fixture::new();
+    let account = f.create(f.a);
+    let id = account["id"].as_str().unwrap().to_owned();
+    let uuid: Uuid = id.parse().unwrap();
+    for counts in [
+        json!({"emailUpserted": {"accessToken": SENTINEL}, "emailFailures": 2, "emailErrorDetail": {"status": {"x": SENTINEL}, "reason": "late"}}),
+    ] {
+        f.rt.block_on(f.root.execute(
+            "UPDATE app.connector_accounts SET last_sync_counts=$2 WHERE id=$1",
+            &[&uuid, &counts],
+        ))
+        .unwrap();
+        let rows = f.call(f.a, "get", "connectors.accounts", json!({}));
+        assert!(!rows.to_string().contains(SENTINEL), "{rows}");
+    }
+    let rows = f.call(f.a, "get", "connectors.accounts", json!({}));
+    assert_eq!(rows[0]["lastSyncCounts"]["emailFailures"], 2);
+    assert_eq!(rows[0]["lastSyncCounts"]["emailErrorDetail"]["reason"], "late");
+    let upper = f.call(f.a, "get", "connectors.accounts", json!({"id": id.to_uppercase()}));
+    assert_eq!(upper.as_array().map(Vec::len), Some(1), "{upper}");
+}
