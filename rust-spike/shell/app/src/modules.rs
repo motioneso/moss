@@ -155,6 +155,12 @@ impl Intelligence for SplitIntelligence {
             None => self.generator.embed(scope, request),
         }
     }
+    fn embedding_model(&self, scope: &CallScope) -> Result<(String, String)> {
+        match &self.embedder {
+            Some(embedder) => embedder.embedding_model(scope),
+            None => self.generator.embedding_model(scope),
+        }
+    }
 }
 
 /// Account preference and linked-notes ports for People. Keys, resources and roots are
