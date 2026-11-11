@@ -1,0 +1,32 @@
+[package]
+name = "moss-connectors-host"
+version = "0.1.0"
+edition = "2021"
+publish = false
+autoexamples = false
+
+[workspace]
+
+[dependencies]
+anyhow = "1"
+moss-module-host = { path = "../../../rust-spike/module-host" }
+moss-connectors = { path = "../src" }
+moss-module-sdk = { path = "../../../rust-spike/module-sdk" }
+access-context = { path = "../../../rust-spike/access-context" }
+safety-core = { path = "../../../rust-spike/safety-core" }
+portability = { path = "../../../rust-spike/portability" }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread"] }
+tokio-postgres = { version = "0.7", features = ["with-serde_json-1", "with-uuid-1"] }
+uuid = { version = "1", features = ["v4"] }
+wat = "=1.239.0"
+
+[dev-dependencies]
+moss-platform-jobs = { path = "../../../rust-spike/module-host/bridges/jobs" }
+base64 = "0.22"
+ring = "0.17"
+chrono = "0.4"
+tempfile = "3"
+
+[profile.dev]
+debug = 0
