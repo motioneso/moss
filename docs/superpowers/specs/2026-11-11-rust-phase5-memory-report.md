@@ -89,3 +89,52 @@ the database save, so a database failure could leave a new key beside the old ad
 - **Vikunja card.** The card could not be found, so it was not moved.
 - **Core app map file** (`packages/shared/src/app-map-core.ts`) was not changed. The entries live
   in the module manifest.
+
+## Part 5: the search index (JS-232)
+
+### What was built
+
+- The Memory module now keeps its own search index of private note copies and the People notes
+  folder. A job lists the files, skips unchanged ones, indexes changed ones in small pages,
+  removes deleted or moved ones, and clears rows for files that are gone.
+- A fifteen-minute schedule per account starts the sweep. The `attachments/` and `exports/`
+  folders are never indexed.
+- A change of embedding model name re-embeds every file once. A restart does not.
+- A request to index one private note export (or drop it) is stored in a small private table and
+  queued by its row number only. No note text or path travels in a job.
+- A signed-in call to start the first sweep now exists. Until a screen or Notes calls it, nothing
+  starts the schedule on its own.
+- The host side reads files only through the account's vault, and returns only counts and statuses
+  to the module.
+
+### Proof
+
+| Claim                                                           | Evidence                                                                                                                                          |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Changed, unchanged, deleted and moved files are handled         | Real database test with the fake embedding model, passing                                                                                         |
+| A restart does not re-embed; a model name change re-embeds once | Same test file, two tests, passing                                                                                                                |
+| Index rows written by the old TypeScript code are honoured      | Test seeds a row with the old code; Rust embeds nothing for it and stays private to its owner                                                     |
+| A fifteen-minute schedule is registered once per account        | Real database test and the live run                                                                                                               |
+| Note text never appears in a job                                | Test failed when a path was planted in a job and passed when removed; the host also refuses anything but ids, counts and flags                    |
+| Native and WebAssembly builds with tests                        | 9 module tests and 6 package tests through the real host, passing                                                                                 |
+| Live run on the real server over HTTPS                          | The gate started the sweep over HTTPS, the server's worker embedded a private note export through the saved endpoint, and a schedule row appeared |
+| Notes real-server gate still passes                             | Passed with Memory installed alongside Notes                                                                                                      |
+
+The live run found a real fault the database tests missed. The model lookup was called inside an
+async block and crashed the worker. It is fixed and the live run passes.
+
+### Not proven
+
+- **Notes ingest comparison, 6 of 7 tests.** As in part 1, they need a Notes component this
+  machine cannot build. With a component built by another task, 1 passed and 6 failed. No Notes
+  file was changed by this work. The Notes real-server gate passed.
+- **Notes calling Memory when a note export is written.** The request call is built and tested
+  inside the module, but Notes does not call it. The fifteen-minute sweep covers exports instead.
+- **Managed note labels against the real Notes tables.** The label identities match the old code
+  (checked against values from the old code), but no test ran with a real label.
+- **Structured-state folders and the Meetings producer.** There is no Rust equivalent yet.
+- **People notes folder.** The root is wired but was not exercised with real People data.
+- **Second device.** Not reachable in this run.
+- **Searching the new index.** Search by the new rows over HTTP is not built. Part 2 owns recall.
+- **Core app map file.** Not changed. The new job, route and feature are in the module manifest.
+- **Migration number.** 0363 had no collision with open pull requests at check time.
