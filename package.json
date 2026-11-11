@@ -20,6 +20,7 @@
     "test:rust-notes-server": "tsx modules/notes/tools/server-gate.ts",
     "test:rust-notes-ingest": "tsx modules/notes/tools/ingest-gate.ts",
     "test:rust-memory": "bash modules/memory/tools/check.sh",
+    "test:rust-memory-index": "tsx modules/memory/tools/index-gate.ts",
     "test:rust-people-server": "tsx rust-spike/module-host/tools/people-server-gate.ts",
     "test:rust-module-bootstrap": "tsx rust-spike/module-host/tools/bootstrap-server-gate.ts",
     "test:rust-install-endpoints": "tsx rust-spike/module-host/tools/install-endpoints-gate.ts",
