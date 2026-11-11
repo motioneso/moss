@@ -2592,14 +2592,17 @@ version = "0.1.0"
 dependencies = [
  "access-context",
  "anyhow",
+ "chrono",
  "moss-connectors",
  "moss-module-host",
  "moss-module-sdk",
  "portability",
+ "reqwest",
  "safety-core",
  "serde_json",
  "tokio",
  "tokio-postgres",
+ "url",
  "uuid",
  "wat",
 ]
