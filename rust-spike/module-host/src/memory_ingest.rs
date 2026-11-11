@@ -23,6 +23,10 @@ pub trait DocumentEmbeddings: Send + Sync {
     fn model_name(&self) -> &str;
     fn model_version(&self) -> &str;
     fn embed_document(&self, scope: &CallScope, text: &str) -> Result<Vec<f64>>;
+    /// Name and version recorded with every vector this call writes.
+    fn model(&self, _scope: &CallScope) -> Result<(String, String)> {
+        Ok((self.model_name().to_owned(), self.model_version().to_owned()))
+    }
 }
 
 pub struct MemoryIngestSource {
@@ -460,6 +464,7 @@ impl MemoryIngestPorts {
             .context("Memory ingest deadline exceeded")?
         })?;
         let (root, relative, content) = prepared;
+        let (model_name, model_version) = self.embeddings.model(scope)?;
         let file_hash = sha256(&content);
         let offset = if input.expected_file_hash.as_deref() == Some(file_hash.as_str()) {
             input.chunk_offset
@@ -495,7 +500,7 @@ impl MemoryIngestPorts {
                 // current one, which is always none here. A managed row is
                 // therefore read again instead of skipped.
                 if *hash == file_hash
-                    && *model == self.embeddings.model_name()
+                    && *model == model_name
                     && snapshot.is_none()
                 {
                     return Ok(json!({"status": "skipped", "chunksProcessed": 0}));
@@ -519,6 +524,10 @@ impl MemoryIngestPorts {
             embedded.push(vector);
         }
         let processed = embedded.len();
+        ensure!(
+            self.embeddings.model(scope)? == (model_name.clone(), model_version.clone()),
+            "The embedding model changed during indexing"
+        );
         let actor = scope.access().actor_user_id();
         self.runtime.block_on(async {
             tokio::time::timeout(scope.remaining(), async {
@@ -547,7 +556,7 @@ impl MemoryIngestPorts {
                     let literal = format!("[{}]", vector.iter().map(f64::to_string).collect::<Vec<_>>().join(","));
                     db.execute(
                         "INSERT INTO app.memory_chunks(owner_user_id,source_kind,source_path,line_start,line_end,content_hash,text,embedding,embed_model_name,embed_model_version,managed_snapshot) VALUES(app.current_actor_user_id(),$1,$2,$3,$4,$5,$6,$7::text::vector,$8,$9,NULL)",
-                        &[&source.source_kind, &input.file_path, &(chunk.line_start as i32), &(chunk.line_end as i32), &sha256(&chunk.text), &sanitize(&chunk.text), &literal, &self.embeddings.model_name(), &self.embeddings.model_version()],
+                        &[&source.source_kind, &input.file_path, &(chunk.line_start as i32), &(chunk.line_end as i32), &sha256(&chunk.text), &sanitize(&chunk.text), &literal, &model_name, &model_version],
                     ).await?;
                 }
                 if offset == 0 {
@@ -563,7 +572,7 @@ impl MemoryIngestPorts {
                 }
                 db.execute(
                     "INSERT INTO app.memory_file_index(owner_user_id,source_kind,source_path,file_hash,chunk_count,embed_model_name,embed_model_version,managed_snapshot,ingested_at) VALUES(app.current_actor_user_id(),$1,$2,$3,$4,$5,$6,NULL,now()) ON CONFLICT(owner_user_id,source_kind,source_path) DO UPDATE SET file_hash=EXCLUDED.file_hash,chunk_count=EXCLUDED.chunk_count,embed_model_name=EXCLUDED.embed_model_name,embed_model_version=EXCLUDED.embed_model_version,managed_snapshot=NULL,ingested_at=now()",
-                    &[&source.source_kind, &input.file_path, &file_hash, &(chunks.len() as i32), &self.embeddings.model_name(), &self.embeddings.model_version()],
+                    &[&source.source_kind, &input.file_path, &file_hash, &(chunks.len() as i32), &model_name, &model_version],
                 ).await?;
                 cx.commit_bounded(scope.remaining()).await.map_err(|_| anyhow::anyhow!("Memory commit failed"))?;
                 Ok(json!({"status":"ingested","chunksProcessed":processed}))

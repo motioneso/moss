@@ -1,5 +1,6 @@
 //! Explicit assembly for an existing approved module catalog. Installation/bootstrap
 //! still owns schema creation; the serving process never runs bootstrap SQL.
+use crate::module_embedding::{ActivityRows, EmbeddingConfig, SettingsEmbeddings};
 use anyhow::Result;
 use moss_calendar_host::CalendarPorts;
 use moss_connectors_host::ConnectorsPorts;
@@ -14,7 +15,10 @@ use axum::{
 };
 use moss_module_host::{
     account_preferences::{AccountPreferencesPorts, Binding},
-    ai::{EmbeddingsOnly, FixedEmbeddings, Intelligence, IntelligenceEmbeddings},
+    ai::{
+        EmbeddingsOnly, FixedEmbeddings, Intelligence, IntelligenceEmbeddings,
+        DEFAULT_EMBEDDING_MODEL,
+    },
     application::{Application, Configuration},
     folder_settings::{FolderSetting, FolderSettingsPorts},
     frame::AssetPolicy,
@@ -153,6 +157,12 @@ impl Intelligence for SplitIntelligence {
         match &self.embedder {
             Some(embedder) => embedder.embed(scope, request),
             None => self.generator.embed(scope, request),
+        }
+    }
+    fn embedding_model(&self, scope: &CallScope) -> Result<(String, String)> {
+        match &self.embedder {
+            Some(embedder) => embedder.embedding_model(scope),
+            None => self.generator.embedding_model(scope),
         }
     }
 }
@@ -298,7 +308,6 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
     let calendar_database = database.clone();
     let connectors_database = database.clone();
     let email_database = database.clone();
-    let mut embedding_model = None;
     let generator: Arc<dyn Intelligence> = match &settings.ai_key {
         Some(key) => crate::module_ai::intelligence(
             database.clone(),
@@ -307,19 +316,30 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
         )?,
         None => Arc::new(UnconfiguredIntelligence),
     };
-    let embedder: Option<Arc<dyn Intelligence>> = match settings.embeddings {
-        Some(e) => {
-            embedding_model = Some(e.model.clone());
-            Some(Arc::new(EmbeddingsOnly::new(FixedEmbeddings::new(
-                e.url
-                    .parse()
-                    .map_err(|_| anyhow::anyhow!("Invalid embeddings url"))?,
-                e.model,
-                e.api_key,
-            ))?))
-        }
+    // The endpoint the owner sets in the app wins. The modules file is the fallback.
+    let fallback = match settings.embeddings {
+        Some(e) => Some(FixedEmbeddings::new(
+            e.url
+                .parse()
+                .map_err(|_| anyhow::anyhow!("Invalid embeddings url"))?,
+            e.model,
+            e.api_key,
+        )),
         None => None,
     };
+    let embedder: Option<Arc<dyn Intelligence>> = Some(Arc::new(
+        EmbeddingsOnly::new(SettingsEmbeddings {
+            settings: Arc::new(EmbeddingConfig::new(
+                database.clone(),
+                &connectors_key,
+                &settings.data,
+            )?),
+            fallback,
+        })?
+        .with_activity(Arc::new(ActivityRows {
+            database: database.clone(),
+        })),
+    ));
     let intelligence: Arc<dyn Intelligence> = Arc::new(SplitIntelligence {
         generator,
         embedder,
@@ -341,15 +361,15 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
         |services| {
             let services = match notes_base {
             Some(base) => {
-                let services = match embedding_model {
-                    Some(model) => memory(
-                        preferences_database.clone(),
-                        base.clone(),
-                        Arc::new(IntelligenceEmbeddings::new(notes_intelligence, model)),
-                        services,
-                    )?,
-                    None => services,
-                };
+                let services = memory(
+                    preferences_database.clone(),
+                    base.clone(),
+                    Arc::new(IntelligenceEmbeddings::new(
+                        notes_intelligence,
+                        DEFAULT_EMBEDDING_MODEL.into(),
+                    )),
+                    services,
+                )?;
                 linked_notes(preferences_database, base, private_base, services)
             }
             None => {

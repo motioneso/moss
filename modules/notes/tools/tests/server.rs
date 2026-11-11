@@ -49,6 +49,8 @@ impl moss_module_host::ai::Intelligence for NoAi {
 }
 /// A real HTTP embeddings endpoint on this machine (OpenAI-style). It hashes words into a
 /// 768-slot vector, so texts sharing words are close. It stands in for a hosted provider.
+static SEEN_AUTHORIZATION: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
 fn embedding_stub(port: &str) {
     use std::io::{Read, Write};
     let listener = std::net::TcpListener::bind(format!("127.0.0.1:{port}")).unwrap();
@@ -79,6 +81,15 @@ fn embedding_stub(port: &str) {
                         }
                     }
                 };
+                let head = String::from_utf8_lossy(&data).to_string();
+                for line in head.lines() {
+                    if line.to_ascii_lowercase().starts_with("authorization:") {
+                        SEEN_AUTHORIZATION
+                            .lock()
+                            .unwrap()
+                            .push(line["authorization:".len()..].trim().to_owned());
+                    }
+                }
                 let input: Value = serde_json::from_slice(&body).unwrap();
                 let mut vector = vec![0f64; 768];
                 for word in input["input"]
@@ -605,6 +616,87 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
     assert_eq!(again.0, 202, "{}", again.1);
     assert_eq!(again.1["jobId"], json!(waiting), "{}", again.1);
     println!("Sync now reused the waiting request: {}", again.1);
+    // Settings route, live: the owner sets the endpoint in the app. The server must then embed
+    // through the saved endpoint with the saved credential, and nothing may leak it.
+    {
+        const SAVED_KEY: &str = "settings-credential-7d41c9";
+        const MARKER_TEXT: &str = "zanzibar-quokka-marker";
+        let settings = |method: Method, body: Option<Value>| {
+            let mut request = client
+                .request(method, format!("{notes_origin}/api/m/memory/embedding"))
+                .header("origin", &notes_origin)
+                .header("cookie", &cookie);
+            if let Some(body) = body {
+                request = request.json(&body);
+            }
+            let response = request.send().unwrap();
+            let status = response.status().as_u16();
+            let text = response.text().unwrap();
+            (status, text)
+        };
+        let (status, text) = settings(Method::GET, None);
+        assert_eq!(status, 200, "{text}");
+        assert!(text.contains("hasCredential"), "{text}");
+        let refused = settings(
+            Method::PUT,
+            Some(json!({"url":embedding_url,"model":"bag-of-words-768","apiKey":SAVED_KEY})),
+        );
+        assert_eq!(refused.0, 400, "{}", refused.1);
+        assert!(refused.1.contains("memory text will be sent"), "{}", refused.1);
+        let saved = settings(
+            Method::PUT,
+            Some(json!({"url":embedding_url,"model":"bag-of-words-768","apiKey":SAVED_KEY,"confirmOffDevice":true})),
+        );
+        assert_eq!(saved.0, 200, "{}", saved.1);
+        let moved = settings(
+            Method::PUT,
+            Some(json!({"url":"https://other.example.test/v1/embeddings","model":"x","confirmOffDevice":true})),
+        );
+        assert_eq!(moved.0, 400, "a new address must not inherit the old key: {}", moved.1);
+        let insecure = settings(
+            Method::PUT,
+            Some(json!({"url":"http://203.0.113.9/v1/embeddings","model":"x","apiKey":"k","confirmOffDevice":true})),
+        );
+        assert_eq!(insecure.0, 400, "plain http off this machine: {}", insecure.1);
+        let shown = settings(Method::GET, None);
+        assert_eq!(shown.0, 200, "{}", shown.1);
+        assert!(shown.1.contains("\"hasCredential\":true"), "{}", shown.1);
+        for text in [&saved.1, &shown.1, &refused.1] {
+            assert!(!text.contains(SAVED_KEY), "{text}");
+        }
+        let sealed = fs::read_to_string(root.join("data/embedding-credential.json")).unwrap();
+        assert!(!sealed.contains(SAVED_KEY), "the credential file is sealed");
+        fs::write(
+            journal.join("marker.md"),
+            format!("# Marker\n\n{MARKER_TEXT} lives only in this note.\n"),
+        )
+        .unwrap();
+        let sync = call(Method::POST, "/notes/sync", Some(&cookie), Some(json!({})));
+        assert_eq!(sync.0, 202, "{}", sync.1);
+        let deadline = Instant::now() + Duration::from_secs(90);
+        while !rows(indexed_sql).iter().any(|p| p.ends_with("marker.md")) {
+            assert!(
+                Instant::now() < deadline,
+                "the marker note was not indexed through the saved endpoint\n{}",
+                fs::read_to_string(root.join("server.log")).unwrap_or_default()
+            );
+            std::thread::sleep(Duration::from_millis(500));
+        }
+        let bearer = format!("Bearer {SAVED_KEY}");
+        assert!(
+            SEEN_AUTHORIZATION.lock().unwrap().iter().any(|h| *h == bearer),
+            "the endpoint never received the saved credential"
+        );
+        let log = fs::read_to_string(root.join("server.log")).unwrap_or_default();
+        assert!(!log.contains(SAVED_KEY), "the credential reached the server log");
+        assert!(!log.contains(MARKER_TEXT), "note text reached the server log");
+        let activity = rows("SELECT coalesce(model_name,'') || '|' || action || '|' || outcome || '|' || coalesce(result,'') FROM app.moss_model_activity_log WHERE kind='embedding' AND owner_user_id=$1");
+        assert!(activity.iter().any(|r| r.starts_with("bag-of-words-768|embed document|ok|")), "{activity:?}");
+        for row in &activity {
+            assert!(!row.contains(MARKER_TEXT) && !row.contains(SAVED_KEY), "{row}");
+        }
+        println!("PASS memory settings: the owner set the embedding endpoint over HTTPS (refused without the off-device confirmation), the credential was never in a response, the sealed file, the server log or an activity row, the endpoint received it, and a marker note indexed through the saved endpoint; {} activity rows", activity.len());
+    }
     // Search runs through the same host ports in this process (the server has no tool
     // endpoint yet), against the real index and the same embeddings endpoint.
     {

@@ -12,6 +12,10 @@ for parent,ledger in [('packages','core-legacy'),('external-modules','module-leg
         for source in sources:
             text=source.read_text()
             match=re.search(r'ownedTables["\s]*:\s*\[([^]]*)\]',text,re.S)
+            if not match:
+                # `ownedTables: name` refers to an array constant in the same file.
+                ref=re.search(r'ownedTables\s*:\s*(\w+)\s*[,}\n]',text)
+                if ref: match=re.search(r'const\s+'+ref[1]+r'\s*=\s*\[([^]]*)\]',text,re.S)
             if match: tables+=re.findall(r'["\'](app\.[a-z0-9_]+)["\']',match[1])
         # The original manifest predates the Calendar-owned day-plan aggregate.
         # Freeze these reviewed identities explicitly; do not infer arbitrary SQL ownership.
