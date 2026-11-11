@@ -1,0 +1,18 @@
+{
+  "kind": "calendar#event",
+  "etag": "\"3452103658428000\"",
+  "id": "fakeevent0001",
+  "status": "confirmed",
+  "htmlLink": "https://www.google.com/calendar/event?eid=ZmFrZWV2ZW50MDAwMQ",
+  "created": "2026-03-02T09:20:00.000Z",
+  "updated": "2026-03-02T09:20:00.214Z",
+  "summary": "Agenda review",
+  "creator": { "email": "bob@example.com", "self": true },
+  "organizer": { "email": "bob@example.com", "self": true },
+  "start": { "dateTime": "2026-03-05T10:00:00Z", "timeZone": "UTC" },
+  "end": { "dateTime": "2026-03-05T10:30:00Z", "timeZone": "UTC" },
+  "iCalUID": "fakeevent0001@google.com",
+  "sequence": 0,
+  "reminders": { "useDefault": true },
+  "eventType": "default"
+}

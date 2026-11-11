@@ -1,0 +1,9 @@
+From: Dave Invented <dave@example.com>
+To: Bob Sample <bob@example.com>
+Subject: Invoice reminder
+Date: Wed, 04 Mar 2026 14:30:00 +0000
+Message-ID: <invoice-1@mail.example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+
+This is a reminder that invoice 1001 is due next week.

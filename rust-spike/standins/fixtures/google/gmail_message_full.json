@@ -1,0 +1,27 @@
+{
+  "id": "18c3f2a1b4d5e6f7",
+  "threadId": "18c3f2a1b4d5e6f7",
+  "labelIds": ["INBOX", "UNREAD"],
+  "snippet": "Hi Bob, the draft agenda for Thursday is attached below.",
+  "payload": {
+    "partId": "",
+    "mimeType": "text/plain",
+    "filename": "",
+    "headers": [
+      { "name": "Delivered-To", "value": "bob@example.com" },
+      { "name": "From", "value": "Alice Example <alice@example.com>" },
+      { "name": "To", "value": "Bob Sample <bob@example.com>" },
+      { "name": "Subject", "value": "Thursday agenda" },
+      { "name": "Date", "value": "Mon, 02 Mar 2026 09:15:00 +0000" },
+      { "name": "Message-ID", "value": "<agenda-1@mail.example.com>" },
+      { "name": "Content-Type", "value": "text/plain; charset=\"UTF-8\"" }
+    ],
+    "body": {
+      "size": 58,
+      "data": "SGkgQm9iLCB0aGUgZHJhZnQgYWdlbmRhIGZvciBUaHVyc2RheSBpcyBhdHRhY2hlZCBiZWxvdy4"
+    }
+  },
+  "sizeEstimate": 3120,
+  "historyId": "4821",
+  "internalDate": "1772442900000"
+}
