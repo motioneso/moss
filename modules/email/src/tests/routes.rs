@@ -75,3 +75,14 @@ fn a_host_failure_becomes_a_scrubbed_500() {
 fn unknown_routes_are_404() {
     assert_eq!(call(&Fake::default(), "GET", "/nothing", None, Value::Null).0, 404);
 }
+#[test]
+fn a_large_mailbox_lists_completely_in_bounded_pages() {
+    let mut host = Fake::default();
+    for n in 0..450 {
+        host = host.with_message(&format!("m{n}"), "Hello");
+    }
+    let (status, body) = call(&host, "GET", "/messages", None, Value::Null);
+    assert_eq!(status, 200);
+    assert_eq!(body["messages"].as_array().map(Vec::len), Some(450));
+    assert_eq!(body["messages"][449]["id"], "m449");
+}

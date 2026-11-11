@@ -253,3 +253,39 @@ fn source_switch_keeps_other_entries_and_draft_policy_round_trips() {
     assert_eq!(f.call(f.a, "get", "email.draft-policy", json!({})), json!({"tier":"trusted_auto"}));
     assert_eq!(f.call(f.b, "get", "email.draft-policy", json!({})), json!({}));
 }
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_large_mailbox_pages_under_the_response_limit_without_gaps_or_repeats() {
+    let f = Fixture::new();
+    let excerpt = "x".repeat(500);
+    f.rt.block_on(async {
+        f.root
+            .execute(
+                "INSERT INTO app.email_messages(id,connector_account_id,owner_user_id,sender,recipients,subject,snippet,body_excerpt,received_at,external_id)
+                 SELECT gen_random_uuid(),$1,$2,'s',ARRAY['r'],'Bulk '||n,'snip',$3,now() - (n || ' seconds')::interval,'bulk-'||n
+                 FROM generate_series(1,2400) n",
+                &[&f.account_a, &f.a, &excerpt],
+            )
+            .await
+            .unwrap();
+    });
+    let mut ids = std::collections::BTreeSet::new();
+    let mut offset = 0;
+    loop {
+        let page = f.call(f.a, "get", "email.messages", json!({"limit":200,"offset":offset}));
+        let rows = page.as_array().unwrap();
+        assert!(page.to_string().len() < 1024 * 1024 / 2, "a page must stay well under the limit");
+        for row in rows {
+            assert!(ids.insert(row["id"].as_str().unwrap().to_string()), "repeated row");
+        }
+        if rows.len() < 200 {
+            break;
+        }
+        offset += 200;
+    }
+    assert_eq!(ids.len(), 2400);
+    // The old unbounded read would not fit one host answer.
+    let all = f.call(f.a, "get", "email.messages", json!({}));
+    assert!(all.to_string().len() > 1024 * 1024, "the fixture must be big enough to prove the point");
+}

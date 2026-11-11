@@ -62,7 +62,10 @@ fn text<'a>(parameters: &'a Value, name: &str) -> Result<&'a str> {
 pub async fn run(cx: &DataContext, request: &Request) -> Result<Value> {
     let p = &request.parameters;
     match (request.operation.as_str(), request.resource.as_str()) {
-        ("get", "email.messages") => messages(cx, p["id"].as_str()).await,
+        ("get", "email.messages") => {
+            let page = p["limit"].as_i64().map(|limit| (limit.clamp(1, 500), p["offset"].as_i64().unwrap_or(0).max(0)));
+            messages(cx, p["id"].as_str(), page).await
+        }
         ("get", "email.preferences") => {
             let keys: Vec<String> = p["keys"]
                 .as_array()
@@ -86,7 +89,7 @@ pub async fn run(cx: &DataContext, request: &Request) -> Result<Value> {
     }
 }
 
-async fn messages(cx: &DataContext, id: Option<&str>) -> Result<Value> {
+async fn messages(cx: &DataContext, id: Option<&str>, page: Option<(i64, i64)>) -> Result<Value> {
     let rows = match id {
         // A malformed id matches nothing, so the route answers not found.
         Some(id) => match Uuid::parse_str(id) {
@@ -97,8 +100,10 @@ async fn messages(cx: &DataContext, id: Option<&str>) -> Result<Value> {
             Err(_) => Vec::new(),
         },
         None => {
-            let sql = format!("{} {ORDER}", message_select(TABLE));
-            cx.db().query(&sql, &[]).await?
+            // One bounded page per call keeps each host answer under the response limit.
+            let (limit, offset) = page.unwrap_or((i64::MAX, 0));
+            let sql = format!("{} {ORDER} LIMIT $1 OFFSET $2", message_select(TABLE));
+            cx.db().query(&sql, &[&limit, &offset]).await?
         }
     };
     Ok(Value::Array(rows.iter().map(|row| row.get(0)).collect()))

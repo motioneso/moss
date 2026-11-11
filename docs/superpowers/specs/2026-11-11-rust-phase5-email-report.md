@@ -39,6 +39,9 @@ Commands: `pnpm test:rust-email` and `pnpm test:rust-email-live`, both through t
 
 ## Differences from the old app
 
+- The message list is read in pages of 200 so a large mailbox fits the host's response limit. A
+  database test with 2,400 messages proves no gaps or repeats, and that one unpaged read would
+  not fit.
 - A malformed message id answers 404. The old server answered 500.
 - The excerpt cap of 500 counts characters, the old code counted UTF-16 units. They differ only
   for rare characters outside the basic range.
@@ -49,8 +52,9 @@ Commands: `pnpm test:rust-email` and `pnpm test:rust-email-live`, both through t
 - A second physical device. The live run used one browser on this machine.
 - A second person over the network. Setup allows one owner, so the second person is proven in the
   database test only.
-- Inserting and updating messages through the public API on the real server. Only the guest tests
-  and the database tests cover it, and nothing calls it yet.
+- Inserting and updating messages through the public API on the real server, as the owner, a
+  second person and a manage-share person. The guest tests and the database tests cover each layer
+  separately, and nothing calls it yet. The sync part must add that assembled test.
 - The old triage-preservation behaviour on update. It belongs with sync, a later part.
 - Connectors will need to call Email while Email requires Connectors. That is a possible circular
   install order and needs a decision in the sync part.

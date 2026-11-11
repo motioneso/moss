@@ -65,7 +65,11 @@ impl Host for Fake {
         Ok(match (operation, resource) {
             ("get", "email.messages") => match p["id"].as_str() {
                 Some(id) => json!(state.messages.iter().filter(|m| m["id"] == id).collect::<Vec<_>>()),
-                None => json!(state.messages),
+                None => {
+                    let offset = p["offset"].as_u64().unwrap_or(0) as usize;
+                    let limit = p["limit"].as_u64().map_or(usize::MAX, |l| l as usize);
+                    json!(state.messages.iter().skip(offset).take(limit).collect::<Vec<_>>())
+                }
             },
             ("get", "email.preferences") => {
                 let mut out = Map::new();
