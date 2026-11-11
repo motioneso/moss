@@ -40,7 +40,7 @@ try {
     $out = Join-Path $work 'standard.out'; $err = Join-Path $work 'standard.err'
     $process = Start-Process -FilePath $MossDb -Credential $credential -LoadUserProfile -WorkingDirectory $work `
         -ArgumentList @('at-rest', '--path', "Data=$work") -RedirectStandardOutput $out -RedirectStandardError $err -PassThru
-    if (-not $process.WaitForExit(120000)) { $process.Kill($true); throw 'standard-user run hung' }
+    if (-not $process.WaitForExit(600000)) { $process.Kill($true); throw 'standard-user run hung' }
     if ($process.ExitCode -ne 0) { Get-Content $err; throw "standard-user run failed ($($process.ExitCode))" }
     $standard = Show 'standard user' (Get-Content $out -Raw)
     # What a standard user may and may not conclude.

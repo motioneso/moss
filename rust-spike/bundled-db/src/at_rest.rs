@@ -1121,7 +1121,11 @@ foreach ($root in 'HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\Loca
             return Verdict::unknown("could not read the crash dump settings".into());
         };
         let system = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into());
-        crash_dump_verdict_from(&text, &system, &|d| drive_verdict(d))
+        // Each drive costs several process launches, so ask once per drive.
+        let seen = std::cell::RefCell::new(std::collections::HashMap::<String, Verdict>::new());
+        crash_dump_verdict_from(&text, &system, &|d| {
+            seen.borrow_mut().entry(d.to_uppercase()).or_insert_with(|| drive_verdict(d)).clone()
+        })
     }
 }
 
