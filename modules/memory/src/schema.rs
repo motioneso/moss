@@ -122,6 +122,11 @@ fn check(schema: &Schema, value: &mut Value, path: &str, issues: &mut Vec<Issue>
             true
         }
         Schema::AnyOf(branches) => {
+            // A value that already has an allowed type is kept as it is, as Ajv does for a
+            // type list. Only then is coercion tried.
+            if value.is_null() && branches.iter().any(|b| matches!(b, Schema::Null)) {
+                return true;
+            }
             let mark = issues.len();
             for branch in branches {
                 if check(branch, value, path, issues) {

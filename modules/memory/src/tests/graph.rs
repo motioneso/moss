@@ -159,3 +159,18 @@ fn remember_tool_answers_with_the_fact_id_and_trims() {
     assert_eq!(sent["source"]["excerpt"], "said so");
     assert!(tool(&host, "memory.remember", json!({"predicate": "prefers"})).is_err());
 }
+
+#[test]
+fn explicit_nulls_stay_null() {
+    let host = Fake::new();
+    let body = json!({
+        "predicate": "prefers", "objectText": "tea", "objectEntityId": null,
+        "source": {"sourceKind": "chat", "sourceRef": "t1", "excerpt": "x", "occurredAt": null}
+    });
+    let (status, _) = route(&host, "POST", "/graph/facts", json!({}), body);
+    assert_eq!(status, 200);
+    let sent = host.sent("memory.fact");
+    assert!(sent["objectEntityId"].is_null());
+    assert!(sent["source"]["occurredAt"].is_null());
+    assert_eq!(sent["objectText"], "tea");
+}
