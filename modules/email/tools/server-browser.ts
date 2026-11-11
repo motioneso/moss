@@ -50,7 +50,9 @@ assert.equal(await checked("Let your assistant draft email replies without askin
 assert.equal(await checked("Suggest replies"), true);
 await page.screenshot({ path: join(OUT!, "email-settings.png") });
 // A real click saves through the module, and a fresh load shows the saved choice.
-await frame.getByLabel("Suggest replies").uncheck();
+await frame
+  .locator("label.jds-switch", { has: frame.getByText("Suggest replies", { exact: true }) })
+  .click();
 await frame.locator("#email-task-mode").selectOption("off");
 await page.waitForTimeout(1500);
 await open();
