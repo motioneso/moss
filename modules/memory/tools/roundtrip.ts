@@ -31,7 +31,14 @@ try {
         source: { sourceKind: "chat", sourceRef: "ts-thread", excerpt: "ts said so" }
       });
       await repo.upsertSearchDocument(
-        scoped, actor, "fact", fact.id, "Self prefers written by the old code", vector, "stand-in", "1"
+        scoped,
+        actor,
+        "fact",
+        fact.id,
+        "Self prefers written by the old code",
+        vector,
+        "stand-in",
+        "1"
       );
       return { factId: fact.id, entityId: self.id };
     });

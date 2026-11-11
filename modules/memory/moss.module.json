@@ -10,17 +10,8 @@
   "capabilities": [
     {
       "port": "kv",
-      "operations": [
-        "get",
-        "set"
-      ],
-      "resources": [
-        "memory.recall",
-        "memory.core",
-        "memory.entity",
-        "memory.fact",
-        "memory.index"
-      ]
+      "operations": ["get", "set"],
+      "resources": ["memory.recall", "memory.core", "memory.entity", "memory.fact", "memory.index"]
     }
   ],
   "database": {
@@ -142,9 +133,7 @@
   ],
   "requires": {},
   "provides": {},
-  "icons": [
-    "icons/memory.svg"
-  ],
+  "icons": ["icons/memory.svg"],
   "accounts": {
     "supportsUserDisable": false,
     "defaultEnabled": true
