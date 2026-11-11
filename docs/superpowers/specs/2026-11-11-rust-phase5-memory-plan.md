@@ -137,27 +137,27 @@ API for chat.
 All need the `memory.view` or `memory.manage` permission as the legacy manifest says. Part numbers
 refer to section 6.
 
-| Route                                         | Notes                                                                                        | Part |
-| --------------------------------------------- | -------------------------------------------------------------------------------------------- | ---- |
-| `GET /api/memory/graph/recall`                | `q` required, 400 `q is required`                                                            | 2    |
-| `GET /api/memory/graph/core`                  |                                                                                              | 2    |
-| `POST /api/memory/graph/entities`             |                                                                                              | 2    |
-| `POST /api/memory/graph/facts`                | exactly one object target, else 400                                                          | 2    |
-| `POST /api/memory/graph/facts/:id/pin`        | 404 `Memory fact not found`                                                                  | 3    |
-| `POST /api/memory/graph/facts/:id/confirm`    | supersedes conflicts, 409 on recording conflict, 400 on conflict-group memory                | 3    |
-| `POST /api/memory/graph/facts/:id/correct`    | same errors as confirm                                                                       | 3    |
-| `POST /api/memory/graph/facts/:id/status`     | 400 `SUPERSEDED_REACTIVATION_BLOCKED`                                                        | 3    |
-| `POST /api/memory/graph/facts/:id/mark-stale` |                                                                                              | 3    |
-| `POST /api/memory/graph/facts/:id/supersede`  | 204, 404                                                                                     | 3    |
-| `DELETE /api/memory/graph/facts/:id`          | 204, 404                                                                                     | 3    |
-| `GET /api/memory/dashboard`                   | counts, items, `nextCursor`; 400 on old paging or bad cursor                                 | 4    |
-| `GET /api/memory/candidates`                  | cursor paging, 400 `Invalid cursor`                                                          | 4    |
-| `POST /api/memory/candidates/:id/accept`      | 400 if the body tries to replace, 404 `Candidate not found or not pending`, 200 `{accepted}` | 4    |
-| `POST /api/memory/candidates/:id/reject`      | 204, 404 as above                                                                            | 4    |
-| `POST /api/memory/candidates/:id/suppress`    | 204, 404 as above                                                                            | 4    |
-| `PATCH /api/memory/graph/facts/:id`           | dates, pinned. 404 `Fact not found`, 200 `{patched}`                                         | 4    |
-| `PATCH /api/memory/graph/entities/:id`        | 400 empty object text, 403 self entity protected, 409 ambiguous subject                      | 4    |
-| `DELETE /api/memory/graph/entities/:id`       | 409 `Entity has associated facts; delete facts first`, 403 self entity, 404, 204             | 4    |
+| Route                                         | Notes                                                                                                                   | Part |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---- |
+| `GET /api/memory/graph/recall`                | `q` required, 400 `q is required`                                                                                       | 2    |
+| `GET /api/memory/graph/core`                  |                                                                                                                         | 2    |
+| `POST /api/memory/graph/entities`             |                                                                                                                         | 2    |
+| `POST /api/memory/graph/facts`                | exactly one object target, else 400                                                                                     | 2    |
+| `POST /api/memory/graph/facts/:id/pin`        | 204, 404 `Memory fact not found`                                                                                        | 3    |
+| `POST /api/memory/graph/facts/:id/confirm`    | 404 `Memory fact not found`, 409 on recording conflict, 400 on conflict-group memory                                    | 3    |
+| `POST /api/memory/graph/facts/:id/correct`    | same errors as confirm                                                                                                  | 3    |
+| `POST /api/memory/graph/facts/:id/status`     | 404 `Memory fact not found`, 400 `SUPERSEDED_REACTIVATION_BLOCKED`                                                      | 3    |
+| `POST /api/memory/graph/facts/:id/mark-stale` | 404 `Memory fact not found`                                                                                             | 3    |
+| `POST /api/memory/graph/facts/:id/supersede`  | 204, 404                                                                                                                | 3    |
+| `DELETE /api/memory/graph/facts/:id`          | 204, 404                                                                                                                | 3    |
+| `GET /api/memory/dashboard`                   | counts, items, `nextCursor`; no route-specific 400                                                                      | 4    |
+| `GET /api/memory/candidates`                  | cursor paging, 400 `Use cursor paging; omit cursor to start, then pass nextCursor` for old paging, 400 `Invalid cursor` | 4    |
+| `POST /api/memory/candidates/:id/accept`      | 400 if the body tries to replace, 404 `Candidate not found or not pending`, 200 `{accepted}`                            | 4    |
+| `POST /api/memory/candidates/:id/reject`      | 204, 404 as above                                                                                                       | 4    |
+| `POST /api/memory/candidates/:id/suppress`    | 204, 404 as above                                                                                                       | 4    |
+| `PATCH /api/memory/graph/facts/:id`           | dates, pinned. 404 `Fact not found`, 200 `{patched}`                                                                    | 4    |
+| `PATCH /api/memory/graph/entities/:id`        | 200 `{patched}`, 404 `Entity not found`, 400 empty object text, 403 self entity protected, 409 ambiguous subject        | 4    |
+| `DELETE /api/memory/graph/entities/:id`       | 409 `Entity has associated facts; delete facts first`, 403 self entity protected, 404 `Entity not found`, 204           | 4    |
 
 Common errors. 401 `Unauthorized` when there is no actor. Every route keeps the legacy status code
 and body wording. Every chat access class in the legacy manifest (blocked, read, write,
@@ -178,7 +178,7 @@ Payloads stay metadata only (section 4). The legacy `assertMetadataOnlyPayload` 
 
 ### 3.3 Settings and preferences
 
-- `ai.embed_provider` (admin, only `local`) and `ai.embed_model` (admin, blank means default).
+- `ai.embed_provider` (only `local`; env var `JARVIS_EMBED_PROVIDER`) and `ai.embed_model` (blank means default; env var `JARVIS_EMBED_MODEL`). `stub` is test-only and not settable.
   The Rust equivalents are decided in section 4.2 (**Guess** at the names, see there).
 - Per-owner "index this folder" choices belong to Notes (`preference_key` in `memory_ingest.rs`).
 - No other memory settings exist.
