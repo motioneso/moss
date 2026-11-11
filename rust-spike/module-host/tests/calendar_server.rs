@@ -200,28 +200,37 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
     // canonical installer, as the server would find it.
     let keys = Keys::new();
     fs::create_dir_all(root.join("registry/packages")).unwrap();
-    let bytes = fs::read(std::env::var("JS181_CALENDAR_PACKAGE").unwrap()).unwrap();
-    let digest = trust::digest(&bytes);
-    let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
-    let manifest = &package.manifest;
-    assert_eq!(manifest.id, "calendar");
-    let artifact = Artifact {
-        id: manifest.id.clone(),
-        version: manifest.version.clone(),
-        digest: digest.clone(),
-        size: bytes.len() as u64,
-        publisher_key: "calendar-test".into(),
-        signature: Keys::sign(&keys.publisher, digest.as_bytes()),
-        requires_moss: manifest.requires_moss.clone(),
-        abi: manifest.abi.clone(),
-        capabilities: manifest.capabilities.clone(),
-        migrations: manifest.database.migrations.clone(),
-        requires: manifest.requires.clone(),
-        changelog: "Calendar server gate".into(),
-        channel: Channel::Stable,
-        urgent: false,
-    };
-    fs::write(root.join(format!("registry/packages/{digest}.mosspkg")), &bytes).unwrap();
+    // Calendar reads task facts through the Tasks package, so both are published and installed.
+    let artifacts: Vec<Artifact> = [
+        ("JS220_TASKS_PACKAGE", "tasks"),
+        ("JS181_CALENDAR_PACKAGE", "calendar"),
+    ]
+    .iter()
+    .map(|(variable, id)| {
+        let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
+        let digest = trust::digest(&bytes);
+        let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
+        let manifest = &package.manifest;
+        assert_eq!(manifest.id, *id);
+        fs::write(root.join(format!("registry/packages/{digest}.mosspkg")), &bytes).unwrap();
+        Artifact {
+            id: manifest.id.clone(),
+            version: manifest.version.clone(),
+            digest: digest.clone(),
+            size: bytes.len() as u64,
+            publisher_key: "calendar-test".into(),
+            signature: Keys::sign(&keys.publisher, digest.as_bytes()),
+            requires_moss: manifest.requires_moss.clone(),
+            abi: manifest.abi.clone(),
+            capabilities: manifest.capabilities.clone(),
+            migrations: manifest.database.migrations.clone(),
+            requires: manifest.requires.clone(),
+            changelog: "Calendar server gate".into(),
+            channel: Channel::Stable,
+            urgent: false,
+        }
+    })
+    .collect();
     let identity = RegistryIdentity {
         id: "calendar-test-registry".into(),
         name: "Calendar test registry".into(),
@@ -241,7 +250,7 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
         serial: 1,
         expires: chrono::Utc::now() + chrono::Duration::days(1),
         signing_key: "online".into(),
-        modules: vec![artifact.clone()],
+        modules: artifacts.clone(),
         revoked: vec![],
     };
     for (name, data, key) in [
@@ -266,7 +275,9 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
             "calendar-test-registry",
         )
         .unwrap();
-    installer.install(&access, &source, &artifact, true).unwrap();
+    for artifact in &artifacts {
+        installer.install(&access, &source, artifact, true).unwrap();
+    }
     drop(installer);
     // A cached event for the signed-in owner, written the way a sync would leave it.
     let event_title = "Server gate planning review";
@@ -307,7 +318,13 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
             )
         });
         let status = response.status().as_u16();
-        let body = response.json::<Value>().unwrap_or(Value::Null);
+        let text = response.text().unwrap_or_default();
+        let body = serde_json::from_str::<Value>(&text).unwrap_or_else(|_| {
+            if !text.is_empty() {
+                println!("{path} non-JSON body: {text}");
+            }
+            Value::Null
+        });
         println!("{path} -> {status}");
         (status, body)
     };
@@ -404,6 +421,54 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
     assert_eq!((status, &sources), (200, &json!({"briefings":true,"planning":true})));
     let (status, bad) = call(Method::PATCH, "/source-behaviors", Some(&cookie), Some(json!({"writeback":true})));
     assert_eq!(status, 400, "{bad}");
+    // Day plans check task references through the installed Tasks package, under the caller's account.
+    let (own_task, other_task) = runtime.block_on(async {
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
+            .await
+            .unwrap();
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        // Setup allows one owner over HTTP, so the second account is inserted directly.
+        let other = uuid::Uuid::new_v4();
+        db.execute("INSERT INTO app.users(id,email,name,is_instance_admin) VALUES($1,'calendar-other@example.test','Calendar other',false)", &[&other]).await.unwrap();
+        let mut ids = vec![];
+        for email in ["calendar-owner@example.test", "calendar-other@example.test"] {
+            let user: uuid::Uuid = db
+                .query_one("SELECT id FROM app.users WHERE email=$1", &[&email])
+                .await
+                .unwrap()
+                .get(0);
+            let list = uuid::Uuid::new_v4();
+            let task = uuid::Uuid::new_v4();
+            db.execute("INSERT INTO app.task_lists(id,owner_user_id,name) VALUES($1,$2,'Gate list')", &[&list, &user]).await.unwrap();
+            db.execute("INSERT INTO app.tasks(id,owner_user_id,list_id,title,status) VALUES($1,$2,$3,'Gate task','todo')", &[&task, &user, &list]).await.unwrap();
+            ids.push(task);
+        }
+        (ids[0], ids[1])
+    });
+    // The first call into Tasks compiles its package, which a debug build does slowly. Warm it
+    // so the day plan checks below run inside the module time limit.
+    let warm = client
+        .get(format!("{origin}/api/m/tasks/tasks"))
+        .header("origin", &origin)
+        .header("cookie", &cookie)
+        .send()
+        .unwrap();
+    println!("tasks warm-up -> {}", warm.status());
+    for (day, task, who, expected) in [
+        ("2026-11-13", own_task, &cookie, 200),
+        ("2026-11-14", other_task, &cookie, 404),
+        ("2026-11-15", uuid::Uuid::new_v4(), &cookie, 404),
+    ] {
+        let (status, reply) = call(
+            Method::POST,
+            "/day-plans",
+            Some(who),
+            Some(json!({"localDay":day,"timeZone":"UTC","eveningIntent":{"priorityTaskIds":[task]}})),
+        );
+        assert_eq!(status, expected, "{day}: {reply}\n{}", fs::read_to_string(root.join("server.log")).unwrap_or_default());
+    }
     println!("PASS installed Calendar package served over HTTPS by the real server: sign-in required, owner event list and detail, unknown event 404, day plan create and read, apply route validates and fails closed");
     // The signed-in owner gets the verified screen address; the files need no session.
     let screen_url = format!("{origin}/api/modules/calendar/screen?path=/calendar");

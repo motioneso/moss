@@ -36,3 +36,7 @@ path = "../tests/contracts.rs"
 [[test]]
 name = "approval"
 path = "../tests/approval.rs"
+
+[[test]]
+name = "reference"
+path = "../tests/reference.rs"

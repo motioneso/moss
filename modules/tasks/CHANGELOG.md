@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add the public `getTaskReference` call, which returns only a task's id, owner, status and due time to another module, read under the caller's account.
+
 - Add Do First, At risk and Done today focus presets in both task views, using the saved account timezone for day filters. Presets replace status; choosing a status or clearing filters leaves focus.
 
 - Keep task editor drafts while refreshing untouched fields after detail actions, including parent completion from the last subtask.

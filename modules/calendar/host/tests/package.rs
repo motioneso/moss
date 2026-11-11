@@ -18,7 +18,12 @@ fn injected_public_references_use_declared_read_only_host_resources() {
         )
         .unwrap();
     }
-    assert!(!manifest.capabilities.iter().any(|cap| cap.port == "api"));
+    // The only public API Calendar may call is Tasks, for task references.
+    for cap in manifest.capabilities.iter().filter(|cap| cap.port == "api") {
+        assert_eq!(cap.resources.iter().collect::<Vec<_>>(), ["tasks"]);
+        assert_eq!(cap.operations.iter().collect::<Vec<_>>(), ["call"]);
+    }
+    assert_eq!(manifest.requires.keys().collect::<Vec<_>>(), ["tasks"]);
 }
 
 pub fn core() -> Vec<u8> {
