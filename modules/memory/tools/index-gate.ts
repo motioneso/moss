@@ -18,7 +18,7 @@ const app = createDatabase({ connectionString: urls.app });
 const base = await mkdtemp(join(tmpdir(), "memory-index-"));
 const actors = [randomUUID(), randomUUID(), randomUUID()];
 const legacyNote = `notes/generated/${randomUUID()}/v1.md`;
-let status = 1;
+let status: number | undefined;
 try {
   await bootstrap.connect();
   for (const actor of actors)
