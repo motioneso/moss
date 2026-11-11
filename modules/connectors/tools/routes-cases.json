@@ -299,5 +299,115 @@
     "method": "GET",
     "url": "/api/admin/connectors/accounts",
     "admin": "unauthenticated"
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/google/authorize",
+    "body": {
+      "clientId": "cid.apps.example.com",
+      "clientSecret": "s3cret-value"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/google/authorize",
+    "body": {
+      "clientId": "  cid  ",
+      "clientSecret": " sec "
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/google/authorize",
+    "body": {
+      "clientSecret": "x"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/google/authorize",
+    "body": {
+      "clientId": "x"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/google/authorize",
+    "body": {
+      "clientId": "",
+      "clientSecret": "x"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/google/authorize",
+    "body": {
+      "clientId": "   ",
+      "clientSecret": "x"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/google/authorize",
+    "body": {
+      "clientId": {
+        "a": 1
+      },
+      "clientSecret": "x"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/google/authorize",
+    "body": {
+      "clientId": "a",
+      "clientSecret": "b",
+      "extra": 1
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/google/authorize",
+    "body": []
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/google/complete",
+    "body": {
+      "redirectUrl": "http://localhost:1/?code=abc&state=ok"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/google/complete",
+    "body": {
+      "redirectUrl": "http://localhost:1/?code=abc&state=mismatch"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/google/complete",
+    "body": {}
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/google/complete",
+    "body": {
+      "redirectUrl": ""
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/google/complete",
+    "body": {
+      "redirectUrl": "  "
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/google/complete",
+    "body": {
+      "redirectUrl": 5
+    }
   }
 ]

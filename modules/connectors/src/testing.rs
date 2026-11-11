@@ -127,6 +127,23 @@ impl Host for Fake {
             ("get", "connectors.admin-accounts") => {
                 json!({"status":self.admin,"accounts":state.accounts})
             }
+            ("set", "connectors.google-authorize") => {
+                json!({"authUrl":format!("https://accounts.example.test/auth?client_id={}", p["clientId"].as_str().unwrap_or(""))})
+            }
+            ("set", "connectors.google-complete") => {
+                let url = p["redirectUrl"].as_str().unwrap_or("");
+                if url.contains("refuse") {
+                    return Ok(json!({"refused":{"status":429,"body":{"statusCode":429,"error":"Too Many Requests","message":"Rate limit exceeded, retry in 1 minute"}}}));
+                }
+                if url.contains("mismatch") {
+                    return Ok(json!({"failure":"Authorization state did not match \u{2014} please retry the connect flow"}));
+                }
+                state.next += 1;
+                let id = format!("acct-{}", state.next);
+                let row = account(&id, "google", json!("google"), &["https://www.googleapis.com/auth/gmail.modify","https://www.googleapis.com/auth/calendar"], "active");
+                state.accounts.insert(0, row.clone());
+                json!({"account":row})
+            }
             _ => return Err(Error::new("unknown resource")),
         })
     }
