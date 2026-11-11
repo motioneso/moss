@@ -52,7 +52,8 @@ async function run(work) {
   render();
   try {
     view = await work();
-    $("url").value = view.url ?? "";
+    savedUrl = view.url ?? "";
+    $("url").value = savedUrl;
     $("model").value = view.model ?? view.defaultModel ?? "";
     $("key").value = "";
     $("confirm").checked = false;
@@ -63,10 +64,15 @@ async function run(work) {
   render();
 }
 
+let savedUrl = "";
 $("form").addEventListener("input", render);
 $("form").addEventListener("submit", (event) => {
   event.preventDefault();
   const key = $("key").value;
+  if (!key && $("url").value.trim() !== savedUrl) {
+    $("status").textContent = "The address changed. Enter the key for the new address first.";
+    return;
+  }
   void run(() =>
     request("PUT", {
       url: $("url").value.trim(),

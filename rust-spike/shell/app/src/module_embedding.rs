@@ -39,6 +39,8 @@ const VERSION: &str = "ai.embed_model_version";
 /// Value of the provider setting once an endpoint is chosen. The legacy values are "local" and
 /// "stub".
 const ENDPOINT: &str = "endpoint";
+/// Saved when an admin turns embeddings off, so the server file is not used instead.
+const OFF: &str = "none";
 const CREDENTIAL_FILE: &str = "embedding-credential.json";
 
 pub struct EmbeddingConfig {
@@ -145,6 +147,7 @@ impl EmbeddingStore for SettingsEmbeddings {
             .map_err(|_| anyhow::anyhow!(NOT_SET_UP))?;
         let url = match (stored.provider.as_deref(), stored.url) {
             (Some(ENDPOINT), Some(url)) => url,
+            (Some(OFF), _) => anyhow::bail!(NOT_SET_UP),
             _ => {
                 return match &self.fallback {
                     Some(fixed) => fixed.for_actor(actor).await,
@@ -185,8 +188,8 @@ impl EmbeddingActivity for ActivityRows {
             .map_err(|_| anyhow::anyhow!("Database unavailable"))?;
             cx.db()
                 .execute(
-                    "INSERT INTO app.moss_model_activity_log (kind, action, outcome, model_name, result) \
-                     VALUES ('embedding', $1, $2, $3, $4)",
+                    "INSERT INTO app.moss_model_activity_log (owner_user_id, kind, action, outcome, model_name, result) \
+                     VALUES (app.current_actor_user_id(), 'embedding', $1, $2, $3, $4)",
                     &[
                         &call.action,
                         &call.outcome,
@@ -315,6 +318,17 @@ async fn save(
     if key.is_some_and(|k| k.len() > 4096 || k.chars().any(char::is_control)) {
         return say(StatusCode::BAD_REQUEST, "The credential is not valid");
     }
+    if let Some(new) = &url {
+        let Ok(saved) = settings.read(&access).await else {
+            return say(StatusCode::SERVICE_UNAVAILABLE, "Embedding settings are unavailable");
+        };
+        if key.is_none() && saved.url.as_ref() != Some(new) {
+            return say(
+                StatusCode::BAD_REQUEST,
+                "The address changed. Enter the key for the new address, or clear the key to use none",
+            );
+        }
+    }
     let result: Result<()> = async {
         match (key, &url) {
             (_, None) | (Some(""), _) => settings.save_credential(None)?,
@@ -325,7 +339,7 @@ async fn save(
             .await
             .map_err(|_| anyhow::anyhow!("Database unavailable"))?;
         let values: [(&str, Option<String>); 4] = [
-            (PROVIDER, url.as_ref().map(|_| ENDPOINT.to_owned())),
+            (PROVIDER, Some(url.as_ref().map_or(OFF, |_| ENDPOINT).to_owned())),
             (MODEL, url.as_ref().and(model)),
             (URL, url.clone()),
             (VERSION, url.as_ref().and(version)),

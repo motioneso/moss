@@ -137,10 +137,17 @@ impl EmbeddingKind {
     }
 }
 
-/// True for a plain http or https address with a host and no embedded sign-in.
+/// True for an https address, or an http address on this machine only. Plain http elsewhere
+/// would send the credential and the note text across the network unencrypted.
 pub fn valid_endpoint_url(text: &str) -> bool {
     url::Url::parse(text).is_ok_and(|u| {
-        matches!(u.scheme(), "http" | "https")
+        let local = match u.host() {
+            Some(url::Host::Domain(d)) => d.eq_ignore_ascii_case("localhost"),
+            Some(url::Host::Ipv4(a)) => a.is_loopback(),
+            Some(url::Host::Ipv6(a)) => a.is_loopback(),
+            None => false,
+        };
+        (u.scheme() == "https" || (u.scheme() == "http" && local))
             && u.host().is_some()
             && u.username().is_empty()
             && u.password().is_none()

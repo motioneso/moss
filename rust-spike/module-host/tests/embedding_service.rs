@@ -251,3 +251,16 @@ fn an_unset_endpoint_refuses_and_records_nothing() {
     assert_eq!(error.to_string(), "The module could not finish this request");
     assert!(f.rows.0.lock().unwrap().is_empty());
 }
+
+#[test]
+fn plain_http_is_accepted_only_on_this_machine() {
+    use moss_module_host::ai::valid_endpoint_url as ok;
+    assert!(ok("https://embeddings.example.test/v1/embeddings"));
+    assert!(ok("http://127.0.0.1:5200/v1/embeddings"));
+    assert!(ok("http://localhost:5200/v1/embeddings"));
+    assert!(ok("http://[::1]:5200/v1/embeddings"));
+    assert!(!ok("http://embeddings.example.test/v1/embeddings"));
+    assert!(!ok("http://192.168.1.20:5200/v1/embeddings"));
+    assert!(!ok("https://user:pass@embeddings.example.test/"));
+    assert!(!ok("ftp://127.0.0.1/"));
+}

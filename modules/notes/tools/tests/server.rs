@@ -648,6 +648,16 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
             Some(json!({"url":embedding_url,"model":"bag-of-words-768","apiKey":SAVED_KEY,"confirmOffDevice":true})),
         );
         assert_eq!(saved.0, 200, "{}", saved.1);
+        let moved = settings(
+            Method::PUT,
+            Some(json!({"url":"https://other.example.test/v1/embeddings","model":"x","confirmOffDevice":true})),
+        );
+        assert_eq!(moved.0, 400, "a new address must not inherit the old key: {}", moved.1);
+        let insecure = settings(
+            Method::PUT,
+            Some(json!({"url":"http://203.0.113.9/v1/embeddings","model":"x","apiKey":"k","confirmOffDevice":true})),
+        );
+        assert_eq!(insecure.0, 400, "plain http off this machine: {}", insecure.1);
         let shown = settings(Method::GET, None);
         assert_eq!(shown.0, 200, "{}", shown.1);
         assert!(shown.1.contains("\"hasCredential\":true"), "{}", shown.1);
@@ -680,7 +690,7 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
         let log = fs::read_to_string(root.join("server.log")).unwrap_or_default();
         assert!(!log.contains(SAVED_KEY), "the credential reached the server log");
         assert!(!log.contains(MARKER_TEXT), "note text reached the server log");
-        let activity = rows("SELECT coalesce(model_name,'') || '|' || action || '|' || outcome || '|' || coalesce(result,'') FROM app.moss_model_activity_log WHERE kind='embedding' AND ($1::uuid IS NOT NULL)");
+        let activity = rows("SELECT coalesce(model_name,'') || '|' || action || '|' || outcome || '|' || coalesce(result,'') FROM app.moss_model_activity_log WHERE kind='embedding' AND owner_user_id=$1");
         assert!(activity.iter().any(|r| r.starts_with("bag-of-words-768|embed document|ok|")), "{activity:?}");
         for row in &activity {
             assert!(!row.contains(MARKER_TEXT) && !row.contains(SAVED_KEY), "{row}");

@@ -135,7 +135,7 @@ pub struct Lifecycle {
 }
 impl Manifest {
     pub fn removable(&self) -> bool {
-        self.lifecycle.as_ref().is_none_or(|l| l.removable)
+        self.lifecycle.as_ref().is_none_or(|l| l.removable && !l.required)
     }
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

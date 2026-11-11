@@ -524,6 +524,10 @@ impl MemoryIngestPorts {
             embedded.push(vector);
         }
         let processed = embedded.len();
+        ensure!(
+            self.embeddings.model(scope)? == (model_name.clone(), model_version.clone()),
+            "The embedding model changed during indexing"
+        );
         let actor = scope.access().actor_user_id();
         self.runtime.block_on(async {
             tokio::time::timeout(scope.remaining(), async {
