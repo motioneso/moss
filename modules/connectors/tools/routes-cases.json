@@ -1,0 +1,303 @@
+[
+  {
+    "seed": {
+      "id": "outlook-1",
+      "providerId": "outlook-browser-calendar",
+      "scopes": ["calendar.readonly"]
+    }
+  },
+  {
+    "method": "GET",
+    "url": "/api/connectors/providers"
+  },
+  {
+    "method": "GET",
+    "url": "/api/connectors/accounts"
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/accounts",
+    "body": {
+      "providerId": "google",
+      "scopes": ["https://www.googleapis.com/auth/gmail.modify", " calendar "],
+      "tokenPayload": {
+        "refresh": "x"
+      }
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/accounts",
+    "body": {
+      "providerId": "imap-fastmail",
+      "status": "error",
+      "tokenPayload": {},
+      "extra": 1
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/accounts",
+    "body": {
+      "providerId": "outlook-browser-calendar",
+      "tokenPayload": {}
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/accounts",
+    "body": {
+      "providerId": "no-such-provider",
+      "tokenPayload": {}
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/accounts",
+    "body": {
+      "providerId": "  ",
+      "tokenPayload": {}
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/accounts",
+    "body": {
+      "providerId": "google"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/accounts",
+    "body": {
+      "tokenPayload": {}
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/accounts",
+    "body": {
+      "providerId": "google",
+      "tokenPayload": []
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/accounts",
+    "body": {
+      "providerId": "google",
+      "tokenPayload": "x"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/accounts",
+    "body": {
+      "providerId": "google",
+      "tokenPayload": {},
+      "status": "revoked"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/accounts",
+    "body": {
+      "providerId": "google",
+      "tokenPayload": {},
+      "status": "active"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/accounts",
+    "body": {
+      "providerId": 7,
+      "tokenPayload": {}
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/accounts",
+    "body": {
+      "providerId": "google",
+      "scopes": "calendar",
+      "tokenPayload": {}
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/accounts",
+    "body": {
+      "providerId": "google",
+      "scopes": ["a", ""],
+      "tokenPayload": {}
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/accounts",
+    "body": {
+      "providerId": "google",
+      "scopes": [["a", "b"]],
+      "tokenPayload": {}
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/accounts",
+    "body": {
+      "providerId": "google",
+      "scopes": null,
+      "tokenPayload": {}
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/accounts",
+    "body": []
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/accounts",
+    "body": "text"
+  },
+  {
+    "method": "GET",
+    "url": "/api/connectors/accounts"
+  },
+  {
+    "method": "PATCH",
+    "url": "/api/connectors/accounts/acct-1",
+    "body": {
+      "scopes": ["gmail"]
+    }
+  },
+  {
+    "method": "PATCH",
+    "url": "/api/connectors/accounts/acct-1",
+    "body": {
+      "status": "error",
+      "tokenPayload": {
+        "a": 1
+      }
+    }
+  },
+  {
+    "method": "PATCH",
+    "url": "/api/connectors/accounts/acct-1",
+    "body": {
+      "status": "nope"
+    }
+  },
+  {
+    "method": "PATCH",
+    "url": "/api/connectors/accounts/acct-1",
+    "body": {
+      "tokenPayload": 5
+    }
+  },
+  {
+    "method": "PATCH",
+    "url": "/api/connectors/accounts/acct-1",
+    "body": {
+      "scopes": [" "]
+    }
+  },
+  {
+    "method": "PATCH",
+    "url": "/api/connectors/accounts/acct-1",
+    "body": {}
+  },
+  {
+    "method": "PATCH",
+    "url": "/api/connectors/accounts/missing",
+    "body": {
+      "scopes": ["a"]
+    }
+  },
+  {
+    "method": "PATCH",
+    "url": "/api/connectors/accounts/outlook-1",
+    "body": {
+      "scopes": ["a"]
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/accounts/acct-2/revoke"
+  },
+  {
+    "method": "PATCH",
+    "url": "/api/connectors/accounts/acct-2",
+    "body": {
+      "scopes": ["calendar"]
+    }
+  },
+  {
+    "method": "PATCH",
+    "url": "/api/connectors/accounts/acct-2",
+    "body": {
+      "status": "active"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/accounts/missing/revoke"
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/accounts/outlook-1/revoke"
+  },
+  {
+    "method": "GET",
+    "url": "/api/connectors/accounts/acct-1/feature-grants"
+  },
+  {
+    "method": "GET",
+    "url": "/api/connectors/accounts/acct-2/feature-grants"
+  },
+  {
+    "method": "GET",
+    "url": "/api/connectors/accounts/missing/feature-grants"
+  },
+  {
+    "method": "PUT",
+    "url": "/api/connectors/accounts/missing/feature-grants",
+    "body": {
+      "email": true
+    }
+  },
+  {
+    "method": "PUT",
+    "url": "/api/connectors/accounts/acct-1/feature-grants",
+    "body": {
+      "email": "maybe"
+    }
+  },
+  {
+    "method": "PUT",
+    "url": "/api/connectors/accounts/acct-1/feature-grants",
+    "body": {
+      "calendar": {}
+    }
+  },
+  {
+    "method": "PUT",
+    "url": "/api/connectors/accounts/acct-1/feature-grants",
+    "body": []
+  },
+  {
+    "method": "GET",
+    "url": "/api/admin/connectors/accounts"
+  },
+  {
+    "method": "GET",
+    "url": "/api/admin/connectors/accounts",
+    "admin": "forbidden"
+  },
+  {
+    "method": "GET",
+    "url": "/api/admin/connectors/accounts",
+    "admin": "unauthenticated"
+  }
+]

@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 2,
+  "id": "connectors",
+  "name": "Connectors",
+  "description": "Keeps the mail and calendar connections of each account, their sign-in secrets and the Email and Calendar permissions. Google, IMAP and Outlook sign-in and sync are not part of this package yet.",
+  "publisher": "Moss",
+  "version": "0.1.0",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "kv",
+      "operations": ["get", "set"],
+      "resources": [
+        "connectors.providers",
+        "connectors.accounts",
+        "connectors.account-write",
+        "connectors.feature-grants",
+        "connectors.admin-accounts",
+        "connectors.diagnostics"
+      ]
+    }
+  ],
+  "database": {
+    "ownedTables": [
+      "app.connector_accounts",
+      "app.connector_definitions",
+      "app.connector_email_refresh_accounts",
+      "app.connector_email_refresh_keys",
+      "app.connector_email_refreshes",
+      "app.connector_oauth_pending"
+    ],
+    "migrations": [
+      "sql/0009_connectors_module.sql",
+      "sql/0010_connector_admin_safe_metadata.sql",
+      "sql/0022_connectors_owner_only.sql",
+      "sql/0043_connector_google_enum.sql",
+      "sql/0044_google_unified_connection.sql",
+      "sql/0069_connector_worker_runtime_grants.sql",
+      "sql/0099_connector_health_metadata.sql",
+      "sql/0100_connector_admin_safe_metadata_health.sql",
+      "sql/0130_connector_imap_enum.sql",
+      "sql/0131_connector_imap_definitions.sql",
+      "sql/0141_email_triage_feedback.sql",
+      "sql/0144_google_sync_sweep_accounts.sql",
+      "sql/0179_email_action_suppression.sql",
+      "sql/0180_email_action_suppression_evidence.sql",
+      "sql/0215_connector_sync_previous_run.sql",
+      "sql/0244_email_refresh.sql",
+      "sql/0248_connector_email_history_id.sql",
+      "sql/0331_outlook_browser_calendar.sql"
+    ],
+    "ledger": "core-legacy",
+    "access": {
+      "app.connector_accounts": {
+        "access": "owner-only"
+      },
+      "app.connector_oauth_pending": {
+        "access": "owner-only"
+      }
+    }
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/providers",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/accounts",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/accounts",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/accounts/:id",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/accounts/:id/revoke",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/accounts/:id/feature-grants",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/accounts/:id/feature-grants",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/admin/accounts",
+      "signIn": true
+    }
+  ],
+  "requires": {},
+  "provides": {},
+  "icons": ["icons/connectors.svg"],
+  "accounts": {
+    "supportsUserDisable": false,
+    "defaultEnabled": true
+  },
+  "features": [
+    {
+      "id": "connectors.accounts",
+      "description": "Lists, creates, updates and revokes the signed-in person's connection accounts. Secrets are sealed on save and never returned; only a safe summary is shown. Google, IMAP and Outlook cannot be connected from this package yet.",
+      "errors": [
+        {
+          "code": "connector-account-not-found",
+          "class": "validation",
+          "description": "The account does not exist or belongs to another person"
+        },
+        {
+          "code": "connector-request-invalid",
+          "class": "validation",
+          "description": "The connection request was refused as invalid"
+        },
+        {
+          "code": "connectors-unavailable",
+          "class": "transient",
+          "description": "Connection storage is unavailable",
+          "remediationRef": "connectors-check-package"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "connectors-check-package",
+          "description": "Check that Connectors is enabled",
+          "path": "/settings/modules"
+        }
+      ]
+    },
+    {
+      "id": "connectors.feature-grants",
+      "description": "Each connection account has an Email switch and a Calendar switch. A missing choice means on. Changing a switch writes an admin audit line."
+    },
+    {
+      "id": "connectors.health",
+      "description": "Settings, Connections shows each account as never synced, healthy, partly synced, failing, in error or revoked. Outlook calendar shows healthy, partial, stale, collecting, disconnected, sign-in needed, source changed or settings not found."
+    },
+    {
+      "id": "connectors.admin-list",
+      "description": "Instance administrators see a safe list of every account (provider, status, last sync) without secrets. Administrators cannot read another person's secrets or data."
+    }
+  ],
+  "tools": {},
+  "jobs": {},
+  "screens": {
+    "/settings/connections": "ui/settings.html"
+  },
+  "navigation": [],
+  "settings": [
+    {
+      "id": "connectors.connections",
+      "label": "Connections",
+      "path": "/settings/connections",
+      "scope": "user",
+      "description": "Mail and calendar connections for this account, their health and the Email and Calendar switches for each. Connecting Google, IMAP or Outlook is not available in this version."
+    }
+  ]
+}
