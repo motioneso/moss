@@ -45,6 +45,11 @@ jobs:
         run: |
           $root = (Get-Location).Path
           ./rust-spike/bundled-db/proof/windows/supervisor.ps1 -MossDb "$root\.rust-sup\target\debug\moss-db.exe" -Postgres "$root\.rust-sup\bundle\postgres" -Repo $root
+      - name: Disk encryption check as administrator and as a standard user
+        shell: pwsh
+        run: |
+          $root = (Get-Location).Path
+          ./rust-spike/bundled-db/proof/windows/at-rest.ps1 -MossDb "$root\.rust-sup\target\debug\moss-db.exe"
       - name: Build the server and the app's proof program
         run: |
           cargo +1.95.0 build --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-shell
