@@ -53,6 +53,7 @@ async function run(work) {
   try {
     view = await work();
     savedUrl = view.url ?? "";
+    hasKey = view.hasCredential === true;
     $("url").value = savedUrl;
     $("model").value = view.model ?? view.defaultModel ?? "";
     $("key").value = "";
@@ -65,11 +66,12 @@ async function run(work) {
 }
 
 let savedUrl = "";
+let hasKey = false;
 $("form").addEventListener("input", render);
 $("form").addEventListener("submit", (event) => {
   event.preventDefault();
   const key = $("key").value;
-  if (!key && $("url").value.trim() !== savedUrl) {
+  if (!key && hasKey && $("url").value.trim() !== savedUrl) {
     $("status").textContent = "The address changed. Enter the key for the new address first.";
     return;
   }

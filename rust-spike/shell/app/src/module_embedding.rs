@@ -322,7 +322,7 @@ async fn save(
         let Ok(saved) = settings.read(&access).await else {
             return say(StatusCode::SERVICE_UNAVAILABLE, "Embedding settings are unavailable");
         };
-        if key.is_none() && saved.url.as_ref() != Some(new) {
+        if key.is_none() && settings.file.is_file() && saved.url.as_ref() != Some(new) {
             return say(
                 StatusCode::BAD_REQUEST,
                 "The address changed. Enter the key for the new address, or clear the key to use none",

@@ -51,6 +51,12 @@ Part of https://github.com/motioneso/moss/issues/4027. Task JS-229. Plan: `2026-
   inside the few moments between that check and the write is not covered.
 - A required module cannot be removed even if its manifest also says removable.
 
+Round 2 (a fresh Opus reviewer, because Codex was out of capacity) found no blocker. It found
+that a first setup with no key was refused, which is fixed: a key is demanded on an address
+change only when a key is already saved. Two minor items are left open. A large note indexed in
+batches can mix models if the model is changed between batches. The key file is written before
+the database save, so a database failure could leave a new key beside the old address.
+
 ## Proof
 
 | Claim                                                            | Evidence                                                                                                                                                    |
