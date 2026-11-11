@@ -100,13 +100,13 @@ try {
             -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $inner, '-Install', $install, '-Data', $buttonsData, '-Work', $work) `
             -RedirectStandardOutput $buttonsOut -RedirectStandardError $buttonsErr -PassThru
         $script:process = $buttons
-        if (-not $buttons.WaitForExit(1200000)) { $buttons.Kill($true); throw 'Buttons proof exceeded twenty minutes' }
+        if (-not $buttons.WaitForExit(1200000)) { & taskkill.exe /PID $buttons.Id /T /F | Out-Null; throw 'Buttons proof exceeded twenty minutes' }
         Get-Content $buttonsOut; Get-Content $buttonsErr -ErrorAction SilentlyContinue
         Get-Content (Join-Path $work 'app.err') -Tail 40 -ErrorAction SilentlyContinue
         if ($buttons.ExitCode -ne 0 -or -not (Select-String -Path $buttonsOut -Pattern 'WINDOWS APP BUTTONS PROOF')) { throw "Buttons proof failed ($($buttons.ExitCode))" }
     }
 } finally {
-    if ($process -and -not $process.HasExited) { $process.Kill($true) }
+    if ($process -and -not $process.HasExited) { & taskkill.exe /PID $process.Id /T /F | Out-Null }
     Get-Process postgres, moss-shell, moss-db -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$work*" } | Stop-Process -Force
     $profile = Get-CimInstance Win32_UserProfile -Filter "SID='$($user.SID.Value)'"
     if ($profile -and -not $profile.Loaded) { $profile | Remove-CimInstance }

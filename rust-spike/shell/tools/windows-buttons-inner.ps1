@@ -44,9 +44,9 @@ function Eval($expression) {
 function Screen { Eval 'document.body ? document.body.dataset.screen || "" : ""' }
 
 function Connect-Page {
-    for ($i = 0; $i -lt 120; $i++) {
+    for ($i = 0; $i -lt 60; $i++) {
         try {
-            $targets = Invoke-RestMethod "http://127.0.0.1:$DebugPort/json" -TimeoutSec 3
+            $targets = Invoke-RestMethod "http://127.0.0.1:$DebugPort/json" -TimeoutSec 2
             $page = @($targets | Where-Object { $_.type -eq 'page' -and $_.url -like '*moss-app*' })[0]
             if (-not $page) { $page = @($targets | Where-Object { $_.type -eq 'page' })[0] }
             if ($page) {
@@ -149,7 +149,17 @@ try {
     Click 'Stop server'
     Wait-ServerGone $third
     Log 'WINDOWS APP BUTTONS PROOF: This computer, Stop, Open and a restart all worked through the real window'
+} catch {
+    Log "FAILED: $($_.Exception.Message)"
+    Log "app exited: $($app.HasExited)"
+    foreach ($f in 'app.out', 'app.err') { $p = Join-Path $Work $f; if (Test-Path $p) { Log "--- $f"; Get-Content $p -Tail 30 } }
+    Log '--- listening ports'
+    Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.OwningProcess -ne 4 } | ForEach-Object { "{0}:{1} pid {2}" -f $_.LocalAddress, $_.LocalPort, $_.OwningProcess } | Sort-Object -Unique | Select-Object -First 30
+    Log '--- processes'
+    Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'moss|webview|msedge' } | ForEach-Object { "$($_.Name) $($_.Id)" }
+    $global:LASTEXITCODE = 1
+    throw
 } finally {
-    if (-not $app.HasExited) { $app.Kill($true) }
+    if (-not $app.HasExited) { & taskkill.exe /PID $app.Id /T /F | Out-Null }
     Get-Process postgres, moss-shell, moss-db -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$Work*" } | Stop-Process -Force
 }
