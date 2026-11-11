@@ -1,6 +1,7 @@
 //! Memory guest. It validates requests, scores recall results and shapes responses. SQL, the
 //! acting person, row-level security and the embedding service belong to the host, so no
-//! vector or credential reaches this code. Candidates and screens are later parts.
+//! vector or credential reaches this code. It also runs the vault index jobs and the fact
+//! lifecycle. Candidates and screens are later parts.
 use moss_module_sdk::{Host, Response, RouteRequest};
 use serde_json::{json, Value};
 
@@ -11,6 +12,7 @@ pub mod lifecycle;
 pub mod schema;
 pub mod score;
 pub mod testing;
+mod vault_index;
 
 #[derive(Debug)]
 pub struct Error {
@@ -41,6 +43,12 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
         "health" | "install" => Ok("{}".into()),
         "route" => {
             let response = match serde_json::from_str::<RouteRequest>(payload) {
+                Ok(request) if request.method == "POST" && request.path == "/vault-index/start" => {
+                    match vault_index::handle_job(host, r#"{"queue":"memory.vault-ingest-tick","parameters":{}}"#) {
+                        Ok(_) => Response::new(202, json!({"started":true})),
+                        Err(_) => Response::new(503, json!({"error":"Memory index is unavailable"})),
+                    }
+                }
                 Ok(request) => match route(host, request) {
                     Ok(Value::Null) => Response::new(204, Value::Null),
                     Ok(body) => Response::new(200, body),
@@ -69,10 +77,13 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
             let value = result?;
             serde_json::to_string(&value).map_err(|_| "Invalid memory response".into())
         }
+        "job" => vault_index::handle_job(host, payload).map_err(|e| e.message),
         "api" => {
             #[derive(serde::Deserialize)]
-            #[serde(deny_unknown_fields, tag = "name", content = "parameters")]
+            #[serde(tag = "name", content = "parameters", deny_unknown_fields)]
             enum Api {
+                #[serde(rename = "requestVaultIndex")]
+                RequestVaultIndex(vault_index::NudgeRequest),
                 #[serde(rename = "prepareMemoryAction")]
                 Prepare {
                     tool: String,
@@ -80,14 +91,19 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
                     input_json: String,
                 },
             }
-            let Api::Prepare { tool, input_json } =
-                serde_json::from_str(payload).map_err(|_| "Invalid memory request")?;
-            let result = match lifecycle::prepare_json(host, &tool, &input_json) {
-                Ok(details) => json!({"ok": details}),
-                Err(error) => json!({"error": serde_json::from_str::<Value>(&error)
-                    .unwrap_or_else(|_| json!({"statusCode": 503, "error": "Memory service is unavailable"}))}),
-            };
-            serde_json::to_string(&result).map_err(|_| "Invalid memory response".into())
+            match serde_json::from_str(payload).map_err(|_| "Invalid memory request".to_owned())? {
+                Api::RequestVaultIndex(input) => vault_index::request(host, input)
+                    .map(|v| v.to_string())
+                    .map_err(|e| e.message),
+                Api::Prepare { tool, input_json } => {
+                    let result = match lifecycle::prepare_json(host, &tool, &input_json) {
+                        Ok(details) => json!({"ok": details}),
+                        Err(error) => json!({"error": serde_json::from_str::<Value>(&error)
+                            .unwrap_or_else(|_| json!({"statusCode": 503, "error": "Memory service is unavailable"}))}),
+                    };
+                    serde_json::to_string(&result).map_err(|_| "Invalid memory response".into())
+                }
+            }
         }
         _ => Err("Memory handler is unavailable".into()),
     }

@@ -12,7 +12,7 @@ pub fn component(core: &[u8]) -> Result<Vec<u8>> {
     let mut imports = String::new();
     let mut lowers = String::new();
     let mut exports = String::new();
-    for port in ["kv"] {
+    for port in ["kv", "db", "vault", "jobs", "context"] {
         imports += &format!(
             r#"(import "moss:module/{port}@1.0.0" (instance ${port} (export "call" (func (type $call)))))
             (alias export ${port} "call" (func ${port}-call))"#
@@ -138,12 +138,22 @@ pub fn files(root: &Path, core: &[u8]) -> Result<BTreeMap<String, Vec<u8>>> {
         files.insert(format!("ui/{name}"), bytes.to_vec());
     }
     for path in &manifest.database.migrations {
-        let bytes = std::fs::read(root.join("packages/memory").join(path))?;
-        anyhow::ensure!(
-            moss_module_host::legacy::entry("memory", path)
-                .is_some_and(|f| f.raw == moss_module_host::trust::digest(&bytes)),
-            "Legacy Memory SQL changed"
-        );
+        let bytes = if let Some(frozen) = moss_module_host::legacy::entry("memory", path) {
+            let bytes = std::fs::read(root.join("packages/memory").join(path))?;
+            anyhow::ensure!(
+                frozen.raw == moss_module_host::trust::digest(&bytes),
+                "Legacy Memory SQL changed"
+            );
+            bytes
+        } else {
+            let bytes = std::fs::read(root.join("modules/memory").join(path))?;
+            anyhow::ensure!(
+                moss_module_host::trust::digest(&bytes)
+                    == "461aa6600ae180caa1e0d5b66bb4f4b562612cac037f4638dd191c41f589443c",
+                "Memory migration bytes changed: {path}"
+            );
+            bytes
+        };
         files.insert(path.clone(), bytes);
     }
     Ok(files)

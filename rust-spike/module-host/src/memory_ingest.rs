@@ -15,8 +15,8 @@ use std::{
 use uuid::Uuid;
 use vault::{AllowedRoots, EntryKind, VaultContext};
 
-const MAX_ENTRIES: usize = 10_000;
-const MAX_FILE_BYTES: usize = 16 * 1024 * 1024;
+pub(crate) const MAX_ENTRIES: usize = 10_000;
+pub(crate) const MAX_FILE_BYTES: usize = 16 * 1024 * 1024;
 const MAX_CHUNK_CHARS: usize = 2000;
 
 pub trait DocumentEmbeddings: Send + Sync {
@@ -60,13 +60,13 @@ struct File {
     expected_snapshot_key: Option<String>,
 }
 
-fn sha256(text: &str) -> String {
+pub(crate) fn sha256(text: &str) -> String {
     Sha256::digest(text.as_bytes())
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect()
 }
-fn sanitize(text: &str) -> String {
+pub(crate) fn sanitize(text: &str) -> String {
     text.chars()
         .filter(
             |c| !matches!(c, '\u{0}'..='\u{8}' | '\u{b}' | '\u{c}' | '\u{e}'..='\u{1f}' | '\u{7f}'),
@@ -83,10 +83,10 @@ fn count_lines(text: &str) -> i64 {
     count_newlines(text) + 1
 }
 
-struct Chunk {
-    text: String,
-    line_start: i64,
-    line_end: i64,
+pub(crate) struct Chunk {
+    pub(crate) text: String,
+    pub(crate) line_start: i64,
+    pub(crate) line_end: i64,
 }
 
 /// JavaScript trim also removes the byte-order mark, and keeps U+0085,
@@ -97,7 +97,7 @@ fn trim_js(text: &str) -> &str {
 
 /// Port of the legacy document parser. Its size budget counts UTF-16 units,
 /// matching the JavaScript string length the original code used.
-fn parse_document(content: &str) -> (Vec<String>, Vec<Chunk>) {
+pub(crate) fn parse_document(content: &str) -> (Vec<String>, Vec<Chunk>) {
     let body = match frontmatter_end(content) {
         Some((_, end)) => &content[end..],
         None => content,
@@ -714,7 +714,7 @@ mod tests {
     }
 }
 
-fn error_code(error: &anyhow::Error) -> &'static str {
+pub(crate) fn error_code(error: &anyhow::Error) -> &'static str {
     let text = format!("{error:#}");
     if text.contains("no longer exists")
         || text.contains("No such file")

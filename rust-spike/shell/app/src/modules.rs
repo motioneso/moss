@@ -27,6 +27,7 @@ use moss_module_host::{
     memory_cleanup::{MemoryCleanupPorts, MemoryCleanupSource},
     memory_ingest::{MemoryIngestPorts, MemoryIngestSource},
     memory_search::MemorySearchPorts,
+    memory_vault::MemoryVaultPorts,
     runtime::{CallScope, Ports, Request},
     worker::Worker,
 };
@@ -102,6 +103,7 @@ impl Intelligence for UnconfiguredIntelligence {
 fn memory(
     database: Database,
     base: PathBuf,
+    private_base: PathBuf,
     embeddings: Arc<IntelligenceEmbeddings>,
     next: Arc<dyn Ports>,
 ) -> Result<Arc<dyn Ports>> {
@@ -137,11 +139,21 @@ fn memory(
         )?
         .with_account_base(base),
     );
-    Ok(Arc::new(MemorySearchPorts::new(
-        database,
-        embeddings,
+    let search = Arc::new(MemorySearchPorts::new(
+        database.clone(),
+        embeddings.clone(),
         BTreeMap::from([(key, "notes".into())]),
         ingest,
+    )?);
+    // The Memory module indexes the account's private note copies and its people notes folder.
+    Ok(Arc::new(MemoryVaultPorts::new(
+        database,
+        embeddings,
+        ("memory".into(), "vault-index".into()),
+        private_base,
+        vec!["notes/generated".into()],
+        vec!["people-notes-folder".into()],
+        search,
     )?))
 }
 
@@ -370,6 +382,7 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
                 let services = memory(
                     preferences_database.clone(),
                     base.clone(),
+                    private_base.clone(),
                     Arc::new(IntelligenceEmbeddings::new(
                         notes_intelligence,
                         DEFAULT_EMBEDDING_MODEL.into(),

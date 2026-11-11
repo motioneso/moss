@@ -319,8 +319,14 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
             fs::read(std::env::var("NOTES_TOOL_COMPONENT").unwrap()).unwrap(),
         )
         .unwrap();
+        // Memory's own guest sits in the same registry so its route and jobs run in the real server.
+        let memory_files = moss_memory_host::package::files(
+            &repo,
+            &fs::read(std::env::var("MEMORY_CORE_WASM").unwrap()).unwrap(),
+        )
+        .unwrap();
         let registry = root.join("registry");
-        let fixture = support::Registry::create(&registry, &files);
+        let fixture = support::Registry::create_all(&registry, &[&files, &memory_files]);
         let catalog = application
             .installer
             .refresh(
@@ -344,6 +350,19 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
             .installer
             .install(&access, &catalog, artifact, true)
             .unwrap();
+        let memory_artifact = catalog
+            .select(
+                "memory",
+                None,
+                &"0.1.0".parse().unwrap(),
+                &Default::default(),
+                &Default::default(),
+            )
+            .unwrap();
+        application
+            .installer
+            .install(&access, &catalog, memory_artifact, true)
+            .unwrap();
     }
     let embedding_port = Port(
         String::from_utf8(
@@ -362,7 +381,7 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
     let embedding_url = format!("http://127.0.0.1:{}/v1/embeddings", embedding_port.0);
     private(
         &root.join("modules.json"),
-        &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"notes_base":root.join("notes"),"embeddings":{"url":embedding_url,"model":"bag-of-words-768","api_key":"local-stub"}}),
+        &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"notes_base":root.join("notes"),"private_base":root.join("private"),"embeddings":{"url":embedding_url,"model":"bag-of-words-768","api_key":"local-stub"}}),
     );
     let _server = start(true);
     // With MOSS_NOTES_HOST set, Notes calls cross the non-loopback address.
@@ -885,6 +904,36 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
         );
         assert!(private_base.join(other.to_string()).join("notes/generated").join(source).join("v1.md").is_file());
         println!("private export -> written, unchanged, conflict (kept), missing; second actor isolated");
+        // Memory's own index: the real server starts the sweep over HTTPS, the scheduler
+        // keeps a fifteen-minute schedule, and the worker embeds the exported copy.
+        let started = client
+            .request(Method::POST, format!("{notes_origin}/api/m/memory/vault-index/start"))
+            .header("origin", &notes_origin)
+            .header("cookie", &cookie)
+            .json(&json!({}))
+            .send()
+            .unwrap();
+        let started_status = started.status().as_u16();
+        let started_body = started.text().unwrap_or_default();
+        assert_eq!(started_status, 202, "{started_body}");
+        let memory_sql = "SELECT DISTINCT source_path FROM app.memory_chunks WHERE owner_user_id=$1 AND source_path LIKE 'notes/generated/%' AND embedding IS NOT NULL";
+        let memory_deadline = Instant::now() + Duration::from_secs(90);
+        let memory_rows = loop {
+            let found = rows(memory_sql);
+            if !found.is_empty() {
+                break found;
+            }
+            assert!(
+                Instant::now() < memory_deadline,
+                "memory sweep did not index the export\n{}",
+                fs::read_to_string(root.join("server.log")).unwrap_or_default()
+            );
+            std::thread::sleep(Duration::from_millis(500));
+        };
+        assert!(memory_rows.iter().any(|p| p.ends_with("v1.md")), "{memory_rows:?}");
+        let memory_schedule = "SELECT cron FROM moss_queue.schedules WHERE actor_user_id=$1 AND queue LIKE '%memory.vault-ingest-tick' AND disabled_reason IS NULL";
+        assert_eq!(rows(memory_schedule), vec!["*/15 * * * *".to_string()]);
+        println!("PASS memory index: the server's sweep, started over HTTPS, embedded the private export {memory_rows:?} through the saved endpoint, and a fifteen-minute schedule was registered");
         drop(application);
         drop(runtime);
     }
