@@ -158,6 +158,11 @@ try {
     Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $ids -contains $_.OwningProcess } | ForEach-Object { "{0}:{1} pid {2}" -f $_.LocalAddress, $_.LocalPort, $_.OwningProcess }
     Log '--- what the debugging port answers'
     try { (Invoke-WebRequest "http://127.0.0.1:$DebugPort/json" -UseBasicParsing -TimeoutSec 3).Content.Substring(0, 400) } catch { "no answer: $($_.Exception.Message)" }
+    Log '--- DevToolsActivePort file and netstat'
+    $dt = Join-Path $Install 'moss-app.exe.WebView2\EBWebView\DevToolsActivePort'
+    if (Test-Path $dt) { Get-Content $dt } else { 'no DevToolsActivePort file' }
+    & netstat.exe -ano | Select-String 'LISTENING' | Select-String '127.0.0.1|\[::1\]' | Select-Object -First 25
+    foreach ($h in 'localhost', '[::1]') { try { "$h answers: " + (Invoke-WebRequest "http://${h}:$DebugPort/json/version" -UseBasicParsing -TimeoutSec 3).StatusCode } catch { "$h no answer" } }
     Log '--- web engine command lines'
     Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | Select-Object -First 2 | ForEach-Object { $_.CommandLine.Substring(0, [Math]::Min(500, $_.CommandLine.Length)) }
     Log '--- processes'
