@@ -1,0 +1,33 @@
+[package]
+name = "moss-connectors"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[lib]
+path = "lib.rs"
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+moss-module-sdk = { path = "../../../rust-spike/module-sdk" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+
+[[test]]
+name = "routes"
+path = "tests/routes.rs"
+
+[[test]]
+name = "grants"
+path = "tests/grants.rs"
+
+[[test]]
+name = "health"
+path = "tests/health.rs"
+
+[[bin]]
+name = "connectors-oracle"
+path = "bin/oracle.rs"
