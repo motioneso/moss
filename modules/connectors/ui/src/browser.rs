@@ -89,11 +89,13 @@ pub fn Connections() -> impl IntoView {
     let redirect = RwSignal::new(String::new());
     let google_error = RwSignal::new(None::<String>);
     let done = RwSignal::new(false);
+    let consent_url = RwSignal::new(None::<String>);
     let reset = move || {
         phase.set(Phase::Credentials);
         show_google.set(false);
         client_secret.set(String::new());
         redirect.set(String::new());
+        consent_url.set(None);
     };
     // The popup opens inside the click so the browser does not block it.
     let on_open = Callback::new(move |_| {
@@ -105,10 +107,9 @@ pub fn Connections() -> impl IntoView {
             match attempt("POST", "/google/authorize", body).await {
                 Ok(answer) => {
                     let url = answer["authUrl"].as_str().unwrap_or("").to_string();
-                    match popup {
-                        Some(win) => { let _ = win.location().set_href(&url); }
-                        None => google_error.set(Some("Your browser blocked the consent window. Allow pop-ups for this page and try again.".into())),
-                    }
+                    // A sandboxed screen may not open windows, so the address always shows too.
+                    if let Some(win) = popup { let _ = win.location().set_href(&url); }
+                    consent_url.set(Some(url));
                     phase.set(Phase::Redirect);
                 }
                 Err((status, message)) => {
@@ -168,7 +169,7 @@ pub fn Connections() -> impl IntoView {
                 <Button variant=ButtonVariant::Primary on_click=Callback::new(move |_| { done.set(false); show_google.set(true); })>"Connect Google"</Button>
             })}
             {move || show_google.get().then(|| view! {
-                <GoogleConnect phase=phase.into() client_id client_secret redirect error=google_error.into()
+                <GoogleConnect phase=phase.into() client_id client_secret redirect error=google_error.into() consent_url=consent_url.into()
                     busy=busy.into() on_open on_finish on_cancel on_file/>
             })}
             {move || rows.get().map(|accounts| view! {

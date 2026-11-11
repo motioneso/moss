@@ -71,6 +71,7 @@ mod google_flow {
         view! {<GoogleConnect phase=Signal::derive(move || phase)
             client_id=RwSignal::new(String::new()) client_secret=RwSignal::new(String::new())
             redirect=RwSignal::new(String::new()) error=Signal::derive(move || error.clone())
+            consent_url=Signal::derive(|| Some("https://accounts.example/consent?state=s1".to_string()))
             busy=Signal::derive(|| false) on_open=Callback::new(|_| {}) on_finish=Callback::new(|_| {})
             on_cancel=Callback::new(|_| {}) on_file=Callback::new(|_| {})/>}
         .to_html()
@@ -90,6 +91,7 @@ mod google_flow {
     fn second_step_adds_the_paste_field_and_errors_show_as_alerts() {
         let html = render(Phase::Redirect, Some("Too many tries."));
         assert!(html.contains("Finish connection") && html.contains("Cancel"));
+        assert!(html.contains("consent?state=s1"), "the consent address must be copyable: {html}");
         assert!(html.contains("role=\"alert\"") && html.contains("Too many tries."));
     }
 

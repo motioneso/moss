@@ -17,6 +17,7 @@ pub fn GoogleConnect(
     client_secret: RwSignal<String>,
     redirect: RwSignal<String>,
     error: Signal<Option<String>>,
+    consent_url: Signal<Option<String>>,
     busy: Signal<bool>,
     on_open: Callback<()>,
     on_finish: Callback<()>,
@@ -52,6 +53,12 @@ pub fn GoogleConnect(
             </div>
             {move || (phase.get() == Phase::Redirect).then(|| view! {
                 <h3 class="conn-google__sub">"Finish the connection"</h3>
+                {move || consent_url.get().map(|address| view! {
+                    <Field>
+                        <FormLabel control_id="google-consent">"Consent address. If no window opened, copy this into a new browser tab."</FormLabel>
+                        <input id="google-consent" class="jds-input" readonly=true value=address/>
+                    </Field>
+                })}
                 <Field>
                     <FormLabel control_id="google-redirect">"Address Google sent you to"</FormLabel>
                     <input id="google-redirect" class="jds-input" autocomplete="off"
