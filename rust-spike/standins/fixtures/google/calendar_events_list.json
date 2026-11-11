@@ -1,0 +1,12 @@
+{
+  "kind": "calendar#events",
+  "etag": "\"p33c1nq2dd2k4o0g\"",
+  "summary": "bob@example.com",
+  "description": "",
+  "updated": "2026-03-02T09:20:00.214Z",
+  "timeZone": "UTC",
+  "accessRole": "owner",
+  "defaultReminders": [{ "method": "popup", "minutes": 10 }],
+  "nextSyncToken": "CPDAlvWDx70DEPDAlvWDx70DGAU=",
+  "items": []
+}
