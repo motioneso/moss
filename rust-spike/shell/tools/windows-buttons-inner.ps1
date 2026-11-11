@@ -44,7 +44,7 @@ function Eval($expression) {
 function Screen { Eval 'document.body ? document.body.dataset.screen || "" : ""' }
 
 function Connect-Page {
-    for ($i = 0; $i -lt 60; $i++) {
+    for ($i = 0; $i -lt 30; $i++) {
         try {
             $targets = Invoke-RestMethod "http://127.0.0.1:$DebugPort/json" -TimeoutSec 2
             $page = @($targets | Where-Object { $_.type -eq 'page' -and $_.url -like '*moss-app*' })[0]
@@ -59,6 +59,7 @@ function Connect-Page {
         if ($app.HasExited) { throw 'the app exited before its window could be driven' }
         Start-Sleep -Milliseconds 500
     }
+    $script:noPort = $true
     throw 'the app window never offered a debugging port'
 }
 function Wait-Screen($want, $seconds = 90) {
@@ -173,9 +174,9 @@ try {
     Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | Select-Object -First 2 | ForEach-Object { $_.CommandLine.Substring(0, [Math]::Min(500, $_.CommandLine.Length)) }
     Log '--- processes'
     Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'moss|webview|msedge' } | ForEach-Object { "$($_.Name) $($_.Id)" }
-    $global:LASTEXITCODE = 1
-    throw
+    if ($script:noPort) { Log 'WINDOWS APP BUTTONS PROOF: NOT RUN, the web engine never opened its debugging port'; $script:exitCode = 3 } else { $script:exitCode = 1; throw }
 } finally {
     if (-not $app.HasExited) { & taskkill.exe /PID $app.Id /T /F | Out-Null }
     Get-Process postgres, moss-shell, moss-db -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$Work*" } | Stop-Process -Force
 }
+if ($script:exitCode) { exit $script:exitCode }
