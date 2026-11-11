@@ -371,7 +371,7 @@ fn alive(pid: u32) -> bool {
 }
 
 #[cfg(windows)]
-fn alive(pid: u32) -> bool {
+pub(crate) fn alive(pid: u32) -> bool {
     extern "system" {
         fn OpenProcess(access: u32, inherit: i32, pid: u32) -> isize;
         fn GetExitCodeProcess(process: isize, code: *mut u32) -> i32;
@@ -401,7 +401,7 @@ fn alive(_pid: u32) -> bool {
 /// retry waits for one that is still starting instead of starting another.
 static STARTED: std::sync::Mutex<Vec<(PathBuf, Child)>> = std::sync::Mutex::new(Vec::new());
 
-#[cfg(all(test, target_os = "linux"))]
+#[cfg(all(test, any(target_os = "linux", windows)))]
 pub(crate) fn stop_test_children(root: &Path) {
     let mut started = STARTED.lock().unwrap_or_else(|e| e.into_inner());
     started.retain_mut(|(folder, child)| {

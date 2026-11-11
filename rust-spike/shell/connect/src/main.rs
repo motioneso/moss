@@ -14,6 +14,8 @@ mod provision;
 mod reach;
 #[cfg(all(test, target_os = "linux"))]
 mod runtime_proof;
+#[cfg(all(test, windows))]
+mod windows_proof;
 mod store;
 
 #[cfg(target_os = "linux")]

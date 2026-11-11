@@ -26,8 +26,8 @@ usage:
   moss-db stop    --root DIR
   moss-db status  --root DIR
   moss-db credentials --root DIR [--module-host]
-  moss-db check   --root DIR [--write NOTE]       (Unix only)
-  moss-db hold    --root DIR --seconds N          (Unix only)
+  moss-db check   --root DIR [--write NOTE]
+  moss-db hold    --root DIR --seconds N
   moss-db at-rest [--root DIR] [--path LABEL=DIR]... (Unix only)
 ";
 
@@ -44,7 +44,6 @@ const START_TIMEOUT: Duration = Duration::from_secs(60);
 /// How long a fast shutdown may take before the supervisor escalates.
 const STOP_TIMEOUT: Duration = Duration::from_secs(30);
 
-#[cfg(unix)]
 const PROOF_DATABASE: &str = "moss_proof";
 
 fn main() -> ExitCode {
@@ -70,9 +69,7 @@ fn main() -> ExitCode {
         "stop" => stop(&options),
         "status" => status(&options),
         "credentials" => credentials(&options),
-        #[cfg(unix)]
         "check" => check(&options),
-        #[cfg(unix)]
         "hold" => hold(&options),
         #[cfg(unix)]
         "at-rest" => at_rest_report(&options),
@@ -384,7 +381,6 @@ fn credentials(options: &Options) -> Result<ExitCode, String> {
     Ok(ExitCode::SUCCESS)
 }
 
-#[cfg(unix)]
 /// Reads back what `up` set up, and runs a vector search. `--write NOTE` also stores a
 /// marked row, so a later check after a restart or a crash can show the row survived.
 fn check(options: &Options) -> Result<ExitCode, String> {
@@ -475,7 +471,6 @@ fn check(options: &Options) -> Result<ExitCode, String> {
     Ok(ExitCode::SUCCESS)
 }
 
-#[cfg(unix)]
 fn vector_proof(
     endpoint: &Endpoint,
     superuser: &secrets::Secret,
@@ -529,7 +524,6 @@ fn vector_proof(
     Ok(json!({ "query": query, "nearest": nearest, "plan": plan, "marks": marks }))
 }
 
-#[cfg(unix)]
 /// Proof helper: one session reads the proof rows into memory, then keeps the CPU busy. It
 /// prints the server process id first, so a crash proof can target that exact process. A busy
 /// loop, unlike `pg_sleep`, does not notice the postmaster dying, which the leftover proof needs.
@@ -619,7 +613,6 @@ fn emit(value: &Value) {
     let _ = out.flush();
 }
 
-#[cfg(unix)]
 fn emit_pretty(value: &Value) {
     let mut out = std::io::stdout().lock();
     let _ = writeln!(

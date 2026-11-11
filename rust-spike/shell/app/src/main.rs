@@ -278,8 +278,9 @@ fn main() {
     });
     let (listener, acceptor, app, running, modules, loader) = match prepared {
         Ok(parts) => parts,
-        Err(_) => {
-            eprintln!("moss-shell: could not start secure HTTPS; check private configuration, certificates and runtime database roles");
+        Err(reason) => {
+            // The reasons are fixed messages that never carry secrets.
+            eprintln!("moss-shell: could not start secure HTTPS ({reason}); check private configuration, certificates and runtime database roles");
             std::process::exit(1);
         }
     };
@@ -295,11 +296,11 @@ fn main() {
     // The loader can sit in a database wait or a lock held by another installer. Give it a few
     // seconds, then leave without it so shutdown never hangs.
     let stuck = match loader {
+        // The timer needs the runtime, so build the timeout inside the future.
         Some(loader) => runtime
-            .block_on(tokio::time::timeout(
-                std::time::Duration::from_secs(5),
-                loader,
-            ))
+            .block_on(async {
+                tokio::time::timeout(std::time::Duration::from_secs(5), loader).await
+            })
             .is_err(),
         None => false,
     };
