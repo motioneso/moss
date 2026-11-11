@@ -89,3 +89,36 @@ the database save, so a database failure could leave a new key beside the old ad
 - **Vikunja card.** The card could not be found, so it was not moved.
 - **Core app map file** (`packages/shared/src/app-map-core.ts`) was not changed. The entries live
   in the module manifest.
+
+## Part 2: graph store and recall
+
+### What was built
+
+- Rust reads and writes the old graph tables (facts, entities, sources, search documents). Every query runs as the signed-in person, under row security.
+- Four routes: recall, core facts, add entity, add fact. Status codes and error text match the old routes.
+- Two tools, `memory.recall` and `memory.remember`, with the old input shapes and the exact old score formula.
+- Remembering saves the fact first, then tries to store its search vector (two tries). A failed embedding leaves the fact saved and the answer says the search is pending.
+- The module manifest declares the routes, tools and features, so the app map stays true. No screens.
+
+### Proof
+
+| Claim                                                                | Evidence                                                                                                                                                                                                                                     |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Score formula matches the old code                                   | 25 cases made by running the old recall code, replayed in Rust, all equal                                                                                                                                                                    |
+| Rows written by the old code read correctly in Rust, and the reverse | Database test through the old code, passing                                                                                                                                                                                                  |
+| One person cannot see, count or change another person's memory       | Two-person test passing, and it fails when row security is switched off                                                                                                                                                                      |
+| A failed embedding never loses the fact                              | Database test and live run, both passing                                                                                                                                                                                                     |
+| Guest and package build and pass in native and WebAssembly           | Memory check script, passing                                                                                                                                                                                                                 |
+| Real server over HTTPS                                               | Live run: sign-up, add entity, add fact, recall by keyword, 401 when signed out, 400 error texts. A local stand-in embedding endpoint saw only the configured key. The key and the memory text did not appear in responses or the server log |
+
+### Not proven
+
+- The tools are proven through the real guest in database tests, not over HTTP. The server has no web route for tools.
+- A second person over HTTP. Sign-up closes after the first account, so that check lives in the database tests only.
+- A second device. No other device was reachable for this run.
+- A hosted embedding provider. Only a local stand-in endpoint was used.
+- Route parity is by score cases and unit tests, not by calling the old server and comparing live answers. Framework-level validation error bodies for recall may differ in wording.
+- Chat gating flags (blocked or write) for the routes are not carried in the Rust manifest.
+- The old guard against search-index changes on new rows was skipped.
+- Retrying vectors that stayed pending is part 7.
+- Pin, confirm, correct, forget, suggestions, the Memory screen, the search index and on-device embeddings are not built.

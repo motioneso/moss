@@ -102,3 +102,4 @@ docs/superpowers/mockups/summary-owner-context/
 # Generated build output for the isolated Rust platform workspace.
 rust-spike/platform/target/
 rust-spike/**/target/
+modules/memory/tools/score-cases.json

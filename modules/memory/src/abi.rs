@@ -1,12 +1,30 @@
-//! Canonical ABI entry points. The package declares no host ports and no WASI imports.
+//! Canonical ABI bridge for the JSON host port. No WASI imports.
 use moss_module_sdk::{Error, Host, Result};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::alloc::{alloc, realloc, Layout};
 
+#[link(wasm_import_module = "ports")]
+extern "C" {
+    fn kv(ptr: *const u8, len: usize, out: *mut usize);
+}
 struct Bridge;
 impl Host for Bridge {
-    fn call(&self, _: &str, _: &str, _: &str, _: Value) -> Result<Value> {
-        Err(Error::new("Memory declares no host ports"))
+    fn call(&self, port: &str, operation: &str, resource: &str, parameters: Value) -> Result<Value> {
+        let request =
+            json!({"operation":operation,"resource":resource,"parameters":parameters}).to_string();
+        let mut out = [0usize; 3];
+        unsafe {
+            let call = match port {
+                "kv" => kv,
+                _ => return Err(Error::new("Undeclared Memory port")),
+            };
+            call(request.as_ptr(), request.len(), out.as_mut_ptr());
+            let bytes = std::slice::from_raw_parts(out[1] as *const u8, out[2]);
+            if out[0] != 0 {
+                return Err(Error::new("Memory host request failed"));
+            }
+            Ok(serde_json::from_slice(bytes)?)
+        }
     }
 }
 #[no_mangle]

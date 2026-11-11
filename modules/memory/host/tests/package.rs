@@ -40,22 +40,57 @@ fn an_unknown_route_is_a_plain_404() {
 }
 
 #[test]
-fn the_package_asks_for_no_host_ports() {
+fn the_package_asks_only_for_its_own_memory_resources() {
     let manifest = moss_memory_host::package::manifest().unwrap();
-    assert!(manifest.capabilities.is_empty());
-    let ask = |port: &str| {
+    let ask = |port: &str, operation: &str, resource: &str| {
         authorize(
             &manifest,
             port,
             &Request {
-                operation: "get".into(),
-                resource: "memory.anything".into(),
+                operation: operation.into(),
+                resource: resource.into(),
                 parameters: json!({}),
             },
         )
     };
-    for port in ["kv", "db", "embed", "ai", "vault", "credentials"] {
-        assert!(ask(port).is_err(), "{port} must be refused");
+    for (operation, resource) in [
+        ("get", "memory.recall"),
+        ("get", "memory.core"),
+        ("set", "memory.entity"),
+        ("set", "memory.fact"),
+        ("set", "memory.index"),
+    ] {
+        ask("kv", operation, resource).unwrap();
+    }
+    assert!(ask("kv", "get", "memory.anything").is_err());
+    assert!(ask("kv", "delete", "memory.fact").is_err());
+    for port in ["db", "embed", "ai", "vault", "credentials", "fetch"] {
+        assert!(ask(port, "get", "memory.recall").is_err(), "{port} must be refused");
+    }
+}
+
+#[test]
+fn the_four_routes_and_two_tools_are_declared() {
+    let manifest = moss_memory_host::package::manifest().unwrap();
+    let routes: Vec<_> = manifest.routes.iter().map(|r| (r.method.as_str(), r.path.as_str())).collect();
+    assert_eq!(
+        routes,
+        [
+            ("GET", "/graph/recall"),
+            ("GET", "/graph/core"),
+            ("POST", "/graph/entities"),
+            ("POST", "/graph/facts")
+        ]
+    );
+    assert!(manifest.routes.iter().all(|r| r.sign_in));
+    let mut tools: Vec<_> = manifest.tools.keys().map(String::as_str).collect();
+    tools.sort();
+    assert_eq!(tools, ["memory.recall", "memory.remember"]);
+    assert_eq!(manifest.tools["memory.recall"].risk, "read");
+    assert_eq!(manifest.tools["memory.remember"].risk, "write");
+    let features: Vec<_> = manifest.features.iter().filter_map(|f| f["id"].as_str()).collect();
+    for id in ["memory.recall", "memory.remember"] {
+        assert!(features.contains(&id), "{id} must be in the app map");
     }
 }
 

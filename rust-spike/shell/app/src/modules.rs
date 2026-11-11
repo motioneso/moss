@@ -5,6 +5,7 @@ use anyhow::Result;
 use moss_calendar_host::CalendarPorts;
 use moss_connectors_host::ConnectorsPorts;
 use moss_email_host::EmailPorts;
+use moss_memory_host::ports::MemoryPorts;
 use axum::{
     body::Bytes,
     extract::{Path as UrlPath, Query, State},
@@ -345,6 +346,11 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
         embedder,
     });
     let notes_intelligence = intelligence.clone();
+    let memory_embeddings = Arc::new(IntelligenceEmbeddings::new(
+        intelligence.clone(),
+        DEFAULT_EMBEDDING_MODEL.into(),
+    ));
+    let memory_database = email_database.clone();
     let application = Application::open_extended_with(
         &settings.data,
         database,
@@ -395,7 +401,9 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
             }
             let services = Arc::new(connectors) as Arc<dyn Ports>;
             // Email answers only its own cached-message and preference calls.
-            Ok(Arc::new(EmailPorts::new(email_database, services)?) as Arc<dyn Ports>)
+            let services = Arc::new(EmailPorts::new(email_database, services)?) as Arc<dyn Ports>;
+            // Memory answers only its own graph calls, as the signed-in person.
+            Ok(Arc::new(MemoryPorts::new(memory_database, memory_embeddings, services)?) as Arc<dyn Ports>)
         },
     )?;
     Ok(application)
