@@ -72,7 +72,7 @@ fn manual_sync(host: &impl Host) -> Result<Response> {
             }),
         ));
     };
-    let saved = crate::sync_worker::request_source_coalesced(host, &source)?;
+    let saved = crate::sync_worker::request_coalesced(host, &source)?;
     crate::sync_worker::reconcile_schedule(host);
     // This is the durable request identity, not a claim of completed indexing.
     // Outer finalization must commit and publish before returning HTTP success.

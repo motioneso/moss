@@ -2222,3 +2222,31 @@ works. A second physical device was not used. Still open: per-queue retention in
 email triage feedback; installed chat and summary presentation; approval cards in the chat
 drawer; performance budgets; physical second-device HTTPS proof. Workshop and Food remain
 excluded. Part of #4027; release note Category N/A.
+
+## Tasks part 39 checkpoint (JS-219, Card 526)
+
+No product change. This part built the focus-preset hand-off from the address into the Tasks
+screen, proved it live, and then found that part 38 (PR 4219) had merged the same feature
+first; the duplicate was dropped. Part 38 stands as the record for that item.
+
+Finding on per-queue retention of finished jobs (the largest open Tasks item that does not
+depend on another module): it cannot be built as a Tasks-only or host-only change today.
+
+- The queue table has no finished-time column, and the worker role has no delete right on it,
+  so a cleanup needs a schema change.
+- The server's database setup only creates a table when its marker table is missing
+  (`bootstrap_steps` in `rust-spike/shell/app/src/module_install.rs`). An instance that already
+  has the queue would never receive a changed queue migration, and editing the applied one
+  would break that rule for every existing install.
+- Every test that prepares a database lists the queue migrations by hand (about ten files), so
+  a new step has to be added to each.
+
+Recommended next step (a platform task, not a Tasks one): add a numbered migration step with a
+marker that checks for a column, so setup can evolve an existing queue; then add a `finished_at`
+column, a worker delete right, a per-queue `jobRetentionSeconds` manifest field next to
+`jobRetries`, and a sweep in the worker loop. Tasks would declare 60 seconds, the legacy value.
+
+Still open: per-queue retention (above); email triage feedback (needs the connectors module);
+Today and chat producing focus links; approval cards in the chat drawer; installed chat and
+summary presentation; performance budgets; physical second-device HTTPS proof. Workshop and
+Food remain excluded. Part of #4027; release note Category N/A.

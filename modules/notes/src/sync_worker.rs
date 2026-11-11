@@ -2,7 +2,7 @@
 //! Private paths/hashes live in an owner-scoped table; jobs carry only its UUID.
 //! Checkpoints are retained for retry after post-commit queue publication failure.
 use moss_module_sdk::{
-    query::{Filter, Query},
+    query::{Compare, Filter, Order, Query},
     Client, Error, Host, Result,
 };
 use serde::{Deserialize, Serialize};
@@ -82,7 +82,7 @@ fn tick(host: &impl Host) -> Result<String> {
     };
     // Re-register in case the first registration failed; the keyed row is replaced.
     reconcile_schedule(host);
-    Ok(request_source_coalesced(host, &source)?.to_string())
+    Ok(request_coalesced(host, &source)?.to_string())
 }
 
 pub fn handle(host: &impl Host, payload: &str) -> Result<String> {
@@ -160,73 +160,57 @@ pub(crate) fn selected_source(host: &impl Host) -> Result<Option<String>> {
 pub fn request(host: &impl Host) -> Result<Value> {
     let source =
         selected_source(host)?.ok_or_else(|| Error::new("Notes source is not configured"))?;
-    request_source_coalesced(host, &source)
+    request_coalesced(host, &source)
+}
+
+/// How long an unfinished request for the same folder absorbs new manual or
+/// scheduled requests, matching the legacy one-queued-sync-per-account rule.
+const COALESCE_SECONDS: i64 = 2 * 60;
+
+/// Manual and scheduled syncs reuse a recent unfinished request for the same
+/// folder instead of stacking another. The job reads the folder when it runs, so
+/// the waiting request covers files changed since it was saved. Writes and the
+/// daily archive always request their own sync.
+pub(crate) fn request_coalesced(host: &impl Host, source: &str) -> Result<Value> {
+    if let Some(id) = pending_request(host, source)? {
+        let context = host.call("context", "read", "call", json!({}))?;
+        publish(host, &id, context["now"].as_str().ok_or_else(unavailable)?)?;
+        return Ok(json!({"checkpointId":id}));
+    }
+    request_source(host, source)
+}
+
+fn pending_request(host: &impl Host, source: &str) -> Result<Option<String>> {
+    let context = host.call("context", "read", "call", json!({}))?;
+    let now = context["now"].as_str().ok_or_else(unavailable)?;
+    let cutoff =
+        crate::sync_recovery::shift_seconds(now, -COALESCE_SECONDS).ok_or_else(unavailable)?;
+    let mut query = Query::select(Filter::Compare {
+        column: "created_at".into(),
+        op: Compare::Ge,
+        value: json!(cutoff),
+    });
+    query.limit = Some(100);
+    query.order = vec![Order {
+        column: "created_at".into(),
+        descending: true,
+    }];
+    let rows = Client(host).query(TABLE, &query)?;
+    Ok(rows.iter().find_map(|row| {
+        let checkpoint = row.get("checkpoint")?;
+        // A continuation page (it names a file) resumes mid-folder and would skip
+        // earlier files, so only a whole-folder request can absorb a new one.
+        let open = checkpoint.get("workerResult").is_none() && checkpoint.get("filePath").is_none();
+        (open && checkpoint.get("sourcePath").and_then(Value::as_str) == Some(source))
+            .then(|| row.get("id")?.as_str().map(str::to_owned))
+            .flatten()
+    }))
 }
 
 /// Preserve the HTTP handler's server-read source in private durable state,
 /// never in the queue envelope. A later folder change cannot retarget this job.
 pub(crate) fn request_source(host: &impl Host, source: &str) -> Result<Value> {
     enqueue(host, json!({"sourcePath":source}))
-}
-
-/// Requests younger than this and still unfinished absorb a repeat request.
-const COALESCE_SECONDS: i64 = 5 * 60;
-
-/// Manual and scheduled requests join an unfinished one for the same folder, so
-/// repeated clicks queue one pass. The joined request is published again (the
-/// queue deduplicates by id), which also repairs a lost first publication. Writes
-/// and archives always queue their own pass, because a running pass may have
-/// already scanned past their file.
-pub(crate) fn request_source_coalesced(host: &impl Host, source: &str) -> Result<Value> {
-    if let Some(id) = unfinished_request(host, source)? {
-        let context = host.call("context", "read", "call", json!({}))?;
-        let now = context["now"].as_str().ok_or_else(unavailable)?;
-        publish(host, &id, now)?;
-        return Ok(json!({"checkpointId":id}));
-    }
-    request_source(host, source)
-}
-
-fn unfinished_request(host: &impl Host, source: &str) -> Result<Option<String>> {
-    let context = host.call("context", "read", "call", json!({}))?;
-    let now = context["now"].as_str().ok_or_else(unavailable)?;
-    let cutoff = crate::sync_recovery::shift_seconds(now, -COALESCE_SECONDS)
-        .ok_or_else(unavailable)?;
-    // Rows from the window are read in pages, so a burst of unrelated requests
-    // (writes, continuation pages) cannot hide a matching one. 1000 rows at most.
-    for page in 0..10u32 {
-        let mut query = Query::select(Filter::Compare {
-            column: "created_at".into(),
-            op: moss_module_sdk::query::Compare::Gt,
-            value: json!(cutoff),
-        });
-        query.limit = Some(100);
-        query.offset = page * 100;
-        query.order = vec![moss_module_sdk::query::Order {
-            column: "id".into(),
-            descending: false,
-        }];
-        let rows = Client(host).query(TABLE, &query)?;
-        let last = rows.len() < 100;
-        for row in rows {
-            let Some(checkpoint) = row["checkpoint"].as_object() else {
-                continue;
-            };
-            // A plain request holds only its source. Continuation pages hold more.
-            if checkpoint.len() == 1
-                && checkpoint.get("sourcePath").and_then(Value::as_str) == Some(source)
-            {
-                if let Some(id) = row["id"].as_str() {
-                    uuid::Uuid::parse_str(id).map_err(|_| unavailable())?;
-                    return Ok(Some(id.to_owned()));
-                }
-            }
-        }
-        if last {
-            break;
-        }
-    }
-    Ok(None)
 }
 
 fn resume(host: &impl Host, input: Resume) -> Result<String> {

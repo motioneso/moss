@@ -354,10 +354,12 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
         &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"notes_base":root.join("notes"),"embeddings":{"url":embedding_url,"model":"bag-of-words-768","api_key":"local-stub"}}),
     );
     let _server = start(true);
+    // With MOSS_NOTES_HOST set, Notes calls cross the non-loopback address.
+    let notes_origin = remote.clone().unwrap_or_else(|| origin.clone());
     let call = |method: reqwest::Method, path: &str, cookie: Option<&str>, body: Option<Value>| {
         let mut request = client
-            .request(method, format!("{origin}/api/m/notes{path}"))
-            .header("origin", &origin);
+            .request(method, format!("{notes_origin}/api/m/notes{path}"))
+            .header("origin", &notes_origin);
         if let Some(cookie) = cookie {
             request = request.header("cookie", cookie);
         }
@@ -477,32 +479,10 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
     assert_eq!(got["path"], json!(journal), "{got}");
     let (status, state) = call(Method::GET, "/notes-last-sync", Some(&cookie), None);
     assert_eq!(status, 200, "{state}");
-    // An unfinished request for this folder already waits. Sync now must join it
-    // and return its id instead of queueing a second pass.
-    let waiting = "0b000000-0000-4000-8000-0000000000b1";
-    {
-        let runtime = tokio::runtime::Runtime::new().unwrap();
-        runtime.block_on(async {
-            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
-                .await
-                .unwrap();
-            tokio::spawn(async move {
-                let _ = connection.await;
-            });
-            let checkpoint = json!({"sourcePath": got["path"]});
-            db.execute(
-                "INSERT INTO app.notes_sync_checkpoints (id, owner_user_id, checkpoint) VALUES ($1::text::uuid, $2, $3::text::jsonb)",
-                &[&waiting, &owner, &checkpoint.to_string()],
-            )
-            .await
-            .unwrap();
-        });
-    }
     let sync = call(Method::POST, "/notes/sync", Some(&cookie), Some(json!({})));
     println!("sync request answered {} {}", sync.0, sync.1);
     assert_eq!(sync.0, 202, "{}", sync.1);
-    assert_eq!(sync.1["jobId"], waiting, "the request must join the waiting one: {}", sync.1);
-    println!("manual sync joined the unfinished request instead of queueing another");
+    assert!(sync.1["jobId"].is_string(), "{}", sync.1);
     // The server's own worker runs the sync: wait for the rows it indexed.
     let rows = |sql: &'static str| -> Vec<String> {
         let runtime = tokio::runtime::Runtime::new().unwrap();
@@ -601,6 +581,30 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
     let kept = rows("SELECT id::text FROM app.notes_sync_checkpoints WHERE owner_user_id=$1 AND id::text LIKE '0a000000-%' ORDER BY id");
     assert_eq!(kept, vec!["0a000000-0000-4000-8000-0000000000a2".to_string()]);
     println!("tick retention removed the old checkpoint and kept the recent one: {kept:?}");
+    // Sync now while a recent request for the same folder is still waiting reuses it
+    // instead of stacking a second one.
+    let waiting = "0b000000-0000-4000-8000-0000000000b1";
+    {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        runtime.block_on(async {
+            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
+                .await
+                .unwrap();
+            tokio::spawn(async move {
+                let _ = connection.await;
+            });
+            db.execute(
+                "INSERT INTO app.notes_sync_checkpoints (id, owner_user_id, checkpoint) VALUES ($1::text::uuid, $2, jsonb_build_object('sourcePath', $3::text))",
+                &[&waiting, &owner, &journal.to_str().unwrap()],
+            )
+            .await
+            .unwrap();
+        });
+    }
+    let again = call(Method::POST, "/notes/sync", Some(&cookie), Some(json!({})));
+    assert_eq!(again.0, 202, "{}", again.1);
+    assert_eq!(again.1["jobId"], json!(waiting), "{}", again.1);
+    println!("Sync now reused the waiting request: {}", again.1);
     // Search runs through the same host ports in this process (the server has no tool
     // endpoint yet), against the real index and the same embeddings endpoint.
     {

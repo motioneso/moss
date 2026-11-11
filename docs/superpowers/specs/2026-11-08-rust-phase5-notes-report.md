@@ -1977,18 +1977,16 @@ Not proven: a second physical device (the browser ran on the same machine, at it
 
 Still open: managed publication and reconciliation, singleton coalescing and recall warmup, the assembled Settings and chat join, second-device HTTPS proof.
 
-## Part thirty-five checkpoint — repeat sync requests join the waiting one
+## Part thirty-four checkpoint — one waiting sync per folder, live over the LAN address
 
-The manual Sync now route, the experimental request API and the fifteen-minute tick now look for an unfinished plain request (saved source only, no result yet, created in the last five minutes) for the same folder. When one exists they return its id and publish it again, instead of saving a second request. The queue deduplicates by id, so the repeat publication is safe and also repairs a lost first one. Continuation pages, finished requests, other folders and older requests do not match. Writes and daily archives still queue their own pass, because a running pass may already have scanned past their file. This is the Rust equivalent of the legacy per-account singleton key; it differs by returning the waiting request's id where legacy returned an empty id.
+Package 0.1.22 (the live gate reads `MOSS_NOTES_HOST` for the LAN address; the gate step is run with it set). Sync now and the fifteen-minute tick no longer stack requests. Before saving a new request they look at the account's saved requests from the last two minutes; one with no result and the same folder is reused (its id is returned and publication is repeated, which the queue deduplicates by id). This is the legacy one-queued-sync-per-account rule without a queue change, because the job reads the folder when it runs. Saving, editing or deleting a note and the daily archive still request their own sync. A request older than two minutes no longer absorbs anything, so a lost one cannot block syncing.
 
-Recall warmup is not ported on purpose. Legacy loaded a local model in the API process on first use. The Rust server embeds through a remote HTTP endpoint, so no model load exists to warm.
+Recall warmup (legacy loaded a local model before the first search) does not apply: the Rust server embeds through a configured endpoint and loads no model.
 
-The window is read in pages of 100 (up to 1000 rows, ordered by id), so a burst of unrelated requests cannot hide the waiting one.
+Checks: two new guest tests (reuse a waiting request; make a new one when nothing matches, the match is finished, or it is another folder); existing sync and component suites pass. Live (`pnpm test:rust-notes-server`, through the gate, passed): the real HTTPS server was started listening on all interfaces with the sharing switch on and trusted origins for both loopback and this machine's LAN address, with a certificate covering both. Sign-up used loopback; every Notes call (folder browse, link, sync, status, unlink) went through the LAN address with a real cookie. With a waiting request saved for the linked folder, Sync now returned that request's id instead of a new one. The earlier scheduler and retention checks still pass.
 
-Review round 1 (Codex): two majors. The row cap hiding a match was fixed with paging and a test. The race (two requests in one instant both saving a row) is judged acceptable and left: it costs one extra indexing pass, which is repeatable, and closing it needs a database-level claim the guest cannot express today.
+Not proven: a second physical device (the LAN address is this machine's own, so the traffic loops back in the kernel), the tailnet address, a phone browser, Notes screens in a browser (the web app does not yet mount module screens), search from chat (the server has no tool-call route), a second account, hosted embeddings.
 
-Checks: unit tests cover joined, finished, other-folder, continuation and empty cases, the five-minute cutoff and a 200-row burst; the Notes suites pass. Live (`pnpm test:rust-notes-server`, through the gate, passed): an unfinished request was saved for the linked folder, Sync now over HTTPS returned that request's id, and the server's worker then indexed the three notes from it.
+Still open: managed publication and reconciliation (needs Meetings), the assembled Settings and chat join, second-device proof.
 
-Not proven: two requests racing in the same instant (both could save a row; indexing is repeatable), a second signed-in account, native UI, a second physical device, the assembled Settings and chat join.
-
-Still open: managed publication and reconciliation (needs Meetings), the assembled Settings and chat join, second-device HTTPS proof.
+Review round 1 (Codex): fixed a major (a continuation page, which resumes mid-folder, must not absorb a whole-folder request; it is now skipped and tested) and a minor (the lookup now reads 100 recent rows, not 25). One major is declined as a limit shared with legacy: a request cannot be told apart as queued or already running, so an external edit made after a running sync passed that file is missed until the next tick (legacy's one-per-account queue key has the same gap). The reuse window was cut from ten to two minutes to bound it.
