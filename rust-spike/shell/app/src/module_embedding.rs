@@ -24,9 +24,10 @@ use safety_core::{
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
 use std::{
     io::Write,
-    os::unix::fs::OpenOptionsExt,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -109,12 +110,12 @@ impl EmbeddingConfig {
             .cipher
             .seal(&SecretFields::new().with("apiKey", Secret::new(key.to_owned())));
         let temporary = self.file.with_extension("tmp");
-        let mut file = std::fs::OpenOptions::new()
-            .create(true)
-            .truncate(true)
-            .write(true)
-            .mode(0o600)
-            .open(&temporary)?;
+        let mut options = std::fs::OpenOptions::new();
+        options.create(true).truncate(true).write(true);
+        // Windows has no mode bits; the file inherits the data folder's access rules.
+        #[cfg(unix)]
+        options.mode(0o600);
+        let mut file = options.open(&temporary)?;
         file.write_all(sealed.to_string().as_bytes())?;
         file.sync_all()?;
         std::fs::rename(temporary, &self.file)?;
