@@ -8,9 +8,10 @@ Part of https://github.com/motioneso/moss/issues/4027. Release note: Category N/
   - Setup makes the instance folder, a local certificate, the database and the server's credentials.
   - The database keeps one fixed port per instance on Windows (saved in `database.port`). Before this, every restart picked a new random port and the saved database address went stale, so the server refused to start the second time.
 - Three Windows bugs found by the real runner are fixed.
-  - Saving a private file renamed it while it was still open, which Windows refuses. The file is now closed first, the rename retries briefly, and a stubborn case falls back to an in-place write.
+  - Saving a private file renamed it while it was still open, which Windows refuses. The file is now closed first, the rename retries briefly, and a stubborn case falls back to an in-place write, and if that write fails the full new copy is kept beside the file.
   - The web server crashed while shutting down on a stop request, because a timer was built outside the async runtime. It now builds inside it.
   - A failed secure start now prints its reason in the server log.
+- On Windows, setup limits the instance folder to the running account and SYSTEM, since it holds the database passwords and keys. The account is found by asking Windows, because the environment can name a different one. A review found the folder was otherwise readable through inherited permissions.
 - Setup failures in the app now print which step failed (certificate, folder, lock, port, file write).
 - The database supervisor's crash case is covered on Windows. After a forced kill of the supervisor, the database process dies with it, a restart recovers, and a row written before the crash is still there.
 - The proof checks `check` and `hold` now run over loopback TCP, so they work on Windows. `at-rest` stays Unix only.
