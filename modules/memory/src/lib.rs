@@ -1,12 +1,13 @@
 //! Memory guest. It validates requests, scores recall results and shapes responses. SQL, the
 //! acting person, row-level security and the embedding service belong to the host, so no
-//! vector or credential reaches this code. Candidates, lifecycle and screens are later parts.
+//! vector or credential reaches this code. Candidates and screens are later parts.
 use moss_module_sdk::{Host, Response, RouteRequest};
 use serde_json::{json, Value};
 
 #[cfg(target_arch = "wasm32")]
 mod abi;
 pub mod graph;
+pub mod lifecycle;
 pub mod schema;
 pub mod score;
 pub mod testing;
@@ -41,6 +42,7 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
         "route" => {
             let response = match serde_json::from_str::<RouteRequest>(payload) {
                 Ok(request) => match route(host, request) {
+                    Ok(Value::Null) => Response::new(204, Value::Null),
                     Ok(body) => Response::new(200, body),
                     Err(error) => Response::new(error.status, json!({"error": error.message})),
                 },
@@ -54,15 +56,38 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
             struct Tool {
                 tool: String,
                 parameters: Value,
+                #[serde(default, rename = "approvalVersion")]
+                approval_version: Option<String>,
             }
             let input: Tool = serde_json::from_str(payload).map_err(|_| "Invalid memory tool request")?;
             let result = match input.tool.as_str() {
-                "memory.recall" => graph::recall_tool(host, &input.parameters),
-                "memory.remember" => graph::remember_tool(host, &input.parameters),
-                _ => Err(Error::new(404, "Memory tool not found")),
+                "memory.recall" => graph::recall_tool(host, &input.parameters).map_err(|e| e.message),
+                "memory.remember" => graph::remember_tool(host, &input.parameters).map_err(|e| e.message),
+                "memory.forget" => lifecycle::forget_tool(host, &input.parameters, input.approval_version.as_deref()),
+                _ => Err(Error::new(404, "Memory tool not found").message),
             };
-            let value = result.map_err(|e| e.message)?;
+            let value = result?;
             serde_json::to_string(&value).map_err(|_| "Invalid memory response".into())
+        }
+        "api" => {
+            #[derive(serde::Deserialize)]
+            #[serde(deny_unknown_fields, tag = "name", content = "parameters")]
+            enum Api {
+                #[serde(rename = "prepareMemoryAction")]
+                Prepare {
+                    tool: String,
+                    #[serde(rename = "inputJson")]
+                    input_json: String,
+                },
+            }
+            let Api::Prepare { tool, input_json } =
+                serde_json::from_str(payload).map_err(|_| "Invalid memory request")?;
+            let result = match lifecycle::prepare_json(host, &tool, &input_json) {
+                Ok(details) => json!({"ok": details}),
+                Err(error) => json!({"error": serde_json::from_str::<Value>(&error)
+                    .unwrap_or_else(|_| json!({"statusCode": 503, "error": "Memory service is unavailable"}))}),
+            };
+            serde_json::to_string(&result).map_err(|_| "Invalid memory response".into())
         }
         _ => Err("Memory handler is unavailable".into()),
     }
@@ -70,6 +95,13 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
 
 fn route(host: &impl Host, request: RouteRequest) -> Result<Value> {
     match (request.method.as_str(), request.path.as_str()) {
+        ("POST", "/graph/facts/:id/pin") => lifecycle::pin_route(host, &request),
+        ("POST", "/graph/facts/:id/confirm") => lifecycle::confirm_route(host, &request),
+        ("POST", "/graph/facts/:id/correct") => lifecycle::correct_route(host, &request),
+        ("POST", "/graph/facts/:id/status") => lifecycle::status_route(host, &request),
+        ("POST", "/graph/facts/:id/mark-stale") => lifecycle::mark_stale_route(host, &request),
+        ("POST", "/graph/facts/:id/supersede") => lifecycle::supersede_route(host, &request),
+        ("DELETE", "/graph/facts/:id") => lifecycle::delete_route(host, &request),
         ("GET", "/graph/recall") => graph::recall_route(host, &request),
         ("GET", "/graph/core") => graph::core_route(host),
         ("POST", "/graph/entities") => graph::entity_route(host, &request.body),
