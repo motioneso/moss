@@ -36,8 +36,8 @@ impl Fixture {
             .await
             .unwrap();
             root.execute(
-                "INSERT INTO app.connector_accounts(id,provider_id,owner_user_id,scopes,status,created_at,updated_at)
-                 VALUES($1,'google',$2,ARRAY['https://www.googleapis.com/auth/gmail.modify'],'active',now(),now())",
+                "INSERT INTO app.connector_accounts(id,provider_id,owner_user_id,scopes,status,encrypted_secret,created_at,updated_at)
+                 VALUES($1,'google',$2,ARRAY['https://www.googleapis.com/auth/gmail.modify'],'active','{}'::jsonb,now(),now())",
                 &[&account_a, &a],
             )
             .await

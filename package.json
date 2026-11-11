@@ -24,6 +24,7 @@
     "test:rust-calendar-server": "tsx modules/calendar/tools/server-gate.ts",
     "test:rust-connectors": "tsx modules/connectors/tools/gate.ts",
     "test:rust-email": "tsx modules/email/tools/gate.ts",
+    "test:rust-email-live": "bash modules/email/tools/live.sh",
     "test:rust-connectors-live": "bash modules/connectors/tools/live.sh",
     "test:rust-module-assembly": "tsx rust-spike/module-host/tools/assembly-gate.ts",
     "test:module-enqueue-options": "tsx rust-spike/module-host/tools/enqueue-options-gate.ts",
