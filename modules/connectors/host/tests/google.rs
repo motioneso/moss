@@ -170,7 +170,7 @@ fn a_person_connects_google_and_the_tokens_are_sealed() {
     assert_eq!(account["providerId"], "google");
     assert_eq!(account["status"], "active");
     assert_eq!(account["hasSecret"], true);
-    assert_eq!(account["scopes"], json!(["https://www.googleapis.com/auth/gmail.modify","https://www.googleapis.com/auth/calendar"]));
+    assert_eq!(account["scopes"], json!(["https://www.googleapis.com/auth/gmail.readonly","https://www.googleapis.com/auth/gmail.send","https://www.googleapis.com/auth/calendar.events"]));
     assert_eq!(f.pending_count(f.a), 0, "the pending sign-in is removed once used");
     let secret = f.stored_secret(account["id"].as_str().unwrap());
     assert_eq!(secret["kind"], "google-oauth");
@@ -199,8 +199,10 @@ fn refused_attempts_answer_like_the_old_server() {
     let (s, b) = complete(f.a, "http://localhost:1/?code=x&state=not-mine");
     assert_eq!((s, b["error"].as_str().unwrap()), (400, "Authorization state did not match \u{2014} please retry the connect flow"));
     // Pastes the old server treated as plain failures.
+    // These use the second person so the first stays under the five-a-minute limit.
+    f.authorize(f.b, "code-bad");
     for bad in ["not a url", "http://localhost:1/?error=access_denied", "http://localhost:1/?code=only"] {
-        let (s, b) = complete(f.a, bad);
+        let (s, b) = complete(f.b, bad);
         assert_eq!((s, b["error"].as_str().unwrap()), (500, "Internal server error"), "{bad}");
     }
     // A wrong code reaches Google and fails there. The pending sign-in survives for a retry.
@@ -210,9 +212,9 @@ fn refused_attempts_answer_like_the_old_server() {
     assert_eq!(f.pending_count(f.a), 1);
     let (s, _) = complete(f.a, &pasted);
     assert_eq!(s, 201);
-    // The sixth finish inside a minute is refused.
+    // The second person has used three; the sixth finish inside a minute is refused.
     let mut last = (0, Value::Null);
-    for _ in 0..6 {
+    for _ in 0..3 {
         last = complete(f.b, "http://localhost:1/?code=x&state=y");
     }
     assert_eq!(last.0, 429);
