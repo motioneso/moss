@@ -138,3 +138,9 @@ async block and crashed the worker. It is fixed and the live run passes.
 - **Searching the new index.** Search by the new rows over HTTP is not built. Part 2 owns recall.
 - **Core app map file.** Not changed. The new job, route and feature are in the module manifest.
 - **Migration number.** 0363 had no collision with open pull requests at check time.
+
+### Review round 1 (Codex)
+
+One major finding, fixed. A note's source could be fenced between the check and the lock, so a
+fenced source could still be indexed. The source state is now read under the lock. No test covers
+this path, because no test ran with a real managed label (listed above).

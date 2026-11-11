@@ -533,6 +533,7 @@ async fn capture(
     let destination = snapshot::destination_id(canonical);
     let content_hash = sha256(content);
     let share = if lock { " FOR SHARE" } else { "" };
+    let sources_share = if lock { "FOR SHARE OF s" } else { "" };
     let available: bool = db
         .query_one("SELECT app.notes_destination_available($1)", &[&destination])
         .await?
@@ -575,7 +576,7 @@ async fn capture(
     }
     let rows = db
         .query(
-            "SELECT c.receipt_id, c.side, c.source_module_id, c.source_id::text, c.source_generation::int, s.generation::int, s.state, c.block_bytes FROM app.notes_recording_contributions c JOIN app.notes_managed_sources s USING (owner_user_id, source_module_id, source_id) WHERE c.destination_id=$1 AND c.state='applied' ORDER BY c.source_module_id, c.source_id, c.receipt_id",
+            &format!("SELECT c.receipt_id, c.side, c.source_module_id, c.source_id::text, c.source_generation::int, s.generation::int, s.state, c.block_bytes FROM app.notes_recording_contributions c JOIN app.notes_managed_sources s USING (owner_user_id, source_module_id, source_id) WHERE c.destination_id=$1 AND c.state='applied' ORDER BY c.source_module_id, c.source_id, c.receipt_id {sources_share}"),
             &[&destination],
         )
         .await?;
