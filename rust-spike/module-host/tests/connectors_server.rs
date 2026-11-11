@@ -290,7 +290,7 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
     {
         use std::io::BufRead;
         let mut out = std::io::BufReader::new(fake_google.0.stdout.take().unwrap());
-        for _ in 0..6 {
+        for _ in 0..5 {
             let mut line = String::new();
             out.read_line(&mut line).unwrap();
             if let Some((key, value)) = line.trim().split_once(' ') {
