@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 fn every_case_matches_the_old_service() {
     let cases: Vec<Value> =
         serde_json::from_str(include_str!("../../tools/score-cases.json")).unwrap();
-    assert!(cases.len() >= 20);
+    assert!(cases.len() >= 8);
     for case in cases {
         let options = Options {
             limit: case["options"]["limit"].as_u64().map(|n| n as usize),

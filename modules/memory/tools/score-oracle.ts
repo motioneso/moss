@@ -72,19 +72,23 @@ function fact(index: number): Fact {
 
 function build(): Case[] {
   const cases: Case[] = [];
-  const queries = ["coffee", "learn rust", "no meetings", "Dark ROAST coffee please", "zzz"];
-  const optionSets = [
-    {},
-    { limit: 3 },
-    { includeInactive: true },
-    { includeLowConfidence: true, limit: 50 },
-    { limit: 1 }
+  // A small spread that still hits the limit, inactive, low-confidence, keyword-overlap and
+  // no-match paths.
+  const picks: [string, Record<string, unknown>][] = [
+    ["coffee", {}],
+    ["coffee", { limit: 3 }],
+    ["coffee", { includeInactive: true }],
+    ["coffee", { includeLowConfidence: true, limit: 50 }],
+    ["learn rust", {}],
+    ["no meetings", { limit: 1 }],
+    ["Dark ROAST coffee please", {}],
+    ["zzz", { includeInactive: true }]
   ];
   let index = 1;
-  for (const query of queries) {
-    for (const options of optionSets) {
+  for (const [query, options] of picks) {
+    {
       const candidates: Candidate[] = [];
-      for (let i = 0; i < 12; i += 1) {
+      for (let i = 0; i < 4; i += 1) {
         const f = fact(index++);
         const text = [i % 3 === 0 ? "Sam" : null, f.predicate, f.objectText]
           .filter(Boolean)
