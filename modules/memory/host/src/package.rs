@@ -138,12 +138,22 @@ pub fn files(root: &Path, core: &[u8]) -> Result<BTreeMap<String, Vec<u8>>> {
         files.insert(format!("ui/{name}"), bytes.to_vec());
     }
     for path in &manifest.database.migrations {
-        let bytes = std::fs::read(root.join("packages/memory").join(path))?;
-        anyhow::ensure!(
-            moss_module_host::legacy::entry("memory", path)
-                .is_some_and(|f| f.raw == moss_module_host::trust::digest(&bytes)),
-            "Legacy Memory SQL changed"
-        );
+        let bytes = if let Some(frozen) = moss_module_host::legacy::entry("memory", path) {
+            let bytes = std::fs::read(root.join("packages/memory").join(path))?;
+            anyhow::ensure!(
+                frozen.raw == moss_module_host::trust::digest(&bytes),
+                "Legacy Memory SQL changed"
+            );
+            bytes
+        } else {
+            let bytes = std::fs::read(root.join("modules/memory").join(path))?;
+            anyhow::ensure!(
+                moss_module_host::trust::digest(&bytes)
+                    == "d8bcaee31c816f837aa097bad7523450bd90b9c608fb913ed6502d09c3d672c6",
+                "Memory migration bytes changed: {path}"
+            );
+            bytes
+        };
         files.insert(path.clone(), bytes);
     }
     Ok(files)

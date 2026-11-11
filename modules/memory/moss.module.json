@@ -31,7 +31,8 @@
       "sql/0301_superseded_by_set_null_on_delete.sql",
       "sql/0338_memory_managed_note_snapshots.sql",
       "sql/0339_memory_recording_lineage.sql",
-      "sql/0341_memory_recording_cleanup.sql"
+      "sql/0341_memory_recording_cleanup.sql",
+      "sql/0363_memory_ingest_nudges.sql"
     ],
     "ownedTables": [
       "app.memory_chunks",
@@ -49,7 +50,8 @@
       "app.memory_candidates",
       "app.memory_recording_fact_versions",
       "app.memory_recording_receipts",
-      "app.memory_recording_proposals"
+      "app.memory_recording_proposals",
+      "app.memory_ingest_nudges"
     ],
     "ledger": "core-legacy",
     "access": {
@@ -99,6 +101,9 @@
         "access": "owner-only"
       },
       "app.memory_recording_proposals": {
+        "access": "owner-only"
+      },
+      "app.memory_ingest_nudges": {
         "access": "owner-only"
       }
     }
