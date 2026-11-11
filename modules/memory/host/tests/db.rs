@@ -172,7 +172,7 @@ fn rows_written_by_the_old_code_read_in_rust_and_the_reverse() {
     assert_eq!(read["recalled"], true);
     assert_eq!(read["objectText"], "written by rust");
     assert_eq!(read["sourceCount"], 1);
-    assert_eq!(read["inCore"], false);
+    assert_eq!(read["inCore"], true, "the old code lists the Rust fact as a core fact too");
     assert!((read["similarity"].as_f64().unwrap() - 1.0).abs() < 1e-9);
 }
 
@@ -203,21 +203,36 @@ fn a_second_person_cannot_see_or_change_the_first_persons_memory() {
     assert_eq!(f.count("SELECT count(*) FROM app.memory_facts WHERE owner_user_id = $1", f.a), 1);
 }
 
+/// What person `actor` can count in A's tables with no owner filter in the query at all.
+fn bare_count(f: &Fixture, actor: Uuid) -> i64 {
+    f.rt.block_on(async {
+        let cx = DataContext::open(&f.db, &AccessContext::new(actor, "memory-proof")).await.unwrap();
+        let mut total = 0;
+        for t in ["memory_facts", "memory_fact_sources", "memory_entities", "memory_search_documents"] {
+            let row = cx.db().query_one(&format!("SELECT count(*) FROM app.{t}"), &[]).await.unwrap();
+            total += row.get::<_, i64>(0);
+        }
+        cx.commit().await.unwrap();
+        total
+    })
+}
+
 #[test]
 #[ignore = "Only through verify-gate"]
 fn the_second_person_check_has_teeth() {
     let f = Fixture::new();
     f.remember(f.a, "private to a");
+    assert_eq!(bare_count(&f, f.b), 0, "row security hides A's rows from B");
     let tables = ["memory_facts", "memory_fact_sources", "memory_entities", "memory_search_documents"];
     for t in tables {
         f.sql(&format!("ALTER TABLE app.{t} DISABLE ROW LEVEL SECURITY"));
     }
-    let leaked = f.recalled(f.b);
+    let leaked = bare_count(&f, f.b);
     for t in tables {
         f.sql(&format!("ALTER TABLE app.{t} ENABLE ROW LEVEL SECURITY; ALTER TABLE app.{t} FORCE ROW LEVEL SECURITY"));
     }
-    assert!(!leaked.is_empty(), "A's fact was not exposed without row security, so the check proves nothing");
-    assert!(f.recalled(f.b).is_empty());
+    assert!(leaked > 0, "A's rows were not exposed without row security, so the check proves nothing");
+    assert_eq!(bare_count(&f, f.b), 0);
 }
 
 #[test]
