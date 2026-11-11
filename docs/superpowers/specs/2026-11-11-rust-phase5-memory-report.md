@@ -48,7 +48,7 @@ Part of https://github.com/motioneso/moss/issues/4027. Task JS-229. Plan: `2026-
 | Key never in a response, sealed file, server log or activity row | Live run below                                                                                                                                              |
 | Notes search and ingest still work                               | Real-server Notes gate passed, 1 test, 71 s                                                                                                                 |
 | Settings set over HTTPS on the real server                       | Same gate: refused without the confirmation, saved with it, then a note was indexed through the saved address, and the fake endpoint received the saved key |
-| Memory package loads in the real host, 6 package tests           | Memory package gate (see Not proven for its result)                                                                                                         |
+| Memory package loads in the real host, 6 package tests           | Memory package gate passed: 2 native tests, wasm build, 6 package tests through the real host                                                               |
 | Stored vectors match the old code                                | First test of the old-code ingest comparison passed: Rust rows equal the old rows for both roles                                                            |
 
 ## Not proven
