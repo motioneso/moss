@@ -9,6 +9,7 @@ mod abi;
 pub mod graph;
 pub mod schema;
 pub mod score;
+pub mod testing;
 
 #[derive(Debug)]
 pub struct Error {

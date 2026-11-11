@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import { dataContextBrand } from "@moss/db";
+import { confidenceTier } from "../../../packages/memory/src/graph-repository-utils.js";
 import { GraphMemoryRecallService } from "../../../packages/memory/src/graph-recall-service.js";
 
 const NOW = Date.parse("2026-11-11T12:00:00.000Z");
@@ -30,7 +31,8 @@ function fact(index: number): Fact {
   const provenance = pick(["volunteered", "inferred", "confirmed", "imported"]);
   const aged = NOW - Math.floor(next() * 500) * day - Math.floor(next() * day);
   const confirmed = next() < 0.3 ? iso(NOW - Math.floor(next() * 400) * day) : null;
-  const objectText = next() < 0.85 ? pick(["dark roast coffee", "learn rust", "no meetings friday", "tea"]) : null;
+  const objectText =
+    next() < 0.85 ? pick(["dark roast coffee", "learn rust", "no meetings friday", "tea"]) : null;
   return {
     id: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
     ownerUserId: "00000000-0000-4000-8000-0000000000aa",
@@ -84,7 +86,9 @@ function build(): Case[] {
       const candidates: Candidate[] = [];
       for (let i = 0; i < 12; i += 1) {
         const f = fact(index++);
-        const text = [i % 3 === 0 ? "Sam" : null, f.predicate, f.objectText].filter(Boolean).join(" ");
+        const text = [i % 3 === 0 ? "Sam" : null, f.predicate, f.objectText]
+          .filter(Boolean)
+          .join(" ");
         candidates.push({
           fact: f,
           searchText: i % 5 === 0 ? null : text,
@@ -110,9 +114,21 @@ function build(): Case[] {
 
 const revive = (f: Fact): Fact => {
   const out: Fact = { ...f };
-  for (const key of ["validFrom", "validTo", "staleAt", "lastConfirmedAt", "createdAt", "updatedAt"]) {
+  for (const key of [
+    "validFrom",
+    "validTo",
+    "staleAt",
+    "lastConfirmedAt",
+    "createdAt",
+    "updatedAt"
+  ]) {
     out[key] = f[key] === null ? null : new Date(f[key] as string);
   }
+  out.confidenceTier = confidenceTier(
+    f.confidence as number,
+    f.provenance as never,
+    out.lastConfirmedAt as Date | null
+  );
   out.sources = (f.sources as Fact[]).map((s) => ({
     ...s,
     occurredAt: s.occurredAt === null ? null : new Date(s.occurredAt as string)
@@ -155,7 +171,7 @@ const write = process.argv.includes("--write");
 const cases: Case[] = write ? build() : JSON.parse(readFileSync(file, "utf8"));
 for (const test of cases) test.expected = await run(test);
 if (write) {
-  writeFileSync(file, `${JSON.stringify(cases, null, 1)}\n`);
+  writeFileSync(file, `[\n${cases.map((c) => JSON.stringify(c)).join(",\n")}\n]\n`);
   console.log(`wrote ${cases.length} cases`);
 } else {
   const stored = JSON.parse(readFileSync(file, "utf8"));

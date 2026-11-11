@@ -84,6 +84,15 @@ fn item_text(fact: &Value) -> String {
         .to_owned()
 }
 
+/// A whole number prints as `1`, not `1.0`, the way JavaScript prints it.
+fn number(value: f64) -> Value {
+    if value.fract() == 0.0 && value.abs() < 1e15 {
+        json!(value as i64)
+    } else {
+        json!(value)
+    }
+}
+
 /// One recall item. `subjectName` is set only for a named, non-self subject.
 pub fn item(fact: &Value, score: f64, names: &Value) -> Value {
     let mut out = Map::new();
@@ -95,7 +104,7 @@ pub fn item(fact: &Value, score: f64, names: &Value) -> Value {
         ("id", fact["id"].clone()),
         ("title", fact["predicate"].clone()),
         ("text", json!(item_text(fact))),
-        ("score", json!(score)),
+        ("score", number(score)),
         ("recordKind", fact["recordKind"].clone()),
         ("status", fact["status"].clone()),
         ("confidence", fact["confidence"].clone()),
