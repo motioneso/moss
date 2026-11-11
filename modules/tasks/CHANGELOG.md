@@ -1,6 +1,6 @@
 # Tasks package changes
 
-## Unreleased
+## 0.1.1
 
 - Add the public `getTaskReference` call, which returns only a task's id, owner, status and due time to another module, read under the caller's account.
 

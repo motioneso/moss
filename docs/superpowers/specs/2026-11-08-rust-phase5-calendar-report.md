@@ -1353,10 +1353,10 @@ other Calendar tests, and passed when run alone. Cause not found.
 ## JS-220 / part 31: day plans check tasks through the real Tasks package (package 0.26.0)
 
 Before this part, day plans checked task references only through a test stand-in in the host.
-Now Calendar requires the Tasks package and calls its new public `getTaskReference` (Tasks stays
-0.1.0). The reply carries only id, owner, status and due time, read under the caller's account, so a
+Now Calendar requires the Tasks package and calls its new public `getTaskReference` (Tasks becomes
+0.1.1, and Calendar requires `>=0.1.1, <1.0.0` so an older Tasks cannot satisfy it). The reply carries only id, owner, status and due time, read under the caller's account, so a
 task the caller cannot see reads as absent and day plans answer 404. Calendar declares one `api`
-capability (resource `tasks`, operation `call`) and `requires` Tasks `>=0.1.0, <1.0.0`; the
+capability (resource `tasks`, operation `call`) and `requires` Tasks `>=0.1.1, <1.0.0`; the
 installer therefore needs Tasks installed first. A host that injects its own references still wins.
 
 Live (`pnpm test:rust-calendar-server` through `scripts/run-gate.sh`, real HTTPS server, both
@@ -1374,3 +1374,9 @@ Not proven: a second account over HTTP (setup allows one owner, so the second ac
 were inserted directly in the database), the Briefings reference adapter, Connectors, provider
 execution, retry/recover/confirm running a change, a second physical device over LAN or tailnet,
 and any Calendar screen change (none made). A cold Tasks start in a release build was not timed.
+
+Review round 1 (Codex): the version range accepted the old Tasks package without the new call (fixed
+as above). Still open, not fixed here: a cold Tasks start inside a request compiles the package
+while Calendar's five-second deadline runs, and the server has no compiled-code cache, so the first
+day plan that names a task after a server start can fail with 400. This is a host-wide limit (every
+module-to-module call has it), so it needs its own change such as compiling at install or start.

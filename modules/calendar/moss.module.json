@@ -181,7 +181,7 @@
     }
   ],
   "requires": {
-    "tasks": ">=0.1.0, <1.0.0"
+    "tasks": ">=0.1.1, <1.0.0"
   },
   "provides": {
     "listEvents": "1.0.0",
