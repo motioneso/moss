@@ -1349,3 +1349,34 @@ first, so that work was dropped in favor of part 28's version. Part 29's only co
 server test now prints the sign-up response body on failure. Observed before the merge: the server
 test failed at sign-up (422 "Failed to create user") when run in the same database right after the
 other Calendar tests, and passed when run alone. Cause not found.
+
+## JS-220 / part 31: day plans check tasks through the real Tasks package (package 0.26.0)
+
+Before this part, day plans checked task references only through a test stand-in in the host.
+Now Calendar requires the Tasks package and calls its new public `getTaskReference` (Tasks becomes
+0.1.1, and Calendar requires `>=0.1.1, <1.0.0` so an older Tasks cannot satisfy it). The reply carries only id, owner, status and due time, read under the caller's account, so a
+task the caller cannot see reads as absent and day plans answer 404. Calendar declares one `api`
+capability (resource `tasks`, operation `call`) and `requires` Tasks `>=0.1.1, <1.0.0`; the
+installer therefore needs Tasks installed first. A host that injects its own references still wins.
+
+Live (`pnpm test:rust-calendar-server` through `scripts/run-gate.sh`, real HTTPS server, both
+packages installed from a signed registry, nothing rewritten): a day plan naming the signed-in
+owner's own task gives 200; naming another account's task gives 404; an unknown id gives 404. The
+earlier Calendar checks and the Chrome checks still pass. Tests: Tasks `reference` (2), Calendar
+host `package` (4), Calendar guest (31), Tasks component, metadata and tool services pass.
+
+Two things found on the way. The first call into Tasks compiles its package and took about 20 s in a
+debug server build, which exceeded the module time limit and produced 400; the gate now warms Tasks
+with one request first. A Tasks error read as "unavailable" (503), so Tasks answers `{"task":null}`
+for an absent task instead of failing.
+
+Not proven: a second account over HTTP (setup allows one owner, so the second account and its task
+were inserted directly in the database), the Briefings reference adapter, Connectors, provider
+execution, retry/recover/confirm running a change, a second physical device over LAN or tailnet,
+and any Calendar screen change (none made). A cold Tasks start in a release build was not timed.
+
+Review round 1 (Codex): the version range accepted the old Tasks package without the new call (fixed
+as above). Still open, not fixed here: a cold Tasks start inside a request compiles the package
+while Calendar's five-second deadline runs, and the server has no compiled-code cache, so the first
+day plan that names a task after a server start can fail with 400. This is a host-wide limit (every
+module-to-module call has it), so it needs its own change such as compiling at install or start.

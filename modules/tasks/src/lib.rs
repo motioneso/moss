@@ -58,6 +58,13 @@ pub fn handle<H: moss_module_sdk::Host + ?Sized>(
                 Prepare(Prepare),
                 #[serde(rename = "prepareTaskRoute")]
                 PrepareRoute(PrepareRoute),
+                #[serde(rename = "getTaskReference")]
+                Reference(Reference),
+            }
+            #[derive(serde::Deserialize)]
+            #[serde(deny_unknown_fields)]
+            struct Reference {
+                id: String,
             }
             #[derive(serde::Deserialize)]
             #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -74,10 +81,26 @@ pub fn handle<H: moss_module_sdk::Host + ?Sized>(
                 // A JSON string keeps field order, which sets the card's row order.
                 input_json: String,
             }
-            Ok(match serde_json::from_str(payload)? {
+            let api: Api = serde_json::from_str(payload)?;
+            if let Api::Reference(r) = api {
+                // The host reads through the caller's account, so another account's task is absent.
+                let Some(task) = repository::Repository::new(host)
+                    .task(&r.id)
+                    .map_err(|_| moss_module_sdk::Error::new("Task reference unavailable"))?
+                else {
+                    return Ok(serde_json::json!({"task":null}).to_string());
+                };
+                let dto = task.dto(&[]);
+                return Ok(serde_json::json!({"task":{
+                    "id":dto["id"],"ownerUserId":dto["ownerUserId"],
+                    "status":dto["status"],"dueAt":dto["dueAt"]}})
+                .to_string());
+            }
+            Ok(match api {
                 Api::Prepare(request) => {
                     approval::prepare(host, &request.tool, &request.input_json)
                 }
+                Api::Reference(_) => unreachable!(),
                 Api::PrepareRoute(r) => approval::prepare_route(
                     host,
                     &r.route,
