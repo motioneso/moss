@@ -45,9 +45,14 @@ jobs:
         run: |
           $root = (Get-Location).Path
           ./rust-spike/bundled-db/proof/windows/supervisor.ps1 -MossDb "$root\.rust-sup\target\debug\moss-db.exe" -Postgres "$root\.rust-sup\bundle\postgres" -Repo $root
+      - name: Disk encryption check as administrator and as a standard user
+        shell: pwsh
+        run: |
+          $root = (Get-Location).Path
+          ./rust-spike/bundled-db/proof/windows/at-rest.ps1 -MossDb "$root\.rust-sup\target\debug\moss-db.exe"
       - name: Build the server and the app's proof program
         run: |
-          cargo +1.95.0 build --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-shell
+          cargo +1.95.0 build --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-shell -p moss-app
           cargo +1.95.0 test --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-app --no-run --message-format=json > .rust-sup/app-build.jsonl
       - name: App sets up, starts, stops and restarts the whole local server as a standard user
         shell: pwsh
@@ -56,4 +61,4 @@ jobs:
           $bin = "$root\.rust-sup\target\debug"
           $exe = Get-Content .rust-sup/app-build.jsonl | ForEach-Object { try { $_ | ConvertFrom-Json } catch {} } |
             Where-Object { $_.executable -and $_.target.name -eq 'moss-app' -and $_.profile.test } | Select-Object -Last 1
-          ./rust-spike/shell/tools/windows-lifecycle.ps1 -Bin $bin -Postgres "$root\.rust-sup\bundle\postgres" -Repo $root -TestExe $exe.executable
+          ./rust-spike/shell/tools/windows-lifecycle.ps1 -Bin $bin -Postgres "$root\.rust-sup\bundle\postgres" -Repo $root -TestExe $exe.executable -AppExe "$bin\moss-app.exe"
