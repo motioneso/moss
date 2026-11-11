@@ -76,6 +76,16 @@ impl Ports for CalendarPorts {
                 .as_str()
                 .filter(|id| !id.is_empty())
                 .ok_or_else(|| anyhow::anyhow!("Reference id required"))?;
+            if request.resource == "calendar.task-reference" && self.references.is_none() {
+                // The Tasks package answers through its public API, under this account.
+                let call = Request {
+                    operation: "call".into(),
+                    resource: "tasks".into(),
+                    parameters: serde_json::json!({"name":"getTaskReference","parameters":{"id":id}}),
+                };
+                moss_module_host::runtime::authorize(scope.module(), "api", &call)?;
+                return self.next.invoke(scope, "api", &call);
+            }
             let references = self
                 .references
                 .as_ref()

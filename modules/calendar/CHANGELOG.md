@@ -1,5 +1,9 @@
 # Calendar package
 
+## 0.26.0
+
+- Day plans now check task references against the real Tasks package, under the signed-in account. A task that does not exist, or belongs to another account, is refused the same way (404). Calendar now requires Tasks to be installed.
+
 ## 0.22.0
 
 - Add the day-plan apply route. It checks the request shape and answers "day plan apply is unavailable" (503) until a Connectors package can run the change; nothing is written.
