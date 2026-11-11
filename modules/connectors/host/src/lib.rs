@@ -18,7 +18,10 @@ use std::{
 #[derive(Default)]
 struct Flight {
     lock: tokio::sync::Mutex<()>,
+    /// Counts refreshes that reached Google.
     finished: AtomicU64,
+    /// The answer of the latest refresh that reached Google.
+    last: Mutex<Option<std::result::Result<String, google::RefreshFailure>>>,
 }
 
 pub mod google;
@@ -79,16 +82,25 @@ impl ConnectorsPorts {
         self.runtime.block_on(async {
             let seen = flight.finished.load(Ordering::SeqCst);
             let _turn = flight.lock.lock().await;
-            // Someone refreshed while this caller waited, so their token is current.
-            let force = force && flight.finished.load(Ordering::SeqCst) == seen;
+            // A refresh reached Google while this caller waited, so its answer is current,
+            // whether it gave a token or a failure.
+            if flight.finished.load(Ordering::SeqCst) != seen {
+                if let Some(shared) = flight.last.lock().expect("last").clone() {
+                    return Ok(shared);
+                }
+            }
             let cx = DataContext::open(&self.database, access)
                 .await
                 .map_err(|_| anyhow::anyhow!("Connectors data unavailable"))?;
-            let outcome = google::fresh_access_token(&cx, &self.cipher, &self.google, force).await?;
+            let (outcome, refreshed) =
+                google::fresh_access_token_traced(&cx, &self.cipher, &self.google, force).await?;
             cx.commit()
                 .await
                 .map_err(|_| anyhow::anyhow!("Connectors data unavailable"))?;
-            flight.finished.fetch_add(1, Ordering::SeqCst);
+            if refreshed {
+                *flight.last.lock().expect("last") = Some(outcome.clone());
+                flight.finished.fetch_add(1, Ordering::SeqCst);
+            }
             Ok(outcome)
         })
     }

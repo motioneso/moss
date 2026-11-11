@@ -98,7 +98,7 @@ impl GoogleConfig {
 }
 
 /// The answer to a refresh request that did not give a token.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RefreshFailure {
     NoConnection,
     /// Google refused the stored sign-in. The account now reads as needing sign-in.
@@ -267,6 +267,17 @@ pub async fn fresh_access_token(
     config: &GoogleConfig,
     force: bool,
 ) -> Result<std::result::Result<String, RefreshFailure>> {
+    Ok(fresh_access_token_traced(cx, cipher, config, force).await?.0)
+}
+
+/// Same as `fresh_access_token`, and also says whether Google was asked. Callers that
+/// waited behind a real refresh share its answer, including a failure.
+pub async fn fresh_access_token_traced(
+    cx: &DataContext,
+    cipher: &JsonSecretCipher,
+    config: &GoogleConfig,
+    force: bool,
+) -> Result<(std::result::Result<String, RefreshFailure>, bool)> {
     let row = cx
         .db()
         .query_opt(
@@ -276,15 +287,16 @@ pub async fn fresh_access_token(
         )
         .await?;
     let Some(row) = row else {
-        return Ok(Err(RefreshFailure::NoConnection));
+        return Ok((Err(RefreshFailure::NoConnection), false));
     };
     let id: Uuid = row.get(0);
-    let mut bundle = open(cipher, &row.get::<_, Value>(1))?;
+    let original: Value = row.get(1);
+    let mut bundle = open(cipher, &original)?;
     let left = DateTime::parse_from_rfc3339(&string(&bundle, "tokenExpiry")?)
         .map(|t| t.timestamp_millis() - (config.now)().timestamp_millis())
         .unwrap_or(0);
     if !force && left > FRESH_FOR * 1000 {
-        return Ok(Ok(string(&bundle, "accessToken")?));
+        return Ok((Ok(string(&bundle, "accessToken")?), false));
     }
     let refreshed = post_token(
         config,
@@ -296,13 +308,31 @@ pub async fn fresh_access_token(
         ],
     )
     .await;
+    // The person may have reconnected or disconnected while Google answered. Lock the row and
+    // use that newer state instead of writing over it with a response to the old sign-in.
+    let current = cx
+        .db()
+        .query_opt(
+            "SELECT encrypted_secret FROM app.connector_accounts
+             WHERE id = $1 AND status = 'active' FOR UPDATE",
+            &[&id],
+        )
+        .await?;
+    match current {
+        None => return Ok((Err(RefreshFailure::NoConnection), true)),
+        Some(row) if row.get::<_, Value>(0) != original => {
+            let newer = open(cipher, &row.get::<_, Value>(0))?;
+            return Ok((Ok(string(&newer, "accessToken")?), true));
+        }
+        Some(_) => {}
+    }
     let tokens = match refreshed {
         Ok(Ok(tokens)) => tokens,
         Ok(Err(400 | 401 | 403)) => {
             mark_needs_sign_in(cx, id).await?;
-            return Ok(Err(RefreshFailure::NeedsSignIn));
+            return Ok((Err(RefreshFailure::NeedsSignIn), true));
         }
-        _ => return Ok(Err(RefreshFailure::Unreachable)),
+        _ => return Ok((Err(RefreshFailure::Unreachable), true)),
     };
     bundle.insert("accessToken".into(), json!(tokens.access_token));
     bundle.insert("tokenExpiry".into(), json!(expiry(config, tokens.expires_in)));
@@ -316,7 +346,7 @@ pub async fn fresh_access_token(
         &json!({"id":id.to_string(),"tokenPayload":Value::Object(bundle)}),
     )
     .await?;
-    Ok(Ok(token))
+    Ok((Ok(token), true))
 }
 
 /// Records the same failed run with the same label the old sync wrote when sign-in failed.
@@ -420,6 +450,7 @@ impl Transport for PlainHttp {
             .collect();
         let response = reqwest::blocking::Client::builder()
             .no_proxy()
+            .redirect(reqwest::redirect::Policy::none())
             .timeout(r.timeout)
             .build()?
             .request(r.method, r.url.clone())

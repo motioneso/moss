@@ -275,6 +275,73 @@ fn tokens_refresh_near_expiry_share_one_request_and_a_revoked_grant_needs_sign_i
     assert_eq!(f.token(f.b, &live(), false), Err(RefreshFailure::NoConnection));
 }
 
+/// A one-shot local server. It answers the first request with `reply` after `wait` returns.
+fn one_shot(reply: String, wait: impl FnOnce() + Send + 'static) -> (String, std::thread::JoinHandle<()>) {
+    use std::io::{Read, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}/token", listener.local_addr().unwrap());
+    let handle = std::thread::spawn(move || {
+        let (mut c, _) = listener.accept().unwrap();
+        let mut buf = [0u8; 4096];
+        let _ = c.read(&mut buf);
+        wait();
+        let _ = c.write_all(reply.as_bytes());
+    });
+    (url, handle)
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_token_request_never_follows_a_redirect() {
+    let f = Fixture::new();
+    f.connect(f.a, "code-redirect");
+    let target = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    target.set_nonblocking(true).unwrap();
+    let away = format!("http://{}/steal", target.local_addr().unwrap());
+    let (url, server) = one_shot(
+        format!("HTTP/1.1 307 Temporary Redirect\r\nLocation: {away}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"),
+        || {},
+    );
+    assert_eq!(f.token(f.a, &config(&url), true), Err(RefreshFailure::Unreachable));
+    server.join().unwrap();
+    assert!(target.accept().is_err(), "the redirect target was contacted");
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_slow_refresh_does_not_overwrite_a_newer_connection() {
+    let f = Fixture::new();
+    let id: Uuid = f.connect(f.a, "code-race")["id"].as_str().unwrap().parse().unwrap();
+    let (release, gate) = std::sync::mpsc::channel::<()>();
+    let (url, server) = one_shot(
+        {
+            let body = r#"{"access_token":"ya29.old-response","expires_in":3600}"#;
+            format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len())
+        },
+        move || {
+            let _ = gate.recv();
+        },
+    );
+    let cfg = config(&url);
+    let outcome = std::thread::scope(|s| {
+        let refresh = s.spawn(|| f.token(f.a, &cfg, true));
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        let mut newer = f.stored_secret(&id.to_string());
+        newer["accessToken"] = json!("ya29.newer-connection");
+        newer["tokenExpiry"] = json!("2999-01-01T00:00:00.000Z");
+        f.rt.block_on(f.root.execute(
+            "UPDATE app.connector_accounts SET encrypted_secret = $2 WHERE id = $1",
+            &[&id, &connector_cipher(KEY).unwrap().encrypt_json(newer.as_object().unwrap())],
+        ))
+        .unwrap();
+        release.send(()).unwrap();
+        refresh.join().unwrap()
+    });
+    server.join().unwrap();
+    assert_eq!(outcome, Ok("ya29.newer-connection".into()));
+    assert_eq!(f.stored_secret(&id.to_string())["accessToken"], "ya29.newer-connection");
+}
+
 #[test]
 #[ignore = "Only through verify-gate"]
 fn google_accounts_revoke_and_stop_being_active() {
