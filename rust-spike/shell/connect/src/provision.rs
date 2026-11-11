@@ -122,12 +122,10 @@ fn setup_lock(servers: &Path) -> Result<std::fs::File, Failure> {
         use std::os::unix::fs::OpenOptionsExt;
         options.mode(0o600);
     }
-    let file = options
-        .open(servers.join("setup.lock"))
-        .map_err(|e| {
-            eprintln!("moss-app setup: lock file: {e}");
-            Failure::Other
-        })?;
+    let file = options.open(servers.join("setup.lock")).map_err(|e| {
+        eprintln!("moss-app setup: lock file: {e}");
+        Failure::Other
+    })?;
     portability::file_lock::exclusive(&file).map_err(|e| {
         eprintln!("moss-app setup: lock: {e}");
         Failure::Other
