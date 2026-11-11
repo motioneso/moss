@@ -67,6 +67,10 @@ pub struct Settings {
     /// One OpenAI-style embeddings endpoint for every account. Absent means embeddings fail closed.
     #[serde(default)]
     pub(crate) embeddings: Option<EmbeddingSettings>,
+    /// TEST ONLY. An http loopback address that stands in for Google's token endpoint.
+    /// Never set in a real install; anything but http on this machine is refused at start.
+    #[serde(default)]
+    pub(crate) test_only_google_token_url: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -266,6 +270,7 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
         .admin_user_id
         .ok_or_else(|| anyhow::anyhow!("No module has been installed yet"))?;
     let connectors_key = settings.connector_key.clone();
+    let google_test_url = settings.test_only_google_token_url.clone();
     let cipher = SecretCipher::connectors(
         &[("JARVIS_CONNECTOR_SECRET_KEY".into(), settings.connector_key)].into(),
     )
@@ -363,7 +368,12 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
             let services = Arc::new(CalendarPorts::new(calendar_database, services)?) as Arc<dyn Ports>;
             // Connectors answers only its own account calls and seals secrets with the
             // connector key. Every other call passes through.
-            let services = Arc::new(ConnectorsPorts::new(connectors_database, services, &connectors_key)?) as Arc<dyn Ports>;
+            let mut connectors = ConnectorsPorts::new(connectors_database, services, &connectors_key)?;
+            if let Some(url) = &google_test_url {
+                eprintln!("WARNING: test_only_google_token_url is set. Google sign-in talks to {url}, not Google.");
+                connectors = connectors.with_google(moss_connectors_host::google::GoogleConfig::test_only_loopback(url)?);
+            }
+            let services = Arc::new(connectors) as Arc<dyn Ports>;
             // Email answers only its own cached-message and preference calls.
             Ok(Arc::new(EmailPorts::new(email_database, services)?) as Arc<dyn Ports>)
         },

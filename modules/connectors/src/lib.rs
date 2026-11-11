@@ -7,6 +7,7 @@ use serde_json::{json, Value};
 mod abi;
 pub mod accounts;
 pub mod fastify;
+pub mod google;
 pub mod grants;
 pub mod health;
 #[cfg(not(target_arch = "wasm32"))]
@@ -56,6 +57,17 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
             };
             serde_json::to_string(&response).map_err(|_| "Invalid connectors response".into())
         }
+        "tool" => {
+            let input: Value =
+                serde_json::from_str(payload).map_err(|_| "Invalid connectors request")?;
+            match input["tool"].as_str() {
+                Some("connectors.startGoogleGuidance") | Some("startGoogleGuidance") => {
+                    serde_json::to_string(&google::guidance())
+                        .map_err(|_| "Invalid connectors response".into())
+                }
+                _ => Err("Connectors tool is unavailable".into()),
+            }
+        }
         _ => Err("Connectors handler is unavailable".into()),
     }
 }
@@ -79,6 +91,8 @@ fn route(host: &impl Host, request: RouteRequest) -> Result<(u16, Value)> {
         ("PUT", "/accounts/:id/feature-grants") => {
             accounts::put_grants(host, &id, &request.body).map(|b| (200, b))
         }
+        ("POST", "/google/authorize") => google::authorize(host, &request.body).map(|b| (200, b)),
+        ("POST", "/google/complete") => google::complete(host, &request.body),
         ("GET", "/admin/accounts") => accounts::admin_list(host).map(|b| (200, b)),
         _ => Err(Error::new(404, "Connectors route not found")),
     }

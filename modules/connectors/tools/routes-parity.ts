@@ -6,6 +6,7 @@ import { spawnSync } from "node:child_process";
 import Fastify from "fastify";
 import { setMossErrorHandler } from "../../../apps/api/src/error-handling.js";
 import { registerConnectorsRoutes } from "../../../packages/connectors/src/routes.js";
+import { GoogleConnectError } from "../../../packages/connectors/src/google-connection.js";
 
 const binary = process.env.CONNECTORS_ORACLE;
 assert(binary, "Build the connectors oracle first");
@@ -123,7 +124,28 @@ registerConnectorsRoutes(server, {
   repository: repository as unknown as never,
   preferencesRepository: preferences as unknown as never,
   secretCipher: { encryptJson: () => ({ sealed: true }) } as unknown as never,
-  googleService: {} as unknown as never,
+  googleService: {
+    startAuthorization: async (_db: unknown, input: { clientId: string }) => ({
+      authUrl: `https://accounts.example.test/auth?client_id=${input.clientId}`
+    }),
+    completeAuthorization: async (_db: unknown, input: { redirectUrl: string }) => {
+      if (input.redirectUrl.includes("mismatch"))
+        throw new GoogleConnectError(
+          "Authorization state did not match \u2014 please retry the connect flow"
+        );
+      const created = row(
+        `acct-${++next}`,
+        "google",
+        [
+          "https://www.googleapis.com/auth/gmail.modify",
+          "https://www.googleapis.com/auth/calendar"
+        ],
+        "active"
+      );
+      accounts.unshift(created);
+      return created;
+    }
+  } as unknown as never,
   imapService: {} as unknown as never
 });
 

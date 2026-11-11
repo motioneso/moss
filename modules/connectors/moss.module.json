@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "connectors",
   "name": "Connectors",
-  "description": "Keeps the mail and calendar connections of each account, their sign-in secrets and the Email and Calendar permissions. Google, IMAP and Outlook sign-in and sync are not part of this package yet.",
+  "description": "Keeps the mail and calendar connections of each account, their sign-in secrets and the Email and Calendar permissions. Connecting Google works by pasting your own Google client details. IMAP and Outlook sign-in and all syncing are not part of this package yet.",
   "publisher": "Moss",
   "version": "0.1.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
@@ -17,7 +17,9 @@
         "connectors.account-write",
         "connectors.feature-grants",
         "connectors.admin-accounts",
-        "connectors.diagnostics"
+        "connectors.diagnostics",
+        "connectors.google-authorize",
+        "connectors.google-complete"
       ]
     }
   ],
@@ -97,6 +99,16 @@
       "signIn": true
     },
     {
+      "method": "POST",
+      "path": "/google/authorize",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/google/complete",
+      "signIn": true
+    },
+    {
       "method": "GET",
       "path": "/admin/accounts",
       "signIn": true
@@ -112,7 +124,7 @@
   "features": [
     {
       "id": "connectors.accounts",
-      "description": "Lists, creates, updates and revokes the signed-in person's connection accounts. Secrets are sealed on save and never returned; only a safe summary is shown. Google, IMAP and Outlook cannot be connected from this package yet.",
+      "description": "Lists, creates, updates and revokes the signed-in person's connection accounts. Secrets are sealed on save and never returned; only a safe summary is shown. Google connects through its own guided flow. IMAP and Outlook cannot be connected from this package yet.",
       "errors": [
         {
           "code": "connector-account-not-found",
@@ -140,6 +152,55 @@
       ]
     },
     {
+      "id": "connectors.google-connect",
+      "description": "Settings, Connections, Connect Google walks through making a Google client (a desktop-app type), then you paste its client ID and secret, open Google's consent page and paste the address you land on to finish. Moss swaps the code for tokens on the server and seals them. With no Google account connected, the Connections screen offers this flow first. Reconnecting replaces the old sign-in. The chat can explain the steps but never sees the secret.",
+      "errors": [
+        {
+          "code": "google-connect-no-pending",
+          "class": "validation",
+          "description": "There is no sign-in in progress, so the pasted address cannot be finished",
+          "remediationRef": "connectors-restart-google"
+        },
+        {
+          "code": "google-connect-state-mismatch",
+          "class": "validation",
+          "description": "The pasted address belongs to a different attempt",
+          "remediationRef": "connectors-restart-google"
+        },
+        {
+          "code": "google-connect-no-refresh-token",
+          "class": "validation",
+          "description": "Google did not hand back a long-lived sign-in, usually because consent was not asked again",
+          "remediationRef": "connectors-restart-google"
+        },
+        {
+          "code": "google-connect-rate-limited",
+          "class": "transient",
+          "description": "Finishing was tried more than five times in a minute",
+          "remediationRef": "connectors-restart-google"
+        },
+        {
+          "code": "google-connect-failed",
+          "class": "transient",
+          "description": "Google refused the code or could not be reached",
+          "remediationRef": "connectors-restart-google"
+        },
+        {
+          "code": "google-sign-in-needed",
+          "class": "validation",
+          "description": "Google no longer accepts the stored sign-in, for example after access was removed in the Google account",
+          "remediationRef": "connectors-restart-google"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "connectors-restart-google",
+          "description": "Start Connect Google again",
+          "path": "/settings/connections"
+        }
+      ]
+    },
+    {
       "id": "connectors.feature-grants",
       "description": "Each connection account has an Email switch and a Calendar switch. A missing choice means on. Changing a switch writes an admin audit line."
     },
@@ -152,7 +213,12 @@
       "description": "Instance administrators see a safe list of every account (provider, status, last sync) without secrets. Administrators cannot read another person's secrets or data."
     }
   ],
-  "tools": {},
+  "tools": {
+    "connectors.startGoogleGuidance": {
+      "description": "Explain, step by step, how the user connects their Google account (Gmail + Calendar). Read-only guidance; the user completes the secret-entry steps in Settings.",
+      "risk": "read"
+    }
+  },
   "jobs": {},
   "screens": {
     "/settings/connections": "ui/settings.html"
@@ -164,7 +230,7 @@
       "label": "Connections",
       "path": "/settings/connections",
       "scope": "user",
-      "description": "Mail and calendar connections for this account, their health and the Email and Calendar switches for each. Connecting Google, IMAP or Outlook is not available in this version."
+      "description": "Mail and calendar connections for this account, their health and the Email and Calendar switches for each. Connect Google is offered here. Connecting IMAP or Outlook is not available in this version."
     }
   ]
 }

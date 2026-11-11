@@ -25,6 +25,7 @@ impl Drop for Server {
         let _ = self.0.wait();
     }
 }
+static CLAIMED_PORT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 struct Port(String);
 impl Drop for Port {
     fn drop(&mut self) {
@@ -46,6 +47,19 @@ fn private(path: &Path, value: &Value) {
 #[ignore = "Only through verify-gate and the Connectors live gate"]
 fn installed_connectors_package_serves_routes_from_the_real_server() {
     assert_eq!(std::env::var("JARVIS_GATE_RUN").as_deref(), Ok("1"));
+    // Whole-test watchdog. A hang anywhere (server start, a read, the browser) ends the
+    // process with a clear message instead of blocking the gate.
+    std::thread::spawn(|| {
+        std::thread::sleep(Duration::from_secs(900));
+        eprintln!("WATCHDOG: the Connectors live test ran longer than 900s and was stopped");
+        // exit() skips the cleanup guards, so stop the server, fake Google and browser
+        // runner and hand the port back here.
+        let _ = Command::new("pkill").args(["-KILL", "-P", &std::process::id().to_string()]).status();
+        if let Some(port) = CLAIMED_PORT.get() {
+            let _ = Command::new("devports").args(["release", port]).output();
+        }
+        std::process::exit(124);
+    });
     let scratch = tempfile::tempdir().unwrap();
     let root = scratch.path();
     let port = Port(
@@ -61,6 +75,7 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
         .into(),
     );
     assert!(!port.0.is_empty());
+    let _ = CLAIMED_PORT.set(port.0.clone());
     let origin = format!("https://localhost:{}", port.0);
     let cert = root.join("tls/certificate.pem");
     assert!(Command::new(std::env::var("JS170_CERTIFICATE").unwrap())
@@ -275,9 +290,50 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
         installer.install(&access, &source, artifact, true).unwrap();
     }
     drop(installer);
+    // The fake Google runs as its own process. The server reaches it only through the
+    // test-only setting, which is never on in a normal install.
+    let mut fake_google = Server(
+        Command::new(std::env::var("JS230_FAKE_GOOGLE").expect("the gate must supply the fake Google"))
+            .args(["live-http-code", "live-browser-code"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap(),
+    );
+    // Read the fake's startup lines on a helper thread with a deadline, so a missing line
+    // fails the test loudly instead of blocking it forever.
+    let mut google_lines = std::collections::HashMap::new();
+    {
+        use std::io::BufRead;
+        let mut out = std::io::BufReader::new(fake_google.0.stdout.take().unwrap());
+        let (lines, received) = std::sync::mpsc::channel::<String>();
+        std::thread::spawn(move || {
+            let mut line = String::new();
+            while out.read_line(&mut line).is_ok_and(|n| n > 0) {
+                if lines.send(line.trim().to_owned()).is_err() {
+                    break;
+                }
+                line.clear();
+            }
+        });
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while ["token-url", "client-id", "client-secret"].iter().any(|k| !google_lines.contains_key(*k)) {
+            let left = deadline.saturating_duration_since(Instant::now());
+            let line = received
+                .recv_timeout(left)
+                .unwrap_or_else(|_| panic!("the fake Google did not print its startup lines in 15s; got {google_lines:?}"));
+            if let Some((key, value)) = line.split_once(' ') {
+                google_lines.insert(key.to_owned(), value.to_owned());
+            }
+        }
+    }
+    let token_url = google_lines["token-url"].clone();
+    let google_id = google_lines["client-id"].clone();
+    let google_secret = google_lines["client-secret"].clone();
     private(
         &root.join("modules.json"),
-        &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key}),
+        &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"test_only_google_token_url":token_url}),
     );
     let _server = start(true);
     let log = || fs::read_to_string(root.join("server.log")).unwrap_or_default();
@@ -347,6 +403,24 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
     assert_eq!(status, 200, "{text}");
     seen.push(text.clone());
     assert_eq!(json_of(&text)["account"]["status"].as_str().or(json_of(&text)["status"].as_str()), Some("revoked"), "{text}");
+    // Google connect over HTTP with the fake Google: start, then finish with the pasted address.
+    let (status, text) = call(
+        Method::POST,
+        "/google/authorize",
+        Some(&cookie),
+        Some(json!({"clientId":google_id,"clientSecret":google_secret})),
+    );
+    assert_eq!(status, 200, "{text}\n{}", log());
+    seen.push(text.clone());
+    let auth_url = url::Url::parse(json_of(&text)["authUrl"].as_str().expect("authUrl")).unwrap();
+    assert_eq!(auth_url.host_str(), Some("accounts.google.com"));
+    let state = auth_url.query_pairs().find(|(k, _)| k == "state").unwrap().1.to_string();
+    let pasted = format!("http://localhost:1/?code=live-http-code&state={state}");
+    let (status, text) = call(Method::POST, "/google/complete", Some(&cookie), Some(json!({"redirectUrl":pasted})));
+    assert_eq!(status, 201, "{text}\n{}", log());
+    seen.push(text.clone());
+    assert_eq!(json_of(&text)["account"]["status"], "active", "{text}");
+    println!("PASS Google connect over HTTP: authorize then complete answered 201 with an active account");
     // The marker must be in no response, no log line, and no stored job; the stored secret is sealed.
     let markers = [MARKER, MARKER_TOKEN, MARKER_REFRESH];
     for body in &seen {
@@ -380,7 +454,7 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
         }
         // Control: the same search does find a value that really is stored, so a zero above means absent.
         let control: i64 = db
-            .query_one("SELECT count(*) FROM app.connector_accounts t WHERE to_jsonb(t)::text LIKE '%' || $1 || '%'", &[&"gmail.modify"])
+            .query_one("SELECT count(*) FROM app.connector_accounts t WHERE to_jsonb(t)::text LIKE '%' || $1 || '%'", &[&"gmail.readonly"])
             .await
             .unwrap()
             .get(0);
@@ -403,16 +477,58 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
     {
         let script = std::env::var("MOSS_CONNECTORS_BROWSER_SCRIPT").expect("the gate must supply the browser script");
         let out = std::env::var("MOSS_CONNECTORS_BROWSER_OUT").unwrap_or_else(|_| root.display().to_string());
-        let status = Command::new("pnpm")
-            .args(["exec", "tsx", &script])
+        let status = Command::new("timeout")
+            .args(["--kill-after=10", "300", "pnpm", "exec", "tsx", &script])
             .env("ORIGIN", &origin)
             .env("EMAIL", "connectors-owner@example.test")
             .env("PASSWORD", "temporary-connectors-password-224-not-a-real-secret")
+            .env("GOOGLE_CLIENT_ID", &google_id)
+            .env("GOOGLE_CLIENT_SECRET", &google_secret)
+            .env("GOOGLE_CODE", "live-browser-code")
             .env("OUT", out)
             .status()
             .unwrap();
         assert!(status.success(), "browser check failed\n{}", log());
     }
+    {
+        // After both Google connects (HTTP and browser): none of the secrets or tokens is
+        // in the server log or any stored row in plain text.
+        let google_markers = [google_secret.as_str(), "ya29.fake-access-", "1//fake-refresh-"];
+        for marker in google_markers {
+            assert!(!log().contains(marker), "Google marker in the server log: {marker}");
+        }
+        runtime.block_on(async {
+            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+            tokio::spawn(async move {
+                let _ = connection.await;
+            });
+            let tables = db
+                .query("SELECT table_schema, table_name FROM information_schema.tables WHERE table_type='BASE TABLE' AND table_schema NOT IN ('pg_catalog','information_schema')", &[])
+                .await
+                .unwrap();
+            for row in tables {
+                let (schema, name): (String, String) = (row.get(0), row.get(1));
+                for marker in google_markers {
+                    let hits: i64 = db
+                        .query_one(&format!("SELECT count(*) FROM \"{schema}\".\"{name}\" t WHERE to_jsonb(t)::text LIKE '%' || $1 || '%'"), &[&marker])
+                        .await
+                        .unwrap()
+                        .get(0);
+                    assert_eq!(hits, 0, "Google marker {marker} found in {schema}.{name}");
+                }
+            }
+            let control: i64 = db
+                .query_one("SELECT count(*) FROM app.connector_accounts t WHERE to_jsonb(t)::text LIKE '%' || $1 || '%'", &[&"gmail.readonly"])
+                .await
+                .unwrap()
+                .get(0);
+            assert!(control >= 1, "the search must find a stored value");
+            let pending: i64 = db.query_one("SELECT count(*) FROM app.connector_oauth_pending", &[]).await.unwrap().get(0);
+            assert_eq!(pending, 0, "no pending sign-in is left after both connects");
+        });
+        println!("PASS Google secrets and tokens absent from the server log and every stored row; no pending sign-in left");
+    }
+    drop(fake_google);
     if let Ok(seconds) = std::env::var("MOSS_CONNECTORS_HOLD_SECONDS") {
         println!("HOLD {origin} for {seconds}s");
         std::thread::sleep(Duration::from_secs(seconds.parse().unwrap_or(0)));

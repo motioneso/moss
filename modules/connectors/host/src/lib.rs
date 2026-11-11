@@ -6,8 +6,25 @@ use moss_module_host::runtime::{CallScope, Ports, Request};
 use portability::secrets::{resolve_keyring, JsonSecretCipher};
 use safety_core::db::{DataContext, Database};
 use serde_json::Value;
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, Mutex,
+    },
+};
 
+/// One refresh at a time per person. A caller that waited behind a refresh uses its result.
+#[derive(Default)]
+struct Flight {
+    lock: tokio::sync::Mutex<()>,
+    /// Counts refreshes that reached Google.
+    finished: AtomicU64,
+    /// The answer of the latest refresh that reached Google.
+    last: Mutex<Option<std::result::Result<String, google::RefreshFailure>>>,
+}
+
+pub mod google;
 pub mod package;
 pub mod store;
 
@@ -18,6 +35,8 @@ pub struct ConnectorsPorts {
     runtime: tokio::runtime::Runtime,
     next: Arc<dyn Ports>,
     cipher: JsonSecretCipher,
+    google: google::GoogleConfig,
+    flights: Mutex<HashMap<uuid::Uuid, Arc<Flight>>>,
 }
 
 /// The cipher the old server used for connector secrets, from the same key setting.
@@ -41,7 +60,55 @@ impl ConnectorsPorts {
             runtime: tokio::runtime::Runtime::new()?,
             next,
             cipher: connector_cipher(key)?,
+            google: google::GoogleConfig::production(),
+            flights: Mutex::default(),
         })
+    }
+
+    /// A token for the person's Google account, refreshed when close to expiry. Concurrent
+    /// callers for one person share a single refresh. Syncing calls this. It never reaches the package.
+    pub fn fresh_google_access_token(
+        &self,
+        access: &access_context::AccessContext,
+        force: bool,
+    ) -> Result<std::result::Result<String, google::RefreshFailure>> {
+        let flight = Arc::clone(
+            self.flights
+                .lock()
+                .expect("flights")
+                .entry(access.actor_user_id())
+                .or_default(),
+        );
+        self.runtime.block_on(async {
+            let seen = flight.finished.load(Ordering::SeqCst);
+            let _turn = flight.lock.lock().await;
+            // A refresh reached Google while this caller waited, so its answer is current,
+            // whether it gave a token or a failure.
+            if flight.finished.load(Ordering::SeqCst) != seen {
+                if let Some(shared) = flight.last.lock().expect("last").clone() {
+                    return Ok(shared);
+                }
+            }
+            let cx = DataContext::open(&self.database, access)
+                .await
+                .map_err(|_| anyhow::anyhow!("Connectors data unavailable"))?;
+            let (outcome, refreshed) =
+                google::fresh_access_token_traced(&cx, &self.cipher, &self.google, force).await?;
+            cx.commit()
+                .await
+                .map_err(|_| anyhow::anyhow!("Connectors data unavailable"))?;
+            if refreshed {
+                *flight.last.lock().expect("last") = Some(outcome.clone());
+                flight.finished.fetch_add(1, Ordering::SeqCst);
+            }
+            Ok(outcome)
+        })
+    }
+
+    /// Points Google token requests somewhere else. Only for tests and the test-only setting.
+    pub fn with_google(mut self, google: google::GoogleConfig) -> Self {
+        self.google = google;
+        self
     }
 }
 
@@ -63,7 +130,11 @@ impl Ports for ConnectorsPorts {
                 let cx = DataContext::open_bounded(&self.database, scope.access(), scope.remaining())
                     .await
                     .map_err(|_| anyhow::anyhow!("Connectors data unavailable"))?;
-                let result = store::run(&cx, &self.cipher, request).await?;
+                let result = if request.resource.starts_with("connectors.google-") {
+                    google::run(&cx, &self.cipher, &self.google, request).await?
+                } else {
+                    store::run(&cx, &self.cipher, request).await?
+                };
                 cx.commit_bounded(scope.remaining())
                     .await
                     .map_err(|_| anyhow::anyhow!("Connectors data unavailable"))?;
