@@ -9,7 +9,7 @@ use serde_json::Value;
 use std::sync::Arc;
 
 pub mod package;
-mod store;
+pub mod store;
 
 pub const MODULE_ID: &str = "connectors";
 
