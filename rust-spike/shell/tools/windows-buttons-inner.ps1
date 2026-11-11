@@ -163,6 +163,12 @@ try {
     if (Test-Path $dt) { Get-Content $dt } else { 'no DevToolsActivePort file' }
     & netstat.exe -ano | Select-String 'LISTENING' | Select-String '127.0.0.1|\[::1\]' | Select-Object -First 25
     foreach ($h in 'localhost', '[::1]') { try { "$h answers: " + (Invoke-WebRequest "http://${h}:$DebugPort/json/version" -UseBasicParsing -TimeoutSec 3).StatusCode } catch { "$h no answer" } }
+    Log '--- browser policies that could switch debugging off'
+    foreach ($k in 'HKLM:\SOFTWARE\Policies\Microsoft\Edge', 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2', 'HKLM:\SOFTWARE\Policies\Microsoft\EdgeWebView', 'HKCU:\SOFTWARE\Policies\Microsoft\Edge') {
+        if (Test-Path $k) { "$k : " + ((Get-ItemProperty $k | Out-String).Trim() -replace '\s+', ' ') } else { "$k : none" }
+    }
+    Log '--- user data folder'
+    Get-ChildItem (Join-Path $Install 'moss-app.exe.WebView2\EBWebView') -ErrorAction SilentlyContinue | Select-Object -First 15 | ForEach-Object { $_.Name }
     Log '--- web engine command lines'
     Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | Select-Object -First 2 | ForEach-Object { $_.CommandLine.Substring(0, [Math]::Min(500, $_.CommandLine.Length)) }
     Log '--- processes'
