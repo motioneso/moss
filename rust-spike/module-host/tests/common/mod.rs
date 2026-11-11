@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+pub mod fake_embedding_model;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use moss_module_host::{
     archive::{pack, Package},

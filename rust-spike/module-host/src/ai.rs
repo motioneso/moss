@@ -9,14 +9,21 @@ use moss_platform_routing::{
 };
 use safety_core::secret::Secret;
 use serde_json::{json, Value};
+use std::sync::Arc;
 use tokio::runtime::Runtime;
 pub trait Intelligence: Send + Sync {
     fn generate(&self, scope: &CallScope, request: &Request) -> Result<Value>;
     fn embed(&self, scope: &CallScope, request: &Request) -> Result<Value>;
+    /// Model name and version the next embedding would be recorded with.
+    fn embedding_model(&self, _scope: &CallScope) -> Result<(String, String)> {
+        anyhow::bail!(NOT_SET_UP)
+    }
 }
 pub struct EmbeddingEndpoint {
     pub url: url::Url,
     pub model: String,
+    /// Version from configuration. The default model has a fixed one.
+    pub version: Option<String>,
     pub credential: Secret,
 }
 #[async_trait]
@@ -26,6 +33,7 @@ pub trait EmbeddingStore: Send + Sync {
 pub struct RouterIntelligence<S, T, E> {
     router: Router<S, T>,
     embeddings: E,
+    activity: Option<Arc<dyn EmbeddingActivity>>,
     runtime: Runtime,
 }
 impl<S: ConfigurationStore, T: CapabilityTransport, E: EmbeddingStore> RouterIntelligence<S, T, E> {
@@ -33,8 +41,14 @@ impl<S: ConfigurationStore, T: CapabilityTransport, E: EmbeddingStore> RouterInt
         Ok(Self {
             router: Router { store, transport },
             embeddings,
+            activity: None,
             runtime: Runtime::new()?,
         })
+    }
+    /// Records one activity row per embedding call.
+    pub fn with_activity(mut self, activity: Arc<dyn EmbeddingActivity>) -> Self {
+        self.activity = Some(activity);
+        self
     }
 }
 impl<S: ConfigurationStore, T: CapabilityTransport, E: EmbeddingStore> Intelligence
@@ -80,13 +94,141 @@ impl<S: ConfigurationStore, T: CapabilityTransport, E: EmbeddingStore> Intellige
         Ok(json!({"text":text}))
     }
     fn embed(&self, scope: &CallScope, r: &Request) -> Result<Value> {
-        embed_via(&self.runtime, &self.embeddings, scope, r)
+        embed_via(&self.runtime, &self.embeddings, self.activity.as_ref(), scope, r)
     }
+    fn embedding_model(&self, scope: &CallScope) -> Result<(String, String)> {
+        let actor = Actor::from_authenticated_session(
+            scope.access().actor_user_id(),
+            uuid::Uuid::new_v4(),
+        );
+        Ok(self
+            .runtime
+            .block_on(self.embeddings.for_actor(actor))?
+            .provenance())
+    }
+}
+
+/// Vector size every stored memory vector must have.
+pub const EMBEDDING_DIMENSIONS: usize = 768;
+/// Model the legacy app uses when none is configured, and the version it records for it.
+pub const DEFAULT_EMBEDDING_MODEL: &str = "nomic-ai/nomic-embed-text-v1.5";
+const DEFAULT_EMBEDDING_VERSION: &str = "1.5";
+/// Shown to the user when no endpoint has been set up.
+pub const NOT_SET_UP: &str = "No embedding model is set up";
+
+/// Which side of a search a text is on. The model needs a different prefix for each.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum EmbeddingKind {
+    Document,
+    Query,
+}
+impl EmbeddingKind {
+    pub fn prefix(self) -> &'static str {
+        match self {
+            Self::Document => "search_document: ",
+            Self::Query => "search_query: ",
+        }
+    }
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Document => "document",
+            Self::Query => "query",
+        }
+    }
+}
+
+impl EmbeddingEndpoint {
+    /// Model name and version written beside every vector.
+    pub fn provenance(&self) -> (String, String) {
+        let version = match (&self.version, self.model == DEFAULT_EMBEDDING_MODEL) {
+            (Some(v), _) => v.clone(),
+            (None, true) => DEFAULT_EMBEDDING_VERSION.to_owned(),
+            (None, false) => "1".to_owned(),
+        };
+        (self.model.clone(), version)
+    }
+}
+
+/// One row of model activity. It holds fixed words and a model name, never any text.
+pub struct EmbeddingCall {
+    pub model: String,
+    pub action: &'static str,
+    pub outcome: &'static str,
+    pub result: String,
+}
+#[async_trait]
+pub trait EmbeddingActivity: Send + Sync {
+    async fn record(&self, call: EmbeddingCall);
+}
+
+/// The only accepted vector shape: exactly 768 finite numbers.
+pub fn check_vector(vector: &[Value]) -> Result<Vec<f64>> {
+    ensure!(
+        vector.len() == EMBEDDING_DIMENSIONS,
+        "Embedding vector has the wrong size"
+    );
+    vector
+        .iter()
+        .map(|v| {
+            v.as_f64()
+                .filter(|n| n.is_finite())
+                .context("Embedding vector has a value that is not a finite number")
+        })
+        .collect()
+}
+
+async fn request_vector(
+    endpoint: &EmbeddingEndpoint,
+    input: &str,
+    remaining: std::time::Duration,
+) -> Result<Vec<f64>> {
+    ensure!(
+        matches!(endpoint.url.scheme(), "https" | "http")
+            && endpoint.url.username().is_empty()
+            && endpoint.url.password().is_none(),
+        "Invalid host embedding configuration"
+    );
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(remaining)
+        .build()
+        .map_err(|_| anyhow::anyhow!("Embedding service unavailable"))?;
+    let mut response = client
+        .post(endpoint.url.clone())
+        .bearer_auth(endpoint.credential.expose_secret())
+        .json(&json!({"model":endpoint.model,"input":input}))
+        .send()
+        .await
+        .map_err(|_| anyhow::anyhow!("Embedding service unavailable"))?;
+    ensure!(
+        response.status().is_success()
+            && response.content_length().is_none_or(|n| n <= 1024 * 1024),
+        "Embedding request refused"
+    );
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|_| anyhow::anyhow!("Embedding service unavailable"))?
+    {
+        ensure!(
+            bytes.len() + chunk.len() <= 1024 * 1024,
+            "Embedding response too large"
+        );
+        bytes.extend_from_slice(&chunk);
+    }
+    let value: Value = serde_json::from_slice(&bytes)
+        .map_err(|_| anyhow::anyhow!("Invalid embedding response"))?;
+    let vector = value["data"][0]["embedding"]
+        .as_array()
+        .context("Invalid embedding response")?;
+    check_vector(vector)
 }
 
 fn embed_via<E: EmbeddingStore>(
     runtime: &Runtime,
     embeddings: &E,
+    activity: Option<&Arc<dyn EmbeddingActivity>>,
     scope: &CallScope,
     r: &Request,
 ) -> Result<Value> {
@@ -94,56 +236,40 @@ fn embed_via<E: EmbeddingStore>(
     let text = r.parameters["text"]
         .as_str()
         .context("Embedding text required")?;
+    ensure!(!text.is_empty(), "Embedding text required");
     ensure!(text.len() <= 64 * 1024, "Embedding text too large");
+    let kind = match r.parameters["kind"].as_str() {
+        None | Some("document") => EmbeddingKind::Document,
+        Some("query") => EmbeddingKind::Query,
+        Some(_) => anyhow::bail!("Unknown embedding kind"),
+    };
     let actor =
         Actor::from_authenticated_session(scope.access().actor_user_id(), uuid::Uuid::new_v4());
     runtime.block_on(async {
         tokio::time::timeout(scope.remaining(), async {
             let endpoint = embeddings.for_actor(actor).await?;
-            ensure!(
-                matches!(endpoint.url.scheme(), "https" | "http")
-                    && endpoint.url.username().is_empty()
-                    && endpoint.url.password().is_none(),
-                "Invalid host embedding configuration"
-            );
-            let client = reqwest::Client::builder()
-                .redirect(reqwest::redirect::Policy::none())
-                .timeout(scope.remaining())
-                .build()?;
-            let response = client
-                .post(endpoint.url)
-                .bearer_auth(endpoint.credential.expose_secret())
-                .json(&json!({"model":endpoint.model,"input":text}))
-                .send()
-                .await
-                .map_err(|_| anyhow::anyhow!("Embedding service unavailable"))?;
-            ensure!(
-                response.status().is_success()
-                    && response.content_length().is_none_or(|n| n <= 1024 * 1024),
-                "Embedding request refused"
-            );
-            let mut response = response;
-            let mut bytes = Vec::new();
-            while let Some(chunk) = response.chunk().await? {
-                ensure!(
-                    bytes.len() + chunk.len() <= 1024 * 1024,
-                    "Embedding response too large"
-                );
-                bytes.extend_from_slice(&chunk);
+            let (model, version) = endpoint.provenance();
+            let input = format!("{}{text}", kind.prefix());
+            let outcome = request_vector(&endpoint, &input, scope.remaining()).await;
+            if let Some(activity) = activity {
+                activity
+                    .record(EmbeddingCall {
+                        model: model.clone(),
+                        action: match kind {
+                            EmbeddingKind::Document => "embed document",
+                            EmbeddingKind::Query => "embed query",
+                        },
+                        outcome: if outcome.is_ok() { "ok" } else { "error" },
+                        result: match &outcome {
+                            Ok(_) => String::new(),
+                            Err(e) => e.to_string(),
+                        },
+                    })
+                    .await;
             }
-            let value: Value = serde_json::from_slice(&bytes)?;
-            let vector = value["data"][0]["embedding"]
-                .as_array()
-                .context("Invalid embedding response")?;
-            ensure!(
-                !vector.is_empty()
-                    && vector.len() <= 65536
-                    && vector
-                        .iter()
-                        .all(|v| v.as_f64().is_some_and(f64::is_finite)),
-                "Invalid embedding vector"
-            );
-            Ok::<_, anyhow::Error>(json!({"embedding":vector}))
+            Ok::<_, anyhow::Error>(
+                json!({"embedding":outcome?,"model":model,"version":version}),
+            )
         })
         .await
         .context("Embedding deadline exceeded")?
@@ -153,14 +279,21 @@ fn embed_via<E: EmbeddingStore>(
 /// Embeddings from one configured endpoint. Text generation fails closed.
 pub struct EmbeddingsOnly<E> {
     embeddings: E,
+    activity: Option<Arc<dyn EmbeddingActivity>>,
     runtime: Runtime,
 }
 impl<E: EmbeddingStore> EmbeddingsOnly<E> {
     pub fn new(embeddings: E) -> Result<Self> {
         Ok(Self {
             embeddings,
+            activity: None,
             runtime: Runtime::new()?,
         })
+    }
+    /// Records one activity row per embedding call.
+    pub fn with_activity(mut self, activity: Arc<dyn EmbeddingActivity>) -> Self {
+        self.activity = Some(activity);
+        self
     }
 }
 impl<E: EmbeddingStore> Intelligence for EmbeddingsOnly<E> {
@@ -168,7 +301,17 @@ impl<E: EmbeddingStore> Intelligence for EmbeddingsOnly<E> {
         anyhow::bail!("Module AI is not configured on this server")
     }
     fn embed(&self, scope: &CallScope, r: &Request) -> Result<Value> {
-        embed_via(&self.runtime, &self.embeddings, scope, r)
+        embed_via(&self.runtime, &self.embeddings, self.activity.as_ref(), scope, r)
+    }
+    fn embedding_model(&self, scope: &CallScope) -> Result<(String, String)> {
+        let actor = Actor::from_authenticated_session(
+            scope.access().actor_user_id(),
+            uuid::Uuid::new_v4(),
+        );
+        Ok(self
+            .runtime
+            .block_on(self.embeddings.for_actor(actor))?
+            .provenance())
     }
 }
 
@@ -193,6 +336,7 @@ impl EmbeddingStore for FixedEmbeddings {
         Ok(EmbeddingEndpoint {
             url: self.url.clone(),
             model: self.model.clone(),
+            version: None,
             credential: Secret::new(self.credential.clone()),
         })
     }
@@ -207,21 +351,20 @@ impl IntelligenceEmbeddings {
     pub fn new(ai: std::sync::Arc<dyn Intelligence>, model: String) -> Self {
         Self { ai, model }
     }
-    fn embed(&self, scope: &CallScope, text: &str) -> Result<Vec<f64>> {
+    fn embed(&self, scope: &CallScope, kind: EmbeddingKind, text: &str) -> Result<Vec<f64>> {
         let value = self.ai.embed(
             scope,
             &Request {
                 operation: "create".into(),
                 resource: "embeddings".into(),
-                parameters: json!({ "text": text }),
+                parameters: json!({ "text": text, "kind": kind.name() }),
             },
         )?;
-        value["embedding"]
-            .as_array()
-            .context("Invalid embedding response")?
-            .iter()
-            .map(|n| n.as_f64().context("Invalid embedding response"))
-            .collect()
+        check_vector(
+            value["embedding"]
+                .as_array()
+                .context("Invalid embedding response")?,
+        )
     }
 }
 impl crate::memory_ingest::DocumentEmbeddings for IntelligenceEmbeddings {
@@ -231,12 +374,15 @@ impl crate::memory_ingest::DocumentEmbeddings for IntelligenceEmbeddings {
     fn model_version(&self) -> &str {
         "1"
     }
+    fn model(&self, scope: &CallScope) -> Result<(String, String)> {
+        self.ai.embedding_model(scope)
+    }
     fn embed_document(&self, scope: &CallScope, text: &str) -> Result<Vec<f64>> {
-        self.embed(scope, text)
+        self.embed(scope, EmbeddingKind::Document, text)
     }
 }
 impl crate::memory_search::QueryEmbeddings for IntelligenceEmbeddings {
     fn embed_query(&self, scope: &CallScope, query: &str) -> Result<Vec<f64>> {
-        self.embed(scope, query)
+        self.embed(scope, EmbeddingKind::Query, query)
     }
 }
