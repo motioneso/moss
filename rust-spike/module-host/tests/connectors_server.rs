@@ -25,6 +25,7 @@ impl Drop for Server {
         let _ = self.0.wait();
     }
 }
+static CLAIMED_PORT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 struct Port(String);
 impl Drop for Port {
     fn drop(&mut self) {
@@ -46,6 +47,19 @@ fn private(path: &Path, value: &Value) {
 #[ignore = "Only through verify-gate and the Connectors live gate"]
 fn installed_connectors_package_serves_routes_from_the_real_server() {
     assert_eq!(std::env::var("JARVIS_GATE_RUN").as_deref(), Ok("1"));
+    // Whole-test watchdog. A hang anywhere (server start, a read, the browser) ends the
+    // process with a clear message instead of blocking the gate.
+    std::thread::spawn(|| {
+        std::thread::sleep(Duration::from_secs(900));
+        eprintln!("WATCHDOG: the Connectors live test ran longer than 900s and was stopped");
+        // exit() skips the cleanup guards, so stop the server, fake Google and browser
+        // runner and hand the port back here.
+        let _ = Command::new("pkill").args(["-KILL", "-P", &std::process::id().to_string()]).status();
+        if let Some(port) = CLAIMED_PORT.get() {
+            let _ = Command::new("devports").args(["release", port]).output();
+        }
+        std::process::exit(124);
+    });
     let scratch = tempfile::tempdir().unwrap();
     let root = scratch.path();
     let port = Port(
@@ -61,6 +75,7 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
         .into(),
     );
     assert!(!port.0.is_empty());
+    let _ = CLAIMED_PORT.set(port.0.clone());
     let origin = format!("https://localhost:{}", port.0);
     let cert = root.join("tls/certificate.pem");
     assert!(Command::new(std::env::var("JS170_CERTIFICATE").unwrap())
@@ -286,24 +301,32 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
             .spawn()
             .unwrap(),
     );
+    // Read the fake's startup lines on a helper thread with a deadline, so a missing line
+    // fails the test loudly instead of blocking it forever.
     let mut google_lines = std::collections::HashMap::new();
     {
         use std::io::BufRead;
         let mut out = std::io::BufReader::new(fake_google.0.stdout.take().unwrap());
-        for _ in 0..5 {
+        let (lines, received) = std::sync::mpsc::channel::<String>();
+        std::thread::spawn(move || {
             let mut line = String::new();
-            out.read_line(&mut line).unwrap();
-            if let Some((key, value)) = line.trim().split_once(' ') {
+            while out.read_line(&mut line).is_ok_and(|n| n > 0) {
+                if lines.send(line.trim().to_owned()).is_err() {
+                    break;
+                }
+                line.clear();
+            }
+        });
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while ["token-url", "client-id", "client-secret"].iter().any(|k| !google_lines.contains_key(*k)) {
+            let left = deadline.saturating_duration_since(Instant::now());
+            let line = received
+                .recv_timeout(left)
+                .unwrap_or_else(|_| panic!("the fake Google did not print its startup lines in 15s; got {google_lines:?}"));
+            if let Some((key, value)) = line.split_once(' ') {
                 google_lines.insert(key.to_owned(), value.to_owned());
             }
         }
-        // Keep the pipe open and drained so the fake never blocks on a full pipe.
-        std::thread::spawn(move || {
-            let mut sink = String::new();
-            while out.read_line(&mut sink).is_ok_and(|n| n > 0) {
-                sink.clear();
-            }
-        });
     }
     let token_url = google_lines["token-url"].clone();
     let google_id = google_lines["client-id"].clone();
@@ -431,7 +454,7 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
         }
         // Control: the same search does find a value that really is stored, so a zero above means absent.
         let control: i64 = db
-            .query_one("SELECT count(*) FROM app.connector_accounts t WHERE to_jsonb(t)::text LIKE '%' || $1 || '%'", &[&"gmail.modify"])
+            .query_one("SELECT count(*) FROM app.connector_accounts t WHERE to_jsonb(t)::text LIKE '%' || $1 || '%'", &[&"gmail.readonly"])
             .await
             .unwrap()
             .get(0);
@@ -454,8 +477,8 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
     {
         let script = std::env::var("MOSS_CONNECTORS_BROWSER_SCRIPT").expect("the gate must supply the browser script");
         let out = std::env::var("MOSS_CONNECTORS_BROWSER_OUT").unwrap_or_else(|_| root.display().to_string());
-        let status = Command::new("pnpm")
-            .args(["exec", "tsx", &script])
+        let status = Command::new("timeout")
+            .args(["--kill-after=10", "300", "pnpm", "exec", "tsx", &script])
             .env("ORIGIN", &origin)
             .env("EMAIL", "connectors-owner@example.test")
             .env("PASSWORD", "temporary-connectors-password-224-not-a-real-secret")
