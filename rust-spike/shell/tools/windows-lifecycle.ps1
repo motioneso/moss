@@ -33,15 +33,16 @@ foreach ($folder in $names) {
 # Ship an OpenSSL inside the install, the way a real Windows install does. Git's copy is only
 # the source of the files here. The proof account's search path then has no OpenSSL at all, so
 # setup can only succeed with the shipped one.
-$gitOpenssl = 'C:\Program Files\Git\mingw64\bin'
-if (-not (Test-Path (Join-Path $gitOpenssl 'openssl.exe'))) { throw 'No openssl found on this runner to stage' }
+$candidates = @('C:\Program Files\Git\mingw64\bin', 'C:\Program Files\Git\usr\bin')
+$found = Get-Command openssl.exe -All -ErrorAction SilentlyContinue | ForEach-Object { Split-Path $_.Source }
+$gitOpenssl = @($candidates + $found) | Where-Object { $_ -and (Test-Path (Join-Path $_ 'openssl.exe')) } | Select-Object -First 1
+if (-not $gitOpenssl) { throw 'No openssl found on this runner to stage' }
+Write-Host "staging openssl from $gitOpenssl"
 $shipped = Join-Path $install 'openssl'
 New-Item -ItemType Directory -Path $shipped -Force | Out-Null
 Copy-Item (Join-Path $gitOpenssl 'openssl.exe') $shipped
-foreach ($dll in 'libssl-3-x64.dll', 'libcrypto-3-x64.dll', 'zlib1.dll') {
-    $source = Join-Path $gitOpenssl $dll
-    if (Test-Path $source) { Copy-Item $source $shipped }
-}
+# Every library beside it, so the copy runs without that folder on the search path.
+Get-ChildItem $gitOpenssl -Filter '*.dll' | Copy-Item -Destination $shipped
 Set-Content (Join-Path $shipped 'openssl.cnf') '# Moss local certificate generation uses the default provider.'
 $cleanPath = ($env:PATH -split ';' | Where-Object { $_ -and -not (Test-Path (Join-Path $_ 'openssl.exe')) }) -join ';'
 Write-Host "search path entries removed because they hold an openssl: $((($env:PATH -split ';').Count) - (($cleanPath -split ';').Count))"
