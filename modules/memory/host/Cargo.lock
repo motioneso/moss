@@ -1289,7 +1289,10 @@ dependencies = [
  "access-context",
  "anyhow",
  "moss-module-host",
+ "safety-core",
  "serde_json",
+ "tokio",
+ "tokio-postgres",
  "uuid",
  "wat",
 ]
