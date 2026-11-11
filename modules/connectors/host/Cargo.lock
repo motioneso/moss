@@ -1310,13 +1310,16 @@ dependencies = [
  "moss-module-host",
  "moss-module-sdk",
  "moss-platform-jobs",
+ "moss-standins",
  "portability",
+ "reqwest",
  "ring",
  "safety-core",
  "serde_json",
  "tempfile",
  "tokio",
  "tokio-postgres",
+ "url",
  "uuid",
  "wat",
 ]
@@ -1409,6 +1412,17 @@ dependencies = [
  "serde",
  "serde_json",
  "uuid",
+]
+
+[[package]]
+name = "moss-standins"
+version = "0.0.0"
+dependencies = [
+ "axum",
+ "base64 0.22.1",
+ "serde_json",
+ "tokio",
+ "tokio-rustls",
 ]
 
 [[package]]

@@ -104,7 +104,7 @@ fn refusal(error: &tokio_postgres::Error) -> bool {
         .is_some_and(|code| matches!(code.code(), "23503" | "42501" | "23505"))
 }
 
-fn text<'a>(parameters: &'a Value, name: &str) -> Result<&'a str> {
+pub(crate) fn text<'a>(parameters: &'a Value, name: &str) -> Result<&'a str> {
     parameters[name]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("Missing {name}"))
@@ -164,7 +164,7 @@ async fn write(cx: &DataContext, cipher: &JsonSecretCipher, p: &Value) -> Result
     }
 }
 
-fn seal(cipher: &JsonSecretCipher, payload: &Value) -> Result<Value> {
+pub(crate) fn seal(cipher: &JsonSecretCipher, payload: &Value) -> Result<Value> {
     let object = payload
         .as_object()
         .ok_or_else(|| anyhow::anyhow!("Secret payload must be an object"))?;
@@ -179,7 +179,7 @@ async fn visible(cx: &DataContext, id: Uuid) -> Result<Value> {
         .ok_or_else(|| anyhow::anyhow!("Connector account is not visible after write"))
 }
 
-async fn create(cx: &DataContext, cipher: &JsonSecretCipher, p: &Value) -> Result<Value> {
+pub(crate) async fn create(cx: &DataContext, cipher: &JsonSecretCipher, p: &Value) -> Result<Value> {
     let id = Uuid::new_v4();
     let scopes: Vec<String> = serde_json::from_value(p["scopes"].clone())?;
     let secret = seal(cipher, &p["tokenPayload"])?;
@@ -202,7 +202,7 @@ fn canonical_id(p: &Value) -> Result<Option<Uuid>> {
     Ok((id.to_string() == raw).then_some(id))
 }
 
-async fn update(cx: &DataContext, cipher: &JsonSecretCipher, p: &Value) -> Result<Value> {
+pub(crate) async fn update(cx: &DataContext, cipher: &JsonSecretCipher, p: &Value) -> Result<Value> {
     let Some(id) = canonical_id(p)? else {
         return Ok(Value::Null);
     };
