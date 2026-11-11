@@ -28,7 +28,7 @@ usage:
   moss-db credentials --root DIR [--module-host]
   moss-db check   --root DIR [--write NOTE]
   moss-db hold    --root DIR --seconds N
-  moss-db at-rest [--root DIR] [--path LABEL=DIR]... (Unix only)
+  moss-db at-rest [--root DIR] [--path LABEL=DIR]... 
 ";
 
 /// Windows has no termination signal for a background program, so Stop is a file in the
@@ -71,7 +71,6 @@ fn main() -> ExitCode {
         "credentials" => credentials(&options),
         "check" => check(&options),
         "hold" => hold(&options),
-        #[cfg(unix)]
         "at-rest" => at_rest_report(&options),
         _ => {
             eprint!("{USAGE}");
@@ -553,17 +552,19 @@ fn hold(options: &Options) -> Result<ExitCode, String> {
     Ok(ExitCode::SUCCESS)
 }
 
-#[cfg(unix)]
 /// Disk encryption for the install's folders (with `--root`), any `--path`, swap and crash
 /// dumps. Reads only; creates nothing.
 fn at_rest_report(options: &Options) -> Result<ExitCode, String> {
     let mut paths = Vec::new();
-    let mut supervisor = Ok(None);
-    let mut database_pids = Vec::new();
+    #[allow(unused_mut)]
+    let mut supervisor: Result<Option<i32>, String> = Ok(None);
+    #[allow(unused_mut)]
+    let mut database_pids: Vec<i32> = Vec::new();
     if let Some(root) = &options.root {
         paths.push(("Database folder".to_string(), root.join("db")));
         paths.push(("Logs".to_string(), root.join("logs")));
         // The same data path the supervisor uses, so the cluster name matches.
+        #[cfg(unix)]
         if let Ok(layout) = Layout::open(root) {
             supervisor = cluster::holder(&layout);
             database_pids = procs::database_processes(&layout.data, &layout.cluster_name());
@@ -579,6 +580,11 @@ fn at_rest_report(options: &Options) -> Result<ExitCode, String> {
     let report = {
         let _ = (supervisor, database_pids);
         at_rest::macos::report(&paths)
+    };
+    #[cfg(windows)]
+    let report = {
+        let _ = (supervisor, database_pids);
+        at_rest::windows::report(&paths)
     };
     emit_pretty(&report.to_json());
     Ok(ExitCode::SUCCESS)

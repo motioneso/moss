@@ -872,6 +872,182 @@ pub mod macos {
     }
 }
 
+// --- Windows, parsed from command output so the parsers run anywhere ----------------------
+
+/// `manage-bde -status C:`. Needs administrator rights. Reads the "Protection Status" line, and
+/// treats an access-denied reply as unknown.
+pub fn parse_manage_bde(text: &str) -> Verdict {
+    let lower = text.to_lowercase();
+    if lower.contains("administrator") || lower.contains("access is denied") || lower.contains("access denied") {
+        return Verdict::unknown("manage-bde needs administrator rights".into());
+    }
+    let field = |name: &str| {
+        text.lines().find_map(|line| {
+            let (key, value) = line.split_once(':')?;
+            (key.trim().eq_ignore_ascii_case(name)).then(|| value.trim().to_string())
+        })
+    };
+    let conversion = field("Conversion Status").unwrap_or_default();
+    match field("Protection Status") {
+        Some(p) if p.eq_ignore_ascii_case("Protection On") && conversion.eq_ignore_ascii_case("Fully Encrypted") => {
+            Verdict::verified("BitLocker", format!("BitLocker: {p}, {conversion}"))
+        }
+        Some(p) if p.eq_ignore_ascii_case("Protection On") => {
+            Verdict::unknown(format!("BitLocker protection is on but the drive is not fully encrypted ({conversion})"))
+        }
+        Some(p) if p.eq_ignore_ascii_case("Protection Off") && conversion.eq_ignore_ascii_case("Fully Decrypted") => {
+            Verdict::off(format!("BitLocker: {p}, {conversion}"))
+        }
+        Some(p) => Verdict::unknown(format!("BitLocker said: {p} ({conversion})")),
+        None => Verdict::unknown("manage-bde gave no protection status".into()),
+    }
+}
+
+/// The shell's `System.Volume.BitLockerProtection` value for a drive, which a standard account
+/// can read. Only the plain values count (1 on, 2 off). Anything else, including an
+/// encryption in progress or a suspended lock, is unknown.
+pub fn parse_shell_protection(text: &str) -> Verdict {
+    let value = text.trim();
+    match value {
+        "1" => Verdict::verified("BitLocker", "the shell reports BitLocker protection on (value 1)".into()),
+        "2" => Verdict::off("the shell reports BitLocker protection off (value 2)".into()),
+        "" => Verdict::unknown("the shell gave no BitLocker value".into()),
+        other => Verdict::unknown(format!("the shell reported BitLocker value {other}, which is not plain on or off")),
+    }
+}
+
+/// `CrashDumpEnabled` from the CrashControl registry key. 0 means Windows saves no crash dump.
+pub fn parse_crash_dump_enabled(text: &str) -> Option<u32> {
+    text.trim().parse().ok()
+}
+
+/// The drive letter ("C:") a Windows path starts on, whether written `C:\x` or `\\?\C:\x`.
+pub fn windows_drive(path: &str) -> Option<String> {
+    let trimmed = path.strip_prefix("\\\\?\\").unwrap_or(path);
+    let mut chars = trimmed.chars();
+    let letter = chars.next()?;
+    (letter.is_ascii_alphabetic() && chars.next() == Some(':')).then(|| format!("{}:", letter.to_ascii_uppercase()))
+}
+
+/// Windows: BitLocker state per drive that holds a Moss folder, the paging file drives, and the
+/// crash dump setting. A standard account gets the shell's answer, and an administrator also
+/// gets the `manage-bde` answer, which wins when it is clear.
+#[cfg(windows)]
+pub mod windows {
+    use super::*;
+    use std::process::Command;
+
+    pub fn report(paths: &[(String, PathBuf)]) -> Report {
+        let mut checks: Vec<Check> = paths
+            .iter()
+            .map(|(item, path)| Check::new(item, Some(path), folder_verdict(path)))
+            .collect();
+        checks.push(Check::new("Swap", None, pagefile_verdict()));
+        checks.push(Check::new("Crash dumps", None, crash_dump_verdict()));
+        Report::from_checks(checks)
+    }
+
+    fn powershell(script: &str) -> Option<String> {
+        let out = Command::new("powershell.exe")
+            .args(["-NoProfile", "-NonInteractive", "-Command", script])
+            .output()
+            .ok()?;
+        out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+    }
+
+    fn drive_verdict(drive: &str) -> Verdict {
+        let shell = powershell(&format!(
+            "(New-Object -ComObject Shell.Application).NameSpace('{drive}\\').Self.ExtendedProperty('System.Volume.BitLockerProtection')"
+        ))
+        .map(|text| parse_shell_protection(&text))
+        .unwrap_or_else(|| Verdict::unknown("PowerShell could not read the shell's BitLocker value".into()));
+        let admin = Command::new("manage-bde.exe").args(["-status", drive]).output().ok().map(|out| {
+            let mut text = String::from_utf8_lossy(&out.stdout).to_string();
+            text.push_str(&String::from_utf8_lossy(&out.stderr));
+            parse_manage_bde(&text)
+        });
+        match admin {
+            Some(verdict) if verdict.status != Status::Unknown => {
+                let mut verdict = verdict;
+                verdict.evidence.push(format!("the shell said: {}", shell.evidence.join("; ")));
+                verdict
+            }
+            Some(denied) => {
+                let mut shell = shell;
+                shell.evidence.push(denied.evidence.join("; "));
+                shell
+            }
+            None => shell,
+        }
+    }
+
+    fn folder_verdict(path: &Path) -> Verdict {
+        let folder = path.ancestors().find(|p| p.exists()).unwrap_or(path);
+        let full = std::fs::canonicalize(folder).unwrap_or_else(|_| folder.to_path_buf());
+        match windows_drive(&full.to_string_lossy()) {
+            Some(drive) => drive_verdict(&drive),
+            None => Verdict::unknown(format!("{} is not on a lettered drive", full.display())),
+        }
+    }
+
+    /// Every paging file must sit on a drive that is verified encrypted.
+    fn pagefile_verdict() -> Verdict {
+        let Some(listing) = powershell("Get-CimInstance Win32_PageFileUsage | ForEach-Object { $_.Name }") else {
+            return Verdict::unknown("could not list the paging files".into());
+        };
+        let mut drives: Vec<String> = listing.lines().filter_map(|l| windows_drive(l.trim())).collect();
+        drives.sort();
+        drives.dedup();
+        if drives.is_empty() {
+            // Windows may still size an automatic file on the system drive, so no listing is not proof of no swap.
+            return match windows_drive(&std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into())) {
+                Some(system) => {
+                    let mut verdict = drive_verdict(&system);
+                    verdict.evidence.insert(0, format!("no paging file is listed, so the system drive {system} is checked"));
+                    verdict
+                }
+                None => Verdict::unknown("no paging file is listed and the system drive is unknown".into()),
+            };
+        }
+        let verdicts: Vec<(String, Verdict)> = drives.into_iter().map(|d| { let v = drive_verdict(&d); (d, v) }).collect();
+        let status = if verdicts.iter().any(|(_, v)| v.status == Status::Off) {
+            Status::Off
+        } else if verdicts.iter().all(|(_, v)| v.status == Status::Verified) {
+            Status::Verified
+        } else {
+            Status::Unknown
+        };
+        Verdict {
+            status,
+            method: (status == Status::Verified).then(|| "BitLocker".to_string()),
+            evidence: verdicts.iter().map(|(d, v)| format!("paging file on {d}: {}", v.evidence.join("; "))).collect(),
+        }
+    }
+
+    /// Windows saves a crash dump unless CrashDumpEnabled is 0. A saved dump lands on the system drive.
+    fn crash_dump_verdict() -> Verdict {
+        let setting = powershell(
+            "(Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\CrashControl').CrashDumpEnabled",
+        )
+        .and_then(|text| parse_crash_dump_enabled(&text));
+        match setting {
+            Some(0) => Verdict::verified("crash dumps off", "Windows is set to save no crash dump".into()),
+            Some(kind) => {
+                let drive = windows_drive(&std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into()));
+                match drive {
+                    Some(drive) => {
+                        let mut verdict = drive_verdict(&drive);
+                        verdict.evidence.insert(0, format!("Windows saves crash dumps (type {kind}) on {drive}"));
+                        verdict
+                    }
+                    None => Verdict::unknown("crash dumps are saved but the system drive is unknown".into()),
+                }
+            }
+            None => Verdict::unknown("could not read the crash dump setting".into()),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1184,5 +1360,47 @@ mod tests {
         let dumps_unknown = Report::from_checks(vec![check("Data", Status::Verified), check(CRASH_DUMPS, Status::Unknown)]);
         assert!(!dumps_unknown.message.contains("disk encryption for"), "{}", dumps_unknown.message);
         assert!(dumps_unknown.message.starts_with("Moss could not check whether a crash"), "{}", dumps_unknown.message);
+    }
+}
+
+#[cfg(test)]
+mod windows_tests {
+    use super::*;
+
+    const ON: &str = "Volume C: [OS]\n    Conversion Status:    Fully Encrypted\n    Protection Status:    Protection On\n";
+    const OFF: &str = "Volume C: [OS]\n    Conversion Status:    Fully Decrypted\n    Protection Status:    Protection Off\n";
+
+    #[test]
+    fn manage_bde_on_off_and_denied() {
+        assert_eq!(parse_manage_bde(ON).status, Status::Verified);
+        assert_eq!(parse_manage_bde(OFF).status, Status::Off);
+        assert_eq!(parse_manage_bde("ERROR: An attempt to access a required resource was denied.\nYou must have administrator privileges").status, Status::Unknown);
+        assert_eq!(parse_manage_bde("").status, Status::Unknown);
+    }
+
+    #[test]
+    fn half_encrypted_never_verifies() {
+        let part = "Conversion Status:    Used Space Only Encrypted\nProtection Status:    Protection On\n";
+        assert_eq!(parse_manage_bde(part).status, Status::Unknown);
+        let paused = "Conversion Status:    Fully Encrypted\nProtection Status:    Protection Off\n";
+        assert_eq!(parse_manage_bde(paused).status, Status::Unknown);
+    }
+
+    #[test]
+    fn shell_values() {
+        assert_eq!(parse_shell_protection("1\r\n").status, Status::Verified);
+        assert_eq!(parse_shell_protection("2").status, Status::Off);
+        assert_eq!(parse_shell_protection("3").status, Status::Unknown);
+        assert_eq!(parse_shell_protection("").status, Status::Unknown);
+    }
+
+    #[test]
+    fn drive_letters() {
+        assert_eq!(windows_drive("c:\\x\\y").as_deref(), Some("C:"));
+        assert_eq!(windows_drive("\\\\?\\D:\\x").as_deref(), Some("D:"));
+        assert_eq!(windows_drive("\\\\server\\share"), None);
+        assert_eq!(windows_drive("/home"), None);
+        assert_eq!(parse_crash_dump_enabled("0\r\n"), Some(0));
+        assert_eq!(parse_crash_dump_enabled("x"), None);
     }
 }
