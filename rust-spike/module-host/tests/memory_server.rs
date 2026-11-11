@@ -407,7 +407,37 @@ fn installed_memory_package_serves_routes_from_the_real_server() {
     EMBEDDING_FAILS.store(false, std::sync::atomic::Ordering::SeqCst);
     let (_, text) = call(Method::GET, "/graph/recall?q=jasmine", Some(&cookie), None);
     assert!(json_of(&text)["items"].as_array().unwrap().iter().any(|i| i["text"].as_str().is_some_and(|t| t.contains("jasmine"))), "{text}");
+    // Fact lifecycle through the real server: each route, then the old error answers.
+    let id = saved["fact"]["id"].as_str().unwrap().to_owned();
+    let fact_path = |tail: &str| format!("/graph/facts/{id}{tail}");
+    let (status, _) = call(Method::POST, &fact_path("/pin"), Some(&cookie), Some(json!({"pinned":true})));
+    assert_eq!(status, 204);
+    let (status, text) = call(Method::POST, &fact_path("/confirm"), Some(&cookie), Some(json!({})));
+    assert_eq!((status, json_of(&text)["fact"]["confidenceTier"].clone()), (200, json!("confirmed")), "{text}");
+    let (status, text) = call(Method::POST, &fact_path("/mark-stale"), Some(&cookie), Some(json!({})));
+    assert_eq!((status, json_of(&text)["fact"]["status"].clone()), (200, json!("stale")), "{text}");
+    let (status, text) = call(Method::POST, &fact_path("/status"), Some(&cookie), Some(json!({"status":"active"})));
+    assert_eq!((status, json_of(&text)["fact"]["status"].clone()), (200, json!("active")), "{text}");
+    let (status, text) = call(Method::POST, &fact_path("/correct"), Some(&cookie), Some(json!({"replacementText":"matcha in the afternoon"})));
+    assert_eq!((status, json_of(&text)["fact"]["objectText"].clone()), (200, json!("matcha in the afternoon")), "{text}");
+    let corrected = json_of(&text)["fact"]["id"].as_str().unwrap().to_owned();
+    assert_ne!(corrected, id, "a correction is a new fact");
+    let (status, text) = call(Method::POST, &fact_path("/pin"), Some(&cookie), Some(json!({})));
+    assert_eq!(status, 400, "{text}");
+    let unknown = "/graph/facts/00000000-0000-4000-8000-0000000000ff";
+    let (status, text) = call(Method::DELETE, unknown, Some(&cookie), None);
+    assert_eq!((status, json_of(&text)), (404, json!({"error":"Memory fact not found"})), "{text}");
+    let (status, text) = call(Method::POST, &fact_path("/status"), Some(&cookie), Some(json!({"status":"active"})));
+    assert_eq!((status, json_of(&text)), (400, json!({"error":"Cannot reactivate a superseded memory record; create a new fact instead"})), "{text}");
+    let (status, _) = call(Method::POST, &format!("/graph/facts/{corrected}/supersede"), Some(&cookie), Some(json!({})));
+    assert_eq!(status, 204);
+    let (status, _) = call(Method::DELETE, &format!("/graph/facts/{corrected}"), Some(&cookie), None);
+    assert_eq!(status, 204);
+    let (status, _) = call(Method::DELETE, &format!("/graph/facts/{corrected}"), Some(&cookie), None);
+    assert_eq!(status, 404);
+    let (status, _) = call(Method::DELETE, &format!("/graph/facts/{corrected}"), None, None);
+    assert_eq!(status, 401);
     // Memory text stays out of the server log.
     let log = log();
-    assert!(!log.contains("oolong") && !log.contains("jasmine"), "memory text in log");
+    assert!(!log.contains("oolong") && !log.contains("jasmine") && !log.contains("matcha"), "memory text in log");
 }
