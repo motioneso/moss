@@ -1,0 +1,1450 @@
+[
+  {
+    "name": "pin: unknown fact",
+    "seed": "none",
+    "request": {
+      "path": "pin",
+      "method": "POST",
+      "target": "unknown",
+      "body": {
+        "pinned": true
+      }
+    },
+    "status": 404,
+    "body": {
+      "error": "Memory fact not found"
+    },
+    "after": {
+      "facts": [],
+      "group": null,
+      "total": 0
+    }
+  },
+  {
+    "name": "pin: ok",
+    "seed": "plain",
+    "request": {
+      "path": "pin",
+      "method": "POST",
+      "target": "first",
+      "body": {
+        "pinned": true
+      }
+    },
+    "status": 204,
+    "body": null,
+    "after": {
+      "facts": [
+        {
+          "status": "active",
+          "hasGroup": false,
+          "hasValidTo": false,
+          "hasStaleAt": false,
+          "pinned": true,
+          "supersededBy": null,
+          "doc": "active"
+        }
+      ],
+      "group": null,
+      "total": 1
+    }
+  },
+  {
+    "name": "pin: missing body field",
+    "seed": "plain",
+    "request": {
+      "path": "pin",
+      "method": "POST",
+      "target": "first",
+      "body": {}
+    },
+    "status": 400,
+    "body": {
+      "statusCode": 400,
+      "code": "FST_ERR_VALIDATION",
+      "error": "Bad Request",
+      "message": "body must have required property 'pinned'"
+    },
+    "after": {
+      "facts": [
+        {
+          "status": "active",
+          "hasGroup": false,
+          "hasValidTo": false,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "active"
+        }
+      ],
+      "group": null,
+      "total": 1
+    }
+  },
+  {
+    "name": "confirm: unknown fact",
+    "seed": "none",
+    "request": {
+      "path": "confirm",
+      "method": "POST",
+      "target": "unknown",
+      "body": {}
+    },
+    "status": 404,
+    "body": {
+      "error": "Memory fact not found"
+    },
+    "after": {
+      "facts": [],
+      "group": null,
+      "total": 0
+    }
+  },
+  {
+    "name": "confirm: ok",
+    "seed": "plain",
+    "request": {
+      "path": "confirm",
+      "method": "POST",
+      "target": "first",
+      "body": {}
+    },
+    "status": 200,
+    "body": {
+      "status": "active",
+      "provenance": "confirmed",
+      "confidence": 0.9,
+      "pinned": false,
+      "objectText": "case fact 1",
+      "confidenceTier": "confirmed",
+      "hasGroup": false,
+      "sourceCount": 1,
+      "keys": [
+        "confidence",
+        "confidenceTier",
+        "conflictGroupId",
+        "createdAt",
+        "id",
+        "importance",
+        "lastConfirmedAt",
+        "objectEntityId",
+        "objectText",
+        "ownerUserId",
+        "pinned",
+        "predicate",
+        "provenance",
+        "recordKind",
+        "sources",
+        "staleAt",
+        "status",
+        "subjectEntityId",
+        "supersededByFactId",
+        "updatedAt",
+        "validFrom",
+        "validTo"
+      ]
+    },
+    "after": {
+      "facts": [
+        {
+          "status": "active",
+          "hasGroup": false,
+          "hasValidTo": false,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "active"
+        }
+      ],
+      "group": null,
+      "total": 1
+    }
+  },
+  {
+    "name": "confirm: extra body field",
+    "seed": "plain",
+    "request": {
+      "path": "confirm",
+      "method": "POST",
+      "target": "first",
+      "body": {
+        "x": 1
+      }
+    },
+    "status": 200,
+    "body": {
+      "status": "active",
+      "provenance": "confirmed",
+      "confidence": 0.9,
+      "pinned": false,
+      "objectText": "case fact 1",
+      "confidenceTier": "confirmed",
+      "hasGroup": false,
+      "sourceCount": 1,
+      "keys": [
+        "confidence",
+        "confidenceTier",
+        "conflictGroupId",
+        "createdAt",
+        "id",
+        "importance",
+        "lastConfirmedAt",
+        "objectEntityId",
+        "objectText",
+        "ownerUserId",
+        "pinned",
+        "predicate",
+        "provenance",
+        "recordKind",
+        "sources",
+        "staleAt",
+        "status",
+        "subjectEntityId",
+        "supersededByFactId",
+        "updatedAt",
+        "validFrom",
+        "validTo"
+      ]
+    },
+    "after": {
+      "facts": [
+        {
+          "status": "active",
+          "hasGroup": false,
+          "hasValidTo": false,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "active"
+        }
+      ],
+      "group": null,
+      "total": 1
+    }
+  },
+  {
+    "name": "confirm: recording fact",
+    "seed": "recording",
+    "request": {
+      "path": "confirm",
+      "method": "POST",
+      "target": "first",
+      "body": {}
+    },
+    "status": 409,
+    "body": {
+      "error": "This recording's memory has changed or is being removed; refresh its saved state before continuing"
+    },
+    "after": {
+      "facts": [
+        {
+          "status": "active",
+          "hasGroup": false,
+          "hasValidTo": false,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "active"
+        }
+      ],
+      "group": null,
+      "total": 1
+    }
+  },
+  {
+    "name": "confirm: conflict of two",
+    "seed": "conflict2",
+    "request": {
+      "path": "confirm",
+      "method": "POST",
+      "target": "first",
+      "body": {}
+    },
+    "status": 200,
+    "body": {
+      "status": "active",
+      "provenance": "confirmed",
+      "confidence": 0.9,
+      "pinned": false,
+      "objectText": "case fact 1",
+      "confidenceTier": "confirmed",
+      "hasGroup": false,
+      "sourceCount": 1,
+      "keys": [
+        "confidence",
+        "confidenceTier",
+        "conflictGroupId",
+        "createdAt",
+        "id",
+        "importance",
+        "lastConfirmedAt",
+        "objectEntityId",
+        "objectText",
+        "ownerUserId",
+        "pinned",
+        "predicate",
+        "provenance",
+        "recordKind",
+        "sources",
+        "staleAt",
+        "status",
+        "subjectEntityId",
+        "supersededByFactId",
+        "updatedAt",
+        "validFrom",
+        "validTo"
+      ]
+    },
+    "after": {
+      "facts": [
+        {
+          "status": "active",
+          "hasGroup": false,
+          "hasValidTo": false,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "active"
+        },
+        {
+          "status": "superseded",
+          "hasGroup": true,
+          "hasValidTo": true,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": 0,
+          "doc": "inactive"
+        }
+      ],
+      "group": "resolved",
+      "total": 2
+    }
+  },
+  {
+    "name": "confirm: conflict of three",
+    "seed": "conflict3",
+    "request": {
+      "path": "confirm",
+      "method": "POST",
+      "target": "first",
+      "body": {}
+    },
+    "status": 200,
+    "body": {
+      "status": "active",
+      "provenance": "confirmed",
+      "confidence": 0.9,
+      "pinned": false,
+      "objectText": "case fact 1",
+      "confidenceTier": "confirmed",
+      "hasGroup": false,
+      "sourceCount": 1,
+      "keys": [
+        "confidence",
+        "confidenceTier",
+        "conflictGroupId",
+        "createdAt",
+        "id",
+        "importance",
+        "lastConfirmedAt",
+        "objectEntityId",
+        "objectText",
+        "ownerUserId",
+        "pinned",
+        "predicate",
+        "provenance",
+        "recordKind",
+        "sources",
+        "staleAt",
+        "status",
+        "subjectEntityId",
+        "supersededByFactId",
+        "updatedAt",
+        "validFrom",
+        "validTo"
+      ]
+    },
+    "after": {
+      "facts": [
+        {
+          "status": "active",
+          "hasGroup": false,
+          "hasValidTo": false,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "active"
+        },
+        {
+          "status": "superseded",
+          "hasGroup": true,
+          "hasValidTo": true,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": 0,
+          "doc": "inactive"
+        },
+        {
+          "status": "superseded",
+          "hasGroup": true,
+          "hasValidTo": true,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": 0,
+          "doc": "inactive"
+        }
+      ],
+      "group": "resolved",
+      "total": 3
+    }
+  },
+  {
+    "name": "correct: unknown fact",
+    "seed": "none",
+    "request": {
+      "path": "correct",
+      "method": "POST",
+      "target": "unknown",
+      "body": {
+        "replacementText": "x"
+      }
+    },
+    "status": 404,
+    "body": {
+      "error": "Memory fact not found"
+    },
+    "after": {
+      "facts": [],
+      "group": null,
+      "total": 0
+    }
+  },
+  {
+    "name": "correct: ok",
+    "seed": "plain",
+    "request": {
+      "path": "correct",
+      "method": "POST",
+      "target": "first",
+      "body": {
+        "replacementText": "oat milk"
+      }
+    },
+    "status": 200,
+    "body": {
+      "status": "active",
+      "provenance": "confirmed",
+      "confidence": 0.9,
+      "pinned": false,
+      "objectText": "oat milk",
+      "confidenceTier": "confirmed",
+      "hasGroup": false,
+      "sourceCount": 1,
+      "keys": [
+        "confidence",
+        "confidenceTier",
+        "conflictGroupId",
+        "createdAt",
+        "id",
+        "importance",
+        "lastConfirmedAt",
+        "objectEntityId",
+        "objectText",
+        "ownerUserId",
+        "pinned",
+        "predicate",
+        "provenance",
+        "recordKind",
+        "sources",
+        "staleAt",
+        "status",
+        "subjectEntityId",
+        "supersededByFactId",
+        "updatedAt",
+        "validFrom",
+        "validTo"
+      ]
+    },
+    "after": {
+      "facts": [
+        {
+          "status": "superseded",
+          "hasGroup": false,
+          "hasValidTo": true,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": -1,
+          "doc": "inactive"
+        }
+      ],
+      "group": null,
+      "total": 2
+    }
+  },
+  {
+    "name": "correct: missing text",
+    "seed": "plain",
+    "request": {
+      "path": "correct",
+      "method": "POST",
+      "target": "first",
+      "body": {}
+    },
+    "status": 400,
+    "body": {
+      "statusCode": 400,
+      "code": "FST_ERR_VALIDATION",
+      "error": "Bad Request",
+      "message": "body must have required property 'replacementText'"
+    },
+    "after": {
+      "facts": [
+        {
+          "status": "active",
+          "hasGroup": false,
+          "hasValidTo": false,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "active"
+        }
+      ],
+      "group": null,
+      "total": 1
+    }
+  },
+  {
+    "name": "correct: recording fact",
+    "seed": "recording",
+    "request": {
+      "path": "correct",
+      "method": "POST",
+      "target": "first",
+      "body": {
+        "replacementText": "x"
+      }
+    },
+    "status": 409,
+    "body": {
+      "error": "This recording's memory has changed or is being removed; refresh its saved state before continuing"
+    },
+    "after": {
+      "facts": [
+        {
+          "status": "active",
+          "hasGroup": false,
+          "hasValidTo": false,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "active"
+        }
+      ],
+      "group": null,
+      "total": 1
+    }
+  },
+  {
+    "name": "correct: conflict of two",
+    "seed": "conflict2",
+    "request": {
+      "path": "correct",
+      "method": "POST",
+      "target": "first",
+      "body": {
+        "replacementText": "settled"
+      }
+    },
+    "status": 200,
+    "body": {
+      "status": "active",
+      "provenance": "confirmed",
+      "confidence": 0.9,
+      "pinned": false,
+      "objectText": "settled",
+      "confidenceTier": "confirmed",
+      "hasGroup": false,
+      "sourceCount": 2,
+      "keys": [
+        "confidence",
+        "confidenceTier",
+        "conflictGroupId",
+        "createdAt",
+        "id",
+        "importance",
+        "lastConfirmedAt",
+        "objectEntityId",
+        "objectText",
+        "ownerUserId",
+        "pinned",
+        "predicate",
+        "provenance",
+        "recordKind",
+        "sources",
+        "staleAt",
+        "status",
+        "subjectEntityId",
+        "supersededByFactId",
+        "updatedAt",
+        "validFrom",
+        "validTo"
+      ]
+    },
+    "after": {
+      "facts": [
+        {
+          "status": "superseded",
+          "hasGroup": true,
+          "hasValidTo": true,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": -1,
+          "doc": "inactive"
+        },
+        {
+          "status": "superseded",
+          "hasGroup": true,
+          "hasValidTo": true,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": -1,
+          "doc": "inactive"
+        }
+      ],
+      "group": "resolved",
+      "total": 3
+    }
+  },
+  {
+    "name": "status: unknown fact",
+    "seed": "none",
+    "request": {
+      "path": "status",
+      "method": "POST",
+      "target": "unknown",
+      "body": {
+        "status": "stale"
+      }
+    },
+    "status": 404,
+    "body": {
+      "error": "Memory fact not found"
+    },
+    "after": {
+      "facts": [],
+      "group": null,
+      "total": 0
+    }
+  },
+  {
+    "name": "status: stale",
+    "seed": "plain",
+    "request": {
+      "path": "status",
+      "method": "POST",
+      "target": "first",
+      "body": {
+        "status": "stale",
+        "reason": "old"
+      }
+    },
+    "status": 200,
+    "body": {
+      "status": "stale",
+      "provenance": "volunteered",
+      "confidence": 0.8,
+      "pinned": false,
+      "objectText": "case fact 1",
+      "confidenceTier": "high",
+      "hasGroup": false,
+      "sourceCount": 1,
+      "keys": [
+        "confidence",
+        "confidenceTier",
+        "conflictGroupId",
+        "createdAt",
+        "id",
+        "importance",
+        "lastConfirmedAt",
+        "objectEntityId",
+        "objectText",
+        "ownerUserId",
+        "pinned",
+        "predicate",
+        "provenance",
+        "recordKind",
+        "sources",
+        "staleAt",
+        "status",
+        "subjectEntityId",
+        "supersededByFactId",
+        "updatedAt",
+        "validFrom",
+        "validTo"
+      ]
+    },
+    "after": {
+      "facts": [
+        {
+          "status": "stale",
+          "hasGroup": false,
+          "hasValidTo": false,
+          "hasStaleAt": true,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "active"
+        }
+      ],
+      "group": null,
+      "total": 1
+    }
+  },
+  {
+    "name": "status: expired",
+    "seed": "plain",
+    "request": {
+      "path": "status",
+      "method": "POST",
+      "target": "first",
+      "body": {
+        "status": "expired"
+      }
+    },
+    "status": 200,
+    "body": {
+      "status": "expired",
+      "provenance": "volunteered",
+      "confidence": 0.8,
+      "pinned": false,
+      "objectText": "case fact 1",
+      "confidenceTier": "high",
+      "hasGroup": false,
+      "sourceCount": 1,
+      "keys": [
+        "confidence",
+        "confidenceTier",
+        "conflictGroupId",
+        "createdAt",
+        "id",
+        "importance",
+        "lastConfirmedAt",
+        "objectEntityId",
+        "objectText",
+        "ownerUserId",
+        "pinned",
+        "predicate",
+        "provenance",
+        "recordKind",
+        "sources",
+        "staleAt",
+        "status",
+        "subjectEntityId",
+        "supersededByFactId",
+        "updatedAt",
+        "validFrom",
+        "validTo"
+      ]
+    },
+    "after": {
+      "facts": [
+        {
+          "status": "expired",
+          "hasGroup": false,
+          "hasValidTo": true,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "inactive"
+        }
+      ],
+      "group": null,
+      "total": 1
+    }
+  },
+  {
+    "name": "status: rejected",
+    "seed": "plain",
+    "request": {
+      "path": "status",
+      "method": "POST",
+      "target": "first",
+      "body": {
+        "status": "rejected"
+      }
+    },
+    "status": 200,
+    "body": {
+      "status": "rejected",
+      "provenance": "volunteered",
+      "confidence": 0.8,
+      "pinned": false,
+      "objectText": "case fact 1",
+      "confidenceTier": "high",
+      "hasGroup": false,
+      "sourceCount": 1,
+      "keys": [
+        "confidence",
+        "confidenceTier",
+        "conflictGroupId",
+        "createdAt",
+        "id",
+        "importance",
+        "lastConfirmedAt",
+        "objectEntityId",
+        "objectText",
+        "ownerUserId",
+        "pinned",
+        "predicate",
+        "provenance",
+        "recordKind",
+        "sources",
+        "staleAt",
+        "status",
+        "subjectEntityId",
+        "supersededByFactId",
+        "updatedAt",
+        "validFrom",
+        "validTo"
+      ]
+    },
+    "after": {
+      "facts": [
+        {
+          "status": "rejected",
+          "hasGroup": false,
+          "hasValidTo": false,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "inactive"
+        }
+      ],
+      "group": null,
+      "total": 1
+    }
+  },
+  {
+    "name": "status: bad value",
+    "seed": "plain",
+    "request": {
+      "path": "status",
+      "method": "POST",
+      "target": "first",
+      "body": {
+        "status": "gone"
+      }
+    },
+    "status": 400,
+    "body": {
+      "error": "Bad Request"
+    },
+    "after": {
+      "facts": [
+        {
+          "status": "active",
+          "hasGroup": false,
+          "hasValidTo": false,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "active"
+        }
+      ],
+      "group": null,
+      "total": 1
+    }
+  },
+  {
+    "name": "status: missing value",
+    "seed": "plain",
+    "request": {
+      "path": "status",
+      "method": "POST",
+      "target": "first",
+      "body": {}
+    },
+    "status": 400,
+    "body": {
+      "error": "Bad Request"
+    },
+    "after": {
+      "facts": [
+        {
+          "status": "active",
+          "hasGroup": false,
+          "hasValidTo": false,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "active"
+        }
+      ],
+      "group": null,
+      "total": 1
+    }
+  },
+  {
+    "name": "status: conflict member",
+    "seed": "conflict2",
+    "request": {
+      "path": "status",
+      "method": "POST",
+      "target": "first",
+      "body": {
+        "status": "stale"
+      }
+    },
+    "status": 400,
+    "body": {
+      "error": "conflict-group memory must be resolved with confirm or correct"
+    },
+    "after": {
+      "facts": [
+        {
+          "status": "conflicting",
+          "hasGroup": true,
+          "hasValidTo": false,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "inactive"
+        },
+        {
+          "status": "conflicting",
+          "hasGroup": true,
+          "hasValidTo": false,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "inactive"
+        }
+      ],
+      "group": "open",
+      "total": 2
+    }
+  },
+  {
+    "name": "status: reactivate superseded",
+    "seed": "superseded",
+    "request": {
+      "path": "status",
+      "method": "POST",
+      "target": "first",
+      "body": {
+        "status": "active"
+      }
+    },
+    "status": 400,
+    "body": {
+      "error": "Cannot reactivate a superseded memory record; create a new fact instead"
+    },
+    "after": {
+      "facts": [
+        {
+          "status": "superseded",
+          "hasGroup": false,
+          "hasValidTo": false,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": 1,
+          "doc": "active"
+        },
+        {
+          "status": "active",
+          "hasGroup": false,
+          "hasValidTo": false,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "active"
+        }
+      ],
+      "group": null,
+      "total": 2
+    }
+  },
+  {
+    "name": "status: reject superseded",
+    "seed": "superseded",
+    "request": {
+      "path": "status",
+      "method": "POST",
+      "target": "first",
+      "body": {
+        "status": "rejected"
+      }
+    },
+    "status": 200,
+    "body": {
+      "status": "rejected",
+      "provenance": "volunteered",
+      "confidence": 0.8,
+      "pinned": false,
+      "objectText": "case fact 1",
+      "confidenceTier": "high",
+      "hasGroup": false,
+      "sourceCount": 1,
+      "keys": [
+        "confidence",
+        "confidenceTier",
+        "conflictGroupId",
+        "createdAt",
+        "id",
+        "importance",
+        "lastConfirmedAt",
+        "objectEntityId",
+        "objectText",
+        "ownerUserId",
+        "pinned",
+        "predicate",
+        "provenance",
+        "recordKind",
+        "sources",
+        "staleAt",
+        "status",
+        "subjectEntityId",
+        "supersededByFactId",
+        "updatedAt",
+        "validFrom",
+        "validTo"
+      ]
+    },
+    "after": {
+      "facts": [
+        {
+          "status": "rejected",
+          "hasGroup": false,
+          "hasValidTo": false,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": 1,
+          "doc": "inactive"
+        },
+        {
+          "status": "active",
+          "hasGroup": false,
+          "hasValidTo": false,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "active"
+        }
+      ],
+      "group": null,
+      "total": 2
+    }
+  },
+  {
+    "name": "status: recording fact",
+    "seed": "recording",
+    "request": {
+      "path": "status",
+      "method": "POST",
+      "target": "first",
+      "body": {
+        "status": "stale"
+      }
+    },
+    "status": 409,
+    "body": {
+      "error": "This recording's memory has changed or is being removed; refresh its saved state before continuing"
+    },
+    "after": {
+      "facts": [
+        {
+          "status": "active",
+          "hasGroup": false,
+          "hasValidTo": false,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "active"
+        }
+      ],
+      "group": null,
+      "total": 1
+    }
+  },
+  {
+    "name": "mark-stale: unknown fact",
+    "seed": "none",
+    "request": {
+      "path": "mark-stale",
+      "method": "POST",
+      "target": "unknown",
+      "body": {}
+    },
+    "status": 404,
+    "body": {
+      "error": "Memory fact not found"
+    },
+    "after": {
+      "facts": [],
+      "group": null,
+      "total": 0
+    }
+  },
+  {
+    "name": "mark-stale: ok",
+    "seed": "plain",
+    "request": {
+      "path": "mark-stale",
+      "method": "POST",
+      "target": "first",
+      "body": {}
+    },
+    "status": 200,
+    "body": {
+      "status": "stale",
+      "provenance": "volunteered",
+      "confidence": 0.8,
+      "pinned": false,
+      "objectText": "case fact 1",
+      "confidenceTier": "high",
+      "hasGroup": false,
+      "sourceCount": 1,
+      "keys": [
+        "confidence",
+        "confidenceTier",
+        "conflictGroupId",
+        "createdAt",
+        "id",
+        "importance",
+        "lastConfirmedAt",
+        "objectEntityId",
+        "objectText",
+        "ownerUserId",
+        "pinned",
+        "predicate",
+        "provenance",
+        "recordKind",
+        "sources",
+        "staleAt",
+        "status",
+        "subjectEntityId",
+        "supersededByFactId",
+        "updatedAt",
+        "validFrom",
+        "validTo"
+      ]
+    },
+    "after": {
+      "facts": [
+        {
+          "status": "stale",
+          "hasGroup": false,
+          "hasValidTo": false,
+          "hasStaleAt": true,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "active"
+        }
+      ],
+      "group": null,
+      "total": 1
+    }
+  },
+  {
+    "name": "mark-stale: conflict member",
+    "seed": "conflict2",
+    "request": {
+      "path": "mark-stale",
+      "method": "POST",
+      "target": "first",
+      "body": {}
+    },
+    "status": 400,
+    "body": {
+      "error": "conflict-group memory must be resolved with confirm or correct"
+    },
+    "after": {
+      "facts": [
+        {
+          "status": "conflicting",
+          "hasGroup": true,
+          "hasValidTo": false,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "inactive"
+        },
+        {
+          "status": "conflicting",
+          "hasGroup": true,
+          "hasValidTo": false,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "inactive"
+        }
+      ],
+      "group": "open",
+      "total": 2
+    }
+  },
+  {
+    "name": "supersede: unknown fact",
+    "seed": "none",
+    "request": {
+      "path": "supersede",
+      "method": "POST",
+      "target": "unknown",
+      "body": {}
+    },
+    "status": 404,
+    "body": {
+      "error": "Memory fact not found"
+    },
+    "after": {
+      "facts": [],
+      "group": null,
+      "total": 0
+    }
+  },
+  {
+    "name": "supersede: ok",
+    "seed": "plain",
+    "request": {
+      "path": "supersede",
+      "method": "POST",
+      "target": "first",
+      "body": {}
+    },
+    "status": 204,
+    "body": null,
+    "after": {
+      "facts": [
+        {
+          "status": "superseded",
+          "hasGroup": false,
+          "hasValidTo": true,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "inactive"
+        }
+      ],
+      "group": null,
+      "total": 1
+    }
+  },
+  {
+    "name": "supersede: with date",
+    "seed": "plain",
+    "request": {
+      "path": "supersede",
+      "method": "POST",
+      "target": "first",
+      "body": {
+        "validTo": "2026-12-01T00:00:00.000Z"
+      }
+    },
+    "status": 204,
+    "body": null,
+    "after": {
+      "facts": [
+        {
+          "status": "superseded",
+          "hasGroup": false,
+          "hasValidTo": true,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "inactive"
+        }
+      ],
+      "group": null,
+      "total": 1
+    }
+  },
+  {
+    "name": "supersede: recording fact",
+    "seed": "recording",
+    "request": {
+      "path": "supersede",
+      "method": "POST",
+      "target": "first",
+      "body": {}
+    },
+    "status": 409,
+    "body": {
+      "error": "This recording's memory has changed or is being removed; refresh its saved state before continuing"
+    },
+    "after": {
+      "facts": [
+        {
+          "status": "active",
+          "hasGroup": false,
+          "hasValidTo": false,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "active"
+        }
+      ],
+      "group": null,
+      "total": 1
+    }
+  },
+  {
+    "name": "delete: unknown fact",
+    "seed": "none",
+    "request": {
+      "path": "",
+      "method": "DELETE",
+      "target": "unknown"
+    },
+    "status": 404,
+    "body": {
+      "error": "Memory fact not found"
+    },
+    "after": {
+      "facts": [],
+      "group": null,
+      "total": 0
+    }
+  },
+  {
+    "name": "delete: ok",
+    "seed": "plain",
+    "request": {
+      "path": "",
+      "method": "DELETE",
+      "target": "first"
+    },
+    "status": 204,
+    "body": null,
+    "after": {
+      "facts": [null],
+      "group": null,
+      "total": 0
+    }
+  },
+  {
+    "name": "delete: recording fact",
+    "seed": "recording",
+    "request": {
+      "path": "",
+      "method": "DELETE",
+      "target": "first"
+    },
+    "status": 409,
+    "body": {
+      "error": "This recording's memory has changed or is being removed; refresh its saved state before continuing"
+    },
+    "after": {
+      "facts": [
+        {
+          "status": "active",
+          "hasGroup": false,
+          "hasValidTo": false,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "active"
+        }
+      ],
+      "group": null,
+      "total": 1
+    }
+  },
+  {
+    "name": "delete: one of two conflicting",
+    "seed": "conflict2",
+    "request": {
+      "path": "",
+      "method": "DELETE",
+      "target": "first"
+    },
+    "status": 204,
+    "body": null,
+    "after": {
+      "facts": [
+        null,
+        {
+          "status": "active",
+          "hasGroup": false,
+          "hasValidTo": false,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "active"
+        }
+      ],
+      "group": "resolved",
+      "total": 1
+    }
+  },
+  {
+    "name": "delete: one of three conflicting",
+    "seed": "conflict3",
+    "request": {
+      "path": "",
+      "method": "DELETE",
+      "target": "first"
+    },
+    "status": 204,
+    "body": null,
+    "after": {
+      "facts": [
+        null,
+        {
+          "status": "conflicting",
+          "hasGroup": true,
+          "hasValidTo": false,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "inactive"
+        },
+        {
+          "status": "conflicting",
+          "hasGroup": true,
+          "hasValidTo": false,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "inactive"
+        }
+      ],
+      "group": "open",
+      "total": 2
+    }
+  },
+  {
+    "name": "delete: overruled fact after confirm",
+    "seed": "confirmed3",
+    "request": {
+      "path": "",
+      "method": "DELETE",
+      "target": "first"
+    },
+    "status": 204,
+    "body": null,
+    "after": {
+      "facts": [
+        null,
+        {
+          "status": "superseded",
+          "hasGroup": true,
+          "hasValidTo": true,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "inactive"
+        },
+        {
+          "status": "superseded",
+          "hasGroup": true,
+          "hasValidTo": true,
+          "hasStaleAt": false,
+          "pinned": false,
+          "supersededBy": null,
+          "doc": "inactive"
+        }
+      ],
+      "group": "resolved",
+      "total": 2
+    }
+  }
+]
