@@ -321,9 +321,12 @@ pub fn split_dev(dev: u64) -> (u32, u32) {
 
 /// The number of block device `node`, read from the node itself or else from sysfs by name.
 fn device_number(sys: &Path, node: &Path) -> Option<(u32, u32)> {
-    use std::os::unix::fs::{FileTypeExt, MetadataExt};
-    if let Ok(meta) = std::fs::metadata(node) {
-        return meta.file_type().is_block_device().then(|| split_dev(meta.rdev()));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{FileTypeExt, MetadataExt};
+        if let Ok(meta) = std::fs::metadata(node) {
+            return meta.file_type().is_block_device().then(|| split_dev(meta.rdev()));
+        }
     }
     let name = node.file_name()?.to_str()?;
     let dev = std::fs::read_to_string(sys.join(format!("class/block/{name}/dev"))).ok()?;
