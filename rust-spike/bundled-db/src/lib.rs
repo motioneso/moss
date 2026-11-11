@@ -2,7 +2,6 @@
 //! install: it creates it, starts it, runs the app's migrations, stops it, and recovers it
 //! after a crash. It also reports whether the disk holding the data is encrypted.
 
-#[cfg(unix)]
 pub mod at_rest;
 pub mod cluster;
 pub mod layout;

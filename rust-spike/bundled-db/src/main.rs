@@ -10,7 +10,6 @@ use std::time::{Duration, Instant};
 
 use bundled_db::cluster::{self, Bundle, Endpoint, Listen, StopMode};
 use bundled_db::layout::Layout;
-#[cfg(unix)]
 use bundled_db::at_rest;
 use bundled_db::{migrate, procs, secrets, APP_DATABASE, SUPERUSER};
 use serde_json::{json, Value};

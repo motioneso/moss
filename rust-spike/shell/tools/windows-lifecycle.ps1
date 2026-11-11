@@ -3,7 +3,8 @@ param(
     [Parameter(Mandatory)][string]$Postgres,   # database bundle with the vector extension
     [Parameter(Mandatory)][string]$Repo,       # repository root
     [Parameter(Mandatory)][string]$TestExe,    # moss-app test program
-    [int]$Port = 5191
+    [int]$Port = 5191,
+    [string]$AppExe = ''             # the moss-app program; when given, its own buttons are driven too
 )
 # Stages a Windows install, then runs the app's own setup, start, stop and restart as a throwaway
 # standard user (the product refuses to launch children from an elevated account).
@@ -15,6 +16,7 @@ $work = Join-Path $Bin 'lifecycle-proof'
 $install = Join-Path $work 'install'
 New-Item -ItemType Directory -Path $install -Force | Out-Null
 foreach ($name in 'moss-db.exe', 'moss-shell.exe') { Copy-Item (Join-Path $Bin $name) $install }
+if ($AppExe) { Copy-Item $AppExe $install }
 Copy-Item $Postgres (Join-Path $install 'postgres') -Recurse
 New-Item -ItemType Directory -Path (Join-Path $install 'web') -Force | Out-Null
 Set-Content (Join-Path $install 'web\index.html') '<!doctype html><title>Moss</title>'
@@ -86,6 +88,22 @@ try {
     Write-Host '== firewall profiles on this runner'
     Get-NetFirewallProfile | Select-Object Name, Enabled | Format-Table | Out-String | Write-Host
     Run-Proof 'windows_proof::windows_server_answers_on_the_network_address_only_when_sharing_is_on' 'WINDOWS NETWORK ADDRESS PROOF' 'lan'
+    if ($AppExe) {
+        # Buttons proof: the real app window, driven as the same standard user.
+        $buttonsData = Join-Path $work 'data-buttons'
+        $buttonsOut = Join-Path $work 'buttons.out'; $buttonsErr = Join-Path $work 'buttons.err'
+        $inner = Join-Path $PSScriptRoot 'windows-buttons-inner.ps1'
+        & icacls $PSScriptRoot /grant ('*' + $user.SID.Value + ':(OI)(CI)RX') /Q | Out-Null
+        $buttons = Start-Process -FilePath 'powershell.exe' -Credential $credential -LoadUserProfile -WorkingDirectory $work `
+            -Environment @{ TEMP = $temp; TMP = $temp } `
+            -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $inner, '-Install', $install, '-Data', $buttonsData, '-Work', $work) `
+            -RedirectStandardOutput $buttonsOut -RedirectStandardError $buttonsErr -PassThru
+        $script:process = $buttons
+        if (-not $buttons.WaitForExit(1200000)) { $buttons.Kill($true); throw 'Buttons proof exceeded twenty minutes' }
+        Get-Content $buttonsOut; Get-Content $buttonsErr -ErrorAction SilentlyContinue
+        Get-Content (Join-Path $work 'app.err') -Tail 40 -ErrorAction SilentlyContinue
+        if ($buttons.ExitCode -ne 0 -or -not (Select-String -Path $buttonsOut -Pattern 'WINDOWS APP BUTTONS PROOF')) { throw "Buttons proof failed ($($buttons.ExitCode))" }
+    }
 } finally {
     if ($process -and -not $process.HasExited) { $process.Kill($true) }
     Get-Process postgres, moss-shell, moss-db -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$work*" } | Stop-Process -Force
