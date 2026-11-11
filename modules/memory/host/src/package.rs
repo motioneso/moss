@@ -12,7 +12,7 @@ pub fn component(core: &[u8]) -> Result<Vec<u8>> {
     let mut imports = String::new();
     let mut lowers = String::new();
     let mut exports = String::new();
-    for port in ["db", "vault", "jobs", "context"] {
+    for port in ["kv", "db", "vault", "jobs", "context"] {
         imports += &format!(
             r#"(import "moss:module/{port}@1.0.0" (instance ${port} (export "call" (func (type $call)))))
             (alias export ${port} "call" (func ${port}-call))"#

@@ -40,27 +40,64 @@ fn an_unknown_route_is_a_plain_404() {
 }
 
 #[test]
-fn the_package_asks_only_for_the_index_host_ports() {
+fn the_package_asks_only_for_its_own_memory_resources() {
     let manifest = moss_memory_host::package::manifest().unwrap();
     let ports: Vec<_> = manifest.capabilities.iter().map(|c| c.port.as_str()).collect();
-    assert_eq!(ports, ["db", "vault", "jobs", "context"]);
-    let ask = |port: &str| {
+    assert_eq!(ports, ["kv", "db", "vault", "jobs", "context"]);
+    let ask = |port: &str, operation: &str, resource: &str| {
         authorize(
             &manifest,
             port,
             &Request {
-                operation: "get".into(),
-                resource: "memory.anything".into(),
+                operation: operation.into(),
+                resource: resource.into(),
                 parameters: json!({}),
             },
         )
     };
-    for port in ["kv", "embed", "ai", "credentials"] {
-        assert!(ask(port).is_err(), "{port} must be refused");
+    for (operation, resource) in [
+        ("get", "memory.recall"),
+        ("get", "memory.core"),
+        ("set", "memory.entity"),
+        ("set", "memory.fact"),
+        ("set", "memory.index"),
+    ] {
+        ask("kv", operation, resource).unwrap();
+    }
+    assert!(ask("kv", "get", "memory.anything").is_err());
+    assert!(ask("kv", "delete", "memory.fact").is_err());
+    for port in ["embed", "ai", "credentials", "fetch"] {
+        assert!(ask(port, "get", "memory.recall").is_err(), "{port} must be refused");
     }
     // A declared port still refuses any table or source the manifest does not name.
     for port in ["db", "vault"] {
-        assert!(ask(port).is_err(), "{port} must refuse an unnamed resource");
+        assert!(ask(port, "get", "memory.anything").is_err(), "{port} must refuse an unnamed resource");
+    }
+}
+
+#[test]
+fn the_five_routes_and_two_tools_are_declared() {
+    let manifest = moss_memory_host::package::manifest().unwrap();
+    let routes: Vec<_> = manifest.routes.iter().map(|r| (r.method.as_str(), r.path.as_str())).collect();
+    assert_eq!(
+        routes,
+        [
+            ("GET", "/graph/recall"),
+            ("GET", "/graph/core"),
+            ("POST", "/graph/entities"),
+            ("POST", "/graph/facts"),
+            ("POST", "/vault-index/start")
+        ]
+    );
+    assert!(manifest.routes.iter().all(|r| r.sign_in));
+    let mut tools: Vec<_> = manifest.tools.keys().map(String::as_str).collect();
+    tools.sort();
+    assert_eq!(tools, ["memory.recall", "memory.remember"]);
+    assert_eq!(manifest.tools["memory.recall"].risk, "read");
+    assert_eq!(manifest.tools["memory.remember"].risk, "write");
+    let features: Vec<_> = manifest.features.iter().filter_map(|f| f["id"].as_str()).collect();
+    for id in ["memory.recall", "memory.remember", "memory.vault-index"] {
+        assert!(features.contains(&id), "{id} must be in the app map");
     }
 }
 

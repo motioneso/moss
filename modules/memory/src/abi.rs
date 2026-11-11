@@ -1,10 +1,11 @@
-//! Canonical ABI entry points. Declares the db, vault, jobs and context host ports. No WASI imports.
+//! Canonical ABI bridge for the JSON host ports (kv, db, vault, jobs, context). No WASI imports.
 use moss_module_sdk::{Error, Host, Result};
 use serde_json::{json, Value};
 use std::alloc::{alloc, realloc, Layout};
 
 #[link(wasm_import_module = "ports")]
 extern "C" {
+    fn kv(ptr: *const u8, len: usize, out: *mut usize);
     fn db(ptr: *const u8, len: usize, out: *mut usize);
     fn vault(ptr: *const u8, len: usize, out: *mut usize);
     fn jobs(ptr: *const u8, len: usize, out: *mut usize);
@@ -18,6 +19,7 @@ impl Host for Bridge {
         let mut out = [0usize; 3];
         unsafe {
             let call = match port {
+                "kv" => kv,
                 "db" => db,
                 "vault" => vault,
                 "jobs" => jobs,
