@@ -158,11 +158,22 @@ fn make_private_folder(path: &Path) -> Result<(), Failure> {
 /// fails.
 #[cfg(windows)]
 fn owner_only_acl(path: &Path) -> Result<(), Failure> {
-    let user = match (std::env::var("USERDOMAIN"), std::env::var("USERNAME")) {
-        (Ok(domain), Ok(name)) if !domain.is_empty() => format!("{domain}\\{name}"),
-        (_, Ok(name)) => name,
-        _ => return Err(Failure::Other),
-    };
+    // The environment can name a different account than the one running, so ask Windows.
+    let who = std::process::Command::new("whoami")
+        .args(["/user", "/fo", "csv", "/nh"])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .map_err(|_| Failure::Other)?;
+    let text = String::from_utf8_lossy(&who.stdout);
+    let sid = text
+        .trim()
+        .rsplit(',')
+        .next()
+        .map(|s| s.trim_matches('"').to_string())
+        .filter(|s| s.starts_with("S-1-"))
+        .ok_or(Failure::Other)?;
+    let user = format!("*{sid}");
     let status = std::process::Command::new("icacls")
         .arg(path)
         .args(["/inheritance:r", "/grant:r"])
