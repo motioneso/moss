@@ -103,3 +103,4 @@ docs/superpowers/mockups/summary-owner-context/
 rust-spike/platform/target/
 rust-spike/**/target/
 modules/memory/tools/score-cases.json
+modules/memory/tools/lifecycle-cases.json

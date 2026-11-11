@@ -272,7 +272,7 @@ try {
   await server.ready();
   const results = [];
   for (const c of CASES) results.push(await run(c));
-  const text = `${JSON.stringify(results, null, 2)}\n`;
+  const text = `[\n${results.map((r) => `  ${JSON.stringify(r)}`).join(",\n")}\n]\n`;
   if (process.argv[2] === "write") {
     writeFileSync(file, text);
     console.log(`wrote ${results.length} cases`);
