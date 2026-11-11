@@ -32,6 +32,10 @@ async fn windows_app_provisions_starts_stops_and_restarts_the_whole_server() {
         }
     }
     let _cleanup = Cleanup(&install, &store);
+    // The account's own profile can put the machine search path back, so the proof sets it here.
+    if let Some(clean) = std::env::var_os("MOSS_PROOF_CLEAN_PATH") {
+        std::env::set_var("PATH", clean);
+    }
     let host_openssl = std::process::Command::new("openssl")
         .arg("version")
         .output();

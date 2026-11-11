@@ -67,7 +67,7 @@ try {
     $environment = @{
         TEMP = $temp; TMP = $temp
         MOSS_CLEAN_INSTALL = $install; MOSS_CLEAN_DATA = $data; MOSS_PROOF_PORT = "$Port"
-        PATH = $cleanPath; MOSS_PROOF_NO_HOST_OPENSSL = '1'
+        PATH = $cleanPath; MOSS_PROOF_CLEAN_PATH = $cleanPath; MOSS_PROOF_NO_HOST_OPENSSL = '1'
     }
     function Run-Proof($testName, $marker, $suffix) {
         $out = Join-Path $work "proof-$suffix.out"; $err = Join-Path $work "proof-$suffix.err"
