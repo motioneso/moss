@@ -433,7 +433,8 @@ Needs hardware or a real account (so needs Ben, never claimed by CI):
    needs the person's reviewed title and explicit confirmation. Chat classes stay as in 3.1.
 7. **Sensitive meetings.** Not built in legacy, so not in this port. When that spec is built, it
    needs its own plan. Until then no part may add partial lock behaviour.
-8. **Deletion.** Deleting a meeting removes its notes, transcript, summaries, candidates, export
+8. **Deletion.** Deleting a meeting first fences it and cleans its managed Notes and Memory
+   contributions, then removes its notes, transcript, summaries, candidates, export
    receipts and linked chats in one transaction, and reports the same 204 for missing and
    inaccessible. Accepted tasks and saved note copies survive, as legacy says. Account export
    includes the 18 meeting collections (`packages/meetings/src/data-lifecycle.ts:13`: recording types and metadata, manual entries, voice enablements, imports, records, note writes, transcript batches, output requests and artifacts, action candidates, export receipts and requests, stop summaries, and the four capture tables) with original JSON text and all revisions. Backtrack
