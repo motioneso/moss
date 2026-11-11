@@ -1,4 +1,4 @@
-//! Memory guest. This part owns the package identity and tables only. Embedding settings are
+//! Memory guest. It owns the package identity, the tables and the vault index jobs. Embedding settings are
 //! served by the host so the credential never reaches guest code, and graph access, recall,
 //! remembering and candidates are not in this package yet.
 use moss_module_sdk::{Host, Response, RouteRequest};
@@ -6,8 +6,9 @@ use serde_json::json;
 
 #[cfg(target_arch = "wasm32")]
 mod abi;
+mod vault_index;
 
-pub fn handle(_: &impl Host, kind: &str, payload: &str) -> Result<String, String> {
+pub fn handle(host: &impl Host, kind: &str, payload: &str) -> Result<String, String> {
     match kind {
         "health" | "install" => Ok("{}".into()),
         "route" => {
@@ -16,6 +17,20 @@ pub fn handle(_: &impl Host, kind: &str, payload: &str) -> Result<String, String
                 Err(_) => Response::new(400, json!({"error":"Invalid memory request"})),
             };
             serde_json::to_string(&response).map_err(|_| "Invalid memory response".into())
+        }
+        "job" => vault_index::handle_job(host, payload).map_err(|e| e.message),
+        "api" => {
+            #[derive(serde::Deserialize)]
+            #[serde(tag = "name", content = "parameters", deny_unknown_fields)]
+            enum Api {
+                #[serde(rename = "requestVaultIndex")]
+                RequestVaultIndex(vault_index::NudgeRequest),
+            }
+            let Api::RequestVaultIndex(input) =
+                serde_json::from_str(payload).map_err(|_| "Invalid memory request".to_owned())?;
+            vault_index::request(host, input)
+                .map(|v| v.to_string())
+                .map_err(|e| e.message)
         }
         _ => Err("Memory handler is unavailable".into()),
     }

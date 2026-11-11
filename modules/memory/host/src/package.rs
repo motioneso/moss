@@ -12,7 +12,7 @@ pub fn component(core: &[u8]) -> Result<Vec<u8>> {
     let mut imports = String::new();
     let mut lowers = String::new();
     let mut exports = String::new();
-    for port in [] as [&str; 0] {
+    for port in ["db", "vault", "jobs", "context"] {
         imports += &format!(
             r#"(import "moss:module/{port}@1.0.0" (instance ${port} (export "call" (func (type $call)))))
             (alias export ${port} "call" (func ${port}-call))"#
@@ -149,7 +149,7 @@ pub fn files(root: &Path, core: &[u8]) -> Result<BTreeMap<String, Vec<u8>>> {
             let bytes = std::fs::read(root.join("modules/memory").join(path))?;
             anyhow::ensure!(
                 moss_module_host::trust::digest(&bytes)
-                    == "d8bcaee31c816f837aa097bad7523450bd90b9c608fb913ed6502d09c3d672c6",
+                    == "461aa6600ae180caa1e0d5b66bb4f4b562612cac037f4638dd191c41f589443c",
                 "Memory migration bytes changed: {path}"
             );
             bytes

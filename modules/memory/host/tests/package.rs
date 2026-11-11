@@ -40,9 +40,10 @@ fn an_unknown_route_is_a_plain_404() {
 }
 
 #[test]
-fn the_package_asks_for_no_host_ports() {
+fn the_package_asks_only_for_the_index_host_ports() {
     let manifest = moss_memory_host::package::manifest().unwrap();
-    assert!(manifest.capabilities.is_empty());
+    let ports: Vec<_> = manifest.capabilities.iter().map(|c| c.port.as_str()).collect();
+    assert_eq!(ports, ["db", "vault", "jobs", "context"]);
     let ask = |port: &str| {
         authorize(
             &manifest,
@@ -54,8 +55,12 @@ fn the_package_asks_for_no_host_ports() {
             },
         )
     };
-    for port in ["kv", "db", "embed", "ai", "vault", "credentials"] {
+    for port in ["kv", "embed", "ai", "credentials"] {
         assert!(ask(port).is_err(), "{port} must be refused");
+    }
+    // A declared port still refuses any table or source the manifest does not name.
+    for port in ["db", "vault"] {
+        assert!(ask(port).is_err(), "{port} must refuse an unnamed resource");
     }
 }
 
@@ -71,8 +76,9 @@ fn memory_is_required_bundled_and_cannot_be_removed() {
 #[test]
 fn the_sixteen_legacy_tables_match_the_frozen_inventory() {
     let manifest = moss_memory_host::package::manifest().unwrap();
-    assert_eq!(manifest.database.owned_tables.len(), 16);
+    assert_eq!(manifest.database.owned_tables.len(), 17);
     let mut expected = manifest.database.owned_tables.clone();
+    expected.retain(|t| t != "app.memory_ingest_nudges");
     expected.sort();
     let mut frozen = moss_module_host::legacy::tables("memory").to_vec();
     frozen.sort();
@@ -89,10 +95,10 @@ fn the_package_keeps_every_applied_sql_file_byte_for_byte() {
         &"0.1.0".parse().unwrap(),
     )
     .unwrap();
-    assert_eq!(package.manifest.database.migrations.len(), 22);
+    assert_eq!(package.manifest.database.migrations.len(), 23);
     assert_eq!(package.manifest.screens["/settings/memory"], "ui/index.html");
     moss_module_host::sql::check(&package, &Default::default()).unwrap();
-    for path in &package.manifest.database.migrations {
+    for path in package.manifest.database.migrations.iter().filter(|p| moss_module_host::legacy::entry("memory", p).is_some()) {
         assert_eq!(
             moss_module_host::legacy::checksum(&package, path).unwrap(),
             moss_module_host::legacy::entry("memory", path).unwrap().checksum
