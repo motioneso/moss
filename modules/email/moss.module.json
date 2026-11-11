@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 2,
+  "id": "email",
+  "name": "Email",
+  "description": "Keeps the cached mail messages that Connectors fills in, and the Email settings for briefings, task capture and drafted replies. It never contacts a mail service.",
+  "publisher": "Moss",
+  "version": "0.1.0",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "kv",
+      "operations": ["get", "set"],
+      "resources": [
+        "email.messages",
+        "email.preferences",
+        "email.source-behaviors",
+        "email.draft-policy",
+        "email.cache-write"
+      ]
+    }
+  ],
+  "database": {
+    "ownedTables": ["app.email_messages"],
+    "migrations": [
+      "sql/0012_email_module.sql",
+      "sql/0021_email_owner_or_share.sql",
+      "sql/0067_email_summary_signals_columns.sql",
+      "sql/0068_email_worker_grants_and_google_insert.sql",
+      "sql/0132_email_imap_insert.sql",
+      "sql/0219_email_thread_lookup.sql",
+      "sql/0247_email_analysis_attempts.sql",
+      "sql/0249_email_judgement_requested_at.sql"
+    ],
+    "ledger": "core-legacy",
+    "access": {
+      "app.email_messages": {
+        "access": "owner-or-share",
+        "resourceType": "email_message",
+        "shareKey": "id"
+      }
+    }
+  },
+  "routes": [
+    { "method": "GET", "path": "/messages", "signIn": true },
+    { "method": "GET", "path": "/messages/:id", "signIn": true },
+    { "method": "GET", "path": "/briefing-settings", "signIn": true },
+    { "method": "PATCH", "path": "/briefing-settings", "signIn": true },
+    { "method": "GET", "path": "/task-creation-mode", "signIn": true },
+    { "method": "PUT", "path": "/task-creation-mode", "signIn": true },
+    { "method": "GET", "path": "/briefing-source", "signIn": true },
+    { "method": "PUT", "path": "/briefing-source", "signIn": true },
+    { "method": "GET", "path": "/draft-policy", "signIn": true },
+    { "method": "PUT", "path": "/draft-policy", "signIn": true }
+  ],
+  "requires": { "connectors": ">=0.1.0, <1.0.0" },
+  "provides": { "insertCachedMessage": "1.0.0", "updateCachedMessage": "1.0.0" },
+  "icons": ["icons/email.svg"],
+  "accounts": { "supportsUserDisable": false, "defaultEnabled": true },
+  "features": [
+    {
+      "id": "email.messages",
+      "description": "Lists the signed-in person's cached mail messages, newest first, and opens one. A message shared with the person can be read too. Nothing is fetched from a mail service by this package.",
+      "errors": [
+        {
+          "code": "email-message-not-found",
+          "class": "validation",
+          "description": "The message does not exist or is not visible to the person"
+        },
+        {
+          "code": "email-unavailable",
+          "class": "transient",
+          "description": "Cached mail is unavailable",
+          "remediationRef": "email-check-connections"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "email-check-connections",
+          "description": "Check that a mail account is connected and allowed to share Email",
+          "path": "/settings/connections"
+        }
+      ]
+    },
+    {
+      "id": "email.settings",
+      "description": "Settings, Email chooses whether important mail appears in briefings, how tasks are captured from mail (off, suggest, auto for safe items, auto), whether replies are suggested or drafted, and whether the assistant may draft replies without asking. Missing choices use the defaults."
+    },
+    {
+      "id": "email.cache-api",
+      "description": "Connectors adds and updates cached messages through a public interface. The body excerpt is kept to 500 characters."
+    }
+  ],
+  "tools": {},
+  "jobs": {},
+  "screens": { "/settings/email": "ui/settings.html" },
+  "navigation": [],
+  "settings": [
+    {
+      "id": "email.module-settings",
+      "label": "Email",
+      "path": "/settings/email",
+      "scope": "user",
+      "description": "Briefings, task capture and drafted replies for your mail."
+    }
+  ]
+}
