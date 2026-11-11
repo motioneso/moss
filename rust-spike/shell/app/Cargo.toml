@@ -10,6 +10,7 @@ moss-shell-contract = { path = "../contract", features = ["stub"] }
 moss-network = { path = "../../network" }
 moss-module-host = { path = "../../module-host" }
 moss-calendar-host = { path = "../../../modules/calendar/host" }
+moss-connectors-host = { path = "../../../modules/connectors/host" }
 anyhow = "1"
 safety-core = { path = "../../safety-core" }
 uuid = "1"

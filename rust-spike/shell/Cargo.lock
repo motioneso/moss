@@ -2577,6 +2577,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "moss-connectors"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "moss-module-sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "moss-connectors-host"
+version = "0.1.0"
+dependencies = [
+ "access-context",
+ "anyhow",
+ "moss-connectors",
+ "moss-module-host",
+ "moss-module-sdk",
+ "portability",
+ "safety-core",
+ "serde_json",
+ "tokio",
+ "tokio-postgres",
+ "uuid",
+ "wat",
+]
+
+[[package]]
 name = "moss-module-host"
 version = "0.1.0"
 dependencies = [
@@ -2694,6 +2722,7 @@ dependencies = [
  "async-trait",
  "axum",
  "moss-calendar-host",
+ "moss-connectors-host",
  "moss-module-host",
  "moss-network",
  "moss-platform-adapters",

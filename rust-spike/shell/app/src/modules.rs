@@ -2,6 +2,7 @@
 //! still owns schema creation; the serving process never runs bootstrap SQL.
 use anyhow::Result;
 use moss_calendar_host::CalendarPorts;
+use moss_connectors_host::ConnectorsPorts;
 use axum::{
     body::Bytes,
     extract::{Path as UrlPath, Query, State},
@@ -263,6 +264,7 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
     let admin_user_id = settings
         .admin_user_id
         .ok_or_else(|| anyhow::anyhow!("No module has been installed yet"))?;
+    let connectors_key = settings.connector_key.clone();
     let cipher = SecretCipher::connectors(
         &[("JARVIS_CONNECTOR_SECRET_KEY".into(), settings.connector_key)].into(),
     )
@@ -288,6 +290,7 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
     }
     let preferences_database = database.clone();
     let calendar_database = database.clone();
+    let connectors_database = database.clone();
     let mut embedding_model = None;
     let generator: Arc<dyn Intelligence> = match &settings.ai_key {
         Some(key) => crate::module_ai::intelligence(
@@ -355,7 +358,10 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
             }?;
             // Calendar keeps its settings in the account's real preferences and reads the
             // account timezone. The wrapper only answers calls made by the Calendar module.
-            Ok(Arc::new(CalendarPorts::new(calendar_database, services)?) as Arc<dyn Ports>)
+            let services = Arc::new(CalendarPorts::new(calendar_database, services)?) as Arc<dyn Ports>;
+            // Connectors answers only its own account calls and seals secrets with the
+            // connector key. Every other call passes through.
+            Ok(Arc::new(ConnectorsPorts::new(connectors_database, services, &connectors_key)?) as Arc<dyn Ports>)
         },
     )?;
     Ok(application)
