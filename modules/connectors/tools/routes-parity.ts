@@ -9,6 +9,9 @@ import { registerConnectorsRoutes } from "../../../packages/connectors/src/route
 
 const binary = process.env.CONNECTORS_ORACLE;
 assert(binary, "Build the connectors oracle first");
+type Deps = Parameters<typeof registerConnectorsRoutes>[1];
+type Input = { providerId: string; scopes: string[]; status?: string; tokenPayload?: unknown };
+
 type Case = {
   method: string;
   url: string;
@@ -72,7 +75,7 @@ const repository = {
   listAdminSafeAccounts: async () => accounts,
   getUserById: async () =>
     admin === "unauthenticated" ? undefined : { id: "user-1", is_instance_admin: admin === "ok" },
-  createAccount: async (_db: unknown, input: any) => {
+  createAccount: async (_db: unknown, input: Input) => {
     if (!providers.some((p) => p.provider_id === input.providerId))
       throw new Error('violates foreign key constraint "connector_accounts_provider_id_fkey"');
     const created = row(
@@ -84,7 +87,7 @@ const repository = {
     accounts.unshift(created);
     return created;
   },
-  updateAccount: async (_db: unknown, id: string, input: any) => {
+  updateAccount: async (_db: unknown, id: string, input: Input) => {
     const found = accounts.find((a) => a.id === id);
     if (!found) return undefined;
     if (input.scopes !== undefined) found.scopes = [...input.scopes];
@@ -113,13 +116,15 @@ const server = Fastify();
 setMossErrorHandler(server);
 registerConnectorsRoutes(server, {
   resolveAccessContext: async () => ({ actorUserId: "user-1", requestId: "parity" }),
-  dataContext: { withDataContext: async (_ctx: unknown, work: any) => work({}) } as any,
-  boss: {} as any,
-  repository: repository as any,
-  preferencesRepository: preferences as any,
-  secretCipher: { encryptJson: () => ({ sealed: true }) } as any,
-  googleService: {} as any,
-  imapService: {} as any
+  dataContext: {
+    withDataContext: async (_ctx: unknown, work: (db: object) => unknown) => work({})
+  } as unknown as Deps["dataContext"],
+  boss: {} as unknown as never,
+  repository: repository as unknown as never,
+  preferencesRepository: preferences as unknown as never,
+  secretCipher: { encryptJson: () => ({ sealed: true }) } as unknown as never,
+  googleService: {} as unknown as never,
+  imapService: {} as unknown as never
 });
 
 try {
