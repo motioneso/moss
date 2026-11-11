@@ -13,6 +13,12 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> Result<String, Str
         "health" | "install" => Ok("{}".into()),
         "route" => {
             let response = match serde_json::from_str::<RouteRequest>(payload) {
+                Ok(request) if request.method == "POST" && request.path == "/vault-index/start" => {
+                    match vault_index::handle_job(host, r#"{"queue":"memory.vault-ingest-tick","parameters":{}}"#) {
+                        Ok(_) => Response::new(202, json!({"started":true})),
+                        Err(_) => Response::new(503, json!({"error":"Memory index is unavailable"})),
+                    }
+                }
                 Ok(_) => Response::new(404, json!({"error":"Memory route not found"})),
                 Err(_) => Response::new(400, json!({"error":"Invalid memory request"})),
             };

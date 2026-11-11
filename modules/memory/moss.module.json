@@ -15,13 +15,22 @@
     },
     {
       "port": "vault",
-      "operations": ["index.vault-list", "index.vault-file", "index.vault-remove", "index.vault-purge"],
+      "operations": [
+        "index.vault-list",
+        "index.vault-file",
+        "index.vault-remove",
+        "index.vault-purge"
+      ],
       "resources": ["vault-index"]
     },
     {
       "port": "jobs",
       "operations": ["enqueue-after-commit", "enqueue-options", "schedule"],
-      "resources": ["memory.vault-ingest-tick", "memory.vault-ingest-sweep", "memory.vault-ingest-nudge"]
+      "resources": [
+        "memory.vault-ingest-tick",
+        "memory.vault-ingest-sweep",
+        "memory.vault-ingest-nudge"
+      ]
     },
     {
       "port": "context",
@@ -129,7 +138,7 @@
       }
     }
   },
-  "routes": [],
+  "routes": [{ "method": "POST", "path": "/vault-index/start", "signIn": true }],
   "requires": {},
   "provides": {
     "requestVaultIndex": "1.0.0"

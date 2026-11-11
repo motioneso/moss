@@ -297,6 +297,8 @@ impl MemoryVaultPorts {
         let actor = scope.access().actor_user_id();
         let path = input.path.clone();
         let skipped = || Ok(json!({"status": "skipped", "chunksProcessed": 0}));
+        // The model lookup blocks on its own runtime, so it runs outside the async block.
+        let (model_name, model_version) = self.embeddings.model(scope)?;
         // Read, label and embed before the write transaction.
         let prepared = self.runtime.block_on(async {
             tokio::time::timeout(scope.remaining(), async {
@@ -312,7 +314,6 @@ impl MemoryVaultPorts {
                     self.commit(cx, scope).await?;
                     return Ok(None);
                 };
-                let (model_name, model_version) = self.embeddings.model(scope)?;
                 let existing = cx
                     .db()
                     .query_opt(
@@ -331,12 +332,12 @@ impl MemoryVaultPorts {
                 }
                 let offset = progress(cx.db(), &path, &snap.key, &model_name, &model_version).await?;
                 self.commit(cx, scope).await?;
-                anyhow::Ok(Some((content, snap, model_name, model_version, offset)))
+                anyhow::Ok(Some((content, snap, offset)))
             })
             .await
             .context("Memory vault deadline exceeded")?
         })?;
-        let Some((content, snap, model_name, model_version, found)) = prepared else {
+        let Some((content, snap, found)) = prepared else {
             return skipped();
         };
         let (links, chunks) = parse_document(&content);
