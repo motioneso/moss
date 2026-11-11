@@ -287,3 +287,255 @@ fn remember_then_recall_through_the_real_guest() {
         .unwrap();
     assert_eq!(core["status"], 200);
 }
+
+// ---- Part 3: fact lifecycle, conflict groups, forget ----
+
+const UNKNOWN: &str = "00000000-0000-4000-8000-0000000000ff";
+
+impl Fixture {
+    fn route(&self, actor: Uuid, method: &str, path: &str, id: &str, body: Value) -> (u64, Value) {
+        let out = self
+            .guest(actor, false, "route", json!({"method":method,"path":path,"params":{"id":id},"query":{},"body":body}))
+            .unwrap();
+        (out["status"].as_u64().unwrap(), out["body"].clone())
+    }
+
+    /// Facts seeded like the old fixture generator: volunteered, confidence 0.8.
+    fn ids(&self, actor: Uuid, n: usize) -> Vec<String> {
+        (0..n)
+            .map(|i| {
+                self.store(
+                    actor,
+                    "set",
+                    "memory.fact",
+                    json!({"predicate":"prefers","objectText":format!("case fact {}", i + 1),"recordKind":"preference",
+                           "confidence":0.8,"provenance":"volunteered","importance":0.5,"pinned":false,
+                           "source":{"sourceKind":"manual","sourceRef":format!("manual:{}", i + 1),"sourceLabel":"",
+                                     "excerpt":format!("fact {}", i + 1)}}),
+                )["fact"]["id"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned()
+            })
+            .collect()
+    }
+
+    fn new_person(&self) -> Uuid {
+        let id = Uuid::new_v4();
+        self.rt
+            .block_on(self.root.execute(
+                "INSERT INTO app.users(id,email,name,is_instance_admin) VALUES($1,$2,'Case',false)",
+                &[&id, &format!("{id}@example.test")],
+            ))
+            .unwrap();
+        id
+    }
+
+    /// Puts the given facts in one open conflict group, as the old repository does.
+    fn conflict(&self, actor: Uuid, ids: &[String]) {
+        let list = ids.iter().map(|i| format!("'{i}'::uuid")).collect::<Vec<_>>().join(",");
+        self.sql(&format!(
+            "WITH g AS (INSERT INTO app.memory_conflict_groups (owner_user_id) VALUES ('{actor}') RETURNING id)
+             UPDATE app.memory_facts SET status='conflicting', conflict_group_id=(SELECT id FROM g)
+             WHERE owner_user_id='{actor}' AND id IN ({list});
+             UPDATE app.memory_search_documents SET status='inactive'
+             WHERE owner_user_id='{actor}' AND target_kind='fact' AND target_id IN ({list})"
+        ));
+    }
+
+    fn state(&self, actor: Uuid, ids: &[String]) -> Value {
+        self.rt.block_on(async {
+            let mut facts = vec![];
+            for id in ids {
+                let uid: Uuid = id.parse().unwrap();
+                let row = self.root.query_opt(
+                    "SELECT f.status, f.conflict_group_id IS NOT NULL, f.valid_to IS NOT NULL, f.stale_at IS NOT NULL,
+                            f.pinned, f.superseded_by_fact_id,
+                            (SELECT d.status FROM app.memory_search_documents d
+                              WHERE d.owner_user_id = f.owner_user_id AND d.target_kind='fact' AND d.target_id = f.id)
+                     FROM app.memory_facts f WHERE f.owner_user_id=$1 AND f.id=$2",
+                    &[&actor, &uid],
+                ).await.unwrap();
+                facts.push(match row {
+                    None => Value::Null,
+                    Some(r) => {
+                        let by: Option<Uuid> = r.get(5);
+                        json!({"status": r.get::<_, String>(0), "hasGroup": r.get::<_, bool>(1),
+                               "hasValidTo": r.get::<_, bool>(2), "hasStaleAt": r.get::<_, bool>(3),
+                               "pinned": r.get::<_, bool>(4),
+                               "supersededBy": by.map(|b| ids.iter().position(|i| *i == b.to_string()).map_or(-1, |p| p as i64)),
+                               "doc": r.get::<_, Option<String>>(6)})
+                    }
+                });
+            }
+            let group: Option<String> = self.root.query_opt(
+                "SELECT status FROM app.memory_conflict_groups WHERE owner_user_id=$1 ORDER BY created_at LIMIT 1",
+                &[&actor]).await.unwrap().map(|r| r.get(0));
+            let total: i64 = self.root.query_one("SELECT count(*) FROM app.memory_facts WHERE owner_user_id=$1", &[&actor]).await.unwrap().get(0);
+            json!({"facts": facts, "group": group, "total": total})
+        })
+    }
+}
+
+fn plant(f: &Fixture, actor: Uuid, seed: &str) -> Vec<String> {
+    let n = match seed { "none" => 0, "plain" | "recording" => 1, "conflict2" | "superseded" => 2, _ => 3 };
+    let ids = f.ids(actor, n);
+    if seed.starts_with("conflict") || seed == "confirmed3" {
+        f.conflict(actor, &ids);
+    }
+    if seed == "confirmed3" {
+        let (status, _) = f.route(actor, "POST", "/graph/facts/:id/confirm", &ids[0], json!({}));
+        assert_eq!(status, 200);
+    }
+    if seed == "superseded" {
+        f.sql(&format!(
+            "UPDATE app.memory_facts SET status='superseded', superseded_by_fact_id='{}' WHERE owner_user_id='{actor}' AND id='{}'",
+            ids[1], ids[0]
+        ));
+    }
+    if seed == "recording" {
+        f.sql(&format!(
+            "INSERT INTO app.memory_recording_fact_versions (owner_user_id, fact_id, lineage_id, side)
+             VALUES ('{actor}', '{}', gen_random_uuid(), 'personal')", ids[0]
+        ));
+    }
+    ids
+}
+
+fn shape(status: u64, body: &Value) -> Value {
+    let Some(fact) = body.get("fact") else { return body.clone() };
+    let mut keys: Vec<&String> = fact.as_object().unwrap().keys().collect();
+    keys.sort();
+    let _ = status;
+    json!({"status": fact["status"], "provenance": fact["provenance"], "confidence": fact["confidence"],
+           "pinned": fact["pinned"], "objectText": fact["objectText"], "confidenceTier": fact["confidenceTier"],
+           "hasGroup": !fact["conflictGroupId"].is_null(), "sourceCount": fact["sources"].as_array().unwrap().len(),
+           "keys": keys})
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn every_old_route_case_gives_the_same_status_body_and_rows() {
+    let cases: Vec<Value> =
+        serde_json::from_str(&std::fs::read_to_string("../tools/lifecycle-cases.json").unwrap()).unwrap();
+    assert!(cases.len() >= 37);
+    let f = Fixture::new();
+    for case in cases {
+        let person = f.new_person();
+        let ids = plant(&f, person, case["seed"].as_str().unwrap());
+        let request = &case["request"];
+        let id = if request["target"] == "first" { ids[0].clone() } else { UNKNOWN.to_owned() };
+        let path = match request["path"].as_str().unwrap() {
+            "" => "/graph/facts/:id".to_owned(),
+            p => format!("/graph/facts/:id/{p}"),
+        };
+        let body = request.get("body").cloned().unwrap_or(Value::Null);
+        let (status, out) = f.route(person, request["method"].as_str().unwrap(), &path, &id, body);
+        let name = case["name"].as_str().unwrap();
+        assert_eq!(status, case["status"].as_u64().unwrap(), "{name}: status");
+        if status == 400 && case["body"]["code"] == "FST_ERR_VALIDATION" || case["body"] == json!({"error":"Bad Request"}) {
+            // Validation wording is the part 2 convention (the message text), so only the status is compared.
+        } else if status == 204 {
+            assert!(out.is_null(), "{name}: body");
+        } else {
+            assert_eq!(shape(status, &out), case["body"], "{name}: body");
+        }
+        assert_eq!(f.state(person, &ids), case["after"], "{name}: rows afterwards");
+    }
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_second_person_cannot_use_any_new_route_on_the_first_persons_fact() {
+    let f = Fixture::new();
+    let ids = f.ids(f.a, 1);
+    let before = f.state(f.a, &ids);
+    let calls = [
+        ("POST", "pin", json!({"pinned": true})),
+        ("POST", "confirm", json!({})),
+        ("POST", "correct", json!({"replacementText": "stolen"})),
+        ("POST", "status", json!({"status": "rejected"})),
+        ("POST", "mark-stale", json!({})),
+        ("POST", "supersede", json!({})),
+        ("DELETE", "", Value::Null),
+    ];
+    for (method, name, body) in calls {
+        let path = if name.is_empty() { "/graph/facts/:id".to_owned() } else { format!("/graph/facts/:id/{name}") };
+        let (status, out) = f.route(f.b, method, &path, &ids[0], body);
+        assert_eq!((status, out["error"].as_str()), (404, Some("Memory fact not found")), "{method} {name}");
+    }
+    assert_eq!(f.state(f.a, &ids), before, "A's fact is untouched");
+    assert_eq!(f.count("SELECT count(*) FROM app.memory_facts WHERE owner_user_id = $1", f.b), 0);
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_second_person_cannot_read_or_forget_the_first_persons_fact_even_without_row_security() {
+    let f = Fixture::new();
+    let ids = f.ids(f.a, 1);
+    let card = |actor: Uuid| {
+        f.guest(actor, false, "api", json!({"name":"prepareMemoryAction","parameters":{"tool":"memory.forget",
+            "inputJson": json!({"factId": ids[0]}).to_string()}})).unwrap()
+    };
+    let version = card(f.a)["ok"]["version"].as_str().unwrap().to_owned();
+    let forget = |actor: Uuid| {
+        f.guest(actor, false, "tool", json!({"tool":"memory.forget","parameters":{"factId": ids[0]},"approvalVersion":version}))
+    };
+    assert_eq!(card(f.b)["error"]["statusCode"], 409);
+    assert!(forget(f.b).is_err(), "B's approval of A's memory must be refused");
+    assert_eq!(f.state(f.a, &ids)["total"], 1);
+
+    // With row security off on every table the new SQL reads, the owner filter in the SQL still holds.
+    let tables = ["memory_facts", "memory_fact_sources", "memory_entities", "memory_search_documents",
+                  "memory_conflict_groups", "memory_recording_fact_versions", "memory_episodes"];
+    for t in tables { f.sql(&format!("ALTER TABLE app.{t} DISABLE ROW LEVEL SECURITY")); }
+    let (status, _) = f.route(f.b, "POST", "/graph/facts/:id/confirm", &ids[0], json!({}));
+    let (still, _) = (card(f.b)["error"]["statusCode"].clone(), forget(f.b).is_err());
+    for t in tables { f.sql(&format!("ALTER TABLE app.{t} ENABLE ROW LEVEL SECURITY; ALTER TABLE app.{t} FORCE ROW LEVEL SECURITY")); }
+    assert_eq!((status, still), (404, json!(409)));
+    assert_eq!(f.state(f.a, &ids)["total"], 1);
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn forget_asks_first_is_used_once_and_refuses_a_changed_memory() {
+    let f = Fixture::new();
+    let ids = f.ids(f.a, 1);
+    let prepare = || {
+        f.guest(f.a, false, "api", json!({"name":"prepareMemoryAction","parameters":{"tool":"memory.forget",
+            "inputJson": json!({"factId": ids[0]}).to_string()}})).unwrap()
+    };
+    let card = prepare();
+    assert_eq!(card["ok"]["approvalKind"], "memory_delete");
+    assert!(card["ok"]["target"].as_str().unwrap().contains("case fact 1"));
+    let version = card["ok"]["version"].as_str().unwrap().to_owned();
+    let forget = |v: &str| {
+        f.guest(f.a, false, "tool", json!({"tool":"memory.forget","parameters":{"factId":ids[0]},"approvalVersion":v}))
+    };
+    // No approval at all is refused.
+    let none = f.guest(f.a, false, "tool", json!({"tool":"memory.forget","parameters":{"factId":ids[0]}}));
+    assert!(none.is_err());
+    // A memory changed after the card was shown is refused and kept.
+    let (status, _) = f.route(f.a, "POST", "/graph/facts/:id/pin", &ids[0], json!({"pinned": true}));
+    assert_eq!(status, 204);
+    assert!(forget(&version).is_err());
+    assert_eq!(f.state(f.a, &ids)["total"], 1);
+    // The fresh card's version deletes it, and replaying the same approval finds nothing to delete.
+    let fresh = prepare()["ok"]["version"].as_str().unwrap().to_owned();
+    assert_eq!(forget(&fresh).unwrap()["data"]["deleted"], true);
+    assert_eq!(f.state(f.a, &ids)["total"], 0);
+    assert!(forget(&fresh).is_err());
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn forget_refuses_a_recordings_memory() {
+    let f = Fixture::new();
+    let ids = plant(&f, f.a, "recording");
+    let card = f.guest(f.a, false, "api", json!({"name":"prepareMemoryAction","parameters":{"tool":"memory.forget",
+        "inputJson": json!({"factId": ids[0]}).to_string()}})).unwrap();
+    let version = card["ok"]["version"].as_str().unwrap_or("x").to_owned();
+    let out = f.guest(f.a, false, "tool", json!({"tool":"memory.forget","parameters":{"factId":ids[0]},"approvalVersion":version}));
+    assert!(out.is_err());
+    assert_eq!(f.state(f.a, &ids)["total"], 1);
+}

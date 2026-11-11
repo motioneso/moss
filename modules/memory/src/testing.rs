@@ -8,6 +8,9 @@ pub struct Fake {
     pub recall: Value,
     pub core: Value,
     pub index_fails: bool,
+    pub lifecycle: Value,
+    pub target: Value,
+    pub forget: Value,
     pub calls: RefCell<Vec<(String, String, Value)>>,
 }
 
@@ -17,6 +20,9 @@ impl Fake {
             recall: json!({"nowMs": 0.0, "candidates": [], "names": {}}),
             core: json!({"facts": [], "names": {}}),
             index_fails: false,
+            lifecycle: json!({"ok": true}),
+            target: json!({"target": null}),
+            forget: json!({"deleted": true}),
             calls: RefCell::default(),
         }
     }
@@ -45,6 +51,9 @@ impl Host for Fake {
                 "id": "f1", "confidence": p["confidence"], "provenance": p["provenance"],
                 "lastConfirmedAt": null, "recordKind": p["recordKind"]
             }})),
+            "memory.lifecycle" => Ok(self.lifecycle.clone()),
+            "memory.target" => Ok(self.target.clone()),
+            "memory.forget" => Ok(self.forget.clone()),
             "memory.index" if self.index_fails => Err(Error::new("embedding failed")),
             "memory.index" => Ok(json!({"indexed": true})),
             _ => Err(Error::new("unknown resource")),

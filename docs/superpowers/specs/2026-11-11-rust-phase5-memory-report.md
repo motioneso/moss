@@ -123,6 +123,40 @@ the database save, so a database failure could leave a new key beside the old ad
 - Retrying vectors that stayed pending is part 7.
 - Pin, confirm, correct, forget, suggestions, the Memory screen, the search index and on-device embeddings are not built.
 
+## Part 3: fact lifecycle, conflict groups and forget
+
+### What was built
+
+- Seven fact routes: pin, confirm, correct, status, mark stale, supersede and delete. The guest checks the request and shapes the answer. The host runs the SQL for the signed-in person only.
+- Conflict groups: confirming or correcting one member settles the group, deleting members leaves it open or resolved as the old code does, and status changes on a member are refused.
+- A recording-managed fact (one that Meetings owns) is refused with the old 409 text on every route except pin.
+- The `memory.forget` tool, which always asks first. The approval card names the memory in words and carries a version. The host compares that version with the live memory under lock before it deletes.
+- The manifest declares the new routes, tool and features, so the app map stays true. No screens.
+
+### Proof
+
+| Claim                                                              | Evidence                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Statuses, error texts, answer shapes and rows match the old routes | 37 cases made by running the old routes against a real database (every error status included), replayed through the real Rust guest and database. All equal. The check step also fails if the old code stops matching the file. |
+| Conflict group cases                                               | Among the 37: confirm and correct on groups of two and three, status and mark stale on a member, delete from groups of two and three, delete after a confirm                                                                    |
+| Forget asks first, is bound to one version and is used once        | Database test: no approval is refused, a memory changed after the card is refused and kept, the fresh version deletes it, and replaying that approval deletes nothing                                                           |
+| One person cannot use any new route on another's memory            | Database test for all seven routes and for forget. It also passes with row security switched off on every table the new SQL reads, because every statement filters by the acting person                                         |
+| Native and WebAssembly                                             | Memory check script: native guest tests (23), WebAssembly build, package tests and database tests (10) all passing                                                                                                              |
+| Real server over HTTPS                                             | Live run: pin 204, confirm, mark stale, status, correct, 400 and 404 error texts, supersede 204, delete 204, second delete 404, signed-out 401                                                                                  |
+
+### Not proven
+
+- The approval card and the one-use grant are not exercised through the live server. The server has no web route for tools or approvals. The version check is proven through the real guest and database, and the one-use grant by the generic host tests.
+- Removing row security alone does not expose data through the new routes, because the SQL also filters by the acting person. The proof that row security itself hides rows is the part 1 test. The filter was not removed.
+- Recording-managed facts return 409 because Meetings and its authority are not in the Rust server. Lineage transfer and synchronising were not ported.
+- An invalid fact id returns 404 where the old route returned a server error.
+- Validation error wording for request bodies follows the part 2 convention and may differ from the old framework text. The statuses match.
+- A correction is indexed best-effort. The old code left it without a search vector.
+- Deleting a fact that another fact points to as its replacement fails, as in the old code, and shows as a server error.
+- A second person over HTTP. Sign-up closes after the first account, so that check is in the database tests only.
+- A second device. No other device was reachable for this run.
+- Suggestions, the Memory screen, the search index and on-device embeddings are not built.
+
 ## Part 5: the search index (JS-232)
 
 ### What was built

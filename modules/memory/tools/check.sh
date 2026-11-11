@@ -9,6 +9,8 @@ guest="$CARGO_TARGET_DIR/memory-guest"
 CARGO_TARGET_DIR="$guest" cargo +1.95.0 test --locked --offline --manifest-path modules/memory/src/Cargo.toml
 # The stored score cases must still equal what the old recall code produces.
 pnpm exec tsx modules/memory/tools/score-oracle.ts
+# The stored lifecycle cases must still equal what the old fact routes do.
+pnpm exec tsx modules/memory/tools/lifecycle-oracle.ts check
 CARGO_TARGET_DIR="$guest" RUSTFLAGS='-C link-arg=--import-memory -C link-arg=--initial-memory=2097152 -C link-arg=--max-memory=67108864' \
   cargo +1.95.0 build --locked --offline --release --lib --target wasm32-unknown-unknown --manifest-path modules/memory/src/Cargo.toml
 export MEMORY_CORE_WASM="$guest/wasm32-unknown-unknown/release/moss_memory.wasm"

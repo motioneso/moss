@@ -11,7 +11,16 @@
     {
       "port": "kv",
       "operations": ["get", "set"],
-      "resources": ["memory.recall", "memory.core", "memory.entity", "memory.fact", "memory.index"]
+      "resources": [
+        "memory.recall",
+        "memory.core",
+        "memory.entity",
+        "memory.fact",
+        "memory.index",
+        "memory.lifecycle",
+        "memory.target",
+        "memory.forget"
+      ]
     },
     {
       "port": "db",
@@ -166,12 +175,48 @@
     },
     {
       "method": "POST",
+      "path": "/graph/facts/:id/pin",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/graph/facts/:id/confirm",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/graph/facts/:id/correct",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/graph/facts/:id/status",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/graph/facts/:id/mark-stale",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/graph/facts/:id/supersede",
+      "signIn": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/graph/facts/:id",
+      "signIn": true
+    },
+    {
+      "method": "POST",
       "path": "/vault-index/start",
       "signIn": true
     }
   ],
   "requires": {},
   "provides": {
+    "prepareMemoryAction": "1.0.0",
     "requestVaultIndex": "1.0.0"
   },
   "icons": ["icons/memory.svg"],
@@ -282,6 +327,56 @@
           "path": "/settings/memory"
         }
       ]
+    },
+    {
+      "id": "memory.lifecycle",
+      "description": "Lets the signed-in person pin or unpin a saved fact, confirm it, correct its wording, mark it stale, expired or rejected, retire it as superseded, or delete it. Confirming a fact that disagrees with others keeps it and retires the others. Correcting saves a new confirmed fact with the same sources and retires the old one. A retired fact cannot be made active again, so a new fact is needed. Facts that come from a meeting recording are not changed here.",
+      "errors": [
+        {
+          "code": "memory-fact-not-found",
+          "class": "validation",
+          "description": "Memory fact not found"
+        },
+        {
+          "code": "memory-conflict-group-status",
+          "class": "validation",
+          "description": "conflict-group memory must be resolved with confirm or correct"
+        },
+        {
+          "code": "memory-superseded-reactivation",
+          "class": "validation",
+          "description": "Cannot reactivate a superseded memory record; create a new fact instead"
+        },
+        {
+          "code": "memory-recording-changed",
+          "class": "validation",
+          "description": "This recording's memory has changed or is being removed; refresh its saved state before continuing"
+        }
+      ],
+      "remediations": []
+    },
+    {
+      "id": "memory.conflict_groups",
+      "description": "Facts that disagree sit together in a conflict group and stay out of normal answers. Confirming or correcting one resolves the group. Deleting one leaves the group open while two or more remain, and when only one remains it becomes active again and the group is resolved.",
+      "errors": [],
+      "remediations": []
+    },
+    {
+      "id": "memory.forget_approval",
+      "description": "Deleting a memory through chat always asks first. The approval card shows the memory in words, never IDs, and is good for one use. If the memory changed after the card was shown, the deletion is refused and a new request is needed. Rejecting the card tells Moss the person declined.",
+      "errors": [
+        {
+          "code": "memory-changed-since-approval",
+          "class": "validation",
+          "description": "The memory changed or is no longer available. Find it again and review a new request."
+        },
+        {
+          "code": "memory-forget-not-ready",
+          "class": "transient",
+          "description": "Memory deletion is not ready. Start a new chat and try again."
+        }
+      ],
+      "remediations": []
     }
   ],
   "tools": {
@@ -292,6 +387,11 @@
     "memory.remember": {
       "description": "Create a source-backed graph memory fact for the active actor.",
       "risk": "write"
+    },
+    "memory.forget": {
+      "description": "Delete one saved memory fact for the active actor. Always asks first, showing the memory in words.",
+      "risk": "destructive",
+      "approvalVersion": true
     }
   },
   "jobs": {

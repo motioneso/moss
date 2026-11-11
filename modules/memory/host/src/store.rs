@@ -165,7 +165,7 @@ pub async fn core(cx: &DataContext, p: &Value) -> Result<Value> {
     Ok(json!({"facts": facts, "names": names}))
 }
 
-async fn upsert_document(cx: &DataContext, kind: &str, target: &str, search: &str) -> Result<()> {
+pub(crate) async fn upsert_document(cx: &DataContext, kind: &str, target: &str, search: &str) -> Result<()> {
     cx.db()
         .execute(
             "INSERT INTO app.memory_search_documents
