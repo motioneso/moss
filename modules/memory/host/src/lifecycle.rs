@@ -197,8 +197,34 @@ async fn set_status(cx: &DataContext, p: &Value) -> Result<Value> {
     Ok(json!({"fact": fact(cx, id).await?}))
 }
 
+/// Locks the fact and every member of its conflict group in id order, so two requests on
+/// siblings always take locks in the same order and cannot deadlock.
+async fn lock_family(cx: &DataContext, id: &str) -> Result<()> {
+    let group: Option<String> = cx
+        .db()
+        .query_opt(
+            "SELECT conflict_group_id::text FROM app.memory_facts
+             WHERE owner_user_id = app.current_actor_user_id() AND id = $1::text::uuid",
+            &[&id],
+        )
+        .await?
+        .and_then(|row| row.get(0));
+    cx.db()
+        .execute(
+            "SELECT 1 FROM app.memory_facts
+             WHERE owner_user_id = app.current_actor_user_id()
+               AND (id = $1::text::uuid
+                 OR ($2::text IS NOT NULL AND conflict_group_id = $2::text::uuid))
+             ORDER BY id FOR UPDATE",
+            &[&id, &group],
+        )
+        .await?;
+    Ok(())
+}
+
 async fn confirm(cx: &DataContext, p: &Value) -> Result<Value> {
     let id = id_of(p)?;
+    lock_family(cx, id).await?;
     let Some(found) = existing(cx, id).await? else {
         return Ok(refused(404, NOT_FOUND));
     };
@@ -244,6 +270,7 @@ async fn first_episode(cx: &DataContext, id: &str) -> Result<Option<String>> {
 async fn correct(cx: &DataContext, p: &Value) -> Result<Value> {
     let id = id_of(p)?;
     let replacement = p["replacementText"].as_str().ok_or_else(|| anyhow!("Missing replacementText"))?;
+    lock_family(cx, id).await?;
     let Some(found) = existing(cx, id).await? else {
         return Ok(refused(404, NOT_FOUND));
     };
@@ -364,6 +391,7 @@ async fn release_sole_sibling(cx: &DataContext, group: &str, deleted: &str) -> R
 
 /// Removes one fact, releasing a lone conflict sibling first. False when nothing was deleted.
 async fn remove(cx: &DataContext, id: &str, xmin: Option<&str>) -> Result<bool> {
+    lock_family(cx, id).await?;
     let Some(found) = existing(cx, id).await? else {
         return Ok(false);
     };
@@ -440,6 +468,7 @@ async fn forget_approved(cx: &DataContext, p: &Value) -> Result<Value> {
             &[&entities],
         )
         .await?;
+    lock_family(cx, id).await?;
     let Some(row) = cx.db().query_opt(TARGET, &[&id]).await? else {
         return Ok(json!({"deleted": false}));
     };
