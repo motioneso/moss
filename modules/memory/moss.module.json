@@ -106,9 +106,7 @@
   "routes": [],
   "requires": {},
   "provides": {},
-  "icons": [
-    "icons/memory.svg"
-  ],
+  "icons": ["icons/memory.svg"],
   "accounts": {
     "supportsUserDisable": false,
     "defaultEnabled": true
