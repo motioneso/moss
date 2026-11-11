@@ -57,8 +57,6 @@ fn scrub_counts(account: &mut Value) {
     let Some(counts) = account["lastSyncCounts"].as_object() else {
         return;
     };
-    // Counts are numbers or flags and error details are short scalars. Nested values are dropped.
-    let scalar = |value: &Value| value.is_number() || value.is_boolean() || value.is_string();
     let mut kept = Map::new();
     for key in COUNT_KEYS {
         if let Some(value) = counts.get(key).filter(|v| v.is_number() || v.is_boolean()) {
@@ -66,9 +64,14 @@ fn scrub_counts(account: &mut Value) {
         }
     }
     if let Some(detail) = counts.get("emailErrorDetail").and_then(Value::as_object) {
+        // The response schema allows an integer or null status and string or null text fields.
         let mut inner = Map::new();
-        for key in ["status", "reason", "operation"] {
-            if let Some(value) = detail.get(key).filter(|v| scalar(v)) {
+        for (key, allowed) in [
+            ("status", (|v: &Value| v.is_i64() || v.is_u64()) as fn(&Value) -> bool),
+            ("reason", Value::is_string),
+            ("operation", Value::is_string),
+        ] {
+            if let Some(value) = detail.get(key).filter(|v| v.is_null() || allowed(v)) {
                 inner.insert(key.into(), value.clone());
             }
         }
@@ -113,11 +116,7 @@ pub async fn run(cx: &DataContext, cipher: &JsonSecretCipher, request: &Request)
         ("get", "connectors.providers") => providers(cx).await,
         ("get", "connectors.accounts") => {
             let rows = match p["id"].as_str() {
-                Some(id) => {
-                    // Any valid spelling of the id finds the account, so route guards see it.
-                    let id = id.parse::<Uuid>().map(|u| u.to_string()).unwrap_or_else(|_| id.to_owned());
-                    accounts(cx, "WHERE a.id::text = $1::text", Some(&id)).await?
-                }
+                Some(id) => accounts(cx, "WHERE a.id::text = $1::text", Some(id)).await?,
                 None => accounts(cx, "", None).await?,
             };
             Ok(Value::Array(rows))
@@ -195,8 +194,18 @@ async fn create(cx: &DataContext, cipher: &JsonSecretCipher, p: &Value) -> Resul
     visible(cx, id).await
 }
 
+/// Only the canonical lowercase spelling names an account. Another spelling of the same id would
+/// pass the database lookup but miss the route's text lookups and guards, so it counts as not found.
+fn canonical_id(p: &Value) -> Result<Option<Uuid>> {
+    let raw = text(p, "id")?;
+    let id: Uuid = raw.parse()?;
+    Ok((id.to_string() == raw).then_some(id))
+}
+
 async fn update(cx: &DataContext, cipher: &JsonSecretCipher, p: &Value) -> Result<Value> {
-    let id: Uuid = text(p, "id")?.parse()?;
+    let Some(id) = canonical_id(p)? else {
+        return Ok(Value::Null);
+    };
     let scopes: Option<Vec<String>> = match &p["scopes"] {
         Value::Null => None,
         value => Some(serde_json::from_value(value.clone())?),
@@ -227,7 +236,9 @@ async fn update(cx: &DataContext, cipher: &JsonSecretCipher, p: &Value) -> Resul
 }
 
 async fn revoke(cx: &DataContext, cipher: &JsonSecretCipher, p: &Value) -> Result<Value> {
-    let id: Uuid = text(p, "id")?.parse()?;
+    let Some(id) = canonical_id(p)? else {
+        return Ok(Value::Null);
+    };
     let secret = cipher.encrypt_json(json!({"revoked":true}).as_object().expect("object"));
     let changed = cx
         .db()
