@@ -15,7 +15,8 @@ CARGO_TARGET_DIR="$guest" cargo +1.95.0 build --locked --offline --manifest-path
 export CONNECTORS_ORACLE="$guest/debug/connectors-oracle"
 pnpm exec tsx modules/connectors/tools/routes-parity.ts
 pnpm exec tsx modules/connectors/tools/logic-parity.ts
+pnpm exec tsx modules/connectors/tools/google-fixtures.ts --check
 CARGO_TARGET_DIR="$guest" RUSTFLAGS='-C link-arg=--import-memory -C link-arg=--initial-memory=2097152 -C link-arg=--max-memory=67108864' \
   cargo +1.95.0 build --locked --offline --release --lib --target wasm32-unknown-unknown --manifest-path modules/connectors/src/Cargo.toml
 export CONNECTORS_CORE_WASM="$guest/wasm32-unknown-unknown/release/moss_connectors.wasm"
-cargo +1.95.0 test --locked --offline --manifest-path modules/connectors/host/Cargo.toml --test package
+cargo +1.95.0 test --locked --offline --manifest-path modules/connectors/host/Cargo.toml --test package --test google

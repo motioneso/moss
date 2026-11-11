@@ -80,3 +80,44 @@ pub fn audit_category(action: &str) -> &'static str {
         _ => "Other",
     }
 }
+
+/// The Google Cloud steps shown above the credential fields.
+pub const GOOGLE_STEPS: [&str; 4] = [
+    "Create a project in the Google Cloud Console.",
+    "Enable the Gmail and Google Calendar APIs for it.",
+    "Set up the consent screen as External and add yourself as a test user.",
+    "Create an OAuth client of type Desktop app, then copy its client ID and secret here.",
+];
+
+/// True when both pasted credentials are long enough to be real.
+pub fn google_credentials_ok(client_id: &str, client_secret: &str) -> bool {
+    client_id.trim().len() > 8 && client_secret.trim().len() > 6
+}
+
+/// True when the pasted address is the localhost page Google sent the browser to, with a code.
+pub fn google_redirect_ok(pasted: &str) -> bool {
+    let pasted = pasted.trim();
+    let rest = match pasted.strip_prefix("http://").or_else(|| pasted.strip_prefix("https://")) {
+        Some(rest) => rest,
+        None => return false,
+    };
+    let host = rest.split(['/', '?', '#', ':']).next().unwrap_or("");
+    host == "localhost" && pasted.contains("code=")
+}
+
+/// Client ID and secret from a downloaded client JSON file, when it has both.
+pub fn google_client_from_json(text: &str) -> Option<(String, String)> {
+    let value: Value = serde_json::from_str(text).ok()?;
+    let inner = value.get("installed").or_else(|| value.get("web")).unwrap_or(&value);
+    Some((inner["client_id"].as_str()?.to_string(), inner["client_secret"].as_str()?.to_string()))
+}
+
+/// Plain words for a failed Google step, from the server's status and message.
+pub fn google_error_text(status: u16, message: &str) -> String {
+    match status {
+        429 => "Too many tries. Wait a minute and try again.".to_string(),
+        500 => "Google did not accept that. Check the client ID, the secret and the pasted address, then try again.".to_string(),
+        _ if message.is_empty() => "That did not work. Start again from the consent screen.".to_string(),
+        _ => message.to_string(),
+    }
+}
