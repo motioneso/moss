@@ -137,6 +137,16 @@ impl EmbeddingKind {
     }
 }
 
+/// True for a plain http or https address with a host and no embedded sign-in.
+pub fn valid_endpoint_url(text: &str) -> bool {
+    url::Url::parse(text).is_ok_and(|u| {
+        matches!(u.scheme(), "http" | "https")
+            && u.host().is_some()
+            && u.username().is_empty()
+            && u.password().is_none()
+    })
+}
+
 impl EmbeddingEndpoint {
     /// Model name and version written beside every vector.
     pub fn provenance(&self) -> (String, String) {
@@ -151,6 +161,7 @@ impl EmbeddingEndpoint {
 
 /// One row of model activity. It holds fixed words and a model name, never any text.
 pub struct EmbeddingCall {
+    pub actor: uuid::Uuid,
     pub model: String,
     pub action: &'static str,
     pub outcome: &'static str,
@@ -254,6 +265,7 @@ fn embed_via<E: EmbeddingStore>(
             if let Some(activity) = activity {
                 activity
                     .record(EmbeddingCall {
+                        actor: scope.access().actor_user_id(),
                         model: model.clone(),
                         action: match kind {
                             EmbeddingKind::Document => "embed document",
