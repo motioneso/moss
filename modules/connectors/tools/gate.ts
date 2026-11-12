@@ -32,6 +32,7 @@ const run = spawnSync(
       ...process.env,
       JS48_APP_URL: urls.app,
       JS48_BOOTSTRAP_URL: urls.bootstrap,
+      JS48_WORKER_URL: urls.worker,
       CONNECTORS_CORE_WASM: wasm
     }
   }
