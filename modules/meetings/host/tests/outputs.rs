@@ -242,7 +242,7 @@ fn a_pasted_transcript_queues_a_metadata_only_job_that_writes_the_summary() {
     let id = made["body"]["meetingId"].as_str().unwrap().to_owned();
     let jobs: Vec<Value> = w.f.rt.block_on(async {
         w.f.root
-            .query("SELECT payload FROM moss_queue.jobs WHERE queue='meetings.stop-summary'", &[])
+            .query("SELECT payload FROM moss_queue.jobs WHERE queue LIKE '%meetings.stop-summary'", &[])
             .await
             .unwrap()
             .iter()

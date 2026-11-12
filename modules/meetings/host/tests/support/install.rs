@@ -53,7 +53,7 @@ pub fn install_with(f: &Fixture, intelligence: Arc<dyn moss_module_host::ai::Int
         f.access(f.a),
         Configuration {
             migrations: url(),
-            producer: url(),
+            producer: Secret::new(std::env::var("JS48_APP_URL").unwrap()),
             cipher: Arc::new(SecretCipher::connectors(&Default::default()).unwrap()),
             intelligence,
             version: "0.1.0".parse().unwrap(),
