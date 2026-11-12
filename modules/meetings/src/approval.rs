@@ -32,7 +32,7 @@ pub const CHAT_CLASSES: [(&str, &str, &str); 24] = [
     ("GET", "/records/:id/outputs/:version", "read"),
     ("POST", "/records/:id/outputs", "blocked"),
     ("PUT", "/records/:id/outputs", "write"),
-    ("POST", "/records/:id/actions/:candidateId/review", "blocked"),
+    ("POST", "/records/:id/actions/:candidate_id/review", "blocked"),
 ];
 
 pub const REPEAT_NOTE: &str = "An identical retry uses the original result instead of repeating the change";

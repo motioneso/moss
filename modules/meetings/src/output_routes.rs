@@ -200,14 +200,14 @@ pub fn review<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Resp
     if let Err(f) = strict_object(
         "params",
         &mut params,
-        &["id", "candidateId"],
-        &[("id", Kind::Uuid), ("candidateId", Kind::Uuid)],
+        &["id", "candidate_id"],
+        &[("id", Kind::Uuid), ("candidate_id", Kind::Uuid)],
         0,
     ) {
         return Ok(invalid(f));
     }
     let id = params["id"].as_str().unwrap_or_default().to_lowercase();
-    let candidate = params["candidateId"].as_str().unwrap_or_default().to_lowercase();
+    let candidate = params["candidate_id"].as_str().unwrap_or_default().to_lowercase();
     let mut body = request.body.clone();
     if let Err(f) = strict_object(
         "body",

@@ -256,7 +256,7 @@
     },
     {
       "method": "POST",
-      "path": "/records/:id/actions/:candidateId/review",
+      "path": "/records/:id/actions/:candidate_id/review",
       "signIn": true
     }
   ],
