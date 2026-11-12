@@ -86,8 +86,15 @@ impl World {
     /// Runs queued jobs until none is left.
     fn run_jobs(&self) {
         let worker = Secret::new(std::env::var("JS48_WORKER_URL").unwrap());
-        for _ in 0..10 {
-            if !self.app.app.installer.run_job(&worker).unwrap() {
+        // Memory's recurring vault and re-embed jobs come back on every tick, so the queue never
+        // empties. Settled means no other job is waiting.
+        for _ in 0..60 {
+            self.app.app.installer.run_job(&worker).unwrap();
+            let waiting = self.count(
+                "SELECT count(*) FROM moss_queue.jobs WHERE state IN ('pending','running') \
+                 AND queue NOT LIKE '%vault-ingest%' AND queue NOT LIKE '%reembed%'",
+            );
+            if waiting == 0 {
                 return;
             }
         }
