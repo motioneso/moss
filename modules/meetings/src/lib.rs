@@ -26,6 +26,8 @@ pub mod capture_devices;
 pub mod capture_errors;
 pub mod capture_limit;
 pub mod capture_selection;
+pub mod capture_state;
+pub mod capture_store;
 pub mod ring_errors;
 pub mod ring_import;
 pub mod ring_source;

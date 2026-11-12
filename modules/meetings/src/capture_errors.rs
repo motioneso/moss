@@ -97,3 +97,37 @@ impl Failure {
         Response::new(self.status, self.body())
     }
 }
+
+/// Either a refusal to show the caller or a host fault. Routes map a fault to 503.
+#[derive(Debug)]
+pub enum Stop {
+    Fail(Failure),
+    Host(moss_module_sdk::Error),
+}
+
+impl From<Failure> for Stop {
+    fn from(failure: Failure) -> Self {
+        Stop::Fail(failure)
+    }
+}
+
+impl From<moss_module_sdk::Error> for Stop {
+    fn from(error: moss_module_sdk::Error) -> Self {
+        Stop::Host(error)
+    }
+}
+
+impl From<serde_json::Error> for Stop {
+    fn from(error: serde_json::Error) -> Self {
+        Stop::Host(error.into())
+    }
+}
+
+/// Turns a stop into the response the legacy routes sent. A fault never carries detail.
+pub fn respond(result: Result<Response, Stop>) -> Response {
+    match result {
+        Ok(response) => response,
+        Err(Stop::Fail(failure)) => failure.response(),
+        Err(Stop::Host(_)) => Failure::new(CaptureCode::Unavailable).response(),
+    }
+}
