@@ -1,6 +1,7 @@
 //! Meetings package core (part 1): owner-only records, personal notes and capture preferences.
 //! All effects cross the guest-safe SDK Host interface.
 pub mod approval;
+pub mod context_pack;
 pub mod export_render;
 pub mod export_service;
 pub mod history;
@@ -17,6 +18,9 @@ pub mod output_validation;
 pub mod outputs;
 pub mod preferences;
 pub mod recording;
+pub mod recording_filing;
+pub mod recording_jobs;
+pub mod recording_reading;
 pub mod records;
 pub mod schema;
 pub mod stop_summary;

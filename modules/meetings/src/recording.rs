@@ -27,7 +27,7 @@ fn values(pairs: Vec<(&str, Value)>) -> BTreeMap<String, Value> {
 }
 
 /// One recording type, in the key order the old app stored.
-#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RecordingType {
     pub id: String,
@@ -196,7 +196,7 @@ impl<'a, H: Host + ?Sized> Recording<'a, H> {
         Ok(Response::new(200, serde_json::to_value(&next)?))
     }
 
-    fn metadata_row(&self, id: &str) -> Result<Option<Value>> {
+    pub(crate) fn metadata(&self, id: &str) -> Result<Option<Value>> {
         let mut query = Query::select(Filter::eq("meeting_id", id));
         query.limit = Some(1);
         Ok(self.client().query(METADATA, &query)?.into_iter().next())
@@ -208,7 +208,7 @@ impl<'a, H: Host + ?Sized> Recording<'a, H> {
         let mut seed = Query::insert(values(vec![("meeting_id", json!(id)), ("title_source", json!(source))]));
         seed.conflict = Conflict::Ignore;
         self.client().query(METADATA, &seed)?;
-        self.metadata_row(id)
+        self.metadata(id)
     }
 
     pub fn get(&self, request: &RouteRequest) -> Result<Response> {
@@ -219,7 +219,7 @@ impl<'a, H: Host + ?Sized> Recording<'a, H> {
         if Records::new(self.host).row(&id)?.is_none() {
             return Ok(code(404, "meeting_not_found"));
         }
-        let metadata = match self.metadata_row(&id)? {
+        let metadata = match self.metadata(&id)? {
             Some(row) => dto(&row)?,
             None => Value::Null,
         };

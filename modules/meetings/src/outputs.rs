@@ -1,5 +1,8 @@
 //! Guest side of summary storage. The host runs the SQL; this module shapes what goes in and out.
 use crate::output_validation::{InputSegment, Inputs};
+use crate::recording::Recording;
+use crate::recording_reading::Context;
+use crate::records::Records;
 use crate::store;
 use crate::transcript::{self, Ledger};
 use moss_module_sdk::{Error, Host, Result};
@@ -48,6 +51,7 @@ pub fn inputs<H: Host + ?Sized>(host: &H, meeting: &str, exclusive: bool) -> Res
         Ok(None) => None,
         Err(_) => return Err(Error::new("Transcript unavailable")),
     };
+    let recording = recording_context(host, meeting, exclusive)?;
     let mut current = Current {
         stored: Value::Null,
         notes_revision,
@@ -57,6 +61,7 @@ pub fn inputs<H: Host + ?Sized>(host: &H, meeting: &str, exclusive: bool) -> Res
             notes_revision,
             personal_notes: notes.clone(),
             segments: vec![],
+            recording: recording.as_ref().map(|r| r.0.clone()),
         },
         has_notes: !crate::text::js_trim(&notes).is_empty(),
         segment_count: 0,
@@ -95,7 +100,54 @@ pub fn inputs<H: Host + ?Sized>(host: &H, meeting: &str, exclusive: bool) -> Res
     }
     current.stored = json!({"meetingId": meeting, "transcript": snapshot_value,
         "personalNotes": notes, "notesRevision": notes_revision});
+    if let Some((_, stored)) = recording {
+        current.stored["recording"] = stored;
+    }
     Ok(Some(current))
+}
+
+/// The recording facts a summary starts from, with their stored copy. Generation creates the
+/// metadata row on first use, and a read leaves it alone.
+fn recording_context<H: Host + ?Sized>(host: &H, meeting: &str, create: bool) -> Result<Option<(Context, Value)>> {
+    let recording = Recording::new(host);
+    let row = match recording.metadata(meeting)? {
+        Some(row) => Some(row),
+        None if create => {
+            let title = Records::new(host).row(meeting)?.map(|r| r["title"].as_str().unwrap_or_default().to_owned());
+            match title {
+                Some(title) => recording.ensure(meeting, &title)?,
+                None => None,
+            }
+        }
+        None => None,
+    };
+    let Some(row) = row else { return Ok(None) };
+    let configuration = recording.configuration(false)?;
+    let stored = json!({"metadata": crate::recording::dto(&row)?, "configuration": configuration});
+    let context = Context {
+        metadata_revision: row["revision"].as_i64().unwrap_or(0),
+        configuration_revision: configuration.revision,
+        type_source: row["type_source"].as_str().unwrap_or("automatic").to_owned(),
+        type_id: row["type_id"].as_str().map(str::to_owned),
+        title_source: row["title_source"].as_str().unwrap_or("user").to_owned(),
+        recorded_at: stored["metadata"]["recordedAt"].as_str().map(str::to_owned),
+        types: configuration.types,
+    };
+    Ok(Some((context, stored)))
+}
+
+/// Rebuilds the recording facts from the copy an artifact stored.
+fn stored_recording(inputs: &Value) -> Option<Context> {
+    let stored = inputs.get("recording").filter(|v| v.is_object())?;
+    Some(Context {
+        metadata_revision: stored["metadata"]["revision"].as_i64().unwrap_or(0),
+        configuration_revision: stored["configuration"]["revision"].as_i64().unwrap_or(0),
+        type_source: stored["metadata"]["typeSource"].as_str().unwrap_or("automatic").to_owned(),
+        type_id: stored["metadata"]["typeId"].as_str().map(str::to_owned),
+        title_source: stored["metadata"]["titleSource"].as_str().unwrap_or("user").to_owned(),
+        recorded_at: stored["metadata"]["recordedAt"].as_str().map(str::to_owned),
+        types: serde_json::from_value(stored["configuration"]["types"].clone()).unwrap_or_default(),
+    })
 }
 
 fn snapshot_of(ledger: &Ledger, stop: Option<i64>, limits: (i64, i64)) -> Result<transcript::Snapshot> {
@@ -126,6 +178,7 @@ pub fn stored_inputs(artifact: &Value) -> Inputs {
         notes_revision: inputs["notesRevision"].as_i64().unwrap_or(0),
         personal_notes: inputs["personalNotes"].as_str().unwrap_or_default().to_owned(),
         segments,
+        recording: stored_recording(inputs),
     }
 }
 
