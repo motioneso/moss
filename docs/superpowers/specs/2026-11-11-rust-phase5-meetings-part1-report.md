@@ -230,3 +230,33 @@ Only action review is built. Private export, the full account export and deletio
 - Only 2 of the 18 account export collections are real. The other 16, including audio chunks and the old bundle format, are still empty stubs.
 - Deletion is not built. Notes has no fence, seal or recording cleanup in Rust, and Meetings does not yet answer Memory's recording authority. The chat cleanup callback does not exist.
 - Accepting was proved against a fake Tasks host. The real database test installs Meetings alone.
+
+## Part 5B (JS-253), export built, deletion not built
+
+### What was built
+
+- **Private export of a summary into Notes.** Saving an export sends the rendered summary to the Notes module, which stores a private copy in the owner's own notes. Each summary version can be exported once. Asking again with the same key returns the first answer. Reusing a key for a different version is refused. If the saved copy was edited or deleted, it is never overwritten or recreated. A lost answer from Notes is recovered by checking whether the copy already exists.
+- **Plain-text match.** The rendered text matches the old TypeScript output byte for byte on a recorded sample.
+- **Account export section.** The section now returns all 18 collections. Sixteen are read straight from the database in the host so that times are formatted exactly as the old export did. Ready recording imports carry their stored audio, either as chunks with size and sha256 hash checked against the saved row, or as the retained legacy bundle text. A missing or altered file makes the export fail loudly.
+- **Fix to part 5A.** The Meetings component never declared the call into other modules, so the Tasks accept path from 5A could only work against a fake host. It is declared now, and Notes uses the same call.
+
+### What was proved
+
+- Native and WebAssembly builds pass with tests in both (12 new export tests against a stand-in Notes, plus the existing ones).
+- Real database tests: replay, key reuse, missing version, another person and the admin both get 404 on the export routes, and the row-level-security test fails when the protection is removed (the second person then sees the rows) and passes again once restored.
+- The account export test round-trips audio bytes and hashes, the legacy bundle text, millisecond times, and shows a second person sees nothing.
+- A marker planted in the summary never appears in queued jobs, activity rows, model activity rows, or stored receipts.
+- Live run on the real Rust server: the export routes answer for the owner, refuse cleanly when no summary exists, and show nothing to a second person. The server log holds no meeting text.
+
+### Not built
+
+- **Deletion service and chat cleanup.** Not started. Notes cleanup of recording blocks needs a database-backed Notes cleanup that does not exist in Rust yet, and it is large. Memory cleanup likewise. No recording content reaches Notes or Memory until part 6 builds those hooks, so the existing delete route from part 1 stays as it is. What is left: the fence, the Notes and Memory cleanup calls, the seal, the refusal on a conflict, and the survivor and no-searchable-content proofs.
+- **Writing recording audio** is part 8. The export reads it from the Meetings account folder where part 8 will write it.
+
+### Not proven
+
+- A real Notes copy created through the installed Notes module. The database test packs Meetings without Notes, so it sees a failed receipt, and the Notes behaviour is only proved against a stand-in. The live run also has no Notes.
+- The export index stays "delayed", because Notes cannot index private copies yet.
+- The account export through the real server. No server route for it exists yet, so it is proved only by calling the section directly.
+- A live summary export, because no model is configured on the live instance.
+- Survivors after delete, and no searchable recording content after delete. Both belong to the deletion service.

@@ -7,37 +7,35 @@ const checks = spawnSync("modules/meetings/tools/check.sh", {
   env: process.env
 });
 if (checks.status !== 0) process.exit(checks.status ?? 1);
-const run = spawnSync(
-  "cargo",
-  [
-    "+1.95.0",
-    "test",
-    "--locked",
-    "--offline",
-    "--manifest-path",
-    "modules/meetings/host/Cargo.toml",
-    "--test",
-    "installed",
-    "--test",
-    "transcripts",
-    "--test",
-    "recording",
-    "--test",
-    "outputs",
-    "--",
-    "--ignored",
-    "--nocapture",
-    "--test-threads=1"
-  ],
-  {
-    stdio: "inherit",
-    env: {
-      ...process.env,
-      JS48_APP_URL: urls.app,
-      JS48_BOOTSTRAP_URL: urls.bootstrap,
-      JS48_WORKER_URL: urls.worker,
-      MEETINGS_COMPONENT_WASM: `${process.env.CARGO_TARGET_DIR ?? "/tmp/moss-meetings-host"}/module.wasm`
+// One cargo run per test file, in this order. The files share one database and
+// the installed test expects it untouched, so it runs first.
+for (const name of ["installed", "outputs", "recording", "transcripts", "exports"]) {
+  const run = spawnSync(
+    "cargo",
+    [
+      "+1.95.0",
+      "test",
+      "--locked",
+      "--offline",
+      "--manifest-path",
+      "modules/meetings/host/Cargo.toml",
+      "--test",
+      name,
+      "--",
+      "--ignored",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    {
+      stdio: "inherit",
+      env: {
+        ...process.env,
+        JS48_APP_URL: urls.app,
+        JS48_BOOTSTRAP_URL: urls.bootstrap,
+        JS48_WORKER_URL: urls.worker,
+        MEETINGS_COMPONENT_WASM: `${process.env.CARGO_TARGET_DIR ?? "/tmp/moss-meetings-host"}/module.wasm`
+      }
     }
-  }
-);
-process.exit(run.status ?? 1);
+  );
+  if (run.status !== 0) process.exit(run.status ?? 1);
+}

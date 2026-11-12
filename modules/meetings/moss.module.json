@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "meetings",
   "name": "Meetings",
-  "description": "Keeps each person's meeting records, personal notes and recording defaults private to their account. Create, rename, delete and take versioned notes on meetings, and set recording defaults. Transcripts, History search, recording types and pasted transcripts are included. Summaries written by the configured model, with edits, history and an automatic summary after a pasted transcript, are included. Each action a summary proposes can be accepted into Tasks or dismissed. Recording, exports and the Meetings screen are not part of this package yet.",
+  "description": "Keeps each person's meeting records, personal notes and recording defaults private to their account. Create, rename, delete and take versioned notes on meetings, and set recording defaults. Transcripts, History search, recording types and pasted transcripts are included. Summaries written by the configured model, with edits, history and an automatic summary after a pasted transcript, are included. Each action a summary proposes can be accepted into Tasks or dismissed. A summary version can be saved as a private copy in your notes, once, and a copy you edited is never overwritten. Your account export holds every meeting collection, including the stored audio of finished recording imports. Recording and the Meetings screen are not part of this package yet.",
   "publisher": "Moss",
   "version": "0.1.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
@@ -12,7 +12,7 @@
     {
       "port": "api",
       "operations": ["call"],
-      "resources": ["tasks"]
+      "resources": ["tasks", "notes"]
     },
     {
       "port": "db",
@@ -63,14 +63,19 @@
         "save",
         "summary",
         "summary-insert-manual",
-        "summary-set"
+        "summary-set",
+        "list",
+        "receipt",
+        "intend",
+        "section"
       ],
       "resources": [
         "meetings.preferences",
         "meetings.transcripts",
         "meetings.history",
         "meetings.recording-types",
-        "meetings.outputs"
+        "meetings.outputs",
+        "meetings.exports"
       ]
     },
     {
@@ -260,10 +265,21 @@
       "method": "POST",
       "path": "/records/:id/actions/:candidate_id/review",
       "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/records/:id/exports",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/records/:id/exports",
+      "signIn": true
     }
   ],
   "requires": {
-    "tasks": ">=0.1.2, <1.0.0"
+    "tasks": ">=0.1.2, <1.0.0",
+    "notes": ">=0.1.22, <1.0.0"
   },
   "provides": {
     "prepareMeetingRoute": "1.0.0",
@@ -562,6 +578,47 @@
           "code": "meeting_output_interrupted",
           "class": "validation",
           "description": "The automatic summary was not started in time and was dropped"
+        }
+      ]
+    },
+    {
+      "id": "meetings.exports",
+      "description": "A summary version can be saved once as a private copy in your own notes. The copy is created only when you ask, never overwritten, and a copy you edited or removed is reported as a conflict instead of being replaced. A repeated request key returns the first answer. Notes cannot search private copies yet, so the receipt shows the search step as delayed. Nobody else, including admins, can see any of it.",
+      "errors": [
+        {
+          "code": "meeting_export_request_conflict",
+          "class": "validation",
+          "description": "The request key was already used for another summary version"
+        },
+        {
+          "code": "meeting_export_content_conflict",
+          "class": "validation",
+          "description": "The saved receipt for this version was made from different content"
+        },
+        {
+          "code": "meeting_output_unavailable",
+          "class": "validation",
+          "description": "That summary version does not exist"
+        },
+        {
+          "code": "meeting_vault_conflict",
+          "class": "validation",
+          "description": "The private copy was edited or removed, so it was left alone"
+        },
+        {
+          "code": "meeting_vault_write_failed",
+          "class": "transient",
+          "description": "The private copy could not be saved, so try again"
+        },
+        {
+          "code": "meeting_index_delayed",
+          "class": "transient",
+          "description": "The private copy is saved but not yet searchable"
+        },
+        {
+          "code": "meeting_not_found",
+          "class": "validation",
+          "description": "That meeting does not exist"
         }
       ]
     }
