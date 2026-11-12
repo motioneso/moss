@@ -55,6 +55,8 @@ struct Job {
     error: &'static str,
     email_on: bool,
     calendar_on: bool,
+    /// True once the host has marked the run started, so a retried chunk never starts it again.
+    begun: bool,
 }
 
 enum Step {
@@ -78,6 +80,7 @@ impl Job {
             error: "none",
             email_on: true,
             calendar_on: true,
+            begun: false,
         }
     }
 
@@ -87,7 +90,7 @@ impl Job {
             "calendar-upserted":self.calendar_upserted,"calendar-reconciled":self.calendar_reconciled,
             "email-upserted":self.email_upserted,"email-failures":self.email_failures,
             "trigger":self.trigger,"recent-only":self.recent_only,"error":self.error,
-            "email-on":self.email_on,"calendar-on":self.calendar_on,
+            "email-on":self.email_on,"calendar-on":self.calendar_on,"begun":self.begun,
         })
     }
 
@@ -106,6 +109,7 @@ impl Job {
             error: ERRORS.into_iter().find(|e| Some(*e) == p["error"].as_str())?,
             email_on: p["email-on"].as_bool()?,
             calendar_on: p["calendar-on"].as_bool()?,
+            begun: p["begun"].as_bool().unwrap_or(false),
         })
     }
 
@@ -248,13 +252,22 @@ fn finish(host: &impl Host, run: &Job) -> &'static str {
 /// One run of the job. A host failure ends the run as failed instead of retrying, so a broken
 /// service is not hit again at once.
 fn run_job(host: &impl Host, run: &mut Job) -> &'static str {
-    if run.phase == Phase::Calendar && run.cursor == 0 {
+    if run.phase == Phase::Calendar && run.cursor == 0 && !run.begun {
         match kv(host, "set", "connectors.sync-google-start", json!({"accountId":run.account,"trigger":run.trigger})) {
             Ok(started) => match started["state"].as_str() {
                 Some("started") => {
                     run.email_on = started["email"].as_bool().unwrap_or(false);
                     run.calendar_on = started["calendar"].as_bool().unwrap_or(false);
                     reconcile_schedule(host, &run.account);
+                    run.begun = true;
+                    // The first chunk runs in its own job, so a retry of it finds the run already started.
+                    return match enqueue(host, QUEUE, run.params()) {
+                        Ok(_) => "continued",
+                        Err(_) => {
+                            run.note("email-error");
+                            finish(host, run)
+                        }
+                    };
                 }
                 Some("busy") => return "busy",
                 _ => {

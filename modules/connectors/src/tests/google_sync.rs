@@ -131,10 +131,24 @@ fn a_long_walk_continues_in_a_new_job_with_metadata_only_params() {
     let text = queued.to_string();
     assert!(!text.contains("SENTINEL"), "{text}");
     let keys: Vec<&String> = queued["params"].as_object().unwrap().keys().collect();
-    assert_eq!(keys.len(), 12, "{keys:?}");
+    assert_eq!(keys.len(), 13, "{keys:?}");
     assert_eq!(queued["params"]["cursor"], 100);
     assert_eq!(queued["params"]["phase"], "calendar");
     assert!(host.named("connectors.sync-google-finish").is_empty());
+}
+
+#[test]
+fn the_start_runs_alone_so_a_retried_first_chunk_finds_the_run_started() {
+    let host = Script::new(started("started"));
+    assert_eq!(run_once(&host, start_params())["outcome"], "continued");
+    assert!(host.named("connectors.sync-google-calendar").is_empty());
+    let queued = host.last_queued().unwrap();
+    assert_eq!(queued["begun"], true);
+    assert_eq!(queued["phase"], "calendar");
+    // The retried job starts nothing again.
+    let before = host.named("connectors.sync-google-start").len();
+    run_once(&host, queued);
+    assert_eq!(host.named("connectors.sync-google-start").len(), before);
 }
 
 #[test]

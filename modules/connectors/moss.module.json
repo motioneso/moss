@@ -315,7 +315,40 @@
         }
       ]
     },
-    {"id":"connectors.google-sync","description":"Copies the signed-in person's own Gmail and Google Calendar into their Email and Calendar caches every fifteen minutes, right after connecting, and on demand from the Sync now action. Calendar covers the week behind and the month ahead, and mail covers the last thirty days, read in small steps so a large mailbox never blocks the app. Each Email and Calendar switch for the account is respected. Mail text beyond Gmail's short preview is not kept, and no sign-in secret leaves the connection service.","errors":[{"code":"auth-error","class":"validation","description":"Google refused the saved sign-in during a sync","remediationRef":"connectors-google-reconnect"},{"code":"calendar-error","class":"transient","description":"Some calendar events could not be read or saved during a sync"},{"code":"email-error","class":"transient","description":"Google could not be reached or answered badly during a sync"},{"code":"email-message-error","class":"transient","description":"Some messages could not be read or saved during a sync, and the rest were saved"}],"remediations":[{"id":"connectors-google-reconnect","description":"Connect Google again from Connections","path":"/settings/connections"}]}
+    {
+      "id": "connectors.google-sync",
+      "description": "Copies the signed-in person's own Gmail and Google Calendar into their Email and Calendar caches every fifteen minutes, right after connecting, and on demand from the Sync now action. Calendar covers the week behind and the month ahead, and mail covers the last thirty days, read in small steps so a large mailbox never blocks the app. Each Email and Calendar switch for the account is respected. Mail text beyond Gmail's short preview is not kept, and no sign-in secret leaves the connection service.",
+      "errors": [
+        {
+          "code": "auth-error",
+          "class": "validation",
+          "description": "Google refused the saved sign-in during a sync",
+          "remediationRef": "connectors-google-reconnect"
+        },
+        {
+          "code": "calendar-error",
+          "class": "transient",
+          "description": "Some calendar events could not be read or saved during a sync"
+        },
+        {
+          "code": "email-error",
+          "class": "transient",
+          "description": "Google could not be reached or answered badly during a sync"
+        },
+        {
+          "code": "email-message-error",
+          "class": "transient",
+          "description": "Some messages could not be read or saved during a sync, and the rest were saved"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "connectors-google-reconnect",
+          "description": "Connect Google again from Connections",
+          "path": "/settings/connections"
+        }
+      ]
+    }
   ],
   "tools": {
     "connectors.startGoogleGuidance": {
@@ -353,7 +386,8 @@
         "choices": ["none", "auth-error", "calendar-error", "email-error", "email-message-error"]
       },
       "email-on": { "kind": "flag" },
-      "calendar-on": { "kind": "flag" }
+      "calendar-on": { "kind": "flag" },
+      "begun": { "kind": "flag" }
     },
     "google-sync-sweep": {
       "account-id": { "kind": "id" }
