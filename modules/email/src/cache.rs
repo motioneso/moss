@@ -117,3 +117,35 @@ pub fn update(host: &impl Host, input: &Value) -> Result<Value> {
         json!({"action":"update","id":id,"fields":fields}),
     )?)
 }
+
+fn text_list(input: &Value, name: &str) -> Result<Vec<Value>> {
+    match input.get(name) {
+        Some(Value::Array(items)) if items.iter().all(Value::is_string) => Ok(items.clone()),
+        _ => Err(bad(&format!("{name} must be a list of text"))),
+    }
+}
+
+/// The size fingerprint of each named message the account has cached.
+pub fn keys(host: &impl Host, input: &Value) -> Result<Value> {
+    let ids = text_list(input, "externalIds")?;
+    let account = text(input, "connectorAccountId")?;
+    let found = kv(
+        host,
+        "get",
+        "email.cache-keys",
+        json!({"connectorAccountId":account,"externalIds":ids}),
+    )?;
+    Ok(json!({"keys":found}))
+}
+
+/// Deletes cached messages of one account under a key prefix, received since a time,
+/// that are not in the keep list.
+pub fn prune(host: &impl Host, input: &Value) -> Result<Value> {
+    let keep = text_list(input, "keep")?;
+    let params = json!({
+        "action":"prune","connectorAccountId":text(input, "connectorAccountId")?,
+        "prefix":text(input, "prefix")?,"since":text(input, "since")?,"keep":keep,
+    });
+    let result = kv(host, "set", "email.cache-write", params)?;
+    Ok(json!({"deleted":result["deleted"].as_i64().unwrap_or(0)}))
+}
