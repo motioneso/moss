@@ -452,9 +452,9 @@ and the tests pass.
 
 ### What was built
 
-- **Export.** When a person exports their account data, Memory returns eleven sections of their
+- **Export.** When a person exports their account data, Memory returns fourteen sections of their
   own rows (passages, chat facts, entities, facts, episodes, fact sources, aliases, conflict
-  groups, suggestions, search documents, legacy migration marks) plus the recording section. Rows
+  groups, suggestions, search documents, legacy migration marks) and three recording sections (fact versions, receipts, proposals). Rows
   come in pages of at most 200 rows or 48 KB, because the guest has a fixed compute budget per
   call and the host refuses messages over 1 MiB. Vectors are never returned. The text excerpt a
   suggestion carries is dropped, as in the old export.
@@ -492,4 +492,4 @@ and the tests pass.
   there, so only job payloads were scanned in that database.
 - **The `chat_memory_corrections_log` table** is not in the owned list and is not exported or
   deleted by this part.
-- **The recording section is not paged.**
+- **Pages bounded by the byte cap.** The multi-page test proves the row cap and exactly-once delivery on 450 rows; the 48 KB cap itself is not asserted separately.

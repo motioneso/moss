@@ -25,11 +25,24 @@ impl Embedder for Stub {
 
 /// Every table the module owns, as the deletion call reports them.
 const TABLES: &[&str] = &[
-    "memory_reembed_staged", "memory_reembed_runs", "memory_ingest_nudges",
-    "memory_recording_proposals", "memory_recording_receipts", "memory_search_documents",
-    "memory_candidates", "memory_fact_sources", "memory_legacy_fact_migrations", "memory_aliases",
-    "memory_facts", "memory_conflict_groups", "memory_episodes", "memory_entities",
-    "chat_memory_facts", "memory_links", "memory_chunks", "memory_file_index",
+    "memory_reembed_staged",
+    "memory_reembed_runs",
+    "memory_ingest_nudges",
+    "memory_recording_proposals",
+    "memory_recording_receipts",
+    "memory_search_documents",
+    "memory_candidates",
+    "memory_fact_sources",
+    "memory_legacy_fact_migrations",
+    "memory_aliases",
+    "memory_facts",
+    "memory_conflict_groups",
+    "memory_episodes",
+    "memory_entities",
+    "chat_memory_facts",
+    "memory_links",
+    "memory_chunks",
+    "memory_file_index",
     "memory_recording_fact_versions",
 ];
 
@@ -39,7 +52,9 @@ async fn provision(root: &mut Client) {
     let manifest = moss_memory_host::package::manifest().unwrap();
     let role = moss_module_host::database::runtime_role(&manifest.id);
     let tx = root.transaction().await.unwrap();
-    tx.batch_execute("SELECT pg_advisory_xact_lock(246246)").await.unwrap();
+    tx.batch_execute("SELECT pg_advisory_xact_lock(246246)")
+        .await
+        .unwrap();
     tx.batch_execute(&format!(
         "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='{role}') THEN
            CREATE ROLE {role} NOLOGIN; END IF; END $$;
@@ -50,10 +65,17 @@ async fn provision(root: &mut Client) {
     .await
     .unwrap();
     for (table, files) in [
-        ("app.memory_ingest_nudges", vec!["0363_memory_ingest_nudges.sql"]),
+        (
+            "app.memory_ingest_nudges",
+            vec!["0363_memory_ingest_nudges.sql"],
+        ),
         (
             "app.memory_reembed_runs",
-            vec!["0364_memory_reembed_runs.sql", "0365_memory_reembed_one_running.sql", "0366_memory_reembed_staged.sql"],
+            vec![
+                "0364_memory_reembed_runs.sql",
+                "0365_memory_reembed_one_running.sql",
+                "0366_memory_reembed_staged.sql",
+            ],
         ),
     ] {
         let made: bool = tx
@@ -66,7 +88,9 @@ async fn provision(root: &mut Client) {
         }
         for file in files {
             let path = format!("{}/../sql/{file}", env!("CARGO_MANIFEST_DIR"));
-            tx.batch_execute(&std::fs::read_to_string(path).unwrap()).await.unwrap();
+            tx.batch_execute(&std::fs::read_to_string(path).unwrap())
+                .await
+                .unwrap();
         }
         let owned: &[&str] = if table.contains("nudges") {
             &["app.memory_ingest_nudges"]
@@ -74,10 +98,14 @@ async fn provision(root: &mut Client) {
             &["app.memory_reembed_runs", "app.memory_reembed_staged"]
         };
         for t in owned {
-            moss_module_host::rls::emit(&tx, &manifest, t).await.unwrap();
+            moss_module_host::rls::emit(&tx, &manifest, t)
+                .await
+                .unwrap();
         }
     }
-    moss_module_host::rls::emit_owner_delete(&tx, "app.memory_recording_fact_versions").await.unwrap();
+    moss_module_host::rls::emit_owner_delete(&tx, "app.memory_recording_fact_versions")
+        .await
+        .unwrap();
     tx.commit().await.unwrap();
 }
 
@@ -120,12 +148,17 @@ impl Fixture {
     }
 
     fn sql(&self, statement: &str) {
-        self.rt.block_on(self.root.batch_execute(statement)).unwrap();
+        self.rt
+            .block_on(self.root.batch_execute(statement))
+            .unwrap();
     }
 
     fn count(&self, table: &str, owner: Uuid) -> i64 {
         self.rt
-            .block_on(self.root.query_one(&format!("SELECT count(*) FROM app.{table} WHERE owner_user_id = $1"), &[&owner]))
+            .block_on(self.root.query_one(
+                &format!("SELECT count(*) FROM app.{table} WHERE owner_user_id = $1"),
+                &[&owner],
+            ))
             .unwrap()
             .get(0)
     }
@@ -177,14 +210,19 @@ impl Fixture {
         );
         let answer: Value = serde_json::from_str(&out.expect("the guest finished")).unwrap();
         match answer.get("error") {
-            Some(e) => Err((e["statusCode"].as_u64().unwrap(), e["error"].as_str().unwrap().to_owned())),
+            Some(e) => Err((
+                e["statusCode"].as_u64().unwrap(),
+                e["error"].as_str().unwrap().to_owned(),
+            )),
             None => Ok(answer["ok"].clone()),
         }
     }
 
     /// Every row of every section, read page by page.
     fn export_all(&self, actor: Uuid) -> Value {
-        let names = self.api(actor, "collectMemoryExportSection", json!({})).unwrap();
+        let names = self
+            .api(actor, "collectMemoryExportSection", json!({}))
+            .unwrap();
         let mut all = serde_json::Map::new();
         for name in names["sections"].as_array().unwrap() {
             let (mut rows, mut after) = (Vec::new(), Value::Null);
@@ -215,17 +253,27 @@ impl Fixture {
     fn bare_count(&self, actor: Uuid, tables: &[&&str]) -> i64 {
         use safety_core::db::DataContext;
         self.rt.block_on(async {
-            let cx = DataContext::open(&self.db, &AccessContext::new(actor, "account-proof")).await.unwrap();
+            let cx = DataContext::open(&self.db, &AccessContext::new(actor, "account-proof"))
+                .await
+                .unwrap();
             let mut total = 0;
             for t in tables {
-                total += cx.db().query_one(&format!("SELECT count(*) FROM app.{t}"), &[]).await.unwrap().get::<_, i64>(0);
+                total += cx
+                    .db()
+                    .query_one(&format!("SELECT count(*) FROM app.{t}"), &[])
+                    .await
+                    .unwrap()
+                    .get::<_, i64>(0);
             }
             total
         })
     }
 
     fn marker_hits(&self, sql: &str) -> i64 {
-        self.rt.block_on(self.root.query_one(sql, &[&format!("%{MARKER}%")])).unwrap().get(0)
+        self.rt
+            .block_on(self.root.query_one(sql, &[&format!("%{MARKER}%")]))
+            .unwrap()
+            .get(0)
     }
 }
 
@@ -235,18 +283,43 @@ fn export_returns_only_the_callers_rows_and_no_vectors() {
     let f = Fixture::new();
     let mine = f.export_all(f.a);
     let text = mine.to_string();
-    assert!(text.contains(&format!("{MARKER} A")), "the caller's text is exported");
-    assert!(!text.contains(&format!("{MARKER} B")), "the other person's text must not appear");
-    assert!(!text.contains(&f.b.to_string()), "the other person's id must not appear");
+    assert!(
+        text.contains(&format!("{MARKER} A")),
+        "the caller's text is exported"
+    );
+    assert!(
+        !text.contains(&format!("{MARKER} B")),
+        "the other person's text must not appear"
+    );
+    assert!(
+        !text.contains(&f.b.to_string()),
+        "the other person's id must not appear"
+    );
     assert!(!text.contains("embedding"), "vectors are never exported");
-    for section in ["memoryChunks", "chatMemoryFacts", "memoryEntities", "memoryFacts", "memoryEpisodes", "memoryAliases", "memoryCandidates", "memorySearchDocuments"] {
+    for section in [
+        "memoryChunks",
+        "chatMemoryFacts",
+        "memoryEntities",
+        "memoryFacts",
+        "memoryEpisodes",
+        "memoryAliases",
+        "memoryCandidates",
+        "memorySearchDocuments",
+    ] {
         assert_eq!(mine[section].as_array().unwrap().len(), 1, "{section}");
     }
-    assert_eq!(mine["memoryCandidates"][0]["payloadJson"], json!({"k": 1}), "excerpt is stripped");
-    assert_eq!(mine["recordingMemory"]["factVersions"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        mine["memoryCandidates"][0]["payloadJson"],
+        json!({"k": 1}),
+        "excerpt is stripped"
+    );
+    assert_eq!(mine["recordingFactVersions"].as_array().unwrap().len(), 1);
 
     // Without row security an unfiltered read as B sees A's rows, so the policy is what hides them.
-    let tables: Vec<_> = TABLES.iter().filter(|t| !t.contains("reembed") && !t.contains("nudges")).collect();
+    let tables: Vec<_> = TABLES
+        .iter()
+        .filter(|t| !t.contains("reembed") && !t.contains("nudges"))
+        .collect();
     let own: i64 = tables.iter().map(|t| f.count(t, f.b)).sum();
     let theirs: i64 = tables.iter().map(|t| f.count(t, f.a)).sum();
     assert!(theirs > 0);
@@ -258,10 +331,25 @@ fn export_returns_only_the_callers_rows_and_no_vectors() {
     for t in &tables {
         f.sql(&format!("ALTER TABLE app.{t} ENABLE ROW LEVEL SECURITY; ALTER TABLE app.{t} FORCE ROW LEVEL SECURITY"));
     }
-    assert!(leaked >= own + theirs, "without row security B sees everyone, got {leaked}");
+    assert!(
+        leaked >= own + theirs,
+        "without row security B sees everyone, got {leaked}"
+    );
     assert_eq!(f.bare_count(f.b, &tables), own);
-    assert!(f.api(f.b, "collectMemoryExportSection", json!({"section": "nope"})).is_err());
-    assert!(f.api(f.b, "collectMemoryExportSection", json!({"section": "memoryFacts", "owner": f.a.to_string()})).is_err());
+    assert!(f
+        .api(
+            f.b,
+            "collectMemoryExportSection",
+            json!({"section": "nope"})
+        )
+        .is_err());
+    assert!(f
+        .api(
+            f.b,
+            "collectMemoryExportSection",
+            json!({"section": "memoryFacts", "owner": f.a.to_string()})
+        )
+        .is_err());
 }
 
 #[test]
@@ -277,16 +365,19 @@ fn delete_removes_everything_for_the_caller_and_nothing_for_anyone_else() {
     assert_eq!(before_b, after_b, "the other person lost rows");
     assert!(before_b.iter().sum::<i64>() > 10);
     assert!(out["total"].as_u64().unwrap() >= 10);
-    assert!(!out.to_string().contains(MARKER), "the answer carries counts only");
-    assert!(f.api(f.a, "deleteMemoryData", json!({"owner": f.b.to_string()})).is_err());
+    assert!(
+        !out.to_string().contains(MARKER),
+        "the answer carries counts only"
+    );
+    assert!(f
+        .api(f.a, "deleteMemoryData", json!({"owner": f.b.to_string()}))
+        .is_err());
     let again = f.api(f.a, "deleteMemoryData", json!({})).unwrap();
     assert_eq!(again["total"], 0);
     // The export is empty afterwards.
     let empty = f.export_all(f.a);
     for (name, rows) in empty.as_object().unwrap() {
-        if name != "recordingMemory" {
-            assert!(rows.as_array().unwrap().is_empty(), "{name}");
-        }
+        assert!(rows.as_array().unwrap().is_empty(), "{name}");
     }
 }
 
@@ -308,11 +399,71 @@ fn memory_text_never_reaches_jobs_or_activity() {
     let f = Fixture::new();
     f.export_all(f.a);
     f.api(f.a, "deleteMemoryData", json!({})).unwrap();
-    assert_eq!(f.marker_hits("SELECT count(*) FROM pgboss.job WHERE data::text LIKE $1"), 0);
-    for table in ["jarvis_action_audit_log", "moss_activity_detail", "moss_model_activity_log"] {
-        let there: bool = f.rt.block_on(f.root.query_one(&format!("SELECT to_regclass('app.{table}') IS NOT NULL"), &[])).unwrap().get(0);
+    assert_eq!(
+        f.marker_hits("SELECT count(*) FROM pgboss.job WHERE data::text LIKE $1"),
+        0
+    );
+    for table in [
+        "jarvis_action_audit_log",
+        "moss_activity_detail",
+        "moss_model_activity_log",
+    ] {
+        let there: bool =
+            f.rt.block_on(f.root.query_one(
+                &format!("SELECT to_regclass('app.{table}') IS NOT NULL"),
+                &[],
+            ))
+            .unwrap()
+            .get(0);
         if there {
-            assert_eq!(f.marker_hits(&format!("SELECT count(*) FROM app.{table} t WHERE t::text LIKE $1")), 0, "{table}");
+            assert_eq!(
+                f.marker_hits(&format!(
+                    "SELECT count(*) FROM app.{table} t WHERE t::text LIKE $1"
+                )),
+                0,
+                "{table}"
+            );
         }
     }
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_long_section_comes_back_whole_across_several_pages() {
+    let f = Fixture::new();
+    f.sql(&format!(
+        "INSERT INTO app.chat_memory_facts(owner_user_id, category, content)
+           SELECT '{a}', 'fact', '{MARKER} A ' || n || ' ' || repeat('x', 600) FROM generate_series(1, 450) n;
+         INSERT INTO app.chat_memory_facts(owner_user_id, category, content)
+           SELECT '{b}', 'fact', '{MARKER} B ' || n FROM generate_series(1, 30) n;",
+        a = f.a, b = f.b
+    ));
+    let (mut pages, mut ids, mut after) = (0, std::collections::HashSet::new(), Value::Null);
+    loop {
+        let mut p = json!({"section": "chatMemoryFacts"});
+        if !after.is_null() {
+            p["after"] = after.clone();
+        }
+        let page = f.api(f.a, "collectMemoryExportSection", p).unwrap();
+        pages += 1;
+        for row in page["rows"].as_array().unwrap() {
+            assert!(
+                ids.insert(row["id"].as_str().unwrap().to_owned()),
+                "a row came back twice"
+            );
+        }
+        after = page["next"].clone();
+        if after.is_null() {
+            break;
+        }
+    }
+    assert!(
+        pages >= 3,
+        "450 large rows must not fit one page, got {pages}"
+    );
+    assert_eq!(
+        ids.len() as i64,
+        f.count("chat_memory_facts", f.a),
+        "every row arrives exactly once"
+    );
 }

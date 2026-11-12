@@ -2,7 +2,6 @@
 //! Export reads one section per call in pages that stay under the host's message limit, and
 //! never returns vectors. Deletion removes every owned table's rows for that person and
 //! returns counts only, so no memory text reaches logs, jobs or activity rows.
-use crate::recording;
 use anyhow::{anyhow, Result};
 use moss_module_host::database::runtime_role;
 use safety_core::db::DataContext;
@@ -26,7 +25,12 @@ struct Section {
 }
 
 fn sections() -> Vec<Section> {
-    let s = |name, table, key, object: String| Section { name, table, key, object };
+    let s = |name, table, key, object: String| Section {
+        name,
+        table,
+        key,
+        object,
+    };
     vec![
         s("memoryChunks", "app.memory_chunks", "id::text", format!(
             "'id', id::text, 'ownerUserId', owner_user_id::text, 'sourceKind', source_kind,
@@ -82,21 +86,33 @@ fn sections() -> Vec<Section> {
         s("memoryLegacyFactMigrations", "app.memory_legacy_fact_migrations", "legacy_fact_id::text", format!(
             "'ownerUserId', owner_user_id::text, 'legacyFactId', legacy_fact_id::text,
              'memoryFactId', memory_fact_id::text, {}", ts("created_at", "createdAt"))),
+        s("recordingFactVersions", "app.memory_recording_fact_versions", "fact_id::text", 
+            "'ownerUserId', owner_user_id::text, 'factId', fact_id::text, 'lineageId', lineage_id::text,
+             'revision', revision::text, 'side', side, 'state', state, 'corrected', corrected,
+             'replacementFactId', replacement_fact_id::text".into()),
+        s("recordingReceipts", "app.memory_recording_receipts", "receipt_id", 
+            "'ownerUserId', owner_user_id::text, 'receiptId', receipt_id, 'sourceModuleId', source_module_id,
+             'sourceId', source_id::text, 'sourceVersion', source_version, 'itemKey', item_key,
+             'sourceGeneration', source_generation, 'revision', revision, 'side', side, 'state', state,
+             'factId', fact_id::text, 'episodeId', episode_id::text,
+             'cleanupOperationId', cleanup_operation_id::text".into()),
+        s("recordingProposals", "app.memory_recording_proposals", "proposal_id::text", format!(
+            "'ownerUserId', owner_user_id::text, 'proposalId', proposal_id::text, 'requestId', request_id,
+             'receiptId', receipt_id, 'kind', kind, 'expectedReceiptRevision', expected_receipt_revision,
+             'expectedFactId', expected_fact_id::text, 'expectedFactRevision', expected_fact_revision::text,
+             'actorGeneration', actor_generation, 'sourceGeneration', source_generation, 'side', side,
+             'proposedText', proposed_text, 'state', state, 'publicationSnapshot', publication_snapshot,
+             'before', before, {}", ts("created_at", "createdAt"))),
     ]
 }
 
 /// Section names in the order a caller should read them.
 pub fn names() -> Vec<&'static str> {
-    let mut all: Vec<&'static str> = sections().iter().map(|s| s.name).collect();
-    all.push("recordingMemory");
-    all
+    sections().iter().map(|s| s.name).collect()
 }
 
 /// One page of one section. `after` is the key the previous page ended on.
 pub async fn export(cx: &DataContext, section: &str, after: Option<&str>) -> Result<Value> {
-    if section == "recordingMemory" {
-        return Ok(json!({"section": section, "rows": recording::export(cx).await?, "next": null}));
-    }
     let all = sections();
     let found = all
         .iter()
@@ -124,7 +140,9 @@ pub async fn export(cx: &DataContext, section: &str, after: Option<&str>) -> Res
         out.push(serde_json::from_str::<Value>(&text)?);
         last = Some(key);
     }
-    Ok(json!({"section": section, "rows": out, "next": if more { json!(last) } else { Value::Null }}))
+    Ok(
+        json!({"section": section, "rows": out, "next": if more { json!(last) } else { Value::Null }}),
+    )
 }
 
 /// Tables in the order that satisfies their references, and the role that owns each.
@@ -159,7 +177,10 @@ pub async fn delete_all(cx: &DataContext) -> Result<Value> {
     for (table, module_owned) in DELETE_ORDER {
         if *module_owned {
             cx.db()
-                .batch_execute(&format!("SET LOCAL ROLE {}", runtime_role(crate::MODULE_ID)))
+                .batch_execute(&format!(
+                    "SET LOCAL ROLE {}",
+                    runtime_role(crate::MODULE_ID)
+                ))
                 .await?;
         }
         let removed = cx
@@ -175,6 +196,8 @@ pub async fn delete_all(cx: &DataContext) -> Result<Value> {
         total += removed;
         counts.insert((*table).to_owned(), json!(removed));
     }
-    cx.db().batch_execute("SET CONSTRAINTS ALL IMMEDIATE").await?;
+    cx.db()
+        .batch_execute("SET CONSTRAINTS ALL IMMEDIATE")
+        .await?;
     Ok(json!({"deleted": counts, "total": total}))
 }

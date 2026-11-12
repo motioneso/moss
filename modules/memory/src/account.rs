@@ -17,7 +17,9 @@ const SECTIONS: &[&str] = &[
     "memoryCandidates",
     "memorySearchDocuments",
     "memoryLegacyFactMigrations",
-    "recordingMemory",
+    "recordingFactVersions",
+    "recordingReceipts",
+    "recordingProposals",
 ];
 
 fn only(p: &Value, allowed: &[&str]) -> Result<()> {
@@ -40,7 +42,10 @@ pub fn export(host: &impl Host, p: &Value) -> Result<Value> {
         }
     }
     if let Some(after) = p.get("after") {
-        if !after.as_str().is_some_and(|a| a.len() <= 128 && !a.contains('\0')) {
+        if !after
+            .as_str()
+            .is_some_and(|a| a.len() <= 128 && !a.contains('\0'))
+        {
             return Err(Error::new(400, "Invalid memory request"));
         }
     }
