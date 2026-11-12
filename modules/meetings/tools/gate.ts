@@ -9,7 +9,7 @@ const checks = spawnSync("modules/meetings/tools/check.sh", {
 if (checks.status !== 0) process.exit(checks.status ?? 1);
 // One cargo run per test file, in this order. The files share one database and
 // the installed test expects it untouched, so it runs first.
-for (const name of ["installed", "outputs", "recording", "transcripts", "exports", "reading"]) {
+for (const name of ["installed", "outputs", "recording", "transcripts", "exports", "reading", "ring"]) {
   const run = spawnSync(
     "cargo",
     [
