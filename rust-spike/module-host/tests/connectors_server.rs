@@ -215,7 +215,7 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
     // canonical installer, as the server would find it.
     let keys = Keys::new();
     fs::create_dir_all(root.join("registry/packages")).unwrap();
-    let artifacts: Vec<Artifact> = [("JS225_EMAIL_PACKAGE", "email"), ("JS224_CONNECTORS_PACKAGE", "connectors")]
+    let artifacts: Vec<Artifact> = [("JS225_EMAIL_PACKAGE", "email"), ("JS181_CALENDAR_PACKAGE", "calendar"), ("JS224_CONNECTORS_PACKAGE", "connectors")]
     .iter()
     .map(|(variable, id)| {
         let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
@@ -295,7 +295,7 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
     let mut fake_google = Server(
         Command::new(std::env::var("JS230_FAKE_GOOGLE").expect("the gate must supply the fake Google"))
             .args(["live-http-code", "live-browser-code"])
-            .stdin(Stdio::null())
+            .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
@@ -327,6 +327,14 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
                 google_lines.insert(key.to_owned(), value.to_owned());
             }
         }
+    }
+    let mut google_commands = fake_google.0.stdin.take().unwrap();
+    {
+        use std::io::Write;
+        for line in ["event Planning 1", "event Review 2", "event Offsite 3", "message Quarterly plan", "message Lunch on Friday", "message Invoice reminder"] {
+            writeln!(google_commands, "{line}").unwrap();
+        }
+        google_commands.flush().unwrap();
     }
     let token_url = google_lines["token-url"].clone();
     let google_id = google_lines["client-id"].clone();
@@ -460,6 +468,48 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
     seen.push(text.clone());
     assert_eq!(json_of(&text)["account"]["status"], "active", "{text}");
     println!("PASS Google connect over HTTP: authorize then complete answered 201 with an active account");
+    let google_account = json_of(&text)["account"]["id"].as_str().expect("account id").to_owned();
+    // Connecting starts a sync. Wait for it, then read what it saved through Email and Calendar.
+    let wait_until = |what: &str, check: &dyn Fn() -> bool| {
+        let started = Instant::now();
+        while !check() {
+            assert!(started.elapsed() < Duration::from_secs(120), "Google sync did not settle: {what}\n{}", log());
+            std::thread::sleep(Duration::from_millis(500));
+        }
+    };
+    let account_row = || {
+        let all = json_of(&call(Method::GET, "/accounts", Some(&cookie), None).1);
+        all["accounts"].as_array().unwrap().iter().find(|a| a["id"] == google_account.as_str()).cloned().unwrap()
+    };
+    let saved_mail = || {
+        let r = client.get(format!("{origin}/api/m/email/messages")).header("origin", &origin).header("cookie", &cookie).send().unwrap();
+        json_of(&r.text().unwrap_or_default())["messages"].as_array().cloned().unwrap_or_default()
+    };
+    let saved_events = || {
+        let r = client.get(format!("{origin}/api/m/calendar/events")).header("origin", &origin).header("cookie", &cookie).send().unwrap();
+        json_of(&r.text().unwrap_or_default())["events"].as_array().cloned().unwrap_or_default()
+    };
+    wait_until("first run", &|| account_row()["lastSyncStatus"] == "success" && saved_mail().len() == 3 && saved_events().len() == 3);
+    let titles: std::collections::BTreeSet<String> = saved_events().iter().map(|e| e["title"].as_str().unwrap_or("").to_owned()).collect();
+    assert_eq!(titles, ["Offsite", "Planning", "Review"].map(String::from).into(), "{titles:?}");
+    let first = account_row();
+    assert_eq!(first["lastSyncCounts"]["calendarUpserted"], 3, "{first}");
+    println!("PASS Google sync on the real server: 3 events and 3 messages saved after connecting");
+    {
+        // A message is removed and an event is removed in Google. A manual sync follows.
+        use std::io::Write;
+        writeln!(google_commands, "delete-message Lunch on Friday").unwrap();
+        writeln!(google_commands, "label-message Quarterly plan").unwrap();
+        writeln!(google_commands, "remove-event Offsite").unwrap();
+        google_commands.flush().unwrap();
+    }
+    let (status, text) = call(Method::POST, "/google/sync", Some(&cookie), Some(json!({})));
+    assert_eq!(status, 202, "{text}");
+    wait_until("second run", &|| {
+        let events: Vec<String> = saved_events().iter().map(|e| e["title"].as_str().unwrap_or("").to_owned()).collect();
+        events.len() == 2 && !events.iter().any(|t| t == "Offsite") && account_row()["lastSyncStatus"] == "success"
+    });
+    println!("PASS Google sync second run: the event removed in Google is pruned under the runtime role");
     // The marker must be in no response, no log line, and no stored job; the stored secret is sealed.
     let markers = [MARKER, MARKER_TOKEN, MARKER_REFRESH];
     for body in &seen {
@@ -532,7 +582,7 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
     {
         // After both Google connects (HTTP and browser): none of the secrets or tokens is
         // in the server log or any stored row in plain text.
-        let google_markers = [google_secret.as_str(), "ya29.fake-access-", "1//fake-refresh-"];
+        let google_markers = [google_secret.as_str(), "ya29.fake-access-", "1//fake-refresh-", "GOOGLE-BODY-MARKER"];
         for marker in google_markers {
             assert!(!log().contains(marker), "Google marker in the server log: {marker}");
         }

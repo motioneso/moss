@@ -9,7 +9,8 @@ for (const name of [
   "RUSTUP_HOME",
   "CARGO_TARGET_DIR",
   "JS224_CONNECTORS_PACKAGE",
-  "JS225_EMAIL_PACKAGE"
+  "JS225_EMAIL_PACKAGE",
+  "JS181_CALENDAR_PACKAGE"
 ]) {
   if (!process.env[name]) throw new Error(`Set ${name}`);
 }
