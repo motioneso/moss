@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "meetings",
   "name": "Meetings",
-  "description": "Keeps each person's meeting records, personal notes and recording defaults private to their account. Create, rename, delete and take versioned notes on meetings, and set recording defaults. Transcripts, History search, recording types and pasted transcripts are included. Summaries written by the configured model, with edits, history and an automatic summary after a pasted transcript, are included. Recording, exports and the Meetings screen are not part of this package yet.",
+  "description": "Keeps each person's meeting records, personal notes and recording defaults private to their account. Create, rename, delete and take versioned notes on meetings, and set recording defaults. Transcripts, History search, recording types and pasted transcripts are included. Summaries written by the configured model, with edits, history and an automatic summary after a pasted transcript, are included. Each action a summary proposes can be accepted into Tasks or dismissed. Recording, exports and the Meetings screen are not part of this package yet.",
   "publisher": "Moss",
   "version": "0.1.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
@@ -503,7 +503,7 @@
     },
     {
       "id": "meetings.outputs",
-      "description": "A summary of a meeting is written by the model you configured from your own notes and transcript, using one of four templates. Only your meeting text is sent to the model, and every cited quote is checked against the transcript before the summary is saved. Each save is a new numbered version that is never changed, and an edit saves a new version after the same checks. A summary is marked stale when the notes or transcript change afterwards. A repeated request key returns the first answer. Nobody else, including admins, can see any of it.",
+      "description": "A summary of a meeting is written by the model you configured from your own notes and transcript, using one of four templates. Only your meeting text is sent to the model, and every cited quote is checked against the transcript before the summary is saved. Accepting a proposed action makes one task in Tasks from the title you confirm, and accepting again never makes a second. A possible match with an earlier action needs your confirmation first. Each save is a new numbered version that is never changed, and an edit saves a new version after the same checks. A summary is marked stale when the notes or transcript change afterwards. A repeated request key returns the first answer. Nobody else, including admins, can see any of it.",
       "errors": [
         {
           "code": "meeting_output_invalid_input",
