@@ -19,6 +19,24 @@ impl moss_module_host::ai::Intelligence for NoAi {
     }
 }
 
+/// A package that does nothing, so a module that requires `id` can be installed.
+pub fn stand_in(id: &str, wasm: &[u8]) -> (Vec<u8>, moss_module_host::manifest::Manifest) {
+    let manifest: moss_module_host::manifest::Manifest = serde_json::from_value(serde_json::json!({
+        "schemaVersion": 2, "id": id, "name": id, "description": "A stand-in for a test", "publisher": "Moss",
+        "version": "0.1.0", "requiresMoss": ">=0.1.0, <1.0.0", "abi": "moss:module@1", "capabilities": [],
+        "icons": [], "accounts": {"supportsUserDisable": false, "defaultEnabled": true}
+    }))
+    .unwrap();
+    let files = std::collections::BTreeMap::from([
+        ("moss.module.json".to_owned(), serde_json::to_vec(&manifest).unwrap()),
+        ("code/module.wasm".to_owned(), wasm.to_vec()),
+        ("LICENSE".to_owned(), b"test".to_vec()),
+        ("NOTICE".to_owned(), b"test".to_vec()),
+        ("CHANGELOG.md".to_owned(), b"test".to_vec()),
+    ]);
+    (moss_module_host::archive::pack(&files).unwrap(), manifest)
+}
+
 /// The installed application plus the folders that must outlive it.
 pub struct Installed {
     pub app: Application,
@@ -67,8 +85,6 @@ pub fn install_full(
     let reg = tempfile::tempdir().unwrap();
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let wasm = std::fs::read(std::env::var("MEETINGS_COMPONENT_WASM").expect("Run modules/meetings/tools/check.sh")).unwrap();
-    let bytes = moss_meetings_host::package::pack_without_dependencies(&root, &wasm).unwrap();
-    let (key, publisher, artifact) = crate::registry::publish(reg.path(), &bytes);
     let database = f.db.clone();
     let chat_given = chat.is_some();
     let url = || Secret::new(std::env::var("JS48_BOOTSTRAP_URL").unwrap());
@@ -98,21 +114,25 @@ pub fn install_full(
         },
     )
     .unwrap();
-    let source = app
-        .installer
-        .refresh(&f.access(f.a), Source::Folder(reg.path().into()), &key, &publisher, "meetings-test-registry")
-        .unwrap();
-    app.installer.install(&f.access(f.a), &source, &artifact, true).unwrap();
-    if chat_given {
-        let core = std::fs::read(std::env::var("MEMORY_CORE_WASM").expect("Run modules/meetings/tools/check.sh")).unwrap();
-        let bytes = moss_memory_host::package::pack(&root, &core).unwrap();
-        let manifest = moss_memory_host::package::manifest().unwrap();
-        let (key, publisher, artifact) = crate::registry::publish_as(reg.path(), &bytes, manifest, "memory");
+    let put = |bytes: &[u8], manifest: moss_module_host::manifest::Manifest, label: &str| {
+        let (key, publisher, artifact) = crate::registry::publish_as(reg.path(), bytes, manifest, label);
         let source = app
             .installer
-            .refresh(&f.access(f.a), Source::Folder(reg.path().into()), &key, &publisher, "memory-test-registry")
+            .refresh(&f.access(f.a), Source::Folder(reg.path().into()), &key, &publisher, &format!("{label}-test-registry"))
             .unwrap();
         app.installer.install(&f.access(f.a), &source, &artifact, true).unwrap();
+    };
+    // Meetings requires Calendar, People, Tasks and Memory. Calendar, People and Tasks are empty stand-ins
+    // because the tests never reach them; Memory is the real package when a chat is given.
+    let stand_ins: &[&str] = if chat_given { &["calendar", "people", "tasks"] } else { &["calendar", "people", "tasks", "memory"] };
+    for id in stand_ins {
+        let (bytes, manifest) = stand_in(id, &wasm);
+        put(&bytes, manifest, id);
     }
+    if chat_given {
+        let core = std::fs::read(std::env::var("MEMORY_CORE_WASM").expect("Run modules/meetings/tools/check.sh")).unwrap();
+        put(&moss_memory_host::package::pack(&root, &core).unwrap(), moss_memory_host::package::manifest().unwrap(), "memory");
+    }
+    put(&moss_meetings_host::package::pack(&root, &wasm).unwrap(), moss_meetings_host::package::manifest().unwrap(), "meetings");
     Installed { app, _folders: (dir, reg) }
 }

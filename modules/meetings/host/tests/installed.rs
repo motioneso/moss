@@ -47,8 +47,7 @@ fn installed_meetings_keep_each_persons_records_notes_and_preferences_private() 
     });
     let dir = tempfile::tempdir().unwrap();
     let reg = tempfile::tempdir().unwrap();
-    let bytes = moss_meetings_host::package::pack_without_dependencies(&root(), &component()).unwrap();
-    let (key, publisher, artifact) = registry::publish(reg.path(), &bytes);
+    let bytes = moss_meetings_host::package::pack(&root(), &component()).unwrap();
     let database = f.db.clone();
     let app = Application::open_extended_with(
         dir.path(),
@@ -69,6 +68,17 @@ fn installed_meetings_keep_each_persons_records_notes_and_preferences_private() 
         },
     )
     .unwrap();
+    // Meetings requires these modules; the stand-ins do nothing because this test never reaches them.
+    for id in ["calendar", "people", "tasks", "memory"] {
+        let (bytes, manifest) = support::install::stand_in(id, &component());
+        let (key, publisher, artifact) = registry::publish_as(reg.path(), &bytes, manifest, id);
+        let source = app
+            .installer
+            .refresh(&f.access(f.a), Source::Folder(reg.path().into()), &key, &publisher, &format!("{id}-test-registry"))
+            .unwrap();
+        app.installer.install(&f.access(f.a), &source, &artifact, true).unwrap();
+    }
+    let (key, publisher, artifact) = registry::publish(reg.path(), &bytes);
     let source = app
         .installer
         .refresh(
