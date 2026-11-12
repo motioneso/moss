@@ -6,6 +6,7 @@ pub mod js;
 pub mod jobs;
 pub mod lifecycle;
 pub mod manual;
+pub mod output_validation;
 pub mod preferences;
 pub mod recording;
 pub mod records;
