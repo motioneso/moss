@@ -161,8 +161,11 @@ fn open<H: Host + ?Sized>(host: &H, id: &str) -> Result<std::result::Result<(Sto
     })
 }
 
-fn query_value(request: &RouteRequest) -> Value {
-    Value::Object(request.query.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+/// The query parameters a route names. Others are dropped, as the old server's validator did.
+fn query_value(request: &RouteRequest, known: &[&str]) -> Value {
+    Value::Object(
+        request.query.iter().filter(|(k, _)| known.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect(),
+    )
 }
 
 pub fn get<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Response> {
@@ -170,7 +173,7 @@ pub fn get<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Respons
         Ok(id) => id,
         Err(f) => return Ok(invalid(f)),
     };
-    let mut query = query_value(request);
+    let mut query = query_value(request, &["transcriptRevision", "cutoffMs", "maxSegments", "maxCharacters"]);
     if let Err(f) = strict_object(
         "querystring",
         &mut query,
@@ -218,7 +221,7 @@ pub fn evidence<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Re
         Ok(id) => id,
         Err(f) => return Ok(invalid(f)),
     };
-    let mut query = query_value(request);
+    let mut query = query_value(request, &["segmentId", "segmentRevision", "startCharacter", "endCharacter"]);
     if let Err(f) = strict_object(
         "querystring",
         &mut query,

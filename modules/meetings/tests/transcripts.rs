@@ -167,8 +167,8 @@ fn schema_errors_name_the_field_like_the_old_validator() {
     b["requestKey"] = json!(K1);
     b["sources"][0]["kind"] = json!("telephone");
     assert_eq!(post(&f, &id, b).1, json!({"error":"body/sources/0/kind must be equal to one of the allowed values"}));
-    assert_eq!(read(&f, &id, &[("extra", json!("1"))]),
-        (400, json!({"error":"querystring must NOT have additional properties"})));
+    // The old server ignored unknown query parameters, so this reaches the lookup.
+    assert_eq!(read(&f, &id, &[("extra", json!("1"))]).0, 404);
 }
 
 #[test]

@@ -90,9 +90,10 @@ pub fn strict_object(
             }
             if let (Kind::Int { .. }, Value::String(s)) = (kind, &*slot) {
                 if let Some(f) = crate::js::js_number(s) {
-                    if f.is_infinite() {
+                    // Whole numbers past i64 still fail the range check, as Ajv's number does.
+                    if f.is_infinite() || (f.fract() == 0.0 && f.abs() >= 9.2e18) {
                         *slot = Value::from(if f > 0.0 { i64::MAX } else { i64::MIN });
-                    } else if f.fract() == 0.0 && f.abs() < 9.2e18 {
+                    } else if f.fract() == 0.0 {
                         *slot = Value::from(f as i64);
                     }
                 }
