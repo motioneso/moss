@@ -22,6 +22,8 @@ pub mod recording_filing;
 pub mod recording_jobs;
 pub mod recording_reading;
 pub mod records;
+pub mod capture_errors;
+pub mod capture_limit;
 pub mod ring_errors;
 pub mod ring_import;
 pub mod ring_source;
