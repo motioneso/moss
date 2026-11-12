@@ -401,7 +401,7 @@ The two new tables belong to the module, so only the module's own database role 
 ### What was built
 
 - **One door for other modules.** Briefings, Wellness, Goals, People, Backtrack, Notes and chat now
-  have 27 named calls into Memory, listed in the Memory manifest. They cover searching and listing
+  have 25 new named calls into Memory, listed in the Memory manifest. They cover searching and listing
   passages, recalling facts, chat's per-turn write, the chat memory list with its rejections,
   suggestions to review, and goal entities.
 - **The owner comes from the session.** No call takes an owner or a vector. A caller sends text,
@@ -433,6 +433,13 @@ and the tests pass.
 - **No live caller run.** No Rust module that calls Memory exists yet, and chat is not ported, so
   nothing could call the API through the real server. The proof runs the real package and real
   Postgres, but not a second module. A chat answer showing memory provenance was not produced.
+- **Managed snapshot guard.** The old chunk write refused to replace chunks owned by a managed
+  vault snapshot. The Rust vault index writes none yet, so nothing breaks today, but the managed
+  vault index work must port that guard before callers can write vault chunks.
+- **Dates.** Dates now arrive as ISO text where the old repositories returned date objects.
+- **Extra cross-owner cases.** The isolation test does not drive adding an alias, a candidate
+  with another person's episode, or a suppression against another person's data. The owner
+  filter and composite keys cover them by reading, not by test.
 - **Notes search.** It still uses the existing adapter. Part 7 edits that file, so it was left alone.
 - **Search model filter.** Search does not filter by model until part 7 lands.
 - **Old callers' exact call shapes.** They are matched from reading the old code, not by running

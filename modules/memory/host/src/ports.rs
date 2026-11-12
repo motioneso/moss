@@ -206,8 +206,8 @@ impl MemoryPorts {
                     };
                     model = m;
                     chunks.push(public::EmbeddedChunk {
-                        line_start: item["lineStart"].as_i64().unwrap_or(0) as i32,
-                        line_end: item["lineEnd"].as_i64().unwrap_or(0) as i32,
+                        line_start: item["lineStart"].as_i64().unwrap_or(0).clamp(0, i32::MAX as i64) as i32,
+                        line_end: item["lineEnd"].as_i64().unwrap_or(0).clamp(0, i32::MAX as i64) as i32,
                         hash: item["contentHash"].as_str().map_or_else(|| public::sha256_hex(text), str::to_owned),
                         text: text.to_owned(),
                         vector,

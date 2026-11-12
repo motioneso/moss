@@ -449,12 +449,16 @@ pub async fn run(cx: &DataContext, name: &str, p: &Value) -> Result<Value> {
         "createEntity" => store::create_entity(cx, p).await,
         "updateEntity" => {
             let (id, name, summary) = (uuid(p, "id")?, text(p, "name")?, text(p, "summary")?);
-            db.execute(
-                "UPDATE app.memory_entities SET name = $2, summary = $3, updated_at = now()
-                 WHERE owner_user_id = app.current_actor_user_id() AND id = $1::text::uuid",
-                &[&id, &name, &summary],
-            )
-            .await?;
+            let changed = db
+                .execute(
+                    "UPDATE app.memory_entities SET name = $2, summary = $3, updated_at = now()
+                     WHERE owner_user_id = app.current_actor_user_id() AND id = $1::text::uuid",
+                    &[&id, &name, &summary],
+                )
+                .await?;
+            if changed == 0 {
+                return Ok(json!({}));
+            }
             store::upsert_document(cx, "entity", &id, format!("{name} {summary}").trim()).await?;
             Ok(json!({}))
         }
@@ -476,7 +480,8 @@ pub async fn run(cx: &DataContext, name: &str, p: &Value) -> Result<Value> {
             let id = uuid(p, "id")?;
             db.execute(
                 "UPDATE app.memory_entities SET status = 'archived', updated_at = now()
-                 WHERE owner_user_id = app.current_actor_user_id() AND id = $1::text::uuid",
+                 WHERE owner_user_id = app.current_actor_user_id() AND id = $1::text::uuid
+                   AND kind <> 'self'",
                 &[&id],
             )
             .await?;
