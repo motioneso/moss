@@ -24,12 +24,13 @@ pub fn stand_in(id: &str, wasm: &[u8]) -> (Vec<u8>, moss_module_host::manifest::
     let manifest: moss_module_host::manifest::Manifest = serde_json::from_value(serde_json::json!({
         "schemaVersion": 2, "id": id, "name": id, "description": "A stand-in for a test", "publisher": "Moss",
         "version": "0.1.0", "requiresMoss": ">=0.1.0, <1.0.0", "abi": "moss:module@1", "capabilities": [],
-        "icons": [], "accounts": {"supportsUserDisable": false, "defaultEnabled": true}
+        "icons": [format!("icons/{id}.svg")], "accounts": {"supportsUserDisable": false, "defaultEnabled": true}
     }))
     .unwrap();
     let files = std::collections::BTreeMap::from([
         ("moss.module.json".to_owned(), serde_json::to_vec(&manifest).unwrap()),
         ("code/module.wasm".to_owned(), wasm.to_vec()),
+        (format!("icons/{id}.svg"), b"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1 1\"></svg>".to_vec()),
         ("LICENSE".to_owned(), b"test".to_vec()),
         ("NOTICE".to_owned(), b"test".to_vec()),
         ("CHANGELOG.md".to_owned(), b"test".to_vec()),
