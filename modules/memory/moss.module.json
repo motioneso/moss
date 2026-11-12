@@ -13,6 +13,7 @@
       "operations": ["get", "set"],
       "resources": [
         "memory.recall",
+        "memory.public",
         "memory.core",
         "memory.entity",
         "memory.fact",
@@ -297,9 +298,34 @@
   ],
   "requires": {},
   "provides": {
+    "addAlias": "1.0.0",
+    "confirmFact": "1.0.0",
+    "createEntity": "1.0.0",
+    "createEpisode": "1.0.0",
+    "deleteChunksForSources": "1.0.0",
+    "deleteFact": "1.0.0",
+    "embedTurn": "1.0.0",
+    "findEntityByAlias": "1.0.0",
+    "forgetEntity": "1.0.0",
+    "getActiveFact": "1.0.0",
+    "insertCandidate": "1.0.0",
+    "insertFact": "1.0.0",
+    "insertSuppression": "1.0.0",
+    "isSuppressed": "1.0.0",
+    "listActiveFacts": "1.0.0",
+    "listCoreFacts": "1.0.0",
+    "listCorrections": "1.0.0",
+    "listRecentChunks": "1.0.0",
     "prepareMemoryAction": "1.0.0",
+    "recallMemory": "1.0.0",
+    "recordingMemory": "1.0.0",
+    "rejectFact": "1.0.0",
     "requestVaultIndex": "1.0.0",
-    "recordingMemory": "1.0.0"
+    "searchChunks": "1.0.0",
+    "supersedeFact": "1.0.0",
+    "updateEntity": "1.0.0",
+    "updateFactImportance": "1.0.0",
+    "upsertChunks": "1.0.0"
   },
   "icons": ["icons/memory.svg"],
   "accounts": {
@@ -380,6 +406,19 @@
           "path": "/settings/memory"
         }
       ]
+    },
+    {
+      "id": "memory.public-api",
+      "description": "Other modules read and write memory only through a fixed set of calls, never through its tables. They cover searching and listing note, chat and screen passages, recalling saved facts, keeping the chat memory list and its rejections, and proposing new suggestions for the person to review. Every call acts only on the signed-in person's own memory. Callers send text, never vectors, and the text goes only to the configured search model.",
+      "errors": [
+        {
+          "code": "memory-public-unavailable",
+          "class": "transient",
+          "description": "Memory search is unavailable",
+          "remediationRef": "memory-set-up-embedding"
+        }
+      ],
+      "remediations": []
     },
     {
       "id": "memory.recall",

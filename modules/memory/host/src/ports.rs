@@ -1,7 +1,7 @@
 //! Answers the package's `memory.*` calls with SQL under the signed-in person's row-level
 //! security. Memory text goes only to the configured embedding service and never into logs.
 use crate::recording::{self, NoAuthority, RecordingAuthority};
-use crate::{dashboard, lifecycle, reembed, store};
+use crate::{dashboard, lifecycle, public, reembed, store};
 use anyhow::{ensure, Result};
 use moss_module_host::{
     memory_ingest::DocumentEmbeddings,
@@ -164,6 +164,104 @@ impl MemoryPorts {
                 None => Err(error),
             },
             ok => ok,
+        }
+    }
+
+    /// The public API for other modules. The caller never supplies an owner or a vector.
+    fn public(&self, scope: &CallScope, request: &Request) -> Result<Value> {
+        let p = &request.parameters;
+        let name = p["name"].as_str().unwrap_or("");
+        let embed_doc = |text: &str| -> Result<(String, (String, String))> {
+            ensure!(text.len() <= 64 * 1024, "Memory text too long");
+            let (vector, model) = self.embedder.document(scope, text)?;
+            Ok((literal(&vector)?, model))
+        };
+        match name {
+            "searchChunks" => {
+                let query = p["query"].as_str().unwrap_or("");
+                ensure!(!query.is_empty() && query.len() <= 64 * 1024, "Invalid memory query");
+                public::source_kind(p)?;
+                let vector = match self.embedder.query(scope, query).and_then(|v| literal(&v)) {
+                    Ok(vector) => vector,
+                    Err(error) => return Ok(refusal(&error)),
+                };
+                self.within(scope, |cx| async {
+                    let value = public::search_chunks(&cx, p, &vector).await?;
+                    Ok((cx, value))
+                })
+            }
+            "upsertChunks" => {
+                let kind = public::source_kind(p)?.to_owned();
+                let path = p["sourcePath"].as_str().ok_or_else(|| anyhow::anyhow!("Missing sourcePath"))?;
+                let items = p["chunks"].as_array().ok_or_else(|| anyhow::anyhow!("Missing chunks"))?;
+                ensure!(items.len() <= 500, "Too many chunks");
+                let replace = p["replaceExisting"].as_bool().unwrap_or(true);
+                let mut chunks = Vec::new();
+                let mut model = (String::new(), String::new());
+                for item in items {
+                    let text = item["text"].as_str().unwrap_or("");
+                    let (vector, m) = match embed_doc(text) {
+                        Ok(done) => done,
+                        Err(error) => return Ok(refusal(&error)),
+                    };
+                    model = m;
+                    chunks.push(public::EmbeddedChunk {
+                        line_start: item["lineStart"].as_i64().unwrap_or(0) as i32,
+                        line_end: item["lineEnd"].as_i64().unwrap_or(0) as i32,
+                        hash: item["contentHash"].as_str().map_or_else(|| public::sha256_hex(text), str::to_owned),
+                        text: text.to_owned(),
+                        vector,
+                    });
+                }
+                self.within(scope, |cx| async {
+                    public::write_chunks(&cx, &kind, path, replace, &chunks, &model).await?;
+                    Ok((cx, json!({"written": chunks.len()})))
+                })
+            }
+            "embedTurn" => {
+                let thread = p["threadId"].as_str().ok_or_else(|| anyhow::anyhow!("Missing threadId"))?;
+                let text = format!(
+                    "User: {}\nAssistant: {}",
+                    p["userText"].as_str().unwrap_or(""),
+                    p["assistantText"].as_str().unwrap_or("")
+                );
+                let hash = public::sha256_hex(&text);
+                let same = self.within(scope, |cx| async {
+                    let found = public::file_hash(&cx, "chat", thread).await?;
+                    Ok((cx, json!(found.as_deref() == Some(hash.as_str()))))
+                })?;
+                if same == json!(true) {
+                    return Ok(json!({"skipped": true}));
+                }
+                let (vector, model) = match embed_doc(&text) {
+                    Ok(done) => done,
+                    Err(error) => return Ok(refusal(&error)),
+                };
+                let chunk = public::EmbeddedChunk {
+                    line_start: 0,
+                    line_end: 0,
+                    hash: hash.clone(),
+                    text,
+                    vector,
+                };
+                self.within(scope, |cx| async {
+                    public::write_chunks(&cx, "chat", thread, true, std::slice::from_ref(&chunk), &model).await?;
+                    public::upsert_file_index(&cx, "chat", thread, &hash, 1, &model).await?;
+                    Ok((cx, json!({"skipped": false})))
+                })
+            }
+            "deleteChunksForSources" => self.within(scope, |cx| async {
+                let value = public::delete_chunks(&cx, p).await?;
+                Ok((cx, value))
+            }),
+            "listRecentChunks" => self.within(scope, |cx| async {
+                let value = public::list_recent_chunks(&cx, p).await?;
+                Ok((cx, value))
+            }),
+            _ => self.within(scope, |cx| async {
+                let value = public::run(&cx, name, p).await?;
+                Ok((cx, value))
+            }),
         }
     }
 
@@ -349,6 +447,7 @@ impl Ports for MemoryPorts {
             ("set", "memory.index") => self.index(scope, request),
             (_, "memory.recording") => self.recording(scope, request),
             (_, "memory.reembed") => self.reembed(scope, request),
+            (_, "memory.public") => self.public(scope, request),
             (_, "memory.lifecycle" | "memory.target" | "memory.forget") => {
                 self.within(scope, |cx| async {
                     let value = lifecycle::run(&cx, request).await?;

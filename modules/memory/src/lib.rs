@@ -11,6 +11,7 @@ pub mod dashboard;
 pub mod graph;
 pub mod lifecycle;
 mod reembed;
+pub mod public;
 pub mod schema;
 pub mod score;
 pub mod testing;
@@ -89,6 +90,12 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
             }
         }
         "api" => {
+            if let Ok(call) = serde_json::from_str::<Value>(payload) {
+                if let Some(name) = call["name"].as_str().filter(|n| !matches!(*n, "requestVaultIndex" | "prepareMemoryAction")) {
+                    return serde_json::to_string(&public::call(host, name, &call["parameters"]))
+                        .map_err(|_| "Invalid memory response".into());
+                }
+            }
             #[derive(serde::Deserialize)]
             #[serde(tag = "name", content = "parameters", deny_unknown_fields)]
             enum Api {
