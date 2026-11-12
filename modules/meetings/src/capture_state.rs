@@ -182,3 +182,38 @@ pub fn view(grant: &Value, state: &Value, at: DateTime<Utc>) -> Value {
 pub fn lease_current(state: &Value, at: DateTime<Utc>) -> bool {
     millis(&state["lastSeenAt"]).is_some_and(|seen| (at - Duration::milliseconds(0)).timestamp_millis() - seen <= LEASE_MS)
 }
+
+const FINALIZATION_MS: i64 = 60_000;
+
+fn close_epoch(state: &mut Value, at_ms: i64) {
+    if let Some(epoch) = state["epochs"].as_array_mut().and_then(|e| e.last_mut()) {
+        if epoch["endMs"].is_null() {
+            epoch["endMs"] = json!(at_ms);
+        }
+    }
+}
+
+/// Stops the recording. A stop that already happened changes nothing.
+pub fn stop(state: &mut Value, at: DateTime<Utc>) {
+    if state["desired"] == "stopped" {
+        return;
+    }
+    let at_ms = elapsed(state, at);
+    close_epoch(state, at_ms);
+    state["stopCutoffMs"] = json!(at_ms);
+    state["finalizationDeadline"] = json!((at + Duration::milliseconds(FINALIZATION_MS)).to_rfc3339_opts(SecondsFormat::Millis, true));
+    state["desired"] = json!("stopped");
+    state["generation"] = json!(state["generation"].as_i64().unwrap_or(0) + 1);
+}
+
+/// Revokes the link at `at_ms` of the recording clock and tells the Mac it stopped.
+pub fn revoke(state: &mut Value, at_ms: i64, reason: Option<&str>) {
+    close_epoch(state, at_ms);
+    state["desired"] = json!("revoked");
+    if let Some(reason) = reason {
+        state["revocationReason"] = json!(reason);
+    }
+    let generation = state["generation"].as_i64().unwrap_or(0) + 1;
+    state["generation"] = json!(generation);
+    state["observed"] = json!({"generation": generation, "phase": "stopped"});
+}

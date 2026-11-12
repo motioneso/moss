@@ -300,3 +300,55 @@ pub fn cancelled<H: Host + ?Sized>(host: &H, request_key: &str) -> Result<bool, 
 pub fn is_live(connection: &Value, at: DateTime<Utc>) -> bool {
     live(connection, at)
 }
+
+/// Counts one start against the owner's rolling budget. A refused start is not counted, and a
+/// start that fails later still is.
+pub fn take_budget<H: Host + ?Sized>(host: &H, at: DateTime<Utc>) -> Result<(), Stop> {
+    host.call("kv", "lock", CAPTURE, json!({"kind": "limit", "key": "start"}))?;
+    let previous: Vec<DateTime<Utc>> = one(host, LIMITS, Filter::All)?
+        .map(|row| row["started_at"].as_array().map(|a| a.iter().filter_map(parse).collect()).unwrap_or_default())
+        .unwrap_or_default();
+    let kept = crate::capture_limit::budget(&previous, at)?;
+    let stamps: Vec<Value> = kept.into_iter().map(|t| json!(stamp(t))).collect();
+    let mut upsert = Query::insert(values(vec![("started_at", json!(stamps.clone()))]));
+    upsert.conflict = Conflict::Update { columns: vec!["owner_user_id".into()], values: values(vec![("started_at", json!(stamps.clone()))]) };
+    Client(host).query(LIMITS, &upsert)?;
+    Ok(())
+}
+
+/// Marks a grant active under the Mac's credential hash with its new state.
+pub fn activate<H: Host + ?Sized>(host: &H, grant: &str, credential_hash: &str, saved: &Value) -> Result<(), Stop> {
+    Client(host).query(
+        GRANTS,
+        &Query::update(
+            Filter::eq("id", grant),
+            values(vec![
+                ("status", json!("active")),
+                ("credential_hash", json!(credential_hash)),
+                ("state_json", json!(serde_json::to_string(saved)?)),
+            ]),
+        ),
+    )?;
+    Ok(())
+}
+
+/// Records that a start was cancelled. A repeat must name the same meeting, Mac and connection.
+pub fn cancel<H: Host + ?Sized>(host: &H, meeting: &str, request_key: &str, device: Option<&str>, connection: Option<&str>) -> Result<(), Stop> {
+    if let Some(row) = one(host, CANCELLATIONS, Filter::eq("request_key", request_key))? {
+        let differs = |column: &str, given: Option<&str>| given.is_some_and(|g| !row[column].is_null() && row[column] != json!(g));
+        if row["meeting_id"] != json!(meeting) || differs("device_id", device) || differs("connection_id", connection) {
+            return Err(Failure::new(CaptureCode::Conflict).into());
+        }
+        return Ok(());
+    }
+    Client(host).query(
+        CANCELLATIONS,
+        &Query::insert(values(vec![
+            ("request_key", json!(request_key)),
+            ("meeting_id", json!(meeting)),
+            ("device_id", json!(device)),
+            ("connection_id", json!(connection)),
+        ])),
+    )?;
+    Ok(())
+}

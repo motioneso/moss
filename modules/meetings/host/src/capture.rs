@@ -18,19 +18,24 @@ pub struct Browser {
     pub expires_at: String,
 }
 
-/// A paired Mac and what it may record.
-pub struct Device {
-    pub recording_allowed: bool,
+/// The paired Mac behind a native request.
+pub struct Native {
+    pub device_id: String,
+    pub device_name: String,
+    pub capability_revision: i64,
     pub expires_at: String,
 }
 
 pub trait CaptureAuthority: Send + Sync {
     /// The live browser session for this request, or `None`.
     fn browser(&self, owner: Uuid, request_id: &str) -> Result<Option<Browser>>;
-    /// The paired device record for `device_id`, or `None` when it is not paired to `owner`.
-    fn device(&self, owner: Uuid, device_id: &str) -> Result<Option<Device>>;
-    /// Whether the account has a model that can write meeting text.
-    fn processing_ready(&self, owner: Uuid) -> Result<bool>;
+    /// The paired Mac that made this request, or `None`.
+    fn native(&self, owner: Uuid, request_id: &str) -> Result<Option<Native>>;
+    /// When the Mac's recording permission at `capability_revision` ends, or `None` when it is
+    /// not allowed to record.
+    fn recording(&self, owner: Uuid, device_id: &str, capability_revision: i64) -> Result<Option<String>>;
+    /// The model route that can write this account's meeting text, or `None` when there is none.
+    fn processing_route(&self, owner: Uuid) -> Result<Option<String>>;
 }
 
 /// Used until pairing exists. Nothing is allowed.
@@ -39,11 +44,14 @@ impl CaptureAuthority for Refusing {
     fn browser(&self, _: Uuid, _: &str) -> Result<Option<Browser>> {
         Ok(None)
     }
-    fn device(&self, _: Uuid, _: &str) -> Result<Option<Device>> {
+    fn native(&self, _: Uuid, _: &str) -> Result<Option<Native>> {
         Ok(None)
     }
-    fn processing_ready(&self, _: Uuid) -> Result<bool> {
-        Ok(false)
+    fn recording(&self, _: Uuid, _: &str, _: i64) -> Result<Option<String>> {
+        Ok(None)
+    }
+    fn processing_route(&self, _: Uuid) -> Result<Option<String>> {
+        Ok(None)
     }
 }
 
@@ -53,6 +61,7 @@ struct Params {
     kind: Option<String>,
     key: Option<String>,
     device_id: Option<String>,
+    capability_revision: Option<i64>,
 }
 
 fn need(value: &Option<String>, what: &str) -> Result<String> {
@@ -71,6 +80,7 @@ impl MeetingsPorts {
                 let meeting = match kind.as_str() {
                     "request" => false,
                     "device" => false,
+                    "limit" => false,
                     "meeting" => true,
                     _ => anyhow::bail!("Unsupported lock kind"),
                 };
@@ -80,6 +90,14 @@ impl MeetingsPorts {
                         Box::pin(async move {
                             let found = cx.db().query_opt("SELECT id FROM app.meeting_records WHERE id=$1 FOR UPDATE", &[&id]).await?;
                             Ok(json!({"found": found.is_some()}))
+                        })
+                    });
+                }
+                if kind == "limit" {
+                    return self.run(scope, move |cx| {
+                        Box::pin(async move {
+                            cx.db().execute("SELECT pg_advisory_xact_lock(hashtextextended(app.current_actor_user_id()::text,2983))", &[]).await?;
+                            Ok(json!({"locked": true}))
                         })
                     });
                 }
@@ -101,14 +119,23 @@ impl MeetingsPorts {
                 Some(b) => json!({"found": true, "sessionId": b.session_id, "expiresAt": b.expires_at}),
                 None => json!({"found": false}),
             }),
-            "device" => {
+            "native" => Ok(match self.capture_authority.native(owner, scope.access().request_id())? {
+                Some(n) => json!({"found": true, "deviceId": n.device_id, "deviceName": n.device_name,
+                    "capabilityRevision": n.capability_revision, "expiresAt": n.expires_at}),
+                None => json!({"found": false}),
+            }),
+            "recording" => {
                 let device = need(&p.device_id, "Device id")?;
-                Ok(match self.capture_authority.device(owner, &device)? {
-                    Some(d) => json!({"found": true, "recordingAllowed": d.recording_allowed, "expiresAt": d.expires_at}),
+                let revision = p.capability_revision.ok_or_else(|| anyhow::anyhow!("Capability revision required"))?;
+                Ok(match self.capture_authority.recording(owner, &device, revision)? {
+                    Some(expires) => json!({"found": true, "expiresAt": expires}),
                     None => json!({"found": false}),
                 })
             }
-            "processing" => Ok(json!({"ready": self.capture_authority.processing_ready(owner)?})),
+            "processing" => Ok(match self.capture_authority.processing_route(owner)? {
+                Some(route) => json!({"ready": true, "modelRoute": route}),
+                None => json!({"ready": false}),
+            }),
             _ => anyhow::bail!("Unsupported Meetings capture operation"),
         }
     }

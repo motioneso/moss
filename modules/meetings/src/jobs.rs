@@ -8,7 +8,8 @@ use crate::text::is_uuid;
 use moss_module_sdk::{Error, Host, Result};
 use serde_json::{json, Value};
 
-pub const QUEUES: [&str; 4] = [
+pub const QUEUES: [&str; 5] = [
+    crate::capture_maintenance::QUEUE,
     NOTICE_QUEUE,
     QUEUE,
     "meetings.recording-import",
@@ -19,7 +20,7 @@ pub const QUEUES: [&str; 4] = [
 pub const METADATA_KEYS: [&str; 2] = ["queue", "parameters"];
 
 /// The only parameter a summary job carries is the meeting it is for.
-const PARAMETER_KEYS: [&str; 4] = ["meeting-id", "import-id", "kind", "window"];
+const PARAMETER_KEYS: [&str; 6] = ["meeting-id", "import-id", "kind", "window", "grant-id", "sequence"];
 
 pub fn is_metadata_only(payload: &Value) -> bool {
     let top = payload.as_object().is_some_and(|map| map.keys().all(|key| METADATA_KEYS.contains(&key.as_str())));
@@ -41,6 +42,9 @@ pub fn handle<H: Host + ?Sized>(host: &H, payload: &str) -> Result<String> {
     let queue = value["queue"].as_str().unwrap_or_default();
     if queue == crate::ring_upload::IMPORT_QUEUE {
         return crate::ring_import::run(host, &value["parameters"]);
+    }
+    if queue == crate::capture_maintenance::QUEUE {
+        return crate::capture_maintenance::run(host, &value["parameters"]);
     }
     if ![QUEUE, NOTICE_QUEUE, MEMORY_QUEUE].contains(&queue) {
         return Err(Error::new("No Meetings job handler for this queue"));
