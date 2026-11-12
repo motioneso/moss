@@ -372,6 +372,22 @@ except for the pieces listed under "Not built" and "Not proven".
 | Live run             | Real Rust server over HTTPS: reserve, resume over HTTP, a changed resend refused, finish, status, and a second person gets 404 on each route. The server log holds no meeting text. |
 | Builds and tests     | Native and WebAssembly builds, and the full Meetings gate with six ring tests, passed.                                                                                              |
 
+### Error codes
+
+The table lists every code the ring receivers return. A test fails if it differs from the code.
+
+| Code                         | Status     | Meaning                                                       |
+| ---------------------------- | ---------- | ------------------------------------------------------------- |
+| `recording_import_conflict`  | 409        | Same recording sent again with different content              |
+| `recording_import_invalid`   | 400 or 413 | Bad description, bad file, or over a size or length limit     |
+| `recording_import_not_found` | 404        | No such import for this person                                |
+| `recording_voice_ineligible` | 409        | Hold-to-talk is off, or the recording was already on the ring |
+| `recording_voice_not_found`  | 404        | No such voice request for this person                         |
+| `transcription_unavailable`  | job result | No speech-to-text route is set up                             |
+| `transcription_failed`       | job result | The speech-to-text call failed                                |
+| `import_interrupted`         | job result | The upload was abandoned or the meeting was removed           |
+| `import_unavailable`         | job result | The import could not run (retried)                            |
+
 ### Not built
 
 - Bundle import routes for a whole day of recordings and for voice bundles. They do not fit the

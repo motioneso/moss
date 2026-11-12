@@ -139,8 +139,8 @@ pub fn retry<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Respo
         &Query::update(
             Filter::eq("id", id.as_str()),
             values(vec![
-                ("state", json!("queued")), ("code", Value::Null), ("retryable", Value::Null),
-                ("next_window_ms", json!(0)), ("voice_transcript", Value::Null),
+                ("state", json!("queued")), ("code", Value::Null), ("retryable", json!(false)),
+                ("next_window_ms", json!(0)), ("voice_transcript", json!("")),
             ]),
         ),
     )?;

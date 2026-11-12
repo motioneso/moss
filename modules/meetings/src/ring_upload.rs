@@ -385,8 +385,11 @@ pub fn finalize<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Re
 /// Whether a voice recording may dispatch on its own, from the capture time the device sent
 /// and the ring's own clock.
 fn voice_automatic<H: Host + ?Sized>(host: &H, row: &Value, verdict: &Value, received: DateTime<Utc>) -> Result<bool> {
+    // A device that was switched off after the upload was reserved gets no automatic send.
     let enabled_at = match row["voice_enablement_id"].as_str() {
-        Some(id) => one(host, ENABLEMENTS, Filter::eq("id", id))?.and_then(|e| millis(&e["enabled_at"])),
+        Some(id) => one(host, ENABLEMENTS, Filter::eq("id", id))?
+            .filter(|e| e["disabled_at"].is_null())
+            .and_then(|e| millis(&e["enabled_at"])),
         None => None,
     };
     let (Some(enabled), Some(start), Some(end)) = (enabled_at, verdict["startMs"].as_i64(), verdict["endMs"].as_i64()) else {
