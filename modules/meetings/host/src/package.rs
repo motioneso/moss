@@ -47,6 +47,8 @@ pub fn stand_in(id: &str, wasm: &[u8]) -> Result<(Vec<u8>, Manifest)> {
         fields.insert(key.into(), serde_json::json!([]));
     }
     fields.insert("id".into(), id.into());
+    // Above every minimum Meetings asks for and below the next major version.
+    fields.insert("version".into(), "0.9.0".into());
     fields.insert("name".into(), id.into());
     fields.insert("icons".into(), serde_json::json!([format!("icons/{id}.svg")]));
     let manifest: Manifest = serde_json::from_value(value)?;
