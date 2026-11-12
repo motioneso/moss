@@ -1,6 +1,7 @@
 //! Meetings package core (part 1): owner-only records, personal notes and capture preferences.
 //! All effects cross the guest-safe SDK Host interface.
 pub mod approval;
+pub mod history;
 pub mod js;
 pub mod jobs;
 pub mod lifecycle;
@@ -33,6 +34,8 @@ pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
         ("POST", "/records/:id/transcript") => transcript_routes::post(host, &request),
         ("GET", "/records/:id/transcript") => transcript_routes::get(host, &request),
         ("GET", "/records/:id/transcript/evidence") => transcript_routes::evidence(host, &request),
+        ("POST", "/history/search") => history::search(host, &request),
+        ("GET", "/history/:id") => history::get(host, &request),
         ("GET", "/preferences") => preferences::get(host),
         ("PUT", "/preferences") => preferences::put(host, &request.body),
         _ => return Response::new(404, json!({"message":"Route not found"})),
