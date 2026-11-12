@@ -40,6 +40,9 @@ struct Params {
     id: Option<String>,
     template_id: Option<String>,
     early_enqueued: Option<bool>,
+    candidate_id: Option<String>,
+    review_state: Option<String>,
+    accepted_task_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -129,6 +132,38 @@ pub async fn run(cx: &DataContext, operation: &str, parameters: &Value) -> Resul
                 "id": r.get::<_, String>(0), "artifactVersion": r.get::<_, i32>(1), "proposalJson": r.get::<_, String>(2),
                 "possibleMatchIds": r.get::<_, Value>(3), "reviewState": r.get::<_, String>(4),
                 "acceptedTaskId": r.get::<_, Option<String>>(5)})).collect::<Vec<_>>()}))
+        }
+        "candidate" => {
+            let candidate = p.candidate_id.as_deref().ok_or_else(|| anyhow::anyhow!("Candidate required"))?;
+            uuid(candidate)?;
+            let row = db
+                .query_opt(
+                    "SELECT id::text,artifact_version,proposal_json,possible_match_ids,review_state,accepted_task_id::text FROM app.meeting_action_candidates WHERE meeting_id=$1::text::uuid AND id=$2::text::uuid FOR UPDATE",
+                    &[&meeting, &candidate],
+                )
+                .await?;
+            Ok(match row {
+                None => json!({"found": false}),
+                Some(r) => json!({"found": true, "id": r.get::<_, String>(0), "artifactVersion": r.get::<_, i32>(1),
+                    "proposalJson": r.get::<_, String>(2), "possibleMatchIds": r.get::<_, Value>(3),
+                    "reviewState": r.get::<_, String>(4), "acceptedTaskId": r.get::<_, Option<String>>(5)}),
+            })
+        }
+        "review-set" => {
+            let candidate = p.candidate_id.as_deref().ok_or_else(|| anyhow::anyhow!("Candidate required"))?;
+            uuid(candidate)?;
+            let state = p.review_state.as_deref().ok_or_else(|| anyhow::anyhow!("State required"))?;
+            ensure!(matches!(state, "accepted" | "dismissed"), "Invalid review state");
+            let task = p.accepted_task_id.as_deref();
+            if let Some(task) = task {
+                uuid(task)?;
+            }
+            db.execute(
+                "UPDATE app.meeting_action_candidates SET review_state=$3,accepted_task_id=$4::text::uuid WHERE meeting_id=$1::text::uuid AND id=$2::text::uuid AND review_state='pending'",
+                &[&meeting, &candidate, &state, &task],
+            )
+            .await?;
+            Ok(json!({}))
         }
         "request" => {
             let key = key()?;

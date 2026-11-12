@@ -43,7 +43,7 @@ pub fn install_with(f: &Fixture, intelligence: Arc<dyn moss_module_host::ai::Int
     let reg = tempfile::tempdir().unwrap();
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let wasm = std::fs::read(std::env::var("MEETINGS_COMPONENT_WASM").expect("Run modules/meetings/tools/check.sh")).unwrap();
-    let bytes = moss_meetings_host::package::pack(&root, &wasm).unwrap();
+    let bytes = moss_meetings_host::package::pack_without_dependencies(&root, &wasm).unwrap();
     let (key, publisher, artifact) = crate::registry::publish(reg.path(), &bytes);
     let database = f.db.clone();
     let url = || Secret::new(std::env::var("JS48_BOOTSTRAP_URL").unwrap());

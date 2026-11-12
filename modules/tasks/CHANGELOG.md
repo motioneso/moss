@@ -1,5 +1,9 @@
 # Tasks package changes
 
+## 0.1.2
+
+- Add the public `createMeetingTask` call, which makes one task from an accepted meeting action and returns the same task when asked again.
+
 ## 0.1.1
 
 - Add the public `getTaskReference` call, which returns only a task's id, owner, status and due time to another module, read under the caller's account.

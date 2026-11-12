@@ -306,3 +306,105 @@ pub fn edit<H: Host + ?Sized>(host: &H, meeting: &str, input: &Edit) -> Result<A
         Saved::Limit => Ok(refuse(400, "meeting_output_limit")),
     }
 }
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Review {
+    pub request_key: String,
+    pub decision: String,
+    pub title: Option<String>,
+    pub due_at: Option<String>,
+    pub create_despite_possible_matches: Option<bool>,
+}
+
+/// An exact ISO-8601 millisecond timestamp, the only due time form the old route accepted.
+fn exact_due(value: &str) -> bool {
+    chrono::DateTime::parse_from_rfc3339(value)
+        .map(|t| t.with_timezone(&chrono::Utc).to_rfc3339_opts(chrono::SecondsFormat::Millis, true) == value)
+        .unwrap_or(false)
+}
+
+fn shown(meeting: &str, row: &Value, state: &str, task: &Value) -> Value {
+    json!({"id": row["id"], "meetingId": meeting, "artifactVersion": row["artifactVersion"],
+        "proposal": row["proposalJson"].as_str().and_then(|t| serde_json::from_str::<Value>(t).ok()).unwrap_or(Value::Null),
+        "possibleMatchIds": row["possibleMatchIds"], "reviewState": state, "acceptedTaskId": task})
+}
+
+/// Accepts or dismisses one proposed action. Accepting makes one task through the Tasks public
+/// API, keyed by meeting and candidate, so a replay or a second accept never makes another.
+pub fn review<H: Host + ?Sized>(host: &H, meeting: &str, candidate: &str, input: &Review) -> Result<Answer> {
+    if outputs::inputs(host, meeting, true)?.is_none() {
+        return Ok(refuse(404, "meeting_not_found"));
+    }
+    let encoded = json!({"kind": "review", "candidateId": candidate, "requestKey": input.request_key,
+        "decision": input.decision, "title": input.title, "dueAt": input.due_at,
+        "createDespitePossibleMatches": input.create_despite_possible_matches});
+    let found = outputs::call(host, "request", meeting, json!({"requestKey": input.request_key}))?;
+    if found["found"] == true {
+        let same = found["inputJson"].as_str().and_then(|t| serde_json::from_str::<Value>(t).ok()).as_ref() == Some(&encoded);
+        if !same {
+            return Ok(refuse(409, "meeting_output_request_conflict"));
+        }
+        if let Some(text) = found["resultJson"].as_str() {
+            return Ok((200, outputs::parse(text)?));
+        }
+    }
+    let row = outputs::call(host, "candidate", meeting, json!({"candidateId": candidate}))?;
+    if row["found"] != true {
+        return Ok(refuse(404, "meeting_action_unavailable"));
+    }
+    let state = row["reviewState"].as_str().unwrap_or("pending");
+    let mut result = shown(meeting, &row, state, &row["acceptedTaskId"]);
+    if state == "pending" {
+        if input.decision == "accept" {
+            let matched = row["possibleMatchIds"].as_array().is_some_and(|m| !m.is_empty());
+            if matched && input.create_despite_possible_matches != Some(true) {
+                return Ok(refuse(409, "meeting_action_match_review_required"));
+            }
+            let title = input.title.as_deref().unwrap_or_default();
+            if crate::text::js_trim(title).is_empty() || title.chars().count() > 500 || title.contains('\0') {
+                return Ok(refuse(400, "meeting_output_invalid_input"));
+            }
+            if input.due_at.as_deref().is_some_and(|d| !exact_due(d)) {
+                return Ok(refuse(400, "meeting_output_invalid_input"));
+            }
+            let version = row["artifactVersion"].as_i64().unwrap_or(0);
+            let Some(artifact) = outputs::artifact(host, meeting, version)? else {
+                return Ok(refuse(409, "meeting_output_evidence_unavailable"));
+            };
+            let proposal = row["proposalJson"].as_str().and_then(|t| serde_json::from_str::<Value>(t).ok()).unwrap_or(Value::Null);
+            let reviewed = json!({"overview": "Reviewed action", "decisions": [], "openQuestions": [],
+                "actions": [proposal], "warnings": []});
+            if validate(&reviewed, &outputs::stored_inputs(&artifact)).is_err() {
+                return Ok(refuse(409, "meeting_output_evidence_unavailable"));
+            }
+            let made = host.call(
+                "api",
+                "call",
+                "tasks",
+                json!({"name": "createMeetingTask", "parameters": {"title": crate::text::js_trim(title),
+                    "dueAt": input.due_at, "sourceRef": meeting,
+                    "externalKey": format!("meeting:{meeting}:candidate:{candidate}")}}),
+            );
+            let task = match made {
+                Ok(reply) => reply["task"]["id"].clone(),
+                Err(_) => return Ok(refuse(503, "meeting_tasks_unavailable")),
+            };
+            if !task.is_string() {
+                return Ok(refuse(503, "meeting_tasks_unavailable"));
+            }
+            result = shown(meeting, &row, "accepted", &task);
+            outputs::call(host, "review-set", meeting, json!({"candidateId": candidate, "reviewState": "accepted", "acceptedTaskId": task}))?;
+        } else if input.decision == "dismiss" {
+            result = shown(meeting, &row, "dismissed", &Value::Null);
+            outputs::call(host, "review-set", meeting, json!({"candidateId": candidate, "reviewState": "dismissed"}))?;
+        } else {
+            return Ok(refuse(400, "meeting_output_invalid_input"));
+        }
+    } else if (input.decision == "accept") != (state == "accepted") {
+        return Ok(refuse(409, "meeting_action_review_conflict"));
+    }
+    reserve(host, meeting, &input.request_key, &encoded, None)?;
+    finish(host, meeting, &input.request_key, &result)?;
+    Ok((200, result))
+}

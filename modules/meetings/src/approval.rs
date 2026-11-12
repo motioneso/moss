@@ -8,7 +8,7 @@ use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 
 /// How chat treats each route. Reads are open; writes and the delete need approval; blocked routes never run from chat.
-pub const CHAT_CLASSES: [(&str, &str, &str); 23] = [
+pub const CHAT_CLASSES: [(&str, &str, &str); 24] = [
     ("GET", "/records", "read"),
     ("GET", "/records/:id", "read"),
     ("POST", "/records", "write"),
@@ -32,6 +32,7 @@ pub const CHAT_CLASSES: [(&str, &str, &str); 23] = [
     ("GET", "/records/:id/outputs/:version", "read"),
     ("POST", "/records/:id/outputs", "blocked"),
     ("PUT", "/records/:id/outputs", "write"),
+    ("POST", "/records/:id/actions/:candidate_id/review", "blocked"),
 ];
 
 pub const REPEAT_NOTE: &str = "An identical retry uses the original result instead of repeating the change";

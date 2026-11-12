@@ -60,6 +60,16 @@ pub fn handle<H: moss_module_sdk::Host + ?Sized>(
                 PrepareRoute(PrepareRoute),
                 #[serde(rename = "getTaskReference")]
                 Reference(Reference),
+                #[serde(rename = "createMeetingTask")]
+                MeetingTask(MeetingTask),
+            }
+            #[derive(serde::Deserialize)]
+            #[serde(rename_all = "camelCase", deny_unknown_fields)]
+            struct MeetingTask {
+                title: String,
+                due_at: Option<String>,
+                source_ref: String,
+                external_key: String,
             }
             #[derive(serde::Deserialize)]
             #[serde(deny_unknown_fields)]
@@ -96,11 +106,17 @@ pub fn handle<H: moss_module_sdk::Host + ?Sized>(
                     "status":dto["status"],"dueAt":dto["dueAt"]}})
                 .to_string());
             }
+            if let Api::MeetingTask(m) = api {
+                let task = repository::Repository::new(host)
+                    .create_meeting_task(&m.title, m.due_at.as_deref(), &m.source_ref, &m.external_key)
+                    .map_err(|_| moss_module_sdk::Error::new("Meeting task unavailable"))?;
+                return Ok(serde_json::json!({"task":{"id":task.id}}).to_string());
+            }
             Ok(match api {
                 Api::Prepare(request) => {
                     approval::prepare(host, &request.tool, &request.input_json)
                 }
-                Api::Reference(_) => unreachable!(),
+                Api::Reference(_) | Api::MeetingTask(_) => unreachable!(),
                 Api::PrepareRoute(r) => approval::prepare_route(
                     host,
                     &r.route,
