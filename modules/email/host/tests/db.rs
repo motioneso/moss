@@ -329,11 +329,11 @@ fn a_second_person_cannot_prune_and_the_delete_rule_has_teeth() {
     assert_eq!(refused["deleted"], 0, "another person deleted mail: {refused}");
     assert_eq!(count(&f, f.a), 2);
     // With the delete rule removed, the same call deletes, so the check above notices.
-    f.sql("DROP POLICY email_messages_delete ON app.email_messages");
-    f.sql("CREATE POLICY email_messages_delete ON app.email_messages FOR DELETE TO jarvis_app_runtime, jarvis_worker_runtime USING (true)");
+    f.sql("DROP POLICY moss_module_delete ON app.email_messages");
+    f.sql("CREATE POLICY moss_module_delete ON app.email_messages FOR DELETE TO jarvis_app_runtime, jarvis_worker_runtime USING (true)");
     let leaked = f.call(f.b, "set", "email.cache-write", prune_params(&f, &[]));
-    f.sql("DROP POLICY email_messages_delete ON app.email_messages");
-    f.sql("CREATE POLICY email_messages_delete ON app.email_messages FOR DELETE TO jarvis_app_runtime, jarvis_worker_runtime USING (app.current_actor_user_id() IS NOT NULL AND owner_user_id = app.current_actor_user_id())");
+    f.sql("DROP POLICY moss_module_delete ON app.email_messages");
+    f.sql("CREATE POLICY moss_module_delete ON app.email_messages FOR DELETE TO jarvis_app_runtime, jarvis_worker_runtime USING (app.current_actor_user_id() IS NOT NULL AND owner_user_id = app.current_actor_user_id())");
     println!("RED without the delete rule: {leaked}");
     assert_eq!(leaked["deleted"], 2, "the proof did not notice a missing delete rule");
     assert_eq!(count(&f, f.a), 0);

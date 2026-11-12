@@ -97,6 +97,10 @@ pub struct Database {
     pub ledger: Ledger,
     #[serde(default)]
     pub access: BTreeMap<String, TableAccess>,
+    /// Legacy tables whose rows the owner may delete. The host adds the grant and the
+    /// owner-only policy at install, because module SQL cannot contain either.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub owner_delete: Vec<String>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "access", rename_all = "kebab-case", deny_unknown_fields)]
@@ -366,6 +370,13 @@ impl Manifest {
                 == self.database.owned_tables.len(),
             "Repeated owned table"
         );
+        for table in &self.database.owner_delete {
+            ensure!(
+                self.database.owned_tables.contains(table)
+                    && self.database.ledger == Ledger::CoreLegacy,
+                "Owner delete may name only an owned legacy table"
+            );
+        }
         for (table, access) in &self.database.access {
             ensure!(
                 self.database.owned_tables.contains(table),

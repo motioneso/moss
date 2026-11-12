@@ -188,6 +188,7 @@ impl Lifecycle for PostgresLifecycle {
                 }
                 tx.execute("INSERT INTO moss_modules.owned_tables(module_id,name) VALUES($1,$2) ON CONFLICT DO NOTHING",&[id,table]).await?;
                 if !legacy {crate::rls::emit(&tx,&new.manifest,table).await?;}
+                else if new.manifest.database.owner_delete.contains(table) {crate::rls::emit_owner_delete(&tx,table).await?;}
             }
             tx.commit().await?;Ok(())
         })

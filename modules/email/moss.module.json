@@ -34,6 +34,7 @@
       "sql/0249_email_judgement_requested_at.sql"
     ],
     "ledger": "core-legacy",
+    "ownerDelete": ["app.email_messages"],
     "access": {
       "app.email_messages": {
         "access": "owner-or-share",
