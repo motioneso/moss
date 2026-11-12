@@ -51,7 +51,7 @@ async fn cursor(cx: &DataContext, run: &str, kind: &str) -> Result<String> {
     let row = cx
         .db()
         .query_one(
-            "SELECT coalesce(max(target_id)::text, '00000000-0000-0000-0000-000000000000')
+            "SELECT coalesce(max(target_id::text), '00000000-0000-0000-0000-000000000000')
              FROM app.memory_reembed_staged WHERE run_id = $1::text::uuid AND target_kind = $2",
             &[&run, &kind],
         )
