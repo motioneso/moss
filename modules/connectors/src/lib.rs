@@ -13,6 +13,7 @@ pub mod imap;
 pub mod grants;
 pub mod health;
 pub mod mail_sync;
+pub mod refresh;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod testing;
 
@@ -63,7 +64,10 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
         "job" => {
             let queue = serde_json::from_str::<Value>(payload).ok().and_then(|j| j["queue"].as_str().map(String::from));
             match queue.as_deref() {
-                Some(google_sync::QUEUE | google_sync::SWEEP) => google_sync::handle(host, payload),
+                Some(google_sync::QUEUE | google_sync::SWEEP | google_sync::REFRESH_QUEUE) => {
+                    google_sync::handle(host, payload)
+                }
+                Some(refresh::SWEEP) => refresh::handle(host, payload),
                 _ => mail_sync::handle(host, payload),
             }
         }
@@ -106,6 +110,11 @@ fn route(host: &impl Host, request: RouteRequest) -> Result<(u16, Value)> {
         ("POST", "/google/complete") => google::complete(host, &request.body),
         ("POST", "/imap/test-connection") => imap::test_connection(host, &request.body).map(|b| (200, b)),
         ("POST", "/imap/connect") => imap::connect(host, &request.body),
+        ("POST", "/email-refresh") => refresh::request(host, &request.body),
+        ("GET", "/email-refresh/:refreshId") => {
+            let id = request.params.get("refreshId").cloned().unwrap_or_default();
+            refresh::status(host, &id)
+        }
         ("GET", "/admin/accounts") => accounts::admin_list(host).map(|b| (200, b)),
         _ => Err(Error::new(404, "Connectors route not found")),
     }

@@ -2,12 +2,15 @@
 //! time, writes the rows through Calendar's and Email's public APIs, and hands the rest to a
 //! new job. Job parameters hold only ids, counts, flags and fixed choices. Page tokens, the
 //! Gmail position and all mail text stay in the host, and message text is never kept here.
-use crate::{kv, Error, Result};
+use crate::{kv, refresh, Error, Result};
 use moss_module_sdk::{Client, Host};
 use serde_json::{json, Value};
 
 pub const QUEUE: &str = "google-sync";
 pub const SWEEP: &str = "google-sync-sweep";
+/// A refresh the person asked for runs the same sync on its own queue, so the outcome can be
+/// recorded against the refresh.
+pub const REFRESH_QUEUE: &str = "email-refresh-google";
 const CRON: &str = "*/15 * * * *";
 const SWEEP_CRON: &str = "*/30 * * * *";
 /// Events per Calendar chunk and messages per Gmail chunk.
@@ -59,6 +62,9 @@ struct Job {
     begun: bool,
     /// True once a first attempt to record the result failed, so a later job tries once more.
     finishing: bool,
+    /// The refresh this run reports to. Refresh runs sync recent mail only and never move the
+    /// saved Gmail position.
+    refresh: Option<String>,
 }
 
 enum Step {
@@ -84,10 +90,37 @@ impl Job {
             calendar_on: true,
             begun: false,
             finishing: false,
+            refresh: None,
+        }
+    }
+
+    /// A manual, mail-only run for a refresh. Calendar is off and the sync starts at the
+    /// current-day mail phase.
+    fn for_refresh(account: &str, refresh: &str) -> Self {
+        let mut run = Self::new(account, "manual", true);
+        run.phase = Phase::EmailDay;
+        run.calendar_on = false;
+        run.refresh = Some(refresh.into());
+        run
+    }
+
+    fn queue(&self) -> &'static str {
+        if self.refresh.is_some() {
+            REFRESH_QUEUE
+        } else {
+            QUEUE
         }
     }
 
     fn params(&self) -> Value {
+        let mut params = self.base_params();
+        if let Some(refresh) = &self.refresh {
+            params["refresh-id"] = json!(refresh);
+        }
+        params
+    }
+
+    fn base_params(&self) -> Value {
         json!({
             "account-id":self.account,"phase":self.phase.name(),"cursor":self.cursor,
             "calendar-upserted":self.calendar_upserted,"calendar-reconciled":self.calendar_reconciled,
@@ -114,6 +147,7 @@ impl Job {
             calendar_on: p["calendar-on"].as_bool()?,
             begun: p["begun"].as_bool().unwrap_or(false),
             finishing: p["finishing"].as_bool().unwrap_or(false),
+            refresh: p["refresh-id"].as_str().map(String::from),
         })
     }
 
@@ -171,6 +205,11 @@ fn enqueue(host: &impl Host, queue: &str, params: Value) -> Result<Value> {
     )?)
 }
 
+/// The first job parameters of a refresh run for one Google account.
+pub fn refresh_first(account: &str, refresh: &str) -> Value {
+    Job::for_refresh(account, refresh).params()
+}
+
 /// Starts a sync now. Used after connecting and by the manual route.
 pub fn sync_soon(host: &impl Host, account: &str, trigger: &str, recent_only: bool) -> Result<Value> {
     enqueue(host, QUEUE, Job::new(account, trigger, recent_only).params())
@@ -200,6 +239,23 @@ pub fn handle(host: &impl Host, payload: &str) -> std::result::Result<String, St
         Some(QUEUE) => {
             let mut run = Job::from_params(p).ok_or("Invalid Google sync job")?;
             run_job(host, &mut run)
+        }
+        Some(REFRESH_QUEUE) => {
+            let mut run = Job::from_params(p).ok_or("Invalid Google sync job")?;
+            let Some(refresh) = run.refresh.clone() else { return Err("Invalid Google sync job".into()) };
+            if !run.begun && !refresh::begin(host, &refresh, &run.account, "google").map_err(|e| e.message)? {
+                return Ok(json!({"outcome":"skipped"}).to_string());
+            }
+            match run_job(host, &mut run) {
+                // The account is mid-sync or the host failed, so a queue retry tries again. A stuck
+                // row is failed by the refresh sweep.
+                "busy" | "failed" => return Err("Google sync is not ready".into()),
+                "inactive" => {
+                    refresh::finish(host, &refresh, &run.account, "failed", Some("no-active-connection"), 0, 0);
+                    "inactive"
+                }
+                outcome => outcome,
+            }
         }
         Some(SWEEP) => sweep(host, p["account-id"].as_str().ok_or("Invalid Google sync job")?),
         _ => return Err("Connectors job is unavailable".into()),
@@ -257,8 +313,12 @@ fn finish(host: &impl Host, run: &mut Job) -> &'static str {
     if saved.is_err() && !run.finishing {
         // The result is not lost. One later job records it, so the account does not stay in progress.
         run.finishing = true;
-        let _ = enqueue(host, QUEUE, run.params());
+        let _ = enqueue(host, run.queue(), run.params());
         return "finish-retried";
+    }
+    if let Some(id) = &run.refresh {
+        let (status, error) = refresh::outcome(run.error);
+        refresh::finish(host, id, &run.account, status, error, run.email_upserted, run.email_failures);
     }
     if run.error == "auth-error" {
         cancel_schedule(host, &run.account);
@@ -278,7 +338,7 @@ fn run_job(host: &impl Host, run: &mut Job) -> &'static str {
                     reconcile_schedule(host, &run.account);
                     run.begun = true;
                     // The first chunk runs in its own job, so a retry of it finds the run already started.
-                    return match enqueue(host, QUEUE, run.params()) {
+                    return match enqueue(host, run.queue(), run.params()) {
                         Ok(_) => "continued",
                         Err(_) => {
                             run.note("email-error");
@@ -311,7 +371,7 @@ fn run_job(host: &impl Host, run: &mut Job) -> &'static str {
             }
         }
     }
-    match enqueue(host, QUEUE, run.params()) {
+    match enqueue(host, run.queue(), run.params()) {
         Ok(_) => "continued",
         Err(_) => {
             run.note("email-error");
