@@ -116,6 +116,10 @@ pub fn reserve<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Res
         Ok(upload) => upload,
         Err(error) => return Ok(invalid(error)),
     };
+    let device = host.call("kv", "device", FILES, json!({"deviceId": upload.source_device_id}))?;
+    if device["allowed"] != json!(true) {
+        return Ok(message(403, "This device may not upload recordings"));
+    }
     lock(host, &upload.source_device_id, &upload.recording_id)?;
     let now = now(host)?;
     let existing = one(

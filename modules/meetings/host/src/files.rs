@@ -14,6 +14,7 @@ pub const FILES: &str = "meetings.recording-files";
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Params {
     pub key: Option<String>,
+    pub device_id: Option<String>,
     pub import_id: Option<String>,
     pub kind: Option<String>,
     pub index: Option<i32>,

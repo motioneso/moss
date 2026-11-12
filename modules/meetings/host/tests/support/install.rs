@@ -66,7 +66,7 @@ pub fn install_full(
 }
 
 /// Where stored recording files live and the Chat that finished voice recordings go to.
-pub type Ring = (std::path::PathBuf, Arc<dyn moss_meetings_host::chat::VoiceChat>);
+pub type Ring = (std::path::PathBuf, Arc<dyn moss_meetings_host::chat::VoiceChat>, Arc<dyn moss_meetings_host::devices::RingDevices>);
 
 pub fn install_ring(
     f: &Fixture,
@@ -107,8 +107,8 @@ pub fn install_ring(
             let memory = moss_memory_host::ports::MemoryPorts::new(database.clone(), Arc::new(Same), next)?
                 .with_authority(authority);
             let mut ports = moss_meetings_host::MeetingsPorts::new(database, Arc::new(memory))?;
-            if let Some((files, voice)) = ring.clone() {
-                ports = ports.with_recordings(&files)?.with_voice_chat(voice);
+            if let Some((files, voice, devices)) = ring.clone() {
+                ports = ports.with_recordings(&files)?.with_voice_chat(voice).with_devices(devices);
             }
             Ok(match chat.clone() {
                 Some(chat) => Arc::new(ports.with_chat(chat)) as Arc<dyn moss_module_host::runtime::Ports>,

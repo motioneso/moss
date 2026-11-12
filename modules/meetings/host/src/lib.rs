@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 pub mod authority;
 pub mod chat;
+pub mod devices;
 pub mod exports;
 pub mod files;
 pub mod outputs;
@@ -36,6 +37,7 @@ pub struct MeetingsPorts {
     recordings: Option<Arc<recordings::Recordings>>,
     chat: Arc<dyn chat::MainChat>,
     voice: Arc<dyn chat::VoiceChat>,
+    devices: Arc<dyn devices::RingDevices>,
 }
 impl MeetingsPorts {
     pub fn new(database: Database, next: Arc<dyn Ports>) -> Result<Self> {
@@ -46,6 +48,7 @@ impl MeetingsPorts {
             recordings: None,
             chat: Arc::new(chat::NoMainChat),
             voice: Arc::new(chat::NoVoiceChat),
+            devices: Arc::new(devices::AnyDevice),
         })
     }
 
@@ -53,6 +56,12 @@ impl MeetingsPorts {
     pub fn with_recordings(mut self, files: &std::path::Path) -> Result<Self> {
         self.recordings = Some(Arc::new(recordings::Recordings::new(&vault::Root::create(files)?)?));
         Ok(self)
+    }
+
+    /// Connects the check for which ring devices may upload.
+    pub fn with_devices(mut self, devices: Arc<dyn devices::RingDevices>) -> Self {
+        self.devices = devices;
+        self
     }
 
     /// Connects the Chat that finished voice recordings are handed to.
@@ -107,6 +116,11 @@ impl MeetingsPorts {
                     Ok(serde_json::json!({"locked": true}))
                 })
             });
+        }
+        if request.operation == "device" {
+            let device = p.device_id.as_deref().ok_or_else(|| anyhow::anyhow!("Device id required"))?;
+            let allowed = self.devices.allowed(scope.access().actor_user_id(), device)?;
+            return Ok(serde_json::json!({"allowed": allowed}));
         }
         let recordings = self.recordings.as_deref().ok_or_else(|| anyhow::anyhow!("Recording storage is not set up"))?;
         files::run(recordings, scope, &request.operation, &p)

@@ -46,6 +46,15 @@ impl Intelligence for Speech {
     }
 }
 
+/// Refuses the devices it is told to refuse. The real pairing check is not built.
+#[derive(Default)]
+struct Devices(Mutex<Vec<String>>);
+impl moss_meetings_host::devices::RingDevices for Devices {
+    fn allowed(&self, _: Uuid, device: &str) -> anyhow::Result<bool> {
+        Ok(!self.0.lock().unwrap().iter().any(|d| d == device))
+    }
+}
+
 /// Keeps every voice request handed off.
 #[derive(Default)]
 struct Voice(Mutex<Vec<(Uuid, String, bool, String)>>);
@@ -123,6 +132,7 @@ struct World {
     app: support::install::Installed,
     speech: Arc<Speech>,
     voice: Arc<Voice>,
+    devices: Arc<Devices>,
     _files: tempfile::TempDir,
     _serial: std::sync::MutexGuard<'static, ()>,
 }
@@ -137,9 +147,10 @@ impl World {
         let f = support::Fixture::new();
         let speech = Arc::new(Speech { lines: Mutex::new(vec![]), seen: Mutex::new(vec![]) });
         let voice = Arc::new(Voice::default());
+        let devices = Arc::new(Devices::default());
         let files = tempfile::tempdir().unwrap();
-        let app = install_ring(&f, speech.clone(), None, Some((files.path().to_owned(), voice.clone())));
-        Self { f, app, speech, voice, _files: files, _serial: serial }
+        let app = install_ring(&f, speech.clone(), None, Some((files.path().to_owned(), voice.clone(), devices.clone())));
+        Self { f, app, speech, voice, devices, _files: files, _serial: serial }
     }
     fn call(&self, actor: Uuid, method: &str, target: &str, body: Value) -> Value {
         let text = self
@@ -421,4 +432,20 @@ fn another_person_cannot_see_or_change_an_import_and_text_stays_out_of_logs() {
     found.push(("app.meeting_recording_imports (meetings)", w.count(&kept)));
     let leaked: i64 = found.iter().map(|(_, n)| n).sum();
     assert_eq!(leaked, 0, "transcript text reached queued work, activity or import rows: {found:?}");
+}
+
+#[test]
+#[ignore = "run through scripts/run-gate.sh"]
+fn a_refused_device_cannot_reserve_an_upload() {
+    let w = World::new();
+    let a = w.f.a;
+    let (device, recording) = ids();
+    w.devices.0.lock().unwrap().push(device.clone());
+    let files = Files::new(2_000);
+    let refused = w.call(a, "POST", "/recording-uploads", files.manifest(&device, &recording, meeting()));
+    assert_eq!(refused["status"], 403, "{refused}");
+    assert_eq!(w.count(&format!("SELECT count(*) FROM app.meeting_recording_imports WHERE source_device_id = '{device}'")), 0);
+    w.devices.0.lock().unwrap().clear();
+    let allowed = w.call(a, "POST", "/recording-uploads", files.manifest(&device, &recording, meeting()));
+    assert_eq!(allowed["status"], 201, "{allowed}");
 }
