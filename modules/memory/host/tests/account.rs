@@ -33,6 +33,54 @@ const TABLES: &[&str] = &[
     "memory_recording_fact_versions",
 ];
 
+/// Creates the module role, the module tables and the host-made policies the way an install
+/// does, once per database. The throwaway database holds only the core migrations.
+async fn provision(root: &mut Client) {
+    let manifest = moss_memory_host::package::manifest().unwrap();
+    let role = moss_module_host::database::runtime_role(&manifest.id);
+    let tx = root.transaction().await.unwrap();
+    tx.batch_execute("SELECT pg_advisory_xact_lock(246246)").await.unwrap();
+    tx.batch_execute(&format!(
+        "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='{role}') THEN
+           CREATE ROLE {role} NOLOGIN; END IF; END $$;
+         GRANT {role} TO jarvis_app_runtime WITH INHERIT FALSE, SET TRUE;
+         GRANT USAGE ON SCHEMA app TO {role};
+         GRANT EXECUTE ON FUNCTION app.current_actor_user_id() TO {role}"
+    ))
+    .await
+    .unwrap();
+    for (table, files) in [
+        ("app.memory_ingest_nudges", vec!["0363_memory_ingest_nudges.sql"]),
+        (
+            "app.memory_reembed_runs",
+            vec!["0364_memory_reembed_runs.sql", "0365_memory_reembed_one_running.sql", "0366_memory_reembed_staged.sql"],
+        ),
+    ] {
+        let made: bool = tx
+            .query_one(&format!("SELECT to_regclass('{table}') IS NOT NULL"), &[])
+            .await
+            .unwrap()
+            .get(0);
+        if made {
+            continue;
+        }
+        for file in files {
+            let path = format!("{}/../sql/{file}", env!("CARGO_MANIFEST_DIR"));
+            tx.batch_execute(&std::fs::read_to_string(path).unwrap()).await.unwrap();
+        }
+        let owned: &[&str] = if table.contains("nudges") {
+            &["app.memory_ingest_nudges"]
+        } else {
+            &["app.memory_reembed_runs", "app.memory_reembed_staged"]
+        };
+        for t in owned {
+            moss_module_host::rls::emit(&tx, &manifest, t).await.unwrap();
+        }
+    }
+    moss_module_host::rls::emit_owner_delete(&tx, "app.memory_recording_fact_versions").await.unwrap();
+    tx.commit().await.unwrap();
+}
+
 struct Fixture {
     rt: tokio::runtime::Runtime,
     root: Client,
@@ -47,12 +95,13 @@ impl Fixture {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
         let (root, db) = rt.block_on(async {
-            let (root, c) = tokio_postgres::connect(&std::env::var("JS48_BOOTSTRAP_URL").unwrap(), NoTls)
+            let (mut root, c) = tokio_postgres::connect(&std::env::var("JS48_BOOTSTRAP_URL").unwrap(), NoTls)
                 .await
                 .unwrap();
             tokio::spawn(async move {
                 let _ = c.await;
             });
+            provision(&mut root).await;
             root.execute(
                 "INSERT INTO app.users(id,email,name,is_instance_admin) VALUES($1,$3,'Acc A',false),($2,$4,'Acc B',false)",
                 &[&a, &b, &format!("{a}@example.test"), &format!("{b}@example.test")],
@@ -145,13 +194,19 @@ impl Fixture {
                     p["after"] = after.clone();
                 }
                 let page = self.api(actor, "collectMemoryExportSection", p).unwrap();
+                if page["rows"].is_object() {
+                    all.insert(name.as_str().unwrap().into(), page["rows"].clone());
+                    break;
+                }
                 rows.extend(page["rows"].as_array().cloned().unwrap_or_default());
                 after = page["next"].clone();
                 if after.is_null() {
                     break;
                 }
             }
-            all.insert(name.as_str().unwrap().into(), Value::Array(rows));
+            if !all.contains_key(name.as_str().unwrap()) {
+                all.insert(name.as_str().unwrap().into(), Value::Array(rows));
+            }
         }
         Value::Object(all)
     }
