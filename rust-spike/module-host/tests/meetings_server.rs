@@ -457,6 +457,65 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
     }
     let (status, text) = call(Method::GET, "/output-availability", Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
+    // Ring upload through the real server: reserve, send in 1 MiB pieces over HTTPS with an
+    // interruption, finalize, then a second person sees nothing. No speech model is set up here,
+    // so the transcription job is not expected to finish.
+    {
+        use sha2::{Digest, Sha256};
+        let digest = |b: &[u8]| Sha256::digest(b).iter().map(|x| format!("{x:02x}")).collect::<String>();
+        let ms = 40_000usize;
+        let body = ms * 32;
+        let mut wav = Vec::with_capacity(44 + body);
+        wav.extend_from_slice(b"RIFF");
+        wav.extend_from_slice(&((36 + body) as u32).to_le_bytes());
+        wav.extend_from_slice(b"WAVEfmt ");
+        for v in [16u32.to_le_bytes().as_slice(), &1u16.to_le_bytes(), &1u16.to_le_bytes(), &16000u32.to_le_bytes(), &32000u32.to_le_bytes(), &2u16.to_le_bytes(), &16u16.to_le_bytes()] {
+            wav.extend_from_slice(v);
+        }
+        wav.extend_from_slice(b"data");
+        wav.extend_from_slice(&(body as u32).to_le_bytes());
+        wav.resize(44 + body, 0);
+        let packets = vec![0u8, 3, 1, 2, 3, 1, 2, 4, 5];
+        let sidecar = format!("{{\"record\":[\"1700000000\",\"start\"]}},{{\"btn\":[\"1700000001\",\"1\"]}},{{\"record\":[\"1700000040\",\"end\"]}},{{\"duration\":[\"1700000040\",\"{ms}\"]}}").into_bytes();
+        let file = |b: &[u8]| json!({"byteLength": b.len(), "sha256": digest(b)});
+        let device = uuid::Uuid::new_v4().to_string();
+        let recording = format!("1700000000_ring-{}", &uuid::Uuid::new_v4().simple().to_string()[..8]);
+        let manifest = json!({"version":3,"sourceDeviceId":device,"recordingId":recording,"destination":{"intent":"meeting"},
+            "packets":file(&packets),"sidecar":file(&sidecar),"wav":file(&wav)});
+        let (status, text) = call(Method::POST, "/recording-uploads", Some(&cookie), Some(manifest.clone()));
+        assert_eq!(status, 201, "{text}\n{}", log());
+        let reserved = json_of(&text);
+        let upload = reserved["body"]["id"].as_str().or(reserved["id"].as_str()).unwrap_or_else(|| panic!("{text}")).to_owned();
+        let piece = |who: &str, kind: &str, index: usize, bytes: Vec<u8>| {
+            let r = client.put(format!("{origin}/api/m/meetings/recording-uploads/{upload}/{kind}/{index}"))
+                .header("origin", &origin).header("cookie", who).header("content-type", "application/octet-stream")
+                .body(bytes).send().unwrap_or_else(|e| panic!("chunk {kind} {index}: {e}\n{}", log()));
+            let status = r.status().as_u16();
+            println!("chunk {kind} {index} -> {status}");
+            (status, r.text().unwrap_or_default())
+        };
+        let chunk = 1024 * 1024;
+        assert_eq!(piece(&cookie, "wav", 0, wav[..chunk].to_vec()).0, 200, "{}", log());
+        let (status, text) = call(Method::POST, &format!("/recording-uploads/{upload}/finalize"), Some(&cookie), Some(json!(null)));
+        assert!((400..500).contains(&status), "finalize on an incomplete upload: {status} {text}");
+        assert_eq!(piece(&cookie, "wav", 0, wav[..chunk].to_vec()).0, 200, "an identical resend is accepted");
+        let mut changed = wav[..chunk].to_vec();
+        changed[100] ^= 1;
+        assert_eq!(piece(&cookie, "wav", 0, changed).0, 409, "different bytes for a sent piece conflict");
+        assert_eq!(piece(&cookie, "wav", 1, wav[chunk..].to_vec()).0, 200);
+        assert_eq!(piece(&cookie, "packets", 0, packets.clone()).0, 200);
+        assert_eq!(piece(&cookie, "sidecar", 0, sidecar.clone()).0, 200);
+        assert_eq!(piece(&other, "wav", 0, wav[..chunk].to_vec()).0, 404, "another person's piece");
+        assert_eq!(call(Method::GET, &format!("/recording-uploads/{upload}"), Some(&other), None).0, 404);
+        assert_eq!(call(Method::POST, &format!("/recording-uploads/{upload}/finalize"), Some(&other), Some(json!(null))).0, 404);
+        let (status, text) = call(Method::POST, &format!("/recording-uploads/{upload}/finalize"), Some(&cookie), Some(json!(null)));
+        assert_eq!(status, 200, "{text}\n{}", log());
+        let (status, text) = call(Method::GET, &format!("/recording-imports/{upload}"), Some(&cookie), None);
+        assert_eq!(status, 200, "{text}");
+        assert_eq!(call(Method::GET, &format!("/recording-imports/{upload}"), Some(&other), None).0, 404);
+        let (status, text) = call(Method::POST, "/recording-uploads", Some(&cookie), Some(manifest));
+        assert!(status == 200 || status == 201, "{status} {text}");
+    }
     assert_eq!(call(Method::DELETE, &format!("/records/{id}"), Some(&cookie), None).0, 204);
     assert_eq!(call(Method::GET, &format!("/records/{id}"), Some(&cookie), None).0, 404);
     // Titles and notes stay out of the server log.

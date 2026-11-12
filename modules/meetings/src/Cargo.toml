@@ -70,3 +70,7 @@ path = "../tests/export.rs"
 [[test]]
 name = "recording_reading"
 path = "../tests/recording_reading.rs"
+
+[[test]]
+name = "ring_source"
+path = "../tests/ring_source.rs"

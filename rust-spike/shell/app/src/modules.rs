@@ -683,6 +683,7 @@ async fn dispatch(
     Extension(access): Extension<AccessContext>,
     method: Method,
     uri: Uri,
+    headers: HeaderMap,
     body: Bytes,
 ) -> Response {
     let Some(application) = api
@@ -697,10 +698,22 @@ async fn dispatch(
     let Ok(slot) = api.slots.clone().try_acquire_owned() else {
         return StatusCode::TOO_MANY_REQUESTS.into_response();
     };
-    let Ok(body) = std::str::from_utf8(&body) else {
-        return StatusCode::BAD_REQUEST.into_response();
+    // A binary body never enters the module. It is staged under a fresh request id and the route
+    // receives only its size and hash.
+    let binary = headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.starts_with("application/octet-stream"));
+    let (access, staged, body) = if binary {
+        let id = format!("{}{}", moss_module_host::staged::PREFIX, uuid::Uuid::new_v4());
+        let (guard, json) = moss_module_host::staged::stage_body(&id, body.to_vec());
+        (AccessContext::new(access.actor_user_id(), id), Some(guard), json)
+    } else {
+        let Ok(text) = std::str::from_utf8(&body) else {
+            return StatusCode::BAD_REQUEST.into_response();
+        };
+        (access, None, if text.is_empty() { "null" } else { text }.to_owned())
     };
-    let body = if body.is_empty() { "null" } else { body }.to_owned();
     let target = uri
         .path_and_query()
         .map(|p| p.as_str())
@@ -708,6 +721,7 @@ async fn dispatch(
         .to_owned();
     match tokio::task::spawn_blocking(move || {
         let _slot = slot;
+        let _staged = staged;
         application.dispatch_extended(access, method.as_str(), &target, &body)
     })
     .await

@@ -9,7 +9,9 @@ use std::sync::Arc;
 
 pub mod authority;
 pub mod chat;
+pub mod devices;
 pub mod exports;
+pub mod files;
 pub mod outputs;
 pub mod package;
 pub mod recordings;
@@ -34,6 +36,8 @@ pub struct MeetingsPorts {
     next: Arc<dyn Ports>,
     recordings: Option<Arc<recordings::Recordings>>,
     chat: Arc<dyn chat::MainChat>,
+    voice: Arc<dyn chat::VoiceChat>,
+    devices: Arc<dyn devices::RingDevices>,
 }
 impl MeetingsPorts {
     pub fn new(database: Database, next: Arc<dyn Ports>) -> Result<Self> {
@@ -43,6 +47,8 @@ impl MeetingsPorts {
             next,
             recordings: None,
             chat: Arc::new(chat::NoMainChat),
+            voice: Arc::new(chat::NoVoiceChat),
+            devices: Arc::new(devices::AnyDevice),
         })
     }
 
@@ -50,6 +56,18 @@ impl MeetingsPorts {
     pub fn with_recordings(mut self, files: &std::path::Path) -> Result<Self> {
         self.recordings = Some(Arc::new(recordings::Recordings::new(&vault::Root::create(files)?)?));
         Ok(self)
+    }
+
+    /// Connects the check for which ring devices may upload.
+    pub fn with_devices(mut self, devices: Arc<dyn devices::RingDevices>) -> Self {
+        self.devices = devices;
+        self
+    }
+
+    /// Connects the Chat that finished voice recordings are handed to.
+    pub fn with_voice_chat(mut self, voice: Arc<dyn chat::VoiceChat>) -> Self {
+        self.voice = voice;
+        self
     }
 
     /// Connects the chat that low-confidence side notices are posted to.
@@ -79,6 +97,33 @@ impl MeetingsPorts {
             .await
             .map_err(|_| anyhow::anyhow!("Meetings store deadline expired"))?
         })
+    }
+
+    /// Ring upload files and the per-recording lock that keeps two uploads of one recording apart.
+    fn files(&self, scope: &CallScope, request: &Request) -> Result<Value> {
+        let p: files::Params = serde_json::from_value(request.parameters.clone())?;
+        if request.operation == "lock" {
+            let key = p.key.ok_or_else(|| anyhow::anyhow!("Lock key required"))?;
+            ensure!(key.len() <= 200, "Lock key too long");
+            return self.run(scope, move |cx| {
+                Box::pin(async move {
+                    cx.db()
+                        .execute(
+                            "SELECT pg_advisory_xact_lock(hashtextextended(app.current_actor_user_id()::text || ':meetings.recording-files:' || $1,0))",
+                            &[&key],
+                        )
+                        .await?;
+                    Ok(serde_json::json!({"locked": true}))
+                })
+            });
+        }
+        if request.operation == "device" {
+            let device = p.device_id.as_deref().ok_or_else(|| anyhow::anyhow!("Device id required"))?;
+            let allowed = self.devices.allowed(scope.access().actor_user_id(), device)?;
+            return Ok(serde_json::json!({"allowed": allowed}));
+        }
+        let recordings = self.recordings.as_deref().ok_or_else(|| anyhow::anyhow!("Recording storage is not set up"))?;
+        files::run(recordings, scope, &request.operation, &p)
     }
 
     fn store(&self, scope: &CallScope, request: &Request) -> Result<Value> {
@@ -186,7 +231,16 @@ impl MeetingsPorts {
 }
 impl Ports for MeetingsPorts {
     fn invoke(&self, scope: &CallScope, port: &str, request: &Request) -> Result<Value> {
-        let ours = [RESOURCE, store::TRANSCRIPTS, store::HISTORY, store::RECORDING_TYPES, outputs::OUTPUTS, exports::EXPORTS, chat::NOTICE];
+        self.invoke_inner(scope, port, request)
+    }
+    fn finish_call(&self, scope: &CallScope, success: bool) -> Result<()> {
+        self.next.finish_call(scope, success)
+    }
+}
+
+impl MeetingsPorts {
+    fn invoke_inner(&self, scope: &CallScope, port: &str, request: &Request) -> Result<Value> {
+        let ours = [RESOURCE, store::TRANSCRIPTS, store::HISTORY, store::RECORDING_TYPES, outputs::OUTPUTS, exports::EXPORTS, chat::NOTICE, chat::VOICE, files::FILES];
         if port != "kv" || !ours.contains(&request.resource.as_str()) || scope.module().id != "meetings" {
             return self.next.invoke(scope, port, request);
         }
@@ -197,13 +251,19 @@ impl Ports for MeetingsPorts {
             self.chat.post(scope.access().actor_user_id(), text, key)?;
             return Ok(serde_json::json!({"posted": true}));
         }
+        if request.resource == chat::VOICE {
+            ensure!(request.operation == "hand-off", "Unsupported Meetings voice operation");
+            let voice = chat::voice(&request.parameters)?;
+            let id = self.voice.hand_off(scope.access().actor_user_id(), &voice)?;
+            return Ok(serde_json::json!({"requestId": id}));
+        }
+        if request.resource == files::FILES {
+            return self.files(scope, request);
+        }
         if request.resource == RESOURCE {
             self.preferences(scope, request)
         } else {
             self.store(scope, request)
         }
-    }
-    fn finish_call(&self, scope: &CallScope, success: bool) -> Result<()> {
-        self.next.finish_call(scope, success)
     }
 }

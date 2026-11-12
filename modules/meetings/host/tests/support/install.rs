@@ -62,6 +62,18 @@ pub fn install_full(
     intelligence: Arc<dyn moss_module_host::ai::Intelligence>,
     chat: Option<Arc<dyn moss_meetings_host::chat::MainChat>>,
 ) -> Installed {
+    install_ring(f, intelligence, chat, None)
+}
+
+/// Where stored recording files live and the Chat that finished voice recordings go to.
+pub type Ring = (std::path::PathBuf, Arc<dyn moss_meetings_host::chat::VoiceChat>, Arc<dyn moss_meetings_host::devices::RingDevices>);
+
+pub fn install_ring(
+    f: &Fixture,
+    intelligence: Arc<dyn moss_module_host::ai::Intelligence>,
+    chat: Option<Arc<dyn moss_meetings_host::chat::MainChat>>,
+    ring: Option<Ring>,
+) -> Installed {
     f.rt.block_on(async {
         let ready: bool = f.root.query_one("SELECT to_regnamespace('moss_queue') IS NOT NULL", &[]).await.unwrap().get(0);
         if !ready {
@@ -94,7 +106,10 @@ pub fn install_full(
             let authority = Arc::new(moss_meetings_host::authority::MeetingsAuthority::new(database.clone()));
             let memory = moss_memory_host::ports::MemoryPorts::new(database.clone(), Arc::new(Same), next)?
                 .with_authority(authority);
-            let ports = moss_meetings_host::MeetingsPorts::new(database, Arc::new(memory))?;
+            let mut ports = moss_meetings_host::MeetingsPorts::new(database, Arc::new(memory))?;
+            if let Some((files, voice, devices)) = ring.clone() {
+                ports = ports.with_recordings(&files)?.with_voice_chat(voice).with_devices(devices);
+            }
             Ok(match chat.clone() {
                 Some(chat) => Arc::new(ports.with_chat(chat)) as Arc<dyn moss_module_host::runtime::Ports>,
                 None => Arc::new(ports),

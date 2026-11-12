@@ -329,3 +329,81 @@ Everything in the 5C proof list. Nothing was built or run in this part.
 - The live run did not read a real recording, because no real model was set up. It proves install and routes only.
 - Running the memory job twice for the same reading was not tested end to end. It relies on each idea having a fixed key in Memory. Only the stable job key is unit tested.
 - When Memory is unreachable or fails, the memory job fails and retries. When Memory refuses on purpose (the recording changed or is being removed), the idea is skipped.
+
+## Part 8: receiving recordings from the ring
+
+Task JS-256. The server side that takes a recording from the delivery app now works end to end,
+except for the pieces listed under "Not built" and "Not proven".
+
+### What is built
+
+- Upload rules, as before: exact fields, the old recording name format, size and length limits
+  (two hours, two minutes for a voice request), the same upload fingerprint, chunk numbers 0 to
+  999, every chunk exactly 1 MiB except the last. The packet file framing, the sound file header
+  (16 kHz mono 16-bit) and the ring notes are checked. Nothing is decoded.
+- Resumable upload routes. Reserving the same recording again returns the same upload. A
+  changed description for the same recording is a conflict. Sending a chunk again is accepted if
+  the bytes match and refused if they differ. Finishing an incomplete upload is refused.
+- Chunks are stored in each account's own folder. Each chunk reaches the package as a staged
+  binary body, so it stays under the 1 MiB message limit.
+- Imports. A finished meeting upload makes a meeting and a background job that turns the sound
+  into text in 20 second windows through the model router. Running the job twice does not
+  transcribe twice. Windows are 20 seconds, not the old 30, so each one fits the message limit.
+- Voice requests. Hold-to-talk is enabled with a list of recordings already on the ring. A new
+  voice recording goes to Chat on its own only when voice commands are on and the recording is
+  fresh. Otherwise it waits as ready to send. Retry works as before. The voice text stays on its
+  own record so a retry can send it again, and never enters a job, an activity row or a log.
+- The device check is a narrow port. The default admits every device, and the tests use a fake
+  that refuses one. A refused device gets 403 before any import exists.
+- The app map entry for ring receivers in the Meetings manifest describes what works and what
+  does not.
+
+### What was proved
+
+| Check                | How                                                                                                                                                                                 |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Upload and resume    | Real database. A 45 second recording sent in pieces, interrupted, resent, finished, and transcribed in three windows by a scripted speech-to-text.                                  |
+| Limits               | Chunk size, chunk range, upload size and recording length refused. A bad sound file or packet stream is refused at the finish.                                                      |
+| Import repeats       | Reserving a finished recording again finds the same import and does not transcribe again.                                                                                           |
+| Voice                | Refused until enabled, refused for a recording already on the ring, handed to a recording stand-in for Chat with the right starting state.                                          |
+| Two-person privacy   | Another person gets 404 on every route. Seen leaking (1 import row, 3 chunk rows) with row security removed, and clean when restored.                                               |
+| No text in the queue | A planted marker never appears in job payloads, activity rows or meeting import rows.                                                                                               |
+| Device refusal       | The fake refuses a device and the upload is 403, then 201 after the refusal is cleared.                                                                                             |
+| Live run             | Real Rust server over HTTPS: reserve, resume over HTTP, a changed resend refused, finish, status, and a second person gets 404 on each route. The server log holds no meeting text. |
+| Builds and tests     | Native and WebAssembly builds, and the full Meetings gate with six ring tests, passed.                                                                                              |
+
+### Error codes
+
+The table lists every code the ring receivers return. A test fails if it differs from the code.
+
+| Code                         | Status     | Meaning                                                       |
+| ---------------------------- | ---------- | ------------------------------------------------------------- |
+| `recording_import_conflict`  | 409        | Same recording sent again with different content              |
+| `recording_import_invalid`   | 400 or 413 | Bad description, bad file, or over a size or length limit     |
+| `recording_import_not_found` | 404        | No such import for this person                                |
+| `recording_voice_ineligible` | 409        | Hold-to-talk is off, or the recording was already on the ring |
+| `recording_voice_not_found`  | 404        | No such voice request for this person                         |
+| `transcription_unavailable`  | job result | No speech-to-text route is set up                             |
+| `transcription_failed`       | job result | The speech-to-text call failed                                |
+| `import_interrupted`         | job result | The upload was abandoned or the meeting was removed           |
+| `import_unavailable`         | job result | The import could not run (retried)                            |
+
+### Not built
+
+- Bundle import routes for a whole day of recordings and for voice bundles. They do not fit the
+  1 MiB message limit and need a streaming path first.
+- The disk space reservation (507), the refusal of acting-as headers, and the rate limits.
+- Screens.
+
+### Not proven
+
+- A real model pass. The tests use a scripted speech-to-text, and the live server has none set
+  up, so its transcription job does not finish.
+- A real ring and the Android app. Only the byte formats from the old tests and the app source
+  were used.
+- The device credential check and allow-list. Device pairing (part 7) is parked, so a fake stands
+  in for it.
+- Chat. It is not ported, so the shape of the hand-off is a guess, marked as one.
+- Reaching the server from another device. The live run used the local address. A try on the
+  computer's own network address was refused because the server only listens on that address
+  once the owner has switched sharing on, and that was not set up here.
