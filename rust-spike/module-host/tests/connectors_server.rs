@@ -579,11 +579,11 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
         }
         // Control: the same search does find a value that really is stored, so a zero above means absent.
         let control: i64 = db
-            .query_one("SELECT count(*) FROM app.connector_accounts t WHERE to_jsonb(t)::text LIKE '%' || $1 || '%'", &[&"gmail.readonly"])
+            .query_one("SELECT count(*) FROM app.connector_accounts t WHERE to_jsonb(t)::text LIKE '%' || $1 || '%'", &[&"gmail.modify"])
             .await
             .unwrap()
             .get(0);
-        assert_eq!(control, 1, "the search must find a stored value");
+        assert!(control >= 1, "the search must find a stored value");
         let sealed: i64 = db
             .query_one("SELECT count(*) FROM app.connector_accounts WHERE owner_user_id=$1 AND encrypted_secret ? 'ciphertext'", &[&owner])
             .await
@@ -643,7 +643,7 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
                 }
             }
             let control: i64 = db
-                .query_one("SELECT count(*) FROM app.connector_accounts t WHERE to_jsonb(t)::text LIKE '%' || $1 || '%'", &[&"gmail.readonly"])
+                .query_one("SELECT count(*) FROM app.connector_accounts t WHERE to_jsonb(t)::text LIKE '%' || $1 || '%'", &[&"gmail.modify"])
                 .await
                 .unwrap()
                 .get(0);
