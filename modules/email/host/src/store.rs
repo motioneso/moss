@@ -274,10 +274,6 @@ async fn insert(cx: &DataContext, p: &Value) -> Result<Value> {
              sender = EXCLUDED.sender, recipients = EXCLUDED.recipients,
              subject = EXCLUDED.subject, snippet = EXCLUDED.snippet,
              body_excerpt = EXCLUDED.body_excerpt, received_at = EXCLUDED.received_at,
-             analysis_attempts = CASE
-               WHEN app.email_messages.external_metadata->>'historyId'
-                    IS DISTINCT FROM EXCLUDED.external_metadata->>'historyId'
-               THEN 0 ELSE app.email_messages.analysis_attempts END,
              external_metadata = EXCLUDED.external_metadata,
              analysis_attempts = CASE WHEN EXCLUDED.external_metadata->>'historyId'
                IS DISTINCT FROM app.email_messages.external_metadata->>'historyId'
