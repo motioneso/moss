@@ -357,6 +357,14 @@ fn installed_email_package_serves_routes_from_the_real_server() {
     assert_eq!(json_of(&call(Method::GET, "/draft-policy", Some(&cookie), None).1), json!({"tier":"ask_each_time"}));
     assert_eq!(json_of(&call(Method::PUT, "/draft-policy", Some(&cookie), Some(json!({"tier":"trusted_auto"}))).1), json!({"tier":"trusted_auto"}));
     assert_eq!(json_of(&call(Method::GET, "/draft-policy", Some(&cookie), None).1), json!({"tier":"trusted_auto"}));
+    // Understanding: the one cached message was sent by the person's own address, so the pass
+    // settles it without any model call and a second pass finds nothing left to do.
+    assert_eq!(call(Method::POST, "/understand", None, Some(json!({}))).0, 401);
+    let (status, text) = call(Method::POST, "/understand", Some(&cookie), Some(json!({})));
+    assert_eq!((status, json_of(&text)), (200, json!({"analysed":1,"failed":0,"needsConfiguration":false})), "{text}\n{}", log());
+    let (status, text) = call(Method::POST, "/understand", Some(&cookie), Some(json!({})));
+    assert_eq!((status, json_of(&text)), (200, json!({"analysed":0,"failed":0,"needsConfiguration":false})), "{text}");
+    seen.push(text);
     // Responses to settings calls and the not-found answer carry no message content.
     for (_, text) in [call(Method::GET, "/briefing-settings", Some(&cookie), None), call(Method::GET, "/task-creation-mode", Some(&cookie), None)] {
         seen.push(text);
