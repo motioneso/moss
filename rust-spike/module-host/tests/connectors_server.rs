@@ -571,8 +571,8 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
         // any response, the server log or any stored row; the stored bundle is sealed.
         let username = mail_lines["username"].clone();
         let password = mail_lines["password"].clone();
-        let good = json!({"providerId":"yahoo","username":username,"password":password});
-        let wrong = json!({"providerId":"yahoo","username":username,"password":"not-the-password"});
+        let good = json!({"providerId":"imap-yahoo","username":username,"password":password});
+        let wrong = json!({"providerId":"imap-yahoo","username":username,"password":"not-the-password"});
         let tested = call(Method::POST, "/imap/test-connection", Some(&cookie), Some(good.clone()));
         assert_eq!((tested.0, json_of(&tested.1)), (200, json!({"result":"ok"})), "{}", tested.1);
         let refused = call(Method::POST, "/imap/test-connection", Some(&cookie), Some(wrong.clone()));
@@ -585,7 +585,7 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
         let connected = call(Method::POST, "/imap/connect", Some(&cookie), Some(good.clone()));
         assert_eq!(connected.0, 201, "{}", connected.1);
         let account = json_of(&connected.1)["account"].clone();
-        assert_eq!(account["providerId"], "yahoo");
+        assert_eq!(account["providerId"], "imap-yahoo");
         let again = call(Method::POST, "/imap/connect", Some(&cookie), Some(good));
         assert_eq!(again.0, 201, "{}", again.1);
         assert_eq!(json_of(&again.1)["account"]["id"], account["id"], "a second connect updates the same account");
