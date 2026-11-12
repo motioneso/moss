@@ -246,3 +246,28 @@ Commands: `pnpm test:rust-email` and `pnpm test:rust-email-live`, both through t
   retries then a recorded failure, and a revoked sign-in with a second start refused while one is
   going. Tokens, the client secret and mail text were searched for in everything the package sent
   and in the account row.
+- The older Google connect database test `refused_attempts_answer_like_the_old_server` failed in
+  every connectors gate run on a loaded box (load average 20 to 45, 545 to 850 seconds for that
+  file). It counts five finishes inside one minute, and under load the first ones age out of the
+  window, so the sixth answers 400 instead of 429. The test was not changed by this part and has
+  not been run on a quiet box.
+
+## Third-party code
+
+None added. The host reuses the HTTP client, database layer and job queue already in the repo.
+
+## Differences from the old app
+
+- A restart of the server drops an in-progress run's page tokens and the next run starts over.
+  The old app kept them in memory in the same way.
+- The failure reason on the connection's health is a fixed word plus the Google status and call
+  name. The old app stored Google's own error text.
+- The day phase and the full phase may both list one message. Email's insert is an upsert, so the
+  row is written once.
+
+## Not proven
+
+- Real Google. Every test uses the stand-in Google, so a change in Google's real answers is not
+  covered.
+- The one older Google connect test named above, on a quiet box.
+- Behaviour across a server restart in the middle of a run.
