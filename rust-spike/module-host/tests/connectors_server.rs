@@ -734,7 +734,11 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
                         .unwrap();
                     (r.status().as_u16(), r.text().unwrap_or_default())
                 };
-                let rows = if status == 200 { json_of(&text)["messages"].as_array().cloned().unwrap_or_default() } else { vec![] };
+                // The Google run earlier saved mail for the same owner, so only the IMAP rows count here.
+                let rows: Vec<Value> = if status == 200 { json_of(&text)["messages"].as_array().cloned().unwrap_or_default() } else { vec![] }
+                    .into_iter()
+                    .filter(|m| m["externalId"].as_str().is_some_and(|k| k.starts_with("imap:")))
+                    .collect();
                 if want(&rows) {
                     return rows;
                 }
