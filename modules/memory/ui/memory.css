@@ -82,6 +82,8 @@
   min-width: 0;
 }
 .filters .jds-select {
+  width: auto;
+  flex: 0 0 auto;
   min-width: 130px;
 }
 .counts {

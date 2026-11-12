@@ -113,7 +113,10 @@ fn candidate_item(row: &Value) -> Value {
     let payload = &row["payload"];
     let (title, title_cut) = clip(&candidate_title(payload), TITLE_UNITS);
     let (summary, summary_cut) = clip(&candidate_summary(payload), SUMMARY_UNITS);
-    let kind = payload["recordKind"].as_str().filter(|k| RECORD_KINDS.contains(k));
+    let kind = payload["recordKind"]
+        .as_str()
+        .or_else(|| payload["fact"]["recordKind"].as_str())
+        .filter(|k| RECORD_KINDS.contains(k));
     let mut item = json!({
         "id": row["id"], "title": title, "summary": summary,
         "titleTruncated": title_cut, "summaryTruncated": summary_cut,
