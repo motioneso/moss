@@ -18,9 +18,13 @@ const items = [
   ["query", "when is the dentist"],
   ["query", "who lives in Portugal"],
   ["query", "trip planning"],
-  ["document", paragraph.repeat(60)],
+  ["document", paragraph.repeat(60)]
 ];
 writeFileSync(
   new URL("../fixtures/sentences.json", import.meta.url),
-  JSON.stringify(items.map(([kind, text]) => ({ kind, text })), null, 1) + "\n"
+  JSON.stringify(
+    items.map(([kind, text]) => ({ kind, text })),
+    null,
+    1
+  ) + "\n"
 );
