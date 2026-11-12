@@ -17,6 +17,8 @@ const CLIENT_ID: &str = "fake-client-id.apps.example.com";
 const CLIENT_SECRET: &str = "SENTINEL-CLIENT-SECRET-3c9e41";
 const ACCESS: &str = "ya29.fake-access-1";
 const REFRESH: &str = "1//fake-refresh-1";
+/// Longer than the 100-character snippet, so the sentinel after it is body text only.
+const PAD: &str = "Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua enim ad minim veniam";
 const BODY_TEXT: &str = "SENTINEL-MAIL-BODY-text-9d41";
 const MODIFY: &str = "https://www.googleapis.com/auth/gmail.modify";
 const CALENDAR: &str = "https://www.googleapis.com/auth/calendar";
@@ -153,7 +155,7 @@ impl Fixture {
     }
 
     fn mail(&self, subject: &str) -> String {
-        let raw = format!("From: Alice <alice@example.com>\r\nTo: bob@example.com\r\nSubject: {subject}\r\nMessage-ID: <{subject}@example.com>\r\nContent-Type: text/plain\r\n\r\n{BODY_TEXT}");
+        let raw = format!("From: Alice <alice@example.com>\r\nTo: bob@example.com\r\nSubject: {subject}\r\nMessage-ID: <{subject}@example.com>\r\nContent-Type: text/plain\r\n\r\n{PAD} {BODY_TEXT}");
         self.fake.add_message(&raw, &["INBOX"])
     }
 }
