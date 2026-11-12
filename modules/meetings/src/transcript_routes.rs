@@ -28,6 +28,7 @@ fn unavailable() -> Response {
 const COUNTER: Kind = Kind::Int { min: 0, max: MAX_SAFE };
 const FROM_ONE: Kind = Kind::Int { min: 1, max: MAX_SAFE };
 const NAME: Kind = Kind::Text { min: 1, max: 256 };
+const IDENT: Kind = Kind::Ident { min: 1, max: 256 };
 const KINDS: Kind = Kind::Enum(&["microphone", "output", "recording"]);
 const FINALITY: Kind = Kind::Enum(&["provisional", "final"]);
 const PROVENANCE: Kind = Kind::Enum(&["transcription", "correction"]);
@@ -226,7 +227,7 @@ pub fn evidence<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Re
         "querystring",
         &mut query,
         &["segmentId", "segmentRevision", "startCharacter", "endCharacter"],
-        &[("segmentId", NAME), ("segmentRevision", FROM_ONE), ("startCharacter", COUNTER), ("endCharacter", COUNTER)],
+        &[("segmentId", IDENT), ("segmentRevision", FROM_ONE), ("startCharacter", COUNTER), ("endCharacter", COUNTER)],
         0,
     ) {
         return Ok(invalid(f));

@@ -10,6 +10,8 @@ pub type Failure = String;
 pub enum Kind {
     Uuid,
     Text { min: usize, max: usize },
+    /// Text that also holds a non-whitespace character (the old schema's `\S` pattern).
+    Ident { min: usize, max: usize },
     Int { min: i64, max: i64 },
     Enum(&'static [&'static str]),
     /// Present and checked elsewhere.
@@ -28,7 +30,7 @@ fn check(var: &str, name: &str, kind: Kind, value: &Value) -> Result<(), Failure
             Some(_) => Err(format!("{at} must match format \"uuid\"")),
             None => Err(format!("{at} must be string")),
         },
-        Kind::Text { min, max } => {
+        Kind::Text { min, max } | Kind::Ident { min, max } => {
             let s = value.as_str().ok_or_else(|| format!("{at} must be string"))?;
             let n = code_points(s);
             if n > max {
@@ -36,6 +38,9 @@ fn check(var: &str, name: &str, kind: Kind, value: &Value) -> Result<(), Failure
             }
             if n < min {
                 return Err(format!("{at} must NOT have fewer than {min} characters"));
+            }
+            if matches!(kind, Kind::Ident { .. }) && crate::text::js_trim(s).is_empty() {
+                return Err(format!("{at} must match pattern \"\\S\""));
             }
             Ok(())
         }
@@ -89,7 +94,8 @@ pub fn strict_object(
                 }
             }
             if let (Kind::Int { .. }, Value::String(s)) = (kind, &*slot) {
-                if let Some(f) = crate::js::js_number(s) {
+                // Ajv leaves an empty string alone, so it fails as a non-integer.
+                if let Some(f) = crate::js::js_number(s).filter(|_| !s.is_empty()) {
                     // Whole numbers past i64 still fail the range check, as Ajv's number does.
                     if f.is_infinite() || (f.fract() == 0.0 && f.abs() >= 9.2e18) {
                         *slot = Value::from(if f > 0.0 { i64::MAX } else { i64::MIN });

@@ -39,6 +39,9 @@ A Meetings package in `~/Jarv1s/modules/meetings`. It covers meeting records, ti
 - Job parameter kinds in the manifest are a guess.
 - The two history backfills (SQL 0280 and 0292) run from the host's compiled copies, triggered by a marker line in the SQL. The `.backfill.mjs` files are not packaged. Neither was exercised against old data here.
 - The log check was not seen failing with the protection removed, so it shows absence in this run only.
+- The old routes capped a History search body at 4096 bytes (answer 413) and a transcript body at 512 KiB. The package does not enforce either, and whether the shell does was not checked.
+- The replay test hides real ids behind a placeholder and does not compare the no-store header. A wrong owner id in a reply would pass. Steps marked as decided by the shell only print a note when they differ.
+- A stored line with a lone surrogate reads back with the replacement character. Lengths and offsets are unchanged.
 - No screen, no second device, no native app.
 
 # Rust Phase 5: Meetings, part 2
@@ -75,4 +78,7 @@ Two fixes came out of the replay. Unknown query parameters are now ignored, as t
 - The history backfills (SQL 0280, 0292) have a real-database test from the module host work (phase 4b), not repeated here against transcript data from this part.
 - Speed of the package was not measured. The compute budget was set from one failing 200 KB save.
 - The log check for transcript text was not seen failing with the protection removed. It shows absence in this run only.
+- The old routes capped a History search body at 4096 bytes (answer 413) and a transcript body at 512 KiB. The package does not enforce either, and whether the shell does was not checked.
+- The replay test hides real ids behind a placeholder and does not compare the no-store header. A wrong owner id in a reply would pass. Steps marked as decided by the shell only print a note when they differ.
+- A stored line with a lone surrogate reads back with the replacement character. Lengths and offsets are unchanged.
 - No screen, no second device, no native app.
