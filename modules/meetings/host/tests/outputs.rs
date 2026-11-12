@@ -222,7 +222,7 @@ fn another_person_and_an_administrator_see_no_summary_and_nothing_leaks() {
     assert_eq!(payloads, 0);
     let stored = count(
         &w,
-        &format!("SELECT count(*) FROM app.meeting_output_requests WHERE result_json::text LIKE '%{MARK}%'"),
+        &format!("SELECT count(*) FROM app.meeting_output_requests WHERE meeting_id='{id}'::uuid AND result_json::text LIKE '%{MARK}%'"),
     );
     assert_eq!(stored, 1, "the finished result is stored for the owner only");
 }
