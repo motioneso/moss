@@ -12,7 +12,7 @@
     {
       "port": "api",
       "operations": ["call"],
-      "resources": ["tasks", "notes"]
+      "resources": ["calendar", "memory", "notes", "people", "tasks"]
     },
     {
       "port": "db",
@@ -103,11 +103,6 @@
         "meetings.recording-notice",
         "meetings.recording-memory"
       ]
-    },
-    {
-      "port": "api",
-      "operations": ["call"],
-      "resources": ["calendar", "people", "memory"]
     }
   ],
   "database": {
