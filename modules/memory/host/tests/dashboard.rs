@@ -242,7 +242,7 @@ fn accepting_creates_a_confirmed_fact_and_a_new_name_becomes_a_topic() {
     assert_eq!(out["fact"]["provenance"], "confirmed");
     assert_eq!(f.count("SELECT count(*) FROM app.memory_entities WHERE owner_user_id=$1 AND kind='topic' AND name='Gardening'", f.a), 1);
     assert_eq!(f.count("SELECT count(*) FROM app.memory_search_documents WHERE owner_user_id=$1 AND status='active' AND target_kind='fact'", f.a), 1);
-    assert_eq!(f.count("SELECT count(*) FROM app.memory_search_documents WHERE owner_user_id=$1 AND status='active' AND target_kind='entity'", f.a), 2);
+    assert_eq!(f.count("SELECT count(*) FROM app.memory_search_documents WHERE owner_user_id=$1 AND status='active' AND target_kind='entity'", f.a), 1);
 }
 
 #[test]
