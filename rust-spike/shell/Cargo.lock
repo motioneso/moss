@@ -3086,6 +3086,7 @@ dependencies = [
  "access-context",
  "anyhow",
  "base64 0.22.1",
+ "moss-memory-host",
  "moss-module-host",
  "safety-core",
  "serde",
