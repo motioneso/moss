@@ -274,3 +274,66 @@ fn find(value: &Value, key: &str) -> Option<Value> {
         _ => None,
     }
 }
+
+fn review_body(key: &str, decision: &str) -> Value {
+    json!({"requestKey": key, "decision": decision, "title": "Send the budget"})
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn reviewing_an_action_dismisses_replays_keeps_it_pending_without_tasks_and_hides_it_from_others() {
+    let w = World::new();
+    let (a, b, admin) = (w.f.a, w.f.b, w.f.admin);
+    let id = w.with_transcript(a);
+    w.say(content(&id, "We reviewed the budget."));
+    assert_eq!(w.generate(a, &id, K1, 0)["status"], 200);
+    let list = w.call(a, "GET", &format!("/records/{id}/outputs"), Value::Null);
+    let candidate = list["body"]["candidates"][0]["id"].as_str().expect("a candidate").to_owned();
+    assert_eq!(list["body"]["candidates"][0]["reviewState"], "pending");
+    let path = format!("/records/{id}/actions/{candidate}/review");
+
+    // Tasks is not installed in this test, so an accept is refused and the action stays pending.
+    let down = w.call(a, "POST", &path, review_body(K2, "accept"));
+    assert_eq!((down["status"].clone(), down["body"]["code"].clone()), (json!(503), json!("meeting_tasks_unavailable")));
+    let after = w.call(a, "GET", &format!("/records/{id}/outputs"), Value::Null);
+    assert_eq!(after["body"]["candidates"][0]["reviewState"], "pending");
+
+    // Another person and an administrator cannot reach the action.
+    for actor in [b, admin] {
+        let r = w.call(actor, "POST", &path, review_body(K3, "dismiss"));
+        assert_eq!((r["status"].clone(), r["body"]["code"].clone()), (json!(404), json!("meeting_not_found")), "{r}");
+    }
+
+    // The protection is real: with row-level security off, person B can dismiss it.
+    let toggle = |on: bool| {
+        let verb = if on { "ENABLE" } else { "DISABLE" };
+        w.f.rt.block_on(async {
+            for t in ["meeting_records", "meeting_action_candidates", "meeting_output_requests"] {
+                w.f.root.batch_execute(&format!("ALTER TABLE app.{t} {verb} ROW LEVEL SECURITY")).await.unwrap();
+            }
+        });
+    };
+    toggle(false);
+    let leaked = w.call(b, "POST", &path, review_body(K4, "dismiss"));
+    toggle(true);
+    assert_eq!(leaked["status"], 200, "with protection removed person B should reach the action: {leaked}");
+    // Put the state back so the owner's own checks below start from pending.
+    w.f.rt.block_on(async {
+        w.f.root.batch_execute("UPDATE app.meeting_action_candidates SET review_state='pending'").await.unwrap();
+        w.f.root.batch_execute("DELETE FROM app.meeting_output_requests WHERE history_kind='review' OR input_json LIKE '%\"review\"%'").await.unwrap();
+    });
+
+    // The owner dismisses; the same key replays; the opposite decision conflicts.
+    let first = w.call(a, "POST", &path, review_body(K3, "dismiss"));
+    assert_eq!((first["status"].clone(), first["body"]["reviewState"].clone()), (json!(200), json!("dismissed")), "{first}");
+    assert_eq!(w.call(a, "POST", &path, review_body(K3, "dismiss")), first);
+    let conflict = w.call(a, "POST", &path, review_body(K2, "accept"));
+    assert_eq!((conflict["status"].clone(), conflict["body"]["code"].clone()), (json!(409), json!("meeting_action_review_conflict")));
+    let none = w.call(a, "POST", &format!("/records/{id}/actions/{MISSING}/review"), review_body(K1, "dismiss"));
+    assert_eq!((none["status"].clone(), none["body"]["code"].clone()), (json!(404), json!("meeting_action_unavailable")));
+    let invalid = w.call(a, "POST", &path, json!({"requestKey": K1, "decision": "maybe"}));
+    assert_eq!(invalid["status"], 400, "{invalid}");
+
+    // Nothing from the meeting text reached a queue payload.
+    assert_eq!(count(&w, &format!("SELECT count(*) FROM moss_queue.jobs WHERE payload::text LIKE '%{MARK}%'")), 0);
+}
