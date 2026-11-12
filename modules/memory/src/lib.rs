@@ -91,7 +91,7 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
         }
         "api" => {
             if let Ok(call) = serde_json::from_str::<Value>(payload) {
-                if let Some(name) = call["name"].as_str().filter(|n| !matches!(*n, "requestVaultIndex" | "prepareMemoryAction")) {
+                if let Some(name) = call["name"].as_str().filter(|n| !matches!(*n, "requestVaultIndex" | "prepareMemoryAction" | "recordingMemory")) {
                     return serde_json::to_string(&public::call(host, name, &call["parameters"]))
                         .map_err(|_| "Invalid memory response".into());
                 }
