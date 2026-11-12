@@ -249,7 +249,7 @@ async fn list(login: &Login) -> std::result::Result<Value, Fail> {
         let mut uids: Vec<u32> =
             session.uid_search(format!("SINCE {}", since_day())).await.map_err(unreachable)?.into_iter().collect();
         uids.sort_unstable();
-        let truncated = uids.len() > LIST_CAP;
+        let mut truncated = uids.len() > LIST_CAP;
         if truncated {
             uids = uids.split_off(uids.len() - LIST_CAP);
         }
@@ -263,6 +263,10 @@ async fn list(login: &Login) -> std::result::Result<Value, Fail> {
                 }
             }
             keys.sort_unstable();
+            // A fetch that dropped entries must not look like a complete listing.
+            if keys.len() < uids.len() {
+                truncated = true;
+            }
         }
         Ok(json!({
             "uidValidity":validity,"truncated":truncated,"since":since_iso(),
@@ -326,7 +330,7 @@ fn addresses(list: Option<&Address>) -> Vec<String> {
 }
 
 /// Sign-in code wording in the subject plus a short code in the subject or the opening of
-/// the text. This is cruder than the old three-signal rule and errs toward hiding a preview.
+/// the text. Subjects in other languages are not recognised.
 pub fn looks_like_one_time_code(subject: &str, text: &str) -> bool {
     const PHRASES: [&str; 14] = [
         "verification code", "one-time code", "one time code", "one-time passcode", "one-time password",
@@ -334,7 +338,9 @@ pub fn looks_like_one_time_code(subject: &str, text: &str) -> bool {
         "security code", "two-factor code", "2fa code",
     ];
     let subject = subject.to_lowercase();
-    if !PHRASES.iter().any(|p| subject.contains(p)) {
+    let wording = PHRASES.iter().any(|p| subject.contains(p))
+        || subject.split(|c: char| !c.is_alphanumeric()).any(|w| matches!(w, "code" | "passcode" | "otp" | "pin"));
+    if !wording {
         return false;
     }
     let opening: String = text.chars().take(400).collect();
@@ -365,7 +371,7 @@ pub fn parse(uid: u32, size: u32, internal_date: Option<&str>, raw: &[u8]) -> Va
     let references: Vec<String> = message.references().as_text_list().unwrap_or_default().iter().map(|r| r.to_string()).collect();
     json!({
         "uid":uid,"sizeBytes":size,"sender":from,"recipients":recipients,"subject":subject,
-        "receivedAt":received,
+        "receivedAt":received,"arrivedAt":internal_date,
         "snippet": if hidden || preview.is_empty() { Value::Null } else { json!(preview) },
         "messageId":message.message_id(),"references":references,
     })

@@ -228,7 +228,7 @@ fn run_step(host: &impl Host, account: &str, cursor: usize, mut upserted: u64, m
                     "snippet":message["snippet"],"receivedAt":message["receivedAt"],
                     "externalMetadata":{
                         "messageId":message["messageId"],"references":message["references"],
-                        "sizeBytes":message["sizeBytes"],
+                        "sizeBytes":message["sizeBytes"],"arrivedAt":message["arrivedAt"],
                     },
                 }),
             );

@@ -345,7 +345,8 @@ async fn prune(cx: &DataContext, p: &Value) -> Result<Value> {
         .execute(
             "DELETE FROM app.email_messages
               WHERE connector_account_id = $1 AND external_id LIKE $2
-                AND received_at >= $3::text::timestamptz AND NOT (external_id = ANY($4))",
+                AND COALESCE((external_metadata->>'arrivedAt')::timestamptz, received_at) >= $3::text::timestamptz
+                AND NOT (external_id = ANY($4))",
             &[&account, &like, &since, &keep],
         )
         .await?;

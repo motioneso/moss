@@ -144,7 +144,7 @@ Commands: `pnpm test:rust-email` and `pnpm test:rust-email-live`, both through t
   public API. Messages the server no longer lists are removed from Email, but only inside the
   30-day window, so older cached mail stays.
 - A message is saved as sender, recipients, subject, time and a plain-text preview of up to 500
-  characters. Sign-in code messages get no preview. The host reads at most 128 KB of a message.
+  characters. Sign-in code messages get no preview when the subject is in English and mentions a code. The host reads at most 128 KB of a message.
 - A run handles 50 messages and then queues itself for the next 50, so one run stays inside the
   time and fuel limits. The connection's health shows the last run, its result and the counts.
 - Overwriting a message from a sync keeps the summary and signals Email already worked out.
@@ -168,7 +168,7 @@ Commands: `pnpm test:rust-email` and `pnpm test:rust-email-live`, both through t
 
 ## Proof
 
-- Scripted tests of the sync loop in the guest (10), including paging, prune, a failed fetch and
+- Scripted tests of the sync loop in the guest (10), including paging, prune and
   an auth failure.
 - A stand-in IMAP server on this machine, with real TLS, for listing and fetching.
 - Email database tests with two people (14 pass): prune touches only the owner's mail, a view
@@ -189,7 +189,7 @@ Commands: `pnpm test:rust-email` and `pnpm test:rust-email-live`, both through t
 
 ## Differences from the old app
 
-- The old app never removed mail the server dropped. This one does, inside the 30-day window.
+- The old app never removed mail the server dropped. This one does, inside the 30-day window, judged by the server's arrival date. A listing that comes back short is never used to delete.
 - Messages are read in steps of 50 with a fresh listing each run, so a large mailbox costs more
   listings than the old single pass.
 
