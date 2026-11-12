@@ -8,9 +8,10 @@ use moss_module_host::database::runtime_role;
 use safety_core::db::DataContext;
 use serde_json::{json, Value};
 
-/// Largest page, in bytes of row text. The host refuses messages over 1 MiB.
-const PAGE_BYTES: usize = 400 * 1024;
-const PAGE_ROWS: i64 = 500;
+/// Largest page, in bytes of row text. The guest copies each page through a fixed compute
+/// budget, so pages stay small.
+const PAGE_BYTES: usize = 48 * 1024;
+const PAGE_ROWS: i64 = 200;
 
 fn ts(column: &str, alias: &str) -> String {
     format!("'{alias}', to_char({column} AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"')")
