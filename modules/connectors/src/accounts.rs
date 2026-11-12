@@ -1,5 +1,5 @@
 //! Account routes. Every read and write goes through the host's `connectors.*` resources.
-use crate::{fastify, grants, health, kv, mail_sync, Error, Result};
+use crate::{fastify, google_sync, grants, health, kv, mail_sync, Error, Result};
 use moss_module_sdk::Host;
 use serde_json::{json, Map, Value};
 
@@ -23,13 +23,15 @@ fn keep_schedule(host: &impl Host, account: &Value) {
     let (Some(id), Some(provider)) = (account["id"].as_str(), account["providerId"].as_str()) else {
         return;
     };
-    if !mail_sync::is_mail_provider(provider) {
+    let google = provider == "google";
+    if !google && !mail_sync::is_mail_provider(provider) {
         return;
     }
-    if account["status"] == "revoked" {
-        mail_sync::cancel_schedule(host, id);
-    } else {
-        mail_sync::reconcile_schedule(host, id);
+    match (google, account["status"] == "revoked") {
+        (true, true) => google_sync::cancel_schedule(host, id),
+        (true, false) => google_sync::reconcile_schedule(host, id),
+        (false, true) => mail_sync::cancel_schedule(host, id),
+        (false, false) => mail_sync::reconcile_schedule(host, id),
     }
 }
 

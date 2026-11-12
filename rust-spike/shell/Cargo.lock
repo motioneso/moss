@@ -3013,6 +3013,8 @@ dependencies = [
  "safety-core",
  "serde_json",
  "tokio",
+ "tokio-postgres",
+ "uuid",
  "wat",
 ]
 

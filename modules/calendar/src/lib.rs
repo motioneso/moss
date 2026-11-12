@@ -6,6 +6,7 @@ use serde_json::{json, Value};
 mod abi;
 pub mod apply;
 pub mod auto_plan;
+pub mod cache;
 mod display;
 mod draft_tool;
 pub mod events;
@@ -132,6 +133,8 @@ fn api(host: &impl Host, name: &str, input: Value) -> Result<Value> {
         "saveDraft" => plans::save(host, serde_json::from_value(input)?),
         "reserveAutoPlan" => Ok(json!({"reservation":auto_plan::reserve(host, serde_json::from_value(input)?)?})),
         "findUnfinishedBatch" => auto_plan::find_unfinished(host, serde_json::from_value(input)?),
+        "upsertCachedEvent" => cache::upsert(host, &input),
+        "pruneCachedEvents" => cache::prune(host, &input),
         _ => Err(Error::new(404, "Calendar data operation not found")),
     }
 }

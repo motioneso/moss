@@ -215,7 +215,7 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
     // canonical installer, as the server would find it.
     let keys = Keys::new();
     fs::create_dir_all(root.join("registry/packages")).unwrap();
-    let artifacts: Vec<Artifact> = [("JS225_EMAIL_PACKAGE", "email"), ("JS224_CONNECTORS_PACKAGE", "connectors")]
+    let artifacts: Vec<Artifact> = [("JS225_EMAIL_PACKAGE", "email"), ("JS220_TASKS_PACKAGE", "tasks"), ("JS181_CALENDAR_PACKAGE", "calendar"), ("JS224_CONNECTORS_PACKAGE", "connectors")]
     .iter()
     .map(|(variable, id)| {
         let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
@@ -295,7 +295,7 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
     let mut fake_google = Server(
         Command::new(std::env::var("JS230_FAKE_GOOGLE").expect("the gate must supply the fake Google"))
             .args(["live-http-code", "live-browser-code"])
-            .stdin(Stdio::null())
+            .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
@@ -327,6 +327,14 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
                 google_lines.insert(key.to_owned(), value.to_owned());
             }
         }
+    }
+    let mut google_commands = fake_google.0.stdin.take().unwrap();
+    {
+        use std::io::Write;
+        for line in ["event Planning 1", "event Review 2", "event Offsite 3", "message Quarterly plan", "message Lunch on Friday", "message Invoice reminder"] {
+            writeln!(google_commands, "{line}").unwrap();
+        }
+        google_commands.flush().unwrap();
     }
     let token_url = google_lines["token-url"].clone();
     let google_id = google_lines["client-id"].clone();
@@ -460,6 +468,84 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
     seen.push(text.clone());
     assert_eq!(json_of(&text)["account"]["status"], "active", "{text}");
     println!("PASS Google connect over HTTP: authorize then complete answered 201 with an active account");
+    let google_account = json_of(&text)["account"]["id"].as_str().expect("account id").to_owned();
+    // Connecting starts a sync. Wait for it, then read what it saved through Email and Calendar.
+    let account_row = || {
+        let all = json_of(&call(Method::GET, "/accounts", Some(&cookie), None).1);
+        all["accounts"].as_array().unwrap().iter().find(|a| a["id"] == google_account.as_str()).cloned().unwrap()
+    };
+    let saved_mail = || {
+        let r = client.get(format!("{origin}/api/m/email/messages")).header("origin", &origin).header("cookie", &cookie).send().unwrap();
+        json_of(&r.text().unwrap_or_default())["messages"].as_array().cloned().unwrap_or_default()
+    };
+    let saved_events = || {
+        let r = client.get(format!("{origin}/api/m/calendar/events")).header("origin", &origin).header("cookie", &cookie).send().unwrap();
+        json_of(&r.text().unwrap_or_default())["events"].as_array().cloned().unwrap_or_default()
+    };
+    let jobs_now = || {
+        runtime.block_on(async {
+            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+            tokio::spawn(async move {
+                let _ = connection.await;
+            });
+            let result = db
+                .query("SELECT queue, state, attempts::text||' '||coalesce(failure_code,'') FROM moss_queue.jobs WHERE queue LIKE '%google%' ORDER BY run_at DESC LIMIT 6", &[])
+                .await;
+            match result {
+                Ok(rows) => rows.iter().map(|r| format!("{} {} {}", r.get::<_, String>(0), r.get::<_, String>(1), r.get::<_, String>(2))).collect::<Vec<_>>(),
+                Err(e) => {
+                    let tables = db
+                        .query("SELECT table_schema||'.'||table_name FROM information_schema.tables WHERE table_name ILIKE '%job%' OR table_schema ILIKE '%boss%' OR table_schema ILIKE '%job%'", &[])
+                        .await
+                        .map(|rows| rows.iter().map(|r| r.get::<_, String>(0)).collect::<Vec<_>>());
+                    vec![format!("job query failed: {:?}; tables {:?}", e.as_db_error().map(|d| d.message().to_owned()), tables)]
+                }
+            }
+        })
+    };
+    let wait_until = |what: &str, check: &dyn Fn() -> bool| {
+        let started = Instant::now();
+        while !check() {
+            assert!(started.elapsed() < Duration::from_secs(120), "Google sync did not settle: {what}; account {} mail {} events {}; jobs {:?}\n{}", account_row(), saved_mail().len(), saved_events().len(), jobs_now(), log());
+            std::thread::sleep(Duration::from_millis(500));
+        }
+    };
+    // The sync queued by connecting runs with the stand-in grant, which has no Calendar scope.
+    // Let it finish, then set the real scopes and sync by hand.
+    wait_until("sync after connecting", &|| account_row()["lastSyncStatus"] == "success");
+    let (status, text) = call(
+        Method::PATCH,
+        &format!("/accounts/{google_account}"),
+        Some(&cookie),
+        Some(json!({"scopes":["https://www.googleapis.com/auth/gmail.modify","https://www.googleapis.com/auth/calendar"]})),
+    );
+    assert_eq!(status, 200, "{text}");
+    // An earlier step switched Calendar off for this account, so switch it back on.
+    let (status, text) = call(Method::PUT, &format!("/accounts/{google_account}/feature-grants"), Some(&cookie), Some(json!({"calendar":true})));
+    assert_eq!((status, json_of(&text)["calendar"].clone()), (200, json!(true)), "{text}");
+    let (status, text) = call(Method::POST, "/google/sync", Some(&cookie), Some(json!({})));
+    assert_eq!(status, 202, "{text}");
+    wait_until("first run", &|| account_row()["lastSyncStatus"] == "success" && saved_mail().len() == 3 && saved_events().len() == 3);
+    let titles: std::collections::BTreeSet<String> = saved_events().iter().map(|e| e["title"].as_str().unwrap_or("").to_owned()).collect();
+    assert_eq!(titles, ["Offsite", "Planning", "Review"].map(String::from).into(), "{titles:?}");
+    let first = account_row();
+    assert_eq!(first["lastSyncCounts"]["calendarUpserted"], 3, "{first}");
+    println!("PASS Google sync on the real server: 3 events and 3 messages saved after connecting");
+    {
+        // A message is removed and an event is removed in Google. A manual sync follows.
+        use std::io::Write;
+        writeln!(google_commands, "delete-message Lunch on Friday").unwrap();
+        writeln!(google_commands, "label-message Quarterly plan").unwrap();
+        writeln!(google_commands, "remove-event Offsite").unwrap();
+        google_commands.flush().unwrap();
+    }
+    let (status, text) = call(Method::POST, "/google/sync", Some(&cookie), Some(json!({})));
+    assert_eq!(status, 202, "{text}");
+    wait_until("second run", &|| {
+        let events: Vec<String> = saved_events().iter().map(|e| e["title"].as_str().unwrap_or("").to_owned()).collect();
+        events.len() == 2 && !events.iter().any(|t| t == "Offsite") && account_row()["lastSyncStatus"] == "success"
+    });
+    println!("PASS Google sync second run: the event removed in Google is pruned under the runtime role");
     // The marker must be in no response, no log line, and no stored job; the stored secret is sealed.
     let markers = [MARKER, MARKER_TOKEN, MARKER_REFRESH];
     for body in &seen {
@@ -493,11 +579,11 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
         }
         // Control: the same search does find a value that really is stored, so a zero above means absent.
         let control: i64 = db
-            .query_one("SELECT count(*) FROM app.connector_accounts t WHERE to_jsonb(t)::text LIKE '%' || $1 || '%'", &[&"gmail.readonly"])
+            .query_one("SELECT count(*) FROM app.connector_accounts t WHERE to_jsonb(t)::text LIKE '%' || $1 || '%'", &[&"gmail.modify"])
             .await
             .unwrap()
             .get(0);
-        assert_eq!(control, 1, "the search must find a stored value");
+        assert!(control >= 1, "the search must find a stored value");
         let sealed: i64 = db
             .query_one("SELECT count(*) FROM app.connector_accounts WHERE owner_user_id=$1 AND encrypted_secret ? 'ciphertext'", &[&owner])
             .await
@@ -532,7 +618,7 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
     {
         // After both Google connects (HTTP and browser): none of the secrets or tokens is
         // in the server log or any stored row in plain text.
-        let google_markers = [google_secret.as_str(), "ya29.fake-access-", "1//fake-refresh-"];
+        let google_markers = [google_secret.as_str(), "ya29.fake-access-", "1//fake-refresh-", "GOOGLE-BODY-MARKER"];
         for marker in google_markers {
             assert!(!log().contains(marker), "Google marker in the server log: {marker}");
         }
@@ -557,7 +643,7 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
                 }
             }
             let control: i64 = db
-                .query_one("SELECT count(*) FROM app.connector_accounts t WHERE to_jsonb(t)::text LIKE '%' || $1 || '%'", &[&"gmail.readonly"])
+                .query_one("SELECT count(*) FROM app.connector_accounts t WHERE to_jsonb(t)::text LIKE '%' || $1 || '%'", &[&"google"])
                 .await
                 .unwrap()
                 .get(0);
@@ -648,7 +734,11 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
                         .unwrap();
                     (r.status().as_u16(), r.text().unwrap_or_default())
                 };
-                let rows = if status == 200 { json_of(&text)["messages"].as_array().cloned().unwrap_or_default() } else { vec![] };
+                // The Google run earlier saved mail for the same owner, so only the IMAP rows count here.
+                let rows: Vec<Value> = if status == 200 { json_of(&text)["messages"].as_array().cloned().unwrap_or_default() } else { vec![] }
+                    .into_iter()
+                    .filter(|m| m["externalId"].as_str().is_some_and(|k| k.starts_with("imap:")))
+                    .collect();
                 if want(&rows) {
                     return rows;
                 }

@@ -305,7 +305,8 @@ async fn insert(cx: &DataContext, p: &Value) -> Result<Value> {
     }
 }
 
-/// Size fingerprints of the named cached messages of one account.
+/// Sync markers of the named cached messages of one account. `finished` repeats the old
+/// rule for a saved first-pass verdict, so a sync leaves an unchanged finished message alone.
 async fn cache_keys(cx: &DataContext, p: &Value) -> Result<Value> {
     let Ok(account) = Uuid::parse_str(text(p, "connectorAccountId")?) else {
         return Ok(json!([]));
@@ -314,7 +315,20 @@ async fn cache_keys(cx: &DataContext, p: &Value) -> Result<Value> {
     let rows = cx
         .db()
         .query(
-            "SELECT external_id, external_metadata->>'sizeBytes'
+            "SELECT external_id, external_metadata->>'sizeBytes', external_metadata->>'historyId',
+                    analysis_attempts,
+                    (summary IS NOT NULL AND signals->'actionability' IS NOT NULL
+                       AND jsonb_typeof(signals->'actionability') = 'object'
+                       AND CASE
+                         WHEN signals#>>'{actionability,category}' IN ('needs_action','needs_reply','time_sensitive_info')
+                           THEN btrim(COALESCE(signals#>>'{actionability,inferredSubject}', '')) <> ''
+                                AND jsonb_typeof(signals#>'{actionability,suggestedTasks}') = 'array'
+                                AND jsonb_array_length(signals#>'{actionability,suggestedTasks}') > 0
+                         ELSE COALESCE(signals#>>'{actionability,category}', 'unknown') <> 'unknown'
+                       END)
+                    OR signals->>'pendingJudgement' = 'true'
+                    OR signals->>'skipped' = 'own_sent'
+                    OR signals#>>'{actionability,category}' IN ('noise','receipt_or_notice')
                FROM app.email_messages
               WHERE connector_account_id = $1 AND external_id = ANY($2)",
             &[&account, &ids],
@@ -324,7 +338,16 @@ async fn cache_keys(cx: &DataContext, p: &Value) -> Result<Value> {
         rows.iter()
             .map(|r| {
                 let size: Option<String> = r.get(1);
-                json!({"externalId":r.get::<_, String>(0),"sizeBytes":size.and_then(|s| s.parse::<i64>().ok())})
+                let history: Option<String> = r.get(2);
+                let attempts: i32 = r.get(3);
+                let finished: Option<bool> = r.get(4);
+                json!({
+                    "externalId":r.get::<_, String>(0),
+                    "sizeBytes":size.and_then(|s| s.parse::<i64>().ok()),
+                    "historyId":history,
+                    "analysisAttempts":attempts,
+                    "finished":finished.unwrap_or(false),
+                })
             })
             .collect(),
     ))

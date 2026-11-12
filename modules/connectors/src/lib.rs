@@ -8,6 +8,7 @@ mod abi;
 pub mod accounts;
 pub mod fastify;
 pub mod google;
+pub mod google_sync;
 pub mod imap;
 pub mod grants;
 pub mod health;
@@ -59,7 +60,13 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
             };
             serde_json::to_string(&response).map_err(|_| "Invalid connectors response".into())
         }
-        "job" => mail_sync::handle(host, payload),
+        "job" => {
+            let queue = serde_json::from_str::<Value>(payload).ok().and_then(|j| j["queue"].as_str().map(String::from));
+            match queue.as_deref() {
+                Some(google_sync::QUEUE | google_sync::SWEEP) => google_sync::handle(host, payload),
+                _ => mail_sync::handle(host, payload),
+            }
+        }
         "tool" => {
             let input: Value =
                 serde_json::from_str(payload).map_err(|_| "Invalid connectors request")?;
@@ -95,6 +102,7 @@ fn route(host: &impl Host, request: RouteRequest) -> Result<(u16, Value)> {
             accounts::put_grants(host, &id, &request.body).map(|b| (200, b))
         }
         ("POST", "/google/authorize") => google::authorize(host, &request.body).map(|b| (200, b)),
+        ("POST", "/google/sync") => google_sync::sync_route(host, &request.body),
         ("POST", "/google/complete") => google::complete(host, &request.body),
         ("POST", "/imap/test-connection") => imap::test_connection(host, &request.body).map(|b| (200, b)),
         ("POST", "/imap/connect") => imap::connect(host, &request.body),

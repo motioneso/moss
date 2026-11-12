@@ -213,6 +213,35 @@ impl GoogleStandIn {
         self.with(|s| s.sent.clone())
     }
 
+    /// Adds a calendar event directly, as if made in Google's own calendar.
+    pub fn add_event(&self, summary: &str, start: &str, end: &str) -> String {
+        self.with(|s| {
+            s.counter += 1;
+            let mut ev: Value = serde_json::from_str(fx::CALENDAR_EVENT).unwrap();
+            let id = format!("fakeevent{:04}", s.counter);
+            ev["id"] = json!(id);
+            ev["iCalUID"] = json!(format!("{id}@google.com"));
+            ev["creator"]["email"] = json!(s.cfg.email);
+            ev["organizer"]["email"] = json!(s.cfg.email);
+            ev["summary"] = json!(summary);
+            ev["start"] = json!({"dateTime":start});
+            ev["end"] = json!({"dateTime":end});
+            s.events.push(ev);
+            id
+        })
+    }
+
+    /// Removes the first event with this title, as if deleted in Google's own calendar.
+    pub fn remove_event_titled(&self, summary: &str) {
+        self.with(|s| {
+            if let Some(at) = s.events.iter().position(|e| e["summary"] == summary) {
+                let id = s.events[at]["id"].as_str().unwrap_or("").to_string();
+                s.events.remove(at);
+                s.deleted_events.insert(id);
+            }
+        })
+    }
+
     pub fn events(&self) -> Vec<Value> {
         self.with(|s| s.events.clone())
     }

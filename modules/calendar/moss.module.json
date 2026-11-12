@@ -4,7 +4,7 @@
   "name": "Calendar",
   "description": "Calendar cached-event screens and draft tools; signed-in HTTPS Calendar pages; provider execution and full shell composition remain incomplete.",
   "publisher": "Moss",
-  "version": "0.26.0",
+  "version": "0.27.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -43,7 +43,8 @@
         "calendar.task-reference",
         "calendar.briefing-reference",
         "calendar.ui-view",
-        "calendar.source-behaviors"
+        "calendar.source-behaviors",
+        "calendar.cache-write"
       ]
     }
   ],
@@ -73,6 +74,7 @@
       "sql/0236_day_plan_worker_apply_grants.sql"
     ],
     "ledger": "core-legacy",
+    "ownerDelete": ["app.calendar_events"],
     "access": {
       "app.calendar_events": {
         "access": "owner-or-share",
@@ -190,7 +192,9 @@
     "createPlan": "1.0.0",
     "saveDraft": "1.0.0",
     "reserveAutoPlan": "1.0.0",
-    "findUnfinishedBatch": "1.0.0"
+    "findUnfinishedBatch": "1.0.0",
+    "upsertCachedEvent": "1.0.0",
+    "pruneCachedEvents": "1.0.0"
   },
   "icons": ["icons/calendar.svg"],
   "accounts": {
@@ -201,6 +205,10 @@
     {
       "id": "calendar.source-switches",
       "description": "The Calendar settings screen has two switches, Include in briefings and Use for planning, both on by default. They save to the account's source-behavior preferences and change nothing for other modules. The Briefings module does not read them in this Rust version yet."
+    },
+    {
+      "id": "calendar.cache-api",
+      "description": "Connectors adds and updates cached events through a public interface, and removes the ones a sync no longer sees. Only the signed-in person's own events are touched."
     },
     {
       "id": "calendar.data",

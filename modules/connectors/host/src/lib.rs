@@ -25,6 +25,8 @@ struct Flight {
 }
 
 pub mod google;
+pub mod google_parse;
+pub mod google_sync;
 pub mod imap;
 pub mod imap_sync;
 pub mod mail_probe;
@@ -41,6 +43,7 @@ pub struct ConnectorsPorts {
     google: google::GoogleConfig,
     mail: imap::MailConfig,
     flights: Mutex<HashMap<uuid::Uuid, Arc<Flight>>>,
+    runs: google_sync::SyncRuns,
 }
 
 /// The cipher the old server used for connector secrets, from the same key setting.
@@ -67,6 +70,7 @@ impl ConnectorsPorts {
             google: google::GoogleConfig::production(),
             mail: imap::MailConfig::production(),
             flights: Mutex::default(),
+            runs: google_sync::SyncRuns::default(),
         })
     }
 
@@ -141,7 +145,9 @@ impl Ports for ConnectorsPorts {
                 let cx = DataContext::open_bounded(&self.database, scope.access(), scope.remaining())
                     .await
                     .map_err(|_| anyhow::anyhow!("Connectors data unavailable"))?;
-                let result = if request.resource.starts_with("connectors.google-") {
+                let result = if request.resource.starts_with("connectors.sync-google-") {
+                    google_sync::run(&cx, &self.cipher, &self.google, &self.runs, request).await?
+                } else if request.resource.starts_with("connectors.google-") {
                     google::run(&cx, &self.cipher, &self.google, request).await?
                 } else if request.resource.starts_with("connectors.imap-sync-")
                     || request.resource == "connectors.imap-list"
