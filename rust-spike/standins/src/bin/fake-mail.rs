@@ -14,8 +14,8 @@ async fn main() {
     println!("smtp-port {}", mail.smtp_addr.port());
     println!("username bob@example.com");
     println!("password correct-horse-battery");
-    loop {
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-        println!("imap-logins {} smtp-auths {}", mail.imap_logins_seen(), mail.smtp_auth_seen());
-    }
+    // Prints nothing more: the reader stops after the startup lines, and a later write would
+    // hit a closed pipe and end this process.
+    let _keep_alive = &mail;
+    std::future::pending::<()>().await;
 }
