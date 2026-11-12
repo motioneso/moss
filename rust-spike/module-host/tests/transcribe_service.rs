@@ -183,6 +183,10 @@ fn a_moved_route_sends_nothing() {
     assert_eq!((reply["ok"].clone(), reply["reason"].clone(), reply["stage"].clone()), (json!(false), json!("route-changed"), json!("configuration")));
     *f.route.model.lock().unwrap() = "whisper-one".into();
     *f.route.credential.lock().unwrap() = "another-key".into();
+    assert_eq!(f.call("create", params.clone()).unwrap()["reason"], "route-changed");
+    *f.route.credential.lock().unwrap() = CREDENTIAL.into();
+    // Same model, provider and key, but the endpoint moved to another address.
+    *f.route.base.lock().unwrap() = Some("http://127.0.0.1:9".parse().unwrap());
     assert_eq!(f.call("create", params).unwrap()["reason"], "route-changed");
     assert!(fake.received.lock().unwrap().is_empty());
 }

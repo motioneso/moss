@@ -38,15 +38,19 @@ fn registry() -> &'static Mutex<BTreeMap<Uuid, SharedSession>> {
 }
 
 fn open_session(database: &Database, runtime: &Runtime, scope: &CallScope) -> Result<SharedSession> {
-    let mut sessions = registry()
-        .lock()
-        .map_err(|_| anyhow::anyhow!("Database sessions busy"))?;
-    if let Some(session) = sessions.get(&scope.call_id()) {
+    let busy = || anyhow::anyhow!("Database sessions busy");
+    if let Some(session) = registry().lock().map_err(|_| busy())?.get(&scope.call_id()) {
         return Ok(session.clone());
     }
+    // The registry lock is not held while waiting for a connection, so finishing calls can
+    // still commit and release theirs.
     let context = runtime
         .block_on(DataContext::open_bounded(database, scope.access(), scope.remaining()))
         .map_err(|_| anyhow::anyhow!("Could not open the module data context"))?;
+    let mut sessions = registry().lock().map_err(|_| busy())?;
+    if let Some(session) = sessions.get(&scope.call_id()) {
+        return Ok(session.clone());
+    }
     let session = Arc::new(Mutex::new(Session {
         context,
         failed: false,

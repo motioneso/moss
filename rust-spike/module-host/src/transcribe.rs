@@ -30,12 +30,12 @@ pub struct TranscriptionRoute {
     pub credential: Secret,
 }
 impl TranscriptionRoute {
-    /// Hash over the model, the provider and a hash of the credential. Equal digests mean the
-    /// same model on the same provider with the same key.
+    /// Hash over the endpoint, the model, the provider and a hash of the credential. Equal digests
+    /// mean the same endpoint, model and provider with the same key.
     pub fn digest(&self) -> String {
         let key = Sha256::digest(self.credential.expose_secret().as_bytes());
         let mut hash = Sha256::new();
-        for part in [self.model.as_bytes(), self.provider.as_bytes(), &key] {
+        for part in [self.base.as_str().as_bytes(), self.model.as_bytes(), self.provider.as_bytes(), &key] {
             hash.update((part.len() as u64).to_be_bytes());
             hash.update(part);
         }
