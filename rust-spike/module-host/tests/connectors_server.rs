@@ -488,10 +488,19 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
             tokio::spawn(async move {
                 let _ = connection.await;
             });
-            db.query("SELECT queue, state, left(coalesce(output::text,''),200) FROM spike_jobs.jobs WHERE queue LIKE 'google%' ORDER BY created_at DESC LIMIT 6", &[])
-                .await
-                .map(|rows| rows.iter().map(|r| format!("{} {} {}", r.get::<_, String>(0), r.get::<_, String>(1), r.get::<_, String>(2))).collect::<Vec<_>>())
-                .unwrap_or_else(|e| vec![format!("job query failed: {e}")])
+            let result = db
+                .query("SELECT queue, state, left(coalesce(output::text,''),200) FROM spike_jobs.jobs WHERE queue LIKE 'google%' ORDER BY created_at DESC LIMIT 6", &[])
+                .await;
+            match result {
+                Ok(rows) => rows.iter().map(|r| format!("{} {} {}", r.get::<_, String>(0), r.get::<_, String>(1), r.get::<_, String>(2))).collect::<Vec<_>>(),
+                Err(e) => {
+                    let tables = db
+                        .query("SELECT table_schema||'.'||table_name FROM information_schema.tables WHERE table_name ILIKE '%job%' OR table_schema ILIKE '%boss%' OR table_schema ILIKE '%job%'", &[])
+                        .await
+                        .map(|rows| rows.iter().map(|r| r.get::<_, String>(0)).collect::<Vec<_>>());
+                    vec![format!("job query failed: {:?}; tables {:?}", e.as_db_error().map(|d| d.message().to_owned()), tables)]
+                }
+            }
         })
     };
     let wait_until = |what: &str, check: &dyn Fn() -> bool| {
