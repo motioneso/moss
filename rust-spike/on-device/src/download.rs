@@ -97,17 +97,20 @@ fn client() -> Result<reqwest::blocking::Client, Failure> {
 
 /// Fetches every file that is not already complete. A `.part` file left by an earlier try is
 /// resumed with a range request.
-pub fn fetch_all(folder: &Path, files: &[FileSpec], progress: &Progress) -> Result<(), Failure> {
+/// Returns true when every file was fetched and hash-checked by this call, so none was kept
+/// on a size match alone.
+pub fn fetch_all(folder: &Path, files: &[FileSpec], progress: &Progress) -> Result<bool, Failure> {
     std::fs::create_dir_all(folder).map_err(|e| disk(&e))?;
     let client = client()?;
     let mut finished: u64 = files.iter().filter(|f| present(folder, f)).map(|f| f.bytes).sum();
     progress.done.store(finished, Ordering::Relaxed);
+    let all_fresh = !files.iter().any(|f| present(folder, f));
     for file in files.iter().filter(|f| !present(folder, f)) {
         fetch_one(&client, folder, file, finished, progress)?;
         finished += file.bytes;
         progress.done.store(finished, Ordering::Relaxed);
     }
-    Ok(())
+    Ok(all_fresh)
 }
 
 /// Size of one range request.

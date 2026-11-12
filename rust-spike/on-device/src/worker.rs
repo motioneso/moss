@@ -27,6 +27,7 @@ struct Job {
     reply: SyncSender<Result<Vec<f32>, WorkerError>>,
 }
 
+#[derive(Clone)]
 pub struct Worker {
     queue: SyncSender<Job>,
 }

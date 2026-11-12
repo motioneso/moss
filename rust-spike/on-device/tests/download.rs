@@ -244,3 +244,21 @@ fn a_second_process_waits_on_the_folder_lock_and_says_so() {
     device.start_download(true);
     assert_eq!(wait_for(&device, |s| matches!(s, Status::Ready | Status::Failed(_))), Status::Ready);
 }
+
+#[test]
+fn a_damaged_file_kept_on_size_is_still_caught_after_another_file_downloads() {
+    let data = body();
+    let server = serve(data.clone());
+    let root = tempfile::tempdir().unwrap();
+    let model = spec(&server, &data);
+    let mut second = spec(&server, &data);
+    second.name = "tokenizer.json".into();
+    let device = OnDevice::with_files(root.path(), vec![model, second]);
+    std::fs::create_dir_all(device.folder()).unwrap();
+    // The model is the right size but wrong inside; the second file is missing.
+    std::fs::write(device.folder().join("model.onnx"), vec![7u8; data.len()]).unwrap();
+    device.start_download(false);
+    assert_eq!(wait_for(&device, |s| matches!(s, Status::Ready | Status::Failed(_))), Status::Ready);
+    let error = device.embed("search_query: hi", Duration::from_secs(5)).unwrap_err();
+    assert!(error.0.contains("damaged"), "{error}");
+}

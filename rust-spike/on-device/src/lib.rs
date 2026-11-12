@@ -166,13 +166,13 @@ impl OnDevice {
                 let inner = inner.clone();
                 move || {
                     let outcome = Self::download(&inner);
-                    // The download already checked every file against its hash before keeping it.
-                    if outcome.is_ok() {
+                    // Only a download that fetched every file has checked every file's hash.
+                    if matches!(outcome, Ok(true)) {
                         inner.verified.store(true, Ordering::Release);
                     }
                     let mut phase = inner.phase.lock().unwrap_or_else(|e| e.into_inner());
                     *phase = match outcome {
-                        Ok(()) => Phase::Idle,
+                        Ok(_) => Phase::Idle,
                         Err(message) => Phase::Failed { message, at: Instant::now() },
                     };
                 }
@@ -186,7 +186,7 @@ impl OnDevice {
         }
     }
 
-    fn download(inner: &Inner) -> Result<(), String> {
+    fn download(inner: &Inner) -> Result<bool, String> {
         inner.waiting.store(true, Ordering::Relaxed);
         let lock = CacheLock::acquire(&inner.folder, inner.lock_wait).map_err(|e| e.to_string());
         inner.waiting.store(false, Ordering::Relaxed);
@@ -197,6 +197,7 @@ impl OnDevice {
     /// One vector for one text, already prefixed by the caller. Returns at once with a plain
     /// message while the model is not ready, and starts the download the first time.
     pub fn embed(&self, text: &str, timeout: Duration) -> Result<Vec<f32>, Unavailable> {
+        let deadline = Instant::now() + timeout;
         match self.status() {
             Status::Ready => {}
             Status::Downloading { done, total, waiting } => {
@@ -232,8 +233,17 @@ impl OnDevice {
                         .map_err(|_| Unavailable("The search model could not start".into()))?,
                     );
                 }
-                slot.as_ref().and_then(|w| w.embed(text, timeout))
-            };
+                slot.as_ref().cloned()
+            }
+            .and_then(|w| {
+                // The wait started when the call began, so time spent behind others counts.
+                let left = deadline.saturating_duration_since(Instant::now());
+                if left.is_zero() {
+                    Some(Err(WorkerError::Failed("The search model took too long")))
+                } else {
+                    w.embed(text, left)
+                }
+            });
             match attempt {
                 Some(Ok(vector)) => return Ok(vector),
                 Some(Err(WorkerError::Damaged)) => {
