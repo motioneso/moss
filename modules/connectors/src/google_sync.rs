@@ -345,12 +345,14 @@ fn calendar_chunk(host: &impl Host, run: &mut Job) -> Result<Step> {
     }
     // Only a walk that read and wrote everything shows that an uncached event is gone.
     if run.error != "calendar-error" && run.error != "auth-error" {
-        let pruned = Client(host).api(
+        match Client(host).api(
             "calendar",
             "pruneCachedEvents",
             json!({"connectorAccountId":run.account,"seenSince":page["seenSince"]}),
-        )?;
-        run.calendar_reconciled += pruned["deleted"].as_u64().unwrap_or(0);
+        ) {
+            Ok(pruned) => run.calendar_reconciled += pruned["deleted"].as_u64().unwrap_or(0),
+            Err(_) => run.note("calendar-error"),
+        }
     }
     Ok(run.next_phase())
 }

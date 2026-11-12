@@ -193,6 +193,20 @@ fn a_calendar_write_failure_skips_the_prune_and_the_run_is_partial() {
 }
 
 #[test]
+fn a_failed_prune_marks_the_run_partial_and_mail_still_syncs() {
+    let host = Script::new(|port, resource, p| match resource {
+        "connectors.sync-google-start" => Some(Ok(json!({"state":"started","email":true,"calendar":true}))),
+        "connectors.sync-google-calendar" => Some(Ok(json!({"events":[],"done":true,"seenSince":"S"}))),
+        "connectors.sync-google-list" => Some(Ok(json!({"ids":[],"done":true}))),
+        _ if port == "api" && p["name"] == "pruneCachedEvents" => Some(Err(Error::new("denied"))),
+        _ => None,
+    });
+    run(&host, start_params());
+    assert_eq!(finish_of(&host)["status"], "partial");
+    assert!(!host.named("connectors.sync-google-list").is_empty());
+}
+
+#[test]
 fn a_settled_message_is_not_rewritten_but_a_changed_one_is() {
     let host = Script::new(|port, resource, p| match resource {
         "connectors.sync-google-start" => Some(Ok(json!({"state":"started","email":true,"calendar":false}))),

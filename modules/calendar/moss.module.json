@@ -74,6 +74,7 @@
       "sql/0236_day_plan_worker_apply_grants.sql"
     ],
     "ledger": "core-legacy",
+    "ownerDelete": ["app.calendar_events"],
     "access": {
       "app.calendar_events": {
         "access": "owner-or-share",
