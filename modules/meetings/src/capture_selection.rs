@@ -140,3 +140,54 @@ pub fn record(state: &mut Value, selection: &Value, expected_generation: i64, at
     state["generation"] = json!(generation);
     Ok(())
 }
+
+fn unavailable() -> Failure {
+    Failure::new(CaptureCode::SourceUnavailable)
+}
+
+/// The remembered source for a start, or the one the inventory allows. It never saves a choice
+/// and never widens a remembered exact source.
+pub fn resolve_source(preferences: &Value, device_id: &str, inventory: &Value) -> Result<Value, Failure> {
+    let remembered = &preferences["rememberedSource"];
+    if remembered.is_object() && remembered["deviceId"].as_str() != Some(device_id) {
+        return Err(unavailable());
+    }
+    let mode = preferences["defaultCaptureMode"]
+        .as_str()
+        .or_else(|| remembered["mode"].as_str())
+        .unwrap_or("computer-audio");
+    if remembered.is_object() {
+        let mut source = remembered.clone();
+        source["mode"] = json!(mode);
+        return Ok(source);
+    }
+    let mics = list(inventory, "microphones");
+    let defaults: Vec<&Value> = match inventory["defaultMicrophoneId"].as_str() {
+        None => mics.iter().collect(),
+        Some(id) => mics.iter().filter(|m| m["deviceId"].as_str() == Some(id)).collect(),
+    };
+    if defaults.len() != 1 || mode == "selected-app" {
+        return Err(unavailable());
+    }
+    Ok(json!({"deviceId": device_id, "microphoneId": defaults[0]["deviceId"], "mode": mode}))
+}
+
+/// The selection a saved source stands for, checked against the inventory.
+pub fn saved_selection(source: &Value, inventory: &Value) -> Result<Value, Failure> {
+    let mics: Vec<&Value> = list(inventory, "microphones").iter().filter(|m| m["deviceId"] == source["microphoneId"]).collect();
+    let [mic] = mics[..] else { return Err(unavailable()) };
+    let microphone = json!({"deviceId": mic["deviceId"], "sourceId": mic["sourceId"]});
+    let selection = match source["mode"].as_str() {
+        Some("microphone-only") => json!({"mode": "microphone-only", "microphone": microphone}),
+        Some("computer-audio") => json!({"mode": "computer-audio", "microphone": microphone, "outputSourceId": "output",
+            "scope": {"kind": "process-exclusion", "excludedProcessTreeIds": inventory["computerAudio"]["excludedProcessTreeIds"]}}),
+        _ => {
+            let apps: Vec<&Value> = list(inventory, "applications").iter().filter(|a| a["applicationId"] == source["applicationId"]).collect();
+            let [app] = apps[..] else { return Err(unavailable()) };
+            json!({"mode": source["mode"], "microphone": microphone, "outputSourceId": "output",
+                "appProcessTreeId": app["appProcessTreeId"], "applicationId": source["applicationId"]})
+        }
+    };
+    validate(&selection, inventory).map_err(|_| unavailable())?;
+    Ok(selection)
+}

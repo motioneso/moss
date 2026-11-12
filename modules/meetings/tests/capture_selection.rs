@@ -95,3 +95,25 @@ fn record_refuses_stale_generation_revoked_stale_lease_and_epoch_limit() {
     gaps["gapLimitReached"] = json!(true);
     assert_eq!(record(&mut gaps, &mic_only(), 1, 0, Some(0), ""), Err(Failure::new(CaptureCode::Limit)));
 }
+
+#[test]
+fn source_resolution_never_widens_a_remembered_source() {
+    use moss_meetings_module::capture_selection::{resolve_source, saved_selection};
+    let unavailable = Failure::new(CaptureCode::SourceUnavailable);
+    let prefs = json!({"rememberedSource": null, "defaultCaptureMode": "computer-audio"});
+    let source = resolve_source(&prefs, "dev", &inventory()).unwrap();
+    assert_eq!(source, json!({"deviceId": "dev", "microphoneId": "mic-uid", "mode": "computer-audio"}));
+    let elsewhere = json!({"rememberedSource": {"deviceId": "other", "microphoneId": "mic-uid", "mode": "computer-audio"}, "defaultCaptureMode": "computer-audio"});
+    assert_eq!(resolve_source(&elsewhere, "dev", &inventory()), Err(unavailable));
+    let app_default = json!({"rememberedSource": null, "defaultCaptureMode": "selected-app"});
+    assert_eq!(resolve_source(&app_default, "dev", &inventory()), Err(unavailable));
+    let mut two = inventory();
+    two["microphones"].as_array_mut().unwrap().push(json!({"deviceId": "m2", "sourceId": "s2", "label": "Two"}));
+    assert_eq!(resolve_source(&prefs, "dev", &two), Err(unavailable));
+    two["defaultMicrophoneId"] = json!("m2");
+    assert_eq!(resolve_source(&prefs, "dev", &two).unwrap()["microphoneId"], "m2");
+    let selection = saved_selection(&source, &inventory()).unwrap();
+    assert_eq!(selection["scope"]["excludedProcessTreeIds"], json!(["moss"]));
+    let gone = json!({"deviceId": "dev", "microphoneId": "missing", "mode": "computer-audio"});
+    assert_eq!(saved_selection(&gone, &inventory()), Err(unavailable));
+}
