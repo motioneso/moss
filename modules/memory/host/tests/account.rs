@@ -102,7 +102,7 @@ impl Fixture {
              INSERT INTO app.memory_candidates(owner_user_id, kind, action, payload_json, candidate_signature, confidence, importance, provenance)
                VALUES ('{o}','fact','create','{{\"excerpt\":\"{MARKER}\",\"k\":1}}','sig-{tag}',0.9,0.5,'volunteered');
              INSERT INTO app.memory_search_documents(owner_user_id, target_kind, target_id, search_text, embedding, embed_model_name, embed_model_version)
-               SELECT '{o}','fact', id, '{MARKER} {tag}', '{v}', 'm', '1' FROM app.memory_facts WHERE owner_user_id='{o}';
+               SELECT '{o}','entity', id, '{MARKER} {tag}', '{v}', 'm', '1' FROM app.memory_entities WHERE owner_user_id='{o}';
              INSERT INTO app.memory_legacy_fact_migrations(owner_user_id, legacy_fact_id, memory_fact_id)
                SELECT '{o}', c.id, f.id FROM app.chat_memory_facts c, app.memory_facts f WHERE c.owner_user_id='{o}' AND f.owner_user_id='{o}';
              INSERT INTO app.memory_recording_fact_versions(owner_user_id, fact_id, lineage_id, side)
