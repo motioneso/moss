@@ -120,3 +120,40 @@ Two fixes came out of the replay. Unknown query parameters are now ignored, as t
 - No real speech service was called. Timing quality of a real service is unproven.
 - A clip of the full 3.8 MB cannot reach the port, because one module message is limited to 1 MiB. Larger clips need a higher limit for this port, or a chunked call.
 - No screen, no ring, no Mac recorder, no summaries.
+
+## Part 4, slice A (summary logic)
+
+Slice A ports the logic that writes a summary. It touches no database and no route.
+
+### What slice A built
+
+- Four summary templates (general, one-to-one, project review, interview), each version 1.
+- A prompt builder. Meeting text goes in as escaped data, so it cannot close a delimiter or pass as an instruction. The prompt is capped at 65,536 bytes.
+- An answer checker. It enforces the size limits, requires every citation to point at real transcript or notes text, and refuses ranges that split a character.
+- A long-meeting runner. It cuts evidence into pieces, carries a running summary forward, and trims in a fixed order when a prompt is too big.
+- One retry per piece on an unreadable or invalid answer, then a stored rejection code.
+- The model call is a trait. In the package it will be the router's summarization route, and no provider is named.
+
+### What slice A proved
+
+| Check                        | How                                                                                                                  |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Escaping                     | Meeting text appears in the prompt only as escaped data.                                                             |
+| Every citation failure       | One test per refusal reason, plus a surrogate pair split.                                                            |
+| Size limits                  | Total character cap, byte cap across a long meeting in several pieces, and a single huge segment cut with a warning. |
+| Retry and failure codes      | One retry then rejection, fenced answers accepted, timeout and provider failure codes.                               |
+| Piece coverage and citations | Every segment lands in a piece, and notes citations shift back to full-notes offsets.                                |
+
+All 13 tests use a scripted fake model.
+
+### Not proven in slice A
+
+- No storage layer, so no request keys, no immutable versions, no stale marks, no action candidates.
+- No routes and no manifest entries for summaries.
+- No stop-summary job and no automatic summary on stop.
+- No real-database test and no live run.
+- No real model was called. Prompt quality against a real route is unproven.
+- A long meeting may exceed the call deadline, because one route call is one transaction.
+- The old app also summarised recording and speaker data. Slice A keeps only the five core fields.
+- The WebAssembly build and the full gate did not run. The worktree has no node_modules and the build cache lacked one crate offline. Native guest tests ran (all 12 files pass).
+- Prettier did not run, because it is not installed here.
