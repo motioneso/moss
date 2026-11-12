@@ -11,6 +11,8 @@ pub struct Fake {
     pub lifecycle: Value,
     pub target: Value,
     pub forget: Value,
+    /// Answer for the screen resources (lists, decisions, patches, subject lookup).
+    pub screen: Value,
     pub calls: RefCell<Vec<(String, String, Value)>>,
 }
 
@@ -23,6 +25,7 @@ impl Fake {
             lifecycle: json!({"ok": true}),
             target: json!({"target": null}),
             forget: json!({"deleted": true}),
+            screen: json!({}),
             calls: RefCell::default(),
         }
     }
@@ -54,6 +57,8 @@ impl Host for Fake {
             "memory.lifecycle" => Ok(self.lifecycle.clone()),
             "memory.target" => Ok(self.target.clone()),
             "memory.forget" => Ok(self.forget.clone()),
+            "memory.facts" | "memory.candidates" | "memory.candidate" | "memory.fact-patch"
+            | "memory.entity-patch" | "memory.entity-delete" | "memory.subject" => Ok(self.screen.clone()),
             "memory.index" if self.index_fails => Err(Error::new("embedding failed")),
             "memory.index" => Ok(json!({"indexed": true})),
             _ => Err(Error::new("unknown resource")),

@@ -3,47 +3,12 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Memory search model · Moss</title>
+    <title>Memory &amp; context · Moss</title>
     <link rel="stylesheet" href="/module-shared/park-press.css" />
     <link rel="stylesheet" href="./memory.css" />
     <script type="module" src="./app.mjs"></script>
   </head>
   <body>
-    <main class="memory-settings">
-      <h1 class="jds-card__title">Memory search model</h1>
-      <p id="status" role="status">Loading…</p>
-      <form id="form" hidden>
-        <p id="state"></p>
-        <div class="jds-field">
-          <label class="jds-label" for="url">Endpoint address</label>
-          <input id="url" type="url" autocomplete="off" />
-        </div>
-        <div class="jds-field">
-          <label class="jds-label" for="model">Model name</label>
-          <input id="model" type="text" autocomplete="off" />
-        </div>
-        <div class="jds-field">
-          <label class="jds-label" for="key">Key</label>
-          <input id="key" type="password" autocomplete="new-password" />
-          <p id="key-note"></p>
-        </div>
-        <div class="jds-field">
-          <label class="jds-label">Where the model runs</label>
-          <p>On this device: not available yet.</p>
-        </div>
-        <p id="notice" role="note">
-          Saving sends the text of every account's notes to this endpoint so it can be searched.
-          Choose an endpoint you trust with that text.
-        </p>
-        <label class="memory-confirm">
-          <input id="confirm" type="checkbox" />
-          I understand note text leaves this device.
-        </label>
-        <div class="memory-actions">
-          <button id="save" type="submit" disabled>Save</button>
-          <button id="clear" type="button" hidden>Remove model</button>
-        </div>
-      </form>
-    </main>
+    <main class="memory-screen" id="root"></main>
   </body>
 </html>
