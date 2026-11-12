@@ -130,7 +130,10 @@ pub async fn recall(cx: &DataContext, p: &Value, vector: &str) -> Result<Value> 
     if rows.is_empty() {
         now_ms = cx
             .db()
-            .query_one("SELECT floor(extract(epoch FROM now()) * 1000)::float8", &[])
+            .query_one(
+                "SELECT floor(extract(epoch FROM now()) * 1000)::float8",
+                &[],
+            )
             .await?
             .get(0);
     }
@@ -165,7 +168,12 @@ pub async fn core(cx: &DataContext, p: &Value) -> Result<Value> {
     Ok(json!({"facts": facts, "names": names}))
 }
 
-pub(crate) async fn upsert_document(cx: &DataContext, kind: &str, target: &str, search: &str) -> Result<()> {
+pub(crate) async fn upsert_document(
+    cx: &DataContext,
+    kind: &str,
+    target: &str,
+    search: &str,
+) -> Result<()> {
     cx.db()
         .execute(
             "INSERT INTO app.memory_search_documents
@@ -208,7 +216,7 @@ pub async fn create_entity(cx: &DataContext, p: &Value) -> Result<Value> {
     Ok(json!({"entity": entity}))
 }
 
-async fn ensure_self(cx: &DataContext) -> Result<String> {
+pub(crate) async fn ensure_self(cx: &DataContext) -> Result<String> {
     cx.db()
         .execute(
             "INSERT INTO app.memory_entities (owner_user_id, kind, name, summary)
@@ -352,7 +360,9 @@ pub async fn store_vector(
 pub async fn run(cx: &DataContext, request: &Request, vector: Option<&str>) -> Result<Value> {
     let p = &request.parameters;
     match (request.operation.as_str(), request.resource.as_str()) {
-        ("get", "memory.recall") => recall(cx, p, vector.ok_or_else(|| anyhow!("Missing vector"))?).await,
+        ("get", "memory.recall") => {
+            recall(cx, p, vector.ok_or_else(|| anyhow!("Missing vector"))?).await
+        }
         ("get", "memory.core") => core(cx, p).await,
         ("set", "memory.entity") => create_entity(cx, p).await,
         ("set", "memory.fact") => create_fact(cx, p).await,

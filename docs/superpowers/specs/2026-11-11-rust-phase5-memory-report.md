@@ -293,3 +293,51 @@ and ran out of time in a debug build. The download now marks the files as checke
 - **Major.** Removing damaged files happened before taking the folder lock, so two processes could
   delete each other's fresh files. The check and removal now run under the lock, and only files
   that fail their hash are removed. A new test covers it.
+
+## Part 9: recording memory (JS-245)
+
+### What was built
+
+- **Facts from recordings, kept per person.** Fact versions, one receipt per recording item,
+  proposals, shared-fact lineage, cleanup and export now live in the Rust Memory package. The
+  rules, status codes and error wording match the old code.
+- **Preparing and applying.** A proposal is prepared first and applied second. Applying embeds the
+  text between two short database transactions, so no lock is held while the search model runs. A
+  failed embedding publishes the fact without a vector and the search index fills it in later.
+- **Undo, restore and side change** reverse or move a fact without making a second one.
+- **Cleanup** works in batches of twenty receipts and reports whether work remains. Removing a
+  recording deletes the facts that no other recording supports.
+- **Export** returns the person's fact versions, receipts and proposals in the old shapes.
+- **Meetings is a stand-in.** Meetings is not ported, so a small interface answers "what is this
+  recording's current state" and "is its removal open". Until Meetings is connected, every change
+  is refused with the old "has changed or is being removed" message.
+- **No screens.** The Meetings screen joins when Meetings is ported.
+
+### Proof
+
+- A second person cannot read, apply or export the first person's recording memory. The check was
+  seen failing with row-level security switched off on the three recording tables.
+- Fact text never appeared in job payloads or the activity tables that exist in the test database.
+  The same text was found in the memory table, so the search was not empty.
+- The full flow (apply, replay, change, undo, restore, side change, stale revision conflict) runs
+  through the real built module and the real database.
+- Removal deletes the fact and clears the receipts only after the removal is open and sealed.
+- Bad text and bad sources get the old messages and statuses.
+- Rows written by the old TypeScript service read back the same in Rust, and the reverse. The
+  receipts and the whole export are compared for equality.
+- Native and WebAssembly builds both pass their tests.
+
+### Not proven
+
+- **A live run through the real server's web address.** No web route exposes this API, and the
+  old code had none either. The proof runs through the real module host and database instead. The
+  live gate was run to check that the package still installs and serves its routes.
+- **Real Meetings behaviour.** The tests use a stand-in whose answers they control. The real
+  generation and removal rules arrive with the Meetings port.
+- **Changing a recording fact from the Memory screen's confirm and correct.** Those routes still
+  refuse recording facts, as in part 3. Wiring them to lineage waits for Meetings.
+- **Receipt ids across implementations.** Both sides derive the id the same way, and the
+  round-trip test reads each other's rows, but the id was not compared for old rows from before
+  this task.
+- **Heavy concurrency.** Locks fail fast and report a change. No test ran two people changing the
+  same recording at once.
