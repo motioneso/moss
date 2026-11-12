@@ -570,6 +570,16 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
     {
         // Mail connect over HTTPS against the fake mail server. The password must not reach
         // any response, the server log or any stored row; the stored bundle is sealed.
+        // The first call into Email compiles its component, which a debug build does slowly,
+        // and a sync that triggers that compile inside its own time limit would be cut off.
+        // One ordinary Email request warms the compiled copy first.
+        let warm = client
+            .get(format!("{origin}/api/m/email/messages"))
+            .header("origin", &origin)
+            .header("cookie", &cookie)
+            .send()
+            .unwrap();
+        assert_eq!(warm.status().as_u16(), 200);
         let username = mail_lines["username"].clone();
         let password = mail_lines["password"].clone();
         let good = json!({"providerId":"imap-yahoo","username":username,"password":password});
