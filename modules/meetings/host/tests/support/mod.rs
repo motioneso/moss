@@ -35,7 +35,7 @@ impl Fixture {
                 root.batch_execute(moss_module_host::migrations::MIGRATION).await.unwrap();
             }
             root.execute(
-                "INSERT INTO app.users(id,email,name,is_instance_admin) VALUES($1,$4,'Meet A',false),($2,$5,'Meet B',false),($3,$6,'Meet Admin',true)",
+                "INSERT INTO app.users(id,email,name,is_instance_admin) VALUES($1,$4,'Meet A',true),($2,$5,'Meet B',false),($3,$6,'Meet Admin',true)",
                 &[&a, &b, &admin, &format!("{a}@example.test"), &format!("{b}@example.test"), &format!("{admin}@example.test")],
             )
             .await
