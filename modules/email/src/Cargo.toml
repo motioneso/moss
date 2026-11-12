@@ -23,6 +23,20 @@ path = "tests/routes.rs"
 name = "cache"
 path = "tests/cache.rs"
 
+[[test]]
+name = "otp"
+path = "tests/otp.rs"
+
 [[bin]]
 name = "email-oracle"
 path = "bin/oracle.rs"
+
+[[test]]
+
+name = "understand"
+path = "tests/understand.rs"
+
+[[test]]
+
+name = "pass"
+path = "tests/pass.rs"

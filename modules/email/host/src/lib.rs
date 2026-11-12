@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 pub mod package;
 pub mod store;
+pub mod understand;
 
 pub const MODULE_ID: &str = "email";
 
@@ -43,7 +44,14 @@ impl Ports for EmailPorts {
                 let cx = DataContext::open_bounded(&self.database, scope.access(), scope.remaining())
                     .await
                     .map_err(|_| anyhow::anyhow!("Email data unavailable"))?;
-                let result = store::run(&cx, request).await?;
+                let result = if request.resource.starts_with("email.understand")
+                    || request.resource == "email.suppression"
+                    || request.resource == "email.triage-feedback"
+                {
+                    understand::run(&cx, request).await?
+                } else {
+                    store::run(&cx, request).await?
+                };
                 cx.commit_bounded(scope.remaining())
                     .await
                     .map_err(|_| anyhow::anyhow!("Email data unavailable"))?;

@@ -1,6 +1,6 @@
 //! Database proofs for the Email adapter. Run only through scripts/run-gate.sh.
 use access_context::AccessContext;
-use moss_email_host::store;
+use moss_email_host::{store, understand};
 use moss_module_host::runtime::Request;
 use safety_core::db::{DataContext, Database, RuntimeRole};
 use serde_json::{json, Value};
@@ -66,7 +66,14 @@ impl Fixture {
                 resource: resource.into(),
                 parameters,
             };
-            let out = store::run(&cx, &request).await.unwrap();
+            let out = if resource == "email.suppression"
+                || resource == "email.triage-feedback"
+                || resource.starts_with("email.understand")
+            {
+                understand::run(&cx, &request).await.unwrap()
+            } else {
+                store::run(&cx, &request).await.unwrap()
+            };
             cx.commit().await.unwrap();
             out
         })
@@ -388,4 +395,143 @@ fn keys_report_sizes_and_an_overwrite_keeps_what_was_understood() {
     assert_eq!(again["subject"], "Second");
     assert_eq!(again["summary"], "Understood");
     assert_eq!(again["signals"], json!({"urgent":true}));
+}
+
+fn sent_mail(f: &Fixture, external: &str, to: &str) {
+    f.call(
+        f.a,
+        "set",
+        "email.cache-write",
+        json!({"action":"insert","connectorAccountId":f.account_a.to_string(),"externalId":external,
+               "fields":{"sender":"Me <me@example.test>","recipients":[to],"subject":"Sent",
+                         "receivedAt":"2026-01-01T00:00:00.000Z","snippet":"s","bodyExcerpt":"b"}}),
+    );
+}
+
+fn pending(f: &Fixture, actor: Uuid) -> Value {
+    f.call(actor, "get", "email.understand", json!({"limit":50}))
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn pending_mail_carries_the_local_day_own_addresses_and_known_senders() {
+    let f = Fixture::new();
+    sent_mail(&f, "s1", "Friend <friend@example.test>");
+    sent_mail(&f, "s2", "friend@example.test");
+    f.cache("e1", "Hello");
+    let batch = pending(&f, f.a);
+    assert_eq!(batch["today"].as_str().unwrap().len(), 10);
+    assert!(batch["ownAddresses"].as_array().unwrap().iter().any(|a| a == "friend@example.test"));
+    let m = batch["messages"].as_array().unwrap().iter().find(|m| m["subject"] == "Hello").unwrap();
+    assert_eq!(m["receivedDay"], "2026-01-02");
+    assert_eq!(m["attempts"], 0);
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_stored_result_leaves_the_pending_list_and_failures_stop_at_five() {
+    let f = Fixture::new();
+    let id = f.cache("e2", "Result")["id"].as_str().unwrap().to_string();
+    let other = f.cache("e3", "Failing")["id"].as_str().unwrap().to_string();
+    let has = |b: &Value, id: &str| b["messages"].as_array().unwrap().iter().any(|m| m["id"] == id);
+    assert!(has(&pending(&f, f.a), &id));
+    f.call(f.a, "set", "email.understand", json!({"action":"result","id":id,"summary":"A summary",
+        "signals":{"actionability":{"category":"fyi"},"confidence":0.8}}));
+    assert!(!has(&pending(&f, f.a), &id));
+    for n in 1..=5 {
+        assert!(has(&pending(&f, f.a), &other), "still pending before failure {n}");
+        f.call(f.a, "set", "email.understand", json!({"action":"fail","id":other}));
+    }
+    assert!(!has(&pending(&f, f.a), &other));
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_new_mail_revision_resets_attempts_and_the_judgement_stamp() {
+    let f = Fixture::new();
+    let put = |history: &str| {
+        f.call(f.a, "set", "email.cache-write",
+            json!({"action":"insert","connectorAccountId":f.account_a.to_string(),"externalId":"rev",
+                   "fields":{"sender":"x@example.test","recipients":[],"subject":"Rev",
+                             "receivedAt":"2026-01-02T00:00:00.000Z","externalMetadata":{"historyId":history}}}))
+    };
+    let id = put("1")["id"].as_str().unwrap().to_string();
+    f.call(f.a, "set", "email.understand", json!({"action":"fail","id":id}));
+    f.sql(&format!("UPDATE app.email_messages SET judgement_requested_at = now() WHERE id = '{id}'"));
+    put("1");
+    let row = |col: &str| f.rt.block_on(f.root.query_one(&format!("SELECT {col}::text FROM app.email_messages WHERE id = '{id}'"), &[])).unwrap().get::<_, Option<String>>(0);
+    assert_eq!(row("analysis_attempts").as_deref(), Some("1"));
+    assert!(row("judgement_requested_at").is_some());
+    put("2");
+    assert_eq!(row("analysis_attempts").as_deref(), Some("0"));
+    assert!(row("judgement_requested_at").is_none());
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_second_person_neither_sees_nor_changes_the_mail_being_understood() {
+    let f = Fixture::new();
+    let id = f.cache("e4", "Private")["id"].as_str().unwrap().to_string();
+    assert!(pending(&f, f.b)["messages"].as_array().unwrap().is_empty());
+    let out = f.call(f.b, "set", "email.understand", json!({"action":"result","id":id,"summary":"Stolen","signals":{}}));
+    assert_eq!(out["changed"], 0);
+    let own = pending(&f, f.a);
+    assert!(own["messages"].as_array().unwrap().iter().any(|m| m["id"] == id.as_str()));
+}
+
+fn signature() -> String {
+    "ab".repeat(32)
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn suppression_counts_dismissals_keeps_evidence_and_resets_only_existing_rows() {
+    let f = Fixture::new();
+    let sig = signature();
+    f.call(f.a, "set", "email.suppression", json!({"action":"reset","signature":sig}));
+    assert_eq!(f.call(f.a, "get", "email.suppression", json!({"signatures":[sig]})), json!([]));
+    f.call(f.a, "set", "email.suppression", json!({"action":"dismiss","signature":sig}));
+    f.call(f.a, "set", "email.suppression", json!({"action":"dismiss","signature":sig}));
+    f.call(f.a, "set", "email.suppression", json!({"action":"deadline","signature":sig,"key":"d1"}));
+    f.call(f.a, "set", "email.suppression", json!({"action":"context","signature":sig,"key":"c1"}));
+    let rows = f.call(f.a, "get", "email.suppression", json!({"signatures":[sig]}));
+    assert_eq!(rows[0]["dismissalCount"], 2);
+    assert_eq!(rows[0]["deadlineEvidenceKeys"], json!(["d1"]));
+    assert_eq!(rows[0]["contextMessageKeys"], json!(["c1"]));
+    f.call(f.a, "set", "email.suppression", json!({"action":"reset","signature":sig}));
+    let rows = f.call(f.a, "get", "email.suppression", json!({"signatures":[sig]}));
+    assert_eq!(rows[0]["dismissalCount"], 0);
+    assert_eq!(rows[0]["deadlineEvidenceKeys"], json!([]));
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn feedback_keeps_a_capped_subject_prefix_and_counts_per_domain() {
+    let f = Fixture::new();
+    f.call(f.a, "set", "email.triage-feedback", json!({"verdict":"accepted","actionability":"needs_reply",
+        "sender":"Ann <ann@Shop.Example>","subject":"s".repeat(300)}));
+    f.call(f.a, "set", "email.triage-feedback", json!({"verdict":"rejected","actionability":"needs_reply","sender":"ann@shop.example"}));
+    let counts = f.call(f.a, "get", "email.triage-feedback", json!({}));
+    assert_eq!(counts, json!([{"domain":"shop.example","accepted":1,"rejected":1}]));
+    let len: i32 = f.rt.block_on(f.root.query_one("SELECT max(char_length(subject_prefix)) FROM app.email_triage_feedback", &[])).unwrap().get(0);
+    assert_eq!(len, 120);
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_second_person_sees_none_of_the_suppression_or_feedback_and_the_check_has_teeth() {
+    let f = Fixture::new();
+    let sig = signature();
+    f.call(f.a, "set", "email.suppression", json!({"action":"dismiss","signature":sig}));
+    f.call(f.a, "set", "email.triage-feedback", json!({"verdict":"accepted","actionability":"fyi","sender":"a@one.example"}));
+    let list = |actor| f.call(actor, "get", "email.suppression", json!({"signatures":[sig]}));
+    let counts = |actor| f.call(actor, "get", "email.triage-feedback", json!({}));
+    assert_eq!(list(f.b), json!([]));
+    assert_eq!(counts(f.b), json!([]));
+    f.sql("ALTER TABLE app.email_action_suppression NO FORCE ROW LEVEL SECURITY; ALTER TABLE app.email_action_suppression DISABLE ROW LEVEL SECURITY;
+           ALTER TABLE app.email_triage_feedback NO FORCE ROW LEVEL SECURITY; ALTER TABLE app.email_triage_feedback DISABLE ROW LEVEL SECURITY;");
+    let leaked = (list(f.b) != json!([])) && (counts(f.b) != json!([]));
+    f.sql("ALTER TABLE app.email_action_suppression ENABLE ROW LEVEL SECURITY; ALTER TABLE app.email_action_suppression FORCE ROW LEVEL SECURITY;
+           ALTER TABLE app.email_triage_feedback ENABLE ROW LEVEL SECURITY; ALTER TABLE app.email_triage_feedback FORCE ROW LEVEL SECURITY;");
+    assert!(leaked, "with the protection removed the second person must see the rows");
 }
