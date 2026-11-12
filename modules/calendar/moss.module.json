@@ -43,7 +43,8 @@
         "calendar.task-reference",
         "calendar.briefing-reference",
         "calendar.ui-view",
-        "calendar.source-behaviors"
+        "calendar.source-behaviors",
+        "calendar.cache-write"
       ]
     }
   ],
@@ -190,7 +191,9 @@
     "createPlan": "1.0.0",
     "saveDraft": "1.0.0",
     "reserveAutoPlan": "1.0.0",
-    "findUnfinishedBatch": "1.0.0"
+    "findUnfinishedBatch": "1.0.0",
+    "upsertCachedEvent": "1.0.0",
+    "pruneCachedEvents": "1.0.0"
   },
   "icons": ["icons/calendar.svg"],
   "accounts": {
@@ -201,6 +204,10 @@
     {
       "id": "calendar.source-switches",
       "description": "The Calendar settings screen has two switches, Include in briefings and Use for planning, both on by default. They save to the account's source-behavior preferences and change nothing for other modules. The Briefings module does not read them in this Rust version yet."
+    },
+    {
+      "id": "calendar.cache-api",
+      "description": "Connectors adds and updates cached events through a public interface, and removes the ones a sync no longer sees. Only the signed-in person's own events are touched."
     },
     {
       "id": "calendar.data",

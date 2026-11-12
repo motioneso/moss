@@ -378,7 +378,7 @@ fn keys_report_sizes_and_an_overwrite_keeps_what_was_understood() {
                          "receivedAt":"2026-01-02T00:00:00.000Z","snippet":"s","summary":"Understood","signals":{"urgent":true},
                          "externalMetadata":{"sizeBytes":100}}}));
     let keys = f.call(f.a, "get", "email.cache-keys", json!({"connectorAccountId":account,"externalIds":["imap:INBOX:1:1","imap:INBOX:1:9"]}));
-    assert_eq!(keys, json!([{"externalId":"imap:INBOX:1:1","sizeBytes":100}]));
+    assert_eq!(keys, json!([{"externalId":"imap:INBOX:1:1","sizeBytes":100,"historyId":null,"analysisAttempts":0,"finished":false}]));
     assert_eq!(f.call(f.b, "get", "email.cache-keys", json!({"connectorAccountId":account,"externalIds":["imap:INBOX:1:1"]})), json!([]));
     // A sync overwrite carries no summary or signals, and the earlier ones stay.
     let again = f.call(f.a, "set", "email.cache-write",
