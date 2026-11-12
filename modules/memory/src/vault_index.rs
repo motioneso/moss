@@ -82,8 +82,8 @@ pub fn handle_job(host: &impl Host, payload: &str) -> Result<String> {
     match job.queue.as_str() {
         TICK => {
             reconcile_schedule(host);
-            crate::reembed::retry_missing(host);
             enqueue_now(host, SWEEP, json!({"offset":0}), &new_id(host)?)?;
+            crate::reembed::retry_missing(host);
             Ok(json!({"started":true}).to_string())
         }
         SWEEP => sweep(host, job.parameters["offset"].as_u64().ok_or_else(unavailable)? as usize),

@@ -11,7 +11,7 @@ export function describe(status) {
   }
   if (run?.status === "failed" && other > 0) {
     return {
-      text: "The last re-embed stopped. Search keeps using the old data.",
+      text: "The last re-embed stopped. The old data is kept.",
       button: "Try again",
       act: "start"
     };

@@ -254,16 +254,12 @@ impl MemoryPorts {
         );
         let mut staged = Vec::new();
         for item in batch["items"].as_array().into_iter().flatten() {
-            let embedded = self
-                .embedder
-                .document(scope, item["text"].as_str().unwrap_or(""))
-                .and_then(|(vector, model)| {
-                    ensure!(model == target, "The embedding model changed during re-embed");
-                    literal(&vector)
-                });
-            match embedded {
-                Ok(vector) => staged.push((item, vector)),
-                Err(_) => return self.fail_run(scope, run),
+            // A service error returns, so the job retries and resumes from the staged rows.
+            let (vector, made) = self.embedder.document(scope, item["text"].as_str().unwrap_or(""))?;
+            // A changed model or an unusable vector can never succeed, so the run ends.
+            match (made == target, literal(&vector)) {
+                (true, Ok(vector)) => staged.push((item, vector)),
+                _ => return self.fail_run(scope, run),
             }
         }
         self.within(scope, |cx| async {
@@ -314,7 +310,7 @@ impl MemoryPorts {
             });
             let Ok((vector, made)) = stored else {
                 failed += 1;
-                break;
+                continue;
             };
             let done = self.within(scope, |cx| async {
                 let done = store::store_vector(&cx, id, text, &vector, &made).await?;

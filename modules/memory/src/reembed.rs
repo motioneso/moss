@@ -62,9 +62,17 @@ pub fn handle_job(host: &impl Host, parameters: &Value) -> std::result::Result<S
     .to_string())
 }
 
-/// Gives facts that were saved without a vector another try. Failures are not reported.
+/// Gives facts that were saved without a vector another try, and restarts the step chain of a
+/// run whose job ran out of retries. The key holds the staged count, so a healthy chain is not
+/// doubled. Failures are not reported.
 pub fn retry_missing(host: &impl Host) {
     let _ = kv(host, "set", "memory.reembed", json!({"action": "retry-missing"}));
+    let Ok(status) = status_route(host) else { return };
+    let run = &status["run"];
+    if let (Some(id), Some("running")) = (run["id"].as_str().filter(|id| uuid_like(id)), run["status"].as_str()) {
+        let key = format!("memory.reembed-kick-{id}-{}", run["staged"]);
+        let _ = enqueue_now(host, STEP, json!({"run-id": id}), &key);
+    }
 }
 
 #[cfg(test)]

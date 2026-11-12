@@ -346,9 +346,9 @@ and ran out of time in a debug build. The download now marks the files as checke
 
 ### What it does
 
-- When the search model changes, passages saved under the old model keep working. A note on the Search model screen says "N passages use another model", with a Re-embed button.
+- When the search model changes, passages saved under the old model are kept, but note search skips them until a re-embed finishes. A note on the Search model screen says "N passages use another model", with a Re-embed button.
 - Re-embed works in small batches of 16. New vectors go into a holding table. Nothing real changes until every passage has one.
-- When the last batch lands, one transaction moves all of them in and marks the run done. Cancel, a failure, or a restart only throws away the held vectors. The old ones stay in use.
+- When the last batch lands, one transaction moves all of them in and marks the run done. Cancel, a failure, or a restart only throws away the held vectors. The old ones stay in the database. Because search only reads vectors made by the current model, note search returns nothing from old passages while a run is going (facts only lose their vector score). That is a product call for the coordinator: staging empties note search during a run.
 - A passage whose text was edited after its new vector was made keeps its old vector. The swap checks a hash of the text.
 - Search never mixes models. A passage made by another model counts as zero similarity, so it cannot be compared with a query from the current model.
 - Facts saved without a vector (the embedding service was down) are retried on the existing 15 minute tick.
@@ -368,6 +368,15 @@ The 15 minute sweep used to re-embed everything when the model name changed. It 
 ### Platform finding
 
 The two new tables belong to the module, so only the module's own database role can reach them. The app connection does not have those grants. The host adapter therefore switches to the module role for each statement on those tables and back for passages and facts, inside one transaction. Module tables created later will need the same.
+
+### Not proven
+
+- A run of tens of thousands of passages: the final swap and each batch must fit one job's time limit, and nothing timed it.
+- A re-embed on a second person's data while the first runs at the same time, beyond the row-level test.
+- The other indexing path (note ingest) still re-embeds a note when it sees a new model name, so it can overlap a run.
+- The file index keeps the old model name after a swap.
+- A changed model version with the same name is not noticed.
+- The progress total can drift if passages are added mid-run.
 
 ### Guesses
 

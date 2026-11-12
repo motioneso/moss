@@ -1,6 +1,8 @@
-//! Owner-started re-embed. New vectors are staged in their own table while search keeps using
-//! the old ones. One transaction swaps every staged vector in when the run is complete, so a
-//! stopped, cancelled or failed run leaves the old vectors exactly as they were. Only counts,
+//! Owner-started re-embed. New vectors are staged in their own table and the old ones stay in
+//! the database. One transaction swaps every staged vector in when the run is complete, so a
+//! stopped, cancelled or failed run leaves the old vectors exactly as they were. Search only
+//! reads vectors made by the current model, so note search finds nothing from old passages
+//! until the swap lands. Only counts,
 //! ids and model names cross this boundary; passage text never leaves the database except to
 //! the embedding service.
 //!
@@ -42,22 +44,23 @@ const TARGETS: [(&str, &str, &str); 2] = [
     ("document", "app.memory_search_documents", "search_text"),
 ];
 
-/// Ids this run has already staged for one kind of passage.
-async fn staged_ids(cx: &DataContext, run: &str, kind: &str) -> Result<Vec<String>> {
+/// Highest id this run has staged for one kind of passage. Batches walk ids in order, so
+/// everything at or below it is already staged.
+async fn cursor(cx: &DataContext, run: &str, kind: &str) -> Result<String> {
     module_role(cx).await?;
-    let rows = cx
+    let row = cx
         .db()
-        .query(
-            "SELECT target_id::text FROM app.memory_reembed_staged
-             WHERE run_id = $1::text::uuid AND target_kind = $2",
+        .query_one(
+            "SELECT coalesce(max(target_id)::text, '00000000-0000-0000-0000-000000000000')
+             FROM app.memory_reembed_staged WHERE run_id = $1::text::uuid AND target_kind = $2",
             &[&run, &kind],
         )
         .await?;
     app_role(cx).await?;
-    Ok(rows.iter().map(|r| r.get(0)).collect())
+    Ok(row.get(0))
 }
 
-/// Counts that the Memory screen shows. `other` counts passages whose vector was made by a
+/// Counts that the Search model screen shows. `other` counts passages whose vector was made by a
 /// model other than the current one. `missing` counts saved facts with no vector at all.
 pub async fn status(cx: &DataContext, model: &(String, String)) -> Result<Value> {
     let counts = cx
@@ -121,17 +124,19 @@ pub async fn start(cx: &DataContext, model: &(String, String)) -> Result<Value> 
         return Ok(refused(409, "Nothing needs a new search model"));
     }
     module_role(cx).await?;
-    let id: String = cx
+    let id: Option<String> = cx
         .db()
-        .query_one(
+        .query_opt(
             "INSERT INTO app.memory_reembed_runs(id, owner_user_id, status, model_name, model_version, total)
              VALUES (gen_random_uuid(), app.current_actor_user_id(), 'running', $1, $2, $3::int8::int)
+             ON CONFLICT (owner_user_id) WHERE status = 'running' DO NOTHING
              RETURNING id::text",
             &[&model.0, &model.1, &total],
         )
         .await?
-        .get(0);
+        .map(|row| row.get(0));
     app_role(cx).await?;
+    let Some(id) = id else { return Ok(refused(409, "A re-embed is already running")) };
     Ok(json!({"id": id, "status": "running", "total": total, "staged": 0}))
 }
 
@@ -160,12 +165,12 @@ pub async fn next_batch(cx: &DataContext, run: &str, model: &str) -> Result<Vec<
         if left <= 0 {
             break;
         }
-        let done = staged_ids(cx, run, kind).await?;
+        let done = cursor(cx, run, kind).await?;
         let sql = format!(
             "SELECT t.id::text, md5(t.{column}), t.{column} FROM {table} t
              WHERE t.owner_user_id = app.current_actor_user_id() AND t.embedding IS NOT NULL
                AND t.embed_model_name IS DISTINCT FROM $1
-               AND t.id <> ALL($2::text[]::uuid[])
+               AND t.id > $2::text::uuid
              ORDER BY t.id LIMIT $3"
         );
         for row in cx.db().query(&sql, &[&model, &done, &left]).await? {
@@ -195,7 +200,7 @@ pub async fn stage(cx: &DataContext, run: &str, item: &Pending, vector: &str) ->
 pub async fn remaining(cx: &DataContext, run: &str, model: &str) -> Result<i64> {
     let mut total = 0;
     for (kind, table, _) in TARGETS {
-        let done = staged_ids(cx, run, kind).await?;
+        let done = cursor(cx, run, kind).await?;
         let row = cx
             .db()
             .query_one(
@@ -203,7 +208,7 @@ pub async fn remaining(cx: &DataContext, run: &str, model: &str) -> Result<i64> 
                     "SELECT count(*)::int8 FROM {table} t
                      WHERE t.owner_user_id = app.current_actor_user_id() AND t.embedding IS NOT NULL
                        AND t.embed_model_name IS DISTINCT FROM $1
-                       AND t.id <> ALL($2::text[]::uuid[])"
+                       AND t.id > $2::text::uuid"
                 ),
                 &[&model, &done],
             )

@@ -314,7 +314,7 @@
   "features": [
     {
       "id": "memory.vault-index",
-      "description": "Each account's notes are split into searchable pieces and indexed every fifteen minutes, covering the private note copies Moss saves and the folder named in the account's people notes preference. The Attachments and Exports folders are never indexed. Changed files are re-indexed, deleted files are dropped, and an unchanged note is not read again after a change of search model. The owner starts that re-embed from the Memory screen. A restart does not re-index. Other modules can ask for one saved note copy to be indexed sooner through the requestVaultIndex API.",
+      "description": "Each account's notes are split into searchable pieces and indexed every fifteen minutes, covering the private note copies Moss saves and the folder named in the account's people notes preference. The Attachments and Exports folders are never indexed. Changed files are re-indexed, deleted files are dropped, and an unchanged note is not read again after a change of search model. The owner starts that re-embed from the Search model settings screen. A restart does not re-index. Other modules can ask for one saved note copy to be indexed sooner through the requestVaultIndex API.",
       "errors": [
         {
           "code": "memory-index-unavailable",
@@ -514,7 +514,7 @@
     },
     {
       "id": "memory.reembed",
-      "description": "After the search model changes, the Memory screen counts the passages made with another model, and the owner can re-embed them. The old vectors stay in use until every new one is ready and then all swap in at once. Search only reads vectors made by the current model. The owner can cancel a run, and a stopped or failed run leaves the old vectors as they were. Every fifteen minutes Moss also gives facts that were saved without a vector another try.",
+      "description": "After the search model changes, the Search model settings screen counts the passages made with another model, and the owner can re-embed them. The old vectors are kept until every new one is ready and then all swap in at once. Search only reads vectors made by the current model, so note search misses old passages until the run finishes. The owner can cancel a run, and a stopped or failed run leaves the old vectors as they were. Every fifteen minutes Moss also gives facts that were saved without a vector another try.",
       "errors": [
         {
           "code": "reembed-already-running",
