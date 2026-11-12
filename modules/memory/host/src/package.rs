@@ -133,6 +133,7 @@ pub fn files(root: &Path, core: &[u8]) -> Result<BTreeMap<String, Vec<u8>>> {
         ("index.html", include_bytes!("../../ui/index.html").as_slice()),
         ("embedding.html", include_bytes!("../../ui/embedding.html")),
         ("embedding.mjs", include_bytes!("../../ui/embedding.mjs")),
+        ("reembed.mjs", include_bytes!("../../ui/reembed.mjs")),
         ("app.mjs", include_bytes!("../../ui/app.mjs")),
         ("view.mjs", include_bytes!("../../ui/view.mjs")),
         ("api.mjs", include_bytes!("../../ui/api.mjs")),
@@ -151,9 +152,17 @@ pub fn files(root: &Path, core: &[u8]) -> Result<BTreeMap<String, Vec<u8>>> {
             bytes
         } else {
             let bytes = std::fs::read(root.join("modules/memory").join(path))?;
+            let pinned = match path.as_str() {
+                "sql/0363_memory_ingest_nudges.sql" => {
+                    "461aa6600ae180caa1e0d5b66bb4f4b562612cac037f4638dd191c41f589443c"
+                }
+                "sql/0364_memory_reembed.sql" => {
+                    "61c0fff9259300afe4ae0425c93b960caf8c9ca25ce33d753b2b5adc349d73d8"
+                }
+                _ => "",
+            };
             anyhow::ensure!(
-                moss_module_host::trust::digest(&bytes)
-                    == "461aa6600ae180caa1e0d5b66bb4f4b562612cac037f4638dd191c41f589443c",
+                moss_module_host::trust::digest(&bytes) == pinned,
                 "Memory migration bytes changed: {path}"
             );
             bytes
