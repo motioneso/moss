@@ -35,6 +35,7 @@ pub struct MeetingsPorts {
     next: Arc<dyn Ports>,
     recordings: Option<Arc<recordings::Recordings>>,
     chat: Arc<dyn chat::MainChat>,
+    voice: Arc<dyn chat::VoiceChat>,
 }
 impl MeetingsPorts {
     pub fn new(database: Database, next: Arc<dyn Ports>) -> Result<Self> {
@@ -44,6 +45,7 @@ impl MeetingsPorts {
             next,
             recordings: None,
             chat: Arc::new(chat::NoMainChat),
+            voice: Arc::new(chat::NoVoiceChat),
         })
     }
 
@@ -51,6 +53,12 @@ impl MeetingsPorts {
     pub fn with_recordings(mut self, files: &std::path::Path) -> Result<Self> {
         self.recordings = Some(Arc::new(recordings::Recordings::new(&vault::Root::create(files)?)?));
         Ok(self)
+    }
+
+    /// Connects the Chat that finished voice recordings are handed to.
+    pub fn with_voice_chat(mut self, voice: Arc<dyn chat::VoiceChat>) -> Self {
+        self.voice = voice;
+        self
     }
 
     /// Connects the chat that low-confidence side notices are posted to.
@@ -209,7 +217,7 @@ impl MeetingsPorts {
 }
 impl Ports for MeetingsPorts {
     fn invoke(&self, scope: &CallScope, port: &str, request: &Request) -> Result<Value> {
-        let ours = [RESOURCE, store::TRANSCRIPTS, store::HISTORY, store::RECORDING_TYPES, outputs::OUTPUTS, exports::EXPORTS, chat::NOTICE, files::FILES];
+        let ours = [RESOURCE, store::TRANSCRIPTS, store::HISTORY, store::RECORDING_TYPES, outputs::OUTPUTS, exports::EXPORTS, chat::NOTICE, chat::VOICE, files::FILES];
         if port != "kv" || !ours.contains(&request.resource.as_str()) || scope.module().id != "meetings" {
             return self.next.invoke(scope, port, request);
         }
@@ -219,6 +227,12 @@ impl Ports for MeetingsPorts {
             let (text, key) = chat::notice(&request.parameters)?;
             self.chat.post(scope.access().actor_user_id(), text, key)?;
             return Ok(serde_json::json!({"posted": true}));
+        }
+        if request.resource == chat::VOICE {
+            ensure!(request.operation == "hand-off", "Unsupported Meetings voice operation");
+            let voice = chat::voice(&request.parameters)?;
+            let id = self.voice.hand_off(scope.access().actor_user_id(), &voice)?;
+            return Ok(serde_json::json!({"requestId": id}));
         }
         if request.resource == files::FILES {
             return self.files(scope, request);

@@ -68,7 +68,13 @@
         "receipt",
         "intend",
         "section",
-        "post"
+        "post",
+        "prepare",
+        "put",
+        "purge",
+        "validate",
+        "window",
+        "hand-off"
       ],
       "resources": [
         "meetings.preferences",
@@ -77,7 +83,9 @@
         "meetings.recording-types",
         "meetings.outputs",
         "meetings.exports",
-        "meetings.chat-notice"
+        "meetings.chat-notice",
+        "meetings.recording-files",
+        "meetings.chat-voice"
       ]
     },
     {
@@ -101,7 +109,8 @@
       "resources": [
         "meetings.stop-summary",
         "meetings.recording-notice",
-        "meetings.recording-memory"
+        "meetings.recording-memory",
+        "meetings.recording-import"
       ]
     }
   ],
@@ -281,6 +290,56 @@
       "method": "POST",
       "path": "/records/:id/exports",
       "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/recording-uploads",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/recording-uploads/:id",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/recording-uploads/:id/:kind/:index",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/recording-uploads/:id/finalize",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/recording-imports/:id",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/voice-enablement",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/voice-enablement/:id/disable",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/voice-recordings",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/voice-recordings/:id",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/voice-recordings/:id/retry",
+      "signIn": true
     }
   ],
   "requires": {
@@ -316,8 +375,15 @@
       }
     },
     "meetings.recording-import": {
-      "meeting-id": {
+      "import-id": {
         "kind": "id"
+      },
+      "kind": {
+        "kind": "choice",
+        "choices": ["transcribe", "abandoned"]
+      },
+      "window": {
+        "kind": "count"
       }
     },
     "meetings.recording-memory": {
@@ -644,6 +710,57 @@
           "code": "meeting_output_rejected_schema_invalid",
           "class": "validation",
           "description": "The model's reading was malformed or named a type that is not allowed, so the summary was not saved"
+        }
+      ]
+    },
+    {
+      "id": "meetings.ring-receivers",
+      "description": "A ring recording arrives from the delivery app in resumable 1 MiB pieces and is checked before it is accepted. A finished meeting upload becomes a transcript and a summary request. A hold-to-talk recording becomes a voice request for Chat, which waits for confirmation unless it is fresh. The audio is private to your account, and no admin can read it. Bundle import, the disk reservation, the rate limits and the device credential check are not part of this package yet.",
+      "errors": [
+        {
+          "code": "recording_import_conflict",
+          "class": "validation",
+          "description": "The recording was already imported with different contents"
+        },
+        {
+          "code": "recording_import_invalid",
+          "class": "validation",
+          "description": "The recording files are malformed, or too large or too long"
+        },
+        {
+          "code": "recording_import_not_found",
+          "class": "validation",
+          "description": "That recording import does not exist"
+        },
+        {
+          "code": "recording_voice_ineligible",
+          "class": "validation",
+          "description": "Hold-to-talk is off for this device, or the recording is older than hold-to-talk"
+        },
+        {
+          "code": "recording_voice_not_found",
+          "class": "validation",
+          "description": "That voice recording does not exist"
+        },
+        {
+          "code": "transcription_unavailable",
+          "class": "transient",
+          "description": "No speech-to-text service is set up or reachable"
+        },
+        {
+          "code": "transcription_failed",
+          "class": "transient",
+          "description": "The speech-to-text service could not read the audio"
+        },
+        {
+          "code": "import_interrupted",
+          "class": "transient",
+          "description": "The import stopped before it finished"
+        },
+        {
+          "code": "import_unavailable",
+          "class": "transient",
+          "description": "Recording imports could not be reached"
         }
       ]
     }

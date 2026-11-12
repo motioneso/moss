@@ -23,9 +23,11 @@ pub mod recording_jobs;
 pub mod recording_reading;
 pub mod records;
 pub mod ring_errors;
+pub mod ring_import;
 pub mod ring_source;
 pub mod ring_upload;
 pub mod ring_voice;
+pub mod ring_voice_routes;
 pub mod schema;
 pub mod stop_summary;
 pub mod store;
@@ -73,6 +75,16 @@ pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
         ("POST", "/records/:id/actions/:candidate_id/review") => output_routes::review(host, &request),
         ("GET", "/records/:id/exports") => export_service::list(host, &request),
         ("POST", "/records/:id/exports") => export_service::save(host, &request),
+        ("POST", "/recording-uploads") => return ring(|| ring_upload::reserve(host, &request)),
+        ("GET", "/recording-uploads/:id") => return ring(|| ring_upload::status(host, &request)),
+        ("PUT", "/recording-uploads/:id/:kind/:index") => return ring(|| ring_upload::put_chunk(host, &request)),
+        ("POST", "/recording-uploads/:id/finalize") => return ring(|| ring_upload::finalize(host, &request)),
+        ("GET", "/recording-imports/:id") => return ring(|| ring_voice_routes::import_status(host, &request)),
+        ("POST", "/voice-enablement") => return ring(|| ring_voice_routes::enable(host, &request)),
+        ("POST", "/voice-enablement/:id/disable") => return ring(|| ring_voice_routes::disable(host, &request)),
+        ("GET", "/voice-recordings") => return ring(|| ring_voice_routes::list(host, &request)),
+        ("GET", "/voice-recordings/:id") => return ring(|| ring_voice_routes::get(host, &request)),
+        ("POST", "/voice-recordings/:id/retry") => return ring(|| ring_voice_routes::retry(host, &request)),
         ("GET", "/preferences") => preferences::get(host),
         ("PUT", "/preferences") => preferences::put(host, &request.body),
         _ => return Response::new(404, json!({"message":"Route not found"})),
@@ -84,6 +96,11 @@ pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
 /// Recording routes answer a host failure with the old 503 body.
 fn recording_route(run: impl FnOnce() -> moss_module_sdk::Result<Response>) -> Response {
     run().unwrap_or_else(|_| Response::new(503, json!({"code":"recording_unavailable"})))
+}
+
+/// Ring receiver routes answer a host failure with the legacy unavailable code.
+fn ring(run: impl FnOnce() -> moss_module_sdk::Result<Response>) -> Response {
+    run().unwrap_or_else(|_| Response::new(503, json!({"code": ring_errors::RingCode::ImportUnavailable.as_str()})))
 }
 
 /// The same entry point runs natively in tests and inside the packaged component.

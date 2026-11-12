@@ -31,3 +31,56 @@ pub fn notice(parameters: &Value) -> Result<(&str, &str)> {
     ensure!(!key.is_empty() && key.len() <= 128, "Invalid chat notice");
     Ok((text, key))
 }
+
+pub const VOICE: &str = "meetings.chat-voice";
+
+/// A finished voice recording, ready for Chat. The shape is a guess made before Chat is
+/// ported, and Chat may ask for a different one. `state` is `queued`, `ready-to-send` or `no-speech`.
+pub struct VoiceRequest<'a> {
+    pub source_device_id: &'a str,
+    pub recording_id: &'a str,
+    pub fingerprint: &'a str,
+    pub transcript: &'a str,
+    pub captured_at: Option<&'a str>,
+    pub automatic: bool,
+    pub state: &'a str,
+}
+
+/// The Chat side of the voice hand-off. A repeat of the same device and recording must return
+/// the same request id.
+pub trait VoiceChat: Send + Sync {
+    fn hand_off(&self, owner: Uuid, request: &VoiceRequest) -> Result<String>;
+}
+
+/// Used until Chat is ported. The job keeps the transcript and retries.
+pub struct NoVoiceChat;
+impl VoiceChat for NoVoiceChat {
+    fn hand_off(&self, _: Uuid, _: &VoiceRequest) -> Result<String> {
+        bail!("Chat awaits Main")
+    }
+}
+
+/// Checks the request shape and returns the owned parts the trait needs.
+pub fn voice(parameters: &Value) -> Result<VoiceRequest<'_>> {
+    let map = parameters.as_object().filter(|m| {
+        m.len() == 7
+            && ["sourceDeviceId", "recordingId", "fingerprint", "transcript", "capturedAt", "automatic", "state"]
+                .iter()
+                .all(|k| m.contains_key(*k))
+    });
+    let map = map.ok_or_else(|| anyhow::anyhow!("Invalid voice request"))?;
+    let text = |key: &str| map[key].as_str().ok_or_else(|| anyhow::anyhow!("Invalid voice request"));
+    let transcript = text("transcript")?;
+    ensure!(transcript.len() <= 32_768 && !transcript.contains('\0'), "Invalid voice request");
+    let state = text("state")?;
+    ensure!(["queued", "ready-to-send", "no-speech"].contains(&state), "Invalid voice request");
+    Ok(VoiceRequest {
+        source_device_id: text("sourceDeviceId")?,
+        recording_id: text("recordingId")?,
+        fingerprint: text("fingerprint")?,
+        transcript,
+        captured_at: map["capturedAt"].as_str(),
+        automatic: map["automatic"].as_bool().ok_or_else(|| anyhow::anyhow!("Invalid voice request"))?,
+        state,
+    })
+}

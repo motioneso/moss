@@ -204,7 +204,7 @@ pub fn reserve<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Res
     Ok(Response::new(201, progress(host, &row, now)?))
 }
 
-fn inventory_of(row: &Value) -> Vec<String> {
+pub(crate) fn inventory_of(row: &Value) -> Vec<String> {
     let list = match &row["inventory_json"] {
         Value::String(text) => serde_json::from_str(text).unwrap_or(Value::Null),
         other => other.clone(),
