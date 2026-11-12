@@ -33,7 +33,7 @@ impl Ports for Seen {
         self.0.lock().unwrap().push((port.into(), name.clone(), request.parameters.clone()));
         Ok(match (port, name.as_str()) {
             ("context", "read") => json!({"now":"2026-01-01T00:00:00.000Z"}),
-            ("context", _) => json!({"id":"key-1"}),
+            ("context", _) => json!({"id":Uuid::new_v4().to_string()}),
             ("jobs", _) => json!({"id":"row-1"}),
             ("api", "listCachedMessageKeys") => json!({"keys":[]}),
             ("api", "pruneCachedEvents") => json!({"deleted":0}),

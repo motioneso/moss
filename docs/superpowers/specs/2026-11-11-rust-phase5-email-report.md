@@ -227,7 +227,8 @@ Commands: `pnpm test:rust-email` and `pnpm test:rust-email-live`, both through t
   refreshes the token once. A refused sign-in fails the run as an auth error and the account shows
   as needing sign-in.
 - The host stops a package call after five seconds, so a run does one small step and then queues
-  itself for the rest. The start of a run is its own job, so a retried first step never meets its
+  itself for the rest. Each chunk renews the run's claim on the account, so a long walk is not
+  taken over by the next schedule tick, and the shown start time is the time of the latest chunk. The start of a run is its own job, so a retried first step never meets its
   own start marker. Job payloads carry only
   ids, counts, flags and fixed words. Page tokens, the Gmail position and all mail text stay in
   the host, and a restart of the server makes the next run start over.
@@ -239,18 +240,20 @@ Commands: `pnpm test:rust-email` and `pnpm test:rust-email-live`, both through t
 
 ## Proof
 
-- Scripted tests of the package side (17): busy and inactive accounts, a long walk continuing
+- Scripted tests of the package side (22): busy and inactive accounts, a long walk continuing
   in a new job with metadata-only parameters, a rejected sign-in, a write failure skipping the
   prune, settled and given-up messages, partial runs, recent-only runs, both schedules, the sweep
-  and the manual route (409 without Google, 202 with it).
+  the manual route (409 without Google, 202 with it), a slow fetch handing its unread messages
+  to the next job, a result that could not be saved being tried once more by a later job, and a
+  refused sign-in stopping both schedules.
 - Database tests with the real package in WebAssembly, the real host and database, and the
-  stand-in Google (5): a full walk, a second run that reads only changes and survives a deleted
-  message, a second person refused (and the same update shown to succeed without row security),
+  stand-in Google (6): a full walk, a second run that reads only changes and carries on past a
+  message Google no longer has, a second person refused (and the same update shown to succeed without row security),
   retries then a recorded failure, and a revoked sign-in with a second start refused while one is
   going. Tokens, the client secret and mail text were searched for in everything the package sent
   and in the account row.
 - Live run on the real Rust server over HTTPS (`pnpm test:rust-connectors-live`, passed): after
-  connecting, three events and three messages were saved. After Google deleted one message,
+  connecting, three events and three messages were saved. After Google dropped one message,
   relabelled another and removed one event, a second run pruned the event under the runtime role.
   The server log and every table were searched for the tokens, the client secret and the mail
   marker, with a control search that finds a stored value.
@@ -268,6 +271,8 @@ None added. The host reuses the HTTP client, database layer and job queue alread
 
 ## Differences from the old app
 
+- A message that Google reports gone stays in Email's cache. The run counts it and moves on, and
+  nothing removes the cached copy. A cached event that Google no longer lists is removed.
 - A restart of the server drops an in-progress run's page tokens and the next run starts over.
   The old app kept them in memory in the same way.
 - The failure reason on the connection's health is a fixed word plus the Google status and call
@@ -281,6 +286,11 @@ None added. The host reuses the HTTP client, database layer and job queue alread
   covered.
 - The one older Google connect test named above, on a quiet box.
 - Behaviour across a server restart in the middle of a run.
+- Speed against real Google inside the five second budget. Each Google read in a job gets at most
+  1.8 seconds, and a slow fetch hands its unread messages to the next job, but only the stand-in
+  Google was timed.
+- A result that could not be saved twice in a row. The account then shows a run in progress until
+  the 14 minute takeover.
 
 # Part 8: Email understanding
 
