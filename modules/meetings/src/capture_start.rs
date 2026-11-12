@@ -1,13 +1,13 @@
 //! Start and cancel-start. A start binds the browser session, the meeting, the Mac, the
 //! connection and the sources into one grant. It never records until the Mac claims it.
 use crate::capture_auth::{self as auth, hash, Browser};
-use crate::capture_connection::{eligible, parsed, with_state};
+use crate::capture_connection::{eligible, parsed};
 use crate::capture_devices::default_connection;
 use crate::capture_errors::{CaptureCode, Failure, Stop};
 use crate::capture_input as input;
 use crate::capture_selection::{record, resolve_source, saved_selection};
 use crate::capture_state::{initial, view};
-use crate::capture_store::{self as store, now, parse, stamp, NewGrant, PREVIOUS_GRANTS};
+use crate::capture_store::{self as store, now, parse, NewGrant, PREVIOUS_GRANTS};
 use chrono::{DateTime, Duration, Utc};
 use moss_module_sdk::{query::{Filter, Order, Query}, Client, Host, Response};
 use serde_json::{json, Value};
@@ -124,7 +124,8 @@ pub fn start<H: Host + ?Sized>(host: &H, meeting: &str, value: &Value) -> Result
         return Err(conflict());
     }
     let mut saved = initial(&inventory, at, connection["last_seen_at"].as_str().unwrap_or_default());
-    record(&mut saved, &selection, 0, 0, None, &route)?;
+    let since_seen = parse(&connection["last_seen_at"]).map(|seen| (at - seen).num_milliseconds());
+    record(&mut saved, &selection, 0, 0, since_seen, &route)?;
     let expires = (at + Duration::milliseconds(GRANT_MS)).min(session.expires_at).min(capability_ends).min(parse(&connection["expires_at"]).unwrap_or(at));
     let grant = store::create(
         host,
@@ -140,7 +141,6 @@ pub fn start<H: Host + ?Sized>(host: &H, meeting: &str, value: &Value) -> Result
         },
     )?;
     crate::capture_maintenance::schedule(host, grant["id"].as_str().unwrap_or_default(), 0, at)?;
-    let _ = (stamp, with_state);
     Ok(Response::new(200, json!({"capture": view(&grant, &saved, at)})))
 }
 

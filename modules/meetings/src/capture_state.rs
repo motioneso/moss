@@ -180,7 +180,7 @@ pub fn view(grant: &Value, state: &Value, at: DateTime<Utc>) -> Value {
 
 /// A lease is current while the Mac was seen within the lease window.
 pub fn lease_current(state: &Value, at: DateTime<Utc>) -> bool {
-    millis(&state["lastSeenAt"]).is_some_and(|seen| (at - Duration::milliseconds(0)).timestamp_millis() - seen <= LEASE_MS)
+    millis(&state["lastSeenAt"]).is_some_and(|seen| at.timestamp_millis() - seen <= LEASE_MS)
 }
 
 const FINALIZATION_MS: i64 = 60_000;
