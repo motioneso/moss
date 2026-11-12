@@ -22,6 +22,7 @@
     "test:rust-meetings": "tsx modules/meetings/tools/gate.ts",
     "test:rust-memory": "tsx modules/memory/tools/gate.ts",
     "test:rust-memory-index": "tsx modules/memory/tools/index-gate.ts",
+    "test:rust-meetings-live": "bash modules/meetings/tools/live.sh",
     "test:rust-memory-live": "bash modules/memory/tools/live.sh",
     "test:rust-memory-oracle": "tsx modules/memory/tools/lifecycle-oracle.ts check",
     "test:rust-memory-oracle-write": "tsx modules/memory/tools/lifecycle-oracle.ts write",
