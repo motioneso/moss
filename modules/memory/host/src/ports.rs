@@ -1,5 +1,6 @@
 //! Answers the package's `memory.*` calls with SQL under the signed-in person's row-level
 //! security. Memory text goes only to the configured embedding service and never into logs.
+use crate::recording::{self, NoAuthority, RecordingAuthority};
 use crate::{dashboard, lifecycle, store};
 use anyhow::{ensure, Result};
 use moss_module_host::{
@@ -33,7 +34,11 @@ fn literal(vector: &[f64]) -> Result<String> {
     );
     Ok(format!(
         "[{}]",
-        vector.iter().map(f64::to_string).collect::<Vec<_>>().join(",")
+        vector
+            .iter()
+            .map(f64::to_string)
+            .collect::<Vec<_>>()
+            .join(",")
     ))
 }
 
@@ -42,15 +47,27 @@ pub struct MemoryPorts {
     runtime: tokio::runtime::Runtime,
     embedder: Arc<dyn Embedder>,
     next: Arc<dyn Ports>,
+    authority: Arc<dyn RecordingAuthority>,
 }
 impl MemoryPorts {
-    pub fn new(database: Database, embedder: Arc<dyn Embedder>, next: Arc<dyn Ports>) -> Result<Self> {
+    pub fn new(
+        database: Database,
+        embedder: Arc<dyn Embedder>,
+        next: Arc<dyn Ports>,
+    ) -> Result<Self> {
         Ok(Self {
             database,
             runtime: tokio::runtime::Runtime::new()?,
             embedder,
             next,
+            authority: Arc::new(NoAuthority),
         })
+    }
+
+    /// Connects Meetings' answers about recordings. Without it no recording change is admitted.
+    pub fn with_authority(mut self, authority: Arc<dyn RecordingAuthority>) -> Self {
+        self.authority = authority;
+        self
     }
 
     fn within<F, Fut>(&self, scope: &CallScope, work: F) -> Result<Value>
@@ -61,9 +78,10 @@ impl MemoryPorts {
         ensure!(!scope.remaining().is_zero(), "Memory deadline expired");
         self.runtime.block_on(async {
             tokio::time::timeout(scope.remaining(), async {
-                let cx = DataContext::open_bounded(&self.database, scope.access(), scope.remaining())
-                    .await
-                    .map_err(|_| anyhow::anyhow!("Memory data unavailable"))?;
+                let cx =
+                    DataContext::open_bounded(&self.database, scope.access(), scope.remaining())
+                        .await
+                        .map_err(|_| anyhow::anyhow!("Memory data unavailable"))?;
                 let (cx, value) = work(cx).await?;
                 cx.commit_bounded(scope.remaining())
                     .await
@@ -77,7 +95,10 @@ impl MemoryPorts {
 
     fn recall(&self, scope: &CallScope, request: &Request) -> Result<Value> {
         let query = request.parameters["query"].as_str().unwrap_or("");
-        ensure!(!query.is_empty() && query.len() <= 64 * 1024, "Invalid memory query");
+        ensure!(
+            !query.is_empty() && query.len() <= 64 * 1024,
+            "Invalid memory query"
+        );
         let vector = match self.embedder.query(scope, query).and_then(|v| literal(&v)) {
             Ok(vector) => vector,
             Err(error) => return Ok(refusal(&error)),
@@ -88,10 +109,62 @@ impl MemoryPorts {
         })
     }
 
+    fn recording_step(&self, scope: &CallScope, request: &Request) -> Result<Value> {
+        self.within(scope, |cx| async {
+            let value = recording::run(&cx, &*self.authority, request).await?;
+            Ok((cx, value))
+        })
+    }
+
+    /// Recording memory. Applying a proposal embeds its text between two transactions, so no
+    /// lock is held while the embedding service runs. A failed embedding publishes the fact
+    /// without a vector; the search index fills it in later.
+    fn recording(&self, scope: &CallScope, request: &Request) -> Result<Value> {
+        let result = (|| {
+            if request.parameters["action"] != "apply" {
+                return self.recording_step(scope, request);
+            }
+            let step = |action: &str, extra: Value| {
+                let mut parameters = request.parameters.clone();
+                parameters["action"] = json!(action);
+                parameters["embedding"] = extra;
+                Request {
+                    operation: "set".into(),
+                    resource: request.resource.clone(),
+                    parameters,
+                }
+            };
+            let loaded = self.recording_step(scope, &step("applyLoad", Value::Null))?;
+            if !loaded["done"].is_null() {
+                return Ok(loaded["done"].clone());
+            }
+            let embedding = loaded["embed"]
+                .as_str()
+                .and_then(|text| self.embedder.document(scope, text).ok())
+                .and_then(|(vector, model)| {
+                    Some(json!({"vector": literal(&vector).ok()?, "model": [model.0, model.1]}))
+                })
+                .unwrap_or(Value::Null);
+            self.recording_step(scope, &step("applyPublish", embedding))
+        })();
+        match result {
+            Err(error) => match recording::refusal_of(&error) {
+                Some((status, message)) => {
+                    Ok(json!({"refused": {"status": status, "message": message}}))
+                }
+                None => Err(error),
+            },
+            ok => ok,
+        }
+    }
+
     /// Embeds the fact's saved text and stores the vector. A failed embedding is reported as
     /// `indexed: false`; the fact stays saved either way.
     fn index(&self, scope: &CallScope, request: &Request) -> Result<Value> {
-        let fact_id = request.parameters["factId"].as_str().unwrap_or("").to_owned();
+        let fact_id = request.parameters["factId"]
+            .as_str()
+            .unwrap_or("")
+            .to_owned();
         let pending = self.within(scope, |cx| async {
             let text = store::pending_text(&cx, &fact_id).await?;
             Ok((cx, json!(text)))
@@ -126,13 +199,17 @@ fn refusal(error: &anyhow::Error) -> Value {
 
 impl Ports for MemoryPorts {
     fn invoke(&self, scope: &CallScope, port: &str, request: &Request) -> Result<Value> {
-        if port != "kv" || scope.module().id != crate::MODULE_ID || !request.resource.starts_with("memory.") {
+        if port != "kv"
+            || scope.module().id != crate::MODULE_ID
+            || !request.resource.starts_with("memory.")
+        {
             return self.next.invoke(scope, port, request);
         }
         authorize(scope.module(), port, request)?;
         match (request.operation.as_str(), request.resource.as_str()) {
             ("get", "memory.recall") => self.recall(scope, request),
             ("set", "memory.index") => self.index(scope, request),
+            (_, "memory.recording") => self.recording(scope, request),
             (_, "memory.lifecycle" | "memory.target" | "memory.forget") => {
                 self.within(scope, |cx| async {
                     let value = lifecycle::run(&cx, request).await?;

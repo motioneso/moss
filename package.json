@@ -21,6 +21,7 @@
     "test:rust-notes-ingest": "tsx modules/notes/tools/ingest-gate.ts",
     "test:rust-meetings": "tsx modules/meetings/tools/gate.ts",
     "test:rust-memory": "tsx modules/memory/tools/gate.ts",
+    "test:rust-memory-recording": "MEMORY_SUITES=recording tsx modules/memory/tools/gate.ts",
     "test:rust-memory-index": "tsx modules/memory/tools/index-gate.ts",
     "test:rust-meetings-live": "bash modules/meetings/tools/live.sh",
     "test:rust-meetings-oracle": "tsx modules/meetings/tools/transcript-oracle.ts check",

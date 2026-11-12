@@ -1,7 +1,7 @@
 //! Memory guest. It validates requests, scores recall results and shapes responses. SQL, the
 //! acting person, row-level security and the embedding service belong to the host, so no
 //! vector or credential reaches this code. It also runs the vault index jobs and the fact
-//! lifecycle, suggestions and the Memory screen routes.
+//! lifecycle, suggestions, the Memory screen routes and recording memory (forwarded to the host).
 use moss_module_sdk::{Host, Response, RouteRequest};
 use serde_json::{json, Value};
 
@@ -13,6 +13,7 @@ pub mod lifecycle;
 pub mod schema;
 pub mod score;
 pub mod testing;
+pub mod recording;
 mod vault_index;
 
 #[derive(Debug)]
@@ -85,6 +86,8 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
             enum Api {
                 #[serde(rename = "requestVaultIndex")]
                 RequestVaultIndex(vault_index::NudgeRequest),
+                #[serde(rename = "recordingMemory")]
+                Recording(Value),
                 #[serde(rename = "prepareMemoryAction")]
                 Prepare {
                     tool: String,
@@ -96,6 +99,13 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
                 Api::RequestVaultIndex(input) => vault_index::request(host, input)
                     .map(|v| v.to_string())
                     .map_err(|e| e.message),
+                Api::Recording(parameters) => {
+                    let result = match recording::call(host, &parameters) {
+                        Ok(value) => json!({"ok": value}),
+                        Err(e) => json!({"error": {"statusCode": e.status, "error": e.message}}),
+                    };
+                    serde_json::to_string(&result).map_err(|_| "Invalid memory response".into())
+                }
                 Api::Prepare { tool, input_json } => {
                     let result = match lifecycle::prepare_json(host, &tool, &input_json) {
                         Ok(details) => json!({"ok": details}),

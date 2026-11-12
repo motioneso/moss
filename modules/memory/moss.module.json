@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "memory",
   "name": "Memory",
-  "description": "Keeps what Moss remembers for each account, recalls it for a question, remembers new facts, and sets up the model that turns text into searchable vectors. Pinning, confirming, correcting and forgetting facts, suggestions, the Memory screen and the search index jobs are not part of this package yet.",
+  "description": "Keeps what Moss remembers for each account, recalls it for a question, remembers new facts, and sets up the model that turns text into searchable vectors. Facts Moss derives from meeting recordings are kept with receipts, proposals and removal. Suggestions and the Memory screen are not part of this package yet.",
   "publisher": "Moss",
   "version": "0.1.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
@@ -26,7 +26,8 @@
         "memory.fact-patch",
         "memory.entity-patch",
         "memory.entity-delete",
-        "memory.subject"
+        "memory.subject",
+        "memory.recording"
       ]
     },
     {
@@ -269,7 +270,8 @@
   "requires": {},
   "provides": {
     "prepareMemoryAction": "1.0.0",
-    "requestVaultIndex": "1.0.0"
+    "requestVaultIndex": "1.0.0",
+    "recordingMemory": "1.0.0"
   },
   "icons": ["icons/memory.svg"],
   "accounts": {
@@ -407,7 +409,7 @@
     },
     {
       "id": "memory.lifecycle",
-      "description": "Lets the signed-in person pin or unpin a saved fact, confirm it, correct its wording, mark it stale, expired or rejected, retire it as superseded, or delete it. Confirming a fact that disagrees with others keeps it and retires the others. Correcting saves a new confirmed fact with the same sources and retires the old one. A retired fact cannot be made active again, so a new fact is needed. Facts that come from a meeting recording are not changed here.",
+      "description": "Lets the signed-in person pin or unpin a saved fact, confirm it, correct its wording, mark it stale, expired or rejected, retire it as superseded, or delete it. Confirming a fact that disagrees with others keeps it and retires the others. Correcting saves a new confirmed fact with the same sources and retires the old one. A retired fact cannot be made active again, so a new fact is needed. Facts that come from a meeting recording are changed through recording memory, not here.",
       "errors": [
         {
           "code": "memory-fact-not-found",
@@ -451,6 +453,33 @@
           "code": "memory-forget-not-ready",
           "class": "transient",
           "description": "Memory deletion is not ready. Start a new chat and try again."
+        }
+      ],
+      "remediations": []
+    },
+    {
+      "id": "memory.recording",
+      "description": "Keeps facts Moss derives from a person's recorded meetings in that person's own memory. Each fact has versions, a receipt per recording item, and a proposal that must be applied before it appears. Undoing, restoring and removing a recording reverse its facts, and removal deletes facts no other recording supports. Cleanup runs in batches and reports whether work remains. The person can export their versions, receipts and proposals. Without Meetings connected, every change is refused as changed. No screen is part of this package yet.",
+      "errors": [
+        {
+          "code": "memory-recording-unavailable",
+          "class": "validation",
+          "description": "This recording memory is unavailable"
+        },
+        {
+          "code": "memory-recording-conflict",
+          "class": "validation",
+          "description": "This recording memory has changed; refresh its current review"
+        },
+        {
+          "code": "memory-recording-input",
+          "class": "validation",
+          "description": "Recording facts require nonempty text of at most 2048 UTF-8 bytes"
+        },
+        {
+          "code": "memory-recording-cleanup-incomplete",
+          "class": "validation",
+          "description": "Recording Memory cleanup is incomplete"
         }
       ],
       "remediations": []
