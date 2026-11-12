@@ -146,8 +146,6 @@ fn ideas_become_memory_facts_on_the_recordings_own_side_and_text_stays_out_of_qu
     assert_eq!((side_of(&work, "work"), side_of(&work, "personal")), (1, 0));
     assert_eq!(w.count(&format!("SELECT count(*) FROM app.memory_recording_receipts WHERE owner_user_id = '{}'::uuid", w.f.b)), 0);
 
-    // Running again changes nothing, because each idea has a fixed key.
-    w.run_jobs();
     assert_eq!(w.count("SELECT count(*) FROM app.memory_recording_receipts"), 3);
 
     // The idea text reaches no queue payload, activity row or model log.

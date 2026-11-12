@@ -327,3 +327,5 @@ Everything in the 5C proof list. Nothing was built or run in this part.
 - The chat-message job recomputes whether the reading is doubtful, instead of carrying that from the run.
 - Calendar and People were empty stand-ins in the tests and the live run, so the real context pack was never filled from them on a live server.
 - The live run did not read a real recording, because no real model was set up. It proves install and routes only.
+- Running the memory job twice for the same reading was not tested end to end. It relies on each idea having a fixed key in Memory. Only the stable job key is unit tested.
+- When Memory is unreachable or fails, the memory job fails and retries. When Memory refuses on purpose (the recording changed or is being removed), the idea is skipped.

@@ -30,7 +30,7 @@ pub fn enqueue<H: Host + ?Sized>(host: &H, queue: &str, meeting: &str, key: &str
 }
 
 /// A fixed UUID for the memory job, so a repeat of the same run queues it once.
-fn derived_key(request_key: &str) -> String {
+pub(crate) fn derived_key(request_key: &str) -> String {
     use sha2::{Digest, Sha256};
     let d = Sha256::digest(format!("meetings.recording-memory:{request_key}").as_bytes());
     let mut b = [0u8; 16];
@@ -103,4 +103,19 @@ fn retitle<H: Host + ?Sized>(host: &H, meeting: &str, title: &str) -> Result<()>
         ),
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::derived_key;
+
+    #[test]
+    fn the_memory_job_key_is_a_stable_uuid_per_request() {
+        let key = derived_key("11111111-1111-4111-8111-111111111111");
+        assert_eq!(key, derived_key("11111111-1111-4111-8111-111111111111"));
+        assert_ne!(key, derived_key("22222222-2222-4222-8222-222222222222"));
+        assert_eq!(key.len(), 36);
+        assert_eq!(key.matches('-').count(), 4);
+        assert_eq!(&key[14..15], "4");
+    }
 }

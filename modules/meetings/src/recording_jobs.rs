@@ -47,23 +47,30 @@ fn cut(text: &str, max: usize) -> &str {
     &text[..end]
 }
 
+/// Why a fact was not stored. A retry can help only when Memory was unreachable or failed.
+struct Refused {
+    why: String,
+    retry: bool,
+}
+
 /// The reply's value, or Memory's own refusal wording (never meeting text).
-fn answer(reply: Result<Value>) -> std::result::Result<Value, String> {
-    let reply = reply.map_err(|e| e.to_string())?;
+fn answer(reply: Result<Value>) -> std::result::Result<Value, Refused> {
+    let reply = reply.map_err(|e| Refused { why: e.to_string(), retry: true })?;
     if let Some(e) = reply.get("error") {
-        return Err(e.to_string().chars().take(160).collect());
+        let retry = e["statusCode"].as_i64().is_none_or(|c| c >= 500);
+        return Err(Refused { why: e.to_string().chars().take(160).collect(), retry });
     }
     Ok(reply.get("ok").cloned().unwrap_or(reply))
 }
 
 /// Proposes and applies one fact. Memory decides whether the recording still counts.
-fn remember<H: Host + ?Sized>(host: &H, meeting: &str, version: i64, item: &str, text: &str) -> std::result::Result<(), String> {
+fn remember<H: Host + ?Sized>(host: &H, meeting: &str, version: i64, item: &str, text: &str) -> std::result::Result<(), Refused> {
     let client = Client(host);
     let input = json!({"kind": "apply", "requestId": format!("{meeting}:{version}:{item}"),
         "source": {"sourceModuleId": "meetings", "sourceId": meeting, "sourceVersion": version, "itemKey": item},
         "text": text, "expectedRevision": null, "expectedFactRevision": null});
     let prepared = answer(client.api("memory", "recordingMemory", json!({"action": "prepare", "input": input})))?;
-    let id = prepared["proposal"]["id"].as_str().ok_or("No proposal id")?;
+    let id = prepared["proposal"]["id"].as_str().ok_or(Refused { why: "No proposal id".into(), retry: false })?;
     answer(client.api("memory", "recordingMemory", json!({"action": "apply", "proposalId": id}))).map(|_| ())
 }
 
@@ -76,6 +83,7 @@ pub fn memory<H: Host + ?Sized>(host: &H, meeting: &str) -> Result<String> {
     let groups: Vec<IdeaGroup> =
         serde_json::from_value(head["content"]["recording"]["ideaGroups"].clone()).unwrap_or_default();
     let (mut applied, mut skipped, mut why) = (0, 0, String::new());
+    let mut retry = false;
     for (g, group) in groups.iter().enumerate() {
         for (i, idea) in group.ideas.iter().enumerate() {
             let text = format!("{}: {}", group.title, idea);
@@ -84,10 +92,15 @@ pub fn memory<H: Host + ?Sized>(host: &H, meeting: &str) -> Result<String> {
                 Ok(()) => applied += 1,
                 Err(e) => {
                     skipped += 1;
-                    why = e;
+                    retry |= e.retry;
+                    why = e.why;
                 }
             }
         }
+    }
+    // Memory was unreachable or failed. Each idea has a fixed key, so the retry repeats nothing.
+    if retry {
+        return Err(moss_module_sdk::Error::new("Memory could not store every idea yet"));
     }
     Ok(json!({"status": "done", "applied": applied, "skipped": skipped, "why": why}).to_string())
 }
