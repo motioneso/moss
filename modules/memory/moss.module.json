@@ -29,7 +29,8 @@
         "memory.entity-delete",
         "memory.subject",
         "memory.recording",
-        "memory.reembed"
+        "memory.reembed",
+        "memory.account"
       ]
     },
     {
@@ -114,6 +115,7 @@
       "app.memory_reembed_staged"
     ],
     "ledger": "core-legacy",
+    "ownerDelete": ["app.memory_recording_fact_versions"],
     "access": {
       "app.memory_chunks": {
         "access": "owner-only"
@@ -301,9 +303,11 @@
     "addAlias": "1.0.0",
     "confirmFact": "1.0.0",
     "createEntity": "1.0.0",
+    "collectMemoryExportSection": "1.0.0",
     "createEpisode": "1.0.0",
     "deleteChunksForSources": "1.0.0",
     "deleteFact": "1.0.0",
+    "deleteMemoryData": "1.0.0",
     "embedTurn": "1.0.0",
     "findEntityByAlias": "1.0.0",
     "forgetEntity": "1.0.0",
@@ -585,6 +589,18 @@
           "path": "/settings/memory/search-model"
         }
       ]
+    },
+    {
+      "id": "memory.account",
+      "description": "When a person exports their account data, Memory adds everything it holds for them (passages, saved facts, entities, aliases, sources, suggestions and recording facts) without the search vectors. When a person deletes their account data, Memory removes all of those rows for that person only. Nobody can export or delete another person's memory, and an admin has no extra access.",
+      "errors": [
+        {
+          "code": "memory-export-section-unknown",
+          "class": "validation",
+          "description": "That part of the memory export does not exist"
+        }
+      ],
+      "remediations": []
     }
   ],
   "tools": {

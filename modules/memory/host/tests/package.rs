@@ -73,6 +73,8 @@ fn the_package_asks_only_for_its_own_memory_resources() {
         ("set", "memory.subject"),
         ("get", "memory.reembed"),
         ("set", "memory.reembed"),
+        ("get", "memory.account"),
+        ("set", "memory.account"),
     ] {
         ask("kv", operation, resource).unwrap();
     }
@@ -131,6 +133,7 @@ fn the_twenty_four_routes_and_three_tools_are_declared() {
     for id in [
         "memory.recall", "memory.remember", "memory.vault-index", "memory.lifecycle",
         "memory.conflict_groups", "memory.forget_approval", "memory.reembed",
+        "memory.account",
     ] {
         assert!(features.contains(&id), "{id} must be in the app map");
     }

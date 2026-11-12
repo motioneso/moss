@@ -447,3 +447,49 @@ and the tests pass.
 - **Log claim.** The scan covers the tables named above and error text. It does not read server
   log files.
 - **Other devices.** Nothing here is reached from a phone or another machine, because no caller exists.
+
+## Part 10: export and deletion of a person's memory (JS-254)
+
+### What was built
+
+- **Export.** When a person exports their account data, Memory returns fourteen sections of their
+  own rows (passages, chat facts, entities, facts, episodes, fact sources, aliases, conflict
+  groups, suggestions, search documents, legacy migration marks) and three recording sections (fact versions, receipts, proposals). Rows
+  come in pages of at most 200 rows or 48 KB, because the guest has a fixed compute budget per
+  call and the host refuses messages over 1 MiB. Vectors are never returned. The text excerpt a
+  suggestion carries is dropped, as in the old export.
+- **Deletion.** One call removes the signed-in person's rows from all 19 owned tables, module
+  tables first, recording fact versions last, and returns counts only. Fact versions have no
+  delete grant, so the manifest now names them in `ownerDelete` and the host emits an owner-only
+  delete policy at install.
+- **Owner never comes from the caller.** Both calls reject any owner field.
+- **App map.** A new `memory.account` feature entry describes both calls.
+- **Packaging.** The package builds (213,936 bytes) with the new resource, two provided calls and
+  the `ownerDelete` grant. The package test covers them.
+
+### Proof
+
+| Check                                 | Result                                                                                                                                                                                                          |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Native and WebAssembly builds         | Guest tests pass natively. The WebAssembly build and package tests pass against it.                                                                                                                             |
+| Earlier memory suites on this branch  | db 15, dashboard 9, recording 7, reembed 11 pass, package 7 pass.                                                                                                                                               |
+| Export and deletion, second person    | 4 account tests pass. A second person exports none of the first person's text or id. Deletion leaves the second person's rows unchanged, row count by table.                                                    |
+| Protection removed                    | With row security off on the memory tables, an unfiltered read as the second person returns the first person's rows. With it on, only the person's own rows.                                                    |
+| Deleting a person removes derivatives | Deleting the user row leaves zero rows in all 19 tables, including fact versions and search documents.                                                                                                          |
+| No memory text in jobs or activity    | A marker string, exported and deleted, appears in no job payload and none of the activity tables that exist in the gate database.                                                                               |
+| Upgrade from an existing install      | On a copy of the dev data (3 owners, 1,428 old passages, none of the new tables), after installing the new tables and grants, 1,896 rows read back, equal to each table's count per owner. The copy is deleted. |
+
+### Not proven
+
+- **Whole-module live pass.** The live gate does not build here, because the shell build needs a
+  prebuilt ONNX Runtime and the gate forces offline mode. No real model pass was run, and Ben is
+  needed for that one.
+- **Export parity with the old export.** Sections were compared to table counts and checked for
+  fields by hand, not byte for byte against the old collector.
+- **Recording receipts and proposals in the delete test.** They are covered by the recording
+  suite's own cleanup tests, not seeded here.
+- **Activity tables missing from the gate database.** The three activity tables were skipped
+  there, so only job payloads were scanned in that database.
+- **The `chat_memory_corrections_log` table** is not in the owned list and is not exported or
+  deleted by this part.
+- **Pages bounded by the byte cap.** The multi-page test proves the row cap and exactly-once delivery on 450 rows; the 48 KB cap itself is not asserted separately.

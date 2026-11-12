@@ -7,6 +7,7 @@ use serde_json::{json, Value};
 
 #[cfg(target_arch = "wasm32")]
 mod abi;
+pub mod account;
 pub mod dashboard;
 pub mod graph;
 pub mod lifecycle;
@@ -91,7 +92,7 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
         }
         "api" => {
             if let Ok(call) = serde_json::from_str::<Value>(payload) {
-                if let Some(name) = call["name"].as_str().filter(|n| !matches!(*n, "requestVaultIndex" | "prepareMemoryAction" | "recordingMemory")) {
+                if let Some(name) = call["name"].as_str().filter(|n| !matches!(*n, "requestVaultIndex" | "prepareMemoryAction" | "recordingMemory" | "collectMemoryExportSection" | "deleteMemoryData")) {
                     return serde_json::to_string(&public::call(host, name, &call["parameters"]))
                         .map_err(|_| "Invalid memory response".into());
                 }
@@ -103,6 +104,10 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
                 RequestVaultIndex(vault_index::NudgeRequest),
                 #[serde(rename = "recordingMemory")]
                 Recording(Value),
+                #[serde(rename = "collectMemoryExportSection")]
+                Export(Value),
+                #[serde(rename = "deleteMemoryData")]
+                DeleteData(Value),
                 #[serde(rename = "prepareMemoryAction")]
                 Prepare {
                     tool: String,
@@ -116,6 +121,20 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
                     .map_err(|e| e.message),
                 Api::Recording(parameters) => {
                     let result = match recording::call(host, &parameters) {
+                        Ok(value) => json!({"ok": value}),
+                        Err(e) => json!({"error": {"statusCode": e.status, "error": e.message}}),
+                    };
+                    serde_json::to_string(&result).map_err(|_| "Invalid memory response".into())
+                }
+                Api::Export(parameters) => {
+                    let result = match account::export(host, &parameters) {
+                        Ok(value) => json!({"ok": value}),
+                        Err(e) => json!({"error": {"statusCode": e.status, "error": e.message}}),
+                    };
+                    serde_json::to_string(&result).map_err(|_| "Invalid memory response".into())
+                }
+                Api::DeleteData(parameters) => {
+                    let result = match account::delete(host, &parameters) {
                         Ok(value) => json!({"ok": value}),
                         Err(e) => json!({"error": {"statusCode": e.status, "error": e.message}}),
                     };
