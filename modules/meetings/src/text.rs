@@ -63,3 +63,11 @@ fn calendar_valid(value: &str) -> bool {
     };
     day >= 1 && day <= days && n(11, 13) < 24 && n(14, 16) < 60 && n(17, 19) < 60
 }
+
+/// Recording type ids: `^[a-z][a-z0-9-]{0,63}$`.
+pub fn is_type_id(value: &str) -> bool {
+    let b = value.as_bytes();
+    (1..=64).contains(&b.len())
+        && b[0].is_ascii_lowercase()
+        && b[1..].iter().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-')
+}

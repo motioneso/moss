@@ -83,6 +83,8 @@ impl MeetingsPorts {
             (store::TRANSCRIPTS, "get") => self.run(scope, move |cx| Box::pin(async move { store::read(cx, &parameters, false).await })),
             (store::TRANSCRIPTS, "lock") => self.run(scope, move |cx| Box::pin(async move { store::read(cx, &parameters, true).await })),
             (store::TRANSCRIPTS, "set") => self.run(scope, move |cx| Box::pin(async move { store::write(cx, &parameters).await })),
+            (store::RECORDING_TYPES, "get") => self.run(scope, move |cx| Box::pin(async move { store::recording_types_lock(cx, &parameters, false).await })),
+            (store::RECORDING_TYPES, "lock") => self.run(scope, move |cx| Box::pin(async move { store::recording_types_lock(cx, &parameters, true).await })),
             (store::HISTORY, "get") => self.run(scope, move |cx| Box::pin(async move { store::history(cx, &parameters).await })),
             _ => anyhow::bail!("Unsupported Meetings store operation"),
         }
@@ -176,7 +178,7 @@ impl MeetingsPorts {
 }
 impl Ports for MeetingsPorts {
     fn invoke(&self, scope: &CallScope, port: &str, request: &Request) -> Result<Value> {
-        let ours = [RESOURCE, store::TRANSCRIPTS, store::HISTORY];
+        let ours = [RESOURCE, store::TRANSCRIPTS, store::HISTORY, store::RECORDING_TYPES];
         if port != "kv" || !ours.contains(&request.resource.as_str()) || scope.module().id != "meetings" {
             return self.next.invoke(scope, port, request);
         }

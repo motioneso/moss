@@ -50,3 +50,7 @@ path = "../tests/transcripts.rs"
 [[test]]
 name = "history"
 path = "../tests/history.rs"
+
+[[test]]
+name = "recording"
+path = "../tests/recording.rs"

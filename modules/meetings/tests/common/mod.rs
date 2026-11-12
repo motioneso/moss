@@ -169,6 +169,7 @@ impl Host for Fake {
                 self.ids.set(n + 1);
                 Ok(json!(format!("00000000-0000-4000-8000-{n:012x}")))
             }
+            ("kv", _) if resource == "meetings.recording-types" => Ok(json!({"locked": true})),
             ("kv", _) if resource == "meetings.transcripts" => Ok(self.transcripts(operation, &parameters)),
             ("kv", "get") if resource == "meetings.history" => {
                 *self.history_asked.borrow_mut() = Some(parameters);
@@ -236,7 +237,11 @@ impl Fake {
                         row.insert("creation_title".into(), query.values["title"].clone());
                     }
                     "app.meeting_recording_metadata" => {
-                        row.insert("revision".into(), json!(0));
+                        for (k, v) in [("revision", json!(0)), ("type_id", Value::Null), ("type_source", json!("automatic")),
+                            ("side", Value::Null), ("confidence", Value::Null), ("reason", Value::Null),
+                            ("recorded_at", Value::Null), ("source", json!("recording")), ("output_version", Value::Null)] {
+                            row.insert(k.into(), v);
+                        }
                     }
                     _ => {}
                 }
@@ -246,13 +251,25 @@ impl Fake {
                 let key_columns: &[&str] = match table {
                     "app.meeting_records" => &["request_key"],
                     "app.meeting_note_writes" => &["meeting_id", "request_key"],
-                    "app.meeting_recording_metadata" => &["meeting_id"],
+                    "app.meeting_recording_metadata" | "app.meeting_manual_entries" => &["meeting_id"],
                     _ => &[],
                 };
                 let clash = tables.get(table).into_iter().flatten().any(|r| {
                     r["owner_user_id"] == actor && key_columns.iter().all(|c| r[*c] == row[*c])
                 });
                 if clash {
+                    if let Conflict::Update { values, .. } = &query.conflict {
+                        let mut out = vec![];
+                        for r in tables.entry(table.into()).or_default().iter_mut() {
+                            if r["owner_user_id"] == actor {
+                                for (k, v) in values {
+                                    r[k.as_str()] = v.clone();
+                                }
+                                out.push(r.clone());
+                            }
+                        }
+                        return out;
+                    }
                     assert_eq!(query.conflict, Conflict::Ignore, "unique violation on {table}");
                     return vec![];
                 }

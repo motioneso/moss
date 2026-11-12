@@ -13,6 +13,10 @@ pub enum Kind {
     /// Text that also holds a non-whitespace character (the old schema's `\S` pattern).
     Ident { min: usize, max: usize },
     Int { min: i64, max: i64 },
+    /// `format: "date-time"`.
+    DateTime,
+    /// The recording type id pattern `^[a-z][a-z0-9-]{0,63}$`.
+    TypeId,
     Enum(&'static [&'static str]),
     /// Present and checked elsewhere.
     Any,
@@ -45,6 +49,16 @@ fn check(var: &str, name: &str, kind: Kind, value: &Value) -> Result<(), Failure
             Ok(())
         }
         Kind::Any => Ok(()),
+        Kind::DateTime => match value.as_str() {
+            Some(s) if chrono::DateTime::parse_from_rfc3339(s).is_ok() => Ok(()),
+            Some(_) => Err(format!("{at} must match format \"date-time\"")),
+            None => Err(format!("{at} must be string")),
+        },
+        Kind::TypeId => match value.as_str() {
+            Some(s) if crate::text::is_type_id(s) => Ok(()),
+            Some(_) => Err(format!("{at} must match pattern \"^[a-z][a-z0-9-]{{0,63}}$\"")),
+            None => Err(format!("{at} must be string")),
+        },
         Kind::Enum(allowed) => match value {
             Value::String(s) if allowed.contains(&s.as_str()) => Ok(()),
             Value::Array(_) | Value::Object(_) => Err(format!("{at} must be string")),

@@ -71,6 +71,12 @@ impl Snapshot {
     }
 }
 
+pub(crate) enum Created {
+    New(Snapshot),
+    Replay(Snapshot),
+    Conflict,
+}
+
 pub struct Records<'a, H: Host + ?Sized> {
     host: &'a H,
 }
@@ -81,14 +87,14 @@ impl<'a, H: Host + ?Sized> Records<'a, H> {
     fn client(&self) -> Client<'a, H> {
         Client(self.host)
     }
-    fn now(&self) -> Result<String> {
+    pub(crate) fn now(&self) -> Result<String> {
         let context = self.host.call("context", "read", "call", json!({}))?;
         let now = context["now"]
             .as_str()
             .ok_or_else(|| moss_module_sdk::Error::new("Invalid host time"))?;
         iso(&Value::String(now.to_owned()))
     }
-    fn row(&self, id: &str) -> Result<Option<Value>> {
+    pub(crate) fn row(&self, id: &str) -> Result<Option<Value>> {
         let mut query = Query::select(Filter::eq("id", id));
         query.limit = Some(1);
         Ok(self.client().query(RECORDS, &query)?.into_iter().next())
@@ -111,12 +117,19 @@ impl<'a, H: Host + ?Sized> Records<'a, H> {
         if !bounded(raw, 240, true) {
             return Ok(invalid());
         }
-        let title = js_trim(raw);
+        Ok(match self.create_record(key, js_trim(raw))? {
+            Created::New(snapshot) => Response::new(201, json!({"created":true,"meeting":snapshot.dto()})),
+            Created::Replay(snapshot) => Response::new(200, json!({"created":false,"meeting":snapshot.dto()})),
+            Created::Conflict => code(409, "meeting_request_conflict"),
+        })
+    }
+
+    /// Inserts a record, or finds the one this request key already made.
+    pub(crate) fn create_record(&self, key: &str, title: &str) -> Result<Created> {
         let mut insert = Query::insert(values(vec![("request_key", json!(key)), ("title", json!(title))]));
         insert.conflict = Conflict::Ignore;
         if let Some(row) = self.client().query(RECORDS, &insert)?.first() {
-            let meeting = Snapshot::from_row(row)?.dto();
-            return Ok(Response::new(201, json!({"created":true,"meeting":meeting})));
+            return Ok(Created::New(Snapshot::from_row(row)?));
         }
         // A separate statement sees the row a concurrent request committed first.
         let mut find = Query::select(Filter::eq("request_key", key));
@@ -128,7 +141,7 @@ impl<'a, H: Host + ?Sized> Records<'a, H> {
             .next()
             .ok_or_else(|| moss_module_sdk::Error::new("Meeting request vanished"))?;
         if existing["creation_title"].as_str() != Some(title) {
-            return Ok(code(409, "meeting_request_conflict"));
+            return Ok(Created::Conflict);
         }
         // Replay the original creation snapshot, not later edits.
         let mut snapshot = Snapshot::from_row(&existing)?;
@@ -136,7 +149,7 @@ impl<'a, H: Host + ?Sized> Records<'a, H> {
         snapshot.notes = String::new();
         snapshot.revision = 0;
         snapshot.updated_at = snapshot.created_at.clone();
-        Ok(Response::new(200, json!({"created":false,"meeting":snapshot.dto()})))
+        Ok(Created::Replay(snapshot))
     }
 
     pub fn list(&self, request: &RouteRequest) -> Result<Response> {

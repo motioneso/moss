@@ -8,6 +8,7 @@ use serde_json::{json, Value};
 
 pub const TRANSCRIPTS: &str = "meetings.transcripts";
 pub const HISTORY: &str = "meetings.history";
+pub const RECORDING_TYPES: &str = "meetings.recording-types";
 
 const BATCH_READ_LIMIT: i64 = 4097;
 const HISTORY_TIMEOUT_MS: &str = "3000";
@@ -302,3 +303,17 @@ SELECT to_jsonb(q) FROM (
   SELECT * FROM history WHERE /*STATE*/ ORDER BY history_date DESC,id DESC LIMIT /*LIMIT*/
 ) q ORDER BY q.history_date DESC,q.id DESC
 "#;
+
+/// Serialises recording type reads and saves for the signed-in person. A read shares the lock
+/// and a save holds it exclusively until the call's transaction ends.
+pub async fn recording_types_lock(cx: &DataContext, parameters: &Value, exclusive: bool) -> Result<Value> {
+    ensure!(parameters.as_object().is_some_and(|v| v.is_empty()), "Recording types take no parameters");
+    let function = if exclusive { "pg_advisory_xact_lock" } else { "pg_advisory_xact_lock_shared" };
+    cx.db()
+        .execute(
+            &format!("SELECT {function}(hashtextextended('meetings:recording-types:' || app.current_actor_user_id()::text,0))"),
+            &[],
+        )
+        .await?;
+    Ok(json!({"locked": true}))
+}
