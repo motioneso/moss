@@ -34,3 +34,13 @@ pub fn files(root: &Path, component: &[u8]) -> Result<BTreeMap<String, Vec<u8>>>
 pub fn pack(root: &Path, component: &[u8]) -> Result<Vec<u8>> {
     archive::pack(&files(root, component)?)
 }
+
+/// Packs without the Tasks dependency so a test can install Meetings alone. Calls to Tasks then
+/// fail the way they do when Tasks is missing.
+pub fn pack_without_dependencies(root: &Path, component: &[u8]) -> Result<Vec<u8>> {
+    let mut files = files(root, component)?;
+    let mut manifest = manifest()?;
+    manifest.requires.clear();
+    files.insert("moss.module.json".into(), serde_json::to_vec(&manifest)?);
+    archive::pack(&files)
+}

@@ -292,9 +292,11 @@ fn reviewing_an_action_dismisses_replays_keeps_it_pending_without_tasks_and_hide
     assert_eq!(list["body"]["candidates"][0]["reviewState"], "pending");
     let path = format!("/records/{id}/actions/{candidate}/review");
 
-    // Tasks is not installed in this test, so an accept is refused and the action stays pending.
+    // Tasks is not installed in this test, so the accept fails and the action stays pending. The
+    // test package omits the Tasks dependency, so the platform stops the call before the guest can
+    // map it to 503. The guest tests cover that mapping.
     let down = w.call(a, "POST", &path, review_body(K2, "accept"));
-    assert_eq!((down["status"].clone(), down["body"]["code"].clone()), (json!(503), json!("meeting_tasks_unavailable")));
+    assert!(down["status"].as_i64().is_some_and(|s| s >= 500), "{down}");
     let after = w.call(a, "GET", &format!("/records/{id}/outputs"), Value::Null);
     assert_eq!(after["body"]["candidates"][0]["reviewState"], "pending");
 

@@ -47,7 +47,7 @@ fn installed_meetings_keep_each_persons_records_notes_and_preferences_private() 
     });
     let dir = tempfile::tempdir().unwrap();
     let reg = tempfile::tempdir().unwrap();
-    let bytes = moss_meetings_host::package::pack(&root(), &component()).unwrap();
+    let bytes = moss_meetings_host::package::pack_without_dependencies(&root(), &component()).unwrap();
     let (key, publisher, artifact) = registry::publish(reg.path(), &bytes);
     let database = f.db.clone();
     let app = Application::open_extended_with(
