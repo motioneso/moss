@@ -10,6 +10,7 @@ pub mod cache;
 pub mod fastify;
 pub mod messages;
 pub mod settings;
+pub mod understand;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod testing;
 
