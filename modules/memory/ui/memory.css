@@ -280,6 +280,13 @@
   }
   .tabs {
     gap: var(--space-3);
+    flex-wrap: wrap;
+  }
+  .tabs .grow {
+    display: none;
+  }
+  .tabs .add {
+    margin-left: auto;
   }
   .filters .jds-input {
     flex-basis: 100%;
