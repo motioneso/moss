@@ -50,8 +50,7 @@ pub fn publish_as(
         abi: m.abi,
         capabilities: m.capabilities,
         migrations: m.database.migrations,
-        // Tests install only the modules they use, so Calendar and People are not demanded.
-        requires: BTreeMap::new(),
+        requires: m.requires,
         changelog: format!("{label} package"),
         channel: Channel::Stable,
         urgent: false,
