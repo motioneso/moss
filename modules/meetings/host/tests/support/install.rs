@@ -34,7 +34,7 @@ pub fn stand_in(id: &str, wasm: &[u8]) -> (Vec<u8>, moss_module_host::manifest::
     fields.insert("id".into(), id.into());
     fields.insert("name".into(), id.into());
     fields.insert("icons".into(), serde_json::json!([format!("icons/{id}.svg")]));
-    let caps = fields["capabilities"].as_array().unwrap().iter().filter(|c| c["port"] != "api").cloned().collect::<Vec<_>>();
+    let caps = fields["capabilities"].as_array().unwrap().iter().cloned().collect::<Vec<_>>();
     fields.insert("capabilities".into(), caps.into());
     let manifest: moss_module_host::manifest::Manifest = serde_json::from_value(value).unwrap();
     let files = std::collections::BTreeMap::from([
