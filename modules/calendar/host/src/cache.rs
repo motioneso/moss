@@ -101,10 +101,6 @@ async fn prune(cx: &DataContext, p: &Value) -> Result<Value> {
               WHERE connector_account_id = $1 AND updated_at < $2::text::timestamptz",
             &[&account, &since],
         )
-        .await
-        .map_err(|e| {
-            eprintln!("TEMP_DIAG_PRUNE {e:?}");
-            e
-        })?;
+        .await?;
     Ok(json!({"deleted":deleted}))
 }
