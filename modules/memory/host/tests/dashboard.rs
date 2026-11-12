@@ -81,6 +81,7 @@ impl Fixture {
     }
 
     fn fact(&self, actor: Uuid, text: &str, pinned: bool, importance: f64) {
+        self.self_entity(actor);
         self.sql(&format!(
             "INSERT INTO app.memory_facts (owner_user_id, subject_entity_id, predicate, object_text, record_kind,
                                            confidence, importance, provenance, pinned)
@@ -240,13 +241,15 @@ fn accepting_creates_a_confirmed_fact_and_a_new_name_becomes_a_topic() {
     let out = f.accept(f.a, &id);
     assert_eq!(out["fact"]["provenance"], "confirmed");
     assert_eq!(f.count("SELECT count(*) FROM app.memory_entities WHERE owner_user_id=$1 AND kind='topic' AND name='Gardening'", f.a), 1);
-    assert_eq!(f.count("SELECT count(*) FROM app.memory_search_documents WHERE owner_user_id=$1 AND status='active'", f.a), 2);
+    assert_eq!(f.count("SELECT count(*) FROM app.memory_search_documents WHERE owner_user_id=$1 AND status='active' AND target_kind='fact'", f.a), 1);
+    assert_eq!(f.count("SELECT count(*) FROM app.memory_search_documents WHERE owner_user_id=$1 AND status='active' AND target_kind='entity'", f.a), 2);
 }
 
 #[test]
 #[ignore = "Only through verify-gate"]
 fn the_self_entity_cannot_change_and_one_with_facts_cannot_go() {
     let f = Fixture::new();
+    f.self_entity(f.a);
     let id = f.suggest(f.a, "ent-1", "likes jazz", "Music");
     f.accept(f.a, &id);
     let me: String = f.rt.block_on(f.root.query_one(
