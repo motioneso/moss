@@ -260,6 +260,166 @@ fn run_step(host: &impl Host, account: &str, cursor: usize, mut upserted: u64, m
 #[cfg(test)]
 mod tests {
     use super::*;
+    use moss_module_sdk::Error;
+    use std::cell::RefCell;
+
+    /// Scripted host: a server listing, an Email cache, and a record of every call.
+    struct Script {
+        listing: Value,
+        cached: Vec<(String, u64)>,
+        calls: RefCell<Vec<(String, String, Value)>>,
+        start: &'static str,
+    }
+
+    impl Script {
+        fn new(uids: &[(u32, u64)]) -> Self {
+            let keys: Vec<Value> = uids.iter().map(|(u, s)| json!({"uid":u,"size":s})).collect();
+            Self {
+                listing: json!({"uidValidity":7,"truncated":false,"since":"2026-01-01T00:00:00.000Z","keys":keys}),
+                cached: vec![],
+                calls: RefCell::default(),
+                start: "started",
+            }
+        }
+        fn named(&self, resource: &str) -> Vec<Value> {
+            self.calls.borrow().iter().filter(|c| c.1 == resource).map(|c| c.2.clone()).collect()
+        }
+    }
+
+    impl Host for Script {
+        fn call(&self, port: &str, operation: &str, resource: &str, p: Value) -> moss_module_sdk::Result<Value> {
+            let name = match (port, resource) {
+                ("api", _) => p["name"].as_str().unwrap().to_string(),
+                _ => resource.to_string(),
+            };
+            self.calls.borrow_mut().push((port.into(), name.clone(), p.clone()));
+            Ok(match name.as_str() {
+                "connectors.imap-sync-start" => json!({"state":self.start}),
+                "connectors.imap-list" => self.listing.clone(),
+                "connectors.imap-fetch" => {
+                    let messages: Vec<Value> = p["uids"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|u| json!({"uid":u,"sender":"a@example.com","recipients":["b@example.com"],"subject":"Hi","snippet":"SECRET-BODY","receivedAt":"2026-01-02T00:00:00.000Z","messageId":"<m@x>","references":[],"sizeBytes":10}))
+                        .collect();
+                    json!({"messages":messages,"failed":[]})
+                }
+                "listCachedMessageKeys" => {
+                    let wanted = p["parameters"]["externalIds"].as_array().unwrap();
+                    let keys: Vec<Value> = self
+                        .cached
+                        .iter()
+                        .filter(|(id, _)| wanted.iter().any(|w| w == id))
+                        .map(|(id, size)| json!({"externalId":id,"sizeBytes":size}))
+                        .collect();
+                    json!({"keys":keys})
+                }
+                "context" | "read" => json!({"now":"2026-01-01T00:00:00.000Z"}),
+                _ => match (port, operation) {
+                    ("context", "uuid") => json!({"id":"k"}),
+                    ("jobs", "schedule") => json!({"id":"row-1"}),
+                    _ => json!({}),
+                },
+            })
+        }
+    }
+
+    fn job(cursor: u64) -> String {
+        json!({"queue":QUEUE,"parameters":job_params("acct", cursor, 0, 0)}).to_string()
+    }
+
+    #[test]
+    fn a_small_mailbox_syncs_in_one_run_and_prunes() {
+        let host = Script::new(&[(1, 10), (2, 10)]);
+        let out = handle(&host, &job(0)).unwrap();
+        assert!(out.contains("done"));
+        assert_eq!(host.named("insertCachedMessage").len(), 2);
+        let prune = host.named("pruneCachedMessages");
+        assert_eq!(prune.len(), 1);
+        assert_eq!(prune[0]["parameters"]["keep"], json!(["imap:INBOX:7:1", "imap:INBOX:7:2"]));
+        let finish = host.named("connectors.imap-sync-finish");
+        assert_eq!(finish[0]["status"], "success");
+        assert_eq!(finish[0]["counts"]["emailUpserted"], 2);
+    }
+
+    #[test]
+    fn unchanged_messages_are_not_fetched_but_changed_ones_are() {
+        let mut host = Script::new(&[(1, 10), (2, 99)]);
+        host.cached = vec![("imap:INBOX:7:1".into(), 10), ("imap:INBOX:7:2".into(), 10)];
+        handle(&host, &job(0)).unwrap();
+        let fetches = host.named("connectors.imap-fetch");
+        assert_eq!(fetches.len(), 1);
+        assert_eq!(fetches[0]["uids"], json!([2]));
+    }
+
+    #[test]
+    fn a_large_mailbox_continues_in_steps_with_metadata_only_payloads() {
+        let uids: Vec<(u32, u64)> = (1..=120).map(|u| (u, 10)).collect();
+        let host = Script::new(&uids);
+        let out = handle(&host, &job(0)).unwrap();
+        assert!(out.contains("continued"));
+        assert!(host.named("pruneCachedMessages").is_empty());
+        let queued: Vec<Value> = host
+            .calls
+            .borrow()
+            .iter()
+            .filter(|c| c.0 == "jobs" && c.1 != "connectors.imap-list")
+            .map(|c| c.2.clone())
+            .collect();
+        let enqueue = queued.iter().find(|p| p["params"]["cursor"] == 50).expect("continuation");
+        let text = enqueue.to_string();
+        assert!(!text.contains("SECRET-BODY") && !text.contains("example.com"));
+        let mut keys: Vec<&str> = enqueue["params"].as_object().unwrap().keys().map(String::as_str).collect();
+        keys.sort();
+        assert_eq!(keys, ["account-id", "cursor", "failures", "upserted"]);
+    }
+
+    #[test]
+    fn a_truncated_listing_never_prunes() {
+        let mut host = Script::new(&[(1, 10)]);
+        host.listing["truncated"] = json!(true);
+        handle(&host, &job(0)).unwrap();
+        assert!(host.named("pruneCachedMessages").is_empty());
+        assert_eq!(host.named("connectors.imap-sync-finish")[0]["counts"]["truncated"], true);
+    }
+
+    #[test]
+    fn a_busy_account_is_left_alone() {
+        let mut host = Script::new(&[(1, 10)]);
+        host.start = "busy";
+        assert!(handle(&host, &job(0)).unwrap().contains("busy"));
+        assert!(host.named("connectors.imap-list").is_empty());
+    }
+
+    #[test]
+    fn a_revoked_account_cancels_its_schedule() {
+        let mut host = Script::new(&[]);
+        host.start = "inactive";
+        handle(&host, &job(0)).unwrap();
+        assert!(host.calls.borrow().iter().any(|c| c.0 == "jobs" && c.2["id"] == "row-1"));
+    }
+
+    #[test]
+    fn a_login_refusal_is_recorded_as_an_auth_error() {
+        let mut host = Script::new(&[]);
+        host.listing = json!({"result":"auth_failed"});
+        handle(&host, &job(0)).unwrap();
+        let finish = host.named("connectors.imap-sync-finish");
+        assert_eq!(finish[0]["status"], "failed");
+        assert_eq!(finish[0]["error"], "auth-error");
+    }
+
+    #[test]
+    fn the_schedule_is_one_keyed_quarter_hour_row() {
+        let host = Script::new(&[]);
+        reconcile_schedule(&host, "acct");
+        let calls = host.calls.borrow();
+        let schedule = calls.iter().find(|c| c.0 == "jobs").unwrap();
+        assert_eq!(schedule.2["cron"], "*/15 * * * *");
+        assert_eq!(schedule.2["key"], "acct");
+        let _ = Error::new("unused");
+    }
 
     #[test]
     fn key_matches_javascript_encoding() {
