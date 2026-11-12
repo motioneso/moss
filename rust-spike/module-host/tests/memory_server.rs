@@ -437,7 +437,61 @@ fn installed_memory_package_serves_routes_from_the_real_server() {
     assert_eq!(status, 404);
     let (status, _) = call(Method::DELETE, &format!("/graph/facts/{corrected}"), None, None);
     assert_eq!(status, 401);
+    // The Memory screen routes, through the real server with the installed package.
+    let sql = |statement: String| {
+        runtime.block_on(async {
+            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+            tokio::spawn(async move {
+                let _ = connection.await;
+            });
+            db.batch_execute(&statement).await.unwrap();
+        })
+    };
+    for (i, (signature, text, subject)) in [("live-a", "reads before bed", "self"), ("live-b", "runs on Sundays", "Fitness"), ("live-c", "dislikes loud rooms", "self")].iter().enumerate() {
+        let payload = json!({"kind":"fact","fact":{"subject":subject,"predicate":"prefers","objectText":text,"recordKind":"preference"}});
+        sql(format!(
+            "INSERT INTO app.memory_candidates (owner_user_id, kind, action, payload_json, candidate_signature, confidence, importance, provenance, created_at)
+             VALUES ('{owner}', 'fact', 'create', '{payload}'::jsonb, '{signature}', 0.7, 0.5, 'inferred', now() - interval '{i} minutes')"
+        ));
+    }
+    let (status, text) = call(Method::GET, "/dashboard?limit=2", Some(&cookie), None);
+    assert_eq!(status, 200, "{text}");
+    let page = json_of(&text);
+    assert!(page["counts"]["pending"] == 3 && page["items"].as_array().unwrap().len() == 2, "{text}");
+    assert!(page["hasMore"] == false || page["nextCursor"].is_string(), "{text}");
+    let (status, text) = call(Method::GET, "/dashboard?cursor=nonsense", Some(&cookie), None);
+    assert_eq!((status, json_of(&text)["error"].is_string()), (400, true), "{text}");
+    let (status, text) = call(Method::GET, "/candidates?limit=2", Some(&cookie), None);
+    assert_eq!(status, 200, "{text}");
+    let pending = json_of(&text);
+    assert!(pending["total"] == 3 && pending["hasMore"] == true, "{text}");
+    let first = pending["items"][0]["id"].as_str().unwrap().to_owned();
+    let second = pending["items"][1]["id"].as_str().unwrap().to_owned();
+    let (status, text) = call(Method::GET, &format!("/candidates?limit=2&cursor={}", pending["nextCursor"].as_str().unwrap()), Some(&cookie), None);
+    assert_eq!((status, json_of(&text)["items"].as_array().map(Vec::len)), (200, Some(1)), "{text}");
+    let (status, text) = call(Method::POST, &format!("/candidates/{first}/accept"), Some(&cookie), Some(json!({})));
+    assert_eq!(status, 200, "{text}");
+    let (status, _) = call(Method::POST, &format!("/candidates/{first}/accept"), Some(&cookie), Some(json!({})));
+    assert_eq!(status, 404);
+    let (status, _) = call(Method::POST, &format!("/candidates/{second}/reject"), Some(&cookie), Some(json!({})));
+    assert_eq!(status, 204);
+    let (status, _) = call(Method::POST, &format!("/candidates/{second}/reject"), Some(&cookie), Some(json!({})));
+    assert_eq!(status, 404);
+    let (status, text) = call(Method::POST, "/memories", Some(&cookie), Some(json!({"text":"keeps a paper diary","recordKind":"fact"})));
+    assert_eq!(status, 200, "{text}");
+    let (status, text) = call(Method::GET, "/dashboard?q=diary", Some(&cookie), None);
+    assert!(status == 200 && json_of(&text)["items"].as_array().unwrap().len() == 1, "{text}");
+    assert_eq!(call(Method::GET, "/dashboard", None, None).0, 401);
+    assert_eq!(call(Method::GET, "/candidates", None, None).0, 401);
+    // Hold the server open so the screen can be opened in a browser.
+    if let Ok(hold) = std::env::var("MEMORY_LIVE_HOLD") {
+        let (frame, _) = (format!("{origin}/module-frame?module=memory&path=/settings/memory"), 0);
+        fs::write(format!("{hold}/ready.txt"), format!("{frame}\n")).unwrap();
+        while !std::path::Path::new(&format!("{hold}/stop")).exists() {
+            std::thread::sleep(Duration::from_millis(500));
+        }
+    }
     // Memory text stays out of the server log.
     let log = log();
-    assert!(!log.contains("oolong") && !log.contains("jasmine") && !log.contains("matcha"), "memory text in log");
+    assert!(!log.contains("oolong") && !log.contains("jasmine") && !log.contains("matcha") && !log.contains("paper diary") && !log.contains("reads before bed"), "memory text in log");
 }
