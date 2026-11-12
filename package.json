@@ -25,6 +25,8 @@
     "test:rust-meetings-live": "bash modules/meetings/tools/live.sh",
     "test:rust-meetings-oracle": "tsx modules/meetings/tools/transcript-oracle.ts check",
     "test:rust-meetings-oracle-write": "tsx modules/meetings/tools/transcript-oracle.ts write",
+    "test:rust-recording-oracle": "tsx modules/meetings/tools/recording-oracle.ts check",
+    "test:rust-recording-oracle-write": "tsx modules/meetings/tools/recording-oracle.ts write",
     "test:rust-memory-live": "bash modules/memory/tools/live.sh",
     "test:rust-memory-oracle": "tsx modules/memory/tools/lifecycle-oracle.ts check",
     "test:rust-memory-oracle-write": "tsx modules/memory/tools/lifecycle-oracle.ts write",
