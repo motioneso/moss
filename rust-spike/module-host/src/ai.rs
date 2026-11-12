@@ -29,6 +29,27 @@ pub struct EmbeddingEndpoint {
 #[async_trait]
 pub trait EmbeddingStore: Send + Sync {
     async fn for_actor(&self, actor: Actor) -> Result<EmbeddingEndpoint>;
+    /// The search model that runs inside this host, when this account uses it instead of an
+    /// endpoint. The default is none.
+    async fn on_device(&self, _actor: Actor) -> Result<Option<Arc<dyn OnDeviceEmbedder>>> {
+        Ok(None)
+    }
+}
+/// A search model that runs inside the host. Text never leaves the machine.
+pub trait OnDeviceEmbedder: Send + Sync {
+    /// Blocks until the vector is ready or the time is up. The error is a plain sentence that
+    /// holds no text, address or path.
+    fn embed(&self, text: &str, timeout: std::time::Duration) -> Result<Vec<f32>, String>;
+}
+/// Model name and version written beside every vector, from the endpoint or the on-device model.
+async fn provenance_for<E: EmbeddingStore>(embeddings: &E, actor: Actor) -> Result<(String, String)> {
+    if embeddings.on_device(actor.clone()).await?.is_some() {
+        return Ok((
+            DEFAULT_EMBEDDING_MODEL.to_owned(),
+            DEFAULT_EMBEDDING_VERSION.to_owned(),
+        ));
+    }
+    Ok(embeddings.for_actor(actor).await?.provenance())
 }
 pub struct RouterIntelligence<S, T, E> {
     router: Router<S, T>,
@@ -101,10 +122,8 @@ impl<S: ConfigurationStore, T: CapabilityTransport, E: EmbeddingStore> Intellige
             scope.access().actor_user_id(),
             uuid::Uuid::new_v4(),
         );
-        Ok(self
-            .runtime
-            .block_on(self.embeddings.for_actor(actor))?
-            .provenance())
+        self.runtime
+            .block_on(provenance_for(&self.embeddings, actor))
     }
 }
 
@@ -265,10 +284,32 @@ fn embed_via<E: EmbeddingStore>(
         Actor::from_authenticated_session(scope.access().actor_user_id(), uuid::Uuid::new_v4());
     runtime.block_on(async {
         tokio::time::timeout(scope.remaining(), async {
-            let endpoint = embeddings.for_actor(actor).await?;
-            let (model, version) = endpoint.provenance();
             let input = format!("{}{text}", kind.prefix());
-            let outcome = request_vector(&endpoint, &input, scope.remaining()).await;
+            let (model, version, outcome) = if let Some(device) =
+                embeddings.on_device(actor.clone()).await?
+            {
+                let wait = scope.remaining();
+                let vector = tokio::task::spawn_blocking(move || {
+                    device.embed(&input, wait).map_err(|e| anyhow::anyhow!(e))
+                })
+                .await
+                .map_err(|_| anyhow::anyhow!("Embedding service unavailable"))
+                .and_then(|r| r)
+                .and_then(|v| {
+                    let numbers: Vec<Value> = v.iter().map(|n| json!(f64::from(*n))).collect();
+                    check_vector(&numbers)
+                });
+                (
+                    DEFAULT_EMBEDDING_MODEL.to_owned(),
+                    DEFAULT_EMBEDDING_VERSION.to_owned(),
+                    vector,
+                )
+            } else {
+                let endpoint = embeddings.for_actor(actor).await?;
+                let (model, version) = endpoint.provenance();
+                let outcome = request_vector(&endpoint, &input, scope.remaining()).await;
+                (model, version, outcome)
+            };
             if let Some(activity) = activity {
                 activity
                     .record(EmbeddingCall {
@@ -327,10 +368,8 @@ impl<E: EmbeddingStore> Intelligence for EmbeddingsOnly<E> {
             scope.access().actor_user_id(),
             uuid::Uuid::new_v4(),
         );
-        Ok(self
-            .runtime
-            .block_on(self.embeddings.for_actor(actor))?
-            .provenance())
+        self.runtime
+            .block_on(provenance_for(&self.embeddings, actor))
     }
 }
 

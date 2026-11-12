@@ -107,3 +107,6 @@ rust-spike/**/target/
 modules/memory/tools/score-cases.json
 modules/memory/tools/lifecycle-cases.json
 modules/meetings/tools/transcript-cases.json
+
+# Generated reference vectors, kept on one line so the file stays under the size limit.
+rust-spike/on-device/fixtures/old-vectors.json

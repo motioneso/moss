@@ -342,10 +342,13 @@ fn installed_memory_package_serves_routes_from_the_real_server() {
     embedding_stub(&embedding_port.0);
     let embedding_url = format!("http://127.0.0.1:{}/v1/embeddings", embedding_port.0);
     let key = "temporary-disposable-embedding-key-231";
-    private(
-        &root.join("modules.json"),
-        &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"embeddings":{"url":embedding_url,"model":"bag-of-words-768","api_key":key}}),
-    );
+    // JS238_ON_DEVICE=1 leaves the endpoint out, so the model must run inside the server.
+    let on_device = std::env::var("JS238_ON_DEVICE").as_deref() == Ok("1");
+    let mut modules = json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"embeddings":{"url":embedding_url,"model":"bag-of-words-768","api_key":key}});
+    if on_device {
+        modules.as_object_mut().unwrap().remove("embeddings");
+    }
+    private(&root.join("modules.json"), &modules);
     let _server = start(true);
     let log = || fs::read_to_string(root.join("server.log")).unwrap_or_default();
     let call = |method: reqwest::Method, path: &str, cookie: Option<&str>, body: Option<Value>| {
@@ -364,6 +367,10 @@ fn installed_memory_package_serves_routes_from_the_real_server() {
     };
     let json_of = |text: &str| serde_json::from_str::<Value>(text).unwrap_or(Value::Null);
     use reqwest::Method;
+    if on_device {
+        on_device_proof(&call, &json_of, &cookie, &log, &root);
+        return;
+    }
     assert_eq!(call(Method::GET, "/graph/core", None, None).0, 401);
     let started = Instant::now();
     let (status, text) = loop {
@@ -440,4 +447,72 @@ fn installed_memory_package_serves_routes_from_the_real_server() {
     // Memory text stays out of the server log.
     let log = log();
     assert!(!log.contains("oolong") && !log.contains("jasmine") && !log.contains("matcha"), "memory text in log");
+}
+
+/// Memory search on a server with no endpoint configured. The model downloads on first use,
+/// progress is read from the settings route, and a search then finds a paraphrase.
+fn on_device_proof(
+    call: &dyn Fn(reqwest::Method, &str, Option<&str>, Option<Value>) -> (u16, String),
+    json_of: &dyn Fn(&str) -> Value,
+    cookie: &str,
+    log: &dyn Fn() -> String,
+    root: &Path,
+) {
+    use reqwest::Method;
+    let started = Instant::now();
+    let state = || {
+        let (status, text) = call(Method::GET, "/embedding", Some(cookie), None);
+        assert_eq!(status, 200, "{text}");
+        json_of(&text)
+    };
+    let first = state();
+    println!("settings before use: {first}");
+    assert_eq!(first["provider"], "device", "{first}");
+    assert!(first["message"].is_null(), "{first}");
+    while call(Method::GET, "/graph/core", Some(cookie), None).0 == 503 {
+        assert!(started.elapsed() < Duration::from_secs(60), "server did not start");
+        std::thread::sleep(Duration::from_millis(500));
+    }
+    let (status, text) = call(Method::POST, "/graph/entities", Some(cookie), Some(json!({"kind":"self","name":"Me"})));
+    assert_eq!(status, 200, "{text}");
+    let me = json_of(&text)["entity"]["id"].as_str().unwrap().to_owned();
+    // The first save happens while the model downloads. The fact is kept and flagged.
+    let fact = json!({"subjectEntityId":me,"predicate":"prefers","objectText":"oolong tea in the afternoon","source":{"sourceKind":"manual","sourceRef":"live-1","excerpt":"I like oolong tea"}});
+    let (status, text) = call(Method::POST, "/graph/facts", Some(cookie), Some(fact));
+    assert_eq!(status, 200, "{text}\n{}", log());
+    println!("first save while downloading: {text}");
+    assert_eq!(json_of(&text)["searchPending"], true, "{text}");
+    let mut last = String::new();
+    loop {
+        let now = state();
+        let device = now["device"].clone();
+        let line = device.to_string();
+        if line != last {
+            println!("model state after {}s: {line}", started.elapsed().as_secs());
+            last = line;
+        }
+        match device["state"].as_str() {
+            Some("ready") => break,
+            Some("failed") => panic!("model download failed: {device}"),
+            _ => {}
+        }
+        assert!(started.elapsed() < Duration::from_secs(1500), "download took too long");
+        std::thread::sleep(Duration::from_secs(2));
+    }
+    let fact = json!({"subjectEntityId":me,"predicate":"prefers","objectText":"jasmine green tea before bed","source":{"sourceKind":"manual","sourceRef":"live-2","excerpt":"jasmine"}});
+    let (status, text) = call(Method::POST, "/graph/facts", Some(cookie), Some(fact));
+    assert_eq!(status, 200, "{text}");
+    assert!(json_of(&text).get("searchPending").is_none(), "{text}");
+    let other = json!({"subjectEntityId":me,"predicate":"prefers","objectText":"a red bicycle with a broken chain","source":{"sourceKind":"manual","sourceRef":"live-3","excerpt":"bike"}});
+    let (status, text) = call(Method::POST, "/graph/facts", Some(cookie), Some(other));
+    assert_eq!(status, 200, "{text}");
+    // No words are shared with the stored text, so only meaning can find it.
+    let (status, text) = call(Method::GET, "/graph/recall?q=what%20hot%20drink%20do%20I%20like%20at%20night", Some(cookie), None);
+    assert_eq!(status, 200, "{text}");
+    let items = json_of(&text)["items"].as_array().unwrap().clone();
+    println!("recall by meaning: {}", items.iter().map(|i| i["text"].as_str().unwrap_or("")).collect::<Vec<_>>().join(" | "));
+    assert!(items.first().is_some_and(|i| i["text"].as_str().is_some_and(|t| t.contains("jasmine"))), "{text}");
+    let log = log();
+    assert!(!log.contains("oolong") && !log.contains("jasmine") && !log.contains("bicycle"), "memory text in log");
+    let _ = root;
 }

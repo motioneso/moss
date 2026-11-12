@@ -280,6 +280,7 @@ fn main() {
                 platform.app.clone(),
                 &settings.connector_key,
                 &settings.data,
+                settings.embeddings.is_some(),
             ) {
                 Ok(embedding) => private.merge(module_embedding::routes(Arc::new(embedding))),
                 Err(_) => private,

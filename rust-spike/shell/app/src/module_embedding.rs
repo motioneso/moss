@@ -9,13 +9,14 @@ use axum::{
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
     Extension, Json, Router,
 };
 use moss_module_host::ai::{
-    valid_endpoint_url, EmbeddingActivity, EmbeddingCall, EmbeddingEndpoint, EmbeddingStore, DEFAULT_EMBEDDING_MODEL,
-    NOT_SET_UP,
+    valid_endpoint_url, EmbeddingActivity, EmbeddingCall, EmbeddingEndpoint, EmbeddingStore, OnDeviceEmbedder,
+    DEFAULT_EMBEDDING_MODEL, NOT_SET_UP,
 };
+use moss_on_device::{OnDevice, Status};
 use moss_platform_contracts::Actor;
 use safety_core::{
     access::AccessContext,
@@ -29,7 +30,8 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::{
     io::Write,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, OnceLock},
+    time::Duration,
 };
 
 /// Legacy runtime config names. The Rust server stores the same two, and adds the three below.
@@ -40,19 +42,40 @@ const VERSION: &str = "ai.embed_model_version";
 /// Value of the provider setting once an endpoint is chosen. The legacy values are "local" and
 /// "stub".
 const ENDPOINT: &str = "endpoint";
+/// Value of the provider setting when the search model runs inside this server.
+const DEVICE: &str = "device";
 /// Saved when an admin turns embeddings off, so the server file is not used instead.
 const OFF: &str = "none";
 const CREDENTIAL_FILE: &str = "embedding-credential.json";
 
+/// One search model per server process, shared by every account and every route.
+fn shared_device(data: &Path) -> Arc<OnDevice> {
+    static DEVICE_MODEL: OnceLock<Arc<OnDevice>> = OnceLock::new();
+    DEVICE_MODEL
+        .get_or_init(|| Arc::new(OnDevice::new(&data.join("models"))))
+        .clone()
+}
+
+struct DeviceEmbedder(Arc<OnDevice>);
+impl OnDeviceEmbedder for DeviceEmbedder {
+    fn embed(&self, text: &str, timeout: Duration) -> Result<Vec<f32>, String> {
+        self.0.embed(text, timeout).map_err(|e| e.0)
+    }
+}
+
 pub struct EmbeddingConfig {
+    device: Arc<OnDevice>,
+    server_endpoint: bool,
     database: Database,
     cipher: SecretCipher,
     file: PathBuf,
 }
 
 impl EmbeddingConfig {
-    pub fn new(database: Database, connector_key: &str, data: &Path) -> Result<Self> {
+    pub fn new(database: Database, connector_key: &str, data: &Path, server_endpoint: bool) -> Result<Self> {
         Ok(Self {
+            device: shared_device(data),
+            server_endpoint,
             database,
             cipher: SecretCipher::connectors(
                 &[("JARVIS_CONNECTOR_SECRET_KEY".into(), connector_key.to_owned())].into(),
@@ -60,6 +83,11 @@ impl EmbeddingConfig {
             .map_err(|_| anyhow::anyhow!("Invalid module connector key"))?,
             file: data.join(CREDENTIAL_FILE),
         })
+    }
+
+    /// True when the server file names an endpoint that is used while nothing is chosen.
+    fn has_server_endpoint(&self) -> bool {
+        self.server_endpoint
     }
 
     async fn read(&self, access: &AccessContext) -> Result<Stored> {
@@ -123,6 +151,16 @@ impl EmbeddingConfig {
     }
 }
 
+/// The search model runs on this server when the owner chose it, and also when nothing has been
+/// chosen and the server file names no endpoint.
+fn uses_device(stored: &Stored, has_fallback: bool) -> bool {
+    match stored.provider.as_deref() {
+        Some(DEVICE) => true,
+        Some(ENDPOINT) | Some(OFF) => false,
+        _ => !has_fallback,
+    }
+}
+
 #[derive(Default)]
 struct Stored {
     provider: Option<String>,
@@ -140,6 +178,16 @@ pub struct SettingsEmbeddings {
 
 #[async_trait]
 impl EmbeddingStore for SettingsEmbeddings {
+    async fn on_device(&self, actor: Actor) -> Result<Option<Arc<dyn OnDeviceEmbedder>>> {
+        let stored = self
+            .settings
+            .read(&AccessContext::new(actor.user_id(), "module-embedding"))
+            .await
+            .map_err(|_| anyhow::anyhow!(NOT_SET_UP))?;
+        Ok(uses_device(&stored, self.fallback.is_some())
+            .then(|| Arc::new(DeviceEmbedder(self.settings.device.clone())) as Arc<dyn OnDeviceEmbedder>))
+    }
+
     async fn for_actor(&self, actor: Actor) -> Result<EmbeddingEndpoint> {
         let stored = self
             .settings
@@ -237,6 +285,7 @@ pub fn routes(settings: Arc<EmbeddingConfig>) -> Router {
             "/api/m/memory/embedding",
             get(show).put(save),
         )
+        .route("/api/m/memory/embedding/download", post(download))
         .with_state(settings)
 }
 
@@ -251,15 +300,17 @@ async fn show(
         return say(StatusCode::SERVICE_UNAVAILABLE, "Embedding settings are unavailable");
     };
     let set = stored.provider.as_deref() == Some(ENDPOINT) && stored.url.is_some();
+    let device = uses_device(&stored, settings.has_server_endpoint());
     Json(json!({
+        "provider": if set { ENDPOINT } else if device { DEVICE } else { OFF },
+        "device": device_status(&settings.device),
         "set": set,
         "url": stored.url.filter(|_| set),
         "model": stored.model.filter(|_| set),
         "version": stored.version.filter(|_| set),
         "hasCredential": settings.file.is_file(),
         "defaultModel": DEFAULT_EMBEDDING_MODEL,
-        "onDevice": "not available yet",
-        "message": if set { Value::Null } else { json!(NOT_SET_UP) },
+        "message": if set || device { Value::Null } else { json!(NOT_SET_UP) },
     }))
     .into_response()
 }
@@ -276,6 +327,35 @@ struct Save {
     /// Must be true, because the text of memory leaves the device when an endpoint is used.
     #[serde(default)]
     confirm_off_device: bool,
+    /// Use the search model that runs inside this server. Needs no address and sends nothing
+    /// off the device.
+    #[serde(default)]
+    on_device: bool,
+}
+
+/// The model's state in words and numbers a screen can show. It holds no text, address or path.
+fn device_status(device: &OnDevice) -> Value {
+    match device.status() {
+        Status::NotDownloaded => json!({"state": "notDownloaded"}),
+        Status::Downloading { done, total, waiting } => json!({
+            "state": "downloading",
+            "percent": if total == 0 { 0 } else { done.saturating_mul(100) / total },
+            "waiting": waiting,
+        }),
+        Status::Ready => json!({"state": "ready"}),
+        Status::Failed(message) => json!({"state": "failed", "message": message}),
+    }
+}
+
+async fn download(
+    State(settings): State<Arc<EmbeddingConfig>>,
+    Extension(access): Extension<AccessContext>,
+) -> Response {
+    if let Err(refused) = require_admin(&settings, &access).await {
+        return refused;
+    }
+    settings.device.start_download(true);
+    show(State(settings), Extension(access)).await
 }
 
 fn plain(value: &Option<String>, limit: usize) -> Option<String> {
@@ -295,6 +375,9 @@ async fn save(
         return refused;
     }
     let url = plain(&input.url, 2048);
+    if input.on_device && input.url.as_deref().is_some_and(|u| !u.trim().is_empty()) {
+        return say(StatusCode::BAD_REQUEST, "Choose either this device or an address, not both");
+    }
     if let Some(url) = &url {
         if !valid_endpoint_url(url) {
             return say(StatusCode::BAD_REQUEST, "Enter a web address that starts with http or https");
@@ -340,7 +423,14 @@ async fn save(
             .await
             .map_err(|_| anyhow::anyhow!("Database unavailable"))?;
         let values: [(&str, Option<String>); 4] = [
-            (PROVIDER, Some(url.as_ref().map_or(OFF, |_| ENDPOINT).to_owned())),
+            (
+                PROVIDER,
+                Some(
+                    url.as_ref()
+                        .map_or(if input.on_device { DEVICE } else { OFF }, |_| ENDPOINT)
+                        .to_owned(),
+                ),
+            ),
             (MODEL, url.as_ref().and(model)),
             (URL, url.clone()),
             (VERSION, url.as_ref().and(version)),
@@ -368,6 +458,9 @@ async fn save(
         Ok(())
     }
     .await;
+    if result.is_ok() && input.on_device {
+        settings.device.start_download(false);
+    }
     match result {
         Ok(()) => show(State(settings), Extension(access)).await,
         Err(_) => say(StatusCode::SERVICE_UNAVAILABLE, "The embedding settings could not be saved"),
