@@ -395,3 +395,48 @@ The two new tables belong to the module, so only the module's own database role 
 - The on-device model path was not re-run for part 7.
 - No test with thousands of passages. The swap runs in slices of 500, untimed at scale.
 - Old browser tests were not run (Rust-only change).
+
+## Part 8: the public API for other modules (JS-248)
+
+### What was built
+
+- **One door for other modules.** Briefings, Wellness, Goals, People, Backtrack, Notes and chat now
+  have 27 named calls into Memory, listed in the Memory manifest. They cover searching and listing
+  passages, recalling facts, chat's per-turn write, the chat memory list with its rejections,
+  suggestions to review, and goal entities.
+- **The owner comes from the session.** No call takes an owner or a vector. A caller sends text,
+  and the host turns it into a vector and sends it only to the configured search model.
+- **Old callers keep their shapes.** Status codes, error sentences, the 500 path limit, the chat
+  turn text and hash, and the rejection rule (only an active inferred fact can be rejected) match
+  the old code.
+- **Where it differs.** Callers send text, not vectors. Forgetting a goal archives it, because the
+  old status value was refused by the table. Search here does not filter by search model, because
+  that filter arrives with part 7. A failed embedding returns a plain 503.
+- **App map.** A new feature entry describes the API and its one failure, with a fix-it link.
+
+### Proof
+
+| Check                                         | Result                                                                                                                                                       |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Guest tests, native                           | 7 suites pass, 6 of them new tests for this part, with a fake host                                                                                           |
+| Package test, real WebAssembly build          | 9 pass, including the manifest and app-map checks                                                                                                            |
+| Database tests, real WebAssembly and Postgres | 15 pass, 5 new. They cover each old caller's call shape, the old chat fact rules, suggestions and goals, owner isolation, and a scan for leaked text         |
+| Owner isolation                               | A second person reads and changes nothing. With row security switched off the test first shows A's rows are visible, then shows the owner filter alone holds |
+| No memory text in logs, jobs or activity      | A scan of tables named like job, activity, audit, event, outbox or queue, plus error sentences, found none after planted text                                |
+
+The tests found one real fault. The call name shared a field with an entity's own name, so goals
+were saved and renamed as "createEntity" or "updateEntity". The call name now has its own field,
+and the tests pass.
+
+### Not proven
+
+- **No live caller run.** No Rust module that calls Memory exists yet, and chat is not ported, so
+  nothing could call the API through the real server. The proof runs the real package and real
+  Postgres, but not a second module. A chat answer showing memory provenance was not produced.
+- **Notes search.** It still uses the existing adapter. Part 7 edits that file, so it was left alone.
+- **Search model filter.** Search does not filter by model until part 7 lands.
+- **Old callers' exact call shapes.** They are matched from reading the old code, not by running
+  the old callers against the new API.
+- **Log claim.** The scan covers the tables named above and error text. It does not read server
+  log files.
+- **Other devices.** Nothing here is reached from a phone or another machine, because no caller exists.
