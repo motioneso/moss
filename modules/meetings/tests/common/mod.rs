@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! An in-memory host that mimics the database rules the guest relies on. It stands in for the
 //! typed-query layer, and the real-database tests in the host crate prove the same behaviour
 //! against Postgres.
