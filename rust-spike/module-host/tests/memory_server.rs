@@ -457,8 +457,8 @@ fn installed_memory_package_serves_routes_from_the_real_server() {
     let (status, text) = call(Method::GET, "/dashboard?limit=2", Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
     let page = json_of(&text);
-    assert!(page["counts"]["pending"] == 3 && page["items"].as_array().unwrap().len() == 2, "{text}");
-    assert!(page["hasMore"] == false || page["nextCursor"].is_string(), "{text}");
+    assert!(page["counts"]["pending"] == 3 && page["counts"]["saved"] == 1 && page["items"].as_array().unwrap().len() == 1, "{text}");
+    assert!(page["hasMore"] == false && page["nextCursor"].is_null(), "{text}");
     let (status, text) = call(Method::GET, "/dashboard?cursor=nonsense", Some(&cookie), None);
     assert_eq!((status, json_of(&text)["error"].is_string()), (400, true), "{text}");
     let (status, text) = call(Method::GET, "/candidates?limit=2", Some(&cookie), None);
