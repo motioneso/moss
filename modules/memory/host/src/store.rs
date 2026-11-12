@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 
 const ISO: &str = "'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'";
 
-fn iso(column: &str) -> String {
+pub(crate) fn iso(column: &str) -> String {
     format!("to_char({column} AT TIME ZONE 'UTC', {ISO})")
 }
 

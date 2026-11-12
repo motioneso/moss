@@ -13,6 +13,8 @@ pub struct Fake {
     pub forget: Value,
     /// Answer for the screen resources (lists, decisions, patches, subject lookup).
     pub screen: Value,
+    /// Answer for the public API resource.
+    pub public: Value,
     pub calls: RefCell<Vec<(String, String, Value)>>,
 }
 
@@ -26,6 +28,7 @@ impl Fake {
             target: json!({"target": null}),
             forget: json!({"deleted": true}),
             screen: json!({}),
+            public: json!({}),
             calls: RefCell::default(),
         }
     }
@@ -59,6 +62,7 @@ impl Host for Fake {
             "memory.forget" => Ok(self.forget.clone()),
             "memory.facts" | "memory.candidates" | "memory.candidate" | "memory.fact-patch"
             | "memory.entity-patch" | "memory.entity-delete" | "memory.subject" => Ok(self.screen.clone()),
+            "memory.public" => Ok(self.public.clone()),
             "memory.index" if self.index_fails => Err(Error::new("embedding failed")),
             "memory.index" => Ok(json!({"indexed": true})),
             _ => Err(Error::new("unknown resource")),

@@ -314,3 +314,26 @@ fn prune(value: &mut Value) {
         map.values_mut().for_each(prune);
     }
 }
+
+/// Recall for other modules. Items keep `subjectName`, as the old in-process call returned.
+pub(crate) fn recall_api(host: &impl Host, parameters: &Value) -> Result<Value> {
+    let query = parameters["query"].as_str().unwrap_or("").trim().to_owned();
+    if query.is_empty() {
+        return Err(Error::new(400, "query is required"));
+    }
+    let flag = |name: &str| parameters[name] == true;
+    let items = recall_items(
+        host,
+        &query,
+        limit_from(&parameters["limit"]),
+        (flag("includeInactive"), flag("includeStale"), flag("includeLowConfidence")),
+    )?;
+    Ok(json!({"items": items}))
+}
+
+/// Core facts for other modules, at most `limit` (default 30, maximum 100).
+pub(crate) fn core_api(host: &impl Host, limit: Option<usize>) -> Result<Value> {
+    let limit = limit.unwrap_or(30).min(100);
+    let found = answer(kv(host, "get", "memory.core", json!({"limit": limit}))?)?;
+    Ok(json!({"items": score::core(&found)}))
+}
