@@ -33,7 +33,7 @@ A Meetings package in `~/Jarv1s/modules/meetings`. It covers meeting records, ti
 
 - Strict request validation is emulated by hand. The old app used Fastify schemas, and exact error text for every malformed body is not compared.
 - No fixtures were exchanged with the old TypeScript code in both directions. Only the same rules were re-tested.
-- No concurrency test. One winner for a revision relies on the filter on the expected revision.
+- No concurrency test. A rename and a notes save each put the expected value in the update filter, so a lost race returns a conflict. A sequential test shows the answer but not an actual race.
 - The remembered-source approval card is refused until a later part.
 - Chat classes are a constant in the package plus the approval-card API. The Rust manifest has no chat field yet.
 - Job parameter kinds in the manifest are a guess.

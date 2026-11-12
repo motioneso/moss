@@ -37,10 +37,7 @@ fn check(var: &str, name: &str, kind: Kind, value: &Value) -> Result<(), Failure
             Ok(())
         }
         Kind::Int { min, max } => {
-            let n = value
-                .as_i64()
-                .or_else(|| value.as_f64().filter(|f| f.fract() == 0.0).map(|f| f as i64))
-                .ok_or_else(|| format!("{at} must be integer"))?;
+            let n = int_value(value).ok_or_else(|| format!("{at} must be integer"))?;
             if n > max {
                 return Err(format!("{at} must be <= {max}"));
             }
@@ -97,4 +94,11 @@ pub fn id_params(request: &RouteRequest) -> Result<String, Failure> {
     );
     strict_object("params", &mut params, &["id"], &[("id", Kind::Uuid)], 0)?;
     Ok(request.params["id"].clone())
+}
+
+/// An integer JSON number, including a whole-valued float such as `1.0` or `1e0`.
+pub fn int_value(value: &Value) -> Option<i64> {
+    value
+        .as_i64()
+        .or_else(|| value.as_f64().filter(|f| f.fract() == 0.0).map(|f| f as i64))
 }

@@ -234,3 +234,31 @@ fn unknown_routes_answer_not_found() {
     let f = Fake::new();
     assert_eq!(f.route("GET", "/nothing", &[], Value::Null).0, 404);
 }
+
+#[test]
+fn a_whole_valued_float_revision_counts_as_that_integer() {
+    let f = Fake::new();
+    let id = id_of(&create(&f, K1, "Weekly").1);
+    assert_eq!(notes(&f, &id, K1, 0, "first").0, 200);
+    let (status, body) = f.route(
+        "PUT",
+        "/records/:id/notes",
+        &[("id", &id)],
+        serde_json::from_str(&format!(r#"{{"requestKey":"{K2}","expectedRevision":1.0,"personalNotes":"second"}}"#)).unwrap(),
+    );
+    assert_eq!((status, body["meeting"]["notesRevision"].clone()), (200, json!(2)), "{body}");
+}
+
+#[test]
+fn a_rename_that_lost_a_race_reports_the_winner_instead_of_overwriting() {
+    let f = Fake::new();
+    let id = id_of(&create(&f, K1, "Old name").1);
+    // The first rename wins. The second still believes the title is "Old name".
+    let put = |title: &str| {
+        f.route("PUT", "/records/:id/title", &[("id", &id)], json!({"title":title,"expectedTitle":"Old name"}))
+    };
+    assert_eq!(put("Winner").0, 200);
+    let (status, body) = put("Loser");
+    assert_eq!((status, body["code"].clone()), (409, json!("meeting_title_conflict")));
+    assert_eq!(body["meeting"]["title"], "Winner");
+}

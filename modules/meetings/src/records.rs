@@ -256,17 +256,34 @@ impl<'a, H: Host + ?Sized> Records<'a, H> {
         if current.title == title {
             return Ok(Response::new(200, json!({"status":"saved","meeting":current.dto()})));
         }
+        // The expected current title is part of the update filter, so a concurrent rename
+        // that landed first leaves this update with no row and the caller sees the conflict.
         let updated = self.client().query(
             RECORDS,
             &Query::update(
-                Filter::eq("id", id.as_str()),
+                Filter::And {
+                    filters: vec![
+                        Filter::eq("id", id.as_str()),
+                        Filter::eq("title", current.title.as_str()),
+                    ],
+                },
                 values(vec![("title", json!(title)), ("updated_at", json!(self.now()?))]),
             ),
         )?;
-        let row = updated
-            .first()
-            .ok_or_else(|| moss_module_sdk::Error::new("Meeting title update lost"))?;
-        Ok(Response::new(200, json!({"status":"saved","meeting":Snapshot::from_row(row)?.dto()})))
+        if let Some(row) = updated.first() {
+            return Ok(Response::new(200, json!({"status":"saved","meeting":Snapshot::from_row(row)?.dto()})));
+        }
+        let Some(row) = self.row(&id)? else {
+            return Ok(code(404, "meeting_not_found"));
+        };
+        let now = Snapshot::from_row(&row)?;
+        if now.title == title {
+            return Ok(Response::new(200, json!({"status":"saved","meeting":now.dto()})));
+        }
+        Ok(Response::new(
+            409,
+            json!({"code":"meeting_title_conflict","status":"conflict","meeting":now.dto()}),
+        ))
     }
 
     /// A person's own rename stops later automatic titling. The metadata row belongs to recording
@@ -314,7 +331,7 @@ impl<'a, H: Host + ?Sized> Records<'a, H> {
             return Ok(bad_request(failure));
         }
         let key = body["requestKey"].as_str().unwrap_or_default().to_owned();
-        let expected = body["expectedRevision"].as_i64().unwrap_or_default();
+        let expected = crate::schema::int_value(&body["expectedRevision"]).unwrap_or_default();
         let notes = body["personalNotes"].as_str().unwrap_or_default().to_owned();
         if !bounded(&notes, 64_000, false) {
             return Ok(invalid());
