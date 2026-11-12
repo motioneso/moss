@@ -48,6 +48,11 @@
       ]
     },
     {
+      "port": "transcribe",
+      "operations": ["availability", "create"],
+      "resources": ["audio"]
+    },
+    {
       "port": "context",
       "operations": ["uuid", "read"],
       "resources": ["new", "call"]
@@ -380,6 +385,17 @@
           "code": "meeting_not_found",
           "class": "validation",
           "description": "The meeting does not exist or is not yours"
+        }
+      ]
+    },
+    {
+      "id": "meetings.speech-to-text",
+      "description": "Turns one recorded clip into timed text using the speech service you set up for your account. The clip goes only to that service, the module cannot pick the service or model, and a changed setup stops the request before or after it is sent. A clip is at most 3,840,044 bytes, and one reply carries at most 10,000 segments. Nothing about the audio or the text is written to activity records. Nobody else, including admins, can use your speech setup.",
+      "errors": [
+        {
+          "code": "transcription_unavailable",
+          "class": "transient",
+          "description": "Speech to text is not set up, or the speech service did not answer"
         }
       ]
     },
