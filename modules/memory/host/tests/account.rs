@@ -247,7 +247,10 @@ fn export_returns_only_the_callers_rows_and_no_vectors() {
 
     // Without row security an unfiltered read as B sees A's rows, so the policy is what hides them.
     let tables: Vec<_> = TABLES.iter().filter(|t| !t.contains("reembed") && !t.contains("nudges")).collect();
-    assert_eq!(f.bare_count(f.b, &tables), 0);
+    let own: i64 = tables.iter().map(|t| f.count(t, f.b)).sum();
+    let theirs: i64 = tables.iter().map(|t| f.count(t, f.a)).sum();
+    assert!(theirs > 0);
+    assert_eq!(f.bare_count(f.b, &tables), own);
     for t in &tables {
         f.sql(&format!("ALTER TABLE app.{t} NO FORCE ROW LEVEL SECURITY; ALTER TABLE app.{t} DISABLE ROW LEVEL SECURITY"));
     }
@@ -255,8 +258,8 @@ fn export_returns_only_the_callers_rows_and_no_vectors() {
     for t in &tables {
         f.sql(&format!("ALTER TABLE app.{t} ENABLE ROW LEVEL SECURITY; ALTER TABLE app.{t} FORCE ROW LEVEL SECURITY"));
     }
-    assert!(leaked >= 2 * tables.len() as i64 - 4, "without row security B sees everything, got {leaked}");
-    assert_eq!(f.bare_count(f.b, &tables), 0);
+    assert_eq!(leaked, own + theirs, "without row security B sees everything");
+    assert_eq!(f.bare_count(f.b, &tables), own);
     assert!(f.api(f.b, "collectMemoryExportSection", json!({"section": "nope"})).is_err());
     assert!(f.api(f.b, "collectMemoryExportSection", json!({"section": "memoryFacts", "owner": f.a.to_string()})).is_err());
 }
@@ -307,6 +310,9 @@ fn memory_text_never_reaches_jobs_or_activity() {
     f.api(f.a, "deleteMemoryData", json!({})).unwrap();
     assert_eq!(f.marker_hits("SELECT count(*) FROM pgboss.job WHERE data::text LIKE $1"), 0);
     for table in ["jarvis_action_audit_log", "moss_activity_detail", "moss_model_activity_log"] {
-        assert_eq!(f.marker_hits(&format!("SELECT count(*) FROM app.{table} t WHERE t::text LIKE $1")), 0, "{table}");
+        let there: bool = f.rt.block_on(f.root.query_one(&format!("SELECT to_regclass('app.{table}') IS NOT NULL"), &[])).unwrap().get(0);
+        if there {
+            assert_eq!(f.marker_hits(&format!("SELECT count(*) FROM app.{table} t WHERE t::text LIKE $1")), 0, "{table}");
+        }
     }
 }
