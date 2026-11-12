@@ -260,9 +260,7 @@
       "signIn": true
     }
   ],
-  "requires": {
-    "tasks": ">=0.1.2, <1.0.0"
-  },
+  "requires": {},
   "provides": {
     "prepareMeetingRoute": "1.0.0",
     "collectMeetingsExportSection": "1.0.0"

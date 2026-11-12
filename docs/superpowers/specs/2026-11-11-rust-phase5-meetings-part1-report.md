@@ -212,7 +212,7 @@ Only action review is built. Private export, the full account export and deletio
 - The route is `POST /api/meetings/records/:id/actions/:candidateId/review`. It replays by request key and refuses a changed repeat with 409.
 - Accept is refused with 409 while possible matches exist, unless the owner confirms. The title (1 to 500 characters) and the due time are checked again before the task is made.
 - If Tasks is not installed or fails, the answer is 503 and the action stays pending.
-- Tasks moved to version 0.1.2. Meetings now requires it.
+- Tasks moved to version 0.1.2. Meetings does not require Tasks to install. Without it, accepting answers 503.
 - The manifest lists the route, the Tasks permission and four new errors. The chat approval list marks the route as blocked in chat.
 
 ### Proof
