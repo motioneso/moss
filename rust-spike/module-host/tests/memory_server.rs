@@ -447,7 +447,7 @@ fn installed_memory_package_serves_routes_from_the_real_server() {
             db.batch_execute(&statement).await.unwrap();
         })
     };
-    for (i, (signature, text, subject)) in [("live-a", "reads before bed", "self"), ("live-b", "runs on Sundays", "Fitness"), ("live-c", "dislikes loud rooms", "self")].iter().enumerate() {
+    for (i, (signature, text, subject)) in [("live-a", "reads before bed", "self"), ("live-b", "runs on Sundays", "Fitness"), ("live-c", "dislikes loud rooms", "self"), ("live-d", "bikes to work", "self"), ("live-e", "drinks oat milk", "self"), ("live-f", "avoids late meetings", "self"), ("live-g", "plays piano", "self")].iter().enumerate() {
         let payload = json!({"kind":"fact","fact":{"subject":subject,"predicate":"prefers","objectText":text,"recordKind":"preference"}});
         sql(format!(
             "INSERT INTO app.memory_candidates (owner_user_id, kind, action, payload_json, candidate_signature, confidence, importance, provenance, created_at)
@@ -457,18 +457,18 @@ fn installed_memory_package_serves_routes_from_the_real_server() {
     let (status, text) = call(Method::GET, "/dashboard?limit=2", Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
     let page = json_of(&text);
-    assert!(page["counts"]["pending"] == 3 && page["counts"]["saved"] == 1 && page["items"].as_array().unwrap().len() == 1, "{text}");
+    assert!(page["counts"]["pending"] == 7 && page["counts"]["saved"] == 1 && page["items"].as_array().unwrap().len() == 1, "{text}");
     assert!(page["hasMore"] == false && page["nextCursor"].is_null(), "{text}");
     let (status, text) = call(Method::GET, "/dashboard?cursor=nonsense", Some(&cookie), None);
     assert_eq!((status, json_of(&text)["error"].is_string()), (400, true), "{text}");
-    let (status, text) = call(Method::GET, "/candidates?limit=2", Some(&cookie), None);
+    let (status, text) = call(Method::GET, "/candidates", Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
     let pending = json_of(&text);
-    assert!(pending["total"] == 3 && pending["hasMore"] == true, "{text}");
+    assert!(pending["total"] == 7 && pending["hasMore"] == true && pending["items"].as_array().unwrap().len() == 5, "{text}");
     let first = pending["items"][0]["id"].as_str().unwrap().to_owned();
     let second = pending["items"][1]["id"].as_str().unwrap().to_owned();
-    let (status, text) = call(Method::GET, &format!("/candidates?limit=2&cursor={}", pending["nextCursor"].as_str().unwrap()), Some(&cookie), None);
-    assert_eq!((status, json_of(&text)["items"].as_array().map(Vec::len)), (200, Some(1)), "{text}");
+    let (status, text) = call(Method::GET, &format!("/candidates?cursor={}", pending["nextCursor"].as_str().unwrap()), Some(&cookie), None);
+    assert_eq!((status, json_of(&text)["items"].as_array().map(Vec::len)), (200, Some(2)), "{text}");
     let (status, text) = call(Method::POST, &format!("/candidates/{first}/accept"), Some(&cookie), Some(json!({})));
     assert_eq!(status, 200, "{text}");
     let (status, _) = call(Method::POST, &format!("/candidates/{first}/accept"), Some(&cookie), Some(json!({})));
