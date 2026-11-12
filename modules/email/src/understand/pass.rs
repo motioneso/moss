@@ -125,7 +125,7 @@ pub fn run(host: &impl Host, limit: i64) -> Result<Value> {
         }
     }
     if needs_configuration && stored == 0 && failed == 0 {
-        return Err(Error::new(409, "Choose an AI service in settings before Email can read your mail"));
+        return Err(Error::new(409, "Email could not reach your AI service. Choose one in settings or try again later"));
     }
     Ok(json!({"analysed":stored,"failed":failed,"needsConfiguration":needs_configuration}))
 }

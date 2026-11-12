@@ -171,7 +171,7 @@
       "remediations": [
         {
           "id": "email-choose-ai",
-          "description": "Choose an AI service in settings",
+          "description": "Choose an AI service in settings, or try again if it is down",
           "path": "/settings/connections"
         }
       ]

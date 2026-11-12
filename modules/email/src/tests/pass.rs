@@ -110,6 +110,14 @@ fn a_missing_ai_setup_asks_for_setup_and_counts_no_attempt() {
 }
 
 #[test]
+fn a_router_failure_counts_no_attempt_against_the_mail() {
+    let a = message("m9", "a@example.test", "One", "A body long enough to be a real message for the pass to read.");
+    let (out, host) = run(vec![a], vec![Err("The configured AI service could not complete the request")]);
+    assert!(out.is_err());
+    assert!(writes(&host).is_empty());
+}
+
+#[test]
 fn prompts_carry_only_cached_text_and_the_result_carries_none() {
     let m = message("m8", "Ann <ann@example.test>", "Subject line", &format!("Preview text {SECRET} with enough words to read properly."));
     let (out, host) = run(vec![m], vec![Ok(FYI)]);

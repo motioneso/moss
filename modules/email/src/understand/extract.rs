@@ -376,6 +376,12 @@ pub fn retry_reason(error: &str) -> &'static str {
     }
 }
 
+/// True when the AI service itself is missing or unreachable. The router hides the reason
+/// behind one message, so a missing choice and an outage look the same. Neither says
+/// anything about the mail, so no attempt is counted against it.
 pub fn needs_configuration(error: &str) -> bool {
-    error.contains("not configured") || error.contains("not set up")
+    error.contains("not configured")
+        || error.contains("not set up")
+        || error.contains("could not complete the request")
+        || error.contains("AI deadline exceeded")
 }

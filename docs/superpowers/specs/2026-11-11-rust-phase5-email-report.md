@@ -224,8 +224,9 @@ Commands: `pnpm test:rust-email` and `pnpm test:rust-email-live`, both through t
   A changed message (new revision) starts again from zero.
 - Triage feedback and action suppression (dismiss, reset, evidence, deadlines) are stored in the
   Connectors tables and read through Email, one owner at a time.
-- If no AI service is chosen the pass stops with a plain "Choose an AI service in settings before
-  Email can read your mail" and counts no attempt.
+- If no AI service is chosen, or the service is down, the pass stops with a plain "Email could
+  not reach your AI service" message and counts no attempt, so mail is never abandoned because of
+  the service. The router hides which of the two it was.
 - The app map entries in the Email manifest cover the new routes, resources and two new features.
 
 ## Proof
