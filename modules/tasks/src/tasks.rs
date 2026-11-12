@@ -63,6 +63,32 @@ impl<H: Host + ?Sized> Repository<'_, H> {
         }
         Ok(created)
     }
+    /// Creates the task for an accepted meeting action. A repeat of the same key returns the
+    /// task made the first time, so a replayed or regenerated action never doubles up.
+    pub fn create_meeting_task(
+        &self,
+        title: &str,
+        due_at: Option<&str>,
+        meeting_id: &str,
+        external_key: &str,
+    ) -> Result<Task> {
+        let same = and(vec![
+            Filter::Owned,
+            Filter::eq("source", "meeting"),
+            Filter::eq("external_key", external_key),
+        ]);
+        if let Some(found) = self.first::<Task>(TASKS, same)? {
+            return Ok(found);
+        }
+        let list = self.get_or_create_list("Personal")?.id;
+        let now = self.now()?;
+        let data = values(json!({
+            "title":title,"list_id":list,"status":"todo","due_at":due_at,
+            "source":"meeting","source_ref":meeting_id,"external_key":external_key,
+            "position":0,"created_at":now,"updated_at":now,
+        }));
+        self.one(TASKS, Query::insert(data))
+    }
     pub fn update_task(&self, id: &str, input: &TaskFields) -> Result<Option<Task>> {
         // Keep the route's pre-read: do not resolve new relationships for a hidden task.
         let Some(prior) = self.task(id)? else {

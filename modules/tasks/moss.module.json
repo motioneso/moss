@@ -93,6 +93,7 @@
     "ledger": "core-legacy"
   },
   "provides": {
+    "createMeetingTask": "1.0.0",
     "getTaskReference": "1.0.0",
     "prepareTaskAction": "1.0.0",
     "prepareTaskRoute": "1.0.0"
