@@ -211,3 +211,69 @@ async block and crashed the worker. It is fixed and the live run passes.
 One major finding, fixed. A note's source could be fenced between the check and the lock, so a
 fenced source could still be indexed. The source state is now read under the lock. No test covers
 this path, because no test ran with a real managed label (listed above).
+
+## Part 6: the search model on this device (JS-238)
+
+### What was built
+
+- The nomic search model now runs inside the Rust server. With nothing configured, memory search
+  uses it. No note text leaves the machine. An owner can still choose an endpoint, or turn search
+  off, in Memory settings.
+- The model (about 550 MB) downloads on first use into the server's data folder, never the
+  repository. The settings screen reads progress as a percentage and a clear failure sentence.
+  A cut connection resumes from where it stopped. Each file is checked against a fixed hash before
+  it is kept, and again if it was swapped on disk.
+- A lock on the model folder stops two Moss processes downloading at once. The second one waits
+  and says so.
+- One worker thread makes the vectors. Text is capped at 512 tokens, the same cut the old code
+  made. After 10 minutes idle the thread frees about 600 MB and starts again on the next search.
+- Settings gained a Save choice for "run on this device" and a "download now" button route. The
+  Memory manifest text no longer says the on-device model is unavailable.
+- Activity rows hold fixed words and the model name only. Note text never reaches them.
+
+### Runtime choice
+
+ONNX Runtime (the `ort` crate) was compared with `tract`, a pure Rust runtime. Both matched the
+old vectors. On a 512-token input ONNX Runtime took about 0.4 seconds and tract took 26 seconds.
+ONNX Runtime was chosen.
+
+### New crates (approved 2026-11-11)
+
+| Crate        | Version     | Licence           | Reason                                     |
+| ------------ | ----------- | ----------------- | ------------------------------------------ |
+| `ort`        | 2.0.0-rc.15 | MIT OR Apache-2.0 | Runs the model                             |
+| `tokenizers` | 0.23.2      | Apache-2.0        | Splits text into tokens as the old app did |
+
+Their own dependencies also appear in the lock file. No other new crate was added directly.
+`reqwest` and `sha2` were already in the tree.
+
+### Proof
+
+| Claim                                         | Evidence                                                                                                                                                        |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vectors match the old app                     | 14 fixed texts, short and long, unicode and code. Lowest similarity 0.9999997, and 1.0000000 for a 12,000 character text cut at 512 tokens                      |
+| Peak memory at the longest input              | 879 MB after loading, 928 MB peak after a 512-token input (release build, Linux)                                                                                |
+| Download, cut-and-resume, refusal, bad hash   | 7 tests against a local server, passing. They cover the first download, resume from byte 100000, a server that ignores ranges, a 503, and a bad hash            |
+| Folder lock                                   | Test where a second process waits, gives up with a plain sentence, and then succeeds                                                                            |
+| Prefixes and activity rows on the device path | Host test. Text planted in a search reached the model, and appeared in no row, answer or failure sentence                                                       |
+| Live, real server over HTTPS, no endpoint     | The gate downloaded the real model in 83 seconds with progress read from the settings route, saved facts, and a search by meaning returned the right fact first |
+
+The live run found a real fault. The first search after the download hashed the whole file again
+and ran out of time in a debug build. The download now marks the files as checked.
+
+### Not proven
+
+- **Windows and macOS builds.** The ONNX Runtime download has no plain build for Windows or Intel
+  Macs, so the build uses the closest one. Pull request CI is the first test of this. If it
+  fails, the fix is to build that runtime from source for those targets.
+- **Installers.** The Linux binary now depends on the system C++ library. Not checked on the
+  installers.
+- **Model fetch in CI.** No CI test downloads the model. The vector test is skipped unless a
+  model folder is named. Ben decides whether CI should cache the 550 MB model.
+- **Second device.** The model runs on the server, so a second device only sees the result. No
+  other device was reachable in this run.
+- **First search after a restart.** It hashes the files once, which takes seconds in a release
+  build and was not timed there.
+- **Memory on Windows and macOS.** Peak memory was measured on Linux only.
+- **Search order.** In the live run an unrelated fact ranked above one of two related facts.
+  Ranking quality was not part of this part.
