@@ -437,6 +437,17 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
         let (status, text) = call(m, &path, Some(&other), body);
         assert!(status == 404 && !text.contains(MARK), "another person gets 404 on summaries: {path} {status} {text}");
     }
+    // Private exports through the real server. No summary exists and Notes is not installed here,
+    // so the owner sees an empty list and a clean refusal, and another person sees nothing.
+    let (status, text) = call(Method::GET, &format!("/records/{pasted}/exports"), Some(&cookie), None);
+    assert_eq!((status, json_of(&text)["receipts"].clone()), (200, json!([])), "{text}\n{}", log());
+    let export = json!({"requestKey":K3,"artifactVersion":1});
+    let (status, text) = call(Method::POST, &format!("/records/{pasted}/exports"), Some(&cookie), Some(export.clone()));
+    assert_eq!((status, json_of(&text)["code"].clone()), (404, json!("meeting_output_unavailable")), "{text}\n{}", log());
+    for (m, body) in [(Method::GET, None), (Method::POST, Some(export))] {
+        let (status, text) = call(m, &format!("/records/{pasted}/exports"), Some(&other), body);
+        assert!(status == 404 && !text.contains(MARK), "another person gets 404 on exports: {status} {text}");
+    }
     let (status, text) = call(Method::GET, "/output-availability", Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
     assert_eq!(call(Method::DELETE, &format!("/records/{id}"), Some(&cookie), None).0, 204);
