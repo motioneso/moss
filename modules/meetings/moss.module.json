@@ -1,0 +1,246 @@
+{
+  "schemaVersion": 2,
+  "id": "meetings",
+  "name": "Meetings",
+  "description": "Keeps each person's meeting records, personal notes and recording defaults private to their account. Create, rename, delete and take versioned notes on meetings, and set recording defaults. Recording, transcripts, summaries, search, exports and the Meetings screen are not part of this package yet.",
+  "publisher": "Moss",
+  "version": "0.1.0",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "db",
+      "operations": [
+        "query"
+      ],
+      "resources": [
+        "app.meeting_recording_metadata",
+        "app.meeting_recording_types",
+        "app.meeting_manual_entries",
+        "app.meeting_recording_imports",
+        "app.meeting_recording_chunks",
+        "app.meeting_recording_voice_enablements",
+        "app.meeting_records",
+        "app.meeting_note_writes",
+        "app.meeting_transcript_batches",
+        "app.meeting_history_segments",
+        "app.meeting_output_requests",
+        "app.meeting_output_artifacts",
+        "app.meeting_action_candidates",
+        "app.meeting_export_receipts",
+        "app.meeting_export_requests",
+        "app.meeting_capture_links",
+        "app.meeting_capture_grants",
+        "app.meeting_capture_receipts",
+        "app.meeting_capture_connections",
+        "app.meeting_capture_start_cancellations",
+        "app.meeting_stop_summaries",
+        "app.meeting_capture_start_limits"
+      ]
+    },
+    {
+      "port": "kv",
+      "operations": [
+        "get",
+        "set",
+        "lock"
+      ],
+      "resources": [
+        "meetings.preferences"
+      ]
+    },
+    {
+      "port": "context",
+      "operations": [
+        "uuid",
+        "read"
+      ],
+      "resources": [
+        "new",
+        "call"
+      ]
+    }
+  ],
+  "database": {
+    "migrations": [
+      "sql/0273_meeting_records.sql",
+      "sql/0274_meeting_draft_delete.sql",
+      "sql/0275_meeting_transcript_batches.sql",
+      "sql/0278_meeting_outputs.sql",
+      "sql/0279_meeting_exports.sql",
+      "sql/0280_meeting_history.sql",
+      "sql/0283_meeting_account_export.sql",
+      "sql/0284_meeting_capture.sql",
+      "sql/0288_meeting_recording_connections.sql",
+      "sql/0292_meeting_minimal.sql",
+      "sql/0295_meeting_capture_start_limits.sql",
+      "sql/0325_meeting_recording_imports.sql",
+      "sql/0326_meeting_import_summaries.sql",
+      "sql/0328_meeting_voice_recordings.sql",
+      "sql/0329_meeting_recording_uploads.sql",
+      "sql/0335_meeting_recording_identity.sql",
+      "sql/0352_meeting_output_reservation_expiry.sql"
+    ],
+    "ownedTables": [
+      "app.meeting_recording_metadata",
+      "app.meeting_recording_types",
+      "app.meeting_manual_entries",
+      "app.meeting_recording_imports",
+      "app.meeting_recording_chunks",
+      "app.meeting_recording_voice_enablements",
+      "app.meeting_records",
+      "app.meeting_note_writes",
+      "app.meeting_transcript_batches",
+      "app.meeting_history_segments",
+      "app.meeting_output_requests",
+      "app.meeting_output_artifacts",
+      "app.meeting_action_candidates",
+      "app.meeting_export_receipts",
+      "app.meeting_export_requests",
+      "app.meeting_capture_links",
+      "app.meeting_capture_grants",
+      "app.meeting_capture_receipts",
+      "app.meeting_capture_connections",
+      "app.meeting_capture_start_cancellations",
+      "app.meeting_stop_summaries",
+      "app.meeting_capture_start_limits"
+    ],
+    "ledger": "core-legacy"
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/records",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/records",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/records/:id",
+      "signIn": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/records/:id",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/records/:id/title",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/records/:id/notes",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/preferences",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/preferences",
+      "signIn": true
+    }
+  ],
+  "requires": {},
+  "provides": {
+    "prepareMeetingRoute": "1.0.0",
+    "collectMeetingsExportSection": "1.0.0"
+  },
+  "icons": [
+    "icons/meetings.svg"
+  ],
+  "accounts": {
+    "supportsUserDisable": true,
+    "defaultEnabled": true
+  },
+  "lifecycle": {
+    "required": false,
+    "bundled": true,
+    "removable": true
+  },
+  "jobs": {
+    "meetings.recording-notice": {
+      "meeting-id": {
+        "kind": "id"
+      }
+    },
+    "meetings.stop-summary": {
+      "meeting-id": {
+        "kind": "id"
+      }
+    },
+    "meetings.recording-import": {
+      "meeting-id": {
+        "kind": "id"
+      }
+    }
+  },
+  "navigation": [],
+  "settings": [
+    {
+      "id": "meetings.module-settings",
+      "label": "Meetings",
+      "path": "/settings?section=modules&module=meetings",
+      "scope": "user",
+      "description": "Recording audio, transcript language, vocabulary and automatic summary defaults are saved with your account. Changing them from Settings is not available in this version yet; they can be read and saved through the Meetings routes."
+    }
+  ],
+  "features": [
+    {
+      "id": "meetings.records",
+      "description": "Each person keeps private meeting records with a title and personal notes. Titles are at most 240 bytes and notes at most 64,000 bytes. Notes save with a version check, so a stale edit is refused and returns the current notes. A repeated request key returns the original result. Deleting a meeting is permanent. Nobody else, including admins, can see them.",
+      "errors": [
+        {
+          "code": "meeting_invalid_input",
+          "class": "permanent",
+          "description": "The title, notes or request is not valid"
+        },
+        {
+          "code": "meeting_not_found",
+          "class": "permanent",
+          "description": "The meeting does not exist or is not yours"
+        },
+        {
+          "code": "meeting_notes_conflict",
+          "class": "conflict",
+          "description": "The notes changed since you opened them; the current notes are returned"
+        },
+        {
+          "code": "meeting_title_conflict",
+          "class": "conflict",
+          "description": "The title changed since you opened it; the current title is returned"
+        },
+        {
+          "code": "meeting_request_conflict",
+          "class": "conflict",
+          "description": "This request key was already used with different content"
+        }
+      ]
+    },
+    {
+      "id": "meetings.preferences",
+      "description": "Saves the default recording audio, the remembered recording source, automatic summaries on Stop, the summary style, the transcript language and best-effort vocabulary for the account. Reading never creates a default. The Meetings screen and Settings controls are not part of this package yet.",
+      "errors": [
+        {
+          "code": "meeting_capture_invalid_input",
+          "class": "permanent",
+          "description": "A recording default is not valid"
+        },
+        {
+          "code": "meeting_vocabulary_invalid",
+          "class": "permanent",
+          "description": "The vocabulary list is not valid"
+        }
+      ]
+    }
+  ],
+  "screens": {}
+}
