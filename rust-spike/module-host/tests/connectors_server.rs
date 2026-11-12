@@ -510,7 +510,9 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
             std::thread::sleep(Duration::from_millis(500));
         }
     };
-    // The stand-in grant names other scopes than a real Google grant, so set the real ones and sync.
+    // The sync queued by connecting runs with the stand-in grant, which has no Calendar scope.
+    // Let it finish, then set the real scopes and sync by hand.
+    wait_until("sync after connecting", &|| account_row()["lastSyncStatus"] == "success");
     let (status, text) = call(
         Method::PATCH,
         &format!("/accounts/{google_account}"),
