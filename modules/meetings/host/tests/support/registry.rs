@@ -40,7 +40,9 @@ pub fn publish_as(
     // Ephemeral keys generated for this disposable registry; no production credentials.
     let root = key();
     let index = key();
-    let publisher = key();
+    // One publisher key for every package, so the installer sees no conflicting publisher.
+    static PUBLISHER: std::sync::OnceLock<Ed25519KeyPair> = std::sync::OnceLock::new();
+    let publisher = PUBLISHER.get_or_init(key);
     let digest = trust::digest(bytes);
     let artifact = Artifact {
         id: m.id.clone(),
@@ -48,7 +50,7 @@ pub fn publish_as(
         digest: digest.clone(),
         size: bytes.len() as u64,
         publisher_key: format!("{label}-test"),
-        signature: sign(&publisher, digest.as_bytes()),
+        signature: sign(publisher, digest.as_bytes()),
         requires_moss: m.requires_moss,
         abi: m.abi,
         capabilities: m.capabilities,
@@ -66,7 +68,7 @@ pub fn publish_as(
         publishers: BTreeMap::from([(
             format!("{label}-test"),
             Publisher {
-                key: public(&publisher),
+                key: public(publisher),
                 prefix: "".into(),
                 replaces: Default::default(),
             },
@@ -93,5 +95,5 @@ pub fn publish_as(
     }
     std::fs::create_dir_all(folder.join("packages")).unwrap();
     std::fs::write(folder.join(format!("packages/{digest}.mosspkg")), bytes).unwrap();
-    (public(&root), public(&publisher), artifact)
+    (public(&root), public(publisher), artifact)
 }
