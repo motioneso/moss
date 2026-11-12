@@ -643,7 +643,7 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
                 }
             }
             let control: i64 = db
-                .query_one("SELECT count(*) FROM app.connector_accounts t WHERE to_jsonb(t)::text LIKE '%' || $1 || '%'", &[&"gmail.modify"])
+                .query_one("SELECT count(*) FROM app.connector_accounts t WHERE to_jsonb(t)::text LIKE '%' || $1 || '%'", &[&"google"])
                 .await
                 .unwrap()
                 .get(0);
