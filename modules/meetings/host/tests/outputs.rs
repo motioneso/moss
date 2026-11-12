@@ -95,7 +95,9 @@ fn content(id: &str, overview: &str) -> Value {
     json!({"overview": overview, "decisions": [{"text": "Review the budget", "evidence": [cite.clone()]}],
         "openQuestions": ["Who signs off?"],
         "actions": [{"text": "Send the budget", "evidence": [cite], "ownerPhrase": null, "duePhrase": null}],
-        "warnings": []})
+        "warnings": [],
+        "recording": {"title": "Budget review", "typeId": "work-meeting", "side": "work", "confidence": 0.9,
+            "reason": "It is about a budget", "ideaGroups": []}})
 }
 
 #[test]
@@ -259,7 +261,8 @@ fn a_pasted_transcript_queues_a_metadata_only_job_that_writes_the_summary() {
     let cite = json!({"kind":"transcript","meetingId":id,"segmentId":segment["segmentId"],"segmentRevision":segment["revision"],
         "startCharacter":0,"endCharacter":6});
     w.say(json!({"overview":"Pasted.","decisions":[{"text":"Review","evidence":[cite.clone()]}],"openQuestions":[],
-        "actions":[{"text":"Send","evidence":[cite],"ownerPhrase":null,"duePhrase":null}],"warnings":[]}));
+        "actions":[{"text":"Send","evidence":[cite],"ownerPhrase":null,"duePhrase":null}],"warnings":[],
+        "recording":{"title":"Pasted","typeId":"idea","side":"personal","confidence":0.9,"reason":"A pasted idea","ideaGroups":[]}}));
     let worker = Secret::new(std::env::var("JS48_WORKER_URL").unwrap());
     assert!(w.app.app.installer.run_job(&worker).unwrap());
     let list = w.call(a, "GET", &format!("/records/{id}/outputs"), Value::Null);
