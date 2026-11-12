@@ -16,6 +16,7 @@ const run = spawnSync(
     "test",
     "--locked",
     "--offline",
+    "--no-fail-fast",
     "--manifest-path",
     "modules/connectors/host/Cargo.toml",
     "--test",

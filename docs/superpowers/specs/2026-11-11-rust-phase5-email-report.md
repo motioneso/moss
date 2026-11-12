@@ -203,3 +203,46 @@ Commands: `pnpm test:rust-email` and `pnpm test:rust-email-live`, both through t
 - Flag (read, unread) changes.
 - The module-host change that emits the delete rule has been run only through the Email database
   tests and the live run, not through an upgrade of an install that already has Email.
+
+# Part 7: Google sync
+
+## What was built
+
+- A connected Google account is read every 15 minutes, once straight after connecting, and on a
+  manual sync request. A second schedule every 30 minutes restarts an account whose last run did
+  not succeed, and cancels both schedules once the account is revoked.
+- Each run reads Calendar (7 days back, 30 days ahead) and Gmail (last 30 days). Calendar events
+  are saved through Calendar's public API. Gmail messages are saved through Email's public API as
+  sender, recipients, subject, time and a short preview. Message text beyond the preview never
+  leaves the host.
+- The first Gmail run lists the last day, then the rest of the 30 days, and saves Gmail's
+  position. Later runs ask Gmail only for what changed since that position, and fall back to a
+  full listing when Gmail says the position is too old.
+- A message whose revision is already cached and finished is not rewritten. A message that failed
+  analysis five times for the same revision is left alone.
+- Calendar events no longer in Google are removed, but only after a walk that read and wrote every
+  page without an error. A failed or partial walk never removes anything.
+- Transient refusals (rate limits, 408, 5xx) are retried up to three times with a short wait. A 401
+  refreshes the token once. A refused sign-in fails the run as an auth error and the account shows
+  as needing sign-in.
+- A run does at most five small steps and then queues itself for the rest. Job payloads carry only
+  ids, counts, flags and fixed words. Page tokens, the Gmail position and all mail text stay in
+  the host, and a restart of the server makes the next run start over.
+- Calendar gains two operations (add or update a cached event, remove events a sync no longer
+  sees) and Email gains sync markers on cached messages. Both touch only the signed-in person's
+  rows.
+- The connection's health shows the last run, its result, its counts and, on failure, only the
+  Google status, a cleaned reason word and the name of the call. No Google error text is kept.
+
+## Proof
+
+- Scripted tests of the package side (17): busy and inactive accounts, a long walk continuing
+  in a new job with metadata-only parameters, a rejected sign-in, a write failure skipping the
+  prune, settled and given-up messages, partial runs, recent-only runs, both schedules, the sweep
+  and the manual route (409 without Google, 202 with it).
+- Database tests with the real package in WebAssembly, the real host and database, and the
+  stand-in Google (5): a full walk, a second run that reads only changes and survives a deleted
+  message, a second person refused (and the same update shown to succeed without row security),
+  retries then a recorded failure, and a revoked sign-in with a second start refused while one is
+  going. Tokens, the client secret and mail text were searched for in everything the package sent
+  and in the account row.
