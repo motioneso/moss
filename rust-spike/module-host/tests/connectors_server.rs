@@ -470,13 +470,6 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
     println!("PASS Google connect over HTTP: authorize then complete answered 201 with an active account");
     let google_account = json_of(&text)["account"]["id"].as_str().expect("account id").to_owned();
     // Connecting starts a sync. Wait for it, then read what it saved through Email and Calendar.
-    let wait_until = |what: &str, check: &dyn Fn() -> bool| {
-        let started = Instant::now();
-        while !check() {
-            assert!(started.elapsed() < Duration::from_secs(120), "Google sync did not settle: {what}\n{}", log());
-            std::thread::sleep(Duration::from_millis(500));
-        }
-    };
     let account_row = || {
         let all = json_of(&call(Method::GET, "/accounts", Some(&cookie), None).1);
         all["accounts"].as_array().unwrap().iter().find(|a| a["id"] == google_account.as_str()).cloned().unwrap()
@@ -489,6 +482,23 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
         let r = client.get(format!("{origin}/api/m/calendar/events")).header("origin", &origin).header("cookie", &cookie).send().unwrap();
         json_of(&r.text().unwrap_or_default())["events"].as_array().cloned().unwrap_or_default()
     };
+    let wait_until = |what: &str, check: &dyn Fn() -> bool| {
+        let started = Instant::now();
+        while !check() {
+            assert!(started.elapsed() < Duration::from_secs(120), "Google sync did not settle: {what}; account {} mail {} events {}\n{}", account_row(), saved_mail().len(), saved_events().len(), log());
+            std::thread::sleep(Duration::from_millis(500));
+        }
+    };
+    // The stand-in grant names other scopes than a real Google grant, so set the real ones and sync.
+    let (status, text) = call(
+        Method::PATCH,
+        &format!("/accounts/{google_account}"),
+        Some(&cookie),
+        Some(json!({"scopes":["https://www.googleapis.com/auth/gmail.modify","https://www.googleapis.com/auth/calendar"]})),
+    );
+    assert_eq!(status, 200, "{text}");
+    let (status, text) = call(Method::POST, "/google/sync", Some(&cookie), Some(json!({})));
+    assert_eq!(status, 202, "{text}");
     wait_until("first run", &|| account_row()["lastSyncStatus"] == "success" && saved_mail().len() == 3 && saved_events().len() == 3);
     let titles: std::collections::BTreeSet<String> = saved_events().iter().map(|e| e["title"].as_str().unwrap_or("").to_owned()).collect();
     assert_eq!(titles, ["Offsite", "Planning", "Review"].map(String::from).into(), "{titles:?}");
