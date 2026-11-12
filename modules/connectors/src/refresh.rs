@@ -190,3 +190,143 @@ fn sweep(host: &impl Host) -> Result<&'static str> {
     stop_sweep(host);
     Ok("idle")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use moss_module_sdk::Error as HostError;
+    use std::cell::RefCell;
+
+    const REFRESH: &str = "11111111-1111-4111-8111-111111111111";
+    const KEY: &str = "22222222-2222-4222-8222-222222222222";
+
+    /// Scripted host that records every call and can refuse queue sends.
+    #[derive(Default)]
+    struct Script {
+        calls: RefCell<Vec<(String, String, Value)>>,
+        pending: Vec<Value>,
+        fail_queue: bool,
+        sweep: Value,
+        request: Value,
+    }
+
+    impl Script {
+        fn named(&self, resource: &str) -> Vec<Value> {
+            self.calls.borrow().iter().filter(|c| c.1 == resource).map(|c| c.2.clone()).collect()
+        }
+    }
+
+    impl Host for Script {
+        fn call(&self, port: &str, operation: &str, resource: &str, p: Value) -> moss_module_sdk::Result<Value> {
+            self.calls.borrow_mut().push((port.into(), resource.into(), p.clone()));
+            Ok(match (port, operation, resource) {
+                ("jobs", "enqueue-options", _) if self.fail_queue => return Err(HostError::new("queue refused")),
+                ("context", "read", _) => json!({"now":"2026-01-01T00:00:00.000Z"}),
+                ("kv", "set", "connectors.refresh-request") => self.request.clone(),
+                ("kv", "get", "connectors.refresh-pending") => Value::Array(self.pending.clone()),
+                ("kv", "set", "connectors.refresh-sweep") => self.sweep.clone(),
+                ("jobs", "schedule", _) => json!({"id":"row-1"}),
+                _ => json!({}),
+            })
+        }
+    }
+
+    fn row(account: &str, provider: &str) -> Value {
+        json!({"refreshId":REFRESH,"accountId":account,"provider":provider,"dedupeKey":"33333333-3333-4333-8333-333333333333"})
+    }
+
+    fn fresh() -> Script {
+        Script {
+            request: json!({"refreshId":REFRESH,"created":true,"active":true,"deduped":false}),
+            pending: vec![row("a1", "google"), row("a2", "imap")],
+            ..Script::default()
+        }
+    }
+
+    #[test]
+    fn a_request_queues_one_metadata_only_job_per_account_and_marks_each_sent() {
+        let host = fresh();
+        let (status, body) = request(&host, &json!({"idempotencyKey":KEY})).unwrap();
+        assert_eq!((status, body["enqueued"].clone(), body["deduped"].clone()), (202, json!(true), json!(false)));
+        let google = host.named("email-refresh-google");
+        let mail = host.named("email-refresh-imap");
+        assert_eq!((google.len(), mail.len()), (1, 1));
+        assert_eq!(google[0]["idempotencyKey"], "33333333-3333-4333-8333-333333333333");
+        let mut keys: Vec<&str> = mail[0]["params"].as_object().unwrap().keys().map(String::as_str).collect();
+        keys.sort();
+        assert_eq!(keys, ["account-id", "cursor", "failures", "refresh-id", "upserted"]);
+        assert_eq!(google[0]["params"]["trigger"], "manual");
+        assert_eq!(google[0]["params"]["phase"], "email-day");
+        assert_eq!(google[0]["params"]["recent-only"], true);
+        assert_eq!(google[0]["params"]["calendar-on"], false);
+        assert_eq!(host.named("connectors.refresh-dispatch").iter().filter(|d| d["ok"] == true).count(), 2);
+        assert_eq!(host.named("email-refresh-sweep").len(), 1, "the sweep schedule is created");
+    }
+
+    #[test]
+    fn a_failed_send_is_reported_and_not_counted_as_queued() {
+        let mut host = fresh();
+        host.fail_queue = true;
+        let (_, body) = request(&host, &json!({"idempotencyKey":KEY})).unwrap();
+        assert_eq!(body["enqueued"], false);
+        let sent = host.named("connectors.refresh-dispatch");
+        assert_eq!(sent.len(), 2);
+        assert!(sent.iter().all(|d| d["ok"] == false));
+    }
+
+    #[test]
+    fn a_joined_or_repeated_request_queues_nothing() {
+        let mut host = fresh();
+        host.request = json!({"refreshId":REFRESH,"created":false,"active":true,"deduped":true});
+        let (status, body) = request(&host, &json!({"idempotencyKey":KEY})).unwrap();
+        assert_eq!((status, body["enqueued"].clone(), body["deduped"].clone()), (202, json!(false), json!(true)));
+        assert!(host.named("email-refresh-google").is_empty() && host.named("email-refresh-imap").is_empty());
+    }
+
+    #[test]
+    fn a_bad_body_is_refused_with_the_old_messages() {
+        let host = fresh();
+        assert_eq!(request(&host, &json!({})).unwrap_err().status, 400);
+        assert_eq!(request(&host, &json!({"idempotencyKey":"nope"})).unwrap_err().message, "body/idempotencyKey must match format \"uuid\"");
+        assert_eq!(status(&host, "nope").unwrap_err().status, 400);
+        assert!(host.calls.borrow().is_empty(), "nothing is stored for a bad request");
+    }
+
+    #[test]
+    fn a_missing_refresh_is_a_404() {
+        let mut host = fresh();
+        host.request = Value::Null;
+        // The host answers null for the status of a refresh that is missing or another person's.
+        struct Missing;
+        impl Host for Missing {
+            fn call(&self, _: &str, _: &str, _: &str, _: Value) -> moss_module_sdk::Result<Value> {
+                Ok(Value::Null)
+            }
+        }
+        let error = status(&Missing, REFRESH).unwrap_err();
+        assert_eq!((error.status, error.message.as_str()), (404, "Email refresh not found"));
+    }
+
+    #[test]
+    fn errors_map_to_the_outcome_the_old_server_gave() {
+        assert_eq!(outcome("none"), ("succeeded", None));
+        assert_eq!(outcome("auth-error"), ("failed", Some("auth-error")));
+        assert_eq!(outcome("email-message-error"), ("partial", Some("email-message-error")));
+        assert_eq!(outcome("email-error"), ("partial", Some("email-error")));
+        assert_eq!(outcome("calendar-error"), ("partial", Some("email-error")));
+    }
+
+    #[test]
+    fn the_sweep_sends_waiting_rows_and_stops_itself_when_idle() {
+        let mut host = fresh();
+        host.sweep = json!({"pending":true,"active":true});
+        let job = json!({"queue":SWEEP,"parameters":{"round":0}}).to_string();
+        assert!(handle(&host, &job).unwrap().contains("active"));
+        assert_eq!(host.named("email-refresh-google").len(), 1);
+        let mut idle = fresh();
+        idle.sweep = json!({"pending":false,"active":false});
+        assert!(handle(&idle, &job).unwrap().contains("idle"));
+        assert!(idle.calls.borrow().iter().any(|c| c.0 == "jobs" && c.2["id"] == "row-1"), "the schedule is cancelled");
+        assert!(idle.named("email-refresh-google").is_empty());
+    }
+}
