@@ -20,6 +20,9 @@ pub struct Params {
     pub bytes: Option<usize>,
     pub sha256: Option<String>,
     pub manifest: Option<String>,
+    pub start_ms: Option<u64>,
+    pub length_ms: Option<u64>,
+    pub total_ms: Option<u64>,
 }
 
 fn need<T>(value: Option<T>, what: &str) -> Result<T> {
@@ -50,6 +53,14 @@ pub fn run(files: &Recordings, scope: &CallScope, operation: &str, p: &Params) -
             )?;
             Ok(json!({"stored": true}))
         }
+        "validate" => files.validate(access, &need(p.import_id.as_deref(), "Import id")?, &need(p.manifest.as_deref(), "Manifest")?),
+        "window" => files.window(
+            access,
+            &need(p.import_id.as_deref(), "Import id")?,
+            need(p.start_ms, "Start")?,
+            need(p.length_ms, "Length")?,
+            need(p.total_ms, "Total")?,
+        ),
         "purge" => {
             files.purge(access, &need(p.import_id.as_deref(), "Import id")?)?;
             Ok(json!({"purged": true}))

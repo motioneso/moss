@@ -24,6 +24,7 @@ pub mod recording_reading;
 pub mod records;
 pub mod ring_errors;
 pub mod ring_source;
+pub mod ring_upload;
 pub mod ring_voice;
 pub mod schema;
 pub mod stop_summary;
