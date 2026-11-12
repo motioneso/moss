@@ -503,7 +503,7 @@ fn on_device_proof(
     let (status, text) = call(Method::POST, "/graph/facts", Some(cookie), Some(fact));
     assert_eq!(status, 200, "{text}");
     assert!(json_of(&text).get("searchPending").is_none(), "{text}");
-    let other = json!({"subjectEntityId":me,"predicate":"owns","objectText":"a red bicycle with a broken chain","source":{"sourceKind":"manual","sourceRef":"live-3","excerpt":"bike"}});
+    let other = json!({"subjectEntityId":me,"predicate":"prefers","objectText":"a red bicycle with a broken chain","source":{"sourceKind":"manual","sourceRef":"live-3","excerpt":"bike"}});
     let (status, text) = call(Method::POST, "/graph/facts", Some(cookie), Some(other));
     assert_eq!(status, 200, "{text}");
     // No words are shared with the stored text, so only meaning can find it.
