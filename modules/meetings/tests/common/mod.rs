@@ -18,6 +18,13 @@ pub struct Fake {
     pub tables: RefCell<BTreeMap<String, Vec<Value>>>,
     pub prefs: RefCell<BTreeMap<String, Map<String, Value>>>,
     pub calls: RefCell<Vec<String>>,
+    /// Stored transcript batches as (owner, meeting, batch) and the segment rows saved with them.
+    pub batches: RefCell<Vec<(String, String, Value)>>,
+    pub segments: RefCell<Vec<Value>>,
+    /// What the History read returns, and the parameters of the last read.
+    pub history_rows: RefCell<Vec<Value>>,
+    pub history_asked: RefCell<Option<Value>>,
+    pub history_fails: Cell<bool>,
     clock: Cell<u32>,
     ids: Cell<u32>,
 }
@@ -29,6 +36,11 @@ impl Fake {
             tables: RefCell::new(BTreeMap::new()),
             prefs: RefCell::new(BTreeMap::new()),
             calls: RefCell::new(vec![]),
+            batches: RefCell::new(vec![]),
+            segments: RefCell::new(vec![]),
+            history_rows: RefCell::new(vec![]),
+            history_asked: RefCell::new(None),
+            history_fails: Cell::new(false),
             clock: Cell::new(0),
             ids: Cell::new(0),
         }
@@ -117,6 +129,36 @@ fn chrono_free(text: &str) -> String {
     text.replace("+00:00", "Z")
 }
 
+impl Fake {
+    /// The transcript store as the host adapter serves it: visible only to the owner.
+    fn transcripts(&self, operation: &str, p: &Value) -> Value {
+        let actor = self.actor.get();
+        let meeting = p["meetingId"].as_str().unwrap_or_default().to_owned();
+        match operation {
+            "get" | "lock" => {
+                let owned = self.rows("app.meeting_records").iter().any(|r| r["id"] == json!(meeting) && r["owner_user_id"] == actor);
+                if !owned {
+                    return json!({"found": false});
+                }
+                let batches: Vec<Value> = self.batches.borrow().iter().filter(|b| b.1 == meeting).map(|b| b.2.clone()).collect();
+                let bytes: usize = batches.iter().map(|b| b["inputJson"].as_str().unwrap_or("").len()).sum();
+                json!({"found": true, "ownerUserId": actor, "bytes": bytes, "batches": batches})
+            }
+            "set" => {
+                self.batches.borrow_mut().push((
+                    actor.into(),
+                    meeting,
+                    json!({"requestKey": p["requestKey"], "version": p["version"], "inputJson": p["inputJson"],
+                        "transcriptRevision": p["transcriptRevision"], "cursor": p["cursor"], "stopCutoffMs": p["stopCutoffMs"]}),
+                ));
+                self.segments.borrow_mut().extend(p["segments"].as_array().cloned().unwrap_or_default());
+                json!({})
+            }
+            other => panic!("unexpected transcript operation {other}"),
+        }
+    }
+}
+
 impl Host for Fake {
     fn call(&self, port: &str, operation: &str, resource: &str, parameters: Value) -> Result<Value> {
         self.calls.borrow_mut().push(format!("{port}.{operation}.{resource}"));
@@ -126,6 +168,14 @@ impl Host for Fake {
                 let n = self.ids.get();
                 self.ids.set(n + 1);
                 Ok(json!(format!("00000000-0000-4000-8000-{n:012x}")))
+            }
+            ("kv", _) if resource == "meetings.transcripts" => Ok(self.transcripts(operation, &parameters)),
+            ("kv", "get") if resource == "meetings.history" => {
+                *self.history_asked.borrow_mut() = Some(parameters);
+                if self.history_fails.get() {
+                    return Err(moss_module_sdk::Error::new("History read failed"));
+                }
+                Ok(json!({"rows": self.history_rows.borrow().clone()}))
             }
             ("kv", "lock") => Ok(json!({})),
             ("kv", "get") => {

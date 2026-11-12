@@ -42,3 +42,11 @@ path = "../tests/privacy.rs"
 [[test]]
 name = "lifecycle"
 path = "../tests/lifecycle.rs"
+
+[[test]]
+name = "transcripts"
+path = "../tests/transcripts.rs"
+
+[[test]]
+name = "history"
+path = "../tests/history.rs"

@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "meetings",
   "name": "Meetings",
-  "description": "Keeps each person's meeting records, personal notes and recording defaults private to their account. Create, rename, delete and take versioned notes on meetings, and set recording defaults. Recording, transcripts, summaries, search, exports and the Meetings screen are not part of this package yet.",
+  "description": "Keeps each person's meeting records, personal notes and recording defaults private to their account. Create, rename, delete and take versioned notes on meetings, and set recording defaults. Transcripts and History search are included. Recording, summaries, exports and the Meetings screen are not part of this package yet.",
   "publisher": "Moss",
   "version": "0.1.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
@@ -39,7 +39,7 @@
     {
       "port": "kv",
       "operations": ["get", "set", "lock"],
-      "resources": ["meetings.preferences"]
+      "resources": ["meetings.preferences", "meetings.transcripts", "meetings.history"]
     },
     {
       "port": "context",
@@ -124,6 +124,36 @@
       "path": "/records/:id/notes",
       "signIn": true
     },
+    {
+      "method": "POST",
+      "path": "/records/:id/transcript",
+      "signIn": true
+    },
+
+    {
+      "method": "GET",
+      "path": "/records/:id/transcript",
+      "signIn": true
+    },
+
+    {
+      "method": "GET",
+      "path": "/records/:id/transcript/evidence",
+      "signIn": true
+    },
+
+    {
+      "method": "POST",
+      "path": "/history/search",
+      "signIn": true
+    },
+
+    {
+      "method": "GET",
+      "path": "/history/:id",
+      "signIn": true
+    },
+
     {
       "method": "GET",
       "path": "/preferences",
@@ -222,6 +252,63 @@
           "code": "meeting_vocabulary_invalid",
           "class": "validation",
           "description": "The vocabulary list is not valid"
+        }
+      ]
+    },
+    {
+      "id": "meetings.transcripts",
+      "description": "Saves a meeting transcript as numbered batches and reads it back. A batch is applied in order, a repeated request key returns the original receipt, and a stale version is refused. Reads return at most 500 segments and 100,000 characters, and a single segment can be read as evidence with a character range. A meeting holds at most 4,096 batches, 20,000 revisions and 32 MiB. Only the meeting owner can save or read, and admins cannot.",
+      "errors": [
+        {
+          "code": "meeting_transcript_invalid_input",
+          "class": "validation",
+          "description": "The transcript batch is not valid"
+        },
+        {
+          "code": "meeting_transcript_limit",
+          "class": "validation",
+          "description": "The transcript is over a size or count limit"
+        },
+        {
+          "code": "meeting_transcript_request_conflict",
+          "class": "validation",
+          "description": "This request key was already used with different content"
+        },
+        {
+          "code": "meeting_transcript_version_conflict",
+          "class": "validation",
+          "description": "The transcript changed since the batch was prepared; the current receipt is returned"
+        },
+        {
+          "code": "meeting_transcript_unavailable",
+          "class": "validation",
+          "description": "The meeting has no transcript you can read"
+        },
+        {
+          "code": "meeting_not_found",
+          "class": "validation",
+          "description": "The meeting does not exist or is not yours"
+        }
+      ]
+    },
+    {
+      "id": "meetings.history",
+      "description": "Finds your own meetings by words in the title, notes or transcript, with filters for transcript, needs review, exported and notes only, and pages through them newest first. A search can use at most 16 words. Replies are never cached, and nobody else, including admins, sees your meetings.",
+      "errors": [
+        {
+          "code": "meeting_history_invalid_input",
+          "class": "validation",
+          "description": "The search is not valid"
+        },
+        {
+          "code": "meeting_history_unavailable",
+          "class": "transient",
+          "description": "History could not be read right now"
+        },
+        {
+          "code": "meeting_not_found",
+          "class": "validation",
+          "description": "The meeting does not exist or is not yours"
         }
       ]
     }

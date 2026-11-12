@@ -82,7 +82,8 @@ pub fn strict_object(
     let map = value.as_object_mut().expect("checked object");
     for (name, kind) in props {
         if let Some(slot) = map.get_mut(*name) {
-            if let Value::Array(items) = &*slot {
+            // Ajv unwraps a one-item array only where the schema wants a scalar.
+            if let (false, Value::Array(items)) = (matches!(kind, Kind::Any), &*slot) {
                 if items.len() == 1 {
                     *slot = items[0].clone();
                 }
