@@ -82,7 +82,7 @@ async fn pending(cx: &DataContext, limit: i64) -> Result<Value> {
              'knownSender', EXISTS (
                SELECT 1 FROM app.email_messages o
                WHERE o.owner_user_id = (SELECT id FROM me)
-                 AND {sender_o} = ANY((SELECT list FROM own))
+                 AND {sender_o} = ANY(ARRAY(SELECT unnest(list) FROM own))
                  AND {sender_m} IN (SELECT {recipient} FROM unnest(o.recipients) AS r)),
              'threadLastSender', COALESCE((
                SELECT t.sender FROM app.email_messages t
