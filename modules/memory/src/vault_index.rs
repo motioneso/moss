@@ -62,12 +62,12 @@ fn now(host: &impl Host) -> Result<String> {
     Ok(context["now"].as_str().ok_or_else(unavailable)?.to_owned())
 }
 
-fn new_id(host: &impl Host) -> Result<String> {
+pub(crate) fn new_id(host: &impl Host) -> Result<String> {
     let id = host.call("context", "uuid", "new", json!({}))?;
     Ok(id["id"].as_str().ok_or_else(unavailable)?.to_owned())
 }
 
-fn enqueue_now(host: &impl Host, queue: &str, params: Value, key: &str) -> Result<()> {
+pub(crate) fn enqueue_now(host: &impl Host, queue: &str, params: Value, key: &str) -> Result<()> {
     host.call(
         "jobs",
         "enqueue-options",
@@ -82,6 +82,7 @@ pub fn handle_job(host: &impl Host, payload: &str) -> Result<String> {
     match job.queue.as_str() {
         TICK => {
             reconcile_schedule(host);
+            crate::reembed::retry_missing(host);
             enqueue_now(host, SWEEP, json!({"offset":0}), &new_id(host)?)?;
             Ok(json!({"started":true}).to_string())
         }

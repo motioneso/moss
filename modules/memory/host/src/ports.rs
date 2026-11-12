@@ -1,7 +1,7 @@
 //! Answers the package's `memory.*` calls with SQL under the signed-in person's row-level
 //! security. Memory text goes only to the configured embedding service and never into logs.
 use crate::recording::{self, NoAuthority, RecordingAuthority};
-use crate::{dashboard, lifecycle, store};
+use crate::{dashboard, lifecycle, reembed, store};
 use anyhow::{ensure, Result};
 use moss_module_host::{
     memory_ingest::DocumentEmbeddings,
@@ -17,13 +17,18 @@ pub trait Embedder: Send + Sync {
     fn query(&self, scope: &CallScope, text: &str) -> Result<Vec<f64>>;
     /// The document vector with the model name and version that made it.
     fn document(&self, scope: &CallScope, text: &str) -> Result<(Vec<f64>, (String, String))>;
+    /// The model name and version the configured service makes vectors with right now.
+    fn model(&self, scope: &CallScope) -> Result<(String, String)>;
 }
 impl<T: QueryEmbeddings + DocumentEmbeddings> Embedder for T {
     fn query(&self, scope: &CallScope, text: &str) -> Result<Vec<f64>> {
         self.embed_query(scope, text)
     }
     fn document(&self, scope: &CallScope, text: &str) -> Result<(Vec<f64>, (String, String))> {
-        Ok((self.embed_document(scope, text)?, self.model(scope)?))
+        Ok((self.embed_document(scope, text)?, DocumentEmbeddings::model(self, scope)?))
+    }
+    fn model(&self, scope: &CallScope) -> Result<(String, String)> {
+        DocumentEmbeddings::model(self, scope)
     }
 }
 
@@ -103,8 +108,12 @@ impl MemoryPorts {
             Ok(vector) => vector,
             Err(error) => return Ok(refusal(&error)),
         };
+        let model = match self.embedder.model(scope) {
+            Ok(model) => model.0,
+            Err(error) => return Ok(refusal(&error)),
+        };
         self.within(scope, |cx| async {
-            let value = store::recall(&cx, &request.parameters, &vector).await?;
+            let value = store::recall(&cx, &request.parameters, &vector, &model).await?;
             Ok((cx, value))
         })
     }
@@ -186,6 +195,139 @@ impl MemoryPorts {
     }
 }
 
+impl MemoryPorts {
+    /// Status, start, step, cancel and the retry of facts saved without a vector.
+    fn reembed(&self, scope: &CallScope, request: &Request) -> Result<Value> {
+        let action = if request.operation == "get" {
+            "status"
+        } else {
+            request.parameters["action"].as_str().unwrap_or("")
+        };
+        let run = request.parameters["runId"].as_str().unwrap_or("").to_owned();
+        let model = match action {
+            "cancel" => None,
+            _ => match self.embedder.model(scope) {
+                Ok(model) => Some(model),
+                Err(error) => return Ok(refusal(&error)),
+            },
+        };
+        match (action, model) {
+            ("status", Some(model)) => self.within(scope, |cx| async {
+                let value = reembed::status(&cx, &model).await?;
+                Ok((cx, value))
+            }),
+            ("start", Some(model)) => self.within(scope, |cx| async {
+                let value = reembed::start(&cx, &model).await?;
+                Ok((cx, value))
+            }),
+            ("cancel", _) => self.within(scope, |cx| async {
+                let value = reembed::cancel(&cx).await?;
+                Ok((cx, value))
+            }),
+            ("step", Some(_)) => self.reembed_step(scope, &run),
+            ("retry-missing", Some(model)) => self.retry_missing(scope, &model),
+            _ => anyhow::bail!("Unknown memory request"),
+        }
+    }
+
+    /// Embeds one batch outside any transaction, stages it, and swaps everything in once no
+    /// passage is left. Any failure ends the run and leaves the old vectors in place.
+    fn reembed_step(&self, scope: &CallScope, run: &str) -> Result<Value> {
+        ensure!(!run.is_empty() && run.len() <= 64, "Invalid run");
+        let batch = self.within(scope, |cx| async {
+            let Some(model) = reembed::running(&cx, run).await? else {
+                return Ok((cx, json!({"status": "stopped"})));
+            };
+            let items = reembed::next_batch(&cx, run, &model.0).await?;
+            let items: Vec<Value> = items
+                .into_iter()
+                .map(|i| json!({"kind": i.kind, "id": i.id, "hash": i.hash, "text": i.text}))
+                .collect();
+            Ok((cx, json!({"model": [model.0, model.1], "items": items})))
+        })?;
+        if batch["status"] == "stopped" {
+            return Ok(batch);
+        }
+        let target = (
+            batch["model"][0].as_str().unwrap_or("").to_owned(),
+            batch["model"][1].as_str().unwrap_or("").to_owned(),
+        );
+        let mut staged = Vec::new();
+        for item in batch["items"].as_array().into_iter().flatten() {
+            let embedded = self
+                .embedder
+                .document(scope, item["text"].as_str().unwrap_or(""))
+                .and_then(|(vector, model)| {
+                    ensure!(model == target, "The embedding model changed during re-embed");
+                    literal(&vector)
+                });
+            match embedded {
+                Ok(vector) => staged.push((item, vector)),
+                Err(_) => return self.fail_run(scope, run),
+            }
+        }
+        self.within(scope, |cx| async {
+            if !reembed::hold(&cx, run).await? {
+                return Ok((cx, json!({"status": "stopped"})));
+            }
+            for (item, vector) in &staged {
+                let pending = reembed::Pending {
+                    kind: if item["kind"] == "chunk" { "chunk" } else { "document" },
+                    id: item["id"].as_str().unwrap_or("").to_owned(),
+                    hash: item["hash"].as_str().unwrap_or("").to_owned(),
+                    text: String::new(),
+                };
+                reembed::stage(&cx, run, &pending, vector).await?;
+            }
+            let left = reembed::remaining(&cx, run, &target.0).await?;
+            let mut status = "running";
+            if left == 0 {
+                reembed::swap(&cx, run, &target).await?;
+                status = "done";
+            }
+            let (total, done) = reembed::progress(&cx, run).await?;
+            Ok((cx, json!({"status": status, "total": total, "staged": done, "remaining": left})))
+        })
+    }
+
+    fn fail_run(&self, scope: &CallScope, run: &str) -> Result<Value> {
+        self.within(scope, |cx| async {
+            if reembed::hold(&cx, run).await? {
+                reembed::close(&cx, run, "failed").await?;
+            }
+            Ok((cx, json!({"status": "failed"})))
+        })
+    }
+
+    /// Gives a small batch of facts that were saved without a vector another try.
+    fn retry_missing(&self, scope: &CallScope, model: &(String, String)) -> Result<Value> {
+        let waiting = self.within(scope, |cx| async {
+            let rows = reembed::missing(&cx, reembed::BATCH).await?;
+            Ok((cx, json!(rows)))
+        })?;
+        let (mut retried, mut failed) = (0u64, 0u64);
+        for row in waiting.as_array().into_iter().flatten() {
+            let (id, text) = (row[0].as_str().unwrap_or(""), row[1].as_str().unwrap_or(""));
+            let stored = self.embedder.document(scope, text).and_then(|(vector, made)| {
+                ensure!(&made == model, "The embedding model changed");
+                literal(&vector).map(|v| (v, made))
+            });
+            let Ok((vector, made)) = stored else {
+                failed += 1;
+                break;
+            };
+            let done = self.within(scope, |cx| async {
+                let done = store::store_vector(&cx, id, text, &vector, &made).await?;
+                Ok((cx, json!(done)))
+            })?;
+            if done == json!(true) {
+                retried += 1;
+            }
+        }
+        Ok(json!({"retried": retried, "failed": failed}))
+    }
+}
+
 /// A refusal the guest turns into a plain status. Only the fixed "not set up" wording is
 /// passed through; anything else becomes a generic message.
 fn refusal(error: &anyhow::Error) -> Value {
@@ -210,6 +352,7 @@ impl Ports for MemoryPorts {
             ("get", "memory.recall") => self.recall(scope, request),
             ("set", "memory.index") => self.index(scope, request),
             (_, "memory.recording") => self.recording(scope, request),
+            (_, "memory.reembed") => self.reembed(scope, request),
             (_, "memory.lifecycle" | "memory.target" | "memory.forget") => {
                 self.within(scope, |cx| async {
                     let value = lifecycle::run(&cx, request).await?;
