@@ -10,10 +10,7 @@
   "capabilities": [
     {
       "port": "kv",
-      "operations": [
-        "get",
-        "set"
-      ],
+      "operations": ["get", "set"],
       "resources": [
         "connectors.providers",
         "connectors.accounts",
@@ -33,34 +30,18 @@
     },
     {
       "port": "jobs",
-      "operations": [
-        "enqueue-options",
-        "schedule",
-        "unschedule"
-      ],
-      "resources": [
-        "imap-sync"
-      ]
+      "operations": ["enqueue-options", "schedule", "unschedule"],
+      "resources": ["imap-sync"]
     },
     {
       "port": "api",
-      "operations": [
-        "call"
-      ],
-      "resources": [
-        "email"
-      ]
+      "operations": ["call"],
+      "resources": ["email"]
     },
     {
       "port": "context",
-      "operations": [
-        "read",
-        "uuid"
-      ],
-      "resources": [
-        "call",
-        "new"
-      ]
+      "operations": ["read", "uuid"],
+      "resources": ["call", "new"]
     }
   ],
   "database": {
@@ -168,9 +149,7 @@
     "email": ">=0.2.0, <1.0.0"
   },
   "provides": {},
-  "icons": [
-    "icons/connectors.svg"
-  ],
+  "icons": ["icons/connectors.svg"],
   "accounts": {
     "supportsUserDisable": false,
     "defaultEnabled": true
@@ -316,7 +295,13 @@
           "description": "Some messages could not be read or saved during a sync, and the rest were saved"
         }
       ],
-      "remediations": []
+      "remediations": [
+        {
+          "id": "connectors-imap-app-password",
+          "description": "Make a new app password with the mail provider and enter it again",
+          "path": "/settings/connections"
+        }
+      ]
     }
   ],
   "tools": {
