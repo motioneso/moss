@@ -36,6 +36,11 @@ impl fmt::Display for Refusal {
 }
 impl std::error::Error for Refusal {}
 
+/// The recording tables as the old export section, for the signed-in person.
+pub(crate) async fn export(cx: &DataContext) -> Result<Value> {
+    cleanup::export(cx).await
+}
+
 pub(crate) fn refuse(status: u16, message: &'static str) -> anyhow::Error {
     anyhow::Error::new(Refusal { status, message })
 }

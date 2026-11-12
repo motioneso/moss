@@ -1,7 +1,7 @@
 //! Answers the package's `memory.*` calls with SQL under the signed-in person's row-level
 //! security. Memory text goes only to the configured embedding service and never into logs.
 use crate::recording::{self, NoAuthority, RecordingAuthority};
-use crate::{dashboard, lifecycle, public, reembed, store};
+use crate::{account, dashboard, lifecycle, public, reembed, store};
 use anyhow::{ensure, Result};
 use moss_module_host::{
     memory_ingest::DocumentEmbeddings,
@@ -446,6 +446,17 @@ impl Ports for MemoryPorts {
             ("get", "memory.recall") => self.recall(scope, request),
             ("set", "memory.index") => self.index(scope, request),
             (_, "memory.recording") => self.recording(scope, request),
+            (_, "memory.account") => self.within(scope, |cx| async {
+                let p = &request.parameters;
+                let value = match request.operation.as_str() {
+                    "get" => match p["section"].as_str() {
+                        Some(section) => account::export(&cx, section, p["after"].as_str()).await?,
+                        None => json!({"sections": account::names()}),
+                    },
+                    _ => account::delete_all(&cx).await?,
+                };
+                Ok((cx, value))
+            }),
             (_, "memory.reembed") => self.reembed(scope, request),
             (_, "memory.public") => self.public(scope, request),
             (_, "memory.lifecycle" | "memory.target" | "memory.forget") => {

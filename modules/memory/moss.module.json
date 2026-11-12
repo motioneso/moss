@@ -29,7 +29,8 @@
         "memory.entity-delete",
         "memory.subject",
         "memory.recording",
-        "memory.reembed"
+        "memory.reembed",
+        "memory.account"
       ]
     },
     {
@@ -114,6 +115,7 @@
       "app.memory_reembed_staged"
     ],
     "ledger": "core-legacy",
+    "ownerDelete": ["app.memory_recording_fact_versions"],
     "access": {
       "app.memory_chunks": {
         "access": "owner-only"
@@ -301,9 +303,11 @@
     "addAlias": "1.0.0",
     "confirmFact": "1.0.0",
     "createEntity": "1.0.0",
+    "collectMemoryExportSection": "1.0.0",
     "createEpisode": "1.0.0",
     "deleteChunksForSources": "1.0.0",
     "deleteFact": "1.0.0",
+    "deleteMemoryData": "1.0.0",
     "embedTurn": "1.0.0",
     "findEntityByAlias": "1.0.0",
     "forgetEntity": "1.0.0",
