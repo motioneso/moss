@@ -351,6 +351,24 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
     assert_eq!(status, 200, "{text}\n{}", log());
     let (_, text) = call(Method::GET, "/preferences", Some(&cookie), None);
     assert_eq!(json_of(&text)["summarizeOnStop"], false, "{text}");
+    // Transcript and History through the real server.
+    let save = json!({"requestKey":K1,"expectedVersion":0,
+        "sources":[{"sourceId":"mic","epoch":1,"kind":"microphone","label":"Microphone","startMs":0,"endMs":1000}],
+        "events":[{"cursor":1,"segment":{"meetingId":id,"segmentId":"s1","sourceId":"mic","epoch":1,"startMs":10,"endMs":19,
+            "revision":1,"text":format!("spoken {MARK}"),"finality":"final","provenance":"transcription","speakerId":null}}],
+        "stopCutoffMs":null});
+    let (status, text) = call(Method::POST, &format!("/records/{id}/transcript"), Some(&cookie), Some(save));
+    assert_eq!((status, json_of(&text)["status"].clone()), (201, json!("saved")), "{text}");
+    let (status, text) = call(Method::GET, &format!("/records/{id}/transcript?maxSegments=500&maxCharacters=100000"), Some(&cookie), None);
+    assert_eq!(status, 200, "{text}");
+    assert!(text.contains("spoken"), "the saved line reads back: {text}");
+    let (status, text) = call(Method::POST, "/history/search", Some(&cookie), Some(json!({})));
+    assert_eq!(status, 200, "{text}");
+    assert_eq!(json_of(&text)["meetings"][0]["transcript"]["status"], "retained", "{text}");
+    let (status, text) = call(Method::GET, &format!("/records/{id}/transcript?maxSegments=500&maxCharacters=100000"), Some(&other), None);
+    assert!(status == 404 && !text.contains("spoken"), "another person gets no transcript: {status} {text}");
+    let (_, text) = call(Method::POST, "/history/search", Some(&other), Some(json!({})));
+    assert_eq!(json_of(&text)["meetings"], json!([]), "{text}");
     // A second person sees nothing of the first.
     let (status, text) = call(Method::GET, "/records", Some(&other), None);
     assert_eq!((status, json_of(&text)), (200, json!({"meetings":[]})), "{text}");
