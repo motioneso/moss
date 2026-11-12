@@ -75,8 +75,9 @@ pub struct SourceState {
 pub trait RecordingAuthority: Send + Sync {
     /// The source's current state, or none when it is unknown, fenced or being removed.
     fn current(&self, owner: &str, source_id: &str) -> Option<SourceState>;
-    /// True while the cleanup operation is open for this owner.
-    fn cleaning(&self, owner: &str, operation_id: &str) -> bool;
+    /// True while the cleanup operation is open for this owner and covers exactly this scope
+    /// (one source, or the whole account when `source_id` is none).
+    fn cleaning(&self, owner: &str, operation_id: &str, source_id: Option<&str>) -> bool;
     /// True once the operation has sealed its source.
     fn sealed(&self, owner: &str, operation_id: &str) -> bool;
 }
@@ -87,7 +88,7 @@ impl RecordingAuthority for NoAuthority {
     fn current(&self, _: &str, _: &str) -> Option<SourceState> {
         None
     }
-    fn cleaning(&self, _: &str, _: &str) -> bool {
+    fn cleaning(&self, _: &str, _: &str, _: Option<&str>) -> bool {
         false
     }
     fn sealed(&self, _: &str, _: &str) -> bool {

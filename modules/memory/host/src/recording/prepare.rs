@@ -70,7 +70,12 @@ pub(crate) async fn run(
         .current(owner, &source.id)
         .ok_or_else(super::changed)?;
     if let Some(prior) = receipt::by_request(cx, owner, request_id).await? {
-        if prior.input_digest != digest
+        // Key order of the request is not stable across implementations, so a replay is
+        // matched on the stored fields and the revisions the request names.
+        let same_revisions = kind == "apply"
+            || (i64::from(prior.expected_revision) == expected_revision
+                && prior.expected_fact_revision.as_deref() == expected_fact);
+        if !same_revisions
             || prior.receipt_id != rid
             || prior.kind != kind
             || prior.proposed_text.as_deref() != text.filter(|_| has_text)
