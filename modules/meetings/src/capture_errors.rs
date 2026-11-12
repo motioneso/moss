@@ -13,12 +13,13 @@ pub enum CaptureCode {
     Unavailable,
     RateLimited,
     InvalidInput,
+    Interrupted,
     RelinkRequired,
     ConnectionUnavailable,
 }
 
 impl CaptureCode {
-    pub const ALL: [CaptureCode; 10] = [
+    pub const ALL: [CaptureCode; 11] = [
         CaptureCode::Busy,
         CaptureCode::Conflict,
         CaptureCode::Limit,
@@ -27,6 +28,7 @@ impl CaptureCode {
         CaptureCode::Unavailable,
         CaptureCode::RateLimited,
         CaptureCode::InvalidInput,
+        CaptureCode::Interrupted,
         CaptureCode::RelinkRequired,
         CaptureCode::ConnectionUnavailable,
     ];
@@ -41,6 +43,7 @@ impl CaptureCode {
             CaptureCode::Unavailable => "meeting_capture_unavailable",
             CaptureCode::RateLimited => "meeting_capture_rate_limited",
             CaptureCode::InvalidInput => "meeting_capture_invalid_input",
+            CaptureCode::Interrupted => "meeting_capture_interrupted",
             CaptureCode::RelinkRequired => "recording_relink_required",
             CaptureCode::ConnectionUnavailable => "recording_connection_unavailable",
         }
@@ -50,7 +53,7 @@ impl CaptureCode {
     /// so callers that need those build the failure with `Failure::new`.
     pub fn status(self) -> u16 {
         match self {
-            CaptureCode::Busy | CaptureCode::Conflict | CaptureCode::SourceUnavailable => 409,
+            CaptureCode::Busy | CaptureCode::Conflict | CaptureCode::SourceUnavailable | CaptureCode::Interrupted => 409,
             CaptureCode::Limit => 413,
             CaptureCode::ProcessingUnavailable | CaptureCode::Unavailable => 503,
             CaptureCode::RateLimited => 429,

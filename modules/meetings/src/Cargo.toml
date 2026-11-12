@@ -78,3 +78,7 @@ path = "../tests/ring_source.rs"
 [[test]]
 name = "capture_limit"
 path = "../tests/capture_limit.rs"
+
+[[test]]
+name = "capture_selection"
+path = "../tests/capture_selection.rs"
