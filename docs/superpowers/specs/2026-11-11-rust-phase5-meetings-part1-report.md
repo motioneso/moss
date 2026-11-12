@@ -307,14 +307,15 @@ Everything in the 5C proof list. Nothing was built or run in this part.
 
 ### What part 6 proved
 
-| Check                | How                                                                                                                |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Reading is filed     | Real database with a scripted model. Type, side, confidence and version are stored.                                |
-| Low confidence       | Only the doubtful reading posts a chat message. A sure reading posts nothing.                                      |
-| Memory facts         | Personal ideas became personal facts and work ideas became work facts. Running the jobs again added nothing.       |
-| Two-person privacy   | Another person gets nothing from Meetings' check. Seen leaking with row security removed, and fixed when restored. |
-| No text in the queue | A planted marker in an idea never appears in job payloads or activity rows.                                        |
-| Builds and tests     | Native and WebAssembly builds, and the full Meetings gate, passed.                                                 |
+| Check                | How                                                                                                                                                                               |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Reading is filed     | Real database with a scripted model. Type, side, confidence and version are stored.                                                                                               |
+| Low confidence       | Only the doubtful reading posts a chat message. A sure reading posts nothing.                                                                                                     |
+| Memory facts         | Personal ideas became personal facts and work ideas became work facts. Running the jobs again added nothing.                                                                      |
+| Two-person privacy   | Another person gets nothing from Meetings' check. Seen leaking with row security removed, and fixed when restored.                                                                |
+| No text in the queue | A planted marker in an idea never appears in job payloads or activity rows.                                                                                                       |
+| Live run             | Real Rust server over HTTPS with Memory as the real package. Meetings installs with Calendar, People and Memory present, and its routes still keep each person's records private. |
+| Builds and tests     | Native and WebAssembly builds, and the full Meetings gate, passed.                                                                                                                |
 
 ### Not proven in part 6
 
@@ -324,5 +325,5 @@ Everything in the 5C proof list. Nothing was built or run in this part.
 - The old instruction scan on outside text is not ported.
 - Memory's "being cleaned" and "sealed" states always read false until part 5 lands.
 - The chat-message job recomputes whether the reading is doubtful, instead of carrying that from the run.
-- The tests use empty stand-ins for Calendar and People. A real install with those modules was not run.
-- The Rust shell crate was not compiled here, because its dependencies were not available offline.
+- Calendar and People were empty stand-ins in the tests and the live run, so the real context pack was never filled from them on a live server.
+- The live run did not read a real recording, because no real model was set up. It proves install and routes only.
