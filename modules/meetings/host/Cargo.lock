@@ -1296,6 +1296,7 @@ dependencies = [
  "anyhow",
  "base64 0.22.1",
  "chrono",
+ "moss-memory-host",
  "moss-module-host",
  "moss-platform-jobs",
  "ring",
@@ -1308,6 +1309,20 @@ dependencies = [
  "tokio-postgres",
  "uuid",
  "vault",
+]
+
+[[package]]
+name = "moss-memory-host"
+version = "0.1.0"
+dependencies = [
+ "access-context",
+ "anyhow",
+ "moss-module-host",
+ "safety-core",
+ "serde_json",
+ "tokio",
+ "tokio-postgres",
+ "wat",
 ]
 
 [[package]]

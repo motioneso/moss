@@ -424,6 +424,7 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
             }
             }?;
             // Meetings answers only its own capture-preference calls, as the signed-in person.
+            let authority_database = meetings_database.clone();
             let services = Arc::new(
                 MeetingsPorts::new(meetings_database, services)?
                     .with_recordings(&settings.data.join("modules/files"))?,
@@ -458,7 +459,10 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
             // Email answers only its own cached-message and preference calls.
             let services = Arc::new(EmailPorts::new(email_database, services)?) as Arc<dyn Ports>;
             // Memory answers only its own graph calls, as the signed-in person.
-            Ok(Arc::new(MemoryPorts::new(memory_database, memory_embeddings, services)?) as Arc<dyn Ports>)
+            Ok(Arc::new(
+                MemoryPorts::new(memory_database, memory_embeddings, services)?
+                    .with_authority(Arc::new(moss_meetings_host::authority::MeetingsAuthority::new(authority_database))),
+            ) as Arc<dyn Ports>)
         },
     )?;
     Ok(application)

@@ -10,6 +10,7 @@ autoexamples = false
 [dependencies]
 anyhow = "1"
 moss-module-host = { path = "../../../rust-spike/module-host" }
+moss-memory-host = { path = "../../memory/host" }
 access-context = { path = "../../../rust-spike/access-context" }
 safety-core = { path = "../../../rust-spike/safety-core" }
 serde = { version = "1", features = ["derive"] }
