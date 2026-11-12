@@ -47,26 +47,24 @@ fn cut(text: &str, max: usize) -> &str {
     &text[..end]
 }
 
-fn answer(reply: Result<Value>) -> Option<Value> {
-    let reply = reply.ok()?;
-    if reply.get("error").is_some() {
-        return None;
+/// The reply's value, or Memory's own refusal wording (never meeting text).
+fn answer(reply: Result<Value>) -> std::result::Result<Value, String> {
+    let reply = reply.map_err(|e| e.to_string())?;
+    if let Some(e) = reply.get("error") {
+        return Err(e.to_string().chars().take(160).collect());
     }
-    Some(reply.get("ok").cloned().unwrap_or(reply))
+    Ok(reply.get("ok").cloned().unwrap_or(reply))
 }
 
 /// Proposes and applies one fact. Memory decides whether the recording still counts.
-fn remember<H: Host + ?Sized>(host: &H, meeting: &str, version: i64, item: &str, text: &str) -> bool {
+fn remember<H: Host + ?Sized>(host: &H, meeting: &str, version: i64, item: &str, text: &str) -> std::result::Result<(), String> {
     let client = Client(host);
     let input = json!({"kind": "apply", "requestId": format!("{meeting}:{version}:{item}"),
         "source": {"sourceModuleId": "meetings", "sourceId": meeting, "sourceVersion": version, "itemKey": item},
         "text": text, "expectedRevision": null, "expectedFactRevision": null});
-    let Some(prepared) = answer(client.api("memory", "recordingMemory", json!({"action": "prepare", "input": input})))
-    else {
-        return false;
-    };
-    let Some(id) = prepared["proposal"]["id"].as_str() else { return false };
-    answer(client.api("memory", "recordingMemory", json!({"action": "apply", "proposalId": id}))).is_some()
+    let prepared = answer(client.api("memory", "recordingMemory", json!({"action": "prepare", "input": input})))?;
+    let id = prepared["proposal"]["id"].as_str().ok_or("No proposal id")?;
+    answer(client.api("memory", "recordingMemory", json!({"action": "apply", "proposalId": id}))).map(|_| ())
 }
 
 /// Turns the newest reading's ideas into memory facts.
@@ -77,17 +75,22 @@ pub fn memory<H: Host + ?Sized>(host: &H, meeting: &str) -> Result<String> {
     let Some(head) = outputs::head(host, meeting)? else { return Ok(done("skipped")) };
     let groups: Vec<IdeaGroup> =
         serde_json::from_value(head["content"]["recording"]["ideaGroups"].clone()).unwrap_or_default();
-    let (mut applied, mut skipped) = (0, 0);
+    let (mut applied, mut skipped, mut why) = (0, 0, String::new());
     for (g, group) in groups.iter().enumerate() {
         for (i, idea) in group.ideas.iter().enumerate() {
             let text = format!("{}: {}", group.title, idea);
             let item = format!("g{}-i{}", g + 1, i + 1);
-            if remember(host, meeting, version, &item, cut(&text, MAX_FACT_BYTES)) {
-                applied += 1;
-            } else {
-                skipped += 1;
+            match remember(host, meeting, version, &item, cut(&text, MAX_FACT_BYTES)) {
+                Ok(()) => applied += 1,
+                Err(e) => {
+                    skipped += 1;
+                    why = e;
+                }
             }
         }
     }
-    Ok(json!({"status": "done", "applied": applied, "skipped": skipped}).to_string())
+    if applied == 0 && skipped > 0 {
+        return Err(moss_module_sdk::Error::new(&format!("DIAG {why}")));
+    }
+    Ok(json!({"status": "done", "applied": applied, "skipped": skipped, "why": why}).to_string())
 }
