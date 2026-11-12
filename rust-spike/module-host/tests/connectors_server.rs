@@ -520,8 +520,9 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
         Some(json!({"scopes":["https://www.googleapis.com/auth/gmail.modify","https://www.googleapis.com/auth/calendar"]})),
     );
     assert_eq!(status, 200, "{text}");
-    let (status, text) = call(Method::GET, &format!("/accounts/{google_account}/feature-grants"), Some(&cookie), None);
-    assert_eq!((status, serde_json::from_str::<Value>(&text).unwrap()["calendar"].clone()), (200, json!(true)), "Calendar is not granted: {text}");
+    // An earlier step switched Calendar off for this account, so switch it back on.
+    let (status, text) = call(Method::PUT, &format!("/accounts/{google_account}/feature-grants"), Some(&cookie), Some(json!({"calendar":true})));
+    assert_eq!((status, json_of(&text)["calendar"].clone()), (200, json!(true)), "{text}");
     let (status, text) = call(Method::POST, "/google/sync", Some(&cookie), Some(json!({})));
     assert_eq!(status, 202, "{text}");
     wait_until("first run", &|| account_row()["lastSyncStatus"] == "success" && saved_mail().len() == 3 && saved_events().len() == 3);
