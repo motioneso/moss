@@ -4,7 +4,7 @@
   "name": "Connectors",
   "description": "Keeps the mail and calendar connections of each account, their sign-in secrets and the Email and Calendar permissions. Connecting Google works by pasting your own Google client details. Yahoo, Proton Bridge, iCloud and Fastmail mail connect with an app password. Google mail and calendar sync into the Email and Calendar caches. Outlook sign-in and calendar syncing are not part of this package yet.",
   "publisher": "Moss",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
@@ -31,13 +31,27 @@
         "connectors.sync-google-calendar",
         "connectors.sync-google-list",
         "connectors.sync-google-fetch",
-        "connectors.sync-google-finish"
+        "connectors.sync-google-finish",
+        "connectors.refresh-request",
+        "connectors.refresh-status",
+        "connectors.refresh-pending",
+        "connectors.refresh-dispatch",
+        "connectors.refresh-account-start",
+        "connectors.refresh-account-finish",
+        "connectors.refresh-sweep"
       ]
     },
     {
       "port": "jobs",
       "operations": ["enqueue-options", "schedule", "unschedule"],
-      "resources": ["imap-sync", "google-sync", "google-sync-sweep"]
+      "resources": [
+        "imap-sync",
+        "google-sync",
+        "google-sync-sweep",
+        "email-refresh-google",
+        "email-refresh-imap",
+        "email-refresh-sweep"
+      ]
     },
     {
       "port": "api",
@@ -148,6 +162,16 @@
     {
       "method": "POST",
       "path": "/imap/connect",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/email-refresh",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/email-refresh/:refreshId",
       "signIn": true
     },
     {
@@ -348,6 +372,58 @@
           "path": "/settings/connections"
         }
       ]
+    },
+    {
+      "id": "connectors.email-refresh",
+      "description": "Refresh email asks every connected Google and IMAP account to sync recent mail now and reports each account's progress. Today shows a Refresh email button when mail is more than a day old. One refresh runs at a time per person, and asking again while one runs joins it. Each account finishes as succeeded, partial or failed, and the refresh finishes when every account has an outcome. Only the person's own accounts are refreshed, and mail text never goes into the refresh record.",
+      "errors": [
+        {
+          "code": "no-eligible-accounts",
+          "class": "validation",
+          "description": "No connected account has Email switched on, so there was nothing to refresh",
+          "remediationRef": "connectors-open-connections"
+        },
+        {
+          "code": "no-active-connection",
+          "class": "validation",
+          "description": "An account was disconnected or changed before its refresh ran",
+          "remediationRef": "connectors-open-connections"
+        },
+        {
+          "code": "auth-error",
+          "class": "validation",
+          "description": "The account refused the saved sign-in during the refresh",
+          "remediationRef": "connectors-open-connections"
+        },
+        {
+          "code": "email-needs-config",
+          "class": "validation",
+          "description": "Email was switched off for the account before its refresh ran",
+          "remediationRef": "connectors-open-connections"
+        },
+        {
+          "code": "email-error",
+          "class": "transient",
+          "description": "The mail service could not be reached or answered badly during the refresh"
+        },
+        {
+          "code": "email-message-error",
+          "class": "transient",
+          "description": "Some messages could not be read or saved during the refresh, and the rest were saved"
+        },
+        {
+          "code": "enqueue-failed",
+          "class": "transient",
+          "description": "The refresh could not be queued for an account after three tries"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "connectors-open-connections",
+          "description": "Open Connections to check the account",
+          "path": "/settings/connections"
+        }
+      ]
     }
   ],
   "tools": {
@@ -372,26 +448,128 @@
       }
     },
     "google-sync": {
-      "account-id": { "kind": "id" },
-      "phase": { "kind": "choice", "choices": ["calendar", "email-day", "email"] },
-      "cursor": { "kind": "count" },
-      "calendar-upserted": { "kind": "count" },
-      "calendar-reconciled": { "kind": "count" },
-      "email-upserted": { "kind": "count" },
-      "email-failures": { "kind": "count" },
-      "trigger": { "kind": "choice", "choices": ["schedule", "manual", "assistant", "on-connect"] },
-      "recent-only": { "kind": "flag" },
+      "account-id": {
+        "kind": "id"
+      },
+      "phase": {
+        "kind": "choice",
+        "choices": ["calendar", "email-day", "email"]
+      },
+      "cursor": {
+        "kind": "count"
+      },
+      "calendar-upserted": {
+        "kind": "count"
+      },
+      "calendar-reconciled": {
+        "kind": "count"
+      },
+      "email-upserted": {
+        "kind": "count"
+      },
+      "email-failures": {
+        "kind": "count"
+      },
+      "trigger": {
+        "kind": "choice",
+        "choices": ["schedule", "manual", "assistant", "on-connect"]
+      },
+      "recent-only": {
+        "kind": "flag"
+      },
       "error": {
         "kind": "choice",
         "choices": ["none", "auth-error", "calendar-error", "email-error", "email-message-error"]
       },
-      "email-on": { "kind": "flag" },
-      "calendar-on": { "kind": "flag" },
-      "begun": { "kind": "flag" },
-      "finishing": { "kind": "flag" }
+      "email-on": {
+        "kind": "flag"
+      },
+      "calendar-on": {
+        "kind": "flag"
+      },
+      "begun": {
+        "kind": "flag"
+      },
+      "finishing": {
+        "kind": "flag"
+      }
     },
     "google-sync-sweep": {
-      "account-id": { "kind": "id" }
+      "account-id": {
+        "kind": "id"
+      }
+    },
+    "email-refresh-google": {
+      "account-id": {
+        "kind": "id"
+      },
+      "phase": {
+        "kind": "choice",
+        "choices": ["calendar", "email-day", "email"]
+      },
+      "cursor": {
+        "kind": "count"
+      },
+      "calendar-upserted": {
+        "kind": "count"
+      },
+      "calendar-reconciled": {
+        "kind": "count"
+      },
+      "email-upserted": {
+        "kind": "count"
+      },
+      "email-failures": {
+        "kind": "count"
+      },
+      "trigger": {
+        "kind": "choice",
+        "choices": ["schedule", "manual", "assistant", "on-connect"]
+      },
+      "recent-only": {
+        "kind": "flag"
+      },
+      "error": {
+        "kind": "choice",
+        "choices": ["none", "auth-error", "calendar-error", "email-error", "email-message-error"]
+      },
+      "email-on": {
+        "kind": "flag"
+      },
+      "calendar-on": {
+        "kind": "flag"
+      },
+      "begun": {
+        "kind": "flag"
+      },
+      "finishing": {
+        "kind": "flag"
+      },
+      "refresh-id": {
+        "kind": "id"
+      }
+    },
+    "email-refresh-imap": {
+      "account-id": {
+        "kind": "id"
+      },
+      "cursor": {
+        "kind": "count"
+      },
+      "upserted": {
+        "kind": "count"
+      },
+      "failures": {
+        "kind": "count"
+      },
+      "refresh-id": {
+        "kind": "id"
+      }
+    },
+    "email-refresh-sweep": {
+      "round": {
+        "kind": "count"
+      }
     }
   },
   "screens": {
