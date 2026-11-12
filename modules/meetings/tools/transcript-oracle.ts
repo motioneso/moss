@@ -376,7 +376,10 @@ setMossErrorHandler(server);
 
 const TIME = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z/g;
 const normal = (text: string, names: Record<string, string>) => {
-  let out = text.replace(TIME, "<time>");
+  // The owner is a fresh random user each run, so the recording keeps a placeholder.
+  let out = text
+    .replace(TIME, "<time>")
+    .replace(/"ownerUserId":"[0-9a-f-]{36}"/g, '"ownerUserId":"<id>"');
   for (const [name, id] of Object.entries(names)) out = out.split(id).join(`{${name}}`);
   return out;
 };
