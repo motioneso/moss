@@ -205,9 +205,10 @@ fn search(f: &Folder, criteria: &str) -> String {
 fn day_key(text: &str) -> Option<(u32, usize, u32)> {
     let mut parts = text.split(' ').next()?.split('-');
     let day = parts.next()?.parse().ok()?;
+    let name = parts.next()?;
     let month = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
         .iter()
-        .position(|m| *m == parts.next()?)?;
+        .position(|m| *m == name)?;
     Some((parts.next()?.parse().ok()?, month, day))
 }
 
