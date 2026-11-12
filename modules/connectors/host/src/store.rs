@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 const ISO: &str = "'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'";
 
-fn iso(column: &str) -> String {
+pub(crate) fn iso(column: &str) -> String {
     format!("to_char({column} AT TIME ZONE 'UTC', {ISO})")
 }
 
@@ -80,7 +80,7 @@ fn scrub_counts(account: &mut Value) {
     account["lastSyncCounts"] = Value::Object(kept);
 }
 
-async fn accounts(cx: &DataContext, filter: &str, id: Option<&str>) -> Result<Vec<Value>> {
+pub(crate) async fn accounts(cx: &DataContext, filter: &str, id: Option<&str>) -> Result<Vec<Value>> {
     let sql = format!("{} {filter} {ORDER}", account_select(OWN));
     let rows = match id {
         Some(id) => cx.db().query(&sql, &[&id]).await?,
@@ -255,7 +255,7 @@ async fn revoke(cx: &DataContext, cipher: &JsonSecretCipher, p: &Value) -> Resul
     visible(cx, id).await
 }
 
-async fn preference(cx: &DataContext, key: &str) -> Result<Value> {
+pub(crate) async fn preference(cx: &DataContext, key: &str) -> Result<Value> {
     let row = cx
         .db()
         .query_opt("SELECT value_json FROM app.preferences WHERE key = $1", &[&key])
