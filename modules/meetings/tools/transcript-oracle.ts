@@ -422,7 +422,7 @@ async function run(scenario: Scenario) {
           ? {}
           : { payload: JSON.stringify(deep(step.body, names)) })
     });
-    let body: unknown = response.body;
+    let body: unknown;
     try {
       body = JSON.parse(normal(response.body, names));
     } catch {
