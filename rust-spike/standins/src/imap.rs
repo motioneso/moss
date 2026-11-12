@@ -185,6 +185,11 @@ fn search(f: &Folder, criteria: &str) -> String {
                 true
             } else if c.trim() == "UNSEEN" {
                 !m.flags.contains("\\Seen")
+            } else if let Some(day) = c.strip_prefix("SINCE ") {
+                match (day_key(day.trim()), day_key(&m.internal_date.to_ascii_uppercase())) {
+                    (Some(since), Some(sent)) => sent >= since,
+                    _ => false,
+                }
             } else if let Some(set) = c.strip_prefix("UID ") {
                 uid_in_set(set.trim(), m.uid, max)
             } else {
@@ -194,6 +199,16 @@ fn search(f: &Folder, criteria: &str) -> String {
         .map(|m| m.uid.to_string())
         .collect();
     if hits.is_empty() { "* SEARCH\r\n".into() } else { format!("* SEARCH {}\r\n", hits.join(" ")) }
+}
+
+/// Sortable (year, month, day) from "D-Mon-YYYY ..." text, upper case.
+fn day_key(text: &str) -> Option<(u32, usize, u32)> {
+    let mut parts = text.split(' ').next()?.split('-');
+    let day = parts.next()?.parse().ok()?;
+    let month = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
+        .iter()
+        .position(|m| *m == parts.next()?)?;
+    Some((parts.next()?.parse().ok()?, month, day))
 }
 
 fn flag_list(m: &Message) -> String {
@@ -227,7 +242,12 @@ fn fetch(f: &Folder, args: &str, out: &mut Vec<u8>) {
         let section = if upper.contains("BODY.PEEK[HEADER]") || upper.contains("BODY[HEADER]") {
             Some(("BODY[HEADER]", header_of(&m.body)))
         } else if upper.contains("BODY.PEEK[]") || upper.contains("BODY[]") {
-            Some(("BODY[]", m.body.clone()))
+            // A partial fetch, `<0.N>`, returns at most N bytes from the start.
+            let limit = upper.split("<0.").nth(1).and_then(|r| r.split('>').next()?.parse().ok());
+            match limit {
+                Some(n) => Some(("BODY[]<0>", m.body[..m.body.len().min(n)].to_vec())),
+                None => Some(("BODY[]", m.body.clone())),
+            }
         } else if upper.contains("RFC822") && !upper.contains("RFC822.SIZE") {
             Some(("RFC822", m.body.clone()))
         } else {

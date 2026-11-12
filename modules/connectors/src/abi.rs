@@ -6,6 +6,9 @@ use std::alloc::{alloc, realloc, Layout};
 #[link(wasm_import_module = "ports")]
 extern "C" {
     fn kv(ptr: *const u8, len: usize, out: *mut usize);
+    fn jobs(ptr: *const u8, len: usize, out: *mut usize);
+    fn api(ptr: *const u8, len: usize, out: *mut usize);
+    fn context(ptr: *const u8, len: usize, out: *mut usize);
 }
 struct Bridge;
 impl Host for Bridge {
@@ -22,6 +25,9 @@ impl Host for Bridge {
         unsafe {
             let call = match port {
                 "kv" => kv,
+                "jobs" => jobs,
+                "api" => api,
+                "context" => context,
                 _ => return Err(Error::new("Undeclared Connectors port")),
             };
             call(request.as_ptr(), request.len(), out.as_mut_ptr());

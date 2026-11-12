@@ -144,6 +144,26 @@ impl MailStandIn {
         })
     }
 
+    /// Like `add_message`, with an IMAP internal date such as "02-Mar-2026 09:15:00 +0000".
+    pub fn add_message_dated(&self, folder: &str, raw: &str, internal_date: &str) -> u32 {
+        let uid = self.add_message(folder, raw);
+        self.with(|s| {
+            let f = s.folders.iter_mut().find(|f| f.name == folder).expect("folder exists");
+            f.messages.iter_mut().find(|m| m.uid == uid).expect("message exists").internal_date =
+                internal_date.into();
+        });
+        uid
+    }
+
+    /// Changes a message's content in place, keeping its UID, as a server-side edit would.
+    pub fn replace_body(&self, folder: &str, uid: u32, raw: &str) {
+        self.with(|s| {
+            let f = s.folders.iter_mut().find(|f| f.name == folder).expect("folder exists");
+            f.messages.iter_mut().find(|m| m.uid == uid).expect("message exists").body =
+                raw.as_bytes().to_vec();
+        })
+    }
+
     /// Replaces a message's flags, which counts as a change.
     pub fn set_flags(&self, folder: &str, uid: u32, flags: &[&str]) {
         self.with(|s| {

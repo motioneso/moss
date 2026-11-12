@@ -1519,6 +1519,7 @@ dependencies = [
  "async-imap",
  "base64 0.22.1",
  "chrono",
+ "futures-util",
  "lettre",
  "mail-parser",
  "moss-connectors",
