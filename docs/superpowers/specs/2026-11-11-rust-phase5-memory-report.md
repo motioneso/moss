@@ -341,3 +341,48 @@ and ran out of time in a debug build. The download now marks the files as checke
   this task.
 - **Heavy concurrency.** Locks fail fast and report a change. No test ran two people changing the
   same recording at once.
+
+## Part 7: re-embed with a safe swap (JS-246)
+
+### What it does
+
+- When the search model changes, passages saved under the old model keep working. A note on the Search model screen says "N passages use another model", with a Re-embed button.
+- Re-embed works in small batches of 16. New vectors go into a holding table. Nothing real changes until every passage has one.
+- When the last batch lands, one transaction moves all of them in and marks the run done. Cancel, a failure, or a restart only throws away the held vectors. The old ones stay in use.
+- A passage whose text was edited after its new vector was made keeps its old vector. The swap checks a hash of the text.
+- Search never mixes models. A passage made by another model counts as zero similarity, so it cannot be compared with a query from the current model.
+- Facts saved without a vector (the embedding service was down) are retried on the existing 15 minute tick.
+- Jobs carry only the run id. No passage text, vector or secret goes into a job.
+- Only the Search model screen changed. The approved Memory screen is untouched (ruling relayed by t6n, who will ask Ben about a Memory screen spot).
+
+### Behaviour change to know about
+
+The 15 minute sweep used to re-embed everything when the model name changed. It no longer does. A new model name only shows the notice. The owner starts the re-embed. The test that covered the old behaviour was renamed and now asserts the new one.
+
+### Proof
+
+- Database suite (10 tests, real Postgres): interrupted run leaves old vectors usable and a restart finishes it; a completed run swaps everything at once; cancel drops what was staged; a failed embedding ends the run with old vectors intact; an edit after staging keeps the old vector; search never compares two models; retry on the tick; refused starts; job payload holds only the run id; and a second person cannot see, step or cancel the first person's run. That last test was also run with row security switched off on the two tables, and the second person then sees the rows, so the protection is what hides them.
+- Native and WebAssembly builds both pass their tests (guest unit tests: 5 new).
+- Live run on the real Rust server over HTTPS (port from devports): switching the model name showed "4 passages use another model", a run finished and the count went to 0, search still worked, a second start was refused, and a cancel was clean. The Search model screen was opened in a real browser: the note and Re-embed button showed, and the click started the run.
+
+### Platform finding
+
+The two new tables belong to the module, so only the module's own database role can reach them. The app connection does not have those grants. The host adapter therefore switches to the module role for each statement on those tables and back for passages and facts, inside one transaction. Module tables created later will need the same.
+
+### Guesses
+
+- Batch of 16 per step, and one running run per person.
+- Wording of the screen note and the two refusal messages.
+- Retry of missing vectors reuses the existing 15 minute tick instead of its own timer.
+
+### Stray download
+
+`npx prettier` fetched version 3.10.0 once by mistake. Its output matched the repo's 3.8.3. All checks since use the repo's own copy.
+
+### Not proven
+
+- The Memory screen has no re-embed note (by ruling), so nobody sees it there.
+- The live cancel can land after a tiny run already finished. The database suite proves cancel; the live run only proves it ends cleanly.
+- The on-device model path was not re-run for part 7.
+- No test with thousands of passages. The swap runs in slices of 500, untimed at scale.
+- Old browser tests were not run (Rust-only change).
