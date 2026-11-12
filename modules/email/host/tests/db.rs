@@ -29,6 +29,11 @@ impl Fixture {
             tokio::spawn(async move {
                 let _ = c.await;
             });
+            // The delete rule the host adds when it installs the Email package.
+            let mut root = root;
+            let tx = root.transaction().await.unwrap();
+            moss_module_host::rls::emit_owner_delete(&tx, "app.email_messages").await.unwrap();
+            tx.commit().await.unwrap();
             root.execute(
                 "INSERT INTO app.users(id,email,name,is_instance_admin) VALUES($1,$3,'Mail A',false),($2,$4,'Mail B',false)",
                 &[&a, &b, &format!("{a}@example.test"), &format!("{b}@example.test")],
@@ -288,4 +293,99 @@ fn a_large_mailbox_pages_under_the_response_limit_without_gaps_or_repeats() {
     // The old unbounded read would not fit one host answer.
     let all = f.call(f.a, "get", "email.messages", json!({}));
     assert!(all.to_string().len() > 1024 * 1024, "the fixture must be big enough to prove the point");
+}
+
+fn prune_params(f: &Fixture, keep: &[&str]) -> Value {
+    json!({"action":"prune","connectorAccountId":f.account_a.to_string(),"prefix":"imap:",
+           "since":"2026-01-01T00:00:00.000Z","keep":keep})
+}
+
+fn count(f: &Fixture, actor: Uuid) -> usize {
+    f.call(actor, "get", "email.messages", json!({})).as_array().unwrap().len()
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn prune_removes_only_unlisted_in_window_mail_of_the_owner() {
+    let f = Fixture::new();
+    f.cache("imap:INBOX:1:1", "Kept");
+    f.cache("imap:INBOX:1:2", "Gone");
+    f.cache("gmail-3", "Other source");
+    // An older message outside the window stays even when it is unlisted.
+    f.call(f.a, "set", "email.cache-write",
+        json!({"action":"insert","connectorAccountId":f.account_a.to_string(),"externalId":"imap:INBOX:1:3",
+               "fields":{"sender":"s@example.test","recipients":["me@example.test"],"subject":"Old",
+                         "receivedAt":"2020-01-01T00:00:00.000Z","snippet":"x"}}));
+    let out = f.call(f.a, "set", "email.cache-write", prune_params(&f, &["imap:INBOX:1:1"]));
+    assert_eq!(out["deleted"], 1);
+    let left: Vec<String> = f.call(f.a, "get", "email.messages", json!({})).as_array().unwrap()
+        .iter().map(|m| m["subject"].as_str().unwrap().to_string()).collect();
+    assert!(left.contains(&"Kept".into()) && left.contains(&"Other source".into()) && left.contains(&"Old".into()));
+    assert!(!left.contains(&"Gone".into()));
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_second_person_cannot_prune_and_the_delete_rule_has_teeth() {
+    let f = Fixture::new();
+    let first: Uuid = f.cache("imap:INBOX:1:1", "Private one")["id"].as_str().unwrap().parse().unwrap();
+    let second: Uuid = f.cache("imap:INBOX:1:2", "Private two")["id"].as_str().unwrap().parse().unwrap();
+    // Without a share the second person cannot even see the mail.
+    let refused = f.call(f.b, "set", "email.cache-write", prune_params(&f, &[]));
+    assert_eq!(refused["deleted"], 0, "another person deleted mail: {refused}");
+    assert_eq!(count(&f, f.a), 2);
+    // A view share lets the second person see the mail, so only the delete rule stands in the way.
+    for id in [first, second] {
+        f.sql(&format!(
+            "INSERT INTO app.shares(resource_type,resource_id,owner_user_id,grantee_user_id,level) VALUES('email_message','{id}','{}','{}','view')",
+            f.a, f.b
+        ));
+    }
+    let shared = f.call(f.b, "set", "email.cache-write", prune_params(&f, &[]));
+    assert_eq!(shared["deleted"], 0, "a view share let another person delete mail: {shared}");
+    assert_eq!(count(&f, f.a), 2);
+    // With the delete rule loosened, the same call deletes, so the checks above notice.
+    f.sql("DROP POLICY moss_module_delete ON app.email_messages");
+    f.sql("CREATE POLICY moss_module_delete ON app.email_messages FOR DELETE TO jarvis_app_runtime, jarvis_worker_runtime USING (true)");
+    let leaked = f.call(f.b, "set", "email.cache-write", prune_params(&f, &[]));
+    println!("RED without the delete rule: {leaked}");
+    assert_eq!(leaked["deleted"], 2, "the proof did not notice a missing delete rule");
+    assert_eq!(count(&f, f.a), 0);
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_share_never_grants_delete() {
+    let f = Fixture::new();
+    let id: Uuid = f.cache("imap:INBOX:1:1", "Shared")["id"].as_str().unwrap().parse().unwrap();
+    f.sql(&format!(
+        "INSERT INTO app.shares(resource_type,resource_id,owner_user_id,grantee_user_id,level) VALUES('email_message','{id}','{}','{}','manage')",
+        f.a, f.b
+    ));
+    let refused = f.call(f.b, "set", "email.cache-write", prune_params(&f, &[]));
+    assert_eq!(refused["deleted"], 0);
+    assert_eq!(count(&f, f.a), 1);
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn keys_report_sizes_and_an_overwrite_keeps_what_was_understood() {
+    let f = Fixture::new();
+    let account = f.account_a.to_string();
+    f.call(f.a, "set", "email.cache-write",
+        json!({"action":"insert","connectorAccountId":account,"externalId":"imap:INBOX:1:1",
+               "fields":{"sender":"s@example.test","recipients":["me@example.test"],"subject":"First",
+                         "receivedAt":"2026-01-02T00:00:00.000Z","snippet":"s","summary":"Understood","signals":{"urgent":true},
+                         "externalMetadata":{"sizeBytes":100}}}));
+    let keys = f.call(f.a, "get", "email.cache-keys", json!({"connectorAccountId":account,"externalIds":["imap:INBOX:1:1","imap:INBOX:1:9"]}));
+    assert_eq!(keys, json!([{"externalId":"imap:INBOX:1:1","sizeBytes":100}]));
+    assert_eq!(f.call(f.b, "get", "email.cache-keys", json!({"connectorAccountId":account,"externalIds":["imap:INBOX:1:1"]})), json!([]));
+    // A sync overwrite carries no summary or signals, and the earlier ones stay.
+    let again = f.call(f.a, "set", "email.cache-write",
+        json!({"action":"insert","connectorAccountId":account,"externalId":"imap:INBOX:1:1",
+               "fields":{"sender":"s@example.test","recipients":["me@example.test"],"subject":"Second",
+                         "receivedAt":"2026-01-02T00:00:00.000Z","snippet":"t","externalMetadata":{"sizeBytes":200}}}));
+    assert_eq!(again["subject"], "Second");
+    assert_eq!(again["summary"], "Understood");
+    assert_eq!(again["signals"], json!({"urgent":true}));
 }

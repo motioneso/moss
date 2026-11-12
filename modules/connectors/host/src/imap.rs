@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 use std::net::IpAddr;
 use uuid::Uuid;
 
-fn preset(provider: &str) -> Option<Servers> {
+pub(crate) fn preset(provider: &str) -> Option<Servers> {
     let (imap, imap_tls, smtp, smtp_port, security) = match provider {
         "imap-yahoo" => ("imap.mail.yahoo.com:993", true, "smtp.mail.yahoo.com", 465, Smtp::ImplicitTls),
         "imap-proton" => ("127.0.0.1:1143", false, "127.0.0.1", 1025, Smtp::None),
@@ -94,7 +94,7 @@ impl MailConfig {
         Self::test_only_loopback(servers, trusted)
     }
 
-    fn servers(&self, provider: &str) -> Option<(Servers, Trust)> {
+    pub(crate) fn servers(&self, provider: &str) -> Option<(Servers, Trust)> {
         match &self.stand_in {
             Some(found) => Some(found.clone()),
             None => preset(provider).map(|s| (s, Trust::default())),

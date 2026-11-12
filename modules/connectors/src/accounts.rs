@@ -1,5 +1,5 @@
 //! Account routes. Every read and write goes through the host's `connectors.*` resources.
-use crate::{fastify, grants, health, kv, Error, Result};
+use crate::{fastify, grants, health, kv, mail_sync, Error, Result};
 use moss_module_sdk::Host;
 use serde_json::{json, Map, Value};
 
@@ -11,7 +11,26 @@ pub fn providers(host: &impl Host) -> Result<Value> {
 }
 
 pub fn list(host: &impl Host) -> Result<Value> {
-    Ok(json!({"accounts":kv(host, "get", "connectors.accounts", json!({}))?}))
+    let accounts = kv(host, "get", "connectors.accounts", json!({}))?;
+    for account in accounts.as_array().into_iter().flatten() {
+        keep_schedule(host, account);
+    }
+    Ok(json!({"accounts":accounts}))
+}
+
+/// Mail accounts that are not revoked have a sync schedule, and revoked ones have none.
+fn keep_schedule(host: &impl Host, account: &Value) {
+    let (Some(id), Some(provider)) = (account["id"].as_str(), account["providerId"].as_str()) else {
+        return;
+    };
+    if !mail_sync::is_mail_provider(provider) {
+        return;
+    }
+    if account["status"] == "revoked" {
+        mail_sync::cancel_schedule(host, id);
+    } else {
+        mail_sync::reconcile_schedule(host, id);
+    }
 }
 
 fn find(host: &impl Host, id: &str) -> Result<Option<Value>> {
@@ -89,6 +108,12 @@ pub fn create(host: &impl Host, body: &Value) -> Result<Value> {
 }
 
 pub fn update(host: &impl Host, id: &str, body: &Value) -> Result<Value> {
+    let saved = update_account(host, id, body)?;
+    keep_schedule(host, &saved["account"]);
+    Ok(saved)
+}
+
+fn update_account(host: &impl Host, id: &str, body: &Value) -> Result<Value> {
     let body = fastify::object(body)?;
     let fields = parse_fields(body)?;
     if find(host, id)?.is_some_and(|row| row["providerId"] == health::OUTLOOK_PROVIDER) {
@@ -110,12 +135,14 @@ pub fn update(host: &impl Host, id: &str, body: &Value) -> Result<Value> {
 }
 
 pub fn revoke(host: &impl Host, id: &str) -> Result<Value> {
-    written(kv(
+    let saved = written(kv(
         host,
         "set",
         "connectors.account-write",
         json!({"action":"revoke","id":id}),
-    )?)
+    )?)?;
+    keep_schedule(host, &saved["account"]);
+    Ok(saved)
 }
 
 fn stored_grants(host: &impl Host, id: &str) -> Result<Option<(Vec<String>, Value)>> {

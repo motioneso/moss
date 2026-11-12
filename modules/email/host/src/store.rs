@@ -83,8 +83,10 @@ pub async fn run(cx: &DataContext, request: &Request) -> Result<Value> {
         ("set", "email.cache-write") => match p["action"].as_str() {
             Some("insert") => insert(cx, p).await,
             Some("update") => update(cx, p).await,
+            Some("prune") => prune(cx, p).await,
             _ => bail!("Unknown cache action"),
         },
+        ("get", "email.cache-keys") => cache_keys(cx, p).await,
         _ => bail!("Unknown email resource"),
     }
 }
@@ -272,8 +274,10 @@ async fn insert(cx: &DataContext, p: &Value) -> Result<Value> {
              sender = EXCLUDED.sender, recipients = EXCLUDED.recipients,
              subject = EXCLUDED.subject, snippet = EXCLUDED.snippet,
              body_excerpt = EXCLUDED.body_excerpt, received_at = EXCLUDED.received_at,
-             external_metadata = EXCLUDED.external_metadata, summary = EXCLUDED.summary,
-             signals = EXCLUDED.signals, updated_at = now()
+             external_metadata = EXCLUDED.external_metadata,
+             summary = COALESCE(EXCLUDED.summary, app.email_messages.summary),
+             signals = CASE WHEN $12 THEN EXCLUDED.signals ELSE app.email_messages.signals END,
+             updated_at = now()
            RETURNING *)
          {}",
         message_select("m m")
@@ -284,7 +288,7 @@ async fn insert(cx: &DataContext, p: &Value) -> Result<Value> {
             &sql,
             &[
                 &account, &sender, &recipients, &subject, &snippet, &excerpt, &received,
-                &external, &metadata, &summary, &signals,
+                &external, &metadata, &summary, &signals, &f.get("signals").is_some_and(Value::is_object),
             ],
         )
         .await;
@@ -293,6 +297,60 @@ async fn insert(cx: &DataContext, p: &Value) -> Result<Value> {
         Err(error) if refusal(&error) => Ok(json!({"rejected":true})),
         Err(error) => Err(error.into()),
     }
+}
+
+/// Size fingerprints of the named cached messages of one account.
+async fn cache_keys(cx: &DataContext, p: &Value) -> Result<Value> {
+    let Ok(account) = Uuid::parse_str(text(p, "connectorAccountId")?) else {
+        return Ok(json!([]));
+    };
+    let ids: Vec<String> = strings(&p["externalIds"]);
+    let rows = cx
+        .db()
+        .query(
+            "SELECT external_id, external_metadata->>'sizeBytes'
+               FROM app.email_messages
+              WHERE connector_account_id = $1 AND external_id = ANY($2)",
+            &[&account, &ids],
+        )
+        .await?;
+    Ok(Value::Array(
+        rows.iter()
+            .map(|r| {
+                let size: Option<String> = r.get(1);
+                json!({"externalId":r.get::<_, String>(0),"sizeBytes":size.and_then(|s| s.parse::<i64>().ok())})
+            })
+            .collect(),
+    ))
+}
+
+fn strings(value: &Value) -> Vec<String> {
+    value.as_array().into_iter().flatten().filter_map(|v| v.as_str().map(String::from)).collect()
+}
+
+/// Deletes the account's cached messages with the given key prefix and a received time
+/// inside the window that the server no longer lists. Older messages stay.
+async fn prune(cx: &DataContext, p: &Value) -> Result<Value> {
+    let (Ok(account), Some(prefix), Some(since)) = (
+        Uuid::parse_str(text(p, "connectorAccountId")?),
+        p["prefix"].as_str(),
+        p["since"].as_str(),
+    ) else {
+        return Ok(json!({"deleted":0}));
+    };
+    let keep = strings(&p["keep"]);
+    let like = format!("{}%", prefix.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_"));
+    let deleted = cx
+        .db()
+        .execute(
+            "DELETE FROM app.email_messages
+              WHERE connector_account_id = $1 AND external_id LIKE $2
+                AND COALESCE((external_metadata->>'arrivedAt')::timestamptz, received_at) >= $3::text::timestamptz
+                AND NOT (external_id = ANY($4))",
+            &[&account, &like, &since, &keep],
+        )
+        .await?;
+    Ok(json!({"deleted":deleted}))
 }
 
 async fn update(cx: &DataContext, p: &Value) -> Result<Value> {

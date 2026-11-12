@@ -64,6 +64,10 @@ pub fn connect(host: &impl Host, body: &Value) -> Result<(u16, Value)> {
     let login = login(body)?;
     let answer = kv(host, "set", "connectors.imap-connect", params(&login))?;
     if let Some(account) = answer.get("account").filter(|a| !a.is_null()) {
+        if let Some(id) = account["id"].as_str() {
+            crate::mail_sync::reconcile_schedule(host, id);
+            crate::mail_sync::sync_soon(host, id);
+        }
         return Ok((201, json!({"account":account})));
     }
     let message = match result(&answer)? {

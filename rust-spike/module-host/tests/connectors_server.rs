@@ -215,7 +215,7 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
     // canonical installer, as the server would find it.
     let keys = Keys::new();
     fs::create_dir_all(root.join("registry/packages")).unwrap();
-    let artifacts: Vec<Artifact> = [("JS224_CONNECTORS_PACKAGE", "connectors")]
+    let artifacts: Vec<Artifact> = [("JS225_EMAIL_PACKAGE", "email"), ("JS224_CONNECTORS_PACKAGE", "connectors")]
     .iter()
     .map(|(variable, id)| {
         let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
@@ -337,12 +337,13 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
     let mut fake_mail = Server(
         Command::new(std::env::var("JS237_FAKE_MAIL").expect("the gate must supply the fake mail server"))
             .arg(&mail_certificate)
-            .stdin(Stdio::null())
+            .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
             .unwrap(),
     );
+    let mut mail_commands = fake_mail.0.stdin.take().unwrap();
     let mut mail_lines = std::collections::HashMap::new();
     {
         use std::io::BufRead;
@@ -569,6 +570,16 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
     {
         // Mail connect over HTTPS against the fake mail server. The password must not reach
         // any response, the server log or any stored row; the stored bundle is sealed.
+        // The first call into Email compiles its component, which a debug build does slowly,
+        // and a sync that triggers that compile inside its own time limit would be cut off.
+        // One ordinary Email request warms the compiled copy first.
+        let warm = client
+            .get(format!("{origin}/api/m/email/messages"))
+            .header("origin", &origin)
+            .header("cookie", &cookie)
+            .send()
+            .unwrap();
+        assert_eq!(warm.status().as_u16(), 200);
         let username = mail_lines["username"].clone();
         let password = mail_lines["password"].clone();
         let good = json!({"providerId":"imap-yahoo","username":username,"password":password});
@@ -620,6 +631,94 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
             assert!(control >= 1, "the search must find the stored mail account");
         });
         println!("PASS mail connect on the real server: good and wrong password, test-connection, sign-in required, one account on repeat; password absent from every response, the server log and every stored row");
+    }
+    {
+        // Mail sync through the real worker, queue and Email module. The fake server starts
+        // with three messages. One is then rewritten and one removed, and a second connect
+        // starts another sync.
+        let listed = |want: &dyn Fn(&[Value]) -> bool| -> Vec<Value> {
+            let started = Instant::now();
+            loop {
+                let (status, text) = {
+                    let r = client
+                        .get(format!("{origin}/api/m/email/messages"))
+                        .header("origin", &origin)
+                        .header("cookie", &cookie)
+                        .send()
+                        .unwrap();
+                    (r.status().as_u16(), r.text().unwrap_or_default())
+                };
+                let rows = if status == 200 { json_of(&text)["messages"].as_array().cloned().unwrap_or_default() } else { vec![] };
+                if want(&rows) {
+                    return rows;
+                }
+                assert!(started.elapsed() < Duration::from_secs(90), "mail sync did not settle; last answer {status} {text}\n{}", log());
+                std::thread::sleep(Duration::from_millis(500));
+            }
+        };
+        let first = listed(&|rows| rows.len() == 3);
+        let subjects: std::collections::BTreeSet<String> = first.iter().map(|m| m["subject"].as_str().unwrap_or("").to_owned()).collect();
+        assert_eq!(subjects, ["Invoice reminder", "Lunch on Friday", "Quarterly plan"].map(String::from).into());
+        assert!(first.iter().all(|m| m["externalId"].as_str().is_some_and(|k| k.starts_with("imap:INBOX:"))), "{first:?}");
+        let plan = first.iter().find(|m| m["subject"] == "Quarterly plan").unwrap();
+        assert!(plan["snippet"].as_str().unwrap().contains("PLAN-BODY-SENTINEL"), "{plan}");
+        let plan_key = plan["externalId"].as_str().unwrap().to_owned();
+        let lunch_key = first.iter().find(|m| m["subject"] == "Lunch on Friday").unwrap()["externalId"].as_str().unwrap().to_owned();
+        let uid_of = |key: &str| key.rsplit(':').next().unwrap().to_owned();
+        use std::io::Write;
+        writeln!(mail_commands, "replace {}", uid_of(&plan_key)).unwrap();
+        writeln!(mail_commands, "delete {}", uid_of(&lunch_key)).unwrap();
+        mail_commands.flush().unwrap();
+        let resync = call(Method::POST, "/imap/connect", Some(&cookie), Some(json!({"providerId":"imap-yahoo","username":mail_lines["username"],"password":mail_lines["password"]})));
+        assert_eq!(resync.0, 201, "{}", resync.1);
+        let second = listed(&|rows| {
+            rows.len() == 2 && rows.iter().any(|m| m["snippet"].as_str().is_some_and(|s| s.contains("CHANGED-BODY-SENTINEL")))
+        });
+        assert!(second.iter().all(|m| m["subject"] != "Lunch on Friday"), "the deleted message must be gone");
+        assert!(second.iter().all(|m| !m["snippet"].as_str().unwrap_or("").contains("PLAN-BODY-SENTINEL")), "the changed message keeps no old text");
+        let mut account = Value::Null;
+        for _ in 0..40 {
+            let status = call(Method::GET, "/accounts", Some(&cookie), None);
+            let accounts = json_of(&status.1);
+            account = accounts["accounts"].as_array().unwrap().iter().find(|a| a["providerId"] == "imap-yahoo").unwrap().clone();
+            if !account["lastSyncFinishedAt"].is_null() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(500));
+        }
+        assert_eq!(account["lastSyncStatus"], "success", "{account}");
+        // A second run may follow the one that changed the cache and find nothing left to fetch.
+        assert!(account["lastSyncCounts"]["emailUpserted"].as_u64().unwrap() <= 1, "unchanged messages are not fetched again: {account}");
+        let password = mail_lines["password"].clone();
+        assert!(!log().contains(&password), "mail password in the server log");
+        for word in ["PLAN-BODY-SENTINEL", "LUNCH-BODY-SENTINEL", "INVOICE-BODY-SENTINEL", "CHANGED-BODY-SENTINEL"] {
+            assert!(!log().contains(word), "mail text {word} in the server log");
+        }
+        runtime.block_on(async {
+            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+            tokio::spawn(async move {
+                let _ = connection.await;
+            });
+            let tables = db
+                .query("SELECT table_schema, table_name FROM information_schema.tables WHERE table_type='BASE TABLE' AND table_schema NOT IN ('pg_catalog','information_schema')", &[])
+                .await
+                .unwrap();
+            for row in tables {
+                let (schema, name): (String, String) = (row.get(0), row.get(1));
+                if (schema.as_str(), name.as_str()) == ("app", "email_messages") {
+                    continue;
+                }
+                for word in [password.as_str(), "BODY-SENTINEL"] {
+                    let hits: i64 = db
+                        .query_one(&format!("SELECT count(*) FROM \"{schema}\".\"{name}\" t WHERE to_jsonb(t)::text LIKE '%' || $1 || '%'"), &[&word])
+                        .await
+                        .unwrap()
+                        .get(0);
+                    assert_eq!(hits, 0, "{word} found in {schema}.{name}");
+                }
+            }
+        });
+        println!("PASS mail sync on the real server: three messages cached through Email, a rewritten one replaced, a removed one gone, only the changed one fetched again, sync recorded as success; mail text and password absent from the log and every row outside Email's own cache, including job payloads and activity");
     }
     drop(fake_mail);
     drop(fake_google);

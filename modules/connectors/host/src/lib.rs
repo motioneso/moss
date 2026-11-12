@@ -26,6 +26,7 @@ struct Flight {
 
 pub mod google;
 pub mod imap;
+pub mod imap_sync;
 pub mod mail_probe;
 pub mod package;
 pub mod store;
@@ -142,6 +143,11 @@ impl Ports for ConnectorsPorts {
                     .map_err(|_| anyhow::anyhow!("Connectors data unavailable"))?;
                 let result = if request.resource.starts_with("connectors.google-") {
                     google::run(&cx, &self.cipher, &self.google, request).await?
+                } else if request.resource.starts_with("connectors.imap-sync-")
+                    || request.resource == "connectors.imap-list"
+                    || request.resource == "connectors.imap-fetch"
+                {
+                    imap_sync::run(&cx, &self.cipher, &self.mail, request).await?
                 } else if request.resource.starts_with("connectors.imap-") {
                     imap::run(&cx, &self.cipher, &self.mail, request).await?
                 } else {

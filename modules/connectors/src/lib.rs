@@ -11,6 +11,7 @@ pub mod google;
 pub mod imap;
 pub mod grants;
 pub mod health;
+pub mod mail_sync;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod testing;
 
@@ -58,6 +59,7 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
             };
             serde_json::to_string(&response).map_err(|_| "Invalid connectors response".into())
         }
+        "job" => mail_sync::handle(host, payload),
         "tool" => {
             let input: Value =
                 serde_json::from_str(payload).map_err(|_| "Invalid connectors request")?;

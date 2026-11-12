@@ -83,7 +83,7 @@ pub async fn probe(servers: &Servers, trust: &Trust, username: &str, password: &
     }
 }
 
-fn client_config(trust: &Trust) -> Arc<ClientConfig> {
+pub(crate) fn client_config(trust: &Trust) -> Arc<ClientConfig> {
     let mut roots = RootCertStore::empty();
     match &trust.only {
         None => roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned()),
@@ -103,7 +103,7 @@ fn client_config(trust: &Trust) -> Arc<ClientConfig> {
 }
 
 /// A handshake refusal carries a TLS error inside the I/O error.
-fn is_tls_error(error: &(dyn StdError + 'static)) -> bool {
+pub(crate) fn is_tls_error(error: &(dyn StdError + 'static)) -> bool {
     let mut current = Some(error);
     while let Some(e) = current {
         if e.downcast_ref::<rustls::Error>().is_some() {

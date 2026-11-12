@@ -132,3 +132,74 @@ Commands: `pnpm test:rust-email` and `pnpm test:rust-email-live`, both through t
   every gate here uses a debug build.
 - No logger is installed in the shell, so the IMAP library's trace lines go nowhere. If a logger
   is added later, check that it does not print login lines.
+
+# Part 5: IMAP sync
+
+## What was built
+
+- A connected Yahoo, Proton Bridge, iCloud or Fastmail account is read every 15 minutes, and once
+  straight after connecting. Revoking the account stops the schedule.
+- Each run lists the Inbox for the last 30 days (newest 5,000 at most), compares the list with
+  what Email already holds, fetches only new or changed messages, and saves them through Email's
+  public API. Messages the server no longer lists are removed from Email, but only inside the
+  30-day window, so older cached mail stays.
+- A message is saved as sender, recipients, subject, time and a plain-text preview of up to 500
+  characters. Sign-in code messages get no preview when the subject is in English and mentions a code. The host reads at most 128 KB of a message.
+- A run handles 50 messages and then queues itself for the next 50, so one run stays inside the
+  time and fuel limits. The connection's health shows the last run, its result and the counts.
+- Overwriting a message from a sync keeps the summary and signals Email already worked out.
+- Read and unread changes are not copied. No screen was built.
+- Email gains two operations (a cache key list with sizes, and prune) and an owner-only delete
+  rule. The server adds that rule when it installs Email, driven by a new manifest list
+  (`ownerDelete`), because module SQL cannot hold a grant or a policy and a core migration runs
+  before the Email table exists. A share never grants delete.
+- Connectors now declares a 200M fuel limit, as People and Meetings do. The default of 10M was
+  too small for a 500-message mailbox.
+
+## Third-party code
+
+| Crate        | Version | Licence           | Why                                                    |
+| ------------ | ------- | ----------------- | ------------------------------------------------------ |
+| mail-parser  | 0.11.9  | Apache-2.0 OR MIT | Reads message headers and text. Used by the host only. |
+| hashify      | 0.2.9   | Apache-2.0 OR MIT | Pulled in by mail-parser.                              |
+| futures-util | 0.3.34  | MIT OR Apache-2.0 | Already in the tree. Now a direct host dependency.     |
+
+- The parser is outside the guest, so message text never enters WebAssembly.
+
+## Proof
+
+- Scripted tests of the sync loop in the guest (10), including paging, prune and
+  an auth failure.
+- A stand-in IMAP server on this machine, with real TLS, for listing and fetching.
+- Email database tests with two people (14 pass): prune touches only the owner's mail, a view
+  share cannot delete, and loosening the delete rule makes the same call delete (seen red).
+- Cost of one run inside WebAssembly (debug build, fuel against the 200M limit):
+
+| Messages | First step | Last step (prune) |
+| -------- | ---------- | ----------------- |
+| 50       | 6.9M       | 6.9M              |
+| 500      | 8.6M       | 10.8M             |
+| 5,000    | 28.3M      | 51.8M             |
+
+- A live run on the real server over HTTPS, with Email and Connectors both installed from a
+  signed registry: three messages cached through Email, one rewritten and replaced, one removed
+  and gone, only the changed message fetched again, sync recorded as success. The mail text and
+  password were searched for in the log and every row outside Email's own cache, including job
+  payloads and activity, and found nowhere.
+
+## Differences from the old app
+
+- The old app never removed mail the server dropped. This one does, inside the 30-day window, judged by the server's arrival date. A listing that comes back short is never used to delete.
+- Messages are read in steps of 50 with a fresh listing each run, so a large mailbox costs more
+  listings than the old single pass.
+
+## Not proven
+
+- A real mail account. None is reachable from here.
+- A release build. The first call into Email compiles its component inside the caller's 5 second
+  limit. A debug build is slow enough to hit it, so the live test warms Email first. A release
+  build should be far faster, but that was not measured.
+- Mailboxes above 5,000 messages in the window. The cost grows with size, and 5,000 is the cap.
+- Flag (read, unread) changes.
+- The module-host change that emits the delete rule has been run only through the Email database
+  tests and the live run, not through an upgrade of an install that already has Email.

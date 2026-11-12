@@ -4,7 +4,7 @@
   "name": "Email",
   "description": "Keeps the cached mail messages that Connectors fills in, and the Email settings for briefings, task capture and drafted replies. It never contacts a mail service.",
   "publisher": "Moss",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -16,7 +16,8 @@
         "email.preferences",
         "email.source-behaviors",
         "email.draft-policy",
-        "email.cache-write"
+        "email.cache-write",
+        "email.cache-keys"
       ]
     }
   ],
@@ -33,6 +34,7 @@
       "sql/0249_email_judgement_requested_at.sql"
     ],
     "ledger": "core-legacy",
+    "ownerDelete": ["app.email_messages"],
     "access": {
       "app.email_messages": {
         "access": "owner-or-share",
@@ -53,8 +55,12 @@
     { "method": "GET", "path": "/draft-policy", "signIn": true },
     { "method": "PUT", "path": "/draft-policy", "signIn": true }
   ],
-  "requires": { "connectors": ">=0.1.0, <1.0.0" },
-  "provides": { "insertCachedMessage": "1.0.0", "updateCachedMessage": "1.0.0" },
+  "provides": {
+    "insertCachedMessage": "1.0.0",
+    "updateCachedMessage": "1.0.0",
+    "listCachedMessageKeys": "1.0.0",
+    "pruneCachedMessages": "1.0.0"
+  },
   "icons": ["icons/email.svg"],
   "accounts": { "supportsUserDisable": false, "defaultEnabled": true },
   "features": [

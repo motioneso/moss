@@ -66,6 +66,8 @@ fn api(host: &impl Host, name: &str, input: &Value) -> Result<Value> {
     match name {
         "insertCachedMessage" => cache::insert(host, input),
         "updateCachedMessage" => cache::update(host, input),
+        "listCachedMessageKeys" => cache::keys(host, input),
+        "pruneCachedMessages" => cache::prune(host, input),
         _ => Err(Error::new(404, "Email operation not found")),
     }
 }

@@ -2,10 +2,11 @@
   "schemaVersion": 2,
   "id": "connectors",
   "name": "Connectors",
-  "description": "Keeps the mail and calendar connections of each account, their sign-in secrets and the Email and Calendar permissions. Connecting Google works by pasting your own Google client details. Yahoo, Proton Bridge, iCloud and Fastmail mail connect with an app password. Outlook sign-in and all syncing are not part of this package yet.",
+  "description": "Keeps the mail and calendar connections of each account, their sign-in secrets and the Email and Calendar permissions. Connecting Google works by pasting your own Google client details. Yahoo, Proton Bridge, iCloud and Fastmail mail connect with an app password. Outlook sign-in and calendar syncing are not part of this package yet.",
   "publisher": "Moss",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
+  "fuelLimit": 200000000,
   "abi": "moss:module@1",
   "capabilities": [
     {
@@ -21,8 +22,27 @@
         "connectors.google-authorize",
         "connectors.google-complete",
         "connectors.imap-test",
-        "connectors.imap-connect"
+        "connectors.imap-connect",
+        "connectors.imap-sync-start",
+        "connectors.imap-list",
+        "connectors.imap-fetch",
+        "connectors.imap-sync-finish"
       ]
+    },
+    {
+      "port": "jobs",
+      "operations": ["enqueue-options", "schedule", "unschedule"],
+      "resources": ["imap-sync"]
+    },
+    {
+      "port": "api",
+      "operations": ["call"],
+      "resources": ["email"]
+    },
+    {
+      "port": "context",
+      "operations": ["read", "uuid"],
+      "resources": ["call", "new"]
     }
   ],
   "database": {
@@ -126,7 +146,9 @@
       "signIn": true
     }
   ],
-  "requires": {},
+  "requires": {
+    "email": ">=0.2.0, <1.0.0"
+  },
   "provides": {},
   "icons": ["icons/connectors.svg"],
   "accounts": {
@@ -226,7 +248,7 @@
     },
     {
       "id": "connectors.imap-connect",
-      "description": "Connects a Yahoo, Proton Bridge, iCloud or Fastmail mail account with an app password. Moss takes the server settings from the provider choice, signs in to the mail server and then to the sending server to test the details, and seals the password only when both work. The test answers ok, wrong password, secure connection failed or unreachable without saving anything. There is no connect screen for this yet.",
+      "description": "Connects a Yahoo, Proton Bridge, iCloud or Fastmail mail account with an app password. Moss takes the server settings from the provider choice, signs in to the mail server and then to the sending server to test the details, and seals the password only when both work. The test answers ok, wrong password, secure connection failed or unreachable without saving anything. Once connected, Moss reads the Inbox every 15 minutes and also straight after connecting.",
       "errors": [
         {
           "code": "imap-auth-failed",
@@ -252,6 +274,35 @@
           "path": "/settings/connections"
         }
       ]
+    },
+    {
+      "id": "connectors.imap-sync",
+      "description": "Reads the Inbox of each connected Yahoo, Proton Bridge, iCloud or Fastmail account every 15 minutes, looking back 30 days. New and changed messages are copied into Email as sender, recipients, subject, time and a short plain-text preview, and messages the mail server no longer lists are removed from Email. Sign-in code messages get no preview. The connection's health shows the last run, its result and the counts. Read and unread changes are not copied. Revoking the account stops the schedule.",
+      "errors": [
+        {
+          "code": "auth-error",
+          "class": "validation",
+          "description": "The mail server refused the saved sign-in during a sync",
+          "remediationRef": "connectors-imap-app-password"
+        },
+        {
+          "code": "email-error",
+          "class": "transient",
+          "description": "The mail server could not be reached or answered badly during a sync"
+        },
+        {
+          "code": "email-message-error",
+          "class": "transient",
+          "description": "Some messages could not be read or saved during a sync, and the rest were saved"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "connectors-imap-app-password",
+          "description": "Make a new app password with the mail provider and enter it again",
+          "path": "/settings/connections"
+        }
+      ]
     }
   ],
   "tools": {
@@ -260,7 +311,22 @@
       "risk": "read"
     }
   },
-  "jobs": {},
+  "jobs": {
+    "imap-sync": {
+      "account-id": {
+        "kind": "id"
+      },
+      "cursor": {
+        "kind": "count"
+      },
+      "upserted": {
+        "kind": "count"
+      },
+      "failures": {
+        "kind": "count"
+      }
+    }
+  },
   "screens": {
     "/settings/connections": "ui/settings.html"
   },

@@ -41,3 +41,17 @@ pub async fn emit(
     }
     Ok(())
 }
+
+/// Lets the owner delete rows of a legacy table. A share never grants delete.
+pub async fn emit_owner_delete(tx: &tokio_postgres::Transaction<'_>, table: &str) -> Result<()> {
+    tx.batch_execute(&format!(
+        "SET LOCAL ROLE jarvis_migration_owner; \
+         GRANT DELETE ON {table} TO jarvis_app_runtime, jarvis_worker_runtime; \
+         DROP POLICY IF EXISTS moss_module_delete ON {table}; \
+         CREATE POLICY moss_module_delete ON {table} FOR DELETE TO jarvis_app_runtime, jarvis_worker_runtime \
+           USING (app.current_actor_user_id() IS NOT NULL AND owner_user_id = app.current_actor_user_id()); \
+         RESET ROLE"
+    ))
+    .await?;
+    Ok(())
+}
