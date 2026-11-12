@@ -34,7 +34,7 @@ pub fn parse_enablement(value: &Value) -> Option<(String, String, Vec<String>)> 
         return None;
     }
     let device = map.get("sourceDeviceId")?.as_str().filter(|s| crate::text::is_uuid(s))?;
-    let key = map.get("requestKey")?.as_str().filter(|s| (1..=200).contains(&s.len()))?;
+    let key = map.get("requestKey")?.as_str().filter(|s| crate::text::is_uuid(s))?;
     let ids = map.get("recordingIds")?.as_array().filter(|a| a.len() <= INVENTORY_MAX)?;
     let mut list: Vec<String> = Vec::with_capacity(ids.len());
     for id in ids {
@@ -44,7 +44,7 @@ pub fn parse_enablement(value: &Value) -> Option<(String, String, Vec<String>)> 
     if list.windows(2).any(|w| w[0] == w[1]) {
         return None;
     }
-    Some((device.to_lowercase(), key.to_owned(), list))
+    Some((device.to_lowercase(), key.to_lowercase(), list))
 }
 
 /// Automatic dispatch applies only to a recording made after hold-to-talk was enabled, whose

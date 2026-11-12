@@ -154,13 +154,17 @@ fn voice_rules() {
     assert_eq!(hand_off_state(true, true, None, now), State::ReadyToSend);
 }
 
+const KEY: &str = "11111111-1111-4111-8111-111111111111";
+
 #[test]
 fn enablement_request() {
-    let ok = json!({"version": 2, "sourceDeviceId": DEVICE, "requestKey": "k", "recordingIds": ["amsg_1234567890_b", "amsg_1234567890_a"]});
+    let ok = json!({"version": 2, "sourceDeviceId": DEVICE, "requestKey": KEY, "recordingIds": ["amsg_1234567890_b", "amsg_1234567890_a"]});
     let (_, _, list) = parse_enablement(&ok).unwrap();
     assert_eq!(list, vec!["amsg_1234567890_a", "amsg_1234567890_b"]);
-    let dup = json!({"version": 2, "sourceDeviceId": DEVICE, "requestKey": "k", "recordingIds": ["amsg_1234567890_a", "amsg_1234567890_a"]});
+    let dup = json!({"version": 2, "sourceDeviceId": DEVICE, "requestKey": KEY, "recordingIds": ["amsg_1234567890_a", "amsg_1234567890_a"]});
     assert!(parse_enablement(&dup).is_none());
-    let bad = json!({"version": 2, "sourceDeviceId": DEVICE, "requestKey": "k", "recordingIds": ["nope"]});
+    let bad = json!({"version": 2, "sourceDeviceId": DEVICE, "requestKey": KEY, "recordingIds": ["nope"]});
     assert!(parse_enablement(&bad).is_none());
+    let loose = json!({"version": 2, "sourceDeviceId": DEVICE, "requestKey": "k", "recordingIds": []});
+    assert!(parse_enablement(&loose).is_none());
 }

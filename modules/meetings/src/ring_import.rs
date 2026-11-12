@@ -52,10 +52,8 @@ fn fail<H: Host + ?Sized>(host: &H, row: &Value, code: RingCode, retryable: bool
 }
 
 fn enqueue<H: Host + ?Sized>(host: &H, id: &str, kind: &str, window: Option<u64>, at: &str) -> Result<()> {
-    let mut params = json!({"import-id": id, "kind": kind});
-    if let Some(window) = window {
-        params["window"] = json!(window);
-    }
+    // The manifest schema needs every parameter on every job.
+    let params = json!({"import-id": id, "kind": kind, "window": window.unwrap_or(0)});
     host.call(
         "jobs",
         "enqueue-options",
@@ -107,7 +105,12 @@ fn transcribe<H: Host + ?Sized>(host: &H, row: &Value, window: u64) -> Result<St
     if matches!(row["state"].as_str(), Some("complete" | "failed")) {
         return done("finished");
     }
-    let total = row["metadata_json"]["durationMs"].as_u64().unwrap_or(0);
+    // The host may return a JSON column as text or as an object.
+    let metadata = match row["metadata_json"].as_str() {
+        Some(text) => serde_json::from_str(text).unwrap_or(Value::Null),
+        None => row["metadata_json"].clone(),
+    };
+    let total = metadata["durationMs"].as_u64().unwrap_or(0);
     let start = window * WINDOW_MS;
     // A repeated job for a window already done moves on without transcribing twice.
     if start != row["next_window_ms"].as_u64().unwrap_or(0) {
@@ -154,7 +157,10 @@ fn transcribe<H: Host + ?Sized>(host: &H, row: &Value, window: u64) -> Result<St
                 text.push_str(piece);
             }
         }
-        text.truncate(text.char_indices().map(|(i, _)| i).take_while(|i| *i <= VOICE_TEXT_MAX).last().unwrap_or(0));
+        if text.len() > VOICE_TEXT_MAX {
+            let cut = (0..=VOICE_TEXT_MAX).rev().find(|i| text.is_char_boundary(*i)).unwrap_or(0);
+            text.truncate(cut);
+        }
         update(host, id, vec![("voice_transcript", json!(text))])?;
     }
     update(host, id, vec![("state", json!("transcribing")), ("next_window_ms", json!(end))])?;
@@ -168,6 +174,15 @@ fn transcribe<H: Host + ?Sized>(host: &H, row: &Value, window: u64) -> Result<St
 
 fn row_after<H: Host + ?Sized>(host: &H, id: &str) -> Result<Value> {
     row(host, id)?.ok_or_else(|| moss_module_sdk::Error::new("Import row vanished"))
+}
+
+/// A repeatable UUID for one window of one import. The store needs a UUID request key, and a
+/// retried window must send the same key. The window number is added to the last 48 bits.
+fn window_key(import: &str, window: u64) -> String {
+    let flat: String = import.chars().filter(|c| *c != '-').collect();
+    let tail = u64::from_str_radix(&flat[20..], 16).unwrap_or(0);
+    let tail = (tail + window) & 0xffff_ffff_ffff;
+    format!("{}-{}-{}-{}-{:012x}", &flat[..8], &flat[8..12], &flat[12..16], &flat[16..20], tail)
 }
 
 /// Adds one window's segments to the meeting's transcript. `None` means the store refused it.
@@ -203,7 +218,7 @@ fn append<H: Host + ?Sized>(
     }
     let mut input = Map::new();
     input.insert("meetingId".into(), json!(meeting));
-    input.insert("requestKey".into(), json!(format!("{import}:{window}")));
+    input.insert("requestKey".into(), json!(window_key(import, window)));
     input.insert("expectedVersion".into(), json!(version));
     input.insert(
         "sources".into(),

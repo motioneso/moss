@@ -195,7 +195,7 @@ pub fn reserve<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Res
         "enqueue-options",
         IMPORT_QUEUE,
         json!({
-            "params": {"import-id": id, "kind": "abandoned"},
+            "params": {"import-id": id, "kind": "abandoned", "window": 0},
             "idempotencyKey": host.call("context", "uuid", "new", json!({}))?["id"],
             "availableAt": expires,
         }),

@@ -217,6 +217,15 @@ impl MeetingsPorts {
 }
 impl Ports for MeetingsPorts {
     fn invoke(&self, scope: &CallScope, port: &str, request: &Request) -> Result<Value> {
+        self.invoke_inner(scope, port, request)
+    }
+    fn finish_call(&self, scope: &CallScope, success: bool) -> Result<()> {
+        self.next.finish_call(scope, success)
+    }
+}
+
+impl MeetingsPorts {
+    fn invoke_inner(&self, scope: &CallScope, port: &str, request: &Request) -> Result<Value> {
         let ours = [RESOURCE, store::TRANSCRIPTS, store::HISTORY, store::RECORDING_TYPES, outputs::OUTPUTS, exports::EXPORTS, chat::NOTICE, chat::VOICE, files::FILES];
         if port != "kv" || !ours.contains(&request.resource.as_str()) || scope.module().id != "meetings" {
             return self.next.invoke(scope, port, request);
@@ -242,8 +251,5 @@ impl Ports for MeetingsPorts {
         } else {
             self.store(scope, request)
         }
-    }
-    fn finish_call(&self, scope: &CallScope, success: bool) -> Result<()> {
-        self.next.finish_call(scope, success)
     }
 }

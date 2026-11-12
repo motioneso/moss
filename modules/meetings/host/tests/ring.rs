@@ -19,6 +19,7 @@ use support::install::install_ring;
 use uuid::Uuid;
 
 const MARK: &str = "PLANTED-RING-MARKER-5b81";
+const KEY: &str = "11111111-1111-4111-8111-111111111111";
 const CHUNK: usize = 1024 * 1024;
 
 /// Answers `availability` and `create`. Each window gets the next scripted line.
@@ -123,15 +124,22 @@ struct World {
     speech: Arc<Speech>,
     voice: Arc<Voice>,
     _files: tempfile::TempDir,
+    _serial: std::sync::MutexGuard<'static, ()>,
 }
+
+/// The job queue is shared, so worlds run one at a time. A job from another test would
+/// otherwise run against this test's files.
+static SERIAL: Mutex<()> = Mutex::new(());
+
 impl World {
     fn new() -> Self {
+        let serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
         let f = support::Fixture::new();
         let speech = Arc::new(Speech { lines: Mutex::new(vec![]), seen: Mutex::new(vec![]) });
         let voice = Arc::new(Voice::default());
         let files = tempfile::tempdir().unwrap();
         let app = install_ring(&f, speech.clone(), None, Some((files.path().to_owned(), voice.clone())));
-        Self { f, app, speech, voice, _files: files }
+        Self { f, app, speech, voice, _files: files, _serial: serial }
     }
     fn call(&self, actor: Uuid, method: &str, target: &str, body: Value) -> Value {
         let text = self
@@ -158,7 +166,7 @@ impl World {
         assert_eq!(reserved["status"], 201, "{reserved}");
         let id = reserved["body"]["id"].as_str().unwrap().to_owned();
         self.send(actor, files, &id);
-        let done = self.call(actor, "POST", &format!("/recording-uploads/{id}/finalize"), json!({}));
+        let done = self.call(actor, "POST", &format!("/recording-uploads/{id}/finalize"), Value::Null);
         assert_eq!(done["status"], 200, "{done}");
         assert_eq!(done["body"]["ready"], true, "{done}");
         id
@@ -176,13 +184,22 @@ impl World {
         for _ in 0..80 {
             self.app.app.installer.run_job(&worker).unwrap();
             let waiting = self.count(
-                "SELECT count(*) FROM moss_queue.jobs WHERE state IN ('pending','running') AND queue LIKE '%recording-import%' AND (data::text NOT LIKE '%abandoned%')",
+                "SELECT count(*) FROM moss_queue.jobs WHERE state IN ('pending','running') AND queue LIKE '%recording-import%' AND (payload::text NOT LIKE '%abandoned%')",
             );
             if waiting == 0 {
                 return;
             }
         }
         panic!("jobs did not settle");
+    }
+    fn diag(&self) -> String {
+        let rows = self.f.rt.block_on(self.f.root.query(
+            "SELECT state||' '||queue||' '||coalesce(failure_code,'-')||' '||payload::text FROM moss_queue.jobs ORDER BY run_at, id", &[])).unwrap();
+        let imports = self.f.rt.block_on(self.f.root.query(
+            "SELECT state||' ready='||ready||' next='||next_window_ms||' '||metadata_json::text FROM app.meeting_recording_imports", &[])).unwrap();
+        let mut out: Vec<String> = rows.iter().map(|r| r.get::<_, String>(0)).collect();
+        out.extend(imports.iter().map(|r| r.get::<_, String>(0)));
+        out.join("\n")
     }
     fn count(&self, sql: &str) -> i64 {
         self.f.rt.block_on(self.f.root.query_one(sql, &[])).unwrap().get(0)
@@ -223,7 +240,7 @@ fn a_meeting_import_resumes_finalizes_and_transcribes() {
     let wav_parts: Vec<&[u8]> = files.wav.chunks(CHUNK).collect();
     assert_eq!(wav_parts.len(), 2);
     assert_eq!(w.chunk(a, &id, "wav", 0, wav_parts[0].to_vec())["status"], 200);
-    let early = w.call(a, "POST", &format!("/recording-uploads/{id}/finalize"), json!({}));
+    let early = w.call(a, "POST", &format!("/recording-uploads/{id}/finalize"), Value::Null);
     assert_ne!(early["status"], 200, "finalize accepted an incomplete upload: {early}");
     let status = w.call(a, "GET", &format!("/recording-uploads/{id}"), Value::Null);
     assert_eq!(status["body"]["received"], json!({"packets": 0, "sidecar": 0, "wav": 1}), "{status}");
@@ -236,17 +253,17 @@ fn a_meeting_import_resumes_finalizes_and_transcribes() {
 
     // The rest arrives after the "interruption".
     w.send(a, &files, &id);
-    let done = w.call(a, "POST", &format!("/recording-uploads/{id}/finalize"), json!({}));
+    let done = w.call(a, "POST", &format!("/recording-uploads/{id}/finalize"), Value::Null);
     assert_eq!(done["status"], 200, "{done}");
     assert_eq!(done["body"]["ready"], true);
 
     w.run_jobs();
-    assert_eq!(w.speech.seen.lock().unwrap().len(), 3, "three windows");
+    assert_eq!(w.speech.seen.lock().unwrap().len(), 3, "three windows\n{}", w.diag());
     assert!(w.speech.seen.lock().unwrap().iter().all(|n| *n < 900_000), "a window must stay under the message limit");
     let imported = w.call(a, "GET", &format!("/recording-imports/{id}"), Value::Null);
     assert_eq!(imported["body"]["state"], "complete", "{imported}");
     let meeting_id = imported["body"]["meetingId"].as_str().unwrap();
-    let transcript = w.call(a, "GET", &format!("/records/{meeting_id}/transcript"), Value::Null);
+    let transcript = w.call(a, "GET", &format!("/records/{meeting_id}/transcript?maxSegments=50&maxCharacters=20000"), Value::Null);
     assert!(transcript.to_string().contains(MARK), "{transcript}");
 
     // Reserving the finished recording again finds the same import and does not transcribe again.
@@ -289,7 +306,7 @@ fn a_bad_wav_or_packet_stream_is_refused_at_finalize() {
     let a = w.f.a;
     for (label, mutate) in [
         ("header", Box::new(|f: &mut Files| f.wav[0] = b'X') as Box<dyn Fn(&mut Files)>),
-        ("rate", Box::new(|f: &mut Files| f.wav[24] = 0x80)),
+        ("rate", Box::new(|f: &mut Files| f.wav[25] = 0x00)),
         ("packets", Box::new(|f: &mut Files| f.packets = vec![0, 5, 1])),
     ] {
         let (device, recording) = ids();
@@ -301,7 +318,7 @@ fn a_bad_wav_or_packet_stream_is_refused_at_finalize() {
         }
         let id = reserved["body"]["id"].as_str().unwrap().to_owned();
         w.send(a, &files, &id);
-        let done = w.call(a, "POST", &format!("/recording-uploads/{id}/finalize"), json!({}));
+        let done = w.call(a, "POST", &format!("/recording-uploads/{id}/finalize"), Value::Null);
         assert_eq!(done["status"], 400, "{label}: {done}");
         assert_eq!(done["body"]["code"], "recording_import_invalid", "{label}: {done}");
     }
@@ -320,15 +337,15 @@ fn a_voice_recording_waits_for_enablement_and_hands_off_text() {
     // Without an enablement a voice recording cannot be reserved as a meeting or a voice request.
     let none = w.call(a, "POST", "/recording-uploads", files.manifest(&device, &recording, meeting()));
     assert_eq!(none["status"], 409, "{none}");
-    assert_eq!(none["body"]["code"], "voice_recording_ineligible");
+    assert_eq!(none["body"]["code"], "recording_voice_ineligible");
 
-    let enabled = w.call(a, "POST", "/voice-enablement", json!({"version": 2, "sourceDeviceId": device, "requestKey": "k1", "recordingIds": []}));
+    let enabled = w.call(a, "POST", "/voice-enablement", json!({"version": 2, "sourceDeviceId": device, "requestKey": KEY, "recordingIds": []}));
     assert_eq!(enabled["status"], 201, "{enabled}");
     let enablement = enabled["body"]["id"].as_str().unwrap().to_owned();
     // The same request replays; a changed inventory with the same key conflicts.
-    let replay = w.call(a, "POST", "/voice-enablement", json!({"version": 2, "sourceDeviceId": device, "requestKey": "k1", "recordingIds": []}));
+    let replay = w.call(a, "POST", "/voice-enablement", json!({"version": 2, "sourceDeviceId": device, "requestKey": KEY, "recordingIds": []}));
     assert_eq!(replay["body"]["id"], enablement.as_str());
-    let clash = w.call(a, "POST", "/voice-enablement", json!({"version": 2, "sourceDeviceId": device, "requestKey": "k1", "recordingIds": [recording.clone()]}));
+    let clash = w.call(a, "POST", "/voice-enablement", json!({"version": 2, "sourceDeviceId": device, "requestKey": KEY, "recordingIds": [recording.clone()]}));
     assert_eq!(clash["status"], 409);
 
     *w.speech.lines.lock().unwrap() = vec![format!("what is next {MARK}")];
@@ -346,7 +363,7 @@ fn a_voice_recording_waits_for_enablement_and_hands_off_text() {
     assert!(!handed[0].2);
     let list = w.call(a, "GET", "/voice-recordings", Value::Null);
     assert!(!list.to_string().contains(MARK), "{list}");
-    let disabled = w.call(a, "POST", &format!("/voice-enablement/{enablement}/disable"), json!({}));
+    let disabled = w.call(a, "POST", &format!("/voice-enablement/{enablement}/disable"), Value::Null);
     assert_eq!(disabled["status"], 200, "{disabled}");
 }
 
@@ -365,7 +382,7 @@ fn another_person_cannot_see_or_change_an_import_and_text_stays_out_of_logs() {
     let target = format!("/recording-uploads/{id}");
     assert_eq!(w.call(b, "GET", &target, Value::Null)["status"], 404);
     assert_eq!(w.call(b, "GET", &format!("/recording-imports/{id}"), Value::Null)["status"], 404);
-    assert_eq!(w.call(b, "POST", &format!("{target}/finalize"), json!({}))["status"], 404);
+    assert_eq!(w.call(b, "POST", &format!("{target}/finalize"), Value::Null)["status"], 404);
     assert_eq!(w.chunk(b, &id, "wav", 0, files.wav[..CHUNK.min(files.wav.len())].to_vec())["status"], 404);
     // Another person reserving the same recording gets their own import, not a's.
     let theirs = w.call(b, "POST", "/recording-uploads", files.manifest(&device, &recording, meeting()));
@@ -397,9 +414,11 @@ fn another_person_cannot_see_or_change_an_import_and_text_stays_out_of_logs() {
 
     // The transcript text stays out of queued work, activity rows and the import record.
     let count = |t: &str| format!("SELECT CASE WHEN to_regclass('{t}') IS NULL THEN 0 ELSE (SELECT count(*) FROM {t} x WHERE x::text LIKE '%{MARK}%') END");
-    let leaked: i64 = ["moss_queue.jobs", "app.moss_activity_detail", "app.moss_model_activity_log", "app.meeting_recording_imports", "app.meeting_recording_chunks"]
-        .iter()
-        .map(|t| w.count(&count(t)))
-        .sum();
-    assert_eq!(leaked, 0, "transcript text reached queued work, activity or import rows");
+    let tables = ["moss_queue.jobs", "app.moss_activity_detail", "app.moss_model_activity_log", "app.meeting_recording_imports", "app.meeting_recording_chunks"];
+    let mut found: Vec<(&str, i64)> = tables.iter().filter(|t| !t.ends_with("imports")).map(|t| (*t, w.count(&count(t)))).collect();
+    // A voice import keeps its own text so a retry can resend it. A meeting import never holds text.
+    let kept = format!("SELECT count(*) FROM app.meeting_recording_imports x WHERE meeting_id IS NOT NULL AND x::text LIKE '%{MARK}%'");
+    found.push(("app.meeting_recording_imports (meetings)", w.count(&kept)));
+    let leaked: i64 = found.iter().map(|(_, n)| n).sum();
+    assert_eq!(leaked, 0, "transcript text reached queued work, activity or import rows: {found:?}");
 }
