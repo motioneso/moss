@@ -51,10 +51,17 @@ fn serve(body: Vec<u8>) -> Server {
             let head = String::from_utf8_lossy(&head).to_string();
             let range = head
                 .lines()
-                .find_map(|l| l.to_ascii_lowercase().strip_prefix("range: bytes=").map(str::to_owned))
+                .find_map(|l| {
+                    l.to_ascii_lowercase()
+                        .strip_prefix("range: bytes=")
+                        .map(str::to_owned)
+                })
                 .and_then(|v| {
                     let mut parts = v.trim().split('-');
-                    Some((parts.next()?.parse::<usize>().ok()?, parts.next().and_then(|e| e.parse::<usize>().ok())))
+                    Some((
+                        parts.next()?.parse::<usize>().ok()?,
+                        parts.next().and_then(|e| e.parse::<usize>().ok()),
+                    ))
                 });
             if let Some((start, _)) = range {
                 r.lock().unwrap().push(format!("from {start}"));
@@ -84,14 +91,22 @@ fn serve(body: Vec<u8>) -> Server {
             let _ = stream.write_all(sent);
         }
     });
-    Server { port, mode, ranges, hits }
+    Server {
+        port,
+        mode,
+        ranges,
+        hits,
+    }
 }
 
 fn spec(server: &Server, body: &[u8]) -> FileSpec {
     FileSpec {
         name: "model.onnx".into(),
         url: format!("http://127.0.0.1:{}/model.onnx", server.port),
-        sha256: Sha256::digest(body).iter().map(|b| format!("{b:02x}")).collect(),
+        sha256: Sha256::digest(body)
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect(),
         bytes: body.len() as u64,
     }
 }
@@ -118,11 +133,19 @@ fn a_first_use_starts_the_download_and_finishes() {
     let root = tempfile::tempdir().unwrap();
     let device = OnDevice::with_files(root.path(), vec![spec(&server, &data)]);
     assert_eq!(device.status(), Status::NotDownloaded);
-    let error = device.embed("search_query: hi", Duration::from_secs(2)).unwrap_err();
-    assert!(error.0.contains("downloading for the first time"), "{error}");
+    let error = device
+        .embed("search_query: hi", Duration::from_secs(2))
+        .unwrap_err();
+    assert!(
+        error.0.contains("downloading for the first time"),
+        "{error}"
+    );
     let status = wait_for(&device, |s| matches!(s, Status::Ready | Status::Failed(_)));
     assert_eq!(status, Status::Ready);
-    assert_eq!(std::fs::read(device.folder().join("model.onnx")).unwrap(), data);
+    assert_eq!(
+        std::fs::read(device.folder().join("model.onnx")).unwrap(),
+        data
+    );
     assert!(!device.folder().join("model.onnx.part").exists());
 }
 
@@ -135,17 +158,31 @@ fn a_cut_connection_is_a_clear_failure_and_the_next_try_resumes() {
     let device = OnDevice::with_files(root.path(), vec![spec(&server, &data)]);
     device.start_download(false);
     let status = wait_for(&device, |s| matches!(s, Status::Ready | Status::Failed(_)));
-    let Status::Failed(message) = status else { panic!("expected a failure, got {status:?}") };
+    let Status::Failed(message) = status else {
+        panic!("expected a failure, got {status:?}")
+    };
     assert!(message.contains("could not be downloaded"), "{message}");
-    assert!(!message.contains("127.0.0.1"), "an address leaked into the message");
+    assert!(
+        !message.contains("127.0.0.1"),
+        "an address leaked into the message"
+    );
     let part = device.folder().join("model.onnx.part");
     assert_eq!(part.metadata().unwrap().len(), 100_000);
 
     *server.mode.lock().unwrap() = Mode::Good;
     device.start_download(true);
-    assert_eq!(wait_for(&device, |s| matches!(s, Status::Ready | Status::Failed(_))), Status::Ready);
-    assert_eq!(server.ranges.lock().unwrap().last().map(String::as_str), Some("from 100000"));
-    assert_eq!(std::fs::read(device.folder().join("model.onnx")).unwrap(), data);
+    assert_eq!(
+        wait_for(&device, |s| matches!(s, Status::Ready | Status::Failed(_))),
+        Status::Ready
+    );
+    assert_eq!(
+        server.ranges.lock().unwrap().last().map(String::as_str),
+        Some("from 100000")
+    );
+    assert_eq!(
+        std::fs::read(device.folder().join("model.onnx")).unwrap(),
+        data
+    );
 }
 
 #[test]
@@ -159,8 +196,14 @@ fn a_server_that_ignores_ranges_restarts_the_file() {
     wait_for(&device, |s| matches!(s, Status::Failed(_)));
     *server.mode.lock().unwrap() = Mode::NoRange;
     device.start_download(true);
-    assert_eq!(wait_for(&device, |s| matches!(s, Status::Ready | Status::Failed(_))), Status::Ready);
-    assert_eq!(std::fs::read(device.folder().join("model.onnx")).unwrap(), data);
+    assert_eq!(
+        wait_for(&device, |s| matches!(s, Status::Ready | Status::Failed(_))),
+        Status::Ready
+    );
+    assert_eq!(
+        std::fs::read(device.folder().join("model.onnx")).unwrap(),
+        data
+    );
 }
 
 #[test]
@@ -203,11 +246,16 @@ fn a_swapped_file_of_the_right_size_is_caught_before_it_is_loaded() {
     std::fs::create_dir_all(device.folder()).unwrap();
     std::fs::write(device.folder().join("model.onnx"), vec![7u8; data.len()]).unwrap();
     assert_eq!(device.status(), Status::Ready);
-    let error = device.embed("search_query: hi", Duration::from_secs(5)).unwrap_err();
+    let error = device
+        .embed("search_query: hi", Duration::from_secs(5))
+        .unwrap_err();
     assert!(error.0.contains("damaged"), "{error}");
     let status = wait_for(&device, |s| matches!(s, Status::Ready));
     assert_eq!(status, Status::Ready);
-    assert_eq!(std::fs::read(device.folder().join("model.onnx")).unwrap(), data);
+    assert_eq!(
+        std::fs::read(device.folder().join("model.onnx")).unwrap(),
+        data
+    );
 }
 
 #[test]
@@ -229,11 +277,22 @@ fn a_second_process_waits_on_the_folder_lock_and_says_so() {
         .unwrap();
     holder.lock().unwrap();
     device.start_download(false);
-    let waiting = wait_for(&device, |s| matches!(s, Status::Downloading { waiting: true, .. }));
-    assert!(matches!(waiting, Status::Downloading { waiting: true, .. }), "{waiting:?}");
-    let error = device.embed("search_query: hi", Duration::from_secs(1)).unwrap_err();
+    let waiting = wait_for(&device, |s| {
+        matches!(s, Status::Downloading { waiting: true, .. })
+    });
+    assert!(
+        matches!(waiting, Status::Downloading { waiting: true, .. }),
+        "{waiting:?}"
+    );
+    let error = device
+        .embed("search_query: hi", Duration::from_secs(1))
+        .unwrap_err();
     assert!(error.0.contains("another Moss process"), "{error}");
-    assert_eq!(server.hits.load(Ordering::SeqCst), 0, "downloaded while the lock was held");
+    assert_eq!(
+        server.hits.load(Ordering::SeqCst),
+        0,
+        "downloaded while the lock was held"
+    );
 
     let Status::Failed(message) = wait_for(&device, |s| matches!(s, Status::Failed(_))) else {
         panic!("expected the lock wait to give up")
@@ -242,7 +301,10 @@ fn a_second_process_waits_on_the_folder_lock_and_says_so() {
 
     drop(holder);
     device.start_download(true);
-    assert_eq!(wait_for(&device, |s| matches!(s, Status::Ready | Status::Failed(_))), Status::Ready);
+    assert_eq!(
+        wait_for(&device, |s| matches!(s, Status::Ready | Status::Failed(_))),
+        Status::Ready
+    );
 }
 
 #[test]
@@ -258,7 +320,39 @@ fn a_damaged_file_kept_on_size_is_still_caught_after_another_file_downloads() {
     // The model is the right size but wrong inside; the second file is missing.
     std::fs::write(device.folder().join("model.onnx"), vec![7u8; data.len()]).unwrap();
     device.start_download(false);
-    assert_eq!(wait_for(&device, |s| matches!(s, Status::Ready | Status::Failed(_))), Status::Ready);
-    let error = device.embed("search_query: hi", Duration::from_secs(5)).unwrap_err();
+    assert_eq!(
+        wait_for(&device, |s| matches!(s, Status::Ready | Status::Failed(_))),
+        Status::Ready
+    );
+    let error = device
+        .embed("search_query: hi", Duration::from_secs(5))
+        .unwrap_err();
     assert!(error.0.contains("damaged"), "{error}");
+}
+
+#[test]
+fn a_repair_replaces_only_the_files_that_fail_their_hash() {
+    let data = body();
+    let server = serve(data.clone());
+    let root = tempfile::tempdir().unwrap();
+    let model = spec(&server, &data);
+    let mut second = spec(&server, &data);
+    second.name = "tokenizer.json".into();
+    let device = OnDevice::with_files(root.path(), vec![model, second]);
+    std::fs::create_dir_all(device.folder()).unwrap();
+    std::fs::write(device.folder().join("model.onnx"), vec![7u8; data.len()]).unwrap();
+    std::fs::write(device.folder().join("tokenizer.json"), &data).unwrap();
+    device.repair();
+    assert_eq!(
+        wait_for(&device, |s| matches!(s, Status::Ready | Status::Failed(_))),
+        Status::Ready
+    );
+    assert_eq!(
+        std::fs::read(device.folder().join("model.onnx")).unwrap(),
+        data
+    );
+    assert_eq!(
+        std::fs::read(device.folder().join("tokenizer.json")).unwrap(),
+        data
+    );
 }

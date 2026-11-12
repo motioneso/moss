@@ -15,11 +15,24 @@ fn main() {
     let folder = std::env::args().nth(1).expect("model folder");
     println!("start rss_mb {}", kib("VmRSS:") / 1024);
     let mut engine = Engine::load(std::path::Path::new(&folder)).unwrap();
-    println!("loaded rss_mb {} peak_mb {}", kib("VmRSS:") / 1024, kib("VmHWM:") / 1024);
+    println!(
+        "loaded rss_mb {} peak_mb {}",
+        kib("VmRSS:") / 1024,
+        kib("VmHWM:") / 1024
+    );
     engine.embed("search_query: hello").unwrap();
-    println!("short rss_mb {} peak_mb {}", kib("VmRSS:") / 1024, kib("VmHWM:") / 1024);
+    println!(
+        "short rss_mb {} peak_mb {}",
+        kib("VmRSS:") / 1024,
+        kib("VmHWM:") / 1024
+    );
     let long = "the quick brown fox jumps over the lazy dog ".repeat(2000);
     let t = std::time::Instant::now();
     engine.embed(&format!("search_document: {long}")).unwrap();
-    println!("long rss_mb {} peak_mb {} seconds {:.2}", kib("VmRSS:") / 1024, kib("VmHWM:") / 1024, t.elapsed().as_secs_f64());
+    println!(
+        "long rss_mb {} peak_mb {} seconds {:.2}",
+        kib("VmRSS:") / 1024,
+        kib("VmHWM:") / 1024,
+        t.elapsed().as_secs_f64()
+    );
 }

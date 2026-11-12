@@ -32,7 +32,9 @@ impl CacheLock {
                 Err(TryLockError::WouldBlock) => anyhow::bail!(
                     "Another Moss process is using the search model folder. Try again in a minute"
                 ),
-                Err(TryLockError::Error(e)) => return Err(e).context("Cannot lock the model folder"),
+                Err(TryLockError::Error(e)) => {
+                    return Err(e).context("Cannot lock the model folder")
+                }
             }
         }
     }

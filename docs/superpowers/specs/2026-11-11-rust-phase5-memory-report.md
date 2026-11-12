@@ -253,7 +253,7 @@ Their own dependencies also appear in the lock file. No other new crate was adde
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Vectors match the old app                     | 14 fixed texts, short and long, unicode and code. Lowest similarity 0.9999997, and 1.0000000 for a 12,000 character text cut at 512 tokens                                                  |
 | Peak memory at the longest input              | 879 MB after loading, 928 MB peak after a 512-token input (release build, Linux)                                                                                                            |
-| Download, cut-and-resume, refusal, bad hash   | 8 tests against a local server, passing. They cover the first download, resume from byte 100000, a server that ignores ranges, a 503, a bad hash, and a damaged file kept at its right size |
+| Download, cut-and-resume, refusal, bad hash   | 9 tests against a local server, passing. They cover the first download, resume from byte 100000, a server that ignores ranges, a 503, a bad hash, and a damaged file kept at its right size |
 | Folder lock                                   | Test where a second process waits, gives up with a plain sentence, and then succeeds                                                                                                        |
 | Prefixes and activity rows on the device path | Host test. Text planted in a search reached the model, and appeared in no row, answer or failure sentence                                                                                   |
 | Live, real server over HTTPS, no endpoint     | The gate downloaded the real model in 83 seconds with progress read from the settings route, saved facts, and a search by meaning returned the right fact first                             |
@@ -285,3 +285,11 @@ and ran out of time in a debug build. The download now marks the files as checke
   test covers it and fails without the fix.
 - **Major.** A queued search could wait past its time limit before it ran. Queue and run now share
   one deadline.
+
+### Review round 2 (Codex), fixed
+
+- **Major.** A full request queue made a search wait with no limit. A full queue now answers
+  "busy" at once, and the wait for the answer uses the time left.
+- **Major.** Removing damaged files happened before taking the folder lock, so two processes could
+  delete each other's fresh files. The check and removal now run under the lock, and only files
+  that fail their hash are removed. A new test covers it.

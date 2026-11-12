@@ -54,7 +54,11 @@ pub fn pinned_files() -> Vec<FileSpec> {
 pub enum Status {
     NotDownloaded,
     /// `waiting` is true while another Moss process holds the model folder.
-    Downloading { done: u64, total: u64, waiting: bool },
+    Downloading {
+        done: u64,
+        total: u64,
+        waiting: bool,
+    },
     Ready,
     Failed(String),
 }
@@ -118,7 +122,12 @@ impl OnDevice {
     }
 
     /// Test hook. Shortens the waits.
-    pub fn with_waits(mut self, idle: Duration, lock_wait: Duration, retry_after: Duration) -> Self {
+    pub fn with_waits(
+        mut self,
+        idle: Duration,
+        lock_wait: Duration,
+        retry_after: Duration,
+    ) -> Self {
         let inner = Arc::get_mut(&mut self.inner).expect("not shared yet");
         inner.idle = idle;
         inner.lock_wait = lock_wait;
@@ -127,7 +136,10 @@ impl OnDevice {
     }
 
     fn complete(&self) -> bool {
-        self.inner.files.iter().all(|f| present(&self.inner.folder, f))
+        self.inner
+            .files
+            .iter()
+            .all(|f| present(&self.inner.folder, f))
     }
 
     pub fn status(&self) -> Status {
@@ -147,14 +159,22 @@ impl OnDevice {
     /// Starts the download in the background unless the files are complete or a download is
     /// already running. `force` also retries straight after a failure.
     pub fn start_download(&self, force: bool) {
-        if self.complete() {
+        self.start(force, false);
+    }
+
+    /// `repair` hash-checks every present file under the folder lock and removes the ones that
+    /// fail, so two processes cannot delete each other's fresh files.
+    fn start(&self, force: bool, repair: bool) {
+        if !repair && self.complete() {
             return;
         }
         {
             let mut phase = self.inner.phase.lock().unwrap_or_else(|e| e.into_inner());
             match &*phase {
                 Phase::Downloading => return,
-                Phase::Failed { at, .. } if !force && at.elapsed() < self.inner.retry_after => return,
+                Phase::Failed { at, .. } if !force && at.elapsed() < self.inner.retry_after => {
+                    return
+                }
                 _ => {}
             }
             *phase = Phase::Downloading;
@@ -165,7 +185,7 @@ impl OnDevice {
             .spawn({
                 let inner = inner.clone();
                 move || {
-                    let outcome = Self::download(&inner);
+                    let outcome = Self::download(&inner, repair);
                     // Only a download that fetched every file has checked every file's hash.
                     if matches!(outcome, Ok(true)) {
                         inner.verified.store(true, Ordering::Release);
@@ -173,7 +193,10 @@ impl OnDevice {
                     let mut phase = inner.phase.lock().unwrap_or_else(|e| e.into_inner());
                     *phase = match outcome {
                         Ok(_) => Phase::Idle,
-                        Err(message) => Phase::Failed { message, at: Instant::now() },
+                        Err(message) => Phase::Failed {
+                            message,
+                            at: Instant::now(),
+                        },
                     };
                 }
             });
@@ -186,11 +209,21 @@ impl OnDevice {
         }
     }
 
-    fn download(inner: &Inner) -> Result<bool, String> {
+    fn download(inner: &Inner, repair: bool) -> Result<bool, String> {
         inner.waiting.store(true, Ordering::Relaxed);
         let lock = CacheLock::acquire(&inner.folder, inner.lock_wait).map_err(|e| e.to_string());
         inner.waiting.store(false, Ordering::Relaxed);
         let _lock = lock?;
+        if repair {
+            for file in &inner.files {
+                let path = inner.folder.join(&file.name);
+                let good =
+                    download::hash_file(&path).is_ok_and(|h| h.eq_ignore_ascii_case(&file.sha256));
+                if !good {
+                    let _ = std::fs::remove_file(&path);
+                }
+            }
+        }
         fetch_all(&inner.folder, &inner.files, &inner.progress).map_err(|f: Failure| f.message())
     }
 
@@ -200,7 +233,11 @@ impl OnDevice {
         let deadline = Instant::now() + timeout;
         match self.status() {
             Status::Ready => {}
-            Status::Downloading { done, total, waiting } => {
+            Status::Downloading {
+                done,
+                total,
+                waiting,
+            } => {
                 return Err(Unavailable(if waiting {
                     "The search model is being downloaded by another Moss process".into()
                 } else {
@@ -260,12 +297,16 @@ impl OnDevice {
         Err(Unavailable("The search model could not start".into()))
     }
 
+    /// Starts a locked repair, as a damaged-file report does.
+    #[doc(hidden)]
+    pub fn repair(&self) {
+        self.discard_damaged();
+    }
+
     fn discard_damaged(&self) {
         *self.inner.worker.lock().unwrap_or_else(|e| e.into_inner()) = None;
-        for file in &self.inner.files {
-            let _ = std::fs::remove_file(self.inner.folder.join(&file.name));
-        }
-        self.start_download(true);
+        self.inner.verified.store(false, Ordering::Release);
+        self.start(true, true);
     }
 }
 

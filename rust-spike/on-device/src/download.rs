@@ -65,7 +65,11 @@ pub fn hash_file(path: &Path) -> std::io::Result<String> {
         }
         hasher.update(&buffer[..n]);
     }
-    Ok(hasher.finalize().iter().map(|b| format!("{b:02x}")).collect())
+    Ok(hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect())
 }
 
 /// True when the file exists at its pinned size. The hash is checked separately, once per run.
@@ -84,8 +88,12 @@ fn client() -> Result<reqwest::blocking::Client, Failure> {
         .timeout(Duration::from_secs(120))
         .redirect(reqwest::redirect::Policy::custom(|attempt| {
             let url = attempt.url();
-            let local = url.host_str().is_some_and(|h| h == "127.0.0.1" || h == "localhost");
-            if attempt.previous().len() >= 5 || !(url.scheme() == "https" || (url.scheme() == "http" && local)) {
+            let local = url
+                .host_str()
+                .is_some_and(|h| h == "127.0.0.1" || h == "localhost");
+            if attempt.previous().len() >= 5
+                || !(url.scheme() == "https" || (url.scheme() == "http" && local))
+            {
                 attempt.stop()
             } else {
                 attempt.follow()
@@ -102,7 +110,11 @@ fn client() -> Result<reqwest::blocking::Client, Failure> {
 pub fn fetch_all(folder: &Path, files: &[FileSpec], progress: &Progress) -> Result<bool, Failure> {
     std::fs::create_dir_all(folder).map_err(|e| disk(&e))?;
     let client = client()?;
-    let mut finished: u64 = files.iter().filter(|f| present(folder, f)).map(|f| f.bytes).sum();
+    let mut finished: u64 = files
+        .iter()
+        .filter(|f| present(folder, f))
+        .map(|f| f.bytes)
+        .sum();
     progress.done.store(finished, Ordering::Relaxed);
     let all_fresh = !files.iter().any(|f| present(folder, f));
     for file in files.iter().filter(|f| !present(folder, f)) {
@@ -177,7 +189,9 @@ fn fetch_one(
             }
             out.write_all(&buffer[..n]).map_err(|e| disk(&e))?;
             written += n as u64;
-            progress.done.store(finished + written.min(file.bytes), Ordering::Relaxed);
+            progress
+                .done
+                .store(finished + written.min(file.bytes), Ordering::Relaxed);
         }
         out.sync_all().map_err(|e| disk(&e))?;
         drop(out);

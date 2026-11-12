@@ -85,8 +85,10 @@ impl Engine {
             }
         }
         let norm = mean.iter().map(|x| x * x).sum::<f64>().sqrt();
-        anyhow::ensure!(norm.is_finite() && norm > 0.0, "The model returned no usable vector");
+        anyhow::ensure!(
+            norm.is_finite() && norm > 0.0,
+            "The model returned no usable vector"
+        );
         Ok(mean.iter().map(|x| (x / norm) as f32).collect())
     }
 }
-

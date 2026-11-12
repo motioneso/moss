@@ -8,7 +8,7 @@ use std::{
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, Ordering},
-        mpsc::{sync_channel, RecvTimeoutError, SyncSender},
+        mpsc::{sync_channel, RecvTimeoutError, SyncSender, TrySendError},
         Arc,
     },
     time::{Duration, Instant},
@@ -50,7 +50,8 @@ fn load(setup: &Setup) -> Result<Engine, WorkerError> {
         }
         setup.verified.store(true, Ordering::Release);
     }
-    Engine::load(&setup.folder).map_err(|_| WorkerError::Failed("The search model could not be loaded"))
+    Engine::load(&setup.folder)
+        .map_err(|_| WorkerError::Failed("The search model could not be loaded"))
 }
 
 impl Worker {
@@ -67,7 +68,9 @@ impl Worker {
                         Err(RecvTimeoutError::Timeout | RecvTimeoutError::Disconnected) => return,
                     };
                     if Instant::now() >= job.deadline {
-                        let _ = job.reply.send(Err(WorkerError::Failed("The search model took too long")));
+                        let _ = job
+                            .reply
+                            .send(Err(WorkerError::Failed("The search model took too long")));
                         continue;
                     }
                     if engine.is_none() {
@@ -82,10 +85,14 @@ impl Worker {
                     let result = engine.as_mut().map_or(
                         Err(WorkerError::Failed("The search model is not loaded")),
                         |e| {
-                            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| e.embed(&job.text)))
-                                .ok()
-                                .and_then(Result::ok)
-                                .ok_or(WorkerError::Failed("The search model could not read this text"))
+                            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                e.embed(&job.text)
+                            }))
+                            .ok()
+                            .and_then(Result::ok)
+                            .ok_or(WorkerError::Failed(
+                                "The search model could not read this text",
+                            ))
                         },
                     );
                     let _ = job.reply.send(result);
@@ -98,10 +105,20 @@ impl Worker {
     pub fn embed(&self, text: &str, timeout: Duration) -> Option<Result<Vec<f32>, WorkerError>> {
         let (reply, answer) = sync_channel(1);
         let deadline = Instant::now() + timeout;
-        self.queue
-            .send(Job { text: text.to_owned(), deadline, reply })
-            .ok()?;
-        match answer.recv_timeout(timeout) {
+        match self.queue.try_send(Job {
+            text: text.to_owned(),
+            deadline,
+            reply,
+        }) {
+            Ok(()) => {}
+            Err(TrySendError::Full(_)) => {
+                return Some(Err(WorkerError::Failed(
+                    "The search model is busy, try again shortly",
+                )))
+            }
+            Err(TrySendError::Disconnected(_)) => return None,
+        }
+        match answer.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
             Ok(result) => Some(result),
             Err(RecvTimeoutError::Timeout) => {
                 Some(Err(WorkerError::Failed("The search model took too long")))

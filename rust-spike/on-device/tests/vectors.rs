@@ -23,7 +23,11 @@ fn vectors_match_the_old_app() {
     let mut engine = Engine::load(&PathBuf::from(dir)).unwrap();
     let mut worst = 1.0_f64;
     for (item, expected) in texts.iter().zip(&old) {
-        let prefix = if item["kind"] == "query" { "search_query: " } else { "search_document: " };
+        let prefix = if item["kind"] == "query" {
+            "search_query: "
+        } else {
+            "search_document: "
+        };
         let text = format!("{prefix}{}", item["text"].as_str().unwrap());
         let got = engine.embed(&text).unwrap();
         assert_eq!(got.len(), 768);
