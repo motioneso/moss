@@ -68,7 +68,7 @@ impl Host for Fake {
                 Ok(json!({"task":{"id":"00000000-0000-4000-8000-0000000000d1"}}))
             }
             // These meetings have no recording row, so a summary read finds none.
-            ("db", "app.meeting_recording_metadata", "query") => Ok(json!([])),
+            ("db", "app.meeting_recording_metadata" | "app.meeting_records", "query") => Ok(json!([])),
             other => panic!("unexpected call {other:?}"),
         }
     }
