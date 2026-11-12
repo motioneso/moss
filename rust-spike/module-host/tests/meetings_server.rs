@@ -341,8 +341,8 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
     let (status, text) = notes(K2, 0, "stale edit", &cookie);
     assert_eq!((status, json_of(&text)["code"].clone()), (409, json!("meeting_notes_conflict")), "{text}");
     assert!(json_of(&text)["meeting"]["personalNotes"].as_str().is_some_and(|n| n.contains("agenda")), "the stale answer carries the current notes: {text}");
-    let (status, text) = call(Method::PUT, &format!("/records/{id}/title"), Some(&cookie), Some(json!({"requestKey":K3,"title":"Renamed","expectedTitle":format!("Weekly {MARK}")})));
-    println!("rename -> {status} {}", text.len());
+    let (status, text) = call(Method::PUT, &format!("/records/{id}/title"), Some(&cookie), Some(json!({"title":"Renamed","expectedTitle":format!("Weekly {MARK}")})));
+    assert_eq!((status, json_of(&text)["status"].clone()), (200, json!("saved")), "{text}");
     let (status, text) = call(Method::GET, &format!("/records/{id}"), Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
     assert!(json_of(&text)["meeting"]["personalNotes"].as_str().unwrap().contains("agenda"));

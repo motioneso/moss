@@ -107,8 +107,8 @@ fn installed_meetings_keep_each_persons_records_notes_and_preferences_private() 
     assert_eq!(stale["status"], 409);
     assert_eq!(stale["body"]["code"], "meeting_notes_conflict");
     let renamed = call(f.a, "PUT", &format!("/records/{id}/title"),
-        json!({"requestKey":K3,"title":"Renamed","expectedTitle":format!("Plan {MARK}")}));
-    assert!(matches!(renamed["status"].as_u64(), Some(200 | 400)), "{renamed}");
+        json!({"title":"Renamed","expectedTitle":format!("Plan {MARK}")}));
+    assert_eq!((renamed["status"].as_u64(), &renamed["body"]["status"]), (Some(200), &json!("saved")), "{renamed}");
 
     // Person B and an administrator see nothing and change nothing.
     let foreign = |actor| {
