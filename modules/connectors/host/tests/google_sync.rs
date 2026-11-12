@@ -43,7 +43,9 @@ impl Ports for Seen {
 
 impl Seen {
     fn named(&self, name: &str) -> Vec<Value> {
-        self.0.lock().unwrap().iter().filter(|c| c.1 == name).map(|c| c.2.clone()).collect()
+        let all = self.0.lock().unwrap();
+        let inner = |p: &Value| if p["parameters"].is_object() { p["parameters"].clone() } else { p.clone() };
+        all.iter().filter(|c| c.1 == name).map(|c| inner(&c.2)).collect()
     }
     fn text(&self) -> String {
         serde_json::to_string(&*self.0.lock().unwrap()).unwrap()
@@ -248,7 +250,7 @@ fn transient_refusals_are_retried_and_a_stubborn_one_is_recorded_without_google_
     f.fake.rate_limit_next(50);
     f.sync(f.a, id, false);
     let row = f.row(id);
-    assert_eq!(row["last_sync_status"], "failed");
+    assert_eq!(row["last_sync_status"], "partial", "the first error was in Calendar");
     let detail = &row["last_sync_counts"]["emailErrorDetail"];
     assert_eq!(detail["status"], 429);
     assert!(detail["operation"].is_string());
