@@ -17,15 +17,61 @@ use tokio::runtime::Runtime;
 use tokio_postgres::types::ToSql;
 use uuid::Uuid;
 
-struct Session {
+/// The one database transaction a host invocation owns. Adapters placed below this
+/// layer join it through `join_call_session`, so their reads and writes see the
+/// module's typed-query writes and commit or roll back together with them.
+pub struct Session {
     context: DataContext,
     failed: bool,
 }
-type SharedSession = Arc<Mutex<Session>>;
+impl Session {
+    pub fn context(&self) -> &DataContext {
+        &self.context
+    }
+}
+pub type SharedSession = Arc<Mutex<Session>>;
+
+fn registry() -> &'static Mutex<BTreeMap<Uuid, SharedSession>> {
+    static SESSIONS: std::sync::OnceLock<Mutex<BTreeMap<Uuid, SharedSession>>> =
+        std::sync::OnceLock::new();
+    SESSIONS.get_or_init(|| Mutex::new(BTreeMap::new()))
+}
+
+fn open_session(database: &Database, runtime: &Runtime, scope: &CallScope) -> Result<SharedSession> {
+    let busy = || anyhow::anyhow!("Database sessions busy");
+    if let Some(session) = registry().lock().map_err(|_| busy())?.get(&scope.call_id()) {
+        return Ok(session.clone());
+    }
+    // The registry lock is not held while waiting for a connection, so finishing calls can
+    // still commit and release theirs.
+    let context = runtime
+        .block_on(DataContext::open_bounded(database, scope.access(), scope.remaining()))
+        .map_err(|_| anyhow::anyhow!("Could not open the module data context"))?;
+    let mut sessions = registry().lock().map_err(|_| busy())?;
+    if let Some(session) = sessions.get(&scope.call_id()) {
+        return Ok(session.clone());
+    }
+    let session = Arc::new(Mutex::new(Session {
+        context,
+        failed: false,
+    }));
+    sessions.insert(scope.call_id(), session.clone());
+    Ok(session)
+}
+
+/// Returns the invocation's transaction, opening it when this is the first use.
+/// The invocation's `finish_call` in `TransactionalDatabasePorts` commits it.
+pub fn join_call_session(
+    database: &Database,
+    runtime: &Runtime,
+    scope: &CallScope,
+) -> Result<SharedSession> {
+    open_session(database, runtime, scope)
+}
+
 pub struct TransactionalDatabasePorts {
     database: Database,
     runtime: Runtime,
-    sessions: Mutex<BTreeMap<Uuid, SharedSession>>,
     next: Arc<dyn Ports>,
 }
 impl TransactionalDatabasePorts {
@@ -33,37 +79,11 @@ impl TransactionalDatabasePorts {
         Ok(Self {
             database,
             runtime: Runtime::new()?,
-            sessions: Mutex::new(BTreeMap::new()),
             next,
         })
     }
     fn session(&self, scope: &CallScope) -> Result<SharedSession> {
-        if let Some(session) = self
-            .sessions
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Database sessions busy"))?
-            .get(&scope.call_id())
-            .cloned()
-        {
-            return Ok(session);
-        }
-        let context = self
-            .runtime
-            .block_on(DataContext::open_bounded(
-                &self.database,
-                scope.access(),
-                scope.remaining(),
-            ))
-            .map_err(|_| anyhow::anyhow!("Could not open the module data context"))?;
-        let session = Arc::new(Mutex::new(Session {
-            context,
-            failed: false,
-        }));
-        self.sessions
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Database sessions busy"))?
-            .insert(scope.call_id(), session.clone());
-        Ok(session)
+        open_session(&self.database, &self.runtime, scope)
     }
     async fn query(&self, cx: &DataContext, scope: &CallScope, request: &Request) -> Result<Value> {
         let table = &request.resource;
@@ -173,8 +193,7 @@ impl Ports for TransactionalDatabasePorts {
         result
     }
     fn finish_call(&self, scope: &CallScope, success: bool) -> Result<()> {
-        let session = self
-            .sessions
+        let session = registry()
             .lock()
             .map_err(|_| anyhow::anyhow!("Database sessions busy"))?
             .remove(&scope.call_id());

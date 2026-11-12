@@ -13,6 +13,7 @@ pub const PORTS: &[&str] = &[
     "credentials",
     "ai",
     "embed",
+    "transcribe",
     "jobs",
     "events",
     "api",
@@ -526,7 +527,7 @@ impl Manifest {
                     "db" | "kv" => ("data", "Store and read this module's data"),
                     "vault" | "attachments" => ("files", "Read the files you give this module"),
                     "fetch" | "credentials" => ("network", "Contact approved services"),
-                    "ai" | "embed" => ("AI", "Use your chosen AI service"),
+                    "ai" | "embed" | "transcribe" => ("AI", "Use your chosen AI service"),
                     "tools" | "action-policy" => {
                         ("chat tools", "Offer tools under your approval rules")
                     }

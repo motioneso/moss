@@ -110,3 +110,4 @@ modules/meetings/tools/transcript-cases.json
 
 # Generated reference vectors, kept on one line so the file stays under the size limit.
 rust-spike/on-device/fixtures/old-vectors.json
+modules/meetings/tools/recording-cases.json

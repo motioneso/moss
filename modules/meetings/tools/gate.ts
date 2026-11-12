@@ -20,6 +20,8 @@ const run = spawnSync(
     "installed",
     "--test",
     "transcripts",
+    "--test",
+    "recording",
     "--",
     "--ignored",
     "--nocapture",

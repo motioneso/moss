@@ -4,6 +4,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use moss_module_host::ai::{EmbeddingEndpoint, EmbeddingStore, Intelligence, RouterIntelligence};
+use moss_module_host::transcribe::{TranscriptionRoute, TranscriptionStore};
 use moss_platform_adapters::{Endpoint, EndpointStore, HttpAdapters, Protocol, Secret};
 use moss_platform_contracts::{Actor, Error};
 use moss_platform_routing::{Capability, Configuration, ConfigurationStore, Model, Provider, Tier};
@@ -185,6 +186,43 @@ impl EndpointStore for AiStore {
     }
 }
 
+/// The speech route is the model the routing table picks for transcription, on its own
+/// provider. Only OpenAI-compatible providers take the transcription request.
+#[async_trait]
+impl TranscriptionStore for AiStore {
+    async fn route(&self, actor: Actor) -> Result<TranscriptionRoute> {
+        let config = ConfigurationStore::for_actor(self, actor).await.map_err(|e| anyhow::anyhow!("{e}"))?;
+        let model = moss_platform_routing::resolve(&config, Capability::Transcription, Tier::Interactive)
+            .model
+            .ok_or_else(|| anyhow::anyhow!("No speech model is configured"))?;
+        let cx = self.open(actor).await.map_err(|e| anyhow::anyhow!("{e}"))?;
+        let row = cx
+            .db()
+            .query_opt(
+                "SELECT provider_kind::text, base_url, encrypted_credential \
+                 FROM app.ai_provider_configs WHERE id = $1 AND status = 'active'",
+                &[&model.provider_id],
+            )
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("The speech provider is not available"))?;
+        cx.commit().await.map_err(|_| anyhow::anyhow!("The speech provider is not available"))?;
+        anyhow::ensure!(
+            row.get::<_, String>(0) == "openai-compatible",
+            "The speech provider does not take this request"
+        );
+        let stored: Value = row.get(2);
+        let fields = self.cipher.open(&stored).map_err(|_| anyhow::anyhow!("The speech credential is not available"))?;
+        let key = fields.get("apiKey").ok_or_else(|| anyhow::anyhow!("The speech credential is not available"))?;
+        let base = row.get::<_, Option<String>>(1).unwrap_or_default();
+        Ok(TranscriptionRoute {
+            base: base.parse()?,
+            model: model.provider_model_id,
+            provider: model.provider_id.to_string(),
+            credential: safety_core::secret::Secret::new(key.expose_secret().to_owned()),
+        })
+    }
+}
+
 /// Embeddings have no configured source on this server yet, so they fail closed.
 struct NoEmbeddings;
 #[async_trait]
@@ -200,9 +238,8 @@ pub fn intelligence(database: Database, cipher: SecretCipher) -> Result<Arc<dyn 
         cipher: Arc::new(cipher),
     };
     let transport = HttpAdapters::new(store.clone()).map_err(|e| anyhow::anyhow!("{e}"))?;
-    Ok(Arc::new(RouterIntelligence::new(
-        store,
-        transport,
-        NoEmbeddings,
-    )?))
+    let speech = Arc::new(store.clone());
+    Ok(Arc::new(
+        RouterIntelligence::new(store, transport, NoEmbeddings)?.with_transcription(speech),
+    ))
 }

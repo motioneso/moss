@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 pub mod fake_embedding_model;
+pub mod fake_speech_server;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use moss_module_host::{
     archive::{pack, Package},

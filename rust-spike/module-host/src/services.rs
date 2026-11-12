@@ -245,6 +245,7 @@ impl ServicePorts {
             "credentials" => self.broker(scope, r),
             "ai" => self.ai.generate(scope, r),
             "embed" => self.ai.embed(scope, r),
+            "transcribe" => self.ai.transcribe(scope, r),
             "notify" => {
                 ensure!(r.operation == "post", "Unknown notification operation");
                 let text = r.parameters["text"]

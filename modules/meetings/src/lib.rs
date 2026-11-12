@@ -5,7 +5,9 @@ pub mod history;
 pub mod js;
 pub mod jobs;
 pub mod lifecycle;
+pub mod manual;
 pub mod preferences;
+pub mod recording;
 pub mod records;
 pub mod schema;
 pub mod store;
@@ -36,12 +38,26 @@ pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
         ("GET", "/records/:id/transcript/evidence") => transcript_routes::evidence(host, &request),
         ("POST", "/history/search") => history::search(host, &request),
         ("GET", "/history/:id") => history::get(host, &request),
+        ("GET", "/recording-types") => return recording_route(|| recording::Recording::new(host).get_types()),
+        ("PUT", "/recording-types") => {
+            return recording_route(|| recording::Recording::new(host).put_types(&request.body))
+        }
+        ("GET", "/records/:id/recording") => return recording_route(|| recording::Recording::new(host).get(&request)),
+        ("PUT", "/records/:id/recording/type") => {
+            return recording_route(|| recording::Recording::new(host).put_type(&request))
+        }
+        ("POST", "/manual-transcripts") => return recording_route(|| manual::post(host, &request)),
         ("GET", "/preferences") => preferences::get(host),
         ("PUT", "/preferences") => preferences::put(host, &request.body),
         _ => return Response::new(404, json!({"message":"Route not found"})),
     };
     // Host errors can carry request text, so only a fixed message leaves the guest.
     result.unwrap_or_else(|_| Response::new(500, json!({"message":"Internal server error"})))
+}
+
+/// Recording routes answer a host failure with the old 503 body.
+fn recording_route(run: impl FnOnce() -> moss_module_sdk::Result<Response>) -> Response {
+    run().unwrap_or_else(|_| Response::new(503, json!({"code":"recording_unavailable"})))
 }
 
 /// The same entry point runs natively in tests and inside the packaged component.

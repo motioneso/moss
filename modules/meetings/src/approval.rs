@@ -7,8 +7,8 @@ use moss_module_sdk::{query::{Filter, Query}, Client, Host, Result};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 
-/// How chat treats each route. Reads are open; writes and the delete need approval.
-pub const CHAT_CLASSES: [(&str, &str, &str); 13] = [
+/// How chat treats each route. Reads are open; writes and the delete need approval; blocked routes never run from chat.
+pub const CHAT_CLASSES: [(&str, &str, &str); 18] = [
     ("GET", "/records", "read"),
     ("GET", "/records/:id", "read"),
     ("POST", "/records", "write"),
@@ -22,6 +22,11 @@ pub const CHAT_CLASSES: [(&str, &str, &str); 13] = [
     ("GET", "/history/:id", "read"),
     ("GET", "/preferences", "read"),
     ("PUT", "/preferences", "write"),
+    ("GET", "/recording-types", "read"),
+    ("PUT", "/recording-types", "write"),
+    ("GET", "/records/:id/recording", "read"),
+    ("PUT", "/records/:id/recording/type", "blocked"),
+    ("POST", "/manual-transcripts", "blocked"),
 ];
 
 pub const REPEAT_NOTE: &str = "An identical retry uses the original result instead of repeating the change";

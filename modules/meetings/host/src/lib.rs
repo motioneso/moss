@@ -2,12 +2,10 @@
 //! Capture preferences live in the account's shared preference rows under six fixed keys.
 use anyhow::{ensure, Result};
 use moss_module_host::runtime::{CallScope, Ports, Request};
+use moss_module_host::transactional_database::join_call_session;
 use safety_core::db::{DataContext, Database};
 use serde_json::{Map, Value};
-use std::{
-    collections::BTreeMap,
-    sync::{Arc, Mutex},
-};
+use std::sync::Arc;
 
 pub mod package;
 pub mod store;
@@ -28,8 +26,6 @@ pub struct MeetingsPorts {
     database: Database,
     runtime: tokio::runtime::Runtime,
     next: Arc<dyn Ports>,
-    /// One transaction per guest call, opened by the first preference operation.
-    pending: Mutex<BTreeMap<String, DataContext>>,
 }
 impl MeetingsPorts {
     pub fn new(database: Database, next: Arc<dyn Ports>) -> Result<Self> {
@@ -37,44 +33,30 @@ impl MeetingsPorts {
             database,
             runtime: tokio::runtime::Runtime::new()?,
             next,
-            pending: Mutex::new(BTreeMap::new()),
         })
     }
 
-    fn take(&self, scope: &CallScope) -> Result<Option<DataContext>> {
-        Ok(self
-            .pending
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Meetings preferences busy"))?
-            .remove(&scope.call_id().to_string()))
-    }
-
-    /// Runs one store operation in the call's transaction, opening it on first use.
+    /// Runs one store operation in the call's shared transaction, so it sees the
+    /// module's own typed-query writes from the same call.
     fn run(&self, scope: &CallScope, work: impl for<'a> FnOnce(&'a DataContext) -> Work<'a>) -> Result<Value> {
-        let reused = self.take(scope)?;
-        let (cx, out) = self.runtime.block_on(async {
+        let session = join_call_session(&self.database, &self.runtime, scope)?;
+        let session = session
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Meetings store busy"))?;
+        self.runtime.block_on(async {
             tokio::time::timeout(scope.remaining(), async {
-                let cx = match reused {
-                    Some(cx) => cx,
-                    None => DataContext::open_bounded(&self.database, scope.access(), scope.remaining())
-                        .await
-                        .map_err(|_| anyhow::anyhow!("Meetings store unavailable"))?,
-                };
+                let cx = session.context();
+                // A typed query earlier in this call may have selected the module role.
+                cx.db().batch_execute("RESET ROLE").await?;
                 let timeout = scope.remaining().as_millis().clamp(1, 30_000).to_string();
                 cx.db()
                     .query_one("SELECT set_config('statement_timeout',$1,true)", &[&timeout])
                     .await?;
-                let out = work(&cx).await?;
-                Ok::<_, anyhow::Error>((cx, out))
+                work(cx).await
             })
             .await
             .map_err(|_| anyhow::anyhow!("Meetings store deadline expired"))?
-        })?;
-        self.pending
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Meetings store busy"))?
-            .insert(scope.call_id().to_string(), cx);
-        Ok(out)
+        })
     }
 
     fn store(&self, scope: &CallScope, request: &Request) -> Result<Value> {
@@ -83,6 +65,8 @@ impl MeetingsPorts {
             (store::TRANSCRIPTS, "get") => self.run(scope, move |cx| Box::pin(async move { store::read(cx, &parameters, false).await })),
             (store::TRANSCRIPTS, "lock") => self.run(scope, move |cx| Box::pin(async move { store::read(cx, &parameters, true).await })),
             (store::TRANSCRIPTS, "set") => self.run(scope, move |cx| Box::pin(async move { store::write(cx, &parameters).await })),
+            (store::RECORDING_TYPES, "get") => self.run(scope, move |cx| Box::pin(async move { store::recording_types_lock(cx, &parameters, false).await })),
+            (store::RECORDING_TYPES, "lock") => self.run(scope, move |cx| Box::pin(async move { store::recording_types_lock(cx, &parameters, true).await })),
             (store::HISTORY, "get") => self.run(scope, move |cx| Box::pin(async move { store::history(cx, &parameters).await })),
             _ => anyhow::bail!("Unsupported Meetings store operation"),
         }
@@ -114,19 +98,14 @@ impl MeetingsPorts {
             }
             _ => anyhow::bail!("Unsupported Meetings preference operation"),
         };
-        let reused = self.take(scope)?;
-        let (cx, out) = self.runtime.block_on(async {
+        let session = join_call_session(&self.database, &self.runtime, scope)?;
+        let session = session
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Meetings preferences busy"))?;
+        self.runtime.block_on(async {
             tokio::time::timeout(scope.remaining(), async {
-                let cx = match reused {
-                    Some(cx) => cx,
-                    None => DataContext::open_bounded(
-                        &self.database,
-                        scope.access(),
-                        scope.remaining(),
-                    )
-                    .await
-                    .map_err(|_| anyhow::anyhow!("Meetings preferences unavailable"))?,
-                };
+                let cx = session.context();
+                cx.db().batch_execute("RESET ROLE").await?;
                 let timeout = scope.remaining().as_millis().clamp(1, 30_000).to_string();
                 cx.db()
                     .query_one("SELECT set_config('statement_timeout',$1,true)", &[&timeout])
@@ -161,22 +140,16 @@ impl MeetingsPorts {
                 for row in rows {
                     values.insert(row.get(0), row.get(1));
                 }
-                Ok::<_, anyhow::Error>((cx, Value::Object(values)))
+                Ok::<_, anyhow::Error>(Value::Object(values))
             })
             .await
             .map_err(|_| anyhow::anyhow!("Meetings preferences deadline expired"))?
-        })?;
-        let mut pending = self
-            .pending
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Meetings preferences busy"))?;
-        pending.insert(scope.call_id().to_string(), cx);
-        Ok(out)
+        })
     }
 }
 impl Ports for MeetingsPorts {
     fn invoke(&self, scope: &CallScope, port: &str, request: &Request) -> Result<Value> {
-        let ours = [RESOURCE, store::TRANSCRIPTS, store::HISTORY];
+        let ours = [RESOURCE, store::TRANSCRIPTS, store::HISTORY, store::RECORDING_TYPES];
         if port != "kv" || !ours.contains(&request.resource.as_str()) || scope.module().id != "meetings" {
             return self.next.invoke(scope, port, request);
         }
@@ -188,17 +161,6 @@ impl Ports for MeetingsPorts {
         }
     }
     fn finish_call(&self, scope: &CallScope, success: bool) -> Result<()> {
-        let pending = self.take(scope)?;
-        self.next.finish_call(scope, success)?;
-        if let Some(cx) = pending {
-            if success {
-                ensure!(!scope.remaining().is_zero(), "Meetings preferences deadline expired");
-                self.runtime
-                    .block_on(cx.commit_bounded(scope.remaining()))
-                    .map_err(|_| anyhow::anyhow!("Meetings preferences unavailable"))?;
-            }
-            // Dropping without a commit rolls the account's write back on a failed call.
-        }
-        Ok(())
+        self.next.finish_call(scope, success)
     }
 }
