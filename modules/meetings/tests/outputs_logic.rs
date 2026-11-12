@@ -208,3 +208,14 @@ fn notes_citations_shift_back_to_full_offsets_except_carried_ones() {
     let carried = moss_meetings_module::output_chunks::note_citation_keys(&answer);
     assert_eq!(shift_evidence(&answer, 1000, &carried), answer);
 }
+
+#[test]
+fn odd_notes_offsets_are_left_for_validation_to_refuse() {
+    let cite = |a: serde_json::Value, b: serde_json::Value| {
+        json!({"kind":"personal-note","meetingId":"m","notesRevision":1,"startCharacter":a,"endCharacter":b})
+    };
+    let huge = cite(json!(1e100), json!(1e100));
+    assert_eq!(shift_evidence(&huge, 1000, &Default::default()), huge);
+    let fractional = cite(json!(0.5), json!(4.5));
+    assert_eq!(shift_evidence(&fractional, 1000, &Default::default()), fractional);
+}

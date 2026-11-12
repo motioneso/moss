@@ -175,7 +175,11 @@ pub fn shift_evidence(value: &Value, notes_start: usize, preserved: &HashSet<Str
             let mut out = serde_json::Map::new();
             for (key, item) in map {
                 let item = if shift && (key == "startCharacter" || key == "endCharacter") {
-                    json!(item.as_f64().unwrap_or(0.0) as i64 + notes_start as i64)
+                    // Fractions, huge numbers and non-numbers stay as sent, so validation refuses them.
+                    match item.as_i64().and_then(|n| n.checked_add(notes_start as i64)) {
+                        Some(n) if n <= 9_007_199_254_740_991 => json!(n),
+                        _ => item.clone(),
+                    }
                 } else {
                     shift_evidence(item, notes_start, preserved)
                 };
