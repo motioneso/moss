@@ -98,6 +98,8 @@ docs/superpowers/specs/mockups/moss-runs-itself/
 docs/superpowers/mockups/summary-update-guard/
 # Summary owner context and speaker guesses mockups (JS-27): static page that borrows the classifier-gate stylesheet, frozen for review.
 docs/superpowers/mockups/summary-owner-context/
+# Memory screen mockups (JS-239): static page that borrows the classifier-gate fonts, frozen for review.
+docs/superpowers/mockups/memory-screen/
 
 # Generated build output for the isolated Rust platform workspace.
 rust-spike/platform/target/
