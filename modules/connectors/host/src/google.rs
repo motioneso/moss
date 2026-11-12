@@ -21,6 +21,8 @@ use uuid::Uuid;
 pub const PROVIDER: &str = "google";
 pub const AUTH_ENDPOINT: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 pub const TOKEN_ENDPOINT: &str = "https://oauth2.googleapis.com/token";
+pub const GMAIL_BASE: &str = "https://gmail.googleapis.com/gmail/v1";
+pub const CALENDAR_BASE: &str = "https://www.googleapis.com/calendar/v3";
 pub const LOOPBACK_REDIRECT: &str = "http://localhost:1";
 pub const SCOPES: [&str; 2] = [
     "https://www.googleapis.com/auth/gmail.modify",
@@ -39,6 +41,10 @@ pub struct GoogleConfig {
     token_url: Url,
     hosts: BTreeSet<String>,
     allow_private: bool,
+    gmail_base: Url,
+    calendar_base: Url,
+    api_hosts: BTreeSet<String>,
+    retry_delay: Duration,
     now: Arc<dyn Fn() -> DateTime<Utc> + Send + Sync>,
     attempts: Mutex<HashMap<Uuid, VecDeque<Instant>>>,
 }
@@ -60,7 +66,12 @@ impl GoogleConfig {
             None => false,
         };
         ensure!(url.scheme() == "http" && loopback, "The test-only Google address must be http on this machine");
-        Ok(Self::with_transport(Arc::new(PlainHttp), url, true))
+        let mut config = Self::with_transport(Arc::new(PlainHttp), url.clone(), true);
+        let origin = url.origin().ascii_serialization();
+        config.gmail_base = Url::parse(&format!("{origin}/gmail/v1")).expect("loopback origin");
+        config.calendar_base = Url::parse(&format!("{origin}/calendar/v3")).expect("loopback origin");
+        config.api_hosts = url.host_str().map(String::from).into_iter().collect();
+        Ok(config)
     }
 
     /// A transport that may reach any address, for a stand-in Google. Never used in a normal install.
@@ -71,9 +82,61 @@ impl GoogleConfig {
             token_url,
             hosts,
             allow_private,
+            gmail_base: Url::parse(GMAIL_BASE).expect("fixed address"),
+            calendar_base: Url::parse(CALENDAR_BASE).expect("fixed address"),
+            api_hosts: ["gmail.googleapis.com", "www.googleapis.com"].map(String::from).into(),
+            retry_delay: Duration::from_millis(250),
             now: Arc::new(Utc::now),
             attempts: Mutex::default(),
         }
+    }
+
+    pub(crate) fn gmail_base(&self) -> &Url {
+        &self.gmail_base
+    }
+
+    pub(crate) fn calendar_base(&self) -> &Url {
+        &self.calendar_base
+    }
+
+    pub(crate) fn retry_delay(&self) -> Duration {
+        self.retry_delay
+    }
+
+    /// The wait before a retried Google read, times the attempt number. Tests shorten it.
+    pub fn with_retry_delay(mut self, delay: Duration) -> Self {
+        self.retry_delay = delay;
+        self
+    }
+
+    pub(crate) fn now(&self) -> DateTime<Utc> {
+        (self.now)()
+    }
+
+    /// A read from the Gmail or Calendar API. The outer error is a transport failure. The
+    /// answer is the status and the body. Nothing here records the token or the body.
+    pub(crate) async fn get(&self, url: Url, token: &str) -> Result<(u16, Vec<u8>)> {
+        let transport = Arc::clone(&self.transport);
+        let (hosts, allow_private) = (self.api_hosts.clone(), self.allow_private);
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            reqwest::header::AUTHORIZATION,
+            format!("Bearer {token}").parse().map_err(|_| anyhow!("Unusable access token"))?,
+        );
+        let response = tokio::task::spawn_blocking(move || {
+            transport.send(Outbound {
+                url: &url,
+                hosts: &hosts,
+                allow_private,
+                method: Method::GET,
+                headers,
+                body: None,
+                timeout: HTTP_LIMIT,
+            })
+        })
+        .await
+        .map_err(|_| anyhow!("The Google request did not finish"))??;
+        Ok((response.status, response.body))
     }
 
     pub fn with_clock(mut self, now: Arc<dyn Fn() -> DateTime<Utc> + Send + Sync>) -> Self {
@@ -440,22 +503,24 @@ async fn post_token(
 struct PlainHttp;
 impl Transport for PlainHttp {
     fn send(&self, r: Outbound<'_>) -> Result<Response> {
-        let fields: Vec<(String, String)> = r
-            .body
-            .as_ref()
-            .and_then(Value::as_object)
-            .into_iter()
-            .flatten()
-            .filter_map(|(k, v)| v.as_str().map(|v| (k.clone(), v.to_string())))
-            .collect();
-        let response = reqwest::blocking::Client::builder()
+        let fields: Option<Vec<(String, String)>> = r.body.as_ref().map(|body| {
+            body.as_object()
+                .into_iter()
+                .flatten()
+                .filter_map(|(k, v)| v.as_str().map(|v| (k.clone(), v.to_string())))
+                .collect()
+        });
+        let mut request = reqwest::blocking::Client::builder()
             .no_proxy()
             .redirect(reqwest::redirect::Policy::none())
             .timeout(r.timeout)
             .build()?
             .request(r.method, r.url.clone())
-            .headers(r.headers)
-            .form(&fields)
+            .headers(r.headers);
+        if let Some(fields) = &fields {
+            request = request.form(fields);
+        }
+        let response = request
             .send()
             .map_err(|_| anyhow!("The remote service request failed"))?;
         let status = response.status().as_u16();
