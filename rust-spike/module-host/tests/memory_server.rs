@@ -490,6 +490,45 @@ fn installed_memory_package_serves_routes_from_the_real_server() {
     assert!(status == 200 && json_of(&text)["items"].as_array().unwrap().len() == 1, "{text}");
     assert_eq!(call(Method::GET, "/dashboard", None, None).0, 401);
     assert_eq!(call(Method::GET, "/candidates", None, None).0, 401);
+    // Re-embed through the real server: switch the model name, see the notice, run it, then cancel a second run.
+    let (status, text) = call(Method::GET, "/reembed", Some(&cookie), None);
+    assert_eq!((status, json_of(&text)["otherModel"].clone()), (200, json!(0)), "{text}");
+    let (status, text) = call(Method::PUT, "/embedding", Some(&cookie), Some(json!({"url":embedding_url,"model":"bag-of-words-768-v2","confirmOffDevice":true})));
+    assert_eq!(status, 200, "{text}");
+    let (status, text) = call(Method::GET, "/reembed", Some(&cookie), None);
+    let waiting = json_of(&text)["otherModel"].as_i64().unwrap_or(0);
+    assert!(status == 200 && waiting > 0, "{text}");
+    println!("re-embed notice: {waiting} passages use another model");
+    let (status, text) = call(Method::POST, "/reembed/start", Some(&cookie), Some(json!({})));
+    assert_eq!(status, 200, "{text}");
+    let started = Instant::now();
+    loop {
+        let (_, text) = call(Method::GET, "/reembed", Some(&cookie), None);
+        let state = json_of(&text);
+        if state["run"]["status"] == "done" {
+            assert_eq!(state["otherModel"], 0, "{text}");
+            println!("re-embed finished: {text}");
+            break;
+        }
+        assert!(state["run"]["status"] == "running" && started.elapsed() < Duration::from_secs(90), "{text}");
+        std::thread::sleep(Duration::from_millis(500));
+    }
+    let (_, text) = call(Method::GET, "/graph/recall?q=jasmine", Some(&cookie), None);
+    assert!(json_of(&text)["items"].as_array().unwrap().iter().any(|i| i["text"].as_str().is_some_and(|t| t.contains("jasmine"))), "{text}");
+    let (status, text) = call(Method::POST, "/reembed/start", Some(&cookie), Some(json!({})));
+    assert_eq!((status, json_of(&text)["error"].is_string()), (409, true), "{text}");
+    let (status, _) = call(Method::PUT, "/embedding", Some(&cookie), Some(json!({"url":embedding_url,"model":"bag-of-words-768-v3","confirmOffDevice":true})));
+    assert_eq!(status, 200);
+    let (status, text) = call(Method::POST, "/reembed/start", Some(&cookie), Some(json!({})));
+    assert_eq!(status, 200, "{text}");
+    let (status, text) = call(Method::POST, "/reembed/cancel", Some(&cookie), Some(json!({})));
+    // The few passages here can finish before the cancel lands. Either end is a clean stop.
+    let cancelled = json_of(&text)["cancelled"] == true;
+    assert_eq!(status, 200, "{text}");
+    let (_, text) = call(Method::GET, "/reembed", Some(&cookie), None);
+    assert_eq!(json_of(&text)["run"]["status"], if cancelled { "cancelled" } else { "done" }, "{text}");
+    println!("second run cancelled: {cancelled}");
+    assert_eq!(call(Method::GET, "/reembed", None, None).0, 401);
     // Hold the server open so the screen can be opened in a browser.
     if let Ok(hold) = std::env::var("MEMORY_LIVE_HOLD") {
         let (frame, _) = (format!("{origin}/module-frame?module=memory&path=/settings/memory"), 0);
