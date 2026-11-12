@@ -200,3 +200,33 @@ Slice B connects the summary logic to the database, the routes and a background 
 - The failed-result codes are not yet listed in the app map as errors.
 - The model call runs while the meeting row is locked, so notes saved or summaries listed during a long generate can wait and time out. The old app held no lock during the call. The "busy" and "pending" answers therefore cannot occur.
 - If the job fails to publish after a pasted transcript is saved, a retry returns the first answer and queues nothing, so the summary stays waiting until it expires.
+
+## Part 5 (JS-251), partly built
+
+Only action review is built. Private export, the full account export and deletion are not.
+
+### Built
+
+- A signed-in owner can accept or dismiss an action item that a summary proposed from their own meeting.
+- Accepting creates one task in the owner's own Tasks. Meetings calls a new Tasks public call, so it never reads Tasks tables. The call is keyed on the meeting and the action, so a repeat or a regenerated summary makes no second task.
+- The route is `POST /api/meetings/records/:id/actions/:candidateId/review`. It replays by request key and refuses a changed repeat with 409.
+- Accept is refused with 409 while possible matches exist, unless the owner confirms. The title (1 to 500 characters) and the due time are checked again before the task is made.
+- If Tasks is not installed or fails, the answer is 503 and the action stays pending.
+- Tasks moved to version 0.1.2. Meetings now requires it.
+- The manifest lists the route, the Tasks permission and four new errors. The chat approval list marks the route as blocked in chat.
+
+### Proof
+
+| Check                | Result                                                                                                                                                                 |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Task creation        | Tasks tests with a fake host show a repeated key returns the same task and adds no row.                                                                                |
+| Accept and dismiss   | Five Meetings tests with a fake host cover accept, replay, changed replay, conflict, missing action, match confirmation, bad title, bad due time, Tasks down, dismiss. |
+| Two-person privacy   | Real database. Another person and an administrator get 404. Seen leaking when row security was removed on the three tables, and fixed when restored.                   |
+| No text in the queue | The test marker never appears in the job queue.                                                                                                                        |
+
+### Not proven
+
+- Private export through Notes is not built. The create-only conflict rule is untested.
+- Only 2 of the 18 account export collections are real. The other 16, including audio chunks and the old bundle format, are still empty stubs.
+- Deletion is not built. Notes has no fence, seal or recording cleanup in Rust, and Meetings does not yet answer Memory's recording authority. The chat cleanup callback does not exist.
+- Accepting was proved against a fake Tasks host. The real database test installs Meetings alone.
