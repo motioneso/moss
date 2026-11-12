@@ -46,6 +46,11 @@ impl Embedder for Switch {
 struct Queue(Mutex<Vec<(String, Value)>>);
 impl Ports for Queue {
     fn invoke(&self, _: &CallScope, port: &str, r: &Request) -> anyhow::Result<Value> {
+        match (port, r.operation.as_str()) {
+            ("context", "read") => return Ok(json!({"now": "2026-11-11T10:00:00.000Z"})),
+            ("context", "uuid") => return Ok(json!({"id": Uuid::new_v4()})),
+            _ => {}
+        }
         self.0.lock().unwrap().push((format!("{port}:{}:{}", r.operation, r.resource), r.parameters.clone()));
         Ok(json!({"id": Uuid::new_v4(), "deferred": true}))
     }
@@ -160,7 +165,10 @@ impl Fixture {
 
     fn step(&self, actor: Uuid, run: &str) -> Value {
         let out = self.guest(actor, "job", json!({"queue":"memory.reembed-step","parameters":{"run-id":run}}));
-        serde_json::from_str(out.as_str().expect("a step returns its counts as text")).unwrap()
+        match out.as_str() {
+            Some(text) => serde_json::from_str(text).unwrap(),
+            None => out,
+        }
     }
 
     fn start(&self, actor: Uuid) -> String {
@@ -201,8 +209,8 @@ impl Fixture {
         ))
     }
 
-    fn staged(&self) -> String {
-        self.one("SELECT count(*)::text FROM app.memory_reembed_staged")
+    fn staged(&self, owner: Uuid) -> String {
+        self.one(&format!("SELECT count(*)::text FROM app.memory_reembed_staged WHERE owner_user_id='{owner}'"))
     }
 
     /// Rows `app` can see for `actor`, through the runtime role and its row security.
@@ -229,12 +237,12 @@ fn an_interrupted_run_keeps_the_old_vectors_usable_and_a_restart_finishes_it() {
     assert_eq!(first["status"], "running");
     assert_eq!(first["staged"], 16);
     // Staged vectors exist, but nothing real has moved yet.
-    assert_eq!(f.staged(), "16");
+    assert_eq!(f.staged(f.a), "16");
     assert_eq!(f.old_model_rows(f.a), "20");
     // The server "restarts" here. Each call builds fresh ports, so the next step resumes.
     let second = f.step(f.a, &run);
     assert_eq!(second["status"], "done");
-    assert_eq!(f.staged(), "0");
+    assert_eq!(f.staged(f.a), "0");
     assert_eq!(f.old_model_rows(f.a), "0");
     assert_eq!(f.status(f.a)["otherModel"], 0);
     assert_eq!(f.status(f.a)["run"]["status"], "done");
@@ -267,15 +275,15 @@ fn cancel_stops_the_run_and_drops_what_it_staged() {
     f.model("new-model");
     let run = f.start(f.a);
     f.step(f.a, &run);
-    assert_eq!(f.staged(), "16");
+    assert_eq!(f.staged(f.a), "16");
     let out = f.route(f.a, "POST", "/reembed/cancel");
     assert_eq!(out["body"]["cancelled"], true);
-    assert_eq!(f.staged(), "0");
+    assert_eq!(f.staged(f.a), "0");
     assert_eq!(f.old_model_rows(f.a), "20");
     assert_eq!(f.status(f.a)["run"]["status"], "cancelled");
     // A step that arrives after the cancel does nothing.
     assert_eq!(f.step(f.a, &run)["status"], "stopped");
-    assert_eq!(f.staged(), "0");
+    assert_eq!(f.staged(f.a), "0");
     assert_eq!(f.old_model_rows(f.a), "20");
 }
 
@@ -289,7 +297,7 @@ fn a_failed_embedding_ends_the_run_and_leaves_the_old_vectors() {
     *f.switch.fail.lock().unwrap() = true;
     assert_eq!(f.step(f.a, &run)["status"], "failed");
     assert_eq!(f.status(f.a)["run"]["status"], "failed");
-    assert_eq!(f.staged(), "0");
+    assert_eq!(f.staged(f.a), "0");
     assert_eq!(f.old_model_rows(f.a), "4");
 }
 
@@ -343,14 +351,14 @@ fn search_never_compares_two_models() {
     let out = f.guest(
         f.a,
         "route",
-        json!({"method":"GET","path":"/graph/recall","params":{},"query":{"query":"tea"},"body":null}),
+        json!({"method":"GET","path":"/graph/recall","params":{},"query":{"q":"tea"},"body":null}),
     );
-    let found = out["body"]["candidates"].as_array().cloned().unwrap_or_default();
-    let similarity = |name: &str| {
-        found.iter().find(|c| c["fact"]["objectText"] == name).map(|c| c["similarity"].as_f64().unwrap_or(-1.0))
+    let found = out["body"]["items"].as_array().cloned().unwrap_or_default();
+    let score = |name: &str| {
+        found.iter().find(|c| c["text"] == name).and_then(|c| c["score"].as_f64()).unwrap_or(-1.0)
     };
-    assert_eq!(similarity("tea 1"), Some(1.0), "same model compares");
-    assert_eq!(similarity("tea 0"), Some(0.0), "another model never compares");
+    // Both facts match the words equally. Only the one on the current model gains from its vector.
+    assert!(score("tea 1") > score("tea 0") && score("tea 0") >= 0.0, "scores {found:?}");
 }
 
 #[test]
