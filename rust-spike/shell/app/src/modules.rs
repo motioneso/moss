@@ -3,6 +3,7 @@
 use crate::module_embedding::{ActivityRows, EmbeddingConfig, SettingsEmbeddings};
 use anyhow::Result;
 use moss_calendar_host::CalendarPorts;
+use moss_meetings_host::MeetingsPorts;
 use moss_connectors_host::ConnectorsPorts;
 use moss_email_host::EmailPorts;
 use moss_memory_host::ports::MemoryPorts;
@@ -320,6 +321,7 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
     let preferences_database = database.clone();
     let calendar_database = database.clone();
     let connectors_database = database.clone();
+    let meetings_database = database.clone();
     let email_database = database.clone();
     let generator: Arc<dyn Intelligence> = match &settings.ai_key {
         Some(key) => crate::module_ai::intelligence(
@@ -402,6 +404,8 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
                 Ok(Arc::new(LinkedNotesPorts::new(Arc::new(folders), services)) as Arc<dyn Ports>)
             }
             }?;
+            // Meetings answers only its own capture-preference calls, as the signed-in person.
+            let services = Arc::new(MeetingsPorts::new(meetings_database, services)?) as Arc<dyn Ports>;
             // Calendar keeps its settings in the account's real preferences and reads the
             // account timezone. The wrapper only answers calls made by the Calendar module.
             let services = Arc::new(CalendarPorts::new(calendar_database, services)?) as Arc<dyn Ports>;

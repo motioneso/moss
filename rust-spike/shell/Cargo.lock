@@ -2634,6 +2634,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "moss-meetings-host"
+version = "0.1.0"
+dependencies = [
+ "access-context",
+ "anyhow",
+ "moss-module-host",
+ "safety-core",
+ "serde_json",
+ "tokio",
+ "tokio-postgres",
+]
+
+[[package]]
 name = "moss-memory-host"
 version = "0.1.0"
 dependencies = [
@@ -2767,6 +2780,7 @@ dependencies = [
  "moss-calendar-host",
  "moss-connectors-host",
  "moss-email-host",
+ "moss-meetings-host",
  "moss-memory-host",
  "moss-module-host",
  "moss-network",
