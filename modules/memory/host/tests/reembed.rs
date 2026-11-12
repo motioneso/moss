@@ -143,6 +143,10 @@ impl Fixture {
     }
 
     fn guest(&self, actor: Uuid, kind: &str, payload: Value) -> Value {
+        self.try_guest(actor, kind, payload).unwrap()
+    }
+
+    fn try_guest(&self, actor: Uuid, kind: &str, payload: Value) -> Result<Value, String> {
         let ports: Arc<dyn Ports> =
             Arc::new(MemoryPorts::new(self.db.clone(), self.switch.clone(), self.queue.clone()).unwrap());
         let out = Host::new(Limits::default())
@@ -155,8 +159,8 @@ impl Fixture {
                 kind,
                 &payload.to_string(),
             )
-            .unwrap();
-        serde_json::from_str(&out).unwrap()
+            .map_err(|e| e.to_string())?;
+        Ok(serde_json::from_str(&out).unwrap())
     }
 
     fn route(&self, actor: Uuid, method: &str, path: &str) -> Value {
@@ -289,12 +293,31 @@ fn cancel_stops_the_run_and_drops_what_it_staged() {
 
 #[test]
 #[ignore = "Only through verify-gate"]
-fn a_failed_embedding_ends_the_run_and_leaves_the_old_vectors() {
+fn a_service_error_keeps_staged_work_and_a_retry_finishes_the_run() {
+    let f = Fixture::new();
+    f.chunks(f.a, 20);
+    f.model("new-model");
+    let run = f.start(f.a);
+    assert_eq!(f.step(f.a, &run)["status"], "running");
+    let staged = f.staged(f.a);
+    *f.switch.fail.lock().unwrap() = true;
+    let job = json!({"queue":"memory.reembed-step","parameters":{"run-id":run}});
+    assert!(f.try_guest(f.a, "job", job).is_err(), "a service error must fail the job so it retries");
+    assert_eq!(f.status(f.a)["run"]["status"], "running");
+    assert_eq!(f.staged(f.a), staged, "staged work survives the error");
+    *f.switch.fail.lock().unwrap() = false;
+    assert_eq!(f.step(f.a, &run)["status"], "done");
+    assert_eq!(f.old_model_rows(f.a), "0");
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_model_change_mid_run_ends_the_run_and_leaves_the_old_vectors() {
     let f = Fixture::new();
     f.chunks(f.a, 4);
     f.model("new-model");
     let run = f.start(f.a);
-    *f.switch.fail.lock().unwrap() = true;
+    f.model("third-model");
     assert_eq!(f.step(f.a, &run)["status"], "failed");
     assert_eq!(f.status(f.a)["run"]["status"], "failed");
     assert_eq!(f.staged(f.a), "0");
