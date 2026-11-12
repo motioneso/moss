@@ -36,7 +36,7 @@ export function shortDate(iso) {
 }
 const badge = (text, tone) => `<span class="jds-badge jds-badge--${tone}">${esc(text)}</span>`;
 export const sourceName = (fact) => SOURCES[fact.sources?.[0]?.sourceKind] ?? "Unknown";
-export const kindName = (fact) => KINDS[fact.recordKind] ?? esc(fact.recordKind);
+export const kindName = (fact) => KINDS[fact.recordKind] ?? fact.recordKind;
 export const factTitle = (fact) => fact.objectText || fact.predicate || "Memory";
 
 function factBadges(fact) {
@@ -210,11 +210,8 @@ export function empty() {
   return '<div class="state"><div class="jds-empty"><div class="jds-empty__title">No memories yet</div><div class="jds-empty__actions"><button class="jds-btn jds-btn--primary" data-act="add">Add a memory</button></div></div></div>';
 }
 
-export function broken(searchBehind) {
-  const note = searchBehind
-    ? '<div class="confirm"><p><b>Search is behind.</b> New memories are saved but not searchable yet. Retrying.</p></div>'
-    : "";
-  return `<div class="state" role="alert"><div class="jds-empty"><div class="jds-empty__title">Memories did not load</div><div class="jds-empty__sub">The memory service is not answering.</div><div class="jds-empty__actions"><button class="jds-btn jds-btn--primary" data-act="retry">Try again</button></div></div></div>${note}`;
+export function broken() {
+  return `<div class="state" role="alert"><div class="jds-empty"><div class="jds-empty__title">Memories did not load</div><div class="jds-empty__sub">The memory service is not answering.</div><div class="jds-empty__actions"><button class="jds-btn jds-btn--primary" data-act="retry">Try again</button></div></div></div>`;
 }
 
 export function counts(c) {

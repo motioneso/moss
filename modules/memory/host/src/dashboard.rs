@@ -417,7 +417,11 @@ async fn patch_fact(cx: &DataContext, p: &Value) -> Result<Value> {
         .execute(
             "UPDATE app.memory_search_documents SET status = $2, updated_at = now()
              WHERE owner_user_id = app.current_actor_user_id()
-               AND target_kind = 'fact' AND target_id = $1::text::uuid",
+               AND target_kind = 'fact' AND target_id = $1::text::uuid
+               AND EXISTS (SELECT 1 FROM app.memory_facts f
+                           WHERE f.owner_user_id = app.current_actor_user_id()
+                             AND f.id = $1::text::uuid
+                             AND f.status IN ('active', 'stale', 'conflicting'))",
             &[&id, &status],
         )
         .await?;

@@ -104,7 +104,7 @@ function body() {
   const top = `${head}${v.tabs(state.tab, state.counts.pending)}`;
   if (state.adding) return v.addForm();
   if (state.phase === "loading") return `${top}${v.skeleton()}`;
-  if (state.phase === "broken") return `${top}${v.broken(false)}`;
+  if (state.phase === "broken") return `${top}${v.broken()}`;
   const note = state.note ? `<p class="note" role="status">${v.esc(state.note)}</p>` : "";
   if (state.tab === "review") {
     if (!state.candidates.length) {
@@ -152,14 +152,16 @@ function draw() {
   void client.resize(document.documentElement.scrollHeight).catch(() => {});
 }
 
-function fail(error) {
+function fail(error, gone) {
   state.note =
     error?.status === 409 && error.detail
       ? error.detail
-      : (FAILURES.get(error?.status) ?? "That did not work. Try again.");
+      : error?.status === 404 && gone
+        ? gone
+        : (FAILURES.get(error?.status) ?? "That did not work. Try again.");
 }
 
-async function act(work, { reload = true } = {}) {
+async function act(work, { reload = true, gone } = {}) {
   if (state.busy) return;
   state.busy = true;
   state.note = "";
@@ -169,8 +171,8 @@ async function act(work, { reload = true } = {}) {
     state.adding = false;
     if (reload) await load({ keepPage: true });
   } catch (error) {
-    if (error?.status === 404 && reload) await load({ keepPage: true });
-    fail(error);
+    if (error?.status === 404) await load({ keepPage: true });
+    fail(error, gone);
     state.busy = false;
     draw();
     return;
@@ -327,7 +329,10 @@ root.addEventListener("click", (event) => {
 });
 
 async function decide(id, action) {
-  await act(() => api.decide(id, action, {}), { reload: false });
+  await act(() => api.decide(id, action, {}), {
+    reload: false,
+    gone: "That suggestion was already handled. The list has been refreshed."
+  });
   if (state.note) return;
   if (action === "accept") await load({ keepPage: true });
   else decideDone(id);

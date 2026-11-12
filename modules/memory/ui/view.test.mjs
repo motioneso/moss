@@ -35,7 +35,7 @@ test("the phone detail pane has a back button and the desktop one does not", () 
 });
 
 test("empty and broken states render without coloured left borders or inline styles", () => {
-  for (const html of [empty(), broken(false)]) {
+  for (const html of [empty(), broken()]) {
     assert.ok(html.length > 0);
     assert.ok(!html.includes("style="));
   }
