@@ -53,6 +53,8 @@
         "artifacts-meta",
         "artifacts",
         "candidates",
+        "candidate",
+        "review-set",
         "request",
         "expire-pending",
         "reserve",
