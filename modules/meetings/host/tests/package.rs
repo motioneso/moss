@@ -58,7 +58,7 @@ fn the_package_asks_only_for_its_own_resources() {
         authorize(&manifest, port, &Request {
             operation: operation.into(),
             resource: resource.into(),
-            parameters: json!({}),
+            parameters: if port == "db" { json!({"kind":"select"}) } else { json!({}) },
         })
     };
     for operation in ["get", "set", "lock"] {

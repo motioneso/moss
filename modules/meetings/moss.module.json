@@ -10,9 +10,7 @@
   "capabilities": [
     {
       "port": "db",
-      "operations": [
-        "query"
-      ],
+      "operations": ["query"],
       "resources": [
         "app.meeting_recording_metadata",
         "app.meeting_recording_types",
@@ -40,25 +38,13 @@
     },
     {
       "port": "kv",
-      "operations": [
-        "get",
-        "set",
-        "lock"
-      ],
-      "resources": [
-        "meetings.preferences"
-      ]
+      "operations": ["get", "set", "lock"],
+      "resources": ["meetings.preferences"]
     },
     {
       "port": "context",
-      "operations": [
-        "uuid",
-        "read"
-      ],
-      "resources": [
-        "new",
-        "call"
-      ]
+      "operations": ["uuid", "read"],
+      "resources": ["new", "call"]
     }
   ],
   "database": {
@@ -154,9 +140,7 @@
     "prepareMeetingRoute": "1.0.0",
     "collectMeetingsExportSection": "1.0.0"
   },
-  "icons": [
-    "icons/meetings.svg"
-  ],
+  "icons": ["icons/meetings.svg"],
   "accounts": {
     "supportsUserDisable": true,
     "defaultEnabled": true
@@ -200,27 +184,27 @@
       "errors": [
         {
           "code": "meeting_invalid_input",
-          "class": "permanent",
+          "class": "validation",
           "description": "The title, notes or request is not valid"
         },
         {
           "code": "meeting_not_found",
-          "class": "permanent",
+          "class": "validation",
           "description": "The meeting does not exist or is not yours"
         },
         {
           "code": "meeting_notes_conflict",
-          "class": "conflict",
+          "class": "validation",
           "description": "The notes changed since you opened them; the current notes are returned"
         },
         {
           "code": "meeting_title_conflict",
-          "class": "conflict",
+          "class": "validation",
           "description": "The title changed since you opened it; the current title is returned"
         },
         {
           "code": "meeting_request_conflict",
-          "class": "conflict",
+          "class": "validation",
           "description": "This request key was already used with different content"
         }
       ]
@@ -231,12 +215,12 @@
       "errors": [
         {
           "code": "meeting_capture_invalid_input",
-          "class": "permanent",
+          "class": "validation",
           "description": "A recording default is not valid"
         },
         {
           "code": "meeting_vocabulary_invalid",
-          "class": "permanent",
+          "class": "validation",
           "description": "The vocabulary list is not valid"
         }
       ]
