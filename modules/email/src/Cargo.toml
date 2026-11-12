@@ -30,3 +30,8 @@ path = "tests/otp.rs"
 [[bin]]
 name = "email-oracle"
 path = "bin/oracle.rs"
+
+[[test]]
+
+name = "understand"
+path = "tests/understand.rs"
