@@ -156,8 +156,14 @@ pub fn files(root: &Path, core: &[u8]) -> Result<BTreeMap<String, Vec<u8>>> {
                 "sql/0363_memory_ingest_nudges.sql" => {
                     "461aa6600ae180caa1e0d5b66bb4f4b562612cac037f4638dd191c41f589443c"
                 }
-                "sql/0364_memory_reembed.sql" => {
-                    "61c0fff9259300afe4ae0425c93b960caf8c9ca25ce33d753b2b5adc349d73d8"
+                "sql/0364_memory_reembed_runs.sql" => {
+                    "404f1f8db11569a6bbb413acd0037d7555661b1430ba6c0dadcdccd0d907123e"
+                }
+                "sql/0365_memory_reembed_one_running.sql" => {
+                    "502ed9bfba7d5fcc6353066adf43ccd3c548a07dd5a948ecad86d63709c84a19"
+                }
+                "sql/0366_memory_reembed_staged.sql" => {
+                    "56cbd98c7eaefed964fdc74e5fcdb3dcdfc67fb38cfe9b289bbf6128c2797cb9"
                 }
                 _ => "",
             };

@@ -87,7 +87,9 @@
       "sql/0339_memory_recording_lineage.sql",
       "sql/0341_memory_recording_cleanup.sql",
       "sql/0363_memory_ingest_nudges.sql",
-      "sql/0364_memory_reembed.sql"
+      "sql/0364_memory_reembed_runs.sql",
+      "sql/0365_memory_reembed_one_running.sql",
+      "sql/0366_memory_reembed_staged.sql"
     ],
     "ownedTables": [
       "app.memory_chunks",

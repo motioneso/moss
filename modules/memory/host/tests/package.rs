@@ -170,7 +170,7 @@ fn the_package_keeps_every_applied_sql_file_byte_for_byte() {
         &"0.1.0".parse().unwrap(),
     )
     .unwrap();
-    assert_eq!(package.manifest.database.migrations.len(), 24);
+    assert_eq!(package.manifest.database.migrations.len(), 26);
     assert_eq!(package.manifest.screens["/settings/memory"], "ui/index.html");
     assert_eq!(package.manifest.screens["/settings/memory/search-model"], "ui/embedding.html");
     moss_module_host::sql::check(&package, &Default::default()).unwrap();
