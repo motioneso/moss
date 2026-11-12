@@ -62,7 +62,8 @@ fn failures_through_the_entry_point_carry_fixed_text() {
 #[test]
 fn a_job_payload_with_any_content_key_is_refused() {
     use moss_meetings_module::jobs::is_metadata_only;
-    assert!(is_metadata_only(&json!({"actorUserId":K1,"meetingId":K1,"kind":"x","idempotencyKey":"k","params":{}})));
+    assert!(is_metadata_only(&json!({"queue":"meetings.stop-summary","parameters":{"meeting-id":K1}})));
+    assert!(!is_metadata_only(&json!({"queue":"meetings.stop-summary","parameters":{"meeting-id":K1,"text":MARKER}})));
     for key in ["title", "personalNotes", "notes", "transcript", "prompt", "secret", "text"] {
         assert!(!is_metadata_only(&json!({"meetingId":K1, key: MARKER})), "{key} was accepted");
     }
