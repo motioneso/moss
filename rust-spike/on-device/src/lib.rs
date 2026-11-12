@@ -7,7 +7,7 @@ mod lock;
 mod worker;
 
 pub use download::{FileSpec, Progress};
-pub use engine::{DIMENSIONS, MAX_TOKENS};
+pub use engine::{Engine, DIMENSIONS, MAX_TOKENS};
 
 use download::{fetch_all, present, Failure};
 use lock::CacheLock;

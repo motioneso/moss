@@ -7,7 +7,7 @@ use common::fake_embedding_model::{axis, FakeEmbeddingModel, Mode};
 use moss_module_host::{
     ai::{
         EmbeddingActivity, EmbeddingCall, EmbeddingEndpoint, EmbeddingStore, Intelligence,
-        RouterIntelligence, DEFAULT_EMBEDDING_MODEL, NOT_SET_UP,
+        OnDeviceEmbedder, RouterIntelligence, DEFAULT_EMBEDDING_MODEL, NOT_SET_UP,
     },
     local::LocalPorts,
     manifest::{Capability, Manifest},
@@ -29,9 +29,13 @@ struct Store {
     url: Option<url::Url>,
     model: String,
     version: Option<String>,
+    device: Option<Arc<Device>>,
 }
 #[async_trait::async_trait]
 impl EmbeddingStore for Store {
+    async fn on_device(&self, _: Actor) -> Result<Option<Arc<dyn OnDeviceEmbedder>>> {
+        Ok(self.device.clone().map(|d| d as Arc<dyn OnDeviceEmbedder>))
+    }
     async fn for_actor(&self, _: Actor) -> Result<EmbeddingEndpoint> {
         let Some(url) = self.url.clone() else {
             anyhow::bail!(NOT_SET_UP)
@@ -42,6 +46,23 @@ impl EmbeddingStore for Store {
             version: self.version.clone(),
             credential: Secret::new(CREDENTIAL.to_owned()),
         })
+    }
+}
+/// Stands in for the model inside the host. It records what it was given and can be told to fail.
+#[derive(Default)]
+struct Device {
+    received: Mutex<Vec<String>>,
+    fail: Mutex<Option<String>>,
+}
+impl OnDeviceEmbedder for Device {
+    fn embed(&self, text: &str, _: std::time::Duration) -> std::result::Result<Vec<f32>, String> {
+        self.received.lock().unwrap().push(text.to_owned());
+        if let Some(message) = self.fail.lock().unwrap().clone() {
+            return Err(message);
+        }
+        let mut v = vec![0.0; 768];
+        v[3] = 1.0;
+        Ok(v)
     }
 }
 #[derive(Default)]
@@ -154,6 +175,7 @@ fn model_store(fake: &FakeEmbeddingModel) -> Store {
         url: Some(fake.url.parse().unwrap()),
         model: DEFAULT_EMBEDDING_MODEL.into(),
         version: None,
+        device: None,
     }
 }
 fn start() -> FakeEmbeddingModel {
@@ -230,6 +252,7 @@ fn model_name_and_version_follow_configuration() {
         url: Some(fake.url.parse().unwrap()),
         model: "bge-small".into(),
         version: version.map(str::to_owned),
+        device: None,
     };
     let (m, v, _) = scope_free(other(None));
     assert_eq!((m.as_str(), v.as_str()), ("bge-small", "1"));
@@ -244,6 +267,7 @@ fn an_unset_endpoint_refuses_and_records_nothing() {
         url: None,
         model: String::new(),
         version: None,
+        device: None,
     });
     let error = f.embed(json!({"text":"a"})).unwrap_err();
     // A guest only ever sees the generic refusal. The plain wording is checked where the
@@ -263,4 +287,34 @@ fn plain_http_is_accepted_only_on_this_machine() {
     assert!(!ok("http://192.168.1.20:5200/v1/embeddings"));
     assert!(!ok("https://user:pass@embeddings.example.test/"));
     assert!(!ok("ftp://127.0.0.1/"));
+}
+
+#[test]
+fn the_on_device_model_needs_no_endpoint_and_keeps_text_out_of_rows() {
+    let device = Arc::new(Device::default());
+    let f = fixture(Store {
+        url: None,
+        model: String::new(),
+        version: None,
+        device: Some(device.clone()),
+    });
+    let reply = f.embed(json!({"text":MARKER,"kind":"query"})).unwrap();
+    assert_eq!(reply["embedding"].as_array().unwrap().len(), 768);
+    assert_eq!(reply["embedding"][3], 1.0);
+    assert_eq!((reply["model"].as_str().unwrap(), reply["version"].as_str().unwrap()), (DEFAULT_EMBEDDING_MODEL, "1.5"));
+    // The same prefixes as the endpoint path.
+    f.embed(json!({"text":"b"})).unwrap();
+    assert_eq!(
+        *device.received.lock().unwrap(),
+        [format!("search_query: {MARKER}"), "search_document: b".to_owned()]
+    );
+    // A failure reaches the activity row as fixed words only, and the text appears nowhere.
+    *device.fail.lock().unwrap() = Some("The search model is still downloading (40%)".into());
+    let failed = format!("{:?}", f.embed(json!({"text":MARKER})));
+    let rows = f.rows.0.lock().unwrap().clone();
+    assert_eq!(rows.len(), 3);
+    assert!(rows[2].ends_with("|error|The search model is still downloading (40%)"), "{}", rows[2]);
+    for text in rows.iter().chain([&failed, &reply.to_string()]) {
+        assert!(!text.contains(MARKER), "{text}");
+    }
 }

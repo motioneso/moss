@@ -366,6 +366,7 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
                 database.clone(),
                 &connectors_key,
                 &settings.data,
+                fallback.is_some(),
             )?),
             fallback,
         })?
