@@ -201,7 +201,12 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
     // canonical installer, as the server would find it.
     let keys = Keys::new();
     fs::create_dir_all(root.join("registry/packages")).unwrap();
-    let artifacts: Vec<Artifact> = [("JS235_MEETINGS_PACKAGE", "meetings")]
+    let artifacts: Vec<Artifact> = [
+        ("JS235_CALENDAR_STAND_IN", "calendar"),
+        ("JS235_PEOPLE_STAND_IN", "people"),
+        ("JS231_MEMORY_PACKAGE", "memory"),
+        ("JS235_MEETINGS_PACKAGE", "meetings"),
+    ]
     .iter()
     .map(|(variable, id)| {
         let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();

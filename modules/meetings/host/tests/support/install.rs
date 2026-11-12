@@ -19,33 +19,9 @@ impl moss_module_host::ai::Intelligence for NoAi {
     }
 }
 
-/// A package that does nothing, so a module that requires `id` can be installed. It reuses
-/// Meetings' component and ports but declares no tables, routes, jobs or required modules.
+/// A package that does nothing, so a module that requires `id` can be installed.
 pub fn stand_in(id: &str, wasm: &[u8]) -> (Vec<u8>, moss_module_host::manifest::Manifest) {
-    let mut value = serde_json::to_value(moss_meetings_host::package::manifest().unwrap()).unwrap();
-    let fields = value.as_object_mut().unwrap();
-    for key in ["requires", "provides", "jobs", "screens"] {
-        fields.insert(key.into(), serde_json::json!({}));
-    }
-    for key in ["routes", "navigation", "settings", "features"] {
-        fields.insert(key.into(), serde_json::json!([]));
-    }
-    fields.insert("database".into(), serde_json::json!({}));
-    fields.insert("id".into(), id.into());
-    fields.insert("name".into(), id.into());
-    fields.insert("icons".into(), serde_json::json!([format!("icons/{id}.svg")]));
-    let caps = fields["capabilities"].as_array().unwrap().iter().cloned().collect::<Vec<_>>();
-    fields.insert("capabilities".into(), caps.into());
-    let manifest: moss_module_host::manifest::Manifest = serde_json::from_value(value).unwrap();
-    let files = std::collections::BTreeMap::from([
-        ("moss.module.json".to_owned(), serde_json::to_vec(&manifest).unwrap()),
-        ("code/module.wasm".to_owned(), wasm.to_vec()),
-        (format!("icons/{id}.svg"), b"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1 1\"></svg>".to_vec()),
-        ("LICENSE".to_owned(), b"test".to_vec()),
-        ("NOTICE".to_owned(), b"test".to_vec()),
-        ("CHANGELOG.md".to_owned(), b"test".to_vec()),
-    ]);
-    (moss_module_host::archive::pack(&files).unwrap(), manifest)
+    moss_meetings_host::package::stand_in(id, wasm).unwrap()
 }
 
 /// The installed application plus the folders that must outlive it.
