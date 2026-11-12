@@ -272,8 +272,8 @@ No code changed in this part. The check the brief asked for found that one of th
 
 ### What is missing
 
-- **Notes has no fence or seal.** Nothing in Rust fences an actor or a source, opens a cleanup operation, seals it, or deletes under a seal. The old code is about 485 lines (`managed-source-lifecycle.ts`) plus the database lock helpers in `managed-source-admission.ts`.
-- **Notes has no recording block cleanup.** Removing managed blocks from a note file needs destination lookup, the vault file change with conflict detection, receipt state and index invalidation. The old code is about 240 lines (`recording-contribution-cleanup.ts`), 240 (`contribution-destinations.ts`), 180 (`contribution-repository.ts`), 110 (`contribution-state.ts`) and 150 for blocks and snapshots.
+- **Notes has no fence or seal.** Nothing in Rust fences an actor or a source, opens a cleanup operation, seals it, or deletes under a seal. The old code is about 485 lines (`managed-source-lifecycle.ts`) plus about 70 lines of database lock helpers in `packages/db/src/managed-source-admission.ts`.
+- **Notes has no database-backed recording block cleanup.** The pure block text logic (render, inspect, change, cleanup with conflict detection, reconcile) and the block and snapshot keys are already ported in `blocks.rs` and `identity.rs`. Missing is destination lookup, the vault file change with conflict detection, receipt state and index invalidation. The old code is about 240 lines (`recording-contribution-cleanup.ts`), 240 (`contribution-destinations.ts`), 180 (`contribution-repository.ts`) and 110 (`contribution-state.ts`).
 - **Meetings has no deletion service and no authority.** The Meetings side of the old order (`deletion-service.ts`, 59 lines) is small, but it cannot be tested without the two ports above.
 
 ### Why it stops here
