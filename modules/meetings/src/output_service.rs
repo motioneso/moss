@@ -402,7 +402,10 @@ pub fn review<H: Host + ?Sized>(host: &H, meeting: &str, candidate: &str, input:
             let proposal = row["proposalJson"].as_str().and_then(|t| serde_json::from_str::<Value>(t).ok()).unwrap_or(Value::Null);
             let reviewed = json!({"overview": "Reviewed action", "decisions": [], "openQuestions": [],
                 "actions": [proposal], "warnings": []});
-            if validate(&reviewed, &outputs::stored_inputs(&artifact)).is_err() {
+            // A reviewed action carries no recording reading, so only its evidence is checked.
+            let mut inputs = outputs::stored_inputs(&artifact);
+            inputs.recording = None;
+            if validate(&reviewed, &inputs).is_err() {
                 return Ok(refuse(409, "meeting_output_evidence_unavailable"));
             }
             let made = host.call(
