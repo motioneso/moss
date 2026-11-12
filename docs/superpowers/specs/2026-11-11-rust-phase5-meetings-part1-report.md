@@ -38,4 +38,5 @@ A Meetings package in `~/Jarv1s/modules/meetings`. It covers meeting records, ti
 - Chat classes are a constant in the package plus the approval-card API. The Rust manifest has no chat field yet.
 - Job parameter kinds in the manifest are a guess.
 - The two history backfills (SQL 0280 and 0292) run from the host's compiled copies, triggered by a marker line in the SQL. The `.backfill.mjs` files are not packaged. Neither was exercised against old data here.
+- The log check was not seen failing with the protection removed, so it shows absence in this run only.
 - No screen, no second device, no native app.
