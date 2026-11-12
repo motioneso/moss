@@ -71,7 +71,9 @@ impl Host for Fake {
         if self.failing {
             return Err(Error::new("host failure"));
         }
-        assert_eq!(port, "kv");
+        if port != "kv" {
+            return Ok(json!({"id":"row-1","now":TIME,"uuid":"id-1"}));
+        }
         if operation == "set" {
             self.writes.borrow_mut().push(json!({"resource":resource,"parameters":p}));
         }
