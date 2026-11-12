@@ -60,7 +60,7 @@ fn unit(p: &Value, name: &str) -> Result<Option<f64>> {
 }
 
 fn host_call(host: &impl Host, name: &str, mut params: Value) -> Result<Value> {
-    params["name"] = json!(name);
+    params["call"] = json!(name);
     let value = kv(host, "set", "memory.public", params)?;
     if let Some(refused) = value.get("refused") {
         return Err(Error::new(

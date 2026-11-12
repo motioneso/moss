@@ -679,7 +679,7 @@ fn legacy_fact_calls_keep_the_old_chat_behaviour() {
 fn candidate_episode_and_goal_entity_calls_match_the_old_shapes() {
     let f = Fixture::new();
     let entity = seed_public(&f, f.a);
-    let input = json!({"kind":"fact","action":"create","payloadJson":{"x":1},"candidateSignature":"sig-1",
+    let input = json!({"kind":"fact","action":"create","payloadJson":{"x":1},"candidateSignature":"sig-clamp",
         "confidence":7,"importance":-3,"provenance":"inferred"});
     let first = api(&f, f.a, "insertCandidate", input.clone());
     let again = api(&f, f.a, "insertCandidate", input.clone());

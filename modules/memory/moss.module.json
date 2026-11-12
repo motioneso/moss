@@ -418,7 +418,13 @@
           "remediationRef": "memory-set-up-embedding"
         }
       ],
-      "remediations": []
+      "remediations": [
+        {
+          "id": "memory-set-up-embedding",
+          "description": "Set up an embedding model",
+          "path": "/settings/memory/search-model"
+        }
+      ]
     },
     {
       "id": "memory.recall",

@@ -170,7 +170,7 @@ impl MemoryPorts {
     /// The public API for other modules. The caller never supplies an owner or a vector.
     fn public(&self, scope: &CallScope, request: &Request) -> Result<Value> {
         let p = &request.parameters;
-        let name = p["name"].as_str().unwrap_or("");
+        let name = p["call"].as_str().unwrap_or("");
         let embed_doc = |text: &str| -> Result<(String, (String, String))> {
             ensure!(text.len() <= 64 * 1024, "Memory text too long");
             let (vector, model) = self.embedder.document(scope, text)?;

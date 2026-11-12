@@ -49,7 +49,7 @@ fn calls_send_no_owner_and_no_vector_to_the_host() {
     let answer = call(&host, "searchChunks", json!({"query": "tea", "limit": 500, "ownerUserId": "x", "embedding": [1]}));
     assert!(answer.get("ok").is_some());
     let sent = host.sent("memory.public");
-    assert_eq!(sent, json!({"name": "searchChunks", "query": "tea", "limit": 50, "sourceKind": "vault"}));
+    assert_eq!(sent, json!({"call": "searchChunks", "query": "tea", "limit": 50, "sourceKind": "vault"}));
 }
 
 #[test]
