@@ -260,3 +260,35 @@ Only action review is built. Private export, the full account export and deletio
 - The account export through the real server. No server route for it exists yet, so it is proved only by calling the section directly.
 - A live summary export, because no model is configured on the live instance.
 - Survivors after delete, and no searchable recording content after delete. Both belong to the deletion service.
+
+## Part 5C (JS-255), stopped before building: Notes cleanup is large
+
+No code changed in this part. The check the brief asked for found that one of the two cleanup ports is missing and too big to add inside the deletion part.
+
+### What exists in Rust
+
+- **Memory cleanup is built.** The Memory package already answers `cleanup`, `assertComplete` and `retireSource` for recording episodes, facts and search documents, in batches of twenty receipts. It asks a recording authority whether a source is being cleaned and whether it is sealed. Until Meetings supplies that authority, the answer is always no, so nothing is admitted.
+- **Notes tables exist.** The managed actor, managed source, contribution, proposal and operation tables are created by the Notes package migrations and are already read by the Notes account export.
+
+### What is missing
+
+- **Notes has no fence or seal.** Nothing in Rust fences an actor or a source, opens a cleanup operation, seals it, or deletes under a seal. The old code is about 485 lines (`managed-source-lifecycle.ts`) plus the database lock helpers in `managed-source-admission.ts`.
+- **Notes has no recording block cleanup.** Removing managed blocks from a note file needs destination lookup, the vault file change with conflict detection, receipt state and index invalidation. The old code is about 240 lines (`recording-contribution-cleanup.ts`), 240 (`contribution-destinations.ts`), 180 (`contribution-repository.ts`), 110 (`contribution-state.ts`) and 150 for blocks and snapshots.
+- **Meetings has no deletion service and no authority.** The Meetings side of the old order (`deletion-service.ts`, 59 lines) is small, but it cannot be tested without the two ports above.
+
+### Why it stops here
+
+Together this is more than one context window of build and proof: a Notes lifecycle, Notes cleanup, the cross-module calls between Meetings, Notes and Memory, the authority that Memory asks, and then the proofs. Doing it half-way would leave a deletion that cannot refuse correctly, which is worse than none.
+
+### What is left, in order
+
+1. **Notes managed-source lifecycle.** Fence actor and source, open and read operations, seal, delete under seal. Public Notes API only. Two-person row-level-security tests seen failing with protection removed.
+2. **Notes recording block cleanup.** Batch of twenty, separate commits per file, conflict and pending outcomes, index invalidation, source receipt retirement in the sealing step.
+3. **Meetings deletion service and authority.** Fence the source, clean Notes, clean Memory, seal, then delete the meeting. Incomplete or conflicting cleanup refuses deletion with the same two plain errors as before. Implements the Memory recording authority. The chat cleanup callback and the delete route.
+4. **Proofs.** Survivors after delete (independent exported note copies stay), nothing searchable left, refused deletion on incomplete cleanup, second person denied, no meeting text in jobs, activity rows or logs, native and WebAssembly builds, and a live run on the real Rust server with a real Notes copy and the account export through the server.
+
+No recording content reaches Notes or Memory until part 6 builds the hooks that write it, so nothing is currently left behind by a meeting that is deleted. The deletion service still has to land before part 6 ships.
+
+### Not proven
+
+Everything in the 5C proof list. Nothing was built or run in this part.
