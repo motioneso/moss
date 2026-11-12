@@ -31,8 +31,7 @@
       "sql/0132_email_imap_insert.sql",
       "sql/0219_email_thread_lookup.sql",
       "sql/0247_email_analysis_attempts.sql",
-      "sql/0249_email_judgement_requested_at.sql",
-      "sql/0364_email_cache_delete.sql"
+      "sql/0249_email_judgement_requested_at.sql"
     ],
     "ledger": "core-legacy",
     "access": {
