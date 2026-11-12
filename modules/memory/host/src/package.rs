@@ -131,7 +131,11 @@ pub fn files(root: &Path, core: &[u8]) -> Result<BTreeMap<String, Vec<u8>>> {
     ]);
     for (name, bytes) in [
         ("index.html", include_bytes!("../../ui/index.html").as_slice()),
+        ("embedding.html", include_bytes!("../../ui/embedding.html")),
+        ("embedding.mjs", include_bytes!("../../ui/embedding.mjs")),
         ("app.mjs", include_bytes!("../../ui/app.mjs")),
+        ("view.mjs", include_bytes!("../../ui/view.mjs")),
+        ("api.mjs", include_bytes!("../../ui/api.mjs")),
         ("guest-bridge.mjs", include_bytes!("../../ui/guest-bridge.mjs")),
         ("memory.css", include_bytes!("../../ui/memory.css")),
     ] {

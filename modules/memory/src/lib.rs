@@ -1,12 +1,13 @@
 //! Memory guest. It validates requests, scores recall results and shapes responses. SQL, the
 //! acting person, row-level security and the embedding service belong to the host, so no
 //! vector or credential reaches this code. It also runs the vault index jobs and the fact
-//! lifecycle. Candidates and screens are later parts.
+//! lifecycle, suggestions and the Memory screen routes.
 use moss_module_sdk::{Host, Response, RouteRequest};
 use serde_json::{json, Value};
 
 #[cfg(target_arch = "wasm32")]
 mod abi;
+pub mod dashboard;
 pub mod graph;
 pub mod lifecycle;
 pub mod schema;
@@ -118,6 +119,15 @@ fn route(host: &impl Host, request: RouteRequest) -> Result<Value> {
         ("POST", "/graph/facts/:id/mark-stale") => lifecycle::mark_stale_route(host, &request),
         ("POST", "/graph/facts/:id/supersede") => lifecycle::supersede_route(host, &request),
         ("DELETE", "/graph/facts/:id") => lifecycle::delete_route(host, &request),
+        ("GET", "/dashboard") => dashboard::dashboard_route(host, &request),
+        ("POST", "/memories") => dashboard::add_route(host, &request),
+        ("GET", "/candidates") => dashboard::candidates_route(host, &request),
+        ("POST", "/candidates/:id/accept") => dashboard::accept_route(host, &request),
+        ("POST", "/candidates/:id/reject") => dashboard::decide_route(host, &request, "reject"),
+        ("POST", "/candidates/:id/suppress") => dashboard::decide_route(host, &request, "suppress"),
+        ("PATCH", "/graph/facts/:id") => dashboard::patch_fact_route(host, &request),
+        ("PATCH", "/graph/entities/:id") => dashboard::patch_entity_route(host, &request),
+        ("DELETE", "/graph/entities/:id") => dashboard::delete_entity_route(host, &request),
         ("GET", "/graph/recall") => graph::recall_route(host, &request),
         ("GET", "/graph/core") => graph::core_route(host),
         ("POST", "/graph/entities") => graph::entity_route(host, &request.body),

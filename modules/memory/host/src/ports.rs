@@ -1,6 +1,6 @@
 //! Answers the package's `memory.*` calls with SQL under the signed-in person's row-level
 //! security. Memory text goes only to the configured embedding service and never into logs.
-use crate::{lifecycle, store};
+use crate::{dashboard, lifecycle, store};
 use anyhow::{ensure, Result};
 use moss_module_host::{
     memory_ingest::DocumentEmbeddings,
@@ -139,6 +139,14 @@ impl Ports for MemoryPorts {
                     Ok((cx, value))
                 })
             }
+            (
+                _,
+                "memory.facts" | "memory.candidates" | "memory.candidate" | "memory.fact-patch"
+                | "memory.entity-patch" | "memory.entity-delete" | "memory.subject",
+            ) => self.within(scope, |cx| async {
+                let value = dashboard::run(&cx, request).await?;
+                Ok((cx, value))
+            }),
             _ => self.within(scope, |cx| async {
                 let value = store::run(&cx, request, None).await?;
                 Ok((cx, value))

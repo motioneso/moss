@@ -64,6 +64,13 @@ fn the_package_asks_only_for_its_own_memory_resources() {
         ("set", "memory.lifecycle"),
         ("get", "memory.target"),
         ("set", "memory.forget"),
+        ("get", "memory.facts"),
+        ("get", "memory.candidates"),
+        ("set", "memory.candidate"),
+        ("set", "memory.fact-patch"),
+        ("set", "memory.entity-patch"),
+        ("set", "memory.entity-delete"),
+        ("set", "memory.subject"),
     ] {
         ask("kv", operation, resource).unwrap();
     }
@@ -79,7 +86,7 @@ fn the_package_asks_only_for_its_own_memory_resources() {
 }
 
 #[test]
-fn the_twelve_routes_and_three_tools_are_declared() {
+fn the_twenty_one_routes_and_three_tools_are_declared() {
     let manifest = moss_memory_host::package::manifest().unwrap();
     let routes: Vec<_> = manifest.routes.iter().map(|r| (r.method.as_str(), r.path.as_str())).collect();
     assert_eq!(
@@ -96,7 +103,16 @@ fn the_twelve_routes_and_three_tools_are_declared() {
             ("POST", "/graph/facts/:id/mark-stale"),
             ("POST", "/graph/facts/:id/supersede"),
             ("DELETE", "/graph/facts/:id"),
-            ("POST", "/vault-index/start")
+            ("POST", "/vault-index/start"),
+            ("POST", "/memories"),
+            ("GET", "/dashboard"),
+            ("GET", "/candidates"),
+            ("POST", "/candidates/:id/accept"),
+            ("POST", "/candidates/:id/reject"),
+            ("POST", "/candidates/:id/suppress"),
+            ("PATCH", "/graph/facts/:id"),
+            ("PATCH", "/graph/entities/:id"),
+            ("DELETE", "/graph/entities/:id")
         ]
     );
     assert!(manifest.routes.iter().all(|r| r.sign_in));
@@ -148,6 +164,7 @@ fn the_package_keeps_every_applied_sql_file_byte_for_byte() {
     .unwrap();
     assert_eq!(package.manifest.database.migrations.len(), 23);
     assert_eq!(package.manifest.screens["/settings/memory"], "ui/index.html");
+    assert_eq!(package.manifest.screens["/settings/memory/search-model"], "ui/embedding.html");
     moss_module_host::sql::check(&package, &Default::default()).unwrap();
     for path in package.manifest.database.migrations.iter().filter(|p| moss_module_host::legacy::entry("memory", p).is_some()) {
         assert_eq!(

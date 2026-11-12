@@ -19,7 +19,14 @@
         "memory.index",
         "memory.lifecycle",
         "memory.target",
-        "memory.forget"
+        "memory.forget",
+        "memory.facts",
+        "memory.candidates",
+        "memory.candidate",
+        "memory.fact-patch",
+        "memory.entity-patch",
+        "memory.entity-delete",
+        "memory.subject"
       ]
     },
     {
@@ -212,6 +219,51 @@
       "method": "POST",
       "path": "/vault-index/start",
       "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/memories",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/dashboard",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/candidates",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/candidates/:id/accept",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/candidates/:id/reject",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/candidates/:id/suppress",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/graph/facts/:id",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/graph/entities/:id",
+      "signIn": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/graph/entities/:id",
+      "signIn": true
     }
   ],
   "requires": {},
@@ -232,7 +284,7 @@
   "features": [
     {
       "id": "memory.vault-index",
-      "description": "Each account's notes are split into searchable pieces and indexed every fifteen minutes, covering the private note copies Moss saves and the folder named in the account's people notes preference. The Attachments and Exports folders are never indexed. Changed files are re-indexed, deleted files are dropped, and a change of search model re-indexes everything once. A restart does not re-index. Other modules can ask for one saved note copy to be indexed sooner through the requestVaultIndex API. Search and the Memory screen are not part of this package yet.",
+      "description": "Each account's notes are split into searchable pieces and indexed every fifteen minutes, covering the private note copies Moss saves and the folder named in the account's people notes preference. The Attachments and Exports folders are never indexed. Changed files are re-indexed, deleted files are dropped, and a change of search model re-indexes everything once. A restart does not re-index. Other modules can ask for one saved note copy to be indexed sooner through the requestVaultIndex API.",
       "errors": [
         {
           "code": "memory-index-unavailable",
@@ -245,7 +297,7 @@
         {
           "id": "memory-set-up-embedding",
           "description": "Check the search model settings",
-          "path": "/settings/memory"
+          "path": "/settings/memory/search-model"
         }
       ]
     },
@@ -270,6 +322,31 @@
         {
           "id": "memory-set-up-embedding",
           "description": "Set up an embedding model",
+          "path": "/settings/memory/search-model"
+        }
+      ]
+    },
+    {
+      "id": "memory.screen",
+      "description": "The Memory screen under Settings, Memory & context. To review lists what Moss suggests, five at a time, and each suggestion can be accepted, dismissed or never suggested again. A dismissed or never-suggested item does not come back. Saved memories lists what Moss knows with search, status, kind and source filters and paging. Each memory can be pinned, confirmed, corrected, replaced, marked stale or forgotten, and you can add one by hand. History shows replaced and expired memories and dismissed suggestions. Memory text is shown only to its owner.",
+      "errors": [
+        {
+          "code": "memory-suggestion-gone",
+          "class": "validation",
+          "description": "The suggestion was already decided or no longer exists",
+          "remediationRef": "memory-open-screen"
+        },
+        {
+          "code": "memory-subject-ambiguous",
+          "class": "validation",
+          "description": "More than one memory entity has the name a suggestion mentions",
+          "remediationRef": "memory-open-screen"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "memory-open-screen",
+          "description": "Open the Memory screen",
           "path": "/settings/memory"
         }
       ]
@@ -300,7 +377,7 @@
         {
           "id": "memory-set-up-embedding",
           "description": "Set up an embedding model",
-          "path": "/settings/memory"
+          "path": "/settings/memory/search-model"
         }
       ]
     },
@@ -324,7 +401,7 @@
         {
           "id": "memory-set-up-embedding",
           "description": "Set up an embedding model",
-          "path": "/settings/memory"
+          "path": "/settings/memory/search-model"
         }
       ]
     },
@@ -408,14 +485,22 @@
     }
   },
   "screens": {
-    "/settings/memory": "ui/index.html"
+    "/settings/memory": "ui/index.html",
+    "/settings/memory/search-model": "ui/embedding.html"
   },
   "navigation": [],
   "settings": [
     {
+      "id": "memory.screen",
+      "label": "Memory & context",
+      "path": "/settings/memory",
+      "scope": "user",
+      "description": "Everything Moss remembers about you. Review what Moss suggests, search saved memories, and add, pin, confirm, correct, replace, mark stale or forget each one."
+    },
+    {
       "id": "memory.embedding",
       "label": "Memory search model",
-      "path": "/settings/memory",
+      "path": "/settings/memory/search-model",
       "scope": "admin",
       "description": "The endpoint and model that turn note text into searchable vectors for every account. By default the model runs on this server and note text stays on it; note text is sent out only if you choose an endpoint."
     }
