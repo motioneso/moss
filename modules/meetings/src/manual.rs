@@ -64,7 +64,9 @@ fn clean(body: &Value) -> Option<Input> {
         None => None,
         Some(v) => {
             let text = v.as_str()?;
-            match DateTime::parse_from_rfc3339(text) {
+            match DateTime::parse_from_rfc3339(&crate::text::with_colon_offset(text)) {
+                // A leap second is valid for the schema but not for `Date.parse`.
+                Ok(at) if at.timestamp_subsec_nanos() >= 1_000_000_000 => return None,
                 Ok(at) => Some(at.with_timezone(&Utc).to_rfc3339_opts(SecondsFormat::Millis, true)),
                 // JavaScript's parser accepts looser dates, which the schema check then refuses.
                 Err(_) if loosely_a_date(text) => Some(String::new()),
@@ -85,7 +87,8 @@ fn clean(body: &Value) -> Option<Input> {
 fn loosely_a_date(text: &str) -> bool {
     let b = text.as_bytes();
     let digits = |from: usize, n: usize| b.len() >= from + n && b[from..from + n].iter().all(u8::is_ascii_digit);
-    digits(0, 4) && (b.len() == 4 || (matches!(b[4], b'-' | b'/') && digits(5, 2)))
+    let month = |at: usize| digits(at, 2) && (1..=12).contains(&((b[at] - b'0') * 10 + (b[at + 1] - b'0')));
+    digits(0, 4) && (b.len() == 4 || (matches!(b[4], b'-' | b'/') && month(5)))
         && (b.len() <= 7 || (matches!(b[7], b'-' | b'/') && digits(8, 2) && (b.len() == 10 || matches!(b[10], b'T' | b't' | b' '))))
 }
 

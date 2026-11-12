@@ -71,3 +71,20 @@ pub fn is_type_id(value: &str) -> bool {
         && b[0].is_ascii_lowercase()
         && b[1..].iter().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-')
 }
+
+/// The old format check lets the zone offset drop its colon (`-0530`) or its minutes (`+02`).
+pub(crate) fn with_colon_offset(text: &str) -> String {
+    let b = text.as_bytes();
+    let Some(at) = b.iter().rposition(|c| matches!(c, b'+' | b'-')).filter(|at| *at > 10) else {
+        return text.to_owned();
+    };
+    let zone = &text[at + 1..];
+    if !zone.bytes().all(|c| c.is_ascii_digit()) {
+        return text.to_owned();
+    }
+    match zone.len() {
+        2 => format!("{}:00", text),
+        4 => format!("{}:{}", &text[..at + 3], &text[at + 3..]),
+        _ => text.to_owned(),
+    }
+}

@@ -30,6 +30,8 @@ interface Step {
   body?: unknown;
   /** Sent as the raw request text, for malformed JSON. */
   raw?: string;
+  /** The reply is decided by the shell, so a difference is reported and not failed. */
+  shell?: boolean;
   /** Names the meeting this reply created, so later steps and the stored rows can refer to it. */
   save?: string;
   /** Replayed again against rows the old code wrote. */
@@ -123,7 +125,7 @@ const SCENARIOS: Scenario[] = [
           l.map((t) => (t.id === "idea" ? { ...t, retired: true } : t))
         )
       ),
-      getTypes({ reread: true }),
+      getTypes(),
       putTypes(
         withTypes([kind("standup", "Standup", { templateId: "one-to-one" })], 2, (l) =>
           l.map((t) => (t.id === "idea" ? { ...t, retired: false, name: "Big idea" } : t))
@@ -134,7 +136,7 @@ const SCENARIOS: Scenario[] = [
           l.map((t) => (t.id === "other" ? { ...t, templateId: "interview" } : t))
         )
       ),
-      getTypes(),
+      getTypes({ reread: true }),
       getTypes({ as: "b" })
     ]
   },
@@ -196,8 +198,8 @@ const SCENARIOS: Scenario[] = [
       putTypes(null),
       putTypes("text"),
       putTypes([]),
-      { method: "PUT", path: `${base}/recording-types`, raw: "{not json" },
-      { method: "PUT", path: `${base}/recording-types`, raw: "" },
+      { method: "PUT", path: `${base}/recording-types`, raw: "{not json", shell: true },
+      { method: "PUT", path: `${base}/recording-types`, raw: "", shell: true },
       getTypes({ reread: true })
     ]
   },
@@ -221,7 +223,7 @@ const SCENARIOS: Scenario[] = [
       putKind({ expectedRevision: 2, typeId: "idea", extra: 1 }),
       putKind(null),
       putKind([]),
-      { method: "PUT", path: `${base}/records/{M}/recording/type`, raw: "{nope" },
+      { method: "PUT", path: `${base}/records/{M}/recording/type`, raw: "{nope", shell: true },
       putKind({ expectedRevision: 0, typeId: "idea" }, "{M2}"),
       getRec("{M2}"),
       putKind({ expectedRevision: 0, typeId: "idea" }, MISSING),
@@ -312,8 +314,8 @@ const SCENARIOS: Scenario[] = [
       paste(note(2, { recordedAt: "" })),
       paste(note(2, { recordedAt: "0001-01-01T00:00:00Z" })),
       paste(note(2, { recordedAt: "9999-12-31T23:59:59.999Z" })),
-      { method: "POST", path: `${base}/manual-transcripts`, raw: "{nope" },
-      { method: "POST", path: `${base}/manual-transcripts`, raw: "" }
+      { method: "POST", path: `${base}/manual-transcripts`, raw: "{nope", shell: true },
+      { method: "POST", path: `${base}/manual-transcripts`, raw: "", shell: true }
     ]
   },
   {

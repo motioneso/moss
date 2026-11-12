@@ -233,6 +233,10 @@ impl<'a, H: Host + ?Sized> Recording<'a, H> {
             Err(failure) => return Ok(bad_request(failure)),
         };
         let mut body = request.body.clone();
+        // The old route strips unknown properties instead of refusing them.
+        if let Some(map) = body.as_object_mut() {
+            map.retain(|key, _| key == "expectedRevision" || key == "typeId");
+        }
         if let Err(failure) = strict_object(
             "body",
             &mut body,

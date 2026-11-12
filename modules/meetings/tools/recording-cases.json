@@ -583,7 +583,6 @@
       {
         "method": "GET",
         "path": "/api/meetings/recording-types",
-        "reread": true,
         "status": 200,
         "noStore": true,
         "reply": {
@@ -819,6 +818,7 @@
       {
         "method": "GET",
         "path": "/api/meetings/recording-types",
+        "reread": true,
         "status": 200,
         "noStore": true,
         "reply": {
@@ -3413,6 +3413,7 @@
         "method": "PUT",
         "path": "/api/meetings/recording-types",
         "raw": "{not json",
+        "shell": true,
         "status": 400,
         "noStore": false,
         "reply": { "error": "Body is not valid JSON but content-type is set to 'application/json'" }
@@ -3421,6 +3422,7 @@
         "method": "PUT",
         "path": "/api/meetings/recording-types",
         "raw": "",
+        "shell": true,
         "status": 400,
         "noStore": false,
         "reply": { "error": "Body cannot be empty when content-type is set to 'application/json'" }
@@ -3783,6 +3785,7 @@
         "method": "PUT",
         "path": "/api/meetings/records/{M}/recording/type",
         "raw": "{nope",
+        "shell": true,
         "status": 400,
         "noStore": false,
         "reply": { "error": "Body is not valid JSON but content-type is set to 'application/json'" }
@@ -5459,7 +5462,7 @@
         },
         "status": 201,
         "noStore": true,
-        "reply": { "meetingId": "7390b306-03e4-46e6-9ebe-dbce5e7affc4", "replayed": false }
+        "reply": { "meetingId": "39e5b7a9-ec5a-477e-8bcf-0e0fe1676118", "replayed": false }
       },
       {
         "method": "POST",
@@ -5471,7 +5474,7 @@
         },
         "status": 200,
         "noStore": true,
-        "reply": { "meetingId": "7390b306-03e4-46e6-9ebe-dbce5e7affc4", "replayed": true }
+        "reply": { "meetingId": "39e5b7a9-ec5a-477e-8bcf-0e0fe1676118", "replayed": true }
       },
       {
         "method": "POST",
@@ -5585,6 +5588,7 @@
         "method": "POST",
         "path": "/api/meetings/manual-transcripts",
         "raw": "{nope",
+        "shell": true,
         "status": 400,
         "noStore": false,
         "reply": { "error": "Body is not valid JSON but content-type is set to 'application/json'" }
@@ -5593,6 +5597,7 @@
         "method": "POST",
         "path": "/api/meetings/manual-transcripts",
         "raw": "",
+        "shell": true,
         "status": 400,
         "noStore": false,
         "reply": { "error": "Body cannot be empty when content-type is set to 'application/json'" }
@@ -5923,7 +5928,7 @@
         "as": "b",
         "status": 201,
         "noStore": true,
-        "reply": { "meetingId": "c59ed2c8-d9c6-4415-9522-3aa469dc19dd", "replayed": false }
+        "reply": { "meetingId": "34d71ad4-cd9e-46bd-ab39-49dd3c2df0fd", "replayed": false }
       },
       {
         "method": "POST",

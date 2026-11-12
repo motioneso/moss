@@ -50,7 +50,7 @@ fn check(var: &str, name: &str, kind: Kind, value: &Value) -> Result<(), Failure
         }
         Kind::Any => Ok(()),
         Kind::DateTime => match value.as_str() {
-            Some(s) if chrono::DateTime::parse_from_rfc3339(s).is_ok() => Ok(()),
+            Some(s) if chrono::DateTime::parse_from_rfc3339(&crate::text::with_colon_offset(s)).is_ok() => Ok(()),
             Some(_) => Err(format!("{at} must match format \"date-time\"")),
             None => Err(format!("{at} must be string")),
         },
