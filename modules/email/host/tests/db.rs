@@ -328,17 +328,26 @@ fn prune_removes_only_unlisted_in_window_mail_of_the_owner() {
 #[ignore = "Only through verify-gate"]
 fn a_second_person_cannot_prune_and_the_delete_rule_has_teeth() {
     let f = Fixture::new();
-    f.cache("imap:INBOX:1:1", "Private one");
-    f.cache("imap:INBOX:1:2", "Private two");
+    let first: Uuid = f.cache("imap:INBOX:1:1", "Private one")["id"].as_str().unwrap().parse().unwrap();
+    let second: Uuid = f.cache("imap:INBOX:1:2", "Private two")["id"].as_str().unwrap().parse().unwrap();
+    // Without a share the second person cannot even see the mail.
     let refused = f.call(f.b, "set", "email.cache-write", prune_params(&f, &[]));
     assert_eq!(refused["deleted"], 0, "another person deleted mail: {refused}");
     assert_eq!(count(&f, f.a), 2);
-    // With the delete rule removed, the same call deletes, so the check above notices.
+    // A view share lets the second person see the mail, so only the delete rule stands in the way.
+    for id in [first, second] {
+        f.sql(&format!(
+            "INSERT INTO app.shares(resource_type,resource_id,owner_user_id,grantee_user_id,level) VALUES('email_message','{id}','{}','{}','view')",
+            f.a, f.b
+        ));
+    }
+    let shared = f.call(f.b, "set", "email.cache-write", prune_params(&f, &[]));
+    assert_eq!(shared["deleted"], 0, "a view share let another person delete mail: {shared}");
+    assert_eq!(count(&f, f.a), 2);
+    // With the delete rule loosened, the same call deletes, so the checks above notice.
     f.sql("DROP POLICY moss_module_delete ON app.email_messages");
     f.sql("CREATE POLICY moss_module_delete ON app.email_messages FOR DELETE TO jarvis_app_runtime, jarvis_worker_runtime USING (true)");
     let leaked = f.call(f.b, "set", "email.cache-write", prune_params(&f, &[]));
-    f.sql("DROP POLICY moss_module_delete ON app.email_messages");
-    f.sql("CREATE POLICY moss_module_delete ON app.email_messages FOR DELETE TO jarvis_app_runtime, jarvis_worker_runtime USING (app.current_actor_user_id() IS NOT NULL AND owner_user_id = app.current_actor_user_id())");
     println!("RED without the delete rule: {leaked}");
     assert_eq!(leaked["deleted"], 2, "the proof did not notice a missing delete rule");
     assert_eq!(count(&f, f.a), 0);
