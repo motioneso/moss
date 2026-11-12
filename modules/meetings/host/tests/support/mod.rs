@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+pub mod install;
 use access_context::AccessContext;
 use tokio_postgres::{Client, NoTls};
 use safety_core::db::{Database, RuntimeRole};

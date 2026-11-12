@@ -18,6 +18,8 @@ const run = spawnSync(
     "modules/meetings/host/Cargo.toml",
     "--test",
     "installed",
+    "--test",
+    "transcripts",
     "--",
     "--ignored",
     "--nocapture",
