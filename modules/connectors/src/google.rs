@@ -52,7 +52,13 @@ pub fn complete(host: &impl Host, body: &Value) -> Result<(u16, Value)> {
         return Err(Error::new(400, message));
     }
     match answer.get("account") {
-        Some(account) if !account.is_null() => Ok((201, json!({"account":account}))),
+        Some(account) if !account.is_null() => {
+            if let Some(id) = account["id"].as_str() {
+                crate::google_sync::reconcile_schedule(host, id);
+                let _ = crate::google_sync::sync_soon(host, id, "on-connect", false);
+            }
+            Ok((201, json!({"account":account})))
+        }
         _ => Err(Error::new(500, "Internal server error")),
     }
 }

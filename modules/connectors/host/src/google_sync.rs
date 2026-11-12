@@ -37,6 +37,8 @@ struct Run {
     pages: HashMap<String, Vec<Option<String>>>,
     mode: Option<String>,
     anchor: Option<String>,
+    /// The first failure of the run: status, cleaned reason and the call name.
+    detail: Option<Value>,
 }
 
 /// Why a Google call gave nothing. Holds only the status, a cleaned reason and the call name.
@@ -156,7 +158,14 @@ pub async fn run(
                 "connectors.sync-google-list" => list(cx, cipher, config, runs, id, p).await?,
                 _ => fetch(cx, cipher, config, runs, id, p).await?,
             };
-            Ok(answer.unwrap_or_else(|failure| failure.answer()))
+            let answer = answer.unwrap_or_else(|failure| failure.answer());
+            let detail = &answer["error"];
+            if detail.is_object() {
+                if let Some(run) = runs.0.lock().expect("runs").get_mut(&id) {
+                    run.detail.get_or_insert_with(|| detail.clone());
+                }
+            }
+            Ok(answer)
         }
         _ => bail!("Unknown connectors resource"),
     }
@@ -231,15 +240,14 @@ async fn finish(cx: &DataContext, runs: &SyncRuns, id: Uuid, p: &Value) -> Resul
         "emailUpserted":count(p, "emailUpserted"),"emailFailures":count(p, "emailFailures"),
         "escalations":0,"truncated":p["counts"]["truncated"].as_bool().unwrap_or(false),
     });
-    let detail = &p["errorDetail"];
-    if detail.is_object() {
+    let run = runs.0.lock().expect("runs").remove(&id);
+    if let Some(detail) = run.as_ref().and_then(|r| r.detail.as_ref()).filter(|_| error.is_some()) {
         counts["emailErrorDetail"] = json!({
             "status":detail["status"].as_i64(),
             "reason":detail["reason"].as_str().and_then(clean),
             "operation":detail["operation"].as_str().and_then(clean),
         });
     }
-    let run = runs.0.lock().expect("runs").remove(&id);
     let position = if p["savePosition"] == true { run.and_then(|r| r.anchor) } else { None };
     cx.db()
         .execute(

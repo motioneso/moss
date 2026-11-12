@@ -2,9 +2,9 @@
   "schemaVersion": 2,
   "id": "connectors",
   "name": "Connectors",
-  "description": "Keeps the mail and calendar connections of each account, their sign-in secrets and the Email and Calendar permissions. Connecting Google works by pasting your own Google client details. Yahoo, Proton Bridge, iCloud and Fastmail mail connect with an app password. Outlook sign-in and calendar syncing are not part of this package yet.",
+  "description": "Keeps the mail and calendar connections of each account, their sign-in secrets and the Email and Calendar permissions. Connecting Google works by pasting your own Google client details. Yahoo, Proton Bridge, iCloud and Fastmail mail connect with an app password. Google mail and calendar sync into the Email and Calendar caches. Outlook sign-in and calendar syncing are not part of this package yet.",
   "publisher": "Moss",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
@@ -26,18 +26,23 @@
         "connectors.imap-sync-start",
         "connectors.imap-list",
         "connectors.imap-fetch",
-        "connectors.imap-sync-finish"
+        "connectors.imap-sync-finish",
+        "connectors.sync-google-start",
+        "connectors.sync-google-calendar",
+        "connectors.sync-google-list",
+        "connectors.sync-google-fetch",
+        "connectors.sync-google-finish"
       ]
     },
     {
       "port": "jobs",
       "operations": ["enqueue-options", "schedule", "unschedule"],
-      "resources": ["imap-sync"]
+      "resources": ["imap-sync", "google-sync", "google-sync-sweep"]
     },
     {
       "port": "api",
       "operations": ["call"],
-      "resources": ["email"]
+      "resources": ["email", "calendar"]
     },
     {
       "port": "context",
@@ -132,6 +137,11 @@
     },
     {
       "method": "POST",
+      "path": "/google/sync",
+      "signIn": true
+    },
+    {
+      "method": "POST",
       "path": "/imap/test-connection",
       "signIn": true
     },
@@ -147,7 +157,8 @@
     }
   ],
   "requires": {
-    "email": ">=0.2.0, <1.0.0"
+    "email": ">=0.2.0, <1.0.0",
+    "calendar": ">=0.26.0, <1.0.0"
   },
   "provides": {},
   "icons": ["icons/connectors.svg"],
@@ -303,7 +314,8 @@
           "path": "/settings/connections"
         }
       ]
-    }
+    },
+    {"id":"connectors.google-sync","description":"Copies the signed-in person's own Gmail and Google Calendar into their Email and Calendar caches every fifteen minutes, right after connecting, and on demand from the Sync now action. Calendar covers the week behind and the month ahead, and mail covers the last thirty days, read in small steps so a large mailbox never blocks the app. Each Email and Calendar switch for the account is respected. Mail text beyond Gmail's short preview is not kept, and no sign-in secret leaves the connection service.","errors":[{"code":"auth-error","class":"validation","description":"Google refused the saved sign-in during a sync","remediationRef":"connectors-google-reconnect"},{"code":"calendar-error","class":"transient","description":"Some calendar events could not be read or saved during a sync"},{"code":"email-error","class":"transient","description":"Google could not be reached or answered badly during a sync"},{"code":"email-message-error","class":"transient","description":"Some messages could not be read or saved during a sync, and the rest were saved"}],"remediations":[{"id":"connectors-google-reconnect","description":"Connect Google again from Connections","path":"/settings/connections"}]}
   ],
   "tools": {
     "connectors.startGoogleGuidance": {
@@ -325,6 +337,26 @@
       "failures": {
         "kind": "count"
       }
+    },
+    "google-sync": {
+      "account-id": { "kind": "id" },
+      "phase": { "kind": "choice", "choices": ["calendar", "email-day", "email"] },
+      "cursor": { "kind": "count" },
+      "calendar-upserted": { "kind": "count" },
+      "calendar-reconciled": { "kind": "count" },
+      "email-upserted": { "kind": "count" },
+      "email-failures": { "kind": "count" },
+      "trigger": { "kind": "choice", "choices": ["schedule", "manual", "assistant", "on-connect"] },
+      "recent-only": { "kind": "flag" },
+      "error": {
+        "kind": "choice",
+        "choices": ["none", "auth-error", "calendar-error", "email-error", "email-message-error"]
+      },
+      "email-on": { "kind": "flag" },
+      "calendar-on": { "kind": "flag" }
+    },
+    "google-sync-sweep": {
+      "account-id": { "kind": "id" }
     }
   },
   "screens": {
