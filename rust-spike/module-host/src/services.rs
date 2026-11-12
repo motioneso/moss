@@ -359,11 +359,8 @@ impl ServicePorts {
                     "name": api,
                     "parameters": r.parameters.get("parameters").cloned().unwrap_or_else(|| json!({}))
                 });
-                let out = host.invoke_public(&r.resource, access.clone(), "api", &payload.to_string());
-                if let Err(e) = &out {
-                    safety_core::http::log(json!({"event":"TEMP_DIAG_API","api":api,"error":format!("{e:#}").chars().take(300).collect::<String>()}));
-                }
-                out.and_then(|s| Ok(serde_json::from_str(&s)?))
+                host.invoke_public(&r.resource, access.clone(), "api", &payload.to_string())
+                    .and_then(|s| Ok(serde_json::from_str(&s)?))
             }
             "events" => match r.operation.as_str() {
                 "publish" => {
