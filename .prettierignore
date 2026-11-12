@@ -104,3 +104,4 @@ rust-spike/platform/target/
 rust-spike/**/target/
 modules/memory/tools/score-cases.json
 modules/memory/tools/lifecycle-cases.json
+modules/meetings/tools/transcript-cases.json
