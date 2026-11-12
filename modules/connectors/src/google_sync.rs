@@ -13,8 +13,9 @@ const SWEEP_CRON: &str = "*/30 * * * *";
 /// Events per Calendar chunk and messages per Gmail chunk.
 const CALENDAR_CHUNK: u64 = 100;
 const MAIL_CHUNK: u64 = 10;
-/// Chunks one job run handles before it hands the rest to a new job.
-const CHUNKS_PER_RUN: usize = 5;
+/// Chunks one job run handles before it hands the rest to a new job. A run has a five second
+/// budget, so a run stays small enough to finish inside it on a slow machine.
+const CHUNKS_PER_RUN: usize = 1;
 /// A message that failed analysis this many times for the same revision is left alone.
 const GIVE_UP_AFTER: u64 = 5;
 

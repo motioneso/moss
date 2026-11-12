@@ -19,6 +19,11 @@ impl Script {
         let calls = self.calls.borrow();
         calls.iter().filter(|c| c.1 == resource || c.0 == resource || c.3 == resource).map(|c| c.2.clone()).collect()
     }
+    /// The parameters of the most recent job the guest queued.
+    fn last_queued(&self) -> Option<Value> {
+        let calls = self.calls.borrow();
+        calls.iter().rev().find(|c| c.0 == "jobs" && c.3 == "enqueue-options").map(|c| c.2["params"].clone())
+    }
     fn api(&self, name: &str) -> Vec<Value> {
         let calls = self.calls.borrow();
         calls.iter().filter(|c| c.2["name"] == name).map(|c| c.2["parameters"].clone()).collect()
@@ -41,9 +46,22 @@ impl Host for Script {
     }
 }
 
-fn run(host: &Script, params: Value) -> Value {
+fn run_once(host: &Script, params: Value) -> Value {
     let job = json!({"queue":"google-sync","parameters":params});
     serde_json::from_str(&handle(host, &job.to_string()).unwrap()).unwrap()
+}
+
+/// Runs the job and then every continuation it queues, the way the queue would.
+fn run(host: &Script, params: Value) -> Value {
+    let mut outcome = run_once(host, params);
+    for _ in 0..50 {
+        if outcome["outcome"] != "continued" {
+            break;
+        }
+        let next = host.last_queued().expect("a continued run queues the next job");
+        outcome = run_once(host, next);
+    }
+    outcome
 }
 
 fn start_params() -> Value {
