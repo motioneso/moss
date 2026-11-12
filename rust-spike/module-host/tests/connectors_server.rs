@@ -489,7 +489,7 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
                 let _ = connection.await;
             });
             let result = db
-                .query("SELECT queue, state, left(coalesce(output::text,''),200) FROM spike_jobs.jobs WHERE queue LIKE 'google%' ORDER BY created_at DESC LIMIT 6", &[])
+                .query("SELECT queue, state, attempts::text||' '||coalesce(failure_code,'') FROM moss_queue.jobs WHERE queue LIKE 'google%' ORDER BY run_at DESC LIMIT 6", &[])
                 .await;
             match result {
                 Ok(rows) => rows.iter().map(|r| format!("{} {} {}", r.get::<_, String>(0), r.get::<_, String>(1), r.get::<_, String>(2))).collect::<Vec<_>>(),
