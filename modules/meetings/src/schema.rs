@@ -10,7 +10,12 @@ pub type Failure = String;
 pub enum Kind {
     Uuid,
     Text { min: usize, max: usize },
+    /// Text that also holds a non-whitespace character (the old schema's `\S` pattern).
+    Ident { min: usize, max: usize },
     Int { min: i64, max: i64 },
+    Enum(&'static [&'static str]),
+    /// Present and checked elsewhere.
+    Any,
 }
 
 fn object<'a>(var: &str, value: &'a Value) -> Result<&'a Map<String, Value>, Failure> {
@@ -25,7 +30,7 @@ fn check(var: &str, name: &str, kind: Kind, value: &Value) -> Result<(), Failure
             Some(_) => Err(format!("{at} must match format \"uuid\"")),
             None => Err(format!("{at} must be string")),
         },
-        Kind::Text { min, max } => {
+        Kind::Text { min, max } | Kind::Ident { min, max } => {
             let s = value.as_str().ok_or_else(|| format!("{at} must be string"))?;
             let n = code_points(s);
             if n > max {
@@ -34,8 +39,17 @@ fn check(var: &str, name: &str, kind: Kind, value: &Value) -> Result<(), Failure
             if n < min {
                 return Err(format!("{at} must NOT have fewer than {min} characters"));
             }
+            if matches!(kind, Kind::Ident { .. }) && crate::text::js_trim(s).is_empty() {
+                return Err(format!("{at} must match pattern \"\\S\""));
+            }
             Ok(())
         }
+        Kind::Any => Ok(()),
+        Kind::Enum(allowed) => match value {
+            Value::String(s) if allowed.contains(&s.as_str()) => Ok(()),
+            Value::Array(_) | Value::Object(_) => Err(format!("{at} must be string")),
+            _ => Err(format!("{at} must be equal to one of the allowed values")),
+        },
         Kind::Int { min, max } => {
             let n = int_value(value).ok_or_else(|| format!("{at} must be integer"))?;
             if n > max {
@@ -73,9 +87,21 @@ pub fn strict_object(
     let map = value.as_object_mut().expect("checked object");
     for (name, kind) in props {
         if let Some(slot) = map.get_mut(*name) {
+            // Ajv unwraps a one-item array only where the schema wants a scalar.
+            if let (false, Value::Array(items)) = (matches!(kind, Kind::Any), &*slot) {
+                if items.len() == 1 {
+                    *slot = items[0].clone();
+                }
+            }
             if let (Kind::Int { .. }, Value::String(s)) = (kind, &*slot) {
-                if let Ok(n) = s.parse::<i64>() {
-                    *slot = Value::from(n);
+                // Ajv leaves an empty string alone, so it fails as a non-integer.
+                if let Some(f) = crate::js::js_number(s).filter(|_| !s.is_empty()) {
+                    // Whole numbers past i64 still fail the range check, as Ajv's number does.
+                    if f.is_infinite() || (f.fract() == 0.0 && f.abs() >= 9.2e18) {
+                        *slot = Value::from(if f > 0.0 { i64::MAX } else { i64::MIN });
+                    } else if f.fract() == 0.0 {
+                        *slot = Value::from(f as i64);
+                    }
                 }
             }
             check(var, name, *kind, slot)?;

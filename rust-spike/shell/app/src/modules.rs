@@ -684,7 +684,10 @@ fn module_response(output: &str) -> Response {
     match serde_json::from_str::<Reply>(output) {
         Ok(reply) if (200..600).contains(&reply.status) => (
             StatusCode::from_u16(reply.status).unwrap(),
-            [(header::CONTENT_TYPE, "application/json")],
+            [
+                (header::CONTENT_TYPE, "application/json"),
+                (header::CACHE_CONTROL, "no-store"),
+            ],
             reply.body.to_string(),
         )
             .into_response(),
@@ -701,6 +704,10 @@ mod tests {
         assert_eq!(
             module_response(r#"{"status":409,"body":{"error":"conflict"}}"#).status(),
             StatusCode::CONFLICT
+        );
+        assert_eq!(
+            module_response(r#"{"status":200,"body":{}}"#).headers()[header::CACHE_CONTROL],
+            "no-store"
         );
         assert_eq!(
             module_response(r#"{"posted":true}"#).status(),

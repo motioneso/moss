@@ -8,13 +8,18 @@ use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 
 /// How chat treats each route. Reads are open; writes and the delete need approval.
-pub const CHAT_CLASSES: [(&str, &str, &str); 8] = [
+pub const CHAT_CLASSES: [(&str, &str, &str); 13] = [
     ("GET", "/records", "read"),
     ("GET", "/records/:id", "read"),
     ("POST", "/records", "write"),
     ("PUT", "/records/:id/title", "write"),
     ("PUT", "/records/:id/notes", "write"),
     ("DELETE", "/records/:id", "destructive"),
+    ("POST", "/records/:id/transcript", "write"),
+    ("GET", "/records/:id/transcript", "read"),
+    ("GET", "/records/:id/transcript/evidence", "read"),
+    ("POST", "/history/search", "read"),
+    ("GET", "/history/:id", "read"),
     ("GET", "/preferences", "read"),
     ("PUT", "/preferences", "write"),
 ];

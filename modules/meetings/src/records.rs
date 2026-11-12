@@ -28,7 +28,7 @@ fn values(pairs: Vec<(&str, Value)>) -> BTreeMap<String, Value> {
 }
 
 /// Database timestamps become the JavaScript `toISOString` form the old app returned.
-fn iso(value: &Value) -> Result<String> {
+pub(crate) fn iso(value: &Value) -> Result<String> {
     let text = value
         .as_str()
         .ok_or_else(|| moss_module_sdk::Error::new("Invalid meeting row"))?;
