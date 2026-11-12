@@ -330,9 +330,9 @@ fn reviewing_an_action_dismisses_replays_keeps_it_pending_without_tasks_and_hide
     assert_eq!(w.call(a, "POST", &path, review_body(K3, "dismiss")), first);
     let conflict = w.call(a, "POST", &path, review_body(K2, "accept"));
     assert_eq!((conflict["status"].clone(), conflict["body"]["code"].clone()), (json!(409), json!("meeting_action_review_conflict")));
-    let none = w.call(a, "POST", &format!("/records/{id}/actions/{MISSING}/review"), review_body(K1, "dismiss"));
+    let none = w.call(a, "POST", &format!("/records/{id}/actions/{MISSING}/review"), review_body(K4, "dismiss"));
     assert_eq!((none["status"].clone(), none["body"]["code"].clone()), (json!(404), json!("meeting_action_unavailable")));
-    let invalid = w.call(a, "POST", &path, json!({"requestKey": K1, "decision": "maybe"}));
+    let invalid = w.call(a, "POST", &path, json!({"requestKey": K4, "decision": "maybe"}));
     assert_eq!(invalid["status"], 400, "{invalid}");
 
     // Nothing from the meeting text reached a queue payload.
