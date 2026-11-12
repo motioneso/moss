@@ -306,24 +306,23 @@ fn reviewing_an_action_dismisses_replays_keeps_it_pending_without_tasks_and_hide
         assert_eq!((r["status"].clone(), r["body"]["code"].clone()), (json!(404), json!("meeting_not_found")), "{r}");
     }
 
-    // The protection is real: with row-level security off, person B can dismiss it.
+    // The protection is real: with row-level security off, person B can read the owner's actions.
+    let list_path = format!("/records/{id}/outputs");
+    let hidden = w.call(b, "GET", &list_path, Value::Null);
+    assert_eq!(hidden["status"], 404, "{hidden}");
     let toggle = |on: bool| {
         let verb = if on { "ENABLE" } else { "DISABLE" };
         w.f.rt.block_on(async {
-            for t in ["meeting_records", "meeting_action_candidates", "meeting_output_requests"] {
+            for t in ["meeting_records", "meeting_action_candidates", "meeting_output_requests", "meeting_output_artifacts"] {
                 w.f.root.batch_execute(&format!("ALTER TABLE app.{t} {verb} ROW LEVEL SECURITY")).await.unwrap();
             }
         });
     };
     toggle(false);
-    let leaked = w.call(b, "POST", &path, review_body(K4, "dismiss"));
+    let leaked = w.call(b, "GET", &list_path, Value::Null);
     toggle(true);
-    assert_eq!(leaked["status"], 200, "with protection removed person B should reach the action: {leaked}");
-    // Put the state back so the owner's own checks below start from pending.
-    w.f.rt.block_on(async {
-        w.f.root.batch_execute("UPDATE app.meeting_action_candidates SET review_state='pending'").await.unwrap();
-        w.f.root.batch_execute("DELETE FROM app.meeting_output_requests WHERE history_kind='review' OR input_json LIKE '%\"review\"%'").await.unwrap();
-    });
+    assert_eq!(leaked["status"], 200, "with protection removed person B should see the actions: {leaked}");
+    assert!(leaked["body"]["candidates"][0]["id"].is_string(), "{leaked}");
 
     // The owner dismisses; the same key replays; the opposite decision conflicts.
     let first = w.call(a, "POST", &path, review_body(K3, "dismiss"));
