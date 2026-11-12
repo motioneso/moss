@@ -47,6 +47,9 @@ impl moss_memory_host::ports::Embedder for Same {
     fn document(&self, _: &CallScope, _: &str) -> anyhow::Result<(Vec<f64>, (String, String))> {
         Ok((unit(), ("stand-in".into(), "1".into())))
     }
+    fn model(&self, _: &CallScope) -> anyhow::Result<(String, String)> {
+        Ok(("stand-in".into(), "1".into()))
+    }
 }
 fn unit() -> Vec<f64> {
     (0..768).map(|i| if i == 0 { 1.0 } else { 0.0 }).collect()
