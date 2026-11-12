@@ -136,13 +136,13 @@ Slice A ports the logic that writes a summary. It touches no database and no rou
 
 ### What slice A proved
 
-| Check                       | How                                                                                                                |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Escaping                    | Meeting text appears in the prompt only as escaped data.                                                           |
-| Every citation failure      | One test per refusal reason, plus a surrogate pair split.                                                          |
-| Size limits                 | Total character cap, byte cap across a long meeting in several pieces, and a single huge segment cut with a warning. |
-| Retry and failure codes     | One retry then rejection, fenced answers accepted, timeout and provider failure codes.                             |
-| Piece coverage and citations | Every segment lands in a piece, and notes citations shift back to full-notes offsets.                              |
+| Check                        | How                                                                                                                  |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Escaping                     | Meeting text appears in the prompt only as escaped data.                                                             |
+| Every citation failure       | One test per refusal reason, plus a surrogate pair split.                                                            |
+| Size limits                  | Total character cap, byte cap across a long meeting in several pieces, and a single huge segment cut with a warning. |
+| Retry and failure codes      | One retry then rejection, fenced answers accepted, timeout and provider failure codes.                               |
+| Piece coverage and citations | Every segment lands in a piece, and notes citations shift back to full-notes offsets.                                |
 
 All 13 tests use a scripted fake model.
 
