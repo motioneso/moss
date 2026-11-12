@@ -72,10 +72,16 @@ fn a_job_payload_with_any_content_key_is_refused() {
 }
 
 #[test]
-fn only_the_three_queues_are_declared() {
+fn only_the_declared_queues_exist() {
     assert_eq!(
         moss_meetings_module::jobs::QUEUES,
-        ["meetings.recording-notice", "meetings.stop-summary", "meetings.recording-import", "meetings.recording-memory"]
+        [
+            "meetings.capture-maintenance",
+            "meetings.recording-notice",
+            "meetings.stop-summary",
+            "meetings.recording-import",
+            "meetings.recording-memory"
+        ]
     );
 }
 
