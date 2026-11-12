@@ -275,6 +275,12 @@ async fn insert(cx: &DataContext, p: &Value) -> Result<Value> {
              subject = EXCLUDED.subject, snippet = EXCLUDED.snippet,
              body_excerpt = EXCLUDED.body_excerpt, received_at = EXCLUDED.received_at,
              external_metadata = EXCLUDED.external_metadata,
+             analysis_attempts = CASE WHEN EXCLUDED.external_metadata->>'historyId'
+               IS DISTINCT FROM app.email_messages.external_metadata->>'historyId'
+               THEN 0 ELSE app.email_messages.analysis_attempts END,
+             judgement_requested_at = CASE WHEN EXCLUDED.external_metadata->>'historyId'
+               IS DISTINCT FROM app.email_messages.external_metadata->>'historyId'
+               THEN NULL ELSE app.email_messages.judgement_requested_at END,
              summary = COALESCE(EXCLUDED.summary, app.email_messages.summary),
              signals = CASE WHEN $12 THEN EXCLUDED.signals ELSE app.email_messages.signals END,
              updated_at = now()

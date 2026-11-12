@@ -35,3 +35,8 @@ path = "bin/oracle.rs"
 
 name = "understand"
 path = "tests/understand.rs"
+
+[[test]]
+
+name = "pass"
+path = "tests/pass.rs"

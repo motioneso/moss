@@ -17,8 +17,16 @@
         "email.source-behaviors",
         "email.draft-policy",
         "email.cache-write",
-        "email.cache-keys"
+        "email.cache-keys",
+        "email.understand",
+        "email.suppression",
+        "email.triage-feedback"
       ]
+    },
+    {
+      "port": "ai",
+      "operations": ["generate"],
+      "resources": ["chat", "structured"]
     }
   ],
   "database": {
@@ -44,25 +52,78 @@
     }
   },
   "routes": [
-    { "method": "GET", "path": "/messages", "signIn": true },
-    { "method": "GET", "path": "/messages/:id", "signIn": true },
-    { "method": "GET", "path": "/briefing-settings", "signIn": true },
-    { "method": "PATCH", "path": "/briefing-settings", "signIn": true },
-    { "method": "GET", "path": "/task-creation-mode", "signIn": true },
-    { "method": "PUT", "path": "/task-creation-mode", "signIn": true },
-    { "method": "GET", "path": "/briefing-source", "signIn": true },
-    { "method": "PUT", "path": "/briefing-source", "signIn": true },
-    { "method": "GET", "path": "/draft-policy", "signIn": true },
-    { "method": "PUT", "path": "/draft-policy", "signIn": true }
+    {
+      "method": "GET",
+      "path": "/messages",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/messages/:id",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/briefing-settings",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/briefing-settings",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/task-creation-mode",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/task-creation-mode",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/briefing-source",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/briefing-source",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/draft-policy",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/draft-policy",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/understand",
+      "signIn": true
+    }
   ],
   "provides": {
     "insertCachedMessage": "1.0.0",
     "updateCachedMessage": "1.0.0",
     "listCachedMessageKeys": "1.0.0",
-    "pruneCachedMessages": "1.0.0"
+    "pruneCachedMessages": "1.0.0",
+    "understandMessages": "1.0.0",
+    "recordTriageFeedback": "1.0.0",
+    "triageFeedbackCounts": "1.0.0",
+    "listActionSuppression": "1.0.0",
+    "updateActionSuppression": "1.0.0"
   },
   "icons": ["icons/email.svg"],
-  "accounts": { "supportsUserDisable": false, "defaultEnabled": true },
+  "accounts": {
+    "supportsUserDisable": false,
+    "defaultEnabled": true
+  },
   "features": [
     {
       "id": "email.messages",
@@ -95,11 +156,51 @@
     {
       "id": "email.cache-api",
       "description": "Connectors adds and updates cached messages through a public interface. The body excerpt is kept to 500 characters."
+    },
+    {
+      "id": "email.understanding",
+      "description": "Reads cached mail with the person's configured AI model and stores a short summary and signals for each message. Only the cached subject, sender and preview text are sent. Sign-in codes are skipped without a model call, and a message that keeps failing is left alone after five tries.",
+      "errors": [
+        {
+          "code": "email-ai-not-configured",
+          "class": "prerequisite",
+          "description": "No AI service is chosen, so mail cannot be read yet",
+          "remediationRef": "email-choose-ai"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "email-choose-ai",
+          "description": "Choose an AI service in settings",
+          "path": "/settings/connections"
+        }
+      ]
+    },
+    {
+      "id": "email.triage-feedback",
+      "description": "Records whether the person accepted or rejected a sorted message, and counts dismissals of repeated suggestions so they stop coming back. Needs Connectors installed.",
+      "errors": [
+        {
+          "code": "email-connectors-missing",
+          "class": "prerequisite",
+          "description": "Install Connectors to keep triage feedback and suppression",
+          "remediationRef": "email-install-connectors"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "email-install-connectors",
+          "description": "Install Connectors",
+          "path": "/settings/modules"
+        }
+      ]
     }
   ],
   "tools": {},
   "jobs": {},
-  "screens": { "/settings/email": "ui/settings.html" },
+  "screens": {
+    "/settings/email": "ui/settings.html"
+  },
   "navigation": [],
   "settings": [
     {

@@ -3,6 +3,7 @@
 pub mod extract;
 pub mod gate;
 pub mod otp;
+pub mod pass;
 pub mod prompt;
 pub mod sorting;
 pub mod text;
