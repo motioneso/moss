@@ -204,6 +204,8 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
     let artifacts: Vec<Artifact> = [
         ("JS235_CALENDAR_STAND_IN", "calendar"),
         ("JS235_PEOPLE_STAND_IN", "people"),
+        ("JS235_TASKS_STAND_IN", "tasks"),
+        ("JS235_NOTES_STAND_IN", "notes"),
         ("JS231_MEMORY_PACKAGE", "memory"),
         ("JS235_MEETINGS_PACKAGE", "meetings"),
     ]

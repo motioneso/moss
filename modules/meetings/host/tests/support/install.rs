@@ -107,9 +107,9 @@ pub fn install_full(
             .unwrap();
         app.installer.install(&f.access(f.a), &source, &artifact, true).unwrap();
     };
-    // Meetings requires Calendar, People, Tasks and Memory. Calendar, People and Tasks are empty stand-ins
+    // Meetings requires Calendar, People, Tasks, Notes and Memory. Calendar, People, Tasks and Notes are empty stand-ins
     // because the tests never reach them; Memory is the real package.
-    for id in ["calendar", "people", "tasks"] {
+    for id in ["calendar", "people", "tasks", "notes"] {
         let (bytes, manifest) = stand_in(id, &wasm);
         put(&bytes, manifest, id);
     }
