@@ -29,6 +29,18 @@ pub fn enqueue<H: Host + ?Sized>(host: &H, queue: &str, meeting: &str, key: &str
     Ok(())
 }
 
+/// A fixed UUID for the memory job, so a repeat of the same run queues it once.
+fn derived_key(request_key: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let d = Sha256::digest(format!("meetings.recording-memory:{request_key}").as_bytes());
+    let mut b = [0u8; 16];
+    b.copy_from_slice(&d[..16]);
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    let h: String = b.iter().map(|x| format!("{x:02x}")).collect();
+    format!("{}-{}-{}-{}-{}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32])
+}
+
 /// Writes the reading. A person's own type choice stays, and a change made since the run began
 /// (a different revision) leaves everything alone. Returns whether the reading was filed.
 pub fn file<H: Host + ?Sized>(
@@ -69,7 +81,7 @@ pub fn file<H: Host + ?Sized>(
         enqueue(host, NOTICE_QUEUE, meeting, request_key)?;
     }
     if !reading.idea_groups.is_empty() {
-        enqueue(host, MEMORY_QUEUE, meeting, &format!("memory:{request_key}"))?;
+        enqueue(host, MEMORY_QUEUE, meeting, &derived_key(request_key))?;
     }
     Ok(true)
 }
