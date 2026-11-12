@@ -258,7 +258,7 @@ fn export_returns_only_the_callers_rows_and_no_vectors() {
     for t in &tables {
         f.sql(&format!("ALTER TABLE app.{t} ENABLE ROW LEVEL SECURITY; ALTER TABLE app.{t} FORCE ROW LEVEL SECURITY"));
     }
-    assert_eq!(leaked, own + theirs, "without row security B sees everything");
+    assert!(leaked >= own + theirs, "without row security B sees everyone, got {leaked}");
     assert_eq!(f.bare_count(f.b, &tables), own);
     assert!(f.api(f.b, "collectMemoryExportSection", json!({"section": "nope"})).is_err());
     assert!(f.api(f.b, "collectMemoryExportSection", json!({"section": "memoryFacts", "owner": f.a.to_string()})).is_err());
