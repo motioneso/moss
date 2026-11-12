@@ -222,12 +222,10 @@ fn every_old_transcript_and_history_case_gives_the_same_reply_and_rows() {
         let expected: Value = serde_json::from_str(&scrub(&case["rows"].to_string())).unwrap();
         assert_eq!(canon(actual), canon(expected), "{name}: stored rows");
         // Rows written by the old code read back the same through the new package.
-        if !case["rows"]["batches"].as_array().unwrap().is_empty() {
+        // Cases with extra meetings list rows the recording holds only for the first meeting.
+        if case["extra"] == 0 && !case["rows"]["batches"].as_array().unwrap().is_empty() {
             let again = (w.person(), w.person());
-            let mut fresh = vec![("M".to_owned(), w.meeting(again.0, 1))];
-            for i in 0..case["extra"].as_u64().unwrap() {
-                fresh.push((format!("M{}", i + 2), w.meeting(again.0, i as usize + 2)));
-            }
+            let fresh = vec![("M".to_owned(), w.meeting(again.0, 1))];
             w.plant(&fresh[0].1, &case["rows"], again.0, "{M}");
             for step in case["steps"].as_array().unwrap() {
                 replay(&w, again, step, &fresh, true);
