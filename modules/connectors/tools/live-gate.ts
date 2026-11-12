@@ -10,7 +10,8 @@ for (const name of [
   "CARGO_TARGET_DIR",
   "JS224_CONNECTORS_PACKAGE",
   "JS225_EMAIL_PACKAGE",
-  "JS181_CALENDAR_PACKAGE"
+  "JS181_CALENDAR_PACKAGE",
+  "JS220_TASKS_PACKAGE"
 ]) {
   if (!process.env[name]) throw new Error(`Set ${name}`);
 }

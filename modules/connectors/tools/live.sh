@@ -6,7 +6,13 @@ cd "$(dirname "$0")/../../.."
 export CARGO_TARGET_DIR
 export CONNECTORS_UI_DIR="${CONNECTORS_UI_DIR:-$CARGO_TARGET_DIR/connectors-ui/web}"
 modules/connectors/tools/build-ui.sh
-# The sync writes through Email and Calendar, so the live run installs them too.
+# The sync writes through Email and Calendar, and Calendar needs Tasks, so all three are installed.
+tasks_out="$CARGO_TARGET_DIR/tasks-pkg"
+mkdir -p "$tasks_out"
+TASKS_GUEST_TARGET_DIR="$CARGO_TARGET_DIR/tasks-guest" bash modules/tasks/tools/build-component.sh "$tasks_out/module.wasm"
+cargo +1.95.0 run --locked --offline --manifest-path modules/tasks/tools/Cargo.toml --bin tasks-pack -- \
+  "$tasks_out/module.wasm" "$CARGO_TARGET_DIR/tasks.mosspkg"
+export JS220_TASKS_PACKAGE="$CARGO_TARGET_DIR/tasks.mosspkg"
 export CALENDAR_UI_DIR="${CALENDAR_UI_DIR:-$CARGO_TARGET_DIR/calendar-ui/web}"
 modules/calendar/tools/build-ui.sh
 cguest="$CARGO_TARGET_DIR/calendar-guest-pkg"
