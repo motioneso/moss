@@ -1,5 +1,5 @@
-//! Account deletion and export shape. Tables from later parts are listed so a deletion covers
-//! every owned table, and their export collections stay empty until those parts land.
+//! Account deletion and export shape. The export holds every owned collection. The host reads
+//! sixteen of them, with the audio of ready recording imports, and this side reads the other two.
 use crate::records::{NOTE_WRITES, RECORDS};
 use moss_module_sdk::{query::Order, query::Query, Client, Error, Host, Result};
 use serde_json::{Map, Value};
@@ -30,26 +30,6 @@ pub const OWNED_TABLES: [&str; 22] = [
     "app.meeting_capture_start_cancellations",
     "app.meeting_stop_summaries",
     "app.meeting_capture_start_limits",
-];
-
-/// Collections whose tables arrive in later parts. Each exports an empty list for now.
-pub const STUB_COLLECTIONS: [&str; 16] = [
-    "recording_types",
-    "recording_metadata",
-    "manual_entries",
-    "voice_enablements",
-    "recording_imports",
-    "transcript_batches",
-    "output_requests",
-    "output_artifacts",
-    "action_candidates",
-    "export_receipts",
-    "export_requests",
-    "stop_summaries",
-    "capture_grants",
-    "capture_connections",
-    "capture_start_cancellations",
-    "capture_start_limits",
 ];
 
 const RECORD_FIELDS: [(&str, &str); 9] = [
@@ -113,10 +93,11 @@ fn page<H: Host + ?Sized>(
 }
 
 pub fn collect<H: Host + ?Sized>(host: &H) -> Result<Value> {
-    let mut section = Map::new();
-    for name in STUB_COLLECTIONS {
-        section.insert(name.into(), Value::Array(vec![]));
-    }
+    let reply = host.call("kv", "section", "meetings.exports", serde_json::json!({}))?;
+    let mut section = match reply {
+        Value::Object(map) => map,
+        _ => return Err(Error::new("Meetings export section is malformed")),
+    };
     section.insert("records".into(), page(host, RECORDS, &["created_at", "id"], &RECORD_FIELDS)?);
     section.insert(
         "note_writes".into(),

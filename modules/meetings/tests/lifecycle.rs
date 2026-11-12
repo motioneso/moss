@@ -1,7 +1,7 @@
 //! Account deletion and export shape, and agreement with the manifest.
 mod common;
 use common::{Fake, A, B};
-use moss_meetings_module::lifecycle::{collect, COUNT_PREDICATE, OWNED_TABLES, STUB_COLLECTIONS};
+use moss_meetings_module::lifecycle::{collect, COUNT_PREDICATE, OWNED_TABLES};
 use serde_json::{json, Value};
 use std::collections::BTreeSet;
 
@@ -70,13 +70,16 @@ fn export_holds_all_eighteen_collections() {
 }
 
 #[test]
-fn collections_for_later_parts_are_empty_stubs() {
+fn host_collections_pass_through_untouched() {
     let f = Fake::new();
+    f.section.borrow_mut().insert(
+        A.into(),
+        json!({"recording_imports":[{"id":"x","ready":true,"chunks":[{"kind":"wav","index":0,"byteLength":3,"sha256":"h","base64":"AQID"}]}]}),
+    );
     let section = collect(&f).unwrap();
-    for name in STUB_COLLECTIONS {
-        assert_eq!(section[name], json!([]), "{name} is a stub until its part lands");
-    }
-    assert_eq!(STUB_COLLECTIONS.len(), 16);
+    assert_eq!(section["recording_imports"][0]["chunks"][0]["base64"], "AQID");
+    assert_eq!(section["export_receipts"], json!([]));
+    assert_eq!(section.as_object().unwrap().len(), 18);
 }
 
 #[test]
