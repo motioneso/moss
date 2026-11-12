@@ -44,6 +44,12 @@ pub mod ports {
         "moss:module/credentials@1.0.0"
     );
     port!(EMBED, embed, "embed", "moss:module/embed@1.0.0");
+    port!(
+        TRANSCRIBE,
+        transcribe,
+        "transcribe",
+        "moss:module/transcribe@1.0.0"
+    );
     port!(NOTIFY, notify, "notify", "moss:module/notify@1.0.0");
     port!(
         ATTACHMENTS,

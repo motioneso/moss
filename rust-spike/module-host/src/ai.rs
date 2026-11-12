@@ -14,6 +14,10 @@ use tokio::runtime::Runtime;
 pub trait Intelligence: Send + Sync {
     fn generate(&self, scope: &CallScope, request: &Request) -> Result<Value>;
     fn embed(&self, scope: &CallScope, request: &Request) -> Result<Value>;
+    /// Speech to text for the `transcribe` port.
+    fn transcribe(&self, _scope: &CallScope, _request: &Request) -> Result<Value> {
+        anyhow::bail!("Speech to text is not set up on this server")
+    }
     /// Model name and version the next embedding would be recorded with.
     fn embedding_model(&self, _scope: &CallScope) -> Result<(String, String)> {
         anyhow::bail!(NOT_SET_UP)
@@ -55,6 +59,7 @@ pub struct RouterIntelligence<S, T, E> {
     router: Router<S, T>,
     embeddings: E,
     activity: Option<Arc<dyn EmbeddingActivity>>,
+    transcription: Option<Arc<dyn crate::transcribe::TranscriptionStore>>,
     runtime: Runtime,
 }
 impl<S: ConfigurationStore, T: CapabilityTransport, E: EmbeddingStore> RouterIntelligence<S, T, E> {
@@ -63,12 +68,18 @@ impl<S: ConfigurationStore, T: CapabilityTransport, E: EmbeddingStore> RouterInt
             router: Router { store, transport },
             embeddings,
             activity: None,
+            transcription: None,
             runtime: Runtime::new()?,
         })
     }
-    /// Records one activity row per embedding call.
+    /// Records one activity row per embedding or transcription call.
     pub fn with_activity(mut self, activity: Arc<dyn EmbeddingActivity>) -> Self {
         self.activity = Some(activity);
+        self
+    }
+    /// Serves the `transcribe` port from the person's configured speech route.
+    pub fn with_transcription(mut self, store: Arc<dyn crate::transcribe::TranscriptionStore>) -> Self {
+        self.transcription = Some(store);
         self
     }
 }
@@ -116,6 +127,13 @@ impl<S: ConfigurationStore, T: CapabilityTransport, E: EmbeddingStore> Intellige
     }
     fn embed(&self, scope: &CallScope, r: &Request) -> Result<Value> {
         embed_via(&self.runtime, &self.embeddings, self.activity.as_ref(), scope, r)
+    }
+    fn transcribe(&self, scope: &CallScope, r: &Request) -> Result<Value> {
+        let store = self
+            .transcription
+            .as_deref()
+            .context("Speech to text is not set up on this server")?;
+        crate::transcribe::handle(&self.runtime, store, self.activity.as_ref(), scope, r)
     }
     fn embedding_model(&self, scope: &CallScope) -> Result<(String, String)> {
         let actor = Actor::from_authenticated_session(

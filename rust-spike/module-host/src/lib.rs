@@ -47,6 +47,7 @@ mod enqueue_options;
 pub mod typed_query;
 
 pub mod transactional_database;
+pub mod transcribe;
 
 pub mod dispatch;
 

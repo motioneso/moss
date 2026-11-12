@@ -473,7 +473,7 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
                 "Tool risk cannot change at call time"
             );
         }
-        "ai" | "embed" => ensure!(
+        "ai" | "embed" | "transcribe" => ensure!(
             request.parameters.get("model").is_none()
                 && request.parameters.get("provider").is_none(),
             "The host chooses the AI model"
