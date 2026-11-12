@@ -54,7 +54,7 @@ impl World {
             .app
             .app
             .dispatch_extended(self.f.access(actor), method, &format!("/api/m/meetings{target}"), &body.to_string())
-            .unwrap();
+            .unwrap_or_else(|e| panic!("{method} {target}: {e:?}"));
         serde_json::from_str(&text).unwrap()
     }
     fn say(&self, reply: Value) {
@@ -158,7 +158,7 @@ fn a_bad_model_reply_is_stored_as_a_failed_result_and_replays() {
     assert_eq!(failed["status"], 422, "{failed}");
     assert_eq!(failed["body"]["status"], "failed");
     let again = w.generate(a, &id, K1, 0);
-    assert_eq!((again["status"].clone(), again["body"]["replayed"].clone()), (json!(422), json!(true)));
+    assert_eq!(again, failed, "a failed result replays unchanged");
     let list = w.call(a, "GET", &format!("/records/{id}/outputs"), Value::Null);
     assert_eq!(list["body"]["artifacts"].as_array().unwrap().len(), 0);
     // A request for the wrong output version is refused with the current versions.
