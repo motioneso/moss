@@ -676,9 +676,16 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
         });
         assert!(second.iter().all(|m| m["subject"] != "Lunch on Friday"), "the deleted message must be gone");
         assert!(second.iter().all(|m| !m["snippet"].as_str().unwrap_or("").contains("PLAN-BODY-SENTINEL")), "the changed message keeps no old text");
-        let status = call(Method::GET, "/accounts", Some(&cookie), None);
-        let accounts = json_of(&status.1);
-        let account = accounts["accounts"].as_array().unwrap().iter().find(|a| a["providerId"] == "imap-yahoo").unwrap().clone();
+        let mut account = Value::Null;
+        for _ in 0..40 {
+            let status = call(Method::GET, "/accounts", Some(&cookie), None);
+            let accounts = json_of(&status.1);
+            account = accounts["accounts"].as_array().unwrap().iter().find(|a| a["providerId"] == "imap-yahoo").unwrap().clone();
+            if !account["lastSyncFinishedAt"].is_null() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(500));
+        }
         assert_eq!(account["lastSyncStatus"], "success", "{account}");
         assert_eq!(account["lastSyncCounts"]["emailUpserted"], 1, "only the changed message is fetched again: {account}");
         let password = mail_lines["password"].clone();
