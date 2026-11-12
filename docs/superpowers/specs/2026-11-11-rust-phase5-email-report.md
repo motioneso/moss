@@ -221,11 +221,14 @@ Commands: `pnpm test:rust-email` and `pnpm test:rust-email-live`, both through t
 - A message whose revision is already cached and finished is not rewritten. A message that failed
   analysis five times for the same revision is left alone.
 - Calendar events no longer in Google are removed, but only after a walk that read and wrote every
-  page without an error. A failed or partial walk never removes anything.
+  page without an error. A failed or partial walk never removes anything. A clean-up that the
+  database refuses marks the run partial and the mail walk still runs.
 - Transient refusals (rate limits, 408, 5xx) are retried up to three times with a short wait. A 401
   refreshes the token once. A refused sign-in fails the run as an auth error and the account shows
   as needing sign-in.
-- A run does at most five small steps and then queues itself for the rest. Job payloads carry only
+- The host stops a package call after five seconds, so a run does one small step and then queues
+  itself for the rest. The start of a run is its own job, so a retried first step never meets its
+  own start marker. Job payloads carry only
   ids, counts, flags and fixed words. Page tokens, the Gmail position and all mail text stay in
   the host, and a restart of the server makes the next run start over.
 - Calendar gains two operations (add or update a cached event, remove events a sync no longer
@@ -246,6 +249,13 @@ Commands: `pnpm test:rust-email` and `pnpm test:rust-email-live`, both through t
   retries then a recorded failure, and a revoked sign-in with a second start refused while one is
   going. Tokens, the client secret and mail text were searched for in everything the package sent
   and in the account row.
+- Live run on the real Rust server over HTTPS (`pnpm test:rust-connectors-live`, passed): after
+  connecting, three events and three messages were saved. After Google deleted one message,
+  relabelled another and removed one event, a second run pruned the event under the runtime role.
+  The server log and every table were searched for the tokens, the client secret and the mail
+  marker, with a control search that finds a stored value.
+- The live run found that the worker role had no delete right on cached events, because Calendar
+  did not declare it. Calendar's manifest now declares owner-only delete, as Email does.
 - The older Google connect database test `refused_attempts_answer_like_the_old_server` failed in
   every connectors gate run on a loaded box (load average 20 to 45, 545 to 850 seconds for that
   file). It counts five finishes inside one minute, and under load the first ones age out of the
