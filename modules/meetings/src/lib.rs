@@ -22,6 +22,7 @@ pub mod recording_filing;
 pub mod recording_jobs;
 pub mod recording_reading;
 pub mod records;
+pub mod capture_devices;
 pub mod capture_errors;
 pub mod capture_limit;
 pub mod capture_selection;
