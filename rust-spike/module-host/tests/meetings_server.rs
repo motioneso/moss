@@ -164,7 +164,6 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
     };
     let server = start(false);
     let cookie = signup("meetings-owner@example.test", "Meetings owner");
-    let other = signup("meetings-other@example.test", "Meetings other");
     drop(server);
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let (owner, app) = runtime.block_on(async {
@@ -283,6 +282,23 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
         &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key}),
     );
     let _server = start(true);
+    // Setup allows one owner over HTTP, so the second person is made in the database with the
+    // owner's password hash and then signs in through the real route.
+    let other = {
+        runtime.block_on(async {
+            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+            tokio::spawn(async move {
+                let _ = connection.await;
+            });
+            let id = uuid::Uuid::new_v4();
+            db.execute("INSERT INTO app.users (id, name, email, email_verified, created_at, updated_at, is_instance_admin, status) VALUES ($1, 'Meetings other', 'meetings-other@example.test', false, now(), now(), false, 'active')", &[&id]).await.unwrap();
+            db.execute("INSERT INTO app.auth_accounts (id, account_id, provider_id, user_id, password, created_at, updated_at) SELECT gen_random_uuid(), $1::uuid::text, 'credential', $1::uuid, password, now(), now() FROM app.auth_accounts WHERE user_id = $2::uuid AND provider_id = 'credential'", &[&id, &owner]).await.unwrap();
+        });
+        let signed = client.post(format!("{origin}/api/auth/sign-in/email")).header("origin", &origin)
+            .json(&json!({"email":"meetings-other@example.test","password":"temporary-meetings-password-235-not-a-real-secret"})).send().unwrap();
+        assert_eq!(signed.status(), 200, "second person sign-in");
+        signed.headers()["set-cookie"].to_str().unwrap().split(';').next().unwrap().to_owned()
+    };
     let log = || fs::read_to_string(root.join("server.log")).unwrap_or_default();
     let call = |method: reqwest::Method, path: &str, cookie: Option<&str>, body: Option<Value>| {
         let mut request = client.request(method, format!("{origin}/api/m/meetings{path}")).header("origin", &origin);
