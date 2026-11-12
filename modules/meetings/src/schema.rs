@@ -18,6 +18,10 @@ pub enum Kind {
     /// The recording type id pattern `^[a-z][a-z0-9-]{0,63}$`.
     TypeId,
     Enum(&'static [&'static str]),
+    /// `const` for an integer.
+    IntConst(i64),
+    /// Any JSON object. Its contents are checked elsewhere.
+    Object,
     /// Present and checked elsewhere.
     Any,
 }
@@ -49,6 +53,18 @@ fn check(var: &str, name: &str, kind: Kind, value: &Value) -> Result<(), Failure
             Ok(())
         }
         Kind::Any => Ok(()),
+        Kind::Object => match value {
+            Value::Object(_) => Ok(()),
+            _ => Err(format!("{at} must be object")),
+        },
+        Kind::IntConst(expected) => {
+            let n = int_value(value).ok_or_else(|| format!("{at} must be integer"))?;
+            if n == expected {
+                Ok(())
+            } else {
+                Err(format!("{at} must be equal to constant"))
+            }
+        }
         Kind::DateTime => match value.as_str() {
             Some(s) if chrono::DateTime::parse_from_rfc3339(&crate::text::with_colon_offset(s)).is_ok() => Ok(()),
             Some(_) => Err(format!("{at} must match format \"date-time\"")),
@@ -107,7 +123,7 @@ pub fn strict_object(
                     *slot = items[0].clone();
                 }
             }
-            if let (Kind::Int { .. }, Value::String(s)) = (kind, &*slot) {
+            if let (Kind::Int { .. } | Kind::IntConst(_), Value::String(s)) = (kind, &*slot) {
                 // Ajv leaves an empty string alone, so it fails as a non-integer.
                 if let Some(f) = crate::js::js_number(s).filter(|_| !s.is_empty()) {
                     // Whole numbers past i64 still fail the range check, as Ajv's number does.

@@ -254,9 +254,21 @@ pub fn snapshot(
     max_segments: i64,
     max_characters: i64,
 ) -> Result<Snapshot, Rejected> {
+    snapshot_within(ledger, transcript_revision, cutoff_ms, max_segments, max_characters, (MAX_SEGMENTS, MAX_CHARACTERS))
+}
+
+/// Same as `snapshot`, with a higher ceiling for long recordings, which summaries read in pieces.
+pub fn snapshot_within(
+    ledger: &Ledger,
+    transcript_revision: i64,
+    cutoff_ms: i64,
+    max_segments: i64,
+    max_characters: i64,
+    ceiling: (i64, i64),
+) -> Result<Snapshot, Rejected> {
     if transcript_revision > ledger.transcript_revision
-        || !(1..=MAX_SEGMENTS).contains(&max_segments)
-        || !(1..=MAX_CHARACTERS).contains(&max_characters)
+        || !(1..=ceiling.0).contains(&max_segments)
+        || !(1..=ceiling.1).contains(&max_characters)
     {
         return Err(Rejected);
     }

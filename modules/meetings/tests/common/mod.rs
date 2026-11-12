@@ -167,8 +167,10 @@ impl Host for Fake {
             ("context", "uuid") => {
                 let n = self.ids.get();
                 self.ids.set(n + 1);
-                Ok(json!(format!("00000000-0000-4000-8000-{n:012x}")))
+                Ok(json!({"id": format!("00000000-0000-4000-8000-{n:012x}")}))
             }
+            ("kv", _) if resource == "meetings.outputs" => Ok(json!({})),
+            ("jobs", _) => Ok(json!({})),
             ("kv", _) if resource == "meetings.recording-types" => Ok(json!({"locked": true})),
             ("kv", _) if resource == "meetings.transcripts" => Ok(self.transcripts(operation, &parameters)),
             ("kv", "get") if resource == "meetings.history" => {

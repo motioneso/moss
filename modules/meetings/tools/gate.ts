@@ -22,6 +22,8 @@ const run = spawnSync(
     "transcripts",
     "--test",
     "recording",
+    "--test",
+    "outputs",
     "--",
     "--ignored",
     "--nocapture",
@@ -33,6 +35,7 @@ const run = spawnSync(
       ...process.env,
       JS48_APP_URL: urls.app,
       JS48_BOOTSTRAP_URL: urls.bootstrap,
+      JS48_WORKER_URL: urls.worker,
       MEETINGS_COMPONENT_WASM: `${process.env.CARGO_TARGET_DIR ?? "/tmp/moss-meetings-host"}/module.wasm`
     }
   }

@@ -4,6 +4,7 @@ use crate::js::utf16_len;
 use crate::records::{Created, Records};
 use crate::recording::{code, Recording};
 use crate::schema::{strict_object, Kind};
+use crate::stop_summary;
 use crate::store;
 use crate::text::{is_type_id, is_uuid, js_trim};
 use crate::transcript_batch as batch;
@@ -166,6 +167,17 @@ pub fn post<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Respon
     .map(|(k, v)| (k.to_owned(), v))
     .collect();
     client.query(ENTRIES, &Query::insert(entry))?;
+    // A pasted transcript always asks for a summary, whatever the summarize-on-stop setting says.
+    let template = match &input.type_id {
+        Some(type_id) => recording
+            .configuration(false)?
+            .types
+            .iter()
+            .find(|t| &t.id == type_id)
+            .map_or_else(|| "general".to_owned(), |t| t.template_id.clone()),
+        None => "general".to_owned(),
+    };
+    stop_summary::schedule_manual(host, &meeting, revision, &template)?;
     Ok(Response::new(201, json!({"meetingId": meeting, "replayed": false})))
 }
 

@@ -409,6 +409,36 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
         let (status, text) = call(m, &path, Some(&other), body);
         assert!(status == 404 && !text.contains(MARK), "another person gets 404: {path} {status} {text}");
     }
+    // Summaries through the real server. No model is configured here, so a request ends as a stored
+    // failure and never as a server error.
+    let (status, text) = call(Method::GET, &format!("/records/{pasted}/outputs"), Some(&cookie), None);
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let listing = json_of(&text);
+    assert_eq!(listing["artifacts"], json!([]), "{text}");
+    // The real worker may already have tried. With no model set up the attempt is a stored failure.
+    let planned = &listing["automaticSummary"];
+    assert!(
+        planned["status"] == "waiting" || (planned["status"] == "failed" && planned["code"] == "meeting_output_provider_failed"),
+        "a pasted transcript plans a summary: {text}"
+    );
+    let (status, text) = call(Method::GET, &format!("/records/{pasted}/transcript?maxSegments=10&maxCharacters=1000"), Some(&cookie), None);
+    assert_eq!(status, 200, "{text}");
+    let transcript_revision = json_of(&text)["transcriptRevision"].as_i64().unwrap_or(1);
+    let generate = json!({"requestKey":K3,"expectedOutputVersion":0,"expectedTranscriptRevision":transcript_revision,
+        "expectedNotesRevision":0,"templateId":"general","templateVersion":1});
+    let (status, text) = call(Method::POST, &format!("/records/{pasted}/outputs"), Some(&cookie), Some(generate.clone()));
+    assert!(status < 500 && !text.contains(MARK), "a generate request ends cleanly: {status} {text}\n{}", log());
+    for (m, path, body) in [
+        (Method::GET, format!("/records/{pasted}/outputs"), None),
+        (Method::GET, format!("/records/{pasted}/outputs/1"), None),
+        (Method::POST, format!("/records/{pasted}/outputs"), Some(generate)),
+        (Method::PUT, format!("/records/{pasted}/outputs"), Some(json!({"requestKey":K1,"expectedOutputVersion":1,"content":{}}))),
+    ] {
+        let (status, text) = call(m, &path, Some(&other), body);
+        assert!(status == 404 && !text.contains(MARK), "another person gets 404 on summaries: {path} {status} {text}");
+    }
+    let (status, text) = call(Method::GET, "/output-availability", Some(&cookie), None);
+    assert_eq!(status, 200, "{text}");
     assert_eq!(call(Method::DELETE, &format!("/records/{id}"), Some(&cookie), None).0, 204);
     assert_eq!(call(Method::GET, &format!("/records/{id}"), Some(&cookie), None).0, 404);
     // Titles and notes stay out of the server log.

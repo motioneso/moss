@@ -26,6 +26,10 @@ pub struct Installed {
 }
 
 pub fn install(f: &Fixture) -> Installed {
+    install_with(f, Arc::new(NoAi))
+}
+
+pub fn install_with(f: &Fixture, intelligence: Arc<dyn moss_module_host::ai::Intelligence>) -> Installed {
     f.rt.block_on(async {
         let ready: bool = f.root.query_one("SELECT to_regnamespace('moss_queue') IS NOT NULL", &[]).await.unwrap().get(0);
         if !ready {
@@ -49,9 +53,9 @@ pub fn install(f: &Fixture) -> Installed {
         f.access(f.a),
         Configuration {
             migrations: url(),
-            producer: url(),
+            producer: Secret::new(std::env::var("JS48_APP_URL").unwrap()),
             cipher: Arc::new(SecretCipher::connectors(&Default::default()).unwrap()),
-            intelligence: Arc::new(NoAi),
+            intelligence,
             version: "0.1.0".parse().unwrap(),
             compiled_cache: None,
             fuel_ceiling: Some(250_000_000),
