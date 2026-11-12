@@ -45,7 +45,6 @@ interface Scenario {
 }
 
 const base = "/api/meetings";
-const TEXT = "x".repeat(80);
 const defaults = [
   ["work-meeting", "Work meeting", "Work discussions, decisions and action items."],
   ["appointment", "Appointment", "A scheduled appointment or consultation."],
@@ -67,7 +66,11 @@ const kind = (
   ...extra
 });
 const base6 = () => defaults.map(([id, name, description]) => kind(id, name, { description }));
-const withTypes = (extra: Record<string, unknown>[], revision = 0, patch = (l: any[]) => l) => ({
+const withTypes = (
+  extra: Record<string, unknown>[],
+  revision = 0,
+  patch = (l: Record<string, unknown>[]) => l
+) => ({
   expectedRevision: revision,
   types: patch([...base6(), ...extra])
 });

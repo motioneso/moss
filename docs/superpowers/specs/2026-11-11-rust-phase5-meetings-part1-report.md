@@ -82,3 +82,41 @@ Two fixes came out of the replay. Unknown query parameters are now ignored, as t
 - The replay test hides real ids behind a placeholder and does not compare the no-store header. A wrong owner id in a reply would pass. Steps marked as decided by the shell only print a note when they differ.
 - A stored line with a lone surrogate reads back with the replacement character. Lengths and offsets are unchanged.
 - No screen, no second device, no native app.
+
+## Part 3: recording types, recording identity, pasted transcripts, speech port
+
+### What part 3 added
+
+- Four routes for recording types and each meeting's recording identity. A person keeps up to 32 recording types and picks one per meeting. A save must keep every existing type, and a stale save is refused.
+- One route for pasting a transcript. It makes a meeting with its transcript in one step, and a repeated request key returns the first answer. It starts no summary yet.
+- A new host port for speech to text. It sends one clip to the speech service the person has set up, and returns timed text. The package cannot choose the service or the model.
+- The recording routes and the paste route share one database transaction per call, so a paste is all or nothing.
+- The manifest declares the speech capability and a speech feature, and the route list has the five new routes.
+
+### What part 3 proved
+
+| Check                              | How                                                                                                                                                |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Same answers as the old routes     | Steps recorded from the old routes, including every error status, were replayed through the installed package.                                     |
+| Rows written by either side        | Rows the old code wrote were planted and read through the package. Rows the package wrote equal the old code's rows.                               |
+| Two-person privacy                 | Another person and an administrator get 404 on every new route. The check was seen to fail with the protection removed, and pass with it restored. |
+| No text in records                 | A marker planted in type names and pasted text never appears in the job queue or the two activity tables.                                          |
+| Speech port against a fake service | The fake receives the exact bytes. It also produced every refusal, a moved route before sending, and a moved route during the request.             |
+| Builds and tests                   | The native and WebAssembly builds and tests ran through the full Meetings gate.                                                                    |
+| Live run                           | Real server: save types, paste a transcript, repeat the key, read it back, and another person gets 404 on each route.                              |
+
+### Not proven in part 3
+
+- The old routes capped request bodies at 65,536 and 524,288 bytes. The package does not enforce either cap.
+- The date checks approximate the old server's date parsing. Odd spellings may differ.
+- The chat approval card for saving recording types is not built.
+- Pasted transcripts schedule no summary. That belongs to part 4.
+- The old "queue unavailable" answer does not apply, because nothing is queued.
+- Two calls racing at the same moment were not tested with a real race.
+- The size of a stored value in bytes may differ from the old code for unusual number spellings.
+- Lowercasing of names may differ from the old code for rare characters.
+- Malformed JSON bodies are refused by the shell with its own text, as in part 2.
+- The speech input shape, and the language and prompt length limits, are guesses until a real service is tried.
+- No real speech service was called. Timing quality of a real service is unproven.
+- A clip of the full 3.8 MB cannot reach the port, because one module message is limited to 1 MiB. Larger clips need a higher limit for this port, or a chunked call.
+- No screen, no ring, no Mac recorder, no summaries.

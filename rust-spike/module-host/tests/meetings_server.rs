@@ -381,6 +381,34 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
     let (status, text) = call(Method::GET, &format!("/records/{id}"), Some(&cookie), None);
     assert_eq!(status, 200, "the other person's delete changed nothing: {text}");
     // Owner delete, then gone.
+    // Recording types, recording identity and pasted transcripts through the real server.
+    let kind = format!("private-{}", MARK.to_lowercase());
+    let types: Vec<Value> = ["work-meeting", "appointment", "brain-dump", "conversation", "idea", "other"]
+        .iter()
+        .map(|t| json!({"id": t, "name": t, "description": "d", "templateId": "general", "retired": false}))
+        .chain([json!({"id": kind, "name": kind, "description": MARK, "templateId": "general", "retired": false})])
+        .collect();
+    let (status, text) = call(Method::PUT, "/recording-types", Some(&cookie), Some(json!({"expectedRevision":0,"types":types})));
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let (status, text) = call(Method::GET, "/recording-types", Some(&other), None);
+    assert!(!text.contains(MARK), "another person sees no recording types: {status} {text}");
+    let (status, text) = call(Method::POST, "/manual-transcripts", Some(&cookie), Some(json!({"requestKey":K2,"transcript":format!("budget {MARK} review"),"typeId":kind})));
+    assert_eq!(status, 201, "{text}\n{}", log());
+    let pasted = json_of(&text)["meetingId"].as_str().unwrap().to_owned();
+    let (status, text) = call(Method::POST, "/manual-transcripts", Some(&cookie), Some(json!({"requestKey":K2,"transcript":format!("budget {MARK} review"),"typeId":kind})));
+    assert_eq!(status, 200, "a repeated key returns the first answer: {text}");
+    let (status, text) = call(Method::GET, &format!("/records/{pasted}/recording"), Some(&cookie), None);
+    assert_eq!(status, 200, "{text}");
+    let (status, text) = call(Method::GET, &format!("/records/{pasted}/transcript?maxSegments=10&maxCharacters=1000"), Some(&cookie), None);
+    assert!(status == 200 && text.contains(MARK), "the pasted text reads back: {status} {text}");
+    for (m, path, body) in [
+        (Method::GET, format!("/records/{pasted}/recording"), None),
+        (Method::PUT, format!("/records/{pasted}/recording/type"), Some(json!({"expectedRevision":0,"typeId":"idea"}))),
+        (Method::GET, format!("/records/{pasted}/transcript?maxSegments=10&maxCharacters=1000"), None),
+    ] {
+        let (status, text) = call(m, &path, Some(&other), body);
+        assert!(status == 404 && !text.contains(MARK), "another person gets 404: {path} {status} {text}");
+    }
     assert_eq!(call(Method::DELETE, &format!("/records/{id}"), Some(&cookie), None).0, 204);
     assert_eq!(call(Method::GET, &format!("/records/{id}"), Some(&cookie), None).0, 404);
     // Titles and notes stay out of the server log.
