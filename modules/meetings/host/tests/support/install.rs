@@ -97,7 +97,6 @@ pub fn install_full(
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let wasm = std::fs::read(std::env::var("MEETINGS_COMPONENT_WASM").expect("Run modules/meetings/tools/check.sh")).unwrap();
     let database = f.db.clone();
-    let chat_given = chat.is_some();
     let url = || Secret::new(std::env::var("JS48_BOOTSTRAP_URL").unwrap());
     let app = Application::open_extended_with(
         dir.path(),
@@ -113,15 +112,14 @@ pub fn install_full(
             fuel_ceiling: Some(250_000_000),
         },
         move |next| {
-            let Some(chat) = chat.clone() else {
-                return Ok(Arc::new(moss_meetings_host::MeetingsPorts::new(database, next)?)
-                    as Arc<dyn moss_module_host::runtime::Ports>);
-            };
             let authority = Arc::new(moss_meetings_host::authority::MeetingsAuthority::new(database.clone()));
             let memory = moss_memory_host::ports::MemoryPorts::new(database.clone(), Arc::new(Same), next)?
                 .with_authority(authority);
-            Ok(Arc::new(moss_meetings_host::MeetingsPorts::new(database, Arc::new(memory))?.with_chat(chat))
-                as Arc<dyn moss_module_host::runtime::Ports>)
+            let ports = moss_meetings_host::MeetingsPorts::new(database, Arc::new(memory))?;
+            Ok(match chat.clone() {
+                Some(chat) => Arc::new(ports.with_chat(chat)) as Arc<dyn moss_module_host::runtime::Ports>,
+                None => Arc::new(ports),
+            })
         },
     )
     .unwrap();
@@ -134,13 +132,12 @@ pub fn install_full(
         app.installer.install(&f.access(f.a), &source, &artifact, true).unwrap();
     };
     // Meetings requires Calendar, People, Tasks and Memory. Calendar, People and Tasks are empty stand-ins
-    // because the tests never reach them; Memory is the real package when a chat is given.
-    let stand_ins: &[&str] = if chat_given { &["calendar", "people", "tasks"] } else { &["calendar", "people", "tasks", "memory"] };
-    for id in stand_ins {
+    // because the tests never reach them; Memory is the real package.
+    for id in ["calendar", "people", "tasks"] {
         let (bytes, manifest) = stand_in(id, &wasm);
         put(&bytes, manifest, id);
     }
-    if chat_given {
+    {
         let core = std::fs::read(std::env::var("MEMORY_CORE_WASM").expect("Run modules/meetings/tools/check.sh")).unwrap();
         put(&moss_memory_host::package::pack(&root, &core).unwrap(), moss_memory_host::package::manifest().unwrap(), "memory");
     }

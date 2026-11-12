@@ -89,8 +89,5 @@ pub fn memory<H: Host + ?Sized>(host: &H, meeting: &str) -> Result<String> {
             }
         }
     }
-    if applied == 0 && skipped > 0 {
-        host.call("kv", "post", "meetings.chat-notice", json!({"text": format!("DIAG {why}"), "sourceKey": "diag", "meetingId": meeting}))?;
-    }
     Ok(json!({"status": "done", "applied": applied, "skipped": skipped, "why": why}).to_string())
 }

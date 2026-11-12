@@ -16,7 +16,6 @@ use support::install::install_full;
 use uuid::Uuid;
 
 const IDEA: &str = "PLANTED-IDEA-MARKER-93c2";
-const KEY: &str = "00000000-0000-4000-8000-0000000000a1";
 
 #[derive(Default)]
 struct Script {
@@ -140,7 +139,6 @@ fn ideas_become_memory_facts_on_the_recordings_own_side_and_text_stays_out_of_qu
     let personal = w.read(a, reading("personal", 0.9, groups.clone()));
     let work = w.read(a, reading("work", 0.9, json!([{"title": "Plan", "ideas": ["Ship it"]}])));
     w.run_jobs();
-    println!("RECEIPTS {} POSTS {:?}", w.count("SELECT count(*) FROM app.memory_recording_receipts"), w.chat.0.lock().unwrap());
     let side_of = |id: &str, side: &str| {
         w.count(&format!("SELECT count(*) FROM app.memory_recording_receipts WHERE source_id = '{id}'::uuid AND side = '{side}' AND state = 'applied'"))
     };
@@ -181,5 +179,4 @@ fn another_person_cannot_make_meetings_vouch_for_a_recording_and_the_check_fails
     println!("RED: person B sees {open:?} with row security removed");
     assert_eq!(open.as_deref(), Some("personal"), "RED expected with the protection removed");
     assert_eq!(source(b), None, "protection restored");
-    let _ = KEY;
 }
