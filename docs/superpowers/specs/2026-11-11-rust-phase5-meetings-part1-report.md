@@ -329,3 +329,52 @@ Everything in the 5C proof list. Nothing was built or run in this part.
 - The live run did not read a real recording, because no real model was set up. It proves install and routes only.
 - Running the memory job twice for the same reading was not tested end to end. It relies on each idea having a fixed key in Memory. Only the stable job key is unit tested.
 - When Memory is unreachable or fails, the memory job fails and retries. When Memory refuses on purpose (the recording changed or is being removed), the idea is skipped.
+
+## Part 8: receiving recordings from the ring (first slice)
+
+Part 8 is only partly built. This slice holds the rules that decide whether a ring upload is
+acceptable. The routes, the stored chunks, the import job and the Chat hand-off are not built yet
+(see "Not built" below).
+
+### What is built
+
+- The upload description is checked the same way as before: exact fields, a recording name in the
+  old format, up to 32 MiB of audio packets, 256 KiB of ring notes, 256 MiB of sound, and a
+  length of at most two hours (two minutes for a voice request).
+- The identity of an upload is a fingerprint of its description, in the old key order, so a
+  repeat upload can be told apart from a changed one.
+- Chunk numbers and sizes follow the old range rules: numbers 0 to 999 with no leading zero,
+  every chunk exactly 1 MiB except the last.
+- The packet file is checked for the ring's framing (numbered, never empty, no cut-off end).
+- The sound file must be 16 kHz mono 16-bit with a consistent header. Nothing is decoded.
+- The ring notes are read for start, end, recorded length and button bookmarks.
+- Voice rules: who may send, when a voice request goes on by itself, and the starting state of
+  the hand-off (no speech, ready to send, queued).
+
+### Error codes
+
+The table lists every code the ring receivers return. A test fails if it differs from the code.
+
+| Code                         | Status     | Meaning                                                       |
+| ---------------------------- | ---------- | ------------------------------------------------------------- |
+| `recording_import_conflict`  | 409        | Same recording sent again with different content              |
+| `recording_import_invalid`   | 400 or 413 | Bad description, bad file, or over a size or length limit     |
+| `recording_import_not_found` | 404        | No such import for this person                                |
+| `recording_voice_ineligible` | 409        | Hold-to-talk is off, or the recording was already on the ring |
+| `recording_voice_not_found`  | 404        | No such voice request for this person                         |
+| `transcription_unavailable`  | job result | No speech-to-text route is set up                             |
+| `transcription_failed`       | job result | The speech-to-text call failed                                |
+| `import_interrupted`         | job result | The upload was abandoned or the meeting was removed           |
+| `import_unavailable`         | job result | The import could not run (retried)                            |
+
+### Not built
+
+- The receiving routes and the binary chunk upload. The server only passes text bodies to a
+  package today, so a binary path has to be added first.
+- Storing the uploaded chunks, the import job (30 second windows, speech-to-text through the
+  router), and the Chat hand-off. Chat is not ported, so that hand-off will be a guess at its
+  shape.
+- The ring credential check. Device pairing (part 7) is parked, so it will be a narrow port with
+  a fake, and it is not proven.
+- A live run on the real server, the second-person privacy test, and the check that meeting text
+  never reaches logs or job payloads. These need the routes and storage first.
