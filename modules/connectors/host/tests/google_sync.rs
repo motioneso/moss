@@ -127,13 +127,35 @@ impl Fixture {
         id
     }
 
-    fn sync(&self, actor: Uuid, id: Uuid, recent_only: bool) -> Value {
-        let params = json!({
-            "account-id":id.to_string(),"phase":"calendar","cursor":0,"calendar-upserted":0,
+    fn job_params(id: Uuid, phase: &str, recent_only: bool) -> Value {
+        json!({
+            "account-id":id.to_string(),"phase":phase,"cursor":0,"calendar-upserted":0,
             "calendar-reconciled":0,"email-upserted":0,"email-failures":0,"trigger":"manual",
             "recent-only":recent_only,"error":"none","email-on":true,"calendar-on":true,
-        });
+        })
+    }
+
+    fn job(&self, actor: Uuid, params: Value) -> Value {
         self.call(actor, "job", json!({"queue":"google-sync","parameters":params}))
+    }
+
+    /// The job the package queued last, as its parameters.
+    fn last_queued(&self) -> Value {
+        let all = self.seen.0.lock().unwrap();
+        let entry = all.iter().rev().find(|c| c.0 == "jobs" && c.1 == "enqueue-options").expect("a queued job");
+        entry.2["params"].clone()
+    }
+
+    /// Runs a whole sync, following every job the package hands on to a new one.
+    fn sync(&self, actor: Uuid, id: Uuid, recent_only: bool) -> Value {
+        let mut outcome = self.job(actor, Self::job_params(id, "calendar", recent_only));
+        for _ in 0..200 {
+            if outcome["outcome"] != "continued" {
+                break;
+            }
+            outcome = self.job(actor, self.last_queued());
+        }
+        outcome
     }
 
     fn row(&self, id: Uuid) -> Value {
@@ -231,12 +253,48 @@ fn a_second_person_can_neither_start_nor_read_through_another_persons_account() 
     assert_eq!(f.fake.requests().len(), before, "no Google call is made for someone else's account");
     assert!(f.seen.named("insertCachedMessage").is_empty());
     assert!(f.row(id)["last_sync_started_at"].is_null(), "the owner's row is untouched");
-    // The same update as a superuser does start the run, so the refusal above comes from row-level security.
-    let moved = f
-        .rt
-        .block_on(f.root.execute("UPDATE app.connector_accounts SET last_sync_started_at=now() WHERE id=$1 AND status='active'", &[&id]))
-        .unwrap();
-    assert_eq!(moved, 1);
+    // The chunk and finish calls are refused the same way when made directly as the second person.
+    let mut calendar = Fixture::job_params(id, "calendar", false);
+    calendar["begun"] = json!(true);
+    let mut mail = Fixture::job_params(id, "email-day", false);
+    mail["begun"] = json!(true);
+    let mut finishing = Fixture::job_params(id, "calendar", false);
+    finishing["begun"] = json!(true);
+    finishing["finishing"] = json!(true);
+    finishing["error"] = json!("email-error");
+    for (name, params) in [("calendar", calendar.clone()), ("list", mail.clone())] {
+        assert_eq!(f.job(f.b, params)["outcome"], "inactive", "{name}");
+    }
+    f.job(f.b, finishing.clone());
+    assert!(f.row(id)["last_sync_status"].is_null(), "the owner's row is untouched by a foreign finish");
+    assert_eq!(f.fake.requests().len(), before, "no Google call is made for someone else's account");
+    assert!(f.seen.named("upsertCachedEvent").is_empty() && f.seen.named("insertCachedMessage").is_empty());
+    // With row-level security off the same calls reach the row, so the refusals above come from the protection.
+    f.rt.block_on(f.root.batch_execute("ALTER TABLE app.connector_accounts NO FORCE ROW LEVEL SECURITY; ALTER TABLE app.connector_accounts DISABLE ROW LEVEL SECURITY")).unwrap();
+    let open = f.job(f.b, finishing);
+    let after = f.row(id);
+    f.rt.block_on(f.root.batch_execute("ALTER TABLE app.connector_accounts ENABLE ROW LEVEL SECURITY; ALTER TABLE app.connector_accounts FORCE ROW LEVEL SECURITY")).unwrap();
+    assert_eq!(open["outcome"], "done", "{open}");
+    assert_eq!(after["last_sync_status"], "failed", "without the protection the foreign finish lands: {after}");
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_long_walk_keeps_its_claim_and_a_newer_start_is_refused() {
+    let f = Fixture::new();
+    let id = f.connect(f.a, "code-long");
+    for n in 0..3 {
+        f.mail(&format!("m{n}"));
+    }
+    let first = f.job(f.a, Fixture::job_params(id, "calendar", false));
+    assert_eq!(first["outcome"], "continued", "{first}");
+    // The start is old, as in a walk that has run for a long time.
+    f.rt.block_on(f.root.execute("UPDATE app.connector_accounts SET last_sync_started_at = now() - interval '900 seconds' WHERE id=$1", &[&id])).unwrap();
+    let next = f.job(f.a, f.last_queued());
+    assert_eq!(next["outcome"], "continued", "{next}");
+    // A chunk refreshes the claim, so the schedule's start finds the account busy.
+    let rival = f.job(f.a, Fixture::job_params(id, "calendar", false));
+    assert_eq!(rival["outcome"], "busy", "{rival}");
 }
 
 #[test]

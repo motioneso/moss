@@ -11,11 +11,16 @@ use moss_module_host::runtime::Request;
 use portability::secrets::JsonSecretCipher;
 use safety_core::db::DataContext;
 use serde_json::{json, Value};
-use std::{collections::HashMap, sync::Mutex, time::Duration};
+use std::{collections::HashMap, sync::Mutex, time::{Duration, Instant}};
 use url::Url;
 use uuid::Uuid;
 
 const PAGE: usize = 100;
+/// A cursor is page * STRIDE + offset, and a Gmail history page can name more than PAGE messages.
+const STRIDE: usize = 10_000;
+/// One host call may use this long for Google, so a job (a list and a fetch) stays inside the
+/// five seconds the host gives a package call.
+const BUDGET: Duration = Duration::from_millis(1800);
 const ATTEMPTS: u32 = 3;
 const WINDOW_DAYS: i64 = 30;
 const PAST_DAYS: i64 = 7;
@@ -30,7 +35,7 @@ const RATE_REASONS: [&str; 6] = [
 #[derive(Default)]
 pub struct SyncRuns(Mutex<HashMap<Uuid, Run>>);
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct Run {
     started: Option<DateTime<Utc>>,
     /// The page token that opens page N of a list, per list name.
@@ -89,6 +94,7 @@ async fn call(
     config: &GoogleConfig,
     url: Url,
     operation: &'static str,
+    deadline: Instant,
 ) -> Result<Fetched> {
     let fail = |status, reason, sign_in| Err(Failure { status, reason, operation, sign_in });
     let mut token = match google::fresh_access_token(cx, cipher, config, false).await? {
@@ -98,8 +104,12 @@ async fn call(
     };
     let (mut attempt, mut refreshed) = (1, false);
     loop {
-        let Ok((status, body)) = config.get(url.clone(), &token).await else {
-            return Ok(fail(None, None, false));
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Ok(fail(None, Some("timeout".into()), false));
+        }
+        let Ok(Ok((status, body))) = tokio::time::timeout(left, config.get(url.clone(), &token)).await else {
+            return Ok(fail(None, Some("timeout".into()), false));
         };
         if (200..300).contains(&status) {
             return Ok(serde_json::from_slice(&body).or_else(|_| fail(Some(status), None, false)));
@@ -119,10 +129,11 @@ async fn call(
         if status == 401 {
             return Ok(fail(Some(401), reason, true));
         }
-        if attempt < ATTEMPTS && retryable(status, &reason) {
-            let jitter = Duration::from_nanos(Utc::now().timestamp_subsec_nanos() as u64 % 100_000_000)
-                .min(config.retry_delay());
-            tokio::time::sleep(config.retry_delay() * attempt + jitter).await;
+        let jitter = Duration::from_nanos(Utc::now().timestamp_subsec_nanos() as u64 % 100_000_000)
+            .min(config.retry_delay());
+        let wait = config.retry_delay() * attempt + jitter;
+        if attempt < ATTEMPTS && retryable(status, &reason) && wait < deadline.saturating_duration_since(Instant::now()) {
+            tokio::time::sleep(wait).await;
             attempt += 1;
             continue;
         }
@@ -153,6 +164,14 @@ pub async fn run(
             if live.is_none() {
                 return Ok(json!({"result":"inactive"}));
             }
+            // Each chunk keeps the run alive, so a long walk is never taken over by a newer start.
+            cx.db()
+                .execute(
+                    "UPDATE app.connector_accounts SET last_sync_started_at = now()
+                      WHERE id = $1 AND last_sync_status IS NULL",
+                    &[&id],
+                )
+                .await?;
             let answer = match request.resource.as_str() {
                 "connectors.sync-google-calendar" => calendar(cx, cipher, config, runs, id, p).await?,
                 "connectors.sync-google-list" => list(cx, cipher, config, runs, id, p).await?,
@@ -240,7 +259,7 @@ async fn finish(cx: &DataContext, runs: &SyncRuns, id: Uuid, p: &Value) -> Resul
         "emailUpserted":count(p, "emailUpserted"),"emailFailures":count(p, "emailFailures"),
         "escalations":0,"truncated":p["counts"]["truncated"].as_bool().unwrap_or(false),
     });
-    let run = runs.0.lock().expect("runs").remove(&id);
+    let run = runs.0.lock().expect("runs").get(&id).cloned();
     if let Some(detail) = run.as_ref().and_then(|r| r.detail.as_ref()).filter(|_| error.is_some()) {
         counts["emailErrorDetail"] = json!({
             "status":detail["status"].as_i64(),
@@ -249,15 +268,20 @@ async fn finish(cx: &DataContext, runs: &SyncRuns, id: Uuid, p: &Value) -> Resul
         });
     }
     let position = if p["savePosition"] == true { run.and_then(|r| r.anchor) } else { None };
-    cx.db()
+    let saved = cx
+        .db()
         .execute(
             "UPDATE app.connector_accounts SET last_sync_finished_at = now(), last_sync_status = $2,
                last_sync_error = $3, last_sync_counts = $4,
                email_history_id = COALESCE($5, email_history_id)
-             WHERE id = $1 AND status <> 'revoked'",
+             WHERE id = $1 AND status <> 'revoked' AND provider_id = 'google'",
             &[&id, &status, &error, &counts, &position],
         )
         .await?;
+    // Only the owner's own update reaches a row, so only then is the run's state dropped.
+    if saved > 0 {
+        runs.0.lock().expect("runs").remove(&id);
+    }
     Ok(json!({"saved":true}))
 }
 
@@ -298,10 +322,10 @@ struct Slice {
 
 /// The part of one page a chunk covers, and where the next chunk starts.
 fn slice(items: &[Value], cursor: usize, limit: usize, more: bool) -> Slice {
-    let offset = cursor % PAGE;
+    let offset = cursor % STRIDE;
     let taken: Vec<Value> = items.iter().skip(offset).take(limit.max(1)).cloned().collect();
     let end = offset + taken.len() >= items.len();
-    let next = if taken.is_empty() { cursor - offset + PAGE } else { cursor + taken.len() };
+    let next = if taken.is_empty() { cursor - offset + STRIDE } else { cursor + taken.len() };
     Slice { items: taken, next, done: end && !more }
 }
 
@@ -314,7 +338,7 @@ async fn calendar(
     p: &Value,
 ) -> Result<Fetched> {
     let (cursor, limit) = (p["cursor"].as_u64().unwrap_or(0) as usize, p["limit"].as_u64().unwrap_or(100) as usize);
-    let Some(token) = token_for(runs, id, "calendar", cursor / PAGE) else { return Ok(Ok(lost())) };
+    let Some(token) = token_for(runs, id, "calendar", cursor / STRIDE) else { return Ok(Ok(lost())) };
     let started = runs.0.lock().expect("runs").get(&id).and_then(|r| r.started).unwrap_or_else(|| config.now());
     let (min, max) = (iso(started - Days::days(PAST_DAYS)), iso(started + Days::days(WINDOW_DAYS)));
     let max_results = PAGE.to_string();
@@ -326,12 +350,12 @@ async fn calendar(
         query.push(("pageToken", token));
     }
     let url = list_url(config.calendar_base(), "calendars/primary/events", &query)?;
-    let page = match call(cx, cipher, config, url, "calendar.events.list").await? {
+    let page = match call(cx, cipher, config, url, "calendar.events.list", Instant::now() + BUDGET).await? {
         Ok(page) => page,
         Err(failure) => return Ok(Err(failure)),
     };
     let next_token = page["nextPageToken"].as_str().map(String::from);
-    remember(runs, id, "calendar", cursor / PAGE, next_token.clone());
+    remember(runs, id, "calendar", cursor / STRIDE, next_token.clone());
     let items = page["items"].as_array().cloned().unwrap_or_default();
     let part = slice(&items, cursor, limit, next_token.is_some());
     let events: Vec<Value> = part.items.iter().filter_map(calendar_event).collect();
@@ -376,13 +400,14 @@ async fn list(
     id: Uuid,
     p: &Value,
 ) -> Result<Fetched> {
+    let deadline = Instant::now() + BUDGET;
     let phase = p["phase"].as_str().unwrap_or("");
     let Some(query) = gmail_query(phase) else { bail!("Unknown sync phase") };
     let (cursor, limit) = (p["cursor"].as_u64().unwrap_or(0) as usize, p["limit"].as_u64().unwrap_or(10) as usize);
     let backlog = phase == "email";
     if backlog && cursor == 0 && mode_of(runs, id).is_none() {
         let profile = list_url(config.gmail_base(), "users/me/profile", &[])?;
-        let anchor = match call(cx, cipher, config, profile, "gmail.profile.get").await? {
+        let anchor = match call(cx, cipher, config, profile, "gmail.profile.get", deadline).await? {
             Ok(profile) => profile["historyId"].as_str().map(String::from),
             Err(failure) => return Ok(Err(failure)),
         };
@@ -394,7 +419,7 @@ async fn list(
         return Ok(Ok(lost()));
     }
     let name = if history { "history" } else { phase };
-    let Some(token) = token_for(runs, id, name, cursor / PAGE) else { return Ok(Ok(lost())) };
+    let Some(token) = token_for(runs, id, name, cursor / STRIDE) else { return Ok(Ok(lost())) };
     let max_results = PAGE.to_string();
     let (url, operation) = if history {
         let start = stored_position(cx, id).await?.unwrap_or_default();
@@ -412,7 +437,7 @@ async fn list(
         }
         (list_url(config.gmail_base(), "users/me/messages", &q)?, "gmail.messages.list")
     };
-    let page = match call(cx, cipher, config, url, operation).await? {
+    let page = match call(cx, cipher, config, url, operation, deadline).await? {
         Ok(page) => page,
         Err(failure) if history && failure.status == Some(404) => {
             // The saved position is too old for Gmail, so the walk starts over in full.
@@ -423,7 +448,7 @@ async fn list(
         Err(failure) => return Ok(Err(failure)),
     };
     let next_token = page["nextPageToken"].as_str().map(String::from);
-    remember(runs, id, name, cursor / PAGE, next_token.clone());
+    remember(runs, id, name, cursor / STRIDE, next_token.clone());
     let ids: Vec<Value> = if history {
         let mut seen = Vec::<String>::new();
         for record in page["history"].as_array().into_iter().flatten() {
@@ -454,13 +479,19 @@ async fn fetch(
 ) -> Result<Fetched> {
     let history = p["phase"] == "email" && mode_of(runs, id).as_deref() == Some("history");
     let oldest = (config.now() - Days::days(WINDOW_DAYS)).timestamp_millis();
-    let (mut messages, mut failures, mut gone, mut stale) = (Vec::new(), 0, 0, 0);
+    let deadline = Instant::now() + BUDGET;
+    let (mut messages, mut failures, mut gone, mut stale, mut processed) = (Vec::new(), 0, 0, 0, 0);
     let mut error: Option<Value> = None;
     for item in p["ids"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+        // At least one message is read per call, so a slow Google still moves the run on.
+        if processed > 0 && Instant::now() >= deadline {
+            break;
+        }
+        processed += 1;
         let mut q = vec![("format", "metadata")];
         q.extend(["From", "To", "Cc", "Subject", "Message-ID", "References"].map(|h| ("metadataHeaders", h)));
         let url = list_url(config.gmail_base(), &format!("users/me/messages/{}", urlencode(item)), &q)?;
-        match call(cx, cipher, config, url, "gmail.messages.get").await? {
+        match call(cx, cipher, config, url, "gmail.messages.get", deadline.max(Instant::now() + Duration::from_millis(300))).await? {
             Ok(message) => match gmail_message(&message) {
                 Some(parsed) if history && parsed["receivedMs"].as_i64().is_some_and(|ms| ms < oldest) => stale += 1,
                 Some(parsed) => messages.push(parsed),
@@ -474,7 +505,7 @@ async fn fetch(
             }
         }
     }
-    Ok(Ok(json!({"messages":messages,"failures":failures,"gone":gone,"stale":stale,"error":error})))
+    Ok(Ok(json!({"messages":messages,"failures":failures,"gone":gone,"stale":stale,"processed":processed,"error":error})))
 }
 
 fn urlencode(text: &str) -> String {
@@ -534,5 +565,21 @@ mod tests {
         assert!(!slice(&items, 90, 10, true).done);
         assert_eq!(slice(&items, 90, 10, true).next, 100);
         assert!(slice(&items, 90, 10, false).done);
+    }
+
+    #[test]
+    fn a_page_that_names_more_than_a_hundred_messages_is_walked_whole() {
+        let items: Vec<Value> = (0..250).map(Value::from).collect();
+        let (mut cursor, mut seen) = (0, Vec::new());
+        loop {
+            let part = slice(&items, cursor, 10, true);
+            seen.extend(part.items.iter().filter_map(Value::as_i64));
+            if part.items.is_empty() {
+                assert_eq!(part.next, STRIDE);
+                break;
+            }
+            cursor = part.next;
+        }
+        assert_eq!(seen, (0..250).collect::<Vec<i64>>());
     }
 }

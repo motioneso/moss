@@ -57,6 +57,8 @@ struct Job {
     calendar_on: bool,
     /// True once the host has marked the run started, so a retried chunk never starts it again.
     begun: bool,
+    /// True once a first attempt to record the result failed, so a later job tries once more.
+    finishing: bool,
 }
 
 enum Step {
@@ -81,6 +83,7 @@ impl Job {
             email_on: true,
             calendar_on: true,
             begun: false,
+            finishing: false,
         }
     }
 
@@ -90,7 +93,7 @@ impl Job {
             "calendar-upserted":self.calendar_upserted,"calendar-reconciled":self.calendar_reconciled,
             "email-upserted":self.email_upserted,"email-failures":self.email_failures,
             "trigger":self.trigger,"recent-only":self.recent_only,"error":self.error,
-            "email-on":self.email_on,"calendar-on":self.calendar_on,"begun":self.begun,
+            "email-on":self.email_on,"calendar-on":self.calendar_on,"begun":self.begun,"finishing":self.finishing,
         })
     }
 
@@ -110,6 +113,7 @@ impl Job {
             email_on: p["email-on"].as_bool()?,
             calendar_on: p["calendar-on"].as_bool()?,
             begun: p["begun"].as_bool().unwrap_or(false),
+            finishing: p["finishing"].as_bool().unwrap_or(false),
         })
     }
 
@@ -214,6 +218,10 @@ fn sweep(host: &impl Host, account: &str) -> &'static str {
             if healthy {
                 return "healthy";
             }
+            // A refused sign-in can only fail again until the person signs in once more.
+            if row["lastSyncError"] == "auth-error" {
+                return "needs-sign-in";
+            }
             match sync_soon(host, account, "schedule", false) {
                 Ok(_) => "restarted",
                 Err(_) => "failed",
@@ -226,7 +234,7 @@ fn sweep(host: &impl Host, account: &str) -> &'static str {
     }
 }
 
-fn finish(host: &impl Host, run: &Job) -> &'static str {
+fn finish(host: &impl Host, run: &mut Job) -> &'static str {
     let status = match run.error {
         "none" => "success",
         "auth-error" | "email-error" => "failed",
@@ -234,7 +242,7 @@ fn finish(host: &impl Host, run: &Job) -> &'static str {
     };
     let error = (run.error != "none").then_some(run.error);
     let save = status == "success" && run.email_on && !run.recent_only;
-    let _ = kv(
+    let saved = kv(
         host,
         "set",
         "connectors.sync-google-finish",
@@ -246,6 +254,15 @@ fn finish(host: &impl Host, run: &Job) -> &'static str {
             },
         }),
     );
+    if saved.is_err() && !run.finishing {
+        // The result is not lost. One later job records it, so the account does not stay in progress.
+        run.finishing = true;
+        let _ = enqueue(host, QUEUE, run.params());
+        return "finish-retried";
+    }
+    if run.error == "auth-error" {
+        cancel_schedule(host, &run.account);
+    }
     "done"
 }
 
@@ -278,6 +295,9 @@ fn run_job(host: &impl Host, run: &mut Job) -> &'static str {
             Err(_) => return "failed",
         }
     }
+    if run.finishing {
+        return finish(host, run);
+    }
     for _ in 0..CHUNKS_PER_RUN {
         match chunk(host, run) {
             Ok(Step::More) => {}
@@ -285,7 +305,7 @@ fn run_job(host: &impl Host, run: &mut Job) -> &'static str {
             Ok(Step::Stopped(word)) => return word,
             Err(_) => {
                 if run.error != "auth-error" {
-                    run.error = "email-error";
+                    run.error = if run.phase == Phase::Calendar { "calendar-error" } else { "email-error" };
                 }
                 return finish(host, run);
             }
@@ -387,11 +407,15 @@ fn mail_chunk(host: &impl Host, run: &mut Job) -> Result<Step> {
         }
     }
     let ids = listed["ids"].as_array().cloned().unwrap_or_default();
-    if !ids.is_empty() {
-        write_messages(host, run, &ids)?;
-    }
+    let before = run.cursor;
+    let processed = if ids.is_empty() { 0 } else { write_messages(host, run, &ids)? };
     if run.error == "auth-error" {
         return Ok(Step::Finished);
+    }
+    if processed < ids.len() {
+        // Google was slow, so the rest of this slice is read again by the next job.
+        run.cursor = before + processed as u64;
+        return Ok(Step::More);
     }
     if listed["done"] == true {
         return Ok(run.next_phase());
@@ -400,7 +424,8 @@ fn mail_chunk(host: &impl Host, run: &mut Job) -> Result<Step> {
     Ok(Step::More)
 }
 
-fn write_messages(host: &impl Host, run: &mut Job, ids: &[Value]) -> Result<()> {
+/// Saves the fetched messages and says how many of `ids` the host got through.
+fn write_messages(host: &impl Host, run: &mut Job, ids: &[Value]) -> Result<usize> {
     let fetched = kv(
         host,
         "get",
@@ -411,14 +436,15 @@ fn write_messages(host: &impl Host, run: &mut Job, ids: &[Value]) -> Result<()> 
         None => {}
         Some("auth_failed") => {
             run.note("auth-error");
-            return Ok(());
+            return Ok(ids.len());
         }
         Some(_) => {
             run.note("email-error");
             run.email_failures += ids.len() as u64;
-            return Ok(());
+            return Ok(ids.len());
         }
     }
+    let processed = fetched["processed"].as_u64().map_or(ids.len(), |n| (n as usize).clamp(1, ids.len()));
     let failures = fetched["failures"].as_u64().unwrap_or(0);
     if failures > 0 {
         run.email_failures += failures;
@@ -459,5 +485,5 @@ fn write_messages(host: &impl Host, run: &mut Job, ids: &[Value]) -> Result<()> 
             }
         }
     }
-    Ok(())
+    Ok(processed)
 }

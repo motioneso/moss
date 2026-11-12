@@ -158,7 +158,7 @@
   ],
   "requires": {
     "email": ">=0.2.0, <1.0.0",
-    "calendar": ">=0.26.0, <1.0.0"
+    "calendar": ">=0.27.0, <1.0.0"
   },
   "provides": {},
   "icons": ["icons/connectors.svg"],
@@ -387,7 +387,8 @@
       },
       "email-on": { "kind": "flag" },
       "calendar-on": { "kind": "flag" },
-      "begun": { "kind": "flag" }
+      "begun": { "kind": "flag" },
+      "finishing": { "kind": "flag" }
     },
     "google-sync-sweep": {
       "account-id": { "kind": "id" }

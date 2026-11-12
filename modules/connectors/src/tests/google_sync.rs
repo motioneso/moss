@@ -131,7 +131,7 @@ fn a_long_walk_continues_in_a_new_job_with_metadata_only_params() {
     let text = queued.to_string();
     assert!(!text.contains("SENTINEL"), "{text}");
     let keys: Vec<&String> = queued["params"].as_object().unwrap().keys().collect();
-    assert_eq!(keys.len(), 13, "{keys:?}");
+    assert_eq!(keys.len(), 14, "{keys:?}");
     assert_eq!(queued["params"]["cursor"], 100);
     assert_eq!(queued["params"]["phase"], "calendar");
     assert!(host.named("connectors.sync-google-finish").is_empty());
@@ -204,6 +204,53 @@ fn a_failed_prune_marks_the_run_partial_and_mail_still_syncs() {
     run(&host, start_params());
     assert_eq!(finish_of(&host)["status"], "partial");
     assert!(!host.named("connectors.sync-google-list").is_empty());
+}
+
+#[test]
+fn a_slow_fetch_hands_the_unread_messages_to_the_next_job() {
+    let host = Script::new(|_, resource, _| match resource {
+        "connectors.sync-google-start" => Some(Ok(json!({"state":"started","email":true,"calendar":false}))),
+        "connectors.sync-google-list" => Some(Ok(json!({"ids":["a","b","c","d"],"next":4,"done":false}))),
+        "connectors.sync-google-fetch" => Some(Ok(json!({"messages":[],"failures":0,"processed":2}))),
+        _ => None,
+    });
+    let mut params = start_params();
+    params["begun"] = json!(true);
+    params["phase"] = json!("email-day");
+    assert_eq!(run_once(&host, params)["outcome"], "continued");
+    assert_eq!(host.last_queued().unwrap()["cursor"], 2);
+}
+
+#[test]
+fn a_result_that_could_not_be_saved_is_tried_again_by_a_later_job_once() {
+    let host = Script::new(|_, resource, _| match resource {
+        "connectors.sync-google-start" => Some(Ok(json!({"state":"started","email":false,"calendar":false}))),
+        "connectors.sync-google-finish" => Some(Err(Error::new("late"))),
+        _ => None,
+    });
+    let first = run(&host, start_params());
+    assert_eq!(first["outcome"], "finish-retried");
+    let again = host.last_queued().unwrap();
+    assert_eq!(again["finishing"], true);
+    assert_eq!(run_once(&host, again)["outcome"], "done");
+    assert_eq!(host.named("connectors.sync-google-finish").len(), 2);
+}
+
+#[test]
+fn a_refused_sign_in_stops_both_schedules_and_the_sweep_leaves_it_alone() {
+    let host = Script::new(|_, resource, _| match resource {
+        "connectors.sync-google-start" => Some(Ok(json!({"state":"started","email":false,"calendar":true}))),
+        "connectors.sync-google-calendar" => Some(Ok(json!({"result":"auth_failed"}))),
+        _ => None,
+    });
+    run(&host, start_params());
+    assert_eq!(host.named("unschedule").len(), 2);
+    let stuck = Script::new(|_, resource, _| {
+        (resource == "connectors.accounts")
+            .then(|| Ok(json!([{"id":"acct-1","status":"active","lastSyncStatus":"failed","lastSyncError":"auth-error"}])))
+    });
+    assert_eq!(sweep(&stuck)["outcome"], "needs-sign-in");
+    assert!(stuck.named("enqueue-options").is_empty());
 }
 
 #[test]
