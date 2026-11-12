@@ -20,6 +20,15 @@ pub struct Template {
     extra: &'static str,
 }
 impl Template {
+    /// The short style note shown when the person has not chosen a type.
+    pub fn focus(&self) -> &'static str {
+        match self.id {
+            "one-to-one" => "Check-ins, feedback, support and follow-ups; infer no reporting relationship or personal attributes.",
+            "project-review" => "Progress, risks, blockers, trade-offs and next steps; distinguish proposals from decisions.",
+            "interview" => "Questions, responses and follow-ups; separate known speakers. Infer no suitability, protected characteristics or hiring decision.",
+            _ => "Organize around topics actually discussed.",
+        }
+    }
     pub fn guidance(&self) -> String {
         format!("{COMMON_GUIDANCE} {}", self.extra)
     }
@@ -98,6 +107,9 @@ pub struct Inputs {
     pub notes_revision: i64,
     pub personal_notes: String,
     pub segments: Vec<InputSegment>,
+    /// Present for a recording. It is not part of the evidence the model is shown.
+    #[serde(skip)]
+    pub recording: Option<crate::recording_reading::Context>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -128,6 +140,8 @@ pub struct Action {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Content {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recording: Option<crate::recording_reading::Reading>,
     pub overview: String,
     pub decisions: Vec<Decision>,
     pub open_questions: Vec<String>,
@@ -258,12 +272,24 @@ fn check_inputs(inputs: &Inputs) -> Check<()> {
     Ok(())
 }
 
-/// Checks shape, limits and source bindings. The recording and speaker extras of the old app
-/// are not supported here, so an answer carrying them fails the shape check.
+/// Checks shape, limits and source bindings. The speaker extra of the old app is not supported
+/// here, so an answer carrying it fails the shape check. A recording reading is checked when the
+/// meeting is a recording, and is required then.
 pub fn validate(value: &Value, inputs: &Inputs) -> Check<Content> {
     check_inputs(inputs)?;
-    let keys = ["overview", "decisions", "openQuestions", "actions", "warnings"];
-    let output = object(value, &keys, Reason::SchemaInvalid)?;
+    let has_recording = value.as_object().is_some_and(|m| m.contains_key("recording"));
+    let keys: &[&str] = if has_recording {
+        &["overview", "decisions", "openQuestions", "actions", "warnings", "recording"]
+    } else {
+        &["overview", "decisions", "openQuestions", "actions", "warnings"]
+    };
+    let output = object(value, keys, Reason::SchemaInvalid)?;
+    let recording = match (&inputs.recording, has_recording) {
+        (None, true) => return Err(Reason::InputsInvalid),
+        (Some(_), false) => return Err(Reason::SchemaInvalid),
+        (Some(context), true) => Some(crate::recording_reading::validate(&output["recording"], context).ok_or(Reason::SchemaInvalid)?),
+        (None, false) => None,
+    };
     let mut characters = 0usize;
     let mut bounded = |value: &Value, max: usize| -> Check<String> {
         let result = text(value, max, None)?;
@@ -320,5 +346,5 @@ pub fn validate(value: &Value, inputs: &Inputs) -> Check<Content> {
     for value in list(&output["warnings"], MAX_ITEMS, Reason::SchemaInvalid)? {
         warnings.push(bounded(value, MAX_ITEM)?);
     }
-    Ok(Content { overview, decisions, open_questions, actions, warnings })
+    Ok(Content { recording, overview, decisions, open_questions, actions, warnings })
 }

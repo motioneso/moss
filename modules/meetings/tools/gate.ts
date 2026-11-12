@@ -9,7 +9,7 @@ const checks = spawnSync("modules/meetings/tools/check.sh", {
 if (checks.status !== 0) process.exit(checks.status ?? 1);
 // One cargo run per test file, in this order. The files share one database and
 // the installed test expects it untouched, so it runs first.
-for (const name of ["installed", "outputs", "recording", "transcripts", "exports"]) {
+for (const name of ["installed", "outputs", "recording", "transcripts", "exports", "reading"]) {
   const run = spawnSync(
     "cargo",
     [
@@ -33,7 +33,8 @@ for (const name of ["installed", "outputs", "recording", "transcripts", "exports
         JS48_APP_URL: urls.app,
         JS48_BOOTSTRAP_URL: urls.bootstrap,
         JS48_WORKER_URL: urls.worker,
-        MEETINGS_COMPONENT_WASM: `${process.env.CARGO_TARGET_DIR ?? "/tmp/moss-meetings-host"}/module.wasm`
+        MEETINGS_COMPONENT_WASM: `${process.env.CARGO_TARGET_DIR ?? "/tmp/moss-meetings-host"}/module.wasm`,
+        MEMORY_CORE_WASM: `${process.env.CARGO_TARGET_DIR ?? "/tmp/moss-meetings-host"}/memory-guest/wasm32-unknown-unknown/release/moss_memory.wasm`
       }
     }
   );

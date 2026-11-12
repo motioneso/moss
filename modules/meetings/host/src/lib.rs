@@ -7,6 +7,8 @@ use safety_core::db::{DataContext, Database};
 use serde_json::{Map, Value};
 use std::sync::Arc;
 
+pub mod authority;
+pub mod chat;
 pub mod exports;
 pub mod outputs;
 pub mod package;
@@ -31,6 +33,7 @@ pub struct MeetingsPorts {
     runtime: tokio::runtime::Runtime,
     next: Arc<dyn Ports>,
     recordings: Option<Arc<recordings::Recordings>>,
+    chat: Arc<dyn chat::MainChat>,
 }
 impl MeetingsPorts {
     pub fn new(database: Database, next: Arc<dyn Ports>) -> Result<Self> {
@@ -39,6 +42,7 @@ impl MeetingsPorts {
             runtime: tokio::runtime::Runtime::new()?,
             next,
             recordings: None,
+            chat: Arc::new(chat::NoMainChat),
         })
     }
 
@@ -46,6 +50,12 @@ impl MeetingsPorts {
     pub fn with_recordings(mut self, files: &std::path::Path) -> Result<Self> {
         self.recordings = Some(Arc::new(recordings::Recordings::new(&vault::Root::create(files)?)?));
         Ok(self)
+    }
+
+    /// Connects the chat that low-confidence side notices are posted to.
+    pub fn with_chat(mut self, chat: Arc<dyn chat::MainChat>) -> Self {
+        self.chat = chat;
+        self
     }
 
     /// Runs one store operation in the call's shared transaction, so it sees the
@@ -176,11 +186,17 @@ impl MeetingsPorts {
 }
 impl Ports for MeetingsPorts {
     fn invoke(&self, scope: &CallScope, port: &str, request: &Request) -> Result<Value> {
-        let ours = [RESOURCE, store::TRANSCRIPTS, store::HISTORY, store::RECORDING_TYPES, outputs::OUTPUTS, exports::EXPORTS];
+        let ours = [RESOURCE, store::TRANSCRIPTS, store::HISTORY, store::RECORDING_TYPES, outputs::OUTPUTS, exports::EXPORTS, chat::NOTICE];
         if port != "kv" || !ours.contains(&request.resource.as_str()) || scope.module().id != "meetings" {
             return self.next.invoke(scope, port, request);
         }
         moss_module_host::runtime::authorize(scope.module(), port, request)?;
+        if request.resource == chat::NOTICE {
+            ensure!(request.operation == "post", "Unsupported Meetings chat operation");
+            let (text, key) = chat::notice(&request.parameters)?;
+            self.chat.post(scope.access().actor_user_id(), text, key)?;
+            return Ok(serde_json::json!({"posted": true}));
+        }
         if request.resource == RESOURCE {
             self.preferences(scope, request)
         } else {

@@ -28,6 +28,7 @@ fn slice(inputs: &Inputs, notes: &[u16], ss: usize, se: usize, ns: usize, ne: us
         notes_revision: inputs.notes_revision,
         personal_notes: String::from_utf16_lossy(&notes[ns..ne]),
         segments: inputs.segments[ss..se].to_vec(),
+        recording: inputs.recording.clone(),
     }
 }
 

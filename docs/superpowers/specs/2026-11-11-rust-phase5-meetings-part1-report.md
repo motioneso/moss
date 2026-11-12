@@ -292,3 +292,40 @@ No recording content reaches Notes or Memory until part 6 builds the hooks that 
 ### Not proven
 
 Everything in the 5C proof list. Nothing was built or run in this part.
+
+## Part 6: the model reads each recording
+
+### What was built
+
+- After a summary run, the model also reads the recording. It picks a type, a title for an untitled meeting, personal or work, a confidence, a reason and groups of ideas.
+- A person's own type choice and a title they set themselves are never overwritten.
+- A reading below 80% confidence posts a chat message to the owner asking them to check the side.
+- Each idea becomes a Memory fact through Memory's public interface, on the same side as the recording. Work recordings never write personal facts and the reverse.
+- The context for the model comes from Calendar and People through their public interfaces, as the owner. Meetings now requires Calendar, People and Memory at install.
+- Meetings answers Memory's question "does this recording's reading exist for this owner", under row-level security.
+- Meeting text stays out of job payloads, activity rows and logs. Jobs carry only the meeting id.
+
+### What part 6 proved
+
+| Check                | How                                                                                                                                                                               |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Reading is filed     | Real database with a scripted model. Type, side, confidence and version are stored.                                                                                               |
+| Low confidence       | Only the doubtful reading posts a chat message. A sure reading posts nothing.                                                                                                     |
+| Memory facts         | Personal ideas became personal facts and work ideas became work facts. Running the jobs again added nothing.                                                                      |
+| Two-person privacy   | Another person gets nothing from Meetings' check. Seen leaking with row security removed, and fixed when restored.                                                                |
+| No text in the queue | A planted marker in an idea never appears in job payloads or activity rows.                                                                                                       |
+| Live run             | Real Rust server over HTTPS with Memory as the real package. Meetings installs with Calendar, People and Memory present, and its routes still keep each person's records private. |
+| Builds and tests     | Native and WebAssembly builds, and the full Meetings gate, passed.                                                                                                                |
+
+### Not proven in part 6
+
+- No real model was called, so reading quality is unproven.
+- No real Main chat was used. Tests use a recording stand-in for chat.
+- The context pack holds no Memory facts, no owner name and no Calendar attendee names yet.
+- The old instruction scan on outside text is not ported.
+- Memory's "being cleaned" and "sealed" states always read false until part 5 lands.
+- The chat-message job recomputes whether the reading is doubtful, instead of carrying that from the run.
+- Calendar and People were empty stand-ins in the tests and the live run, so the real context pack was never filled from them on a live server.
+- The live run did not read a real recording, because no real model was set up. It proves install and routes only.
+- Running the memory job twice for the same reading was not tested end to end. It relies on each idea having a fixed key in Memory. Only the stable job key is unit tested.
+- When Memory is unreachable or fails, the memory job fails and retries. When Memory refuses on purpose (the recording changed or is being removed), the idea is skipped.

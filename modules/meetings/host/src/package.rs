@@ -35,12 +35,30 @@ pub fn pack(root: &Path, component: &[u8]) -> Result<Vec<u8>> {
     archive::pack(&files(root, component)?)
 }
 
-/// Packs without the Tasks dependency so a test can install Meetings alone. Calls to Tasks then
-/// fail the way they do when Tasks is missing.
-pub fn pack_without_dependencies(root: &Path, component: &[u8]) -> Result<Vec<u8>> {
-    let mut files = files(root, component)?;
-    let mut manifest = manifest()?;
-    manifest.requires.clear();
-    files.insert("moss.module.json".into(), serde_json::to_vec(&manifest)?);
-    archive::pack(&files)
+/// A package that does nothing, so a module that requires `id` can be installed. It reuses
+/// Meetings' component and declares no tables, routes, jobs or required modules. Test setups only.
+pub fn stand_in(id: &str, wasm: &[u8]) -> Result<(Vec<u8>, Manifest)> {
+    let mut value = serde_json::to_value(manifest()?)?;
+    let fields = value.as_object_mut().ok_or_else(|| anyhow::anyhow!("Manifest is not an object"))?;
+    for key in ["requires", "provides", "jobs", "screens", "database"] {
+        fields.insert(key.into(), serde_json::json!({}));
+    }
+    for key in ["routes", "navigation", "settings", "features"] {
+        fields.insert(key.into(), serde_json::json!([]));
+    }
+    fields.insert("id".into(), id.into());
+    // Above every minimum Meetings asks for and below the next major version.
+    fields.insert("version".into(), "0.9.0".into());
+    fields.insert("name".into(), id.into());
+    fields.insert("icons".into(), serde_json::json!([format!("icons/{id}.svg")]));
+    let manifest: Manifest = serde_json::from_value(value)?;
+    let files = BTreeMap::from([
+        ("moss.module.json".to_owned(), serde_json::to_vec(&manifest)?),
+        ("code/module.wasm".to_owned(), wasm.to_vec()),
+        (format!("icons/{id}.svg"), b"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1 1\"></svg>".to_vec()),
+        ("LICENSE".to_owned(), b"test".to_vec()),
+        ("NOTICE".to_owned(), b"test".to_vec()),
+        ("CHANGELOG.md".to_owned(), b"test".to_vec()),
+    ]);
+    Ok((archive::pack(&files)?, manifest))
 }

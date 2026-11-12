@@ -24,37 +24,51 @@ fn sign(k: &Ed25519KeyPair, b: &[u8]) -> String {
     STANDARD.encode(k.sign(b).as_ref())
 }
 pub fn publish(folder: &Path, bytes: &[u8]) -> (String, String, Artifact) {
+    publish_as(folder, bytes, moss_meetings_host::package::manifest().unwrap(), "meetings")
+}
+
+/// Publishes any module's package into its own disposable registry named `<label>-test-registry`,
+/// kept in the `<label>` folder under `parent`.
+pub fn publish_as(
+    parent: &Path,
+    bytes: &[u8],
+    m: moss_module_host::manifest::Manifest,
+    label: &str,
+) -> (String, String, Artifact) {
+    let folder = &parent.join(label);
+    std::fs::create_dir_all(folder).unwrap();
     // Ephemeral keys generated for this disposable registry; no production credentials.
     let root = key();
     let index = key();
-    let publisher = key();
-    let m = moss_meetings_host::package::manifest().unwrap();
+    // One publisher key for every package, so the installer sees no conflicting publisher.
+    static PUBLISHER: std::sync::OnceLock<Ed25519KeyPair> = std::sync::OnceLock::new();
+    let publisher = PUBLISHER.get_or_init(key);
     let digest = trust::digest(bytes);
     let artifact = Artifact {
         id: m.id.clone(),
         version: m.version.clone(),
         digest: digest.clone(),
         size: bytes.len() as u64,
-        publisher_key: "meetings-test".into(),
-        signature: sign(&publisher, digest.as_bytes()),
+        publisher_key: format!("{label}-test"),
+        signature: sign(publisher, digest.as_bytes()),
         requires_moss: m.requires_moss,
         abi: m.abi,
         capabilities: m.capabilities,
         migrations: m.database.migrations,
-        requires: Default::default(),
-        changelog: "Meetings package".into(),
+        requires: m.requires,
+        changelog: format!("{label} package"),
         channel: Channel::Stable,
         urgent: false,
     };
     let identity = RegistryIdentity {
-        id: "meetings-test-registry".into(),
-        name: "Meetings test registry".into(),
+        id: format!("{label}-test-registry"),
+        name: format!("{label} test registry"),
         root_fingerprint: trust::digest(root.public_key().as_ref()),
         index_keys: BTreeMap::from([("online".into(), public(&index))]),
         publishers: BTreeMap::from([(
-            "meetings-test".into(),
+            format!("{label}-test"),
             Publisher {
-                key: public(&publisher),
+                key: public(publisher),
                 prefix: "".into(),
                 replaces: Default::default(),
             },
@@ -79,7 +93,7 @@ pub fn publish(folder: &Path, bytes: &[u8]) -> (String, String, Artifact) {
         std::fs::write(folder.join(name), &data).unwrap();
         std::fs::write(folder.join(format!("{name}.sig")), sign(k, &data)).unwrap();
     }
-    std::fs::create_dir(folder.join("packages")).unwrap();
+    std::fs::create_dir_all(folder.join("packages")).unwrap();
     std::fs::write(folder.join(format!("packages/{digest}.mosspkg")), bytes).unwrap();
-    (public(&root), public(&publisher), artifact)
+    (public(&root), public(publisher), artifact)
 }

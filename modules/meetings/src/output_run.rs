@@ -48,8 +48,14 @@ fn parse_reply(reply: &str) -> Option<Value> {
     serde_json::from_str(body.trim()).ok()
 }
 
-pub fn generate(model: &dyn Model, inputs: &Inputs, template_id: &str, template_version: i64) -> Result<Generated, RunError> {
-    let build = |piece: &Inputs, previous: Option<&Content>| prompt(piece, previous, template_id, template_version);
+pub fn generate(
+    model: &dyn Model,
+    inputs: &Inputs,
+    template_id: &str,
+    template_version: i64,
+    owner_context: Option<&Value>,
+) -> Result<Generated, RunError> {
+    let build = |piece: &Inputs, previous: Option<&Content>| prompt(piece, previous, template_id, template_version, owner_context);
     // Pieces target half the cap, which leaves room for the running summary in later prompts.
     let target = PROMPT_MAX_BYTES / 2;
     let chunks: Vec<Chunk> = if bytes(&build(inputs, None)) <= PROMPT_MAX_BYTES {

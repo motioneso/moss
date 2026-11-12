@@ -1,8 +1,10 @@
 //! Generating, editing and storing summaries. One call is one transaction under the meeting's row
 //! lock, so reserve, model call and save happen together and no second caller can interleave.
+use crate::context_pack;
 use crate::output_run::{self, Model, ModelFail};
 use crate::output_validation::{template, validate, Content};
 use crate::outputs::{self, Current};
+use crate::recording_filing;
 use moss_module_sdk::{Host, Result};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -209,7 +211,8 @@ pub fn generate<H: Host + ?Sized>(host: &H, meeting: &str, input: &Generate) -> 
         return Ok(refuse(400, "meeting_output_evidence_unavailable"));
     }
     let key = input.request_key.as_str();
-    let generated = output_run::generate(&Router(host), &now.inputs, chosen.id, chosen.version);
+    let pack = owner_pack(host, &now);
+    let generated = output_run::generate(&Router(host), &now.inputs, chosen.id, chosen.version, pack.as_ref());
     let generated = match generated {
         Err(error) if error.bad_request => return Ok(refuse(400, &error.code)),
         other => other,
@@ -222,6 +225,16 @@ pub fn generate<H: Host + ?Sized>(host: &H, meeting: &str, input: &Generate) -> 
     finish(host, meeting, key, &outcome)?;
     let status = if outcome["status"] == "failed" { 422 } else { 200 };
     Ok((status, outcome))
+}
+
+/// The owner context for a recording run. Other modules answer through their public APIs, and a
+/// pack with nothing in it is left out.
+fn owner_pack<H: Host + ?Sized>(host: &H, now: &Current) -> Option<Value> {
+    let recording = now.inputs.recording.as_ref()?;
+    let texts: Vec<&str> = now.inputs.segments.iter().map(|s| s.text.as_str()).collect();
+    let names = context_pack::extract_names(&texts);
+    let pack = context_pack::build(&context_pack::HostSources(host), &names, recording.recorded_at.as_deref())?;
+    serde_json::to_value(pack).ok()
 }
 
 fn store_generated<H: Host + ?Sized>(
@@ -245,11 +258,25 @@ fn store_generated<H: Host + ?Sized>(
         Ok(valid) => valid,
         Err(reason) => return Ok(failed(key, &format!("meeting_output_rejected_{}", reason.code()))),
     };
-    let base = json!({"meetingId": meeting, "inputs": now.stored, "templateId": input.template_id,
-        "templateVersion": input.template_version, "modelRoute": model_route});
+    // A recording's summary style follows its type, whether the person or the model chose it.
+    let (template_id, template_version) = match (&checked.recording, now.inputs.recording.as_ref()) {
+        (Some(reading), Some(context)) => {
+            let own = context.chosen().or_else(|| context.type_named(&reading.type_id));
+            own.and_then(|t| template(&t.template_id, 1)).map_or((input.template_id.as_str(), input.template_version), |t| (t.id, t.version))
+        }
+        _ => (input.template_id.as_str(), input.template_version),
+    };
+    let base = json!({"meetingId": meeting, "inputs": now.stored, "templateId": template_id,
+        "templateVersion": template_version, "modelRoute": model_route});
     // The summary and its inputs were read under one lock, so it is current when stored.
     Ok(match save(host, meeting, &base, &checked, "generated", false)? {
-        Saved::Done(artifact) => json!({"status": "saved", "artifact": artifact, "replayed": false}),
+        Saved::Done(artifact) => {
+            if let (Some(reading), Some(context)) = (&checked.recording, now.inputs.recording.as_ref()) {
+                let version = artifact["version"].as_i64().unwrap_or(1);
+                recording_filing::file(host, meeting, context, reading, version, key)?;
+            }
+            json!({"status": "saved", "artifact": artifact, "replayed": false})
+        }
         Saved::Limit => failed(key, "meeting_output_limit"),
     })
 }
@@ -375,7 +402,10 @@ pub fn review<H: Host + ?Sized>(host: &H, meeting: &str, candidate: &str, input:
             let proposal = row["proposalJson"].as_str().and_then(|t| serde_json::from_str::<Value>(t).ok()).unwrap_or(Value::Null);
             let reviewed = json!({"overview": "Reviewed action", "decisions": [], "openQuestions": [],
                 "actions": [proposal], "warnings": []});
-            if validate(&reviewed, &outputs::stored_inputs(&artifact)).is_err() {
+            // A reviewed action carries no recording reading, so only its evidence is checked.
+            let mut inputs = outputs::stored_inputs(&artifact);
+            inputs.recording = None;
+            if validate(&reviewed, &inputs).is_err() {
                 return Ok(refuse(409, "meeting_output_evidence_unavailable"));
             }
             let made = host.call(
