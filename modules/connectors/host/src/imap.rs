@@ -61,6 +61,39 @@ impl MailConfig {
         Ok(Self { stand_in: Some((servers, Trust { only: Some(trusted) })) })
     }
 
+    /// The test-only setting: both servers on 127.0.0.1 at the given ports, and at most one
+    /// trusted certificate as PEM text. `smtp` is `implicit_tls`, `starttls` or `none`.
+    pub fn test_only_ports(
+        imap_port: u16,
+        imap_tls: bool,
+        smtp_port: u16,
+        smtp: &str,
+        trusted_pem: Option<&str>,
+    ) -> Result<Self> {
+        use tokio_rustls::rustls::pki_types::{pem::PemObject, CertificateDer};
+        let smtp_security = match smtp {
+            "implicit_tls" => Smtp::ImplicitTls,
+            "starttls" => Smtp::Starttls,
+            "none" => Smtp::None,
+            _ => bail!("The test-only smtp security must be implicit_tls, starttls or none"),
+        };
+        let trusted = match trusted_pem {
+            Some(pem) => CertificateDer::pem_slice_iter(pem.as_bytes())
+                .map(|c| c.map(|c| c.to_vec()).map_err(|_| anyhow!("The test-only certificate is not PEM")))
+                .collect::<Result<Vec<_>>>()?,
+            None => vec![],
+        };
+        let servers = Servers {
+            imap_host: "127.0.0.1".into(),
+            imap_port,
+            imap_tls,
+            smtp_host: "127.0.0.1".into(),
+            smtp_port,
+            smtp_security,
+        };
+        Self::test_only_loopback(servers, trusted)
+    }
+
     fn servers(&self, provider: &str) -> Option<(Servers, Trust)> {
         match &self.stand_in {
             Some(found) => Some(found.clone()),

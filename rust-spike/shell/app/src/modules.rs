@@ -78,6 +78,23 @@ pub struct Settings {
     /// Never set in a real install; anything but http on this machine is refused at start.
     #[serde(default)]
     pub(crate) test_only_google_token_url: Option<String>,
+    /// TEST ONLY. Stand-in IMAP and SMTP servers on this machine for the mail login test.
+    /// Never set in a real install.
+    #[serde(default)]
+    pub(crate) test_only_mail: Option<TestOnlyMail>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TestOnlyMail {
+    imap_port: u16,
+    #[serde(default)]
+    imap_tls: bool,
+    smtp_port: u16,
+    smtp_security: String,
+    /// The one certificate the login test trusts. Absent trusts nothing.
+    #[serde(default)]
+    trusted_certificate: Option<PathBuf>,
 }
 
 #[derive(Deserialize)]
@@ -295,6 +312,7 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
         .ok_or_else(|| anyhow::anyhow!("No module has been installed yet"))?;
     let connectors_key = settings.connector_key.clone();
     let google_test_url = settings.test_only_google_token_url.clone();
+    let mail_test = settings.test_only_mail;
     let cipher = SecretCipher::connectors(
         &[("JARVIS_CONNECTOR_SECRET_KEY".into(), settings.connector_key)].into(),
     )
@@ -415,6 +433,17 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
             if let Some(url) = &google_test_url {
                 eprintln!("WARNING: test_only_google_token_url is set. Google sign-in talks to {url}, not Google.");
                 connectors = connectors.with_google(moss_connectors_host::google::GoogleConfig::test_only_loopback(url)?);
+            }
+            if let Some(mail) = &mail_test {
+                eprintln!("WARNING: test_only_mail is set. Mail sign-in talks to stand-in servers on this machine, not to a provider.");
+                let pem = mail.trusted_certificate.as_ref().map(std::fs::read_to_string).transpose()?;
+                connectors = connectors.with_mail(moss_connectors_host::imap::MailConfig::test_only_ports(
+                    mail.imap_port,
+                    mail.imap_tls,
+                    mail.smtp_port,
+                    &mail.smtp_security,
+                    pem.as_deref(),
+                )?);
             }
             let services = Arc::new(connectors) as Arc<dyn Ports>;
             // Email answers only its own cached-message and preference calls.
