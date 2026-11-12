@@ -249,17 +249,17 @@ Their own dependencies also appear in the lock file. No other new crate was adde
 
 ### Proof
 
-| Claim                                         | Evidence                                                                                                                                                        |
-| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Vectors match the old app                     | 14 fixed texts, short and long, unicode and code. Lowest similarity 0.9999997, and 1.0000000 for a 12,000 character text cut at 512 tokens                      |
-| Peak memory at the longest input              | 879 MB after loading, 928 MB peak after a 512-token input (release build, Linux)                                                                                |
-| Download, cut-and-resume, refusal, bad hash   | 7 tests against a local server, passing. They cover the first download, resume from byte 100000, a server that ignores ranges, a 503, and a bad hash            |
-| Folder lock                                   | Test where a second process waits, gives up with a plain sentence, and then succeeds                                                                            |
-| Prefixes and activity rows on the device path | Host test. Text planted in a search reached the model, and appeared in no row, answer or failure sentence                                                       |
-| Live, real server over HTTPS, no endpoint     | The gate downloaded the real model in 83 seconds with progress read from the settings route, saved facts, and a search by meaning returned the right fact first |
+| Claim                                         | Evidence                                                                                                                                                                                    |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vectors match the old app                     | 14 fixed texts, short and long, unicode and code. Lowest similarity 0.9999997, and 1.0000000 for a 12,000 character text cut at 512 tokens                                                  |
+| Peak memory at the longest input              | 879 MB after loading, 928 MB peak after a 512-token input (release build, Linux)                                                                                                            |
+| Download, cut-and-resume, refusal, bad hash   | 8 tests against a local server, passing. They cover the first download, resume from byte 100000, a server that ignores ranges, a 503, a bad hash, and a damaged file kept at its right size |
+| Folder lock                                   | Test where a second process waits, gives up with a plain sentence, and then succeeds                                                                                                        |
+| Prefixes and activity rows on the device path | Host test. Text planted in a search reached the model, and appeared in no row, answer or failure sentence                                                                                   |
+| Live, real server over HTTPS, no endpoint     | The gate downloaded the real model in 83 seconds with progress read from the settings route, saved facts, and a search by meaning returned the right fact first                             |
 
 The live run found a real fault. The first search after the download hashed the whole file again
-and ran out of time in a debug build. The download now marks the files as checked.
+and ran out of time in a debug build. The download now marks the files as checked, but only when every file was fetched and hash-checked in that run.
 
 ### Not proven
 
@@ -277,3 +277,11 @@ and ran out of time in a debug build. The download now marks the files as checke
 - **Memory on Windows and macOS.** Peak memory was measured on Linux only.
 - **Search order.** In the live run an unrelated fact ranked above one of two related facts.
   Ranking quality was not part of this part.
+
+### Review round 1 (Codex), fixed
+
+- **Major.** A damaged file of the right size was trusted when another file had just downloaded.
+  The whole-file check is now skipped only after a run that fetched and checked every file. A new
+  test covers it and fails without the fix.
+- **Major.** A queued search could wait past its time limit before it ran. Queue and run now share
+  one deadline.
