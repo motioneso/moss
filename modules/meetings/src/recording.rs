@@ -287,6 +287,11 @@ impl<'a, H: Host + ?Sized> Recording<'a, H> {
 
     /// Writes the metadata row for a new manual transcript.
     pub(crate) fn create(&self, id: &str, title_source: &str, type_id: Option<&str>, recorded_at: Option<&str>) -> Result<()> {
+        self.create_from(id, title_source, type_id, recorded_at, "manual-transcript")
+    }
+
+    /// Writes the metadata row for a meeting whose source is `source`.
+    pub(crate) fn create_from(&self, id: &str, title_source: &str, type_id: Option<&str>, recorded_at: Option<&str>, source: &str) -> Result<()> {
         self.client().query(
             METADATA,
             &Query::insert(values(vec![
@@ -294,7 +299,7 @@ impl<'a, H: Host + ?Sized> Recording<'a, H> {
                 ("title_source", json!(title_source)),
                 ("type_id", json!(type_id)),
                 ("type_source", json!(if type_id.is_none() { "automatic" } else { "user" })),
-                ("source", json!("manual-transcript")),
+                ("source", json!(source)),
                 ("recorded_at", json!(recorded_at)),
             ])),
         )?;

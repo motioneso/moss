@@ -52,6 +52,7 @@ pub struct Upload {
     pub wav: File,
     pub duration_ms: u64,
     pub fingerprint: String,
+    pub canonical: String,
     pub voice_mode: bool,
 }
 
@@ -146,6 +147,7 @@ pub fn parse_upload(value: &Value) -> Result<Upload, Invalid> {
         wav,
         duration_ms,
         fingerprint: sha256_hex(canonical.as_bytes()),
+        canonical,
         voice_mode: id.starts_with("amsg_"),
     })
 }
