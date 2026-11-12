@@ -215,7 +215,7 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
     // canonical installer, as the server would find it.
     let keys = Keys::new();
     fs::create_dir_all(root.join("registry/packages")).unwrap();
-    let artifacts: Vec<Artifact> = [("JS224_CONNECTORS_PACKAGE", "connectors"), ("JS225_EMAIL_PACKAGE", "email")]
+    let artifacts: Vec<Artifact> = [("JS225_EMAIL_PACKAGE", "email"), ("JS224_CONNECTORS_PACKAGE", "connectors")]
     .iter()
     .map(|(variable, id)| {
         let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
