@@ -399,7 +399,8 @@ fn the_sweep_fails_an_account_that_never_finishes_and_stops_when_nothing_is_acti
     let done = f.status(f.a, &id).1;
     assert_eq!((done["status"].clone(), done["errorCode"].clone()), (json!("failed"), json!("email-error")), "{done}");
     let unscheduled = f.seen.all().into_iter().any(|c| c.port == "jobs" && c.operation == "unschedule" && c.resource == "email-refresh-sweep");
-    assert!(unscheduled, "the sweep stops itself when nothing is active");
+    let jobs: Vec<String> = f.seen.all().iter().filter(|c| c.port == "jobs").map(|c| format!("{} {}", c.operation, c.resource)).collect();
+    assert!(unscheduled, "the sweep stops itself when nothing is active: {jobs:?} {done}");
 }
 
 #[test]

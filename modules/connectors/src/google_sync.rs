@@ -329,12 +329,13 @@ fn finish(host: &impl Host, run: &mut Job) -> &'static str {
 /// One run of the job. A host failure ends the run as failed instead of retrying, so a broken
 /// service is not hit again at once.
 fn run_job(host: &impl Host, run: &mut Job) -> &'static str {
-    if run.phase == Phase::Calendar && run.cursor == 0 && !run.begun {
+    if (run.phase == Phase::Calendar || run.refresh.is_some()) && run.cursor == 0 && !run.begun {
         match kv(host, "set", "connectors.sync-google-start", json!({"accountId":run.account,"trigger":run.trigger})) {
             Ok(started) => match started["state"].as_str() {
                 Some("started") => {
                     run.email_on = started["email"].as_bool().unwrap_or(false);
-                    run.calendar_on = started["calendar"].as_bool().unwrap_or(false);
+                    // A refresh reads mail only.
+                    run.calendar_on = run.refresh.is_none() && started["calendar"].as_bool().unwrap_or(false);
                     reconcile_schedule(host, &run.account);
                     run.begun = true;
                     // The first chunk runs in its own job, so a retry of it finds the run already started.
