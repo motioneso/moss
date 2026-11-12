@@ -9,6 +9,7 @@ use moss_shell_contract::{
 };
 
 use crate::api;
+use crate::email_refresh::EmailRefresh;
 use crate::frame::Navigate;
 
 const WEATHER_SETTINGS: &str = "/settings?section=profile";
@@ -42,6 +43,7 @@ fn Today(view: TodayView) -> impl IntoView {
             <div class="cmd-grid" data-mode="day">
                 {view.quick_actions.map(|group| view! { <QuickActions group=group /> })}
                 <div class="cmd-main">
+                    <EmailRefresh />
                     <Timeline slots=view.timeline closing=view.timeline_closing />
                     {view.quiet_line.map(|line| view! {
                         <section class="today-quiet-line" id="start-here" aria-label="Your day so far">

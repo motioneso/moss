@@ -89,7 +89,7 @@ pub fn request(host: &impl Host, body: &Value) -> Result<(u16, Value)> {
     Ok((202, json!({"refreshId":id,"enqueued":enqueued,"deduped":made["deduped"]})))
 }
 
-/// GET /email-refresh/:refreshId. Another person's refresh looks the same as a missing one.
+/// GET /email-refresh/:refresh_id. Another person's refresh looks the same as a missing one.
 pub fn status(host: &impl Host, id: &str) -> Result<(u16, Value)> {
     let id = uuid_param(&json!(id), "refreshId", "params")?;
     let found = kv(host, "get", "connectors.refresh-status", json!({"refreshId":id}))?;

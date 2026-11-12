@@ -165,7 +165,7 @@ impl Fixture {
     }
 
     fn status(&self, actor: Uuid, id: &str) -> (u64, Value) {
-        self.route(actor, "GET", "/email-refresh/:refreshId", json!({"refreshId":id}), Value::Null)
+        self.route(actor, "GET", "/email-refresh/:refresh_id", json!({"refresh_id":id}), Value::Null)
     }
 
     /// Connects Google through the real route and gives the account the scopes a real grant has.

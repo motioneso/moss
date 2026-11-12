@@ -111,8 +111,8 @@ fn route(host: &impl Host, request: RouteRequest) -> Result<(u16, Value)> {
         ("POST", "/imap/test-connection") => imap::test_connection(host, &request.body).map(|b| (200, b)),
         ("POST", "/imap/connect") => imap::connect(host, &request.body),
         ("POST", "/email-refresh") => refresh::request(host, &request.body),
-        ("GET", "/email-refresh/:refreshId") => {
-            let id = request.params.get("refreshId").cloned().unwrap_or_default();
+        ("GET", "/email-refresh/:refresh_id") => {
+            let id = request.params.get("refresh_id").cloned().unwrap_or_default();
             refresh::status(host, &id)
         }
         ("GET", "/admin/accounts") => accounts::admin_list(host).map(|b| (200, b)),
