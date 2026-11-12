@@ -188,6 +188,10 @@ impl MailStandIn {
     pub fn imap_logins_seen(&self) -> u32 {
         self.with(|s| s.imap_logins_seen)
     }
+
+    pub fn smtp_auth_seen(&self) -> u32 {
+        self.with(|s| s.smtp_auth_seen)
+    }
 }
 
 type Handler = fn(Box<dyn Io>, Shared) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>;

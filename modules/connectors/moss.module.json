@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "connectors",
   "name": "Connectors",
-  "description": "Keeps the mail and calendar connections of each account, their sign-in secrets and the Email and Calendar permissions. Connecting Google works by pasting your own Google client details. IMAP and Outlook sign-in and all syncing are not part of this package yet.",
+  "description": "Keeps the mail and calendar connections of each account, their sign-in secrets and the Email and Calendar permissions. Connecting Google works by pasting your own Google client details. Yahoo, Proton Bridge, iCloud and Fastmail mail connect with an app password. Outlook sign-in and all syncing are not part of this package yet.",
   "publisher": "Moss",
   "version": "0.1.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
@@ -10,7 +10,10 @@
   "capabilities": [
     {
       "port": "kv",
-      "operations": ["get", "set"],
+      "operations": [
+        "get",
+        "set"
+      ],
       "resources": [
         "connectors.providers",
         "connectors.accounts",
@@ -19,7 +22,9 @@
         "connectors.admin-accounts",
         "connectors.diagnostics",
         "connectors.google-authorize",
-        "connectors.google-complete"
+        "connectors.google-complete",
+        "connectors.imap-test",
+        "connectors.imap-connect"
       ]
     }
   ],
@@ -109,6 +114,16 @@
       "signIn": true
     },
     {
+      "method": "POST",
+      "path": "/imap/test-connection",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/imap/connect",
+      "signIn": true
+    },
+    {
       "method": "GET",
       "path": "/admin/accounts",
       "signIn": true
@@ -116,7 +131,9 @@
   ],
   "requires": {},
   "provides": {},
-  "icons": ["icons/connectors.svg"],
+  "icons": [
+    "icons/connectors.svg"
+  ],
   "accounts": {
     "supportsUserDisable": false,
     "defaultEnabled": true
@@ -124,7 +141,7 @@
   "features": [
     {
       "id": "connectors.accounts",
-      "description": "Lists, creates, updates and revokes the signed-in person's connection accounts. Secrets are sealed on save and never returned; only a safe summary is shown. Google connects through its own guided flow. IMAP and Outlook cannot be connected from this package yet.",
+      "description": "Lists, creates, updates and revokes the signed-in person's connection accounts. Secrets are sealed on save and never returned; only a safe summary is shown. Google connects through its own guided flow, and mail providers connect with an app password. Outlook cannot be connected from this package yet.",
       "errors": [
         {
           "code": "connector-account-not-found",
@@ -211,6 +228,35 @@
     {
       "id": "connectors.admin-list",
       "description": "Instance administrators see a safe list of every account (provider, status, last sync) without secrets. Administrators cannot read another person's secrets or data."
+    },
+    {
+      "id": "connectors.imap-connect",
+      "description": "Connects a Yahoo, Proton Bridge, iCloud or Fastmail mail account with an app password. Moss takes the server settings from the provider choice, signs in to the mail server and then to the sending server to test the details, and seals the password only when both work. The test answers ok, wrong password, secure connection failed or unreachable without saving anything. There is no connect screen for this yet.",
+      "errors": [
+        {
+          "code": "imap-auth-failed",
+          "class": "validation",
+          "description": "The mail server rejected the supplied username and password",
+          "remediationRef": "connectors-imap-app-password"
+        },
+        {
+          "code": "imap-tls-failed",
+          "class": "validation",
+          "description": "Could not establish a secure connection to the mail server"
+        },
+        {
+          "code": "imap-unreachable",
+          "class": "transient",
+          "description": "Could not reach the mail server"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "connectors-imap-app-password",
+          "description": "Make an app password with the mail provider and try again",
+          "path": "/settings/connections"
+        }
+      ]
     }
   ],
   "tools": {
@@ -230,7 +276,7 @@
       "label": "Connections",
       "path": "/settings/connections",
       "scope": "user",
-      "description": "Mail and calendar connections for this account, their health and the Email and Calendar switches for each. Connect Google is offered here. Connecting IMAP or Outlook is not available in this version."
+      "description": "Mail and calendar connections for this account, their health and the Email and Calendar switches for each. Connect Google is offered here. Mail connects by app password through the connection service, but this screen does not offer it yet, and Outlook is not available in this version."
     }
   ]
 }
