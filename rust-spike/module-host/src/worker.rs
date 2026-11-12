@@ -45,7 +45,8 @@ impl Worker {
                 let delay = match pass() {
                     Ok(true) => continue,
                     Ok(false) => Duration::from_secs(1),
-                    Err(_) => {
+                    Err(e) => {
+                        safety_core::http::log(serde_json::json!({"event":"TEMP_DIAG","error":format!("{e:#}")}));
                         failed();
                         Duration::from_secs(1)
                     }
