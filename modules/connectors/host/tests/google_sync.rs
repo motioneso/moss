@@ -1,0 +1,273 @@
+//! Google sync proofs: the real Rust package in WebAssembly, the real host and database, and
+//! the fake Google. Calendar, Email and the job queue are recorded stand-ins, so the proof
+//! covers what leaves the package. Run only through scripts/run-gate.sh (see tools/gate.ts).
+use access_context::AccessContext;
+use moss_connectors_host::{package, ConnectorsPorts};
+use moss_connectors_host::google::GoogleConfig;
+use moss_module_host::runtime::{CallScope, DenyPorts, Host, Limits, Ports, Request};
+use moss_standins::google::{GoogleConfig as FakeConfig, GoogleStandIn};
+use safety_core::db::{Database, RuntimeRole};
+use serde_json::{json, Value};
+use std::{sync::{Arc, Mutex}, time::Duration};
+use tokio_postgres::{Client, NoTls};
+use uuid::Uuid;
+
+const KEY: &str = "connector-test-key-0123456789abcdef";
+const CLIENT_ID: &str = "fake-client-id.apps.example.com";
+const CLIENT_SECRET: &str = "SENTINEL-CLIENT-SECRET-3c9e41";
+const ACCESS: &str = "ya29.fake-access-1";
+const REFRESH: &str = "1//fake-refresh-1";
+const BODY_TEXT: &str = "SENTINEL-MAIL-BODY-text-9d41";
+const MODIFY: &str = "https://www.googleapis.com/auth/gmail.modify";
+const CALENDAR: &str = "https://www.googleapis.com/auth/calendar";
+
+/// Everything the package sent to Calendar, Email and the queue, in order.
+#[derive(Default)]
+struct Seen(Mutex<Vec<(String, String, Value)>>);
+
+impl Ports for Seen {
+    fn invoke(&self, _: &CallScope, port: &str, request: &Request) -> anyhow::Result<Value> {
+        let name = request.parameters["name"].as_str().unwrap_or(&request.operation).to_string();
+        self.0.lock().unwrap().push((port.into(), name.clone(), request.parameters.clone()));
+        Ok(match (port, name.as_str()) {
+            ("context", "read") => json!({"now":"2026-01-01T00:00:00.000Z"}),
+            ("context", _) => json!({"id":"key-1"}),
+            ("jobs", _) => json!({"id":"row-1"}),
+            ("api", "listCachedMessageKeys") => json!({"keys":[]}),
+            ("api", "pruneCachedEvents") => json!({"deleted":0}),
+            ("api", _) => json!({}),
+            _ => anyhow::bail!("unexpected {port}"),
+        })
+    }
+}
+
+impl Seen {
+    fn named(&self, name: &str) -> Vec<Value> {
+        self.0.lock().unwrap().iter().filter(|c| c.1 == name).map(|c| c.2.clone()).collect()
+    }
+    fn text(&self) -> String {
+        serde_json::to_string(&*self.0.lock().unwrap()).unwrap()
+    }
+    fn clear(&self) {
+        self.0.lock().unwrap().clear();
+    }
+}
+
+struct Fixture {
+    rt: tokio::runtime::Runtime,
+    root: Client,
+    fake: GoogleStandIn,
+    ports: Arc<ConnectorsPorts>,
+    seen: Arc<Seen>,
+    a: Uuid,
+    b: Uuid,
+}
+
+impl Fixture {
+    fn new() -> Self {
+        assert_eq!(std::env::var("JARVIS_GATE_RUN").as_deref(), Ok("1"));
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
+        let (root, db, fake) = rt.block_on(async {
+            let (root, c) = tokio_postgres::connect(&std::env::var("JS48_BOOTSTRAP_URL").unwrap(), NoTls).await.unwrap();
+            tokio::spawn(async move {
+                let _ = c.await;
+            });
+            root.execute(
+                "INSERT INTO app.users(id,email,name,is_instance_admin) VALUES($1,$3,'Sync A',true),($2,$4,'Sync B',false)",
+                &[&a, &b, &format!("{a}@example.test"), &format!("{b}@example.test")],
+            )
+            .await
+            .unwrap();
+            let db = Database::connect(&std::env::var("JS48_APP_URL").unwrap(), 8, RuntimeRole::App).await.unwrap();
+            let fake = GoogleStandIn::start(FakeConfig { client_secret: CLIENT_SECRET.into(), ..FakeConfig::default() }).await;
+            (root, db, fake)
+        });
+        let seen = Arc::new(Seen::default());
+        let config = GoogleConfig::test_only_loopback(&fake.token_url()).unwrap().with_retry_delay(Duration::from_millis(5));
+        let ports = Arc::new(ConnectorsPorts::new(db, seen.clone(), KEY).unwrap().with_google(config));
+        let _ = DenyPorts;
+        Self { rt, root, fake, ports, seen, a, b }
+    }
+
+    fn call(&self, actor: Uuid, entry: &str, payload: Value) -> Value {
+        let wasm = package::component(&std::fs::read(std::env::var("CONNECTORS_CORE_WASM").expect("CONNECTORS_CORE_WASM")).unwrap()).unwrap();
+        let out = Host::new(Limits::default())
+            .unwrap()
+            .call(&wasm, Arc::new(package::manifest().unwrap()), AccessContext::new(actor, "sync-proof"), self.ports.clone(), entry, &payload.to_string())
+            .unwrap();
+        serde_json::from_str(&out).unwrap()
+    }
+
+    fn route(&self, actor: Uuid, method: &str, path: &str, body: Value) -> (u64, Value) {
+        let request = json!({"method":method,"path":path,"params":{},"query":{},"body":body});
+        let reply = self.call(actor, "route", request);
+        (reply["status"].as_u64().unwrap(), reply["body"].clone())
+    }
+
+    /// Connects Google for `actor` through the real route, then gives the account the scopes a real grant has.
+    fn connect(&self, actor: Uuid, code: &str) -> Uuid {
+        self.fake.issue_code(code);
+        let (status, body) = self.route(actor, "POST", "/google/authorize", json!({"clientId":CLIENT_ID,"clientSecret":CLIENT_SECRET}));
+        assert_eq!(status, 200, "{body}");
+        let url = url::Url::parse(body["authUrl"].as_str().unwrap()).unwrap();
+        let state = url.query_pairs().find(|(k, _)| k == "state").unwrap().1.to_string();
+        let pasted = format!("http://localhost:1/?code={code}&state={state}");
+        let (status, body) = self.route(actor, "POST", "/google/complete", json!({"redirectUrl":pasted}));
+        assert_eq!(status, 201, "{body}");
+        let id: Uuid = body["account"]["id"].as_str().unwrap().parse().unwrap();
+        self.rt
+            .block_on(self.root.execute("UPDATE app.connector_accounts SET scopes=$2 WHERE id=$1", &[&id, &vec![MODIFY.to_string(), CALENDAR.to_string()]]))
+            .unwrap();
+        self.seen.clear();
+        id
+    }
+
+    fn sync(&self, actor: Uuid, id: Uuid, recent_only: bool) -> Value {
+        let params = json!({
+            "account-id":id.to_string(),"phase":"calendar","cursor":0,"calendar-upserted":0,
+            "calendar-reconciled":0,"email-upserted":0,"email-failures":0,"trigger":"manual",
+            "recent-only":recent_only,"error":"none","email-on":true,"calendar-on":true,
+        });
+        self.call(actor, "job", json!({"queue":"google-sync","parameters":params}))
+    }
+
+    fn row(&self, id: Uuid) -> Value {
+        self.rt
+            .block_on(self.root.query_one("SELECT to_jsonb(a) FROM app.connector_accounts a WHERE id=$1", &[&id]))
+            .unwrap()
+            .get(0)
+    }
+
+    fn add_event(&self, title: &str) {
+        let client = reqwest::blocking::Client::new();
+        let reply = client
+            .post(format!("{}/calendar/v3/calendars/primary/events", self.fake.base_url()))
+            .bearer_auth(ACCESS)
+            .json(&json!({"summary":title,"start":{"dateTime":"2026-01-02T10:00:00Z"},"end":{"dateTime":"2026-01-02T11:00:00Z"}}))
+            .send()
+            .unwrap();
+        assert!(reply.status().is_success());
+    }
+
+    fn mail(&self, subject: &str) -> String {
+        let raw = format!("From: Alice <alice@example.com>\r\nTo: bob@example.com\r\nSubject: {subject}\r\nMessage-ID: <{subject}@example.com>\r\nContent-Type: text/plain\r\n\r\n{BODY_TEXT}");
+        self.fake.add_message(&raw, &["INBOX"])
+    }
+}
+
+fn externals(calls: &[Value]) -> Vec<String> {
+    calls.iter().map(|c| c["externalId"].as_str().unwrap().to_string()).collect()
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_full_walk_writes_every_event_and_message_and_keeps_secrets_out_of_everything() {
+    let f = Fixture::new();
+    let id = f.connect(f.a, "code-walk");
+    f.add_event("Planning");
+    f.add_event("Review");
+    let one = f.mail("one");
+    let two = f.mail("two");
+    assert_eq!(f.sync(f.a, id, false)["outcome"], "done");
+    assert_eq!(f.seen.named("upsertCachedEvent").len(), 2);
+    assert_eq!(f.seen.named("pruneCachedEvents").len(), 1);
+    let mut inserted = externals(&f.seen.named("insertCachedMessage"));
+    inserted.sort();
+    let mut want = vec![one, two];
+    want.sort();
+    assert_eq!(inserted, want, "each message once even though two phases list it");
+    let row = f.row(id);
+    assert_eq!(row["last_sync_status"], "success");
+    assert_eq!(row["last_sync_counts"]["calendarUpserted"], 2);
+    assert!(row["email_history_id"].is_string(), "the Gmail position is saved after a full success");
+    // No token, client secret or mail body text reaches anything the package sent or the account row.
+    let everything = format!("{} {}", f.seen.text(), row);
+    for secret in [ACCESS, REFRESH, CLIENT_SECRET] {
+        assert!(!everything.contains(secret), "{secret} leaked");
+    }
+    assert!(!f.seen.text().contains(BODY_TEXT), "message text beyond the snippet never travels");
+    for (port, _, params) in f.seen.0.lock().unwrap().iter().filter(|c| c.0 == "jobs") {
+        assert!(params.to_string().len() < 1500, "{port}: job payloads stay small");
+    }
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_second_run_reads_only_what_changed_and_survives_a_deleted_message() {
+    let f = Fixture::new();
+    let id = f.connect(f.a, "code-history");
+    let keep = f.mail("keep");
+    let gone = f.mail("gone");
+    assert_eq!(f.sync(f.a, id, false)["outcome"], "done");
+    f.seen.clear();
+    f.fake.add_label(&keep, "STARRED");
+    f.fake.delete_message(&gone);
+    let late = f.mail("late");
+    assert_eq!(f.sync(f.a, id, false)["outcome"], "done");
+    let mut inserted = externals(&f.seen.named("insertCachedMessage"));
+    inserted.sort();
+    let mut want = vec![keep, late];
+    want.sort();
+    assert_eq!(inserted, want, "the changed and the new message are written, the deleted one is skipped");
+    assert_eq!(f.row(id)["last_sync_status"], "success");
+    assert!(f.fake.requests().iter().any(|r| r.contains("history")), "the second run used the saved position");
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_second_person_can_neither_start_nor_read_through_another_persons_account() {
+    let f = Fixture::new();
+    let id = f.connect(f.a, "code-rls");
+    f.mail("private");
+    let before = f.fake.requests().len();
+    let outcome = f.sync(f.b, id, false);
+    assert_eq!(outcome["outcome"], "inactive", "{outcome}");
+    assert_eq!(f.fake.requests().len(), before, "no Google call is made for someone else's account");
+    assert!(f.seen.named("insertCachedMessage").is_empty());
+    assert!(f.row(id)["last_sync_started_at"].is_null(), "the owner's row is untouched");
+    // The same update as a superuser does start the run, so the refusal above comes from row-level security.
+    let moved = f
+        .rt
+        .block_on(f.root.execute("UPDATE app.connector_accounts SET last_sync_started_at=now() WHERE id=$1 AND status='active'", &[&id]))
+        .unwrap();
+    assert_eq!(moved, 1);
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn transient_refusals_are_retried_and_a_stubborn_one_is_recorded_without_google_text() {
+    let f = Fixture::new();
+    let id = f.connect(f.a, "code-retry");
+    f.add_event("Retried");
+    f.fake.rate_limit_next(2);
+    assert_eq!(f.sync(f.a, id, false)["outcome"], "done");
+    assert_eq!(f.row(id)["last_sync_status"], "success", "two refusals then success");
+    assert_eq!(f.seen.named("upsertCachedEvent").len(), 1);
+    f.seen.clear();
+    f.fake.rate_limit_next(50);
+    f.sync(f.a, id, false);
+    let row = f.row(id);
+    assert_eq!(row["last_sync_status"], "failed");
+    let detail = &row["last_sync_counts"]["emailErrorDetail"];
+    assert_eq!(detail["status"], 429);
+    assert!(detail["operation"].is_string());
+    let text = row["last_sync_counts"].to_string();
+    assert!(!text.contains("Rate Limit") && !text.contains("message"), "{text}");
+    assert!(f.seen.named("pruneCachedEvents").is_empty(), "a failed walk never prunes");
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_revoked_sign_in_fails_the_run_and_a_second_start_is_refused_while_one_is_going() {
+    let f = Fixture::new();
+    let id = f.connect(f.a, "code-auth");
+    f.fake.revoke_refresh_token(REFRESH);
+    f.fake.expire_access_token(ACCESS);
+    f.sync(f.a, id, false);
+    let row = f.row(id);
+    assert_eq!((row["last_sync_status"].clone(), row["last_sync_error"].clone()), (json!("failed"), json!("auth-error")));
+    // A run that never finished blocks the next start for a while.
+    f.rt.block_on(f.root.execute("UPDATE app.connector_accounts SET last_sync_status=NULL, last_sync_started_at=now() WHERE id=$1", &[&id])).unwrap();
+    assert_eq!(f.sync(f.a, id, false)["outcome"], "busy");
+}

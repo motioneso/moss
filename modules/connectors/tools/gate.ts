@@ -23,6 +23,8 @@ const run = spawnSync(
     "--test",
     "google",
     "--test",
+    "google_sync",
+    "--test",
     "imap",
     "--",
     "--ignored",
