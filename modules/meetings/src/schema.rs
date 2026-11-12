@@ -11,6 +11,9 @@ pub enum Kind {
     Uuid,
     Text { min: usize, max: usize },
     Int { min: i64, max: i64 },
+    Enum(&'static [&'static str]),
+    /// Present and checked elsewhere.
+    Any,
 }
 
 fn object<'a>(var: &str, value: &'a Value) -> Result<&'a Map<String, Value>, Failure> {
@@ -36,6 +39,12 @@ fn check(var: &str, name: &str, kind: Kind, value: &Value) -> Result<(), Failure
             }
             Ok(())
         }
+        Kind::Any => Ok(()),
+        Kind::Enum(allowed) => match value {
+            Value::String(s) if allowed.contains(&s.as_str()) => Ok(()),
+            Value::Array(_) | Value::Object(_) => Err(format!("{at} must be string")),
+            _ => Err(format!("{at} must be equal to one of the allowed values")),
+        },
         Kind::Int { min, max } => {
             let n = int_value(value).ok_or_else(|| format!("{at} must be integer"))?;
             if n > max {
@@ -73,9 +82,18 @@ pub fn strict_object(
     let map = value.as_object_mut().expect("checked object");
     for (name, kind) in props {
         if let Some(slot) = map.get_mut(*name) {
+            if let Value::Array(items) = &*slot {
+                if items.len() == 1 {
+                    *slot = items[0].clone();
+                }
+            }
             if let (Kind::Int { .. }, Value::String(s)) = (kind, &*slot) {
-                if let Ok(n) = s.parse::<i64>() {
-                    *slot = Value::from(n);
+                if let Some(f) = crate::js::js_number(s) {
+                    if f.is_infinite() {
+                        *slot = Value::from(if f > 0.0 { i64::MAX } else { i64::MIN });
+                    } else if f.fract() == 0.0 && f.abs() < 9.2e18 {
+                        *slot = Value::from(f as i64);
+                    }
                 }
             }
             check(var, name, *kind, slot)?;

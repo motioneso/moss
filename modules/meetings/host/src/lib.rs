@@ -10,6 +10,9 @@ use std::{
 };
 
 pub mod package;
+pub mod store;
+
+type Work<'a> = std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value>> + 'a>>;
 
 pub const RESOURCE: &str = "meetings.preferences";
 pub const PREFERENCE_KEYS: [&str; 6] = [
@@ -44,6 +47,45 @@ impl MeetingsPorts {
             .lock()
             .map_err(|_| anyhow::anyhow!("Meetings preferences busy"))?
             .remove(&scope.call_id().to_string()))
+    }
+
+    /// Runs one store operation in the call's transaction, opening it on first use.
+    fn run(&self, scope: &CallScope, work: impl for<'a> FnOnce(&'a DataContext) -> Work<'a>) -> Result<Value> {
+        let reused = self.take(scope)?;
+        let (cx, out) = self.runtime.block_on(async {
+            tokio::time::timeout(scope.remaining(), async {
+                let cx = match reused {
+                    Some(cx) => cx,
+                    None => DataContext::open_bounded(&self.database, scope.access(), scope.remaining())
+                        .await
+                        .map_err(|_| anyhow::anyhow!("Meetings store unavailable"))?,
+                };
+                let timeout = scope.remaining().as_millis().clamp(1, 30_000).to_string();
+                cx.db()
+                    .query_one("SELECT set_config('statement_timeout',$1,true)", &[&timeout])
+                    .await?;
+                let out = work(&cx).await?;
+                Ok::<_, anyhow::Error>((cx, out))
+            })
+            .await
+            .map_err(|_| anyhow::anyhow!("Meetings store deadline expired"))?
+        })?;
+        self.pending
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Meetings store busy"))?
+            .insert(scope.call_id().to_string(), cx);
+        Ok(out)
+    }
+
+    fn store(&self, scope: &CallScope, request: &Request) -> Result<Value> {
+        let parameters = request.parameters.clone();
+        match (request.resource.as_str(), request.operation.as_str()) {
+            (store::TRANSCRIPTS, "get") => self.run(scope, move |cx| Box::pin(async move { store::read(cx, &parameters, false).await })),
+            (store::TRANSCRIPTS, "lock") => self.run(scope, move |cx| Box::pin(async move { store::read(cx, &parameters, true).await })),
+            (store::TRANSCRIPTS, "set") => self.run(scope, move |cx| Box::pin(async move { store::write(cx, &parameters).await })),
+            (store::HISTORY, "get") => self.run(scope, move |cx| Box::pin(async move { store::history(cx, &parameters).await })),
+            _ => anyhow::bail!("Unsupported Meetings store operation"),
+        }
     }
 
     fn preferences(&self, scope: &CallScope, request: &Request) -> Result<Value> {
@@ -134,11 +176,16 @@ impl MeetingsPorts {
 }
 impl Ports for MeetingsPorts {
     fn invoke(&self, scope: &CallScope, port: &str, request: &Request) -> Result<Value> {
-        if port != "kv" || request.resource != RESOURCE || scope.module().id != "meetings" {
+        let ours = [RESOURCE, store::TRANSCRIPTS, store::HISTORY];
+        if port != "kv" || !ours.contains(&request.resource.as_str()) || scope.module().id != "meetings" {
             return self.next.invoke(scope, port, request);
         }
         moss_module_host::runtime::authorize(scope.module(), port, request)?;
-        self.preferences(scope, request)
+        if request.resource == RESOURCE {
+            self.preferences(scope, request)
+        } else {
+            self.store(scope, request)
+        }
     }
     fn finish_call(&self, scope: &CallScope, success: bool) -> Result<()> {
         let pending = self.take(scope)?;
