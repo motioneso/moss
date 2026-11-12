@@ -29,6 +29,11 @@ impl Fixture {
             tokio::spawn(async move {
                 let _ = c.await;
             });
+            // The delete rule the host adds when it installs the Email package.
+            let mut root = root;
+            let tx = root.transaction().await.unwrap();
+            moss_module_host::rls::emit_owner_delete(&tx, "app.email_messages").await.unwrap();
+            tx.commit().await.unwrap();
             root.execute(
                 "INSERT INTO app.users(id,email,name,is_instance_admin) VALUES($1,$3,'Mail A',false),($2,$4,'Mail B',false)",
                 &[&a, &b, &format!("{a}@example.test"), &format!("{b}@example.test")],
