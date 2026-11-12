@@ -331,9 +331,47 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
     let token_url = google_lines["token-url"].clone();
     let google_id = google_lines["client-id"].clone();
     let google_secret = google_lines["client-secret"].clone();
+    // The fake mail server also runs as its own process, serving TLS with a throwaway
+    // certificate that the test-only setting trusts. A real provider is never contacted.
+    let mail_certificate = root.join("fake-mail.cert.pem");
+    let mut fake_mail = Server(
+        Command::new(std::env::var("JS237_FAKE_MAIL").expect("the gate must supply the fake mail server"))
+            .arg(&mail_certificate)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap(),
+    );
+    let mut mail_lines = std::collections::HashMap::new();
+    {
+        use std::io::BufRead;
+        let mut out = std::io::BufReader::new(fake_mail.0.stdout.take().unwrap());
+        let (lines, received) = std::sync::mpsc::channel::<String>();
+        std::thread::spawn(move || {
+            let mut line = String::new();
+            while out.read_line(&mut line).is_ok_and(|n| n > 0) {
+                if lines.send(line.trim().to_owned()).is_err() {
+                    break;
+                }
+                line.clear();
+            }
+        });
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while ["imap-port", "smtp-port", "username", "password"].iter().any(|k| !mail_lines.contains_key(*k)) {
+            let left = deadline.saturating_duration_since(Instant::now());
+            let line = received
+                .recv_timeout(left)
+                .unwrap_or_else(|_| panic!("the fake mail server did not print its startup lines in 15s; got {mail_lines:?}"));
+            if let Some((key, value)) = line.split_once(' ') {
+                mail_lines.insert(key.to_owned(), value.to_owned());
+            }
+        }
+    }
     private(
         &root.join("modules.json"),
-        &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"test_only_google_token_url":token_url}),
+        &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"test_only_google_token_url":token_url,
+            "test_only_mail":{"imap_port":mail_lines["imap-port"].parse::<u16>().unwrap(),"imap_tls":true,"smtp_port":mail_lines["smtp-port"].parse::<u16>().unwrap(),"smtp_security":"implicit_tls","trusted_certificate":mail_certificate}}),
     );
     let _server = start(true);
     let log = || fs::read_to_string(root.join("server.log")).unwrap_or_default();
@@ -528,12 +566,68 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
         });
         println!("PASS Google secrets and tokens absent from the server log and every stored row; no pending sign-in left");
     }
+    {
+        // Mail connect over HTTPS against the fake mail server. The password must not reach
+        // any response, the server log or any stored row; the stored bundle is sealed.
+        let username = mail_lines["username"].clone();
+        let password = mail_lines["password"].clone();
+        let good = json!({"providerId":"imap-yahoo","username":username,"password":password});
+        let wrong = json!({"providerId":"imap-yahoo","username":username,"password":"not-the-password"});
+        let tested = call(Method::POST, "/imap/test-connection", Some(&cookie), Some(good.clone()));
+        assert_eq!((tested.0, json_of(&tested.1)), (200, json!({"result":"ok"})), "{}", tested.1);
+        let refused = call(Method::POST, "/imap/test-connection", Some(&cookie), Some(wrong.clone()));
+        assert_eq!((refused.0, json_of(&refused.1)), (200, json!({"result":"auth_failed"})), "{}", refused.1);
+        let bad = call(Method::POST, "/imap/connect", Some(&cookie), Some(wrong));
+        assert_eq!(bad.0, 400, "{}", bad.1);
+        assert_eq!(json_of(&bad.1)["error"], "The mail server rejected the supplied username/password");
+        let unauthenticated = call(Method::POST, "/imap/connect", None, Some(good.clone()));
+        assert_eq!(unauthenticated.0, 401);
+        let connected = call(Method::POST, "/imap/connect", Some(&cookie), Some(good.clone()));
+        assert_eq!(connected.0, 201, "{}", connected.1);
+        let account = json_of(&connected.1)["account"].clone();
+        assert_eq!(account["providerId"], "imap-yahoo");
+        let again = call(Method::POST, "/imap/connect", Some(&cookie), Some(good));
+        assert_eq!(again.0, 201, "{}", again.1);
+        assert_eq!(json_of(&again.1)["account"]["id"], account["id"], "a second connect updates the same account");
+        seen.extend([tested.1, refused.1, bad.1, connected.1, again.1]);
+        for body in &seen {
+            assert!(!body.contains(&password), "mail password in a response: {body}");
+        }
+        assert!(!log().contains(&password), "mail password in the server log");
+        runtime.block_on(async {
+            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+            tokio::spawn(async move {
+                let _ = connection.await;
+            });
+            let tables = db
+                .query("SELECT table_schema, table_name FROM information_schema.tables WHERE table_type='BASE TABLE' AND table_schema NOT IN ('pg_catalog','information_schema')", &[])
+                .await
+                .unwrap();
+            for row in tables {
+                let (schema, name): (String, String) = (row.get(0), row.get(1));
+                let hits: i64 = db
+                    .query_one(&format!("SELECT count(*) FROM \"{schema}\".\"{name}\" t WHERE to_jsonb(t)::text LIKE '%' || $1 || '%'"), &[&password])
+                    .await
+                    .unwrap()
+                    .get(0);
+                assert_eq!(hits, 0, "mail password found in {schema}.{name}");
+            }
+            let control: i64 = db
+                .query_one("SELECT count(*) FROM app.connector_accounts t WHERE to_jsonb(t)::text LIKE '%' || $1 || '%'", &[&"email.read"])
+                .await
+                .unwrap()
+                .get(0);
+            assert!(control >= 1, "the search must find the stored mail account");
+        });
+        println!("PASS mail connect on the real server: good and wrong password, test-connection, sign-in required, one account on repeat; password absent from every response, the server log and every stored row");
+    }
+    drop(fake_mail);
     drop(fake_google);
     if let Ok(seconds) = std::env::var("MOSS_CONNECTORS_HOLD_SECONDS") {
         println!("HOLD {origin} for {seconds}s");
         std::thread::sleep(Duration::from_secs(seconds.parse().unwrap_or(0)));
     }
-    println!("NOT PROVEN: a second person over HTTP (setup allows one owner; proven in the database test), a second physical device");
+    println!("NOT PROVEN: a second person over HTTP (setup allows one owner; proven in the database test), a second physical device, a real mail provider, the STARTTLS upgrade");
 }
 const MARKER: &str = "SENTINEL-PASSWORD-7f3a";
 const MARKER_TOKEN: &str = "SENTINEL-ACCESS-TOKEN-91bc";

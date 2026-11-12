@@ -59,3 +59,76 @@ Commands: `pnpm test:rust-email` and `pnpm test:rust-email-live`, both through t
 - Connectors will need to call Email while Email requires Connectors. That is a possible circular
   install order and needs a decision in the sync part.
 - The marker search over the server log covers the live run only.
+
+# Part 4: IMAP and SMTP connect
+
+## What was built
+
+- The Connectors package can now save a mail account for Yahoo, Proton Bridge, iCloud or Fastmail
+  and test the sign-in first. Two routes: `POST /api/connectors/imap/test-connection` and
+  `POST /api/connectors/imap/connect`. Status codes, answer shapes and error text match the old
+  routes (79 route comparisons pass against the real old route code).
+- The server addresses come only from the provider choice. A request cannot name a host or port,
+  so it cannot point the server at an internal address.
+- The host does all mail traffic, seals the password and stores it. The sealed bundle uses the
+  same AES-256-GCM format as the old app, and the password never reaches logs, jobs, answers or
+  stored rows in plain text. Accounts stay private to their owner through row-level security.
+- The password does pass through the guest. The server hands the whole request body to the
+  package, the guest checks it and forwards it to the host in one call, and the guest never keeps
+  or returns it. The guest is the signed Connectors package, not outside code. Keeping the
+  password out of the guest entirely would mean the host taking the body before the package runs.
+  That changes how every module is called, so it needs a decision before it is built.
+- A failed sign-in saves nothing. Connecting again with the same account updates the same row.
+- No screen was built. No approved connection-form mockup exists in
+  `docs/superpowers/specs/mockups`, so the form waits for a design discussion with Ben.
+- Nothing is scheduled. The 15-minute sync belongs to part 5.
+
+## Third-party code
+
+| Crate      | Version | Licence           | Why                                                                                                                  |
+| ---------- | ------- | ----------------- | -------------------------------------------------------------------------------------------------------------------- |
+| async-imap | 0.12    | MIT OR Apache-2.0 | Maintained by the Delta Chat team, last release 2026-09-30. Pure Rust, runs on tokio, no OpenSSL.                    |
+| lettre     | 0.11.23 | MIT               | The standard Rust SMTP client, last release 2026-08-03. Features limited to tokio and rustls with the ring provider. |
+
+- The mail parser is not added in part 4, because connect never reads a message. mail-parser
+  1.0.1 is the recommendation for part 5, after its licence is checked there.
+- tokio-rustls 0.26 and webpki-roots 1 are now direct dependencies of the host. Both were already
+  in the lock file. Ben should know, since the approval named three crate kinds.
+- The tree has no OpenSSL, no aws-lc and no platform verifier.
+- All 29 new packages in the host lock file are under permissive licences (MIT, Apache-2.0, Zlib,
+  0BSD, or CDLA-Permissive-2.0 for the root certificate list). self_cell offers Apache-2.0 as an
+  alternative to GPL-2.0, and Apache-2.0 is the one that applies. The repo has no dependency
+  licence checker and installing one needs approval, so the check was a read of each package's
+  declared licence.
+
+## Proof
+
+- Stand-in IMAP and SMTP servers on this machine, with real TLS and throwaway certificates:
+  good sign-in, wrong password on IMAP and on SMTP, connection limit, untrusted certificate,
+  wrong-host certificate, and a closed port.
+- A two-person test in the database, seen failing with row security switched off.
+- A password marker searched for in every answer, the log and every stored row, with a check that
+  the search finds a planted value.
+- A live run on the real server over HTTPS against a stand-in mail server.
+
+## Differences from the old app
+
+- The 79 route comparisons stand in fake sign-in results keyed on the password, so they prove
+  status codes, answer shapes and error text, not the real sign-in classification. The
+  classification is proven only against the stand-in servers.
+- A wrong SMTP password and any certificate error are now reported as "rejected username/password"
+  and "could not establish a secure connection". The old code reported both as "could not reach
+  the mail server".
+- Reaching the mail server through plain mode tries an upgrade to TLS and carries on without it if
+  the server refuses, as the old library did.
+
+## Not proven
+
+- A real mail account. None is reachable from here.
+- The STARTTLS upgrade, on IMAP or SMTP. The stand-in has none.
+- A second physical device.
+- The test-only mail setting is refused by any release build of the server, so a production
+  install cannot be pointed at a stand-in server. That refusal was written but not run, because
+  every gate here uses a debug build.
+- No logger is installed in the shell, so the IMAP library's trace lines go nowhere. If a logger
+  is added later, check that it does not print login lines.

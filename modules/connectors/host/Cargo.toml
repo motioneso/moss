@@ -16,7 +16,11 @@ access-context = { path = "../../../rust-spike/access-context" }
 safety-core = { path = "../../../rust-spike/safety-core" }
 portability = { path = "../../../rust-spike/portability" }
 serde_json = "1"
-tokio = { version = "1", features = ["rt-multi-thread", "sync"] }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "net", "time", "io-util"] }
+async-imap = { version = "0.12", default-features = false, features = ["runtime-tokio"] }
+lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "tokio1", "tokio1-rustls", "ring", "webpki-roots"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+webpki-roots = "1"
 chrono = "0.4"
 reqwest = { version = "0.12", default-features = false, features = ["blocking"] }
 url = "2"
@@ -28,6 +32,7 @@ wat = "=1.239.0"
 moss-standins = { path = "../../../rust-spike/standins" }
 moss-platform-jobs = { path = "../../../rust-spike/module-host/bridges/jobs" }
 base64 = "0.22"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ring = "0.17"
 chrono = "0.4"
 tempfile = "3"

@@ -25,6 +25,8 @@ struct Flight {
 }
 
 pub mod google;
+pub mod imap;
+pub mod mail_probe;
 pub mod package;
 pub mod store;
 
@@ -36,6 +38,7 @@ pub struct ConnectorsPorts {
     next: Arc<dyn Ports>,
     cipher: JsonSecretCipher,
     google: google::GoogleConfig,
+    mail: imap::MailConfig,
     flights: Mutex<HashMap<uuid::Uuid, Arc<Flight>>>,
 }
 
@@ -61,6 +64,7 @@ impl ConnectorsPorts {
             next,
             cipher: connector_cipher(key)?,
             google: google::GoogleConfig::production(),
+            mail: imap::MailConfig::production(),
             flights: Mutex::default(),
         })
     }
@@ -105,6 +109,12 @@ impl ConnectorsPorts {
         })
     }
 
+    /// Points the mail login test at stand-in servers. Only for tests and the test-only setting.
+    pub fn with_mail(mut self, mail: imap::MailConfig) -> Self {
+        self.mail = mail;
+        self
+    }
+
     /// Points Google token requests somewhere else. Only for tests and the test-only setting.
     pub fn with_google(mut self, google: google::GoogleConfig) -> Self {
         self.google = google;
@@ -132,6 +142,8 @@ impl Ports for ConnectorsPorts {
                     .map_err(|_| anyhow::anyhow!("Connectors data unavailable"))?;
                 let result = if request.resource.starts_with("connectors.google-") {
                     google::run(&cx, &self.cipher, &self.google, request).await?
+                } else if request.resource.starts_with("connectors.imap-") {
+                    imap::run(&cx, &self.cipher, &self.mail, request).await?
                 } else {
                     store::run(&cx, &self.cipher, request).await?
                 };

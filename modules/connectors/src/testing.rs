@@ -144,6 +144,23 @@ impl Host for Fake {
                 state.accounts.insert(0, row.clone());
                 json!({"account":row})
             }
+            ("set", "connectors.imap-test" | "connectors.imap-connect") => {
+                let result = match p["password"].as_str().unwrap_or("") {
+                    "wrong" => "auth_failed",
+                    "badcert" => "tls_failed",
+                    "down" => "unreachable",
+                    _ => "ok",
+                };
+                if result != "ok" || resource == "connectors.imap-test" {
+                    return Ok(json!({"result":result}));
+                }
+                state.next += 1;
+                let id = format!("acct-{}", state.next);
+                let provider = p["providerId"].as_str().unwrap_or("");
+                let row = account(&id, provider, json!("imap"), &["email.read"], "active");
+                state.accounts.insert(0, row.clone());
+                json!({"account":row})
+            }
             _ => return Err(Error::new("unknown resource")),
         })
     }

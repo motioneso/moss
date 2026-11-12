@@ -8,6 +8,7 @@ mod abi;
 pub mod accounts;
 pub mod fastify;
 pub mod google;
+pub mod imap;
 pub mod grants;
 pub mod health;
 #[cfg(not(target_arch = "wasm32"))]
@@ -93,6 +94,8 @@ fn route(host: &impl Host, request: RouteRequest) -> Result<(u16, Value)> {
         }
         ("POST", "/google/authorize") => google::authorize(host, &request.body).map(|b| (200, b)),
         ("POST", "/google/complete") => google::complete(host, &request.body),
+        ("POST", "/imap/test-connection") => imap::test_connection(host, &request.body).map(|b| (200, b)),
+        ("POST", "/imap/connect") => imap::connect(host, &request.body),
         ("GET", "/admin/accounts") => accounts::admin_list(host).map(|b| (200, b)),
         _ => Err(Error::new(404, "Connectors route not found")),
     }
