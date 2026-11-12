@@ -4,18 +4,18 @@ Branch `task/258-rust-port-phase-5-meetings-part-9-mac-li`. Part of #4027. Parts
 
 ## Legacy sources (packages/meetings/src)
 
-| File | Part 9 uses |
-| --- | --- |
-| capture-connection-service.ts | register, devices, start, commands, claim |
-| capture-connection-repository.ts | locks, connection rows, retire, occupied, cancel, byRequest, create |
-| capture-repository.ts | view/revision hash, lockMeeting, grants, renewClaim, activate, save, revokeExpired, receipt, reserve, transcriptHead |
-| capture-start-limiter.ts | 10/min and 60/hour rolling budget, DB clock, advisory lock |
-| capture-maintenance.ts | queue `meetings.capture-maintenance`, 5 s successor, deterministic job id |
-| capture-domain.ts | state shape, validateCaptureSelection, applyCaptureControl "record", expireCaptureLease |
-| capture-authorization.ts, capture-binding.ts | auth error mapping, revocation reasons |
-| capture-service.ts | browser origin rules, cancelStart (693-740), native bearer `mm1_` |
-| capture-routes.ts | route table, body schemas, no-store, 131072 body limit |
-| apps/api companion-recording-routes.ts | the two 410 routes (`attempt`, `decide`) |
+| File                                         | Part 9 uses                                                                                                          |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| capture-connection-service.ts                | register, devices, start, commands, claim                                                                            |
+| capture-connection-repository.ts             | locks, connection rows, retire, occupied, cancel, byRequest, create                                                  |
+| capture-repository.ts                        | view/revision hash, lockMeeting, grants, renewClaim, activate, save, revokeExpired, receipt, reserve, transcriptHead |
+| capture-start-limiter.ts                     | 10/min and 60/hour rolling budget, DB clock, advisory lock                                                           |
+| capture-maintenance.ts                       | queue `meetings.capture-maintenance`, 5 s successor, deterministic job id                                            |
+| capture-domain.ts                            | state shape, validateCaptureSelection, applyCaptureControl "record", expireCaptureLease                              |
+| capture-authorization.ts, capture-binding.ts | auth error mapping, revocation reasons                                                                               |
+| capture-service.ts                           | browser origin rules, cancelStart (693-740), native bearer `mm1_`                                                    |
+| capture-routes.ts                            | route table, body schemas, no-store, 131072 body limit                                                               |
+| apps/api companion-recording-routes.ts       | the two 410 routes (`attempt`, `decide`)                                                                             |
 
 Out of scope (later parts): audio, source change, gaps, pause/stop/status control.
 
