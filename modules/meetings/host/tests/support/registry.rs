@@ -88,7 +88,7 @@ pub fn publish_as(
         std::fs::write(folder.join(name), &data).unwrap();
         std::fs::write(folder.join(format!("{name}.sig")), sign(k, &data)).unwrap();
     }
-    std::fs::create_dir(folder.join("packages")).unwrap();
+    std::fs::create_dir_all(folder.join("packages")).unwrap();
     std::fs::write(folder.join(format!("packages/{digest}.mosspkg")), bytes).unwrap();
     (public(&root), public(&publisher), artifact)
 }
