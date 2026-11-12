@@ -191,8 +191,8 @@ pub fn enqueue<H: Host + ?Sized>(host: &H, meeting: &str, key: &str, available_a
     Ok(())
 }
 
-/// Records a pasted transcript's intent and queues its job in the paste's own transaction, so a
-/// queue failure rolls the paste back and a retry is safe.
+/// Records a pasted transcript's intent and asks for its job. The job is published after the
+/// transaction commits, so a failed publish can leave the paste saved without a job.
 pub fn schedule_manual<H: Host + ?Sized>(host: &H, meeting: &str, revision: i64, template_id: &str) -> Result<()> {
     let key = host.call("context", "uuid", "new", json!({}))?["id"].as_str().unwrap_or_default().to_owned();
     outputs::call(

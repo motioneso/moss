@@ -287,6 +287,12 @@ pub fn edit<H: Host + ?Sized>(host: &H, meeting: &str, input: &Edit) -> Result<A
     let Ok(content) = validate(&input.content, &outputs::stored_inputs(&head)) else {
         return Ok(refuse(400, "meeting_output_invalid_input"));
     };
+    // Refuse before reserving, so a limit answer never leaves an unfinished request behind.
+    let next = outputs::call(host, "next", meeting, json!({}))?;
+    let existing = next["candidateIds"].as_array().map_or(0, Vec::len);
+    if next["version"].as_i64().unwrap_or(1) > MAX_VERSION || existing + content.actions.len() > MAX_CANDIDATES {
+        return Ok(refuse(400, "meeting_output_limit"));
+    }
     reserve(host, meeting, &input.request_key, &encoded, None)?;
     let mut base = head.clone();
     for key in ["id", "version", "createdAt"] {
@@ -297,7 +303,6 @@ pub fn edit<H: Host + ?Sized>(host: &H, meeting: &str, input: &Edit) -> Result<A
             finish(host, meeting, &input.request_key, &artifact)?;
             Ok((200, artifact))
         }
-        // The old app threw its limit error here, which is not a stored result.
         Saved::Limit => Ok(refuse(400, "meeting_output_limit")),
     }
 }

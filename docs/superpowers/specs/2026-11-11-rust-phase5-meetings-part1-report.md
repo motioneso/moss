@@ -198,3 +198,5 @@ Slice B connects the summary logic to the database, the routes and a background 
 - A long meeting may exceed the call deadline, because one route call is one transaction.
 - Two calls racing at the same moment were not tested with a real race.
 - The failed-result codes are not yet listed in the app map as errors.
+- The model call runs while the meeting row is locked, so notes saved or summaries listed during a long generate can wait and time out. The old app held no lock during the call. The "busy" and "pending" answers therefore cannot occur.
+- If the job fails to publish after a pasted transcript is saved, a retry returns the first answer and queues nothing, so the summary stays waiting until it expires.
