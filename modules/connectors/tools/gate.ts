@@ -22,6 +22,8 @@ const run = spawnSync(
     "db",
     "--test",
     "google",
+    "--test",
+    "imap",
     "--",
     "--ignored",
     "--nocapture",

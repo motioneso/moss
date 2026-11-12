@@ -409,5 +409,189 @@
     "body": {
       "redirectUrl": 5
     }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/imap/test-connection",
+    "body": {
+      "providerId": "imap-fastmail",
+      "username": "bob@example.com",
+      "password": "pw"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/imap/test-connection",
+    "body": {
+      "providerId": "imap-fastmail",
+      "username": "bob@example.com",
+      "password": "wrong"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/imap/test-connection",
+    "body": {
+      "providerId": "imap-fastmail",
+      "username": "bob@example.com",
+      "password": "badcert"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/imap/test-connection",
+    "body": {
+      "providerId": "imap-fastmail",
+      "username": "bob@example.com",
+      "password": "down"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/imap/test-connection",
+    "body": {
+      "providerId": "imap-other",
+      "username": "bob@example.com",
+      "password": "pw"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/imap/test-connection",
+    "body": {
+      "providerId": "imap-fastmail",
+      "username": "",
+      "password": "pw"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/imap/test-connection",
+    "body": {
+      "providerId": "imap-fastmail",
+      "username": "   ",
+      "password": "pw"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/imap/test-connection",
+    "body": {
+      "providerId": "imap-yahoo",
+      "username": "u"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/imap/test-connection",
+    "body": {
+      "providerId": "imap-fastmail",
+      "username": "bob@example.com",
+      "password": ["pw"],
+      "extra": 1
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/imap/test-connection",
+    "body": {
+      "providerId": "imap-fastmail",
+      "username": "bob@example.com",
+      "password": {
+        "a": 1
+      }
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/imap/connect",
+    "body": {
+      "providerId": "imap-fastmail",
+      "username": "bob@example.com",
+      "password": "pw"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/imap/connect",
+    "body": {
+      "providerId": "imap-fastmail",
+      "username": "bob@example.com",
+      "password": "wrong"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/imap/connect",
+    "body": {
+      "providerId": "imap-fastmail",
+      "username": "bob@example.com",
+      "password": "badcert"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/imap/connect",
+    "body": {
+      "providerId": "imap-fastmail",
+      "username": "bob@example.com",
+      "password": "down"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/imap/connect",
+    "body": {
+      "providerId": "imap-other",
+      "username": "bob@example.com",
+      "password": "pw"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/imap/connect",
+    "body": {
+      "providerId": "imap-fastmail",
+      "username": "",
+      "password": "pw"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/imap/connect",
+    "body": {
+      "providerId": "imap-fastmail",
+      "username": "   ",
+      "password": "pw"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/imap/connect",
+    "body": {
+      "providerId": "imap-yahoo",
+      "username": "u"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/imap/connect",
+    "body": {
+      "providerId": "imap-fastmail",
+      "username": "bob@example.com",
+      "password": ["pw"],
+      "extra": 1
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/connectors/imap/connect",
+    "body": {
+      "providerId": "imap-fastmail",
+      "username": "bob@example.com",
+      "password": {
+        "a": 1
+      }
+    }
   }
 ]

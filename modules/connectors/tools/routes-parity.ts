@@ -7,6 +7,7 @@ import Fastify from "fastify";
 import { setMossErrorHandler } from "../../../apps/api/src/error-handling.js";
 import { registerConnectorsRoutes } from "../../../packages/connectors/src/routes.js";
 import { GoogleConnectError } from "../../../packages/connectors/src/google-connection.js";
+import { ImapConnectError } from "../../../packages/connectors/src/imap-connection.js";
 
 const binary = process.env.CONNECTORS_ORACLE;
 assert(binary, "Build the connectors oracle first");
@@ -43,6 +44,15 @@ const providers = [
   created_at: TIME,
   updated_at: TIME
 }));
+
+const imapResult = (password: string) =>
+  password === "wrong"
+    ? "auth_failed"
+    : password === "badcert"
+      ? "tls_failed"
+      : password === "down"
+        ? "unreachable"
+        : "ok";
 
 let admin = "ok";
 let next = 0;
@@ -146,7 +156,23 @@ registerConnectorsRoutes(server, {
       return created;
     }
   } as unknown as never,
-  imapService: {} as unknown as never
+  imapService: {
+    testConnection: async (input: { password: string }) => ({ result: imapResult(input.password) }),
+    connect: async (_db: unknown, input: { providerId: string; password: string }) => {
+      const result = imapResult(input.password);
+      if (result !== "ok")
+        throw new ImapConnectError(
+          result === "auth_failed"
+            ? "The mail server rejected the supplied username/password"
+            : result === "tls_failed"
+              ? "Could not establish a secure connection to the mail server"
+              : "Could not reach the mail server"
+        );
+      const created = row(`acct-${++next}`, input.providerId, ["email.read"], "active");
+      accounts.unshift(created);
+      return created;
+    }
+  } as unknown as never
 });
 
 try {
