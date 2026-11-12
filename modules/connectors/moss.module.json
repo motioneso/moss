@@ -10,10 +10,7 @@
   "capabilities": [
     {
       "port": "kv",
-      "operations": [
-        "get",
-        "set"
-      ],
+      "operations": ["get", "set"],
       "resources": [
         "connectors.providers",
         "connectors.accounts",
@@ -131,9 +128,7 @@
   ],
   "requires": {},
   "provides": {},
-  "icons": [
-    "icons/connectors.svg"
-  ],
+  "icons": ["icons/connectors.svg"],
   "accounts": {
     "supportsUserDisable": false,
     "defaultEnabled": true
