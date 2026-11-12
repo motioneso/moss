@@ -151,7 +151,7 @@ impl Fixture {
         let out = Host::new(Limits::default())
             .unwrap()
             .call(&wasm, Arc::new(package::manifest().unwrap()), AccessContext::new(actor, "refresh-proof"), self.ports.clone(), entry, &payload.to_string())
-            .unwrap();
+            .unwrap_or_else(|e| panic!("{entry} {}: {e}", payload.to_string().chars().take(400).collect::<String>()));
         serde_json::from_str(&out).unwrap()
     }
 
@@ -219,6 +219,17 @@ impl Fixture {
         self.rt.block_on(self.root.query(sql, &[])).unwrap().iter().map(|r| r.get(0)).collect()
     }
 
+    /// Every row of the named refresh tables that belongs to this fixture's two people.
+    /// The database is shared by all tests, so a whole-table read would see other tests' rows.
+    fn mine(&self, tables: &[&str]) -> Vec<Value> {
+        let sql = tables
+            .iter()
+            .map(|t| format!("SELECT to_jsonb(t) FROM app.{t} t WHERE t.owner_user_id IN ('{}','{}')", self.a, self.b))
+            .collect::<Vec<_>>()
+            .join(" UNION ALL ");
+        self.rows(&sql)
+    }
+
     fn mail_body(&self) {
         let raw = format!("From: Alice <alice@example.com>\r\nTo: bob@example.com\r\nSubject: Hello\r\nMessage-ID: <h@example.com>\r\nContent-Type: text/plain\r\n\r\n{BODY_TEXT}");
         self.mail.add_message("INBOX", &raw);
@@ -274,7 +285,7 @@ fn no_mail_text_secret_or_address_reaches_a_job_payload_the_status_or_a_refresh_
         }
         assert!(call.params.to_string().len() < 1500);
     }
-    let rows = f.rows("SELECT to_jsonb(r) FROM app.connector_email_refreshes r UNION ALL SELECT to_jsonb(k) FROM app.connector_email_refresh_keys k UNION ALL SELECT to_jsonb(a) FROM app.connector_email_refresh_accounts a");
+    let rows = f.mine(&["connector_email_refreshes", "connector_email_refresh_keys", "connector_email_refresh_accounts"]);
     let everything = format!("{} {} {}", f.seen.text(), status, serde_json::to_string(&rows).unwrap());
     for secret in [ACCESS, REFRESH, CLIENT_SECRET, PASSWORD, BODY_TEXT, "alice@example.com", "Hello"] {
         assert!(!everything.contains(secret), "{secret} leaked");
@@ -348,7 +359,7 @@ fn a_failed_send_stays_pending_and_the_sweep_retries_it_then_gives_up_after_thre
     let (_, body) = f.start(f.a, Uuid::new_v4());
     assert_eq!(body["enqueued"], false, "{body}");
     let id = body["refreshId"].as_str().unwrap().to_string();
-    let row = f.rows("SELECT to_jsonb(a) FROM app.connector_email_refresh_accounts a");
+    let row = f.mine(&["connector_email_refresh_accounts"]);
     assert_eq!((row[0]["dispatch_status"].clone(), row[0]["dispatch_attempts"].clone(), row[0]["status"].clone()), (json!("pending"), json!(1), json!("queued")));
     // The sweep sends it, and the refresh then runs to its end.
     f.call(f.a, "job", json!({"queue":"email-refresh-sweep","parameters":{"round":0}}));
@@ -393,7 +404,7 @@ fn bad_requests_are_refused_before_anything_is_stored() {
     assert_eq!(f.route(f.a, "POST", "/email-refresh", json!({}), json!({"idempotencyKey":"not-a-uuid"})).0, 400);
     assert_eq!(f.status(f.a, "not-a-uuid").0, 400);
     assert_eq!(f.status(f.a, &Uuid::new_v4().to_string()).0, 404);
-    assert!(f.rows("SELECT to_jsonb(r) FROM app.connector_email_refreshes r").is_empty());
+    assert!(f.mine(&["connector_email_refreshes"]).is_empty());
 }
 
 #[test]
@@ -413,7 +424,7 @@ fn a_second_person_can_neither_read_nor_change_another_persons_refresh() {
     let job = json!({"queue":"email-refresh-google","parameters":params});
     let refused = f.call(f.b, "job", job.clone());
     assert_eq!(refused["outcome"], "skipped", "{refused}");
-    let state = |f: &Fixture| f.rows("SELECT to_jsonb(a) FROM app.connector_email_refresh_accounts a").into_iter().map(|a| a["status"].clone()).collect::<Vec<_>>();
+    let state = |f: &Fixture| f.mine(&["connector_email_refresh_accounts"]).into_iter().map(|a| a["status"].clone()).collect::<Vec<_>>();
     assert_eq!(state(&f), vec![json!("queued")], "A's account row is untouched");
     // With row-level security off on the refresh tables the same job reaches A's row, so the refusal above is the protection.
     let tables = ["connector_email_refreshes", "connector_email_refresh_keys", "connector_email_refresh_accounts"];
