@@ -499,6 +499,14 @@ fn installed_memory_package_serves_routes_from_the_real_server() {
     let waiting = json_of(&text)["otherModel"].as_i64().unwrap_or(0);
     assert!(status == 200 && waiting > 0, "{text}");
     println!("re-embed notice: {waiting} passages use another model");
+    // Hold the server open so the screen can be opened in a browser.
+    if let Ok(hold) = std::env::var("MEMORY_LIVE_HOLD") {
+        let (frame, _) = (format!("{origin}/module-frame?module=memory&path=/settings/memory/search-model"), 0);
+        fs::write(format!("{hold}/ready.txt"), format!("{frame}\n")).unwrap();
+        while !std::path::Path::new(&format!("{hold}/stop")).exists() {
+            std::thread::sleep(Duration::from_millis(500));
+        }
+    }
     let (status, text) = call(Method::POST, "/reembed/start", Some(&cookie), Some(json!({})));
     assert_eq!(status, 200, "{text}");
     let started = Instant::now();
@@ -529,14 +537,6 @@ fn installed_memory_package_serves_routes_from_the_real_server() {
     assert_eq!(json_of(&text)["run"]["status"], if cancelled { "cancelled" } else { "done" }, "{text}");
     println!("second run cancelled: {cancelled}");
     assert_eq!(call(Method::GET, "/reembed", None, None).0, 401);
-    // Hold the server open so the screen can be opened in a browser.
-    if let Ok(hold) = std::env::var("MEMORY_LIVE_HOLD") {
-        let (frame, _) = (format!("{origin}/module-frame?module=memory&path=/settings/memory"), 0);
-        fs::write(format!("{hold}/ready.txt"), format!("{frame}\n")).unwrap();
-        while !std::path::Path::new(&format!("{hold}/stop")).exists() {
-            std::thread::sleep(Duration::from_millis(500));
-        }
-    }
     // Memory text stays out of the server log.
     let log = log();
     assert!(!log.contains("oolong") && !log.contains("jasmine") && !log.contains("matcha") && !log.contains("paper diary") && !log.contains("reads before bed"), "memory text in log");
