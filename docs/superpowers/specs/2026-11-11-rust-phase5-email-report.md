@@ -90,6 +90,11 @@ Commands: `pnpm test:rust-email` and `pnpm test:rust-email-live`, both through t
 - tokio-rustls 0.26 and webpki-roots 1 are now direct dependencies of the host. Both were already
   in the lock file. Ben should know, since the approval named three crate kinds.
 - The tree has no OpenSSL, no aws-lc and no platform verifier.
+- All 29 new packages in the host lock file are under permissive licences (MIT, Apache-2.0, Zlib,
+  0BSD, or CDLA-Permissive-2.0 for the root certificate list). self_cell offers Apache-2.0 as an
+  alternative to GPL-2.0, and Apache-2.0 is the one that applies. The repo has no dependency
+  licence checker and installing one needs approval, so the check was a read of each package's
+  declared licence.
 
 ## Proof
 
