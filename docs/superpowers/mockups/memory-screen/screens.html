@@ -1,0 +1,141 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Memory screen</title>
+<link rel="stylesheet" href="../../../../apps/web/src/styles/tokens.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-core.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-row-controls.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-sections.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-moss.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-moss-today.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-forms.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-keyline.css"><link rel="stylesheet" href="../../../../packages/ui/src/styles/components-tabs.css">
+<style>
+@font-face{font-family:"Archivo";font-style:normal;font-weight:400;font-display:swap;src:url("../classifier-gate/fonts/archivo-latin-400-normal.woff2") format("woff2")}@font-face{font-family:"Archivo";font-style:normal;font-weight:500;font-display:swap;src:url("../classifier-gate/fonts/archivo-latin-500-normal.woff2") format("woff2")}@font-face{font-family:"Archivo";font-style:normal;font-weight:600;font-display:swap;src:url("../classifier-gate/fonts/archivo-latin-600-normal.woff2") format("woff2")}@font-face{font-family:"Archivo";font-style:normal;font-weight:700;font-display:swap;src:url("../classifier-gate/fonts/archivo-latin-700-normal.woff2") format("woff2")}@font-face{font-family:"Archivo";font-style:normal;font-weight:800;font-display:swap;src:url("../classifier-gate/fonts/archivo-latin-800-normal.woff2") format("woff2")}@font-face{font-family:"Archivo";font-style:normal;font-weight:900;font-display:swap;src:url("../classifier-gate/fonts/archivo-latin-900-normal.woff2") format("woff2")}
+
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans)}
+.bar{display:flex;gap:var(--space-4);align-items:center;padding:var(--space-3) var(--space-5);border-bottom:1px solid var(--border);background:var(--surface);flex-wrap:wrap}
+.bar b{font-family:var(--font-display)}
+.stage{padding:var(--space-5)}
+.dev{margin:0 auto;background:var(--bg);border:1px solid var(--border-strong);border-radius:var(--radius-md,6px);overflow:hidden}
+.dev.desk{max-width:1500px}
+.dev.mob{width:390px}
+.apphead{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-3) var(--space-5);border-bottom:1px solid var(--border);font-family:var(--font-display)}.cog{display:inline-flex;padding:6px;border-radius:6px;background:var(--surface-2)}
+/* settings frame */
+.set{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:640px}
+.mob .set{grid-template-columns:1fr}
+.nav{border-right:1px solid var(--border);padding:var(--space-5) var(--space-4);display:flex;flex-direction:column;gap:var(--space-1);font-size:var(--text-sm)}
+.mob .nav{display:none}
+.nav span{padding:var(--space-2) var(--space-3);border-radius:var(--radius-sm,4px);color:var(--text-muted)}
+.nav span[aria-current]{background:var(--surface-2);color:var(--text);font-weight:var(--weight-semibold)}
+.main{padding:var(--space-6);min-width:0}
+.mob .main{padding:var(--space-4)}
+.phead{display:flex;justify-content:space-between;align-items:center;gap:var(--space-4);margin-bottom:var(--space-4);flex-wrap:wrap}
+.phead h1{margin:0;font:var(--weight-semibold) var(--text-3xl)/1.2 var(--font-display);letter-spacing:-.5px}
+.mob .phead h1{font-size:var(--text-2xl)}
+.tabs{display:flex;gap:var(--space-5);border-bottom:1px solid var(--border);margin:var(--space-4) 0}
+.tabs [role=tab]{white-space:nowrap;background:none;border:0;border-bottom:2px solid transparent;padding:var(--space-2) 0;font:inherit;font-size:var(--text-sm);color:var(--text-muted);cursor:pointer;margin-bottom:-1px}
+.tabs [role=tab][aria-selected=true]{color:var(--text);border-bottom-color:var(--accent-fg);font-weight:var(--weight-semibold)}
+.mob .tabs{gap:var(--space-3)}.mob .dk{display:none}.desk .mb{display:none}.tabs .jds-badge{margin-left:var(--space-2)}
+.filters{display:flex;gap:var(--space-3);flex-wrap:wrap;align-items:center;margin-bottom:var(--space-4)}
+.filters .jds-input{flex:1 1 240px;min-width:0}
+.mob .filters .jds-input{flex-basis:100%}
+.filters .jds-select{min-width:130px}
+.counts{display:flex;gap:var(--space-5);font-size:var(--text-sm);color:var(--text-muted);margin-bottom:var(--space-3);flex-wrap:wrap}
+.counts b{color:var(--text);font-weight:var(--weight-semibold)}
+.split{display:grid;grid-template-columns:minmax(0,1fr) 420px;gap:var(--space-6);align-items:start}
+.mob .split{grid-template-columns:1fr}
+.list{border-top:1px solid var(--border)}
+.row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--space-1) var(--space-4);padding:var(--space-4) var(--space-3);border-bottom:1px solid var(--border);cursor:pointer;align-items:center}
+.row[aria-current]{background:var(--surface-2)}
+.row p{margin:0;font:var(--weight-semibold) var(--text-md) var(--font-display)}
+.row small{display:block;color:var(--text-subtle);font-size:var(--text-xs);margin-top:var(--space-1)}
+.row .meta{display:flex;gap:var(--space-2);align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.mob .row{grid-template-columns:1fr}.mob .row .meta{justify-content:flex-start}
+.pager{display:flex;justify-content:space-between;align-items:center;padding:var(--space-4) var(--space-3);font-size:var(--text-sm);color:var(--text-muted)}
+.detail{border:1px solid var(--border);background:var(--surface);border-radius:var(--radius-md,6px);padding:var(--space-5);position:sticky;top:var(--space-4)}
+.mob .detail{position:static}
+.detail h2{margin:0 0 var(--space-2);font:var(--weight-semibold) var(--text-xl)/1.3 var(--font-display)}
+.kv{display:grid;grid-template-columns:110px minmax(0,1fr);gap:var(--space-2) var(--space-4);font-size:var(--text-sm);margin:var(--space-4) 0}
+.kv dt{color:var(--text-subtle)}.kv dd{margin:0}
+.acts{display:flex;gap:var(--space-2);flex-wrap:wrap;margin-top:var(--space-4)}
+.sep{border-top:1px solid var(--border);margin:var(--space-4) 0}
+.form .jds-field{margin-bottom:var(--space-4)}
+.form .two{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4)}
+.sheet{position:relative}
+.back{background:none;border:0;padding:0;margin-bottom:var(--space-4);font:inherit;font-size:var(--text-sm);color:var(--accent-fg);cursor:pointer}
+.confirm{border:1px solid var(--border-strong);border-radius:var(--radius-md,6px);padding:var(--space-4);margin-top:var(--space-4);background:var(--surface-2)}
+.confirm p{margin:0 0 var(--space-3)}
+.state{padding:var(--space-10) var(--space-4);text-align:center}
+.sk{height:14px;border-radius:3px;background:var(--surface-2);margin:var(--space-2) 0;animation:p 1.4s ease-in-out infinite}
+@keyframes p{50%{opacity:.5}}
+.chat{max-width:560px;margin:var(--space-6) auto;border:1px solid var(--border-strong);border-radius:var(--radius-md,6px);padding:var(--space-5);background:var(--surface)}
+.mob .chat{margin:var(--space-3)}
+.chat .q{font-size:var(--text-xs);text-transform:uppercase;letter-spacing:.06em;color:var(--text-subtle);margin-bottom:var(--space-2)}
+.chat blockquote{margin:var(--space-3) 0;padding:var(--space-3);background:var(--surface-2);border-radius:4px;font-family:var(--font-display);font-weight:var(--weight-semibold)}
+.diff{display:grid;grid-template-columns:70px 1fr;gap:var(--space-2) var(--space-3);font-size:var(--text-sm);margin:var(--space-3) 0}
+.diff s{color:var(--text-subtle)}
+</style></head><body>
+<div class="bar"><b>Memory screen</b>
+<span class="jds-segmented" id="views">
+<button class="jds-segmented__opt" data-v="list" aria-pressed="true">Saved memories</button>
+<button class="jds-segmented__opt" data-v="fact">Fact</button>
+<button class="jds-segmented__opt" data-v="correct">Correct</button>
+<button class="jds-segmented__opt" data-v="stale">Mark stale</button>
+<button class="jds-segmented__opt" data-v="supersede">Replace</button>
+<button class="jds-segmented__opt" data-v="forget">Forget</button>
+<button class="jds-segmented__opt" data-v="approval">Forget approval</button>
+<button class="jds-segmented__opt" data-v="review">To review</button>
+<button class="jds-segmented__opt" data-v="add">Add</button>
+<button class="jds-segmented__opt" data-v="history">History</button>
+<button class="jds-segmented__opt" data-v="empty">Empty</button>
+<button class="jds-segmented__opt" data-v="loading">Loading</button>
+<button class="jds-segmented__opt" data-v="broken">Broken</button></span>
+<span class="jds-segmented"><button class="jds-segmented__opt" data-d="desk" aria-pressed="true">Desktop</button><button class="jds-segmented__opt" data-d="mob">Phone</button></span>
+<span class="jds-segmented"><button class="jds-segmented__opt" data-th="light" aria-pressed="true">Light</button><button class="jds-segmented__opt" data-th="dark">Dark</button></span></div>
+<div class="stage"><div class="dev desk" id="dev"><div class="apphead"><b>Settings</b><span class="cog" title="Settings" aria-current="page"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg></span></div><div class="set"><nav class="nav"><span>Profile</span><span>Appearance</span><span>Connections</span><span aria-current="page">Memory &amp; context</span><span>Notifications</span><span>Privacy</span></nav><div class="main" id="root"></div></div></div></div>
+<script>
+var V='list',D='desk',SEL=0,TAB='active';
+var F=[
+{t:'Prefers morning meetings, before 11',k:'Preference',s:'Chat',d:'2 Nov',pin:1,st:'Active',conf:'Confirmed',src:'Chat on 2 Nov',from:'',to:''},
+{t:'Sam Okafor leads the vendor review',k:'Fact',s:'Meeting',d:'30 Oct',pin:0,st:'Active',conf:'Unconfirmed',src:'Team sync, 30 Oct',from:'',to:''},
+{t:'Moved to Lisbon in March',k:'Fact',s:'Added by you',d:'12 Oct',pin:0,st:'Stale',conf:'Confirmed',src:'Added by you',from:'1 Mar',to:''},
+{t:'Allergic to shellfish',k:'Fact',s:'Chat',d:'3 Sep',pin:1,st:'Active',conf:'Confirmed',src:'Chat on 3 Sep',from:'',to:''},
+{t:'Dentist appointment every 6 months',k:'Routine',s:'Note',d:'18 Aug',pin:0,st:'Active',conf:'Unconfirmed',src:'Note "Health admin"',from:'',to:''}];
+var P=[
+{t:'Planning the March launch with Priya',k:'Fact',s:'Chat',why:'You said this in chat on 9 Nov'},
+{t:'Prefers window seats on flights',k:'Preference',s:'Meeting',why:'Mentioned in Trip planning, 6 Nov'},
+{t:'Priya may also be called "Pri"',k:'Alias',s:'Chat',why:'Chat on 8 Nov'}];
+function bd(x){var c={Active:'forest',Stale:'amber',Superseded:'neutral',Confirmed:'pine',Unconfirmed:'outline'}[x]||'neutral';return '<span class="jds-badge jds-badge--'+c+'">'+x+'</span>'}
+function pinI(){return '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 17v5M9 3h6l-1 7 3 3H7l3-3z"/></svg>'}
+function head(){return '<div class="phead"><h1>Memory &amp; context</h1><span class="jds-segmented"><button class="jds-segmented__opt" aria-pressed="true">Memory</button><button class="jds-segmented__opt">People</button></span></div>'}
+function tabs(){var n={pending:'3',active:'',history:''};var L={pending:'To review',active:'Saved memories',history:'History'};return '<div class="tabs" role="tablist">'+['pending','active','history'].map(function(k){return '<button role="tab" data-tab="'+k+'" aria-selected="'+(TAB===k)+'">'+L[k]+(n[k]?'<span class="jds-badge jds-badge--solid-amber">'+n[k]+'</span>':'')+'</button>'}).join('')+'<span style="flex:1"></span><button class="jds-btn jds-btn--primary jds-btn--sm" data-v="add" style="margin-bottom:6px"><span class="dk">Add a memory</span><span class="mb">Add</span></button></div>'}
+function filters(){return '<div class="filters"><input class="jds-input" placeholder="Search memories" value="'+(V==='list'?'':'')+'"><select class="jds-select"><option>Any status</option><option>Active</option><option>Stale</option></select><select class="jds-select"><option>Any kind</option><option>Fact</option><option>Preference</option><option>Routine</option></select><select class="jds-select"><option>Any source</option><option>Chat</option><option>Meeting</option><option>Note</option><option>Added by you</option></select></div><div class="counts"><span><b>42</b> saved</span><span><b>38</b> active</span><span><b>4</b> stale</span><span><b>2</b> pinned</span></div>'}
+function rows(){return '<div class="list">'+F.map(function(f,i){return '<div class="row" data-sel="'+i+'"'+(i===SEL&&V!=='list'?' aria-current="true"':'')+'><div><p>'+f.t+'</p><small>'+f.s+' &middot; '+f.d+'</small></div><div class="meta">'+(f.pin?'<span style="color:var(--gold-strong)" title="Pinned">'+pinI()+'</span>':'')+bd(f.st)+bd(f.conf)+'</div></div>'}).join('')+'<div class="pager"><span>1 to 5 of 42</span><span><button class="jds-btn jds-btn--quiet jds-btn--sm" disabled>Previous</button> <button class="jds-btn jds-btn--secondary jds-btn--sm">Next</button></span></div></div>'}
+function kv(f){return '<dl class="kv"><dt>Source</dt><dd>'+f.src+'</dd><dt>Kind</dt><dd>'+f.k+'</dd><dt>Valid from</dt><dd>'+(f.from||'Not set')+'</dd><dt>Valid to</dt><dd>'+(f.to||'Not set')+'</dd><dt>Saved</dt><dd>'+f.d+'</dd></dl>'}
+function back(){return D==='mob'?'<button class="back" data-v="list">&larr; Saved memories</button>':''}
+function fact(){var f=F[SEL];return '<div class="sheet">'+back()+'<h2>'+f.t+'</h2><div>'+bd(f.st)+' '+bd(f.conf)+'</div>'+kv(f)+'<div class="acts"><button class="jds-btn jds-btn--quiet jds-btn--sm" data-v="fact">'+pinI()+' '+(f.pin?'Unpin':'Pin')+'</button><button class="jds-btn jds-btn--secondary jds-btn--sm">Confirm</button><button class="jds-btn jds-btn--secondary jds-btn--sm" data-v="correct">Correct</button><button class="jds-btn jds-btn--secondary jds-btn--sm" data-v="supersede">Replace</button><button class="jds-btn jds-btn--secondary jds-btn--sm" data-v="stale">Mark stale</button><button class="jds-btn jds-btn--quiet jds-btn--sm" data-v="forget">Forget</button></div></div>'}
+function correct(){var f=F[SEL];return '<div class="sheet">'+back()+'<h2>Correct this memory</h2><div class="form" style="margin-top:16px"><div class="jds-field"><label class="jds-label">What Moss remembers</label><textarea class="jds-textarea" rows="3">'+f.t+'</textarea></div><div class="two"><div class="jds-field"><label class="jds-label">Valid from</label><input class="jds-input" placeholder="Optional"></div><div class="jds-field"><label class="jds-label">Valid to</label><input class="jds-input" placeholder="Optional"></div></div></div><div class="acts"><button class="jds-btn jds-btn--primary jds-btn--sm" data-v="fact">Save correction</button><button class="jds-btn jds-btn--quiet jds-btn--sm" data-v="fact">Cancel</button></div></div>'}
+function stale(){var f=F[SEL];return '<div class="sheet">'+back()+'<h2>'+f.t+'</h2><div class="confirm"><p><b>Mark this memory stale?</b></p><div class="jds-field"><label class="jds-label">Stale from</label><input class="jds-input" value="Today"></div><div class="acts" style="margin-top:0"><button class="jds-btn jds-btn--primary jds-btn--sm" data-v="fact">Mark stale</button><button class="jds-btn jds-btn--quiet jds-btn--sm" data-v="fact">Cancel</button></div></div></div>'}
+function supersede(){var f=F[SEL];return '<div class="sheet">'+back()+'<h2>Replace this memory</h2><dl class="kv"><dt>Old</dt><dd><s>'+f.t+'</s></dd></dl><div class="form"><div class="jds-field"><label class="jds-label">New memory</label><textarea class="jds-textarea" rows="3">Prefers morning meetings, before 10</textarea></div></div><div class="acts"><button class="jds-btn jds-btn--primary jds-btn--sm" data-v="fact">Replace</button><button class="jds-btn jds-btn--quiet jds-btn--sm" data-v="fact">Cancel</button></div></div>'}
+function forget(){var f=F[SEL];return '<div class="sheet">'+back()+'<h2>'+f.t+'</h2>'+kv(f)+'<div class="confirm"><p><b>Forget this memory?</b></p><div class="acts" style="margin-top:0"><button class="jds-btn jds-btn--danger jds-btn--sm" data-v="list">Forget</button><button class="jds-btn jds-btn--quiet jds-btn--sm" data-v="fact">Cancel</button></div></div></div>'}
+function approval(){return '<div class="chat"><div class="q">Moss wants to forget</div><blockquote>Allergic to shellfish</blockquote><dl class="kv" style="margin:12px 0"><dt>Source</dt><dd>Chat on 3 Sep</dd><dt>Pinned</dt><dd>Yes</dd></dl><div class="acts"><button class="jds-btn jds-btn--danger jds-btn--sm">Forget it</button><button class="jds-btn jds-btn--secondary jds-btn--sm">Keep it</button><button class="jds-btn jds-btn--quiet jds-btn--sm">Edit instead</button></div></div><div class="chat"><div class="q">Moss wants to remember</div><blockquote>Prefers window seats on flights</blockquote><div class="acts"><button class="jds-btn jds-btn--primary jds-btn--sm">Remember</button><button class="jds-btn jds-btn--secondary jds-btn--sm">Not this</button></div></div>'}
+function review(){return '<div class="list">'+P.map(function(p,i){return '<div class="row" style="cursor:default"><div><p>'+p.t+'</p><small>'+p.k+' &middot; '+p.s+' &middot; '+p.why+'</small></div><div class="meta"><button class="jds-btn jds-btn--primary jds-btn--sm">Accept</button><button class="jds-btn jds-btn--secondary jds-btn--sm">Dismiss</button><button class="jds-btn jds-btn--quiet jds-btn--sm" title="Never suggest this again">Never suggest</button></div></div>'}).join('')+'</div>'}
+function add(){return '<div class="form" style="max-width:640px"><button class="back" data-v="list">&larr; Saved memories</button><h2 style="margin:0 0 16px;font:var(--weight-semibold) var(--text-xl) var(--font-display)">Add a memory</h2><div class="jds-field"><label class="jds-label">What should Moss remember?</label><textarea class="jds-textarea" rows="3" placeholder="e.g. My sister Anna lives in Porto"></textarea></div><div class="two"><div class="jds-field"><label class="jds-label">Kind</label><select class="jds-select"><option>Fact</option><option>Preference</option><option>Routine</option></select></div><div class="jds-field"><label class="jds-label">About</label><input class="jds-input" placeholder="Person or thing (optional)"></div></div><label style="display:flex;gap:8px;align-items:center;margin-bottom:16px"><input type="checkbox" class="jds-checkbox"> Pin it</label><div class="acts" style="margin-top:0"><button class="jds-btn jds-btn--primary jds-btn--sm" data-v="list">Save memory</button><button class="jds-btn jds-btn--quiet jds-btn--sm" data-v="list">Cancel</button></div></div>'}
+function history(){return '<div class="list"><div class="row" style="cursor:default"><div><p>Prefers morning meetings, before noon</p><small>Replaced by "before 11" &middot; 2 Nov</small></div><div class="meta">'+bd('Superseded')+'</div></div><div class="row" style="cursor:default"><div><p>Works at Northwind</p><small>Forgotten by you &middot; 14 Sep</small></div><div class="meta"><span class="jds-badge jds-badge--neutral">Forgotten</span></div></div><div class="row" style="cursor:default"><div><p>Lives near the harbour</p><small>Suggestion dismissed &middot; 20 Aug</small></div><div class="meta"><span class="jds-badge jds-badge--neutral">Dismissed</span></div></div></div>'}
+function empty(){return '<div class="state"><div class="jds-empty"><div class="jds-empty__title">No memories yet</div><div class="jds-empty__actions"><button class="jds-btn jds-btn--primary" data-v="add">Add a memory</button></div></div></div>'}
+function loading(){var s='';for(var i=0;i<5;i++)s+='<div class="row"><div><div class="sk" style="width:'+(60-i*6)+'%"></div><div class="sk" style="width:25%;height:10px"></div></div><div class="sk" style="width:90px"></div></div>';return '<div class="list" role="status" aria-label="Loading memories">'+s+'</div>'}
+function broken(){return '<div class="state" role="alert"><div class="jds-empty"><div class="jds-empty__title">Memories did not load</div><div class="jds-empty__sub">The memory service is not answering.</div><div class="jds-empty__actions"><button class="jds-btn jds-btn--primary">Try again</button></div></div></div><div class="confirm" style="margin-top:0"><p style="margin:0"><b>Search is behind.</b> New memories are saved but not searchable yet. Retrying.</p></div>'}
+function body(){
+ var split=function(r){return D==='mob'?r:'<div class="split">'+rows()+'<div class="detail">'+r+'</div></div>'};
+ if(V==='add')return add();
+ if(V==='approval')return approval();
+ var inner;
+ if(V==='empty'||V==='loading'||V==='broken'){inner=V==='empty'?empty():V==='loading'?loading():broken();return head()+tabs()+(V==='empty'?'':filters())+inner}
+ if(V==='review'){TAB='pending';return head()+tabs()+review()}
+ if(V==='history'){TAB='history';return head()+tabs()+history()}
+ TAB='active';
+ var map={fact:fact,correct:correct,stale:stale,supersede:supersede,forget:forget};
+ if(V==='list')return head()+tabs()+filters()+(D==='mob'?rows():'<div class="split">'+rows()+'<div class="detail">'+fact()+'</div></div>');
+ return head()+tabs()+(D==='mob'?map[V]():filters()+'<div class="split">'+rows()+'<div class="detail">'+map[V]()+'</div></div>')}
+function draw(){document.getElementById('root').innerHTML=body();document.getElementById('dev').className='dev '+D;
+ document.querySelectorAll('[data-v]').forEach(function(b){if(b.closest('#views'))b.setAttribute('aria-pressed',b.getAttribute('data-v')===V)});
+ document.querySelectorAll('[data-d]').forEach(function(b){b.setAttribute('aria-pressed',b.getAttribute('data-d')===D)})}
+document.addEventListener('click',function(e){var t=e.target.closest('[data-v],[data-d],[data-th],[data-sel],[data-tab]');if(!t)return;
+ if(t.dataset.v)V=t.dataset.v;if(t.dataset.d)D=t.dataset.d;
+ if(t.dataset.sel!==undefined){SEL=+t.dataset.sel;V='fact'}
+ if(t.dataset.tab)V={pending:'review',active:'list',history:'history'}[t.dataset.tab];
+ if(t.dataset.th){document.querySelectorAll('[data-th]').forEach(function(b){b.setAttribute('aria-pressed',b===t)});if(t.dataset.th==='dark')document.documentElement.setAttribute('data-color-mode','dark');else document.documentElement.removeAttribute('data-color-mode');return}
+ draw()});
+draw();
+</script></body></html>
