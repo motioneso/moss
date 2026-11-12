@@ -27,13 +27,16 @@ pub fn publish(folder: &Path, bytes: &[u8]) -> (String, String, Artifact) {
     publish_as(folder, bytes, moss_meetings_host::package::manifest().unwrap(), "meetings")
 }
 
-/// Publishes any module's package into its own disposable registry named `<label>-test-registry`.
+/// Publishes any module's package into its own disposable registry named `<label>-test-registry`,
+/// kept in the `<label>` folder under `parent`.
 pub fn publish_as(
-    folder: &Path,
+    parent: &Path,
     bytes: &[u8],
     m: moss_module_host::manifest::Manifest,
     label: &str,
 ) -> (String, String, Artifact) {
+    let folder = &parent.join(label);
+    std::fs::create_dir_all(folder).unwrap();
     // Ephemeral keys generated for this disposable registry; no production credentials.
     let root = key();
     let index = key();

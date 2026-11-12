@@ -74,7 +74,7 @@ fn installed_meetings_keep_each_persons_records_notes_and_preferences_private() 
         let (key, publisher, artifact) = registry::publish_as(reg.path(), &bytes, manifest, id);
         let source = app
             .installer
-            .refresh(&f.access(f.a), Source::Folder(reg.path().into()), &key, &publisher, &format!("{id}-test-registry"))
+            .refresh(&f.access(f.a), Source::Folder(reg.path().join(id)), &key, &publisher, &format!("{id}-test-registry"))
             .unwrap();
         app.installer.install(&f.access(f.a), &source, &artifact, true).unwrap();
     }
@@ -83,7 +83,7 @@ fn installed_meetings_keep_each_persons_records_notes_and_preferences_private() 
         .installer
         .refresh(
             &f.access(f.a),
-            Source::Folder(reg.path().into()),
+            Source::Folder(reg.path().join("meetings")),
             &key,
             &publisher,
             "meetings-test-registry",

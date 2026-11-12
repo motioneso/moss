@@ -129,7 +129,7 @@ pub fn install_full(
         let (key, publisher, artifact) = crate::registry::publish_as(reg.path(), bytes, manifest, label);
         let source = app
             .installer
-            .refresh(&f.access(f.a), Source::Folder(reg.path().into()), &key, &publisher, &format!("{label}-test-registry"))
+            .refresh(&f.access(f.a), Source::Folder(reg.path().join(label)), &key, &publisher, &format!("{label}-test-registry"))
             .unwrap();
         app.installer.install(&f.access(f.a), &source, &artifact, true).unwrap();
     };
