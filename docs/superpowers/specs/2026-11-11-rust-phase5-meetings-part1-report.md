@@ -157,3 +157,44 @@ All 13 tests use a scripted fake model.
 - The old app also summarised recording and speaker data. Slice A keeps only the five core fields.
 - The WebAssembly build and the full gate did not run. The worktree has no node_modules and the build cache lacked one crate offline. Native guest tests ran (all 12 files pass).
 - Prettier did not run, because it is not installed here.
+
+## Part 4, slice B (storage, routes, automatic summary)
+
+Slice B connects the summary logic to the database, the routes and a background job.
+
+### What slice B built
+
+- Storage for versioned summaries, request keys, action candidates and the one automatic-summary row per meeting. The old SQL is unchanged.
+- Five routes: summary availability, list a meeting's summaries, read one version, generate, and edit.
+- Generate and edit run in one transaction under the meeting lock. A saved answer replays on a repeated key. Versions never change after they are saved. A later edit to notes or transcript marks older versions stale.
+- A background job that writes the automatic summary. Its payload holds only the meeting id.
+- A pasted transcript always asks for an automatic summary, in the same transaction as the paste.
+- Manifest entries and app-map features for summaries and automatic summary.
+
+### What slice B proved
+
+| Check                    | How                                                                                                                                    |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Generate, replay, edit   | Real database with a scripted model. Repeat key, conflicts with current versions, edits, immutable versions and stale marks.           |
+| A bad model answer       | Stored as a failed result and replayed unchanged.                                                                                      |
+| Two-person privacy       | Another person and an administrator get 404 on every summary route. Seen leaking with row security removed, and fixed when restored.   |
+| No text in the queue     | Summary text never appears in a job payload. A pasted transcript queues a job holding only the meeting id.                             |
+| Pasted transcript to job | The queued job ran and saved a summary through the scripted model.                                                                     |
+| Builds and tests         | Native and WebAssembly builds, and the full Meetings gate, passed.                                                                     |
+| Live run                 | Real server: a summary request ends cleanly with no model set up, the list route works, another person gets 404 on each summary route. |
+| Text stays out of logs   | The planted marker never appears in the server log.                                                                                    |
+
+### Not proven in slice B
+
+- No real model was called. Summary quality is unproven. The live run ran with no model, so it shows the stored failure and not a saved summary.
+- Fixtures recorded from the old code were not exchanged in both directions for summary routes. Rules were re-tested against the old behaviour by reading it.
+- The old instruction scan on summaries is not ported.
+- Recording and speaker data are not part of a summary.
+- The availability route always says a model may be used, with no real probe.
+- Capture stop and recording import do not schedule an automatic summary yet. Only a pasted transcript does.
+- The 524,288 byte body cap on edit is not enforced.
+- The review route for action candidates (accept or dismiss) is not built.
+- The chat approval card for editing a summary is not built, so chat refuses that edit.
+- A long meeting may exceed the call deadline, because one route call is one transaction.
+- Two calls racing at the same moment were not tested with a real race.
+- The failed-result codes are not yet listed in the app map as errors.
