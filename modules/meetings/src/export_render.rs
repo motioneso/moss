@@ -116,7 +116,7 @@ pub fn render(artifact: &Value) -> String {
     let claim = |item: &Value| {
         let evidence: Vec<String> =
             item["evidence"].as_array().into_iter().flatten().map(citation).collect();
-        format!("- {}\n  Evidence: {}", said(&item["text"]), evidence.join("; "))
+        format!("- {}\n  Evidence: {}", said(&item["text"]), evidence.join("; ")).trim_end().to_owned()
     };
     let phrase = |value: &Value| plain(value.as_str().unwrap_or("Unspecified"));
     let mut blocks: Vec<String> = vec![
