@@ -70,9 +70,14 @@ Commands: `pnpm test:rust-email` and `pnpm test:rust-email-live`, both through t
   routes (79 route comparisons pass against the real old route code).
 - The server addresses come only from the provider choice. A request cannot name a host or port,
   so it cannot point the server at an internal address.
-- The host does all mail traffic and keeps the password. The sealed bundle uses the same
-  AES-256-GCM format as the old app, and the password never reaches the guest, logs, jobs or
-  answers. Accounts stay private to their owner through row-level security.
+- The host does all mail traffic, seals the password and stores it. The sealed bundle uses the
+  same AES-256-GCM format as the old app, and the password never reaches logs, jobs, answers or
+  stored rows in plain text. Accounts stay private to their owner through row-level security.
+- The password does pass through the guest. The server hands the whole request body to the
+  package, the guest checks it and forwards it to the host in one call, and the guest never keeps
+  or returns it. The guest is the signed Connectors package, not outside code. Keeping the
+  password out of the guest entirely would mean the host taking the body before the package runs.
+  That changes how every module is called, so it needs a decision before it is built.
 - A failed sign-in saves nothing. Connecting again with the same account updates the same row.
 - No screen was built. No approved connection-form mockup exists in
   `docs/superpowers/specs/mockups`, so the form waits for a design discussion with Ben.
@@ -108,6 +113,9 @@ Commands: `pnpm test:rust-email` and `pnpm test:rust-email-live`, both through t
 
 ## Differences from the old app
 
+- The 79 route comparisons stand in fake sign-in results keyed on the password, so they prove
+  status codes, answer shapes and error text, not the real sign-in classification. The
+  classification is proven only against the stand-in servers.
 - A wrong SMTP password and any certificate error are now reported as "rejected username/password"
   and "could not establish a secure connection". The old code reported both as "could not reach
   the mail server".
@@ -119,5 +127,8 @@ Commands: `pnpm test:rust-email` and `pnpm test:rust-email-live`, both through t
 - A real mail account. None is reachable from here.
 - The STARTTLS upgrade, on IMAP or SMTP. The stand-in has none.
 - A second physical device.
+- The test-only mail setting is refused by any release build of the server, so a production
+  install cannot be pointed at a stand-in server. That refusal was written but not run, because
+  every gate here uses a debug build.
 - No logger is installed in the shell, so the IMAP library's trace lines go nowhere. If a logger
   is added later, check that it does not print login lines.

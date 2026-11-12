@@ -435,6 +435,11 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
                 connectors = connectors.with_google(moss_connectors_host::google::GoogleConfig::test_only_loopback(url)?);
             }
             if let Some(mail) = &mail_test {
+                // Release builds never send mail logins to a stand-in server.
+                anyhow::ensure!(
+                    cfg!(debug_assertions),
+                    "test_only_mail is only allowed in a debug build"
+                );
                 eprintln!("WARNING: test_only_mail is set. Mail sign-in talks to stand-in servers on this machine, not to a provider.");
                 let pem = mail.trusted_certificate.as_ref().map(std::fs::read_to_string).transpose()?;
                 connectors = connectors.with_mail(moss_connectors_host::imap::MailConfig::test_only_ports(
