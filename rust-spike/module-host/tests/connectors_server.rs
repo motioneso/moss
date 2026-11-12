@@ -488,9 +488,9 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
             tokio::spawn(async move {
                 let _ = connection.await;
             });
-            db.query("SELECT name, state, retry_count, left(coalesce(output::text,''),200) FROM (SELECT name,state,retry_count,output,created_on FROM pgboss.job UNION ALL SELECT name,state,retry_count,output,created_on FROM pgboss.archive) j WHERE name LIKE 'google%' ORDER BY created_on DESC LIMIT 6", &[])
+            db.query("SELECT queue, state, left(coalesce(output::text,''),200) FROM spike_jobs.jobs WHERE queue LIKE 'google%' ORDER BY created_at DESC LIMIT 6", &[])
                 .await
-                .map(|rows| rows.iter().map(|r| format!("{} {} retry={} {}", r.get::<_, String>(0), r.get::<_, String>(1), r.get::<_, i32>(2), r.get::<_, String>(3))).collect::<Vec<_>>())
+                .map(|rows| rows.iter().map(|r| format!("{} {} {}", r.get::<_, String>(0), r.get::<_, String>(1), r.get::<_, String>(2))).collect::<Vec<_>>())
                 .unwrap_or_else(|e| vec![format!("job query failed: {e}")])
         })
     };
