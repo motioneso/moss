@@ -30,6 +30,30 @@ pub fn install(f: &Fixture) -> Installed {
 }
 
 pub fn install_with(f: &Fixture, intelligence: Arc<dyn moss_module_host::ai::Intelligence>) -> Installed {
+    install_full(f, intelligence, None)
+}
+
+/// A stand-in embedder, so Memory can store a fact without a real model.
+struct Same;
+impl moss_memory_host::ports::Embedder for Same {
+    fn query(&self, _: &CallScope, _: &str) -> anyhow::Result<Vec<f64>> {
+        Ok(unit())
+    }
+    fn document(&self, _: &CallScope, _: &str) -> anyhow::Result<(Vec<f64>, (String, String))> {
+        Ok((unit(), ("stand-in".into(), "1".into())))
+    }
+}
+fn unit() -> Vec<f64> {
+    (0..768).map(|i| if i == 0 { 1.0 } else { 0.0 }).collect()
+}
+
+/// With a chat given, the real Memory package is installed next to Meetings and wired to
+/// Meetings' authority, and low-confidence notices go to that chat.
+pub fn install_full(
+    f: &Fixture,
+    intelligence: Arc<dyn moss_module_host::ai::Intelligence>,
+    chat: Option<Arc<dyn moss_meetings_host::chat::MainChat>>,
+) -> Installed {
     f.rt.block_on(async {
         let ready: bool = f.root.query_one("SELECT to_regnamespace('moss_queue') IS NOT NULL", &[]).await.unwrap().get(0);
         if !ready {
@@ -46,6 +70,7 @@ pub fn install_with(f: &Fixture, intelligence: Arc<dyn moss_module_host::ai::Int
     let bytes = moss_meetings_host::package::pack_without_dependencies(&root, &wasm).unwrap();
     let (key, publisher, artifact) = crate::registry::publish(reg.path(), &bytes);
     let database = f.db.clone();
+    let chat_given = chat.is_some();
     let url = || Secret::new(std::env::var("JS48_BOOTSTRAP_URL").unwrap());
     let app = Application::open_extended_with(
         dir.path(),
@@ -61,7 +86,14 @@ pub fn install_with(f: &Fixture, intelligence: Arc<dyn moss_module_host::ai::Int
             fuel_ceiling: Some(250_000_000),
         },
         move |next| {
-            Ok(Arc::new(moss_meetings_host::MeetingsPorts::new(database, next)?)
+            let Some(chat) = chat.clone() else {
+                return Ok(Arc::new(moss_meetings_host::MeetingsPorts::new(database, next)?)
+                    as Arc<dyn moss_module_host::runtime::Ports>);
+            };
+            let authority = Arc::new(moss_meetings_host::authority::MeetingsAuthority::new(database.clone()));
+            let memory = moss_memory_host::ports::MemoryPorts::new(database.clone(), Arc::new(Same), next)?
+                .with_authority(authority);
+            Ok(Arc::new(moss_meetings_host::MeetingsPorts::new(database, Arc::new(memory))?.with_chat(chat))
                 as Arc<dyn moss_module_host::runtime::Ports>)
         },
     )
@@ -71,5 +103,16 @@ pub fn install_with(f: &Fixture, intelligence: Arc<dyn moss_module_host::ai::Int
         .refresh(&f.access(f.a), Source::Folder(reg.path().into()), &key, &publisher, "meetings-test-registry")
         .unwrap();
     app.installer.install(&f.access(f.a), &source, &artifact, true).unwrap();
+    if chat_given {
+        let core = std::fs::read(std::env::var("MEMORY_CORE_WASM").expect("Run modules/meetings/tools/check.sh")).unwrap();
+        let bytes = moss_memory_host::package::pack(&root, &core).unwrap();
+        let manifest = moss_memory_host::package::manifest().unwrap();
+        let (key, publisher, artifact) = crate::registry::publish_as(reg.path(), &bytes, manifest, "memory");
+        let source = app
+            .installer
+            .refresh(&f.access(f.a), Source::Folder(reg.path().into()), &key, &publisher, "memory-test-registry")
+            .unwrap();
+        app.installer.install(&f.access(f.a), &source, &artifact, true).unwrap();
+    }
     Installed { app, _folders: (dir, reg) }
 }
