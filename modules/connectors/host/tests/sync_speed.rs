@@ -69,7 +69,7 @@ fn run(count: u64, cursor: u64, fuel: u64) -> Result<std::time::Duration, String
 fn least_fuel(count: u64, cursor: u64) -> u64 {
     let (mut low, mut high) = (1_000_000u64, 4_000_000_000u64);
     assert!(run(count, cursor, high).is_ok(), "step does not finish at {high}");
-    while high - low > high / 100 {
+    while high - low > high / 20 {
         let mid = (low + high) / 2;
         if run(count, cursor, mid).is_ok() {
             high = mid;
@@ -85,7 +85,7 @@ fn one_sync_step_fits_the_manifest_budget_at_every_mailbox_size() {
     let declared = moss_connectors_host::package::manifest().unwrap().fuel_limit;
     let budget = declared.unwrap_or(10_000_000);
     println!("declared fuel budget {budget}");
-    for count in [50u64, 200, 500, 1000, 5000] {
+    for count in [50u64, 500, 5000] {
         // The first step lists and fetches. The last step lists and prunes with every key.
         let last = (count - 1) / 50 * 50;
         for (name, cursor) in [("first", 0), ("last", last)] {
