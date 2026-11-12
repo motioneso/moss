@@ -7,7 +7,11 @@ use safety_core::db::{DataContext, Database};
 use serde_json::{Map, Value};
 use std::sync::Arc;
 
+pub mod exports;
+pub mod outputs;
 pub mod package;
+pub mod recordings;
+pub mod section;
 pub mod store;
 
 type Work<'a> = std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value>> + 'a>>;
@@ -26,6 +30,7 @@ pub struct MeetingsPorts {
     database: Database,
     runtime: tokio::runtime::Runtime,
     next: Arc<dyn Ports>,
+    recordings: Option<Arc<recordings::Recordings>>,
 }
 impl MeetingsPorts {
     pub fn new(database: Database, next: Arc<dyn Ports>) -> Result<Self> {
@@ -33,7 +38,14 @@ impl MeetingsPorts {
             database,
             runtime: tokio::runtime::Runtime::new()?,
             next,
+            recordings: None,
         })
+    }
+
+    /// Sets where stored recording audio lives, so the account export can include it.
+    pub fn with_recordings(mut self, files: &std::path::Path) -> Result<Self> {
+        self.recordings = Some(Arc::new(recordings::Recordings::new(&vault::Root::create(files)?)?));
+        Ok(self)
     }
 
     /// Runs one store operation in the call's shared transaction, so it sees the
@@ -67,6 +79,21 @@ impl MeetingsPorts {
             (store::TRANSCRIPTS, "set") => self.run(scope, move |cx| Box::pin(async move { store::write(cx, &parameters).await })),
             (store::RECORDING_TYPES, "get") => self.run(scope, move |cx| Box::pin(async move { store::recording_types_lock(cx, &parameters, false).await })),
             (store::RECORDING_TYPES, "lock") => self.run(scope, move |cx| Box::pin(async move { store::recording_types_lock(cx, &parameters, true).await })),
+            (outputs::OUTPUTS, operation) => {
+                let operation = operation.to_owned();
+                self.run(scope, move |cx| Box::pin(async move { outputs::run(cx, &operation, &parameters).await }))
+            }
+            (exports::EXPORTS, "section") => {
+                let recordings = self.recordings.clone();
+                let access = scope.access().clone();
+                self.run(scope, move |cx| {
+                    Box::pin(async move { section::collect(cx, recordings.as_deref(), &access).await })
+                })
+            }
+            (exports::EXPORTS, operation) => {
+                let operation = operation.to_owned();
+                self.run(scope, move |cx| Box::pin(async move { exports::run(cx, &operation, &parameters).await }))
+            }
             (store::HISTORY, "get") => self.run(scope, move |cx| Box::pin(async move { store::history(cx, &parameters).await })),
             _ => anyhow::bail!("Unsupported Meetings store operation"),
         }
@@ -149,7 +176,7 @@ impl MeetingsPorts {
 }
 impl Ports for MeetingsPorts {
     fn invoke(&self, scope: &CallScope, port: &str, request: &Request) -> Result<Value> {
-        let ours = [RESOURCE, store::TRANSCRIPTS, store::HISTORY, store::RECORDING_TYPES];
+        let ours = [RESOURCE, store::TRANSCRIPTS, store::HISTORY, store::RECORDING_TYPES, outputs::OUTPUTS, exports::EXPORTS];
         if port != "kv" || !ours.contains(&request.resource.as_str()) || scope.module().id != "meetings" {
             return self.next.invoke(scope, port, request);
         }

@@ -1,6 +1,7 @@
 //! Email guest. It validates requests, shapes responses and applies the preference
 //! defaults. SQL, the acting person and row-level security belong to the host. The
 //! package never reaches the network.
+pub use moss_module_sdk;
 use moss_module_sdk::{Host, Response, RouteRequest};
 use serde_json::{json, Value};
 
@@ -10,6 +11,7 @@ pub mod cache;
 pub mod fastify;
 pub mod messages;
 pub mod settings;
+pub mod understand;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod testing;
 
@@ -68,6 +70,13 @@ fn api(host: &impl Host, name: &str, input: &Value) -> Result<Value> {
         "updateCachedMessage" => cache::update(host, input),
         "listCachedMessageKeys" => cache::keys(host, input),
         "pruneCachedMessages" => cache::prune(host, input),
+        "understandMessages" => {
+            understand::pass::run(host, input["limit"].as_i64().unwrap_or(10).clamp(1, 50))
+        }
+        "recordTriageFeedback" => kv(host, "set", "email.triage-feedback", input.clone()),
+        "triageFeedbackCounts" => kv(host, "get", "email.triage-feedback", json!({})),
+        "listActionSuppression" => kv(host, "get", "email.suppression", input.clone()),
+        "updateActionSuppression" => kv(host, "set", "email.suppression", input.clone()),
         _ => Err(Error::new(404, "Email operation not found")),
     }
 }
@@ -75,6 +84,10 @@ fn api(host: &impl Host, name: &str, input: &Value) -> Result<Value> {
 fn route(host: &impl Host, request: RouteRequest) -> Result<(u16, Value)> {
     let id = request.params.get("id").cloned().unwrap_or_default();
     match (request.method.as_str(), request.path.as_str()) {
+        ("POST", "/understand") => {
+            understand::pass::run(host, request.body["limit"].as_i64().unwrap_or(10).clamp(1, 50))
+                .map(|b| (200, b))
+        }
         ("GET", "/messages") => messages::list(host).map(|b| (200, b)),
         ("GET", "/messages/:id") => messages::detail(host, &id).map(|b| (200, b)),
         ("GET", "/briefing-settings") => settings::briefing(host).map(|b| (200, b)),

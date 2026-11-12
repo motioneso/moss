@@ -13,6 +13,7 @@
       "operations": ["get", "set"],
       "resources": [
         "memory.recall",
+        "memory.public",
         "memory.core",
         "memory.entity",
         "memory.fact",
@@ -27,7 +28,9 @@
         "memory.entity-patch",
         "memory.entity-delete",
         "memory.subject",
-        "memory.recording"
+        "memory.recording",
+        "memory.reembed",
+        "memory.account"
       ]
     },
     {
@@ -51,7 +54,8 @@
       "resources": [
         "memory.vault-ingest-tick",
         "memory.vault-ingest-sweep",
-        "memory.vault-ingest-nudge"
+        "memory.vault-ingest-nudge",
+        "memory.reembed-step"
       ]
     },
     {
@@ -84,7 +88,10 @@
       "sql/0338_memory_managed_note_snapshots.sql",
       "sql/0339_memory_recording_lineage.sql",
       "sql/0341_memory_recording_cleanup.sql",
-      "sql/0363_memory_ingest_nudges.sql"
+      "sql/0363_memory_ingest_nudges.sql",
+      "sql/0364_memory_reembed_runs.sql",
+      "sql/0365_memory_reembed_one_running.sql",
+      "sql/0366_memory_reembed_staged.sql"
     ],
     "ownedTables": [
       "app.memory_chunks",
@@ -103,9 +110,12 @@
       "app.memory_recording_fact_versions",
       "app.memory_recording_receipts",
       "app.memory_recording_proposals",
-      "app.memory_ingest_nudges"
+      "app.memory_ingest_nudges",
+      "app.memory_reembed_runs",
+      "app.memory_reembed_staged"
     ],
     "ledger": "core-legacy",
+    "ownerDelete": ["app.memory_recording_fact_versions"],
     "access": {
       "app.memory_chunks": {
         "access": "owner-only"
@@ -156,6 +166,12 @@
         "access": "owner-only"
       },
       "app.memory_ingest_nudges": {
+        "access": "owner-only"
+      },
+      "app.memory_reembed_runs": {
+        "access": "owner-only"
+      },
+      "app.memory_reembed_staged": {
         "access": "owner-only"
       }
     }
@@ -265,13 +281,55 @@
       "method": "DELETE",
       "path": "/graph/entities/:id",
       "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/reembed",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/reembed/start",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/reembed/cancel",
+      "signIn": true
     }
   ],
   "requires": {},
   "provides": {
+    "addAlias": "1.0.0",
+    "confirmFact": "1.0.0",
+    "createEntity": "1.0.0",
+    "collectMemoryExportSection": "1.0.0",
+    "createEpisode": "1.0.0",
+    "deleteChunksForSources": "1.0.0",
+    "deleteFact": "1.0.0",
+    "deleteMemoryData": "1.0.0",
+    "embedTurn": "1.0.0",
+    "findEntityByAlias": "1.0.0",
+    "forgetEntity": "1.0.0",
+    "getActiveFact": "1.0.0",
+    "insertCandidate": "1.0.0",
+    "insertFact": "1.0.0",
+    "insertSuppression": "1.0.0",
+    "isSuppressed": "1.0.0",
+    "listActiveFacts": "1.0.0",
+    "listCoreFacts": "1.0.0",
+    "listCorrections": "1.0.0",
+    "listRecentChunks": "1.0.0",
     "prepareMemoryAction": "1.0.0",
+    "recallMemory": "1.0.0",
+    "recordingMemory": "1.0.0",
+    "rejectFact": "1.0.0",
     "requestVaultIndex": "1.0.0",
-    "recordingMemory": "1.0.0"
+    "searchChunks": "1.0.0",
+    "supersedeFact": "1.0.0",
+    "updateEntity": "1.0.0",
+    "updateFactImportance": "1.0.0",
+    "upsertChunks": "1.0.0"
   },
   "icons": ["icons/memory.svg"],
   "accounts": {
@@ -286,7 +344,7 @@
   "features": [
     {
       "id": "memory.vault-index",
-      "description": "Each account's notes are split into searchable pieces and indexed every fifteen minutes, covering the private note copies Moss saves and the folder named in the account's people notes preference. The Attachments and Exports folders are never indexed. Changed files are re-indexed, deleted files are dropped, and a change of search model re-indexes everything once. A restart does not re-index. Other modules can ask for one saved note copy to be indexed sooner through the requestVaultIndex API.",
+      "description": "Each account's notes are split into searchable pieces and indexed every fifteen minutes, covering the private note copies Moss saves and the folder named in the account's people notes preference. The Attachments and Exports folders are never indexed. Changed files are re-indexed, deleted files are dropped, and an unchanged note is not read again after a change of search model. The owner starts that re-embed from the Search model settings screen. A restart does not re-index. Other modules can ask for one saved note copy to be indexed sooner through the requestVaultIndex API.",
       "errors": [
         {
           "code": "memory-index-unavailable",
@@ -350,6 +408,25 @@
           "id": "memory-open-screen",
           "description": "Open the Memory screen",
           "path": "/settings/memory"
+        }
+      ]
+    },
+    {
+      "id": "memory.public-api",
+      "description": "Other modules read and write memory only through a fixed set of calls, never through its tables. They cover searching and listing note, chat and screen passages, recalling saved facts, keeping the chat memory list and its rejections, and proposing new suggestions for the person to review. Every call acts only on the signed-in person's own memory. Callers send text, never vectors, and the text goes only to the configured search model.",
+      "errors": [
+        {
+          "code": "memory-public-unavailable",
+          "class": "transient",
+          "description": "Memory search is unavailable",
+          "remediationRef": "memory-set-up-embedding"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "memory-set-up-embedding",
+          "description": "Set up an embedding model",
+          "path": "/settings/memory/search-model"
         }
       ]
     },
@@ -483,6 +560,47 @@
         }
       ],
       "remediations": []
+    },
+    {
+      "id": "memory.reembed",
+      "description": "After the search model changes, the Search model settings screen counts the passages made with another model, and the owner can re-embed them. The old vectors are kept until every new one is ready and then all swap in at once. Search only reads vectors made by the current model, so note search misses old passages until the run finishes. The owner can cancel a run, and a stopped or failed run leaves the old vectors as they were. Every fifteen minutes Moss also gives facts that were saved without a vector another try.",
+      "errors": [
+        {
+          "code": "reembed-already-running",
+          "class": "validation",
+          "description": "A re-embed is already running"
+        },
+        {
+          "code": "reembed-nothing-to-do",
+          "class": "validation",
+          "description": "Nothing needs a new search model"
+        },
+        {
+          "code": "reembed-stopped",
+          "class": "transient",
+          "description": "The re-embed stopped and the old search data is unchanged. Start it again.",
+          "remediationRef": "memory-set-up-embedding"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "memory-set-up-embedding",
+          "description": "Check the search model settings",
+          "path": "/settings/memory/search-model"
+        }
+      ]
+    },
+    {
+      "id": "memory.account",
+      "description": "When a person exports their account data, Memory adds everything it holds for them (passages, saved facts, entities, aliases, sources, suggestions and recording facts) without the search vectors. When a person deletes their account data, Memory removes all of those rows for that person only. Nobody can export or delete another person's memory, and an admin has no extra access.",
+      "errors": [
+        {
+          "code": "memory-export-section-unknown",
+          "class": "validation",
+          "description": "That part of the memory export does not exist"
+        }
+      ],
+      "remediations": []
     }
   ],
   "tools": {
@@ -509,6 +627,11 @@
     },
     "memory.vault-ingest-nudge": {
       "nudge-id": {
+        "kind": "id"
+      }
+    },
+    "memory.reembed-step": {
+      "run-id": {
         "kind": "id"
       }
     }

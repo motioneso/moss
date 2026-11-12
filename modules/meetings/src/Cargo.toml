@@ -58,3 +58,11 @@ path = "../tests/recording.rs"
 [[test]]
 name = "outputs_logic"
 path = "../tests/outputs_logic.rs"
+
+[[test]]
+name = "review"
+path = "../tests/review.rs"
+
+[[test]]
+name = "export"
+path = "../tests/export.rs"

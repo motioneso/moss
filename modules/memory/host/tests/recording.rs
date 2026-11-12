@@ -5,7 +5,7 @@ use moss_memory_host::recording::{RecordingAuthority, SourceState};
 use moss_module_host::runtime::{CallScope, DenyPorts, Host, Limits, Ports};
 use safety_core::db::{Database, RuntimeRole};
 use serde_json::{json, Value};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tokio_postgres::{Client, NoTls};
 use uuid::Uuid;
@@ -26,13 +26,16 @@ impl Embedder for Same {
     fn document(&self, _: &CallScope, _: &str) -> anyhow::Result<(Vec<f64>, (String, String))> {
         Ok((unit(), ("stand-in".into(), "1".into())))
     }
+    fn model(&self, _: &CallScope) -> anyhow::Result<(String, String)> {
+        Ok(("stand-in".into(), "1".into()))
+    }
 }
 
 /// Meetings' answers, changeable by the test.
 #[derive(Default)]
 struct Meetings {
     sources: Mutex<HashMap<String, SourceState>>,
-    cleaning: Mutex<HashSet<String>>,
+    cleaning: Mutex<HashMap<String, Option<String>>>,
 }
 impl Meetings {
     fn set(&self, id: &str, side: &str) {
@@ -51,11 +54,15 @@ impl RecordingAuthority for Meetings {
     fn current(&self, _: &str, id: &str) -> Option<SourceState> {
         self.sources.lock().unwrap().get(id).cloned()
     }
-    fn cleaning(&self, _: &str, op: &str) -> bool {
-        self.cleaning.lock().unwrap().contains(op)
+    fn cleaning(&self, _: &str, op: &str, source: Option<&str>) -> bool {
+        self.cleaning
+            .lock()
+            .unwrap()
+            .get(op)
+            .is_some_and(|scope| scope.as_deref() == source)
     }
     fn sealed(&self, _: &str, op: &str) -> bool {
-        self.cleaning.lock().unwrap().contains(op)
+        self.cleaning.lock().unwrap().contains_key(op)
     }
 }
 
@@ -323,8 +330,18 @@ fn cleanup_deletes_the_facts_no_recording_supports_and_export_reads_back() {
     // Cleanup is refused until Meetings opens the operation.
     let early = f.call(f.a, Some(f.meetings.clone()), json!({"action":"cleanup","operationId":op,"source":{"sourceModuleId":"meetings","sourceId":id}}));
     assert_eq!(early.unwrap_err().0, 409);
-    f.meetings.cleaning.lock().unwrap().insert(op.clone());
+    f.meetings
+        .cleaning
+        .lock()
+        .unwrap()
+        .insert(op.clone(), Some(id.to_string()));
     let source = json!({"sourceModuleId":"meetings","sourceId":id});
+    // An operation opened for one recording cannot clean another recording or the account.
+    let other = Uuid::new_v4().to_string();
+    let wrong = f.call(f.a, Some(f.meetings.clone()), json!({"action":"cleanup","operationId":op,"source":{"sourceModuleId":"meetings","sourceId":other}}));
+    assert_eq!(wrong.unwrap_err().0, 409);
+    let wide = f.call(f.a, Some(f.meetings.clone()), json!({"action":"cleanup","operationId":op}));
+    assert_eq!(wide.unwrap_err().0, 409);
     let done = f.as_a(json!({"action":"cleanup","operationId":op,"source":source}));
     assert_eq!(done["status"], "complete");
     assert_eq!(

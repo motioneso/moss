@@ -244,7 +244,7 @@ fn a_sweep_handles_changed_unchanged_deleted_and_moved_files() {
 
 #[test]
 #[ignore = "Only through scripts/run-gate.sh"]
-fn a_new_model_name_re_embeds_once_and_a_restart_does_not() {
+fn a_new_model_name_does_not_make_the_sweep_re_embed_and_a_restart_does_not() {
     let f = Fixture::open();
     let actor = f.actors[2];
     let calls = Arc::new(AtomicUsize::new(0));
@@ -253,11 +253,14 @@ fn a_new_model_name_re_embeds_once_and_a_restart_does_not() {
     f.sweep(actor, "fake-a", &calls);
     let before = calls.load(Ordering::SeqCst);
     f.sweep(actor, "fake-b", &calls);
-    assert!(calls.load(Ordering::SeqCst) > before, "a new model name must re-embed");
-    assert!(f.rows(actor).iter().all(|r| r.1 == "fake-b"));
-    let after = calls.load(Ordering::SeqCst);
+    assert_eq!(
+        calls.load(Ordering::SeqCst),
+        before,
+        "only the owner-started re-embed replaces vectors, never the sweep"
+    );
+    assert!(f.rows(actor).iter().all(|r| r.1 == "fake-a"));
     f.sweep(actor, "fake-b", &calls);
-    assert_eq!(calls.load(Ordering::SeqCst), after, "a restart must not re-embed");
+    assert_eq!(calls.load(Ordering::SeqCst), before, "a restart must not re-embed");
 }
 
 #[test]

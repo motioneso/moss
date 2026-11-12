@@ -341,3 +341,155 @@ and ran out of time in a debug build. The download now marks the files as checke
   this task.
 - **Heavy concurrency.** Locks fail fast and report a change. No test ran two people changing the
   same recording at once.
+
+## Part 7: re-embed with a safe swap (JS-246)
+
+### What it does
+
+- When the search model changes, passages saved under the old model are kept, but note search skips them until a re-embed finishes. A note on the Search model screen says "N passages use another model", with a Re-embed button.
+- Re-embed works in small batches of 16. New vectors go into a holding table. Nothing real changes until every passage has one.
+- When the last batch lands, one transaction moves all of them in and marks the run done. Cancel, a failure, or a restart only throws away the held vectors. The old ones stay in the database. Because search only reads vectors made by the current model, note search returns nothing from old passages while a run is going (facts only lose their vector score). That is a product call for the coordinator: staging empties note search during a run.
+- A passage whose text was edited after its new vector was made keeps its old vector. The swap checks a hash of the text.
+- Search never mixes models. A passage made by another model counts as zero similarity, so it cannot be compared with a query from the current model.
+- Facts saved without a vector (the embedding service was down) are retried on the existing 15 minute tick.
+- Jobs carry only the run id. No passage text, vector or secret goes into a job.
+- Only the Search model screen changed. The approved Memory screen is untouched (ruling relayed by t6n, who will ask Ben about a Memory screen spot).
+
+### Behaviour change to know about
+
+The 15 minute sweep used to re-embed everything when the model name changed. It no longer does. A new model name only shows the notice. The owner starts the re-embed. The test that covered the old behaviour was renamed and now asserts the new one.
+
+### Proof
+
+- Database suite (10 tests, real Postgres): interrupted run leaves old vectors usable and a restart finishes it; a completed run swaps everything at once; cancel drops what was staged; a failed embedding ends the run with old vectors intact; an edit after staging keeps the old vector; search never compares two models; retry on the tick; refused starts; job payload holds only the run id; and a second person cannot see, step or cancel the first person's run. That last test was also run with row security switched off on the two tables, and the second person then sees the rows, so the protection is what hides them.
+- Native and WebAssembly builds both pass their tests (guest unit tests: 5 new).
+- Live run on the real Rust server over HTTPS (port from devports): switching the model name showed "4 passages use another model", a run finished and the count went to 0, search still worked, a second start was refused, and a cancel was clean. The Search model screen was opened in a real browser: the note and Re-embed button showed, and the click started the run.
+
+### Platform finding
+
+The two new tables belong to the module, so only the module's own database role can reach them. The app connection does not have those grants. The host adapter therefore switches to the module role for each statement on those tables and back for passages and facts, inside one transaction. Module tables created later will need the same.
+
+### Not proven
+
+- A run of tens of thousands of passages: the final swap and each batch must fit one job's time limit, and nothing timed it.
+- A re-embed on a second person's data while the first runs at the same time, beyond the row-level test.
+- The other indexing path (note ingest) still re-embeds a note when it sees a new model name, so it can overlap a run.
+- The file index keeps the old model name after a swap.
+- A changed model version with the same name is not noticed.
+- The progress total can drift if passages are added mid-run.
+
+### Guesses
+
+- Batch of 16 per step, and one running run per person.
+- Wording of the screen note and the two refusal messages.
+- Retry of missing vectors reuses the existing 15 minute tick instead of its own timer.
+
+### Stray download
+
+`npx prettier` fetched version 3.10.0 once by mistake. Its output matched the repo's 3.8.3. All checks since use the repo's own copy.
+
+### Not proven
+
+- The Memory screen has no re-embed note (by ruling), so nobody sees it there.
+- The live cancel can land after a tiny run already finished. The database suite proves cancel; the live run only proves it ends cleanly.
+- The on-device model path was not re-run for part 7.
+- No test with thousands of passages. The swap runs in slices of 500, untimed at scale.
+- Old browser tests were not run (Rust-only change).
+
+## Part 8: the public API for other modules (JS-248)
+
+### What was built
+
+- **One door for other modules.** Briefings, Wellness, Goals, People, Backtrack, Notes and chat now
+  have 25 new named calls into Memory, listed in the Memory manifest. They cover searching and listing
+  passages, recalling facts, chat's per-turn write, the chat memory list with its rejections,
+  suggestions to review, and goal entities.
+- **The owner comes from the session.** No call takes an owner or a vector. A caller sends text,
+  and the host turns it into a vector and sends it only to the configured search model.
+- **Old callers keep their shapes.** Status codes, error sentences, the 500 path limit, the chat
+  turn text and hash, and the rejection rule (only an active inferred fact can be rejected) match
+  the old code.
+- **Where it differs.** Callers send text, not vectors. Forgetting a goal archives it, because the
+  old status value was refused by the table. Search here does not filter by search model, because
+  that filter arrives with part 7. A failed embedding returns a plain 503.
+- **App map.** A new feature entry describes the API and its one failure, with a fix-it link.
+
+### Proof
+
+| Check                                         | Result                                                                                                                                                       |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Guest tests, native                           | 7 suites pass, 6 of them new tests for this part, with a fake host                                                                                           |
+| Package test, real WebAssembly build          | 9 pass, including the manifest and app-map checks                                                                                                            |
+| Database tests, real WebAssembly and Postgres | 15 pass, 5 new. They cover each old caller's call shape, the old chat fact rules, suggestions and goals, owner isolation, and a scan for leaked text         |
+| Owner isolation                               | A second person reads and changes nothing. With row security switched off the test first shows A's rows are visible, then shows the owner filter alone holds |
+| No memory text in logs, jobs or activity      | A scan of tables named like job, activity, audit, event, outbox or queue, plus error sentences, found none after planted text                                |
+
+The tests found one real fault. The call name shared a field with an entity's own name, so goals
+were saved and renamed as "createEntity" or "updateEntity". The call name now has its own field,
+and the tests pass.
+
+### Not proven
+
+- **No live caller run.** No Rust module that calls Memory exists yet, and chat is not ported, so
+  nothing could call the API through the real server. The proof runs the real package and real
+  Postgres, but not a second module. A chat answer showing memory provenance was not produced.
+- **Managed snapshot guard.** The old chunk write refused to replace chunks owned by a managed
+  vault snapshot. The Rust vault index writes none yet, so nothing breaks today, but the managed
+  vault index work must port that guard before callers can write vault chunks.
+- **Dates.** Dates now arrive as ISO text where the old repositories returned date objects.
+- **Extra cross-owner cases.** The isolation test does not drive adding an alias, a candidate
+  with another person's episode, or a suppression against another person's data. The owner
+  filter and composite keys cover them by reading, not by test.
+- **Notes search.** It still uses the existing adapter. Part 7 edits that file, so it was left alone.
+- **Search model filter.** Search does not filter by model until part 7 lands.
+- **Old callers' exact call shapes.** They are matched from reading the old code, not by running
+  the old callers against the new API.
+- **Log claim.** The scan covers the tables named above and error text. It does not read server
+  log files.
+- **Other devices.** Nothing here is reached from a phone or another machine, because no caller exists.
+
+## Part 10: export and deletion of a person's memory (JS-254)
+
+### What was built
+
+- **Export.** When a person exports their account data, Memory returns fourteen sections of their
+  own rows (passages, chat facts, entities, facts, episodes, fact sources, aliases, conflict
+  groups, suggestions, search documents, legacy migration marks) and three recording sections (fact versions, receipts, proposals). Rows
+  come in pages of at most 200 rows or 48 KB, because the guest has a fixed compute budget per
+  call and the host refuses messages over 1 MiB. Vectors are never returned. The text excerpt a
+  suggestion carries is dropped, as in the old export.
+- **Deletion.** One call removes the signed-in person's rows from all 19 owned tables, module
+  tables first, recording fact versions last, and returns counts only. Fact versions have no
+  delete grant, so the manifest now names them in `ownerDelete` and the host emits an owner-only
+  delete policy at install.
+- **Owner never comes from the caller.** Both calls reject any owner field.
+- **App map.** A new `memory.account` feature entry describes both calls.
+- **Packaging.** The package builds (213,936 bytes) with the new resource, two provided calls and
+  the `ownerDelete` grant. The package test covers them.
+
+### Proof
+
+| Check                                 | Result                                                                                                                                                                                                          |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Native and WebAssembly builds         | Guest tests pass natively. The WebAssembly build and package tests pass against it.                                                                                                                             |
+| Earlier memory suites on this branch  | db 15, dashboard 9, recording 7, reembed 11 pass, package 7 pass.                                                                                                                                               |
+| Export and deletion, second person    | 4 account tests pass. A second person exports none of the first person's text or id. Deletion leaves the second person's rows unchanged, row count by table.                                                    |
+| Protection removed                    | With row security off on the memory tables, an unfiltered read as the second person returns the first person's rows. With it on, only the person's own rows.                                                    |
+| Deleting a person removes derivatives | Deleting the user row leaves zero rows in all 19 tables, including fact versions and search documents.                                                                                                          |
+| No memory text in jobs or activity    | A marker string, exported and deleted, appears in no job payload and none of the activity tables that exist in the gate database.                                                                               |
+| Upgrade from an existing install      | On a copy of the dev data (3 owners, 1,428 old passages, none of the new tables), after installing the new tables and grants, 1,896 rows read back, equal to each table's count per owner. The copy is deleted. |
+
+### Not proven
+
+- **Whole-module live pass.** The live gate does not build here, because the shell build needs a
+  prebuilt ONNX Runtime and the gate forces offline mode. No real model pass was run, and Ben is
+  needed for that one.
+- **Export parity with the old export.** Sections were compared to table counts and checked for
+  fields by hand, not byte for byte against the old collector.
+- **Recording receipts and proposals in the delete test.** They are covered by the recording
+  suite's own cleanup tests, not seeded here.
+- **Activity tables missing from the gate database.** The three activity tables were skipped
+  there, so only job payloads were scanned in that database.
+- **The `chat_memory_corrections_log` table** is not in the owned list and is not exported or
+  deleted by this part.
+- **Pages bounded by the byte cap.** The multi-page test proves the row cap and exactly-once delivery on 450 rows; the 48 KB cap itself is not asserted separately.

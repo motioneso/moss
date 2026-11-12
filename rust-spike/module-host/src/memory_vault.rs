@@ -322,8 +322,9 @@ impl MemoryVaultPorts {
                     )
                     .await?;
                 if let Some(row) = existing {
+                    // A changed model name alone does not re-embed. The owner starts that
+                    // re-embed, which keeps the old vectors until the new ones are complete.
                     if row.get::<_, String>(0) == sha256(&content)
-                        && row.get::<_, String>(1) == model_name
                         && row.get::<_, Option<String>>(2).as_deref() == Some(snap.key.as_str())
                     {
                         self.commit(cx, scope).await?;

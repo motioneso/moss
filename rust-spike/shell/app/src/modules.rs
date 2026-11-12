@@ -424,7 +424,10 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
             }
             }?;
             // Meetings answers only its own capture-preference calls, as the signed-in person.
-            let services = Arc::new(MeetingsPorts::new(meetings_database, services)?) as Arc<dyn Ports>;
+            let services = Arc::new(
+                MeetingsPorts::new(meetings_database, services)?
+                    .with_recordings(&settings.data.join("modules/files"))?,
+            ) as Arc<dyn Ports>;
             // Calendar keeps its settings in the account's real preferences and reads the
             // account timezone. The wrapper only answers calls made by the Calendar module.
             let services = Arc::new(CalendarPorts::new(calendar_database, services)?) as Arc<dyn Ports>;

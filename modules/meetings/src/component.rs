@@ -20,6 +20,9 @@ impl Host for ComponentHost {
             "db" => moss::module::db::call(&request),
             "context" => moss::module::context::call(&request),
             "kv" => moss::module::kv::call(&request),
+            "ai" => moss::module::ai::call(&request),
+            "jobs" => moss::module::jobs::call(&request),
+            "api" => moss::module::api::call(&request),
             _ => return Err(Error::new("Unsupported Meetings host port")),
         }
         .map_err(|_| Error::new("Meetings host call failed"))?;

@@ -3087,13 +3087,16 @@ version = "0.1.0"
 dependencies = [
  "access-context",
  "anyhow",
+ "base64 0.22.1",
  "moss-module-host",
  "safety-core",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tokio",
  "tokio-postgres",
  "uuid",
+ "vault",
 ]
 
 [[package]]
@@ -3105,6 +3108,7 @@ dependencies = [
  "moss-module-host",
  "safety-core",
  "serde_json",
+ "sha2 0.10.9",
  "tokio",
  "tokio-postgres",
  "wat",

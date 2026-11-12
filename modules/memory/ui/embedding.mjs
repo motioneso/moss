@@ -1,5 +1,6 @@
 /* global document */
 import { moduleClient } from "./guest-bridge.mjs";
+import { describe } from "./reembed.mjs";
 const client = moduleClient();
 const $ = (id) => document.getElementById(id);
 let view = null;
@@ -88,3 +89,63 @@ $("clear").addEventListener("click", () => {
   void run(() => request("PUT", { url: "", model: "", confirmOffDevice: true }));
 });
 void run(() => request("GET"));
+
+// Re-embed section. The old search data stays in use until a run finishes.
+const reembedFailures = new Map([
+  [409, "Nothing needs a new search model, or a re-embed is already running."],
+  [503, "The search model is not set up. Set it up above first."]
+]);
+let timer = null;
+
+async function reembedRequest(method, path) {
+  let reply;
+  try {
+    reply = await client.request(method, path, method === "POST" ? {} : undefined);
+  } catch (error) {
+    if (!Number.isInteger(error?.status)) throw error;
+    reply = { status: error.status, body: error.body };
+  }
+  if (!(reply && typeof reply.status === "number" && "body" in reply)) {
+    reply = { status: 200, body: reply };
+  }
+  if (reply.status >= 400) {
+    const error = new Error("Memory request failed");
+    error.status = reply.status;
+    throw error;
+  }
+  return reply.body;
+}
+
+async function refreshReembed(message = "") {
+  clearTimeout(timer);
+  let shown;
+  try {
+    const status = await reembedRequest("GET", "/reembed");
+    shown = describe(status);
+    if (status.run?.status === "running") timer = setTimeout(() => void refreshReembed(), 3000);
+  } catch {
+    shown = null;
+  }
+  $("reembed").hidden = !shown && !message;
+  $("reembed-text").textContent = message || shown?.text || "";
+  $("reembed-act").hidden = !shown;
+  if (shown) {
+    $("reembed-act").textContent = shown.button;
+    $("reembed-act").dataset.act = shown.act;
+  }
+  void client.resize(document.documentElement.scrollHeight).catch(() => {});
+}
+
+$("reembed-act").addEventListener("click", () => {
+  const path = $("reembed-act").dataset.act === "cancel" ? "/reembed/cancel" : "/reembed/start";
+  $("reembed-act").disabled = true;
+  void reembedRequest("POST", path)
+    .then(() => refreshReembed())
+    .catch((error) =>
+      refreshReembed(reembedFailures.get(error?.status) ?? "That did not work. Try again.")
+    )
+    .finally(() => {
+      $("reembed-act").disabled = false;
+    });
+});
+void refreshReembed();

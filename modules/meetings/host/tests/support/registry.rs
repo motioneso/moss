@@ -41,7 +41,7 @@ pub fn publish(folder: &Path, bytes: &[u8]) -> (String, String, Artifact) {
         abi: m.abi,
         capabilities: m.capabilities,
         migrations: m.database.migrations,
-        requires: m.requires,
+        requires: Default::default(),
         changelog: "Meetings package".into(),
         channel: Channel::Stable,
         urgent: false,

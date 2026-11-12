@@ -7,9 +7,12 @@ use serde_json::{json, Value};
 
 #[cfg(target_arch = "wasm32")]
 mod abi;
+pub mod account;
 pub mod dashboard;
 pub mod graph;
 pub mod lifecycle;
+mod reembed;
+pub mod public;
 pub mod schema;
 pub mod score;
 pub mod testing;
@@ -79,8 +82,21 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
             let value = result?;
             serde_json::to_string(&value).map_err(|_| "Invalid memory response".into())
         }
-        "job" => vault_index::handle_job(host, payload).map_err(|e| e.message),
+        "job" => {
+            let job: Value = serde_json::from_str(payload).map_err(|_| "Invalid memory job")?;
+            if job["queue"] == reembed::STEP {
+                reembed::handle_job(host, &job["parameters"])
+            } else {
+                vault_index::handle_job(host, payload).map_err(|e| e.message)
+            }
+        }
         "api" => {
+            if let Ok(call) = serde_json::from_str::<Value>(payload) {
+                if let Some(name) = call["name"].as_str().filter(|n| !matches!(*n, "requestVaultIndex" | "prepareMemoryAction" | "recordingMemory" | "collectMemoryExportSection" | "deleteMemoryData")) {
+                    return serde_json::to_string(&public::call(host, name, &call["parameters"]))
+                        .map_err(|_| "Invalid memory response".into());
+                }
+            }
             #[derive(serde::Deserialize)]
             #[serde(tag = "name", content = "parameters", deny_unknown_fields)]
             enum Api {
@@ -88,6 +104,10 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
                 RequestVaultIndex(vault_index::NudgeRequest),
                 #[serde(rename = "recordingMemory")]
                 Recording(Value),
+                #[serde(rename = "collectMemoryExportSection")]
+                Export(Value),
+                #[serde(rename = "deleteMemoryData")]
+                DeleteData(Value),
                 #[serde(rename = "prepareMemoryAction")]
                 Prepare {
                     tool: String,
@@ -101,6 +121,20 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
                     .map_err(|e| e.message),
                 Api::Recording(parameters) => {
                     let result = match recording::call(host, &parameters) {
+                        Ok(value) => json!({"ok": value}),
+                        Err(e) => json!({"error": {"statusCode": e.status, "error": e.message}}),
+                    };
+                    serde_json::to_string(&result).map_err(|_| "Invalid memory response".into())
+                }
+                Api::Export(parameters) => {
+                    let result = match account::export(host, &parameters) {
+                        Ok(value) => json!({"ok": value}),
+                        Err(e) => json!({"error": {"statusCode": e.status, "error": e.message}}),
+                    };
+                    serde_json::to_string(&result).map_err(|_| "Invalid memory response".into())
+                }
+                Api::DeleteData(parameters) => {
+                    let result = match account::delete(host, &parameters) {
                         Ok(value) => json!({"ok": value}),
                         Err(e) => json!({"error": {"statusCode": e.status, "error": e.message}}),
                     };
@@ -129,6 +163,9 @@ fn route(host: &impl Host, request: RouteRequest) -> Result<Value> {
         ("POST", "/graph/facts/:id/mark-stale") => lifecycle::mark_stale_route(host, &request),
         ("POST", "/graph/facts/:id/supersede") => lifecycle::supersede_route(host, &request),
         ("DELETE", "/graph/facts/:id") => lifecycle::delete_route(host, &request),
+        ("GET", "/reembed") => reembed::status_route(host),
+        ("POST", "/reembed/start") => reembed::start_route(host),
+        ("POST", "/reembed/cancel") => reembed::cancel_route(host),
         ("GET", "/dashboard") => dashboard::dashboard_route(host, &request),
         ("POST", "/memories") => dashboard::add_route(host, &request),
         ("GET", "/candidates") => dashboard::candidates_route(host, &request),

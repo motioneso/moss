@@ -13,6 +13,14 @@ use std::collections::BTreeMap;
 pub const A: &str = "00000000-0000-4000-8000-00000000000a";
 pub const B: &str = "00000000-0000-4000-8000-00000000000b";
 
+/// The sixteen collections the host reads for the account export.
+pub const HOST_COLLECTIONS: &[&str] = &[
+    "recording_types", "recording_metadata", "manual_entries", "voice_enablements", "recording_imports",
+    "transcript_batches", "output_requests", "output_artifacts", "action_candidates", "export_receipts",
+    "export_requests", "stop_summaries", "capture_grants", "capture_connections",
+    "capture_start_cancellations", "capture_start_limits",
+];
+
 pub struct Fake {
     pub actor: Cell<&'static str>,
     pub tables: RefCell<BTreeMap<String, Vec<Value>>>,
@@ -25,6 +33,12 @@ pub struct Fake {
     pub history_rows: RefCell<Vec<Value>>,
     pub history_asked: RefCell<Option<Value>>,
     pub history_fails: Cell<bool>,
+    /// Private note copies the Notes stand-in holds, keyed by `<meeting>/v<version>`, and its switches.
+    pub copies: RefCell<BTreeMap<String, String>>,
+    pub notes_down: Cell<bool>,
+    pub lose_write_answer: Cell<bool>,
+    /// What the host's account export read returns, per signed-in account.
+    pub section: RefCell<BTreeMap<String, Value>>,
     clock: Cell<u32>,
     ids: Cell<u32>,
 }
@@ -41,6 +55,10 @@ impl Fake {
             history_rows: RefCell::new(vec![]),
             history_asked: RefCell::new(None),
             history_fails: Cell::new(false),
+            copies: RefCell::new(BTreeMap::new()),
+            notes_down: Cell::new(false),
+            lose_write_answer: Cell::new(false),
+            section: RefCell::new(BTreeMap::new()),
             clock: Cell::new(0),
             ids: Cell::new(0),
         }
@@ -159,6 +177,44 @@ impl Fake {
     }
 }
 
+impl Fake {
+    /// A stand-in for the Notes private copy API. It compares bytes and never overwrites.
+    fn notes(&self, p: &Value) -> Result<Value> {
+        if self.notes_down.get() {
+            return Err(moss_module_sdk::Error::new("Notes service is unavailable"));
+        }
+        let args = &p["parameters"];
+        let key = format!("{}/v{}", args["sourceId"].as_str().unwrap(), args["version"]);
+        let content = args["content"].as_str().unwrap().to_owned();
+        let reference = format!("notes/generated/{key}.md");
+        let seen = self.copies.borrow().get(&key).cloned();
+        let hash = format!("hash-of-{}", content.len());
+        let answer = |status: &str| json!({"destination":"private-vault","audience":"owner","noteReference":reference,"contentHash":hash,"status":status});
+        match p["name"].as_str().unwrap() {
+            "inspectPrivateNote" => Ok(answer(match seen {
+                None => "missing",
+                Some(text) if text == content => "unchanged",
+                Some(_) => "conflict",
+            })),
+            "exportPrivateNote" => {
+                let status = match seen {
+                    None => {
+                        self.copies.borrow_mut().insert(key, content);
+                        if self.lose_write_answer.replace(false) {
+                            return Err(moss_module_sdk::Error::new("answer lost"));
+                        }
+                        "written"
+                    }
+                    Some(text) if text == content => "unchanged",
+                    Some(_) => "conflict",
+                };
+                Ok(answer(status))
+            }
+            other => panic!("unexpected Notes call {other}"),
+        }
+    }
+}
+
 impl Host for Fake {
     fn call(&self, port: &str, operation: &str, resource: &str, parameters: Value) -> Result<Value> {
         self.calls.borrow_mut().push(format!("{port}.{operation}.{resource}"));
@@ -167,8 +223,21 @@ impl Host for Fake {
             ("context", "uuid") => {
                 let n = self.ids.get();
                 self.ids.set(n + 1);
-                Ok(json!(format!("00000000-0000-4000-8000-{n:012x}")))
+                Ok(json!({"id": format!("00000000-0000-4000-8000-{n:012x}")}))
             }
+            ("api", "call") if resource == "notes" => self.notes(&parameters),
+            ("kv", "section") if resource == "meetings.exports" => {
+                let mut all = Map::new();
+                for name in HOST_COLLECTIONS {
+                    all.insert((*name).into(), json!([]));
+                }
+                if let Some(Value::Object(mine)) = self.section.borrow().get(self.actor.get()) {
+                    all.extend(mine.clone());
+                }
+                Ok(Value::Object(all))
+            }
+            ("kv", _) if resource == "meetings.outputs" => Ok(json!({})),
+            ("jobs", _) => Ok(json!({})),
             ("kv", _) if resource == "meetings.recording-types" => Ok(json!({"locked": true})),
             ("kv", _) if resource == "meetings.transcripts" => Ok(self.transcripts(operation, &parameters)),
             ("kv", "get") if resource == "meetings.history" => {

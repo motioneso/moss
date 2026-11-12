@@ -47,7 +47,7 @@ pub(crate) async fn cleanup(
     p: &Value,
 ) -> Result<Value> {
     let s = Scope::parse(p)?;
-    if !authority.cleaning(owner, &s.operation) {
+    if !authority.cleaning(owner, &s.operation, s.source.as_deref()) {
         return Err(changed());
     }
     let db = cx.db();

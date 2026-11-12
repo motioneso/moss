@@ -157,3 +157,138 @@ All 13 tests use a scripted fake model.
 - The old app also summarised recording and speaker data. Slice A keeps only the five core fields.
 - The WebAssembly build and the full gate did not run. The worktree has no node_modules and the build cache lacked one crate offline. Native guest tests ran (all 12 files pass).
 - Prettier did not run, because it is not installed here.
+
+## Part 4, slice B (storage, routes, automatic summary)
+
+Slice B connects the summary logic to the database, the routes and a background job.
+
+### What slice B built
+
+- Storage for versioned summaries, request keys, action candidates and the one automatic-summary row per meeting. The old SQL is unchanged.
+- Five routes: summary availability, list a meeting's summaries, read one version, generate, and edit.
+- Generate and edit run in one transaction under the meeting lock. A saved answer replays on a repeated key. Versions never change after they are saved. A later edit to notes or transcript marks older versions stale.
+- A background job that writes the automatic summary. Its payload holds only the meeting id.
+- A pasted transcript always asks for an automatic summary, in the same transaction as the paste.
+- Manifest entries and app-map features for summaries and automatic summary.
+
+### What slice B proved
+
+| Check                    | How                                                                                                                                    |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Generate, replay, edit   | Real database with a scripted model. Repeat key, conflicts with current versions, edits, immutable versions and stale marks.           |
+| A bad model answer       | Stored as a failed result and replayed unchanged.                                                                                      |
+| Two-person privacy       | Another person and an administrator get 404 on every summary route. Seen leaking with row security removed, and fixed when restored.   |
+| No text in the queue     | Summary text never appears in a job payload. A pasted transcript queues a job holding only the meeting id.                             |
+| Pasted transcript to job | The queued job ran and saved a summary through the scripted model.                                                                     |
+| Builds and tests         | Native and WebAssembly builds, and the full Meetings gate, passed.                                                                     |
+| Live run                 | Real server: a summary request ends cleanly with no model set up, the list route works, another person gets 404 on each summary route. |
+| Text stays out of logs   | The planted marker never appears in the server log.                                                                                    |
+
+### Not proven in slice B
+
+- No real model was called. Summary quality is unproven. The live run ran with no model, so it shows the stored failure and not a saved summary.
+- Fixtures recorded from the old code were not exchanged in both directions for summary routes. Rules were re-tested against the old behaviour by reading it.
+- The old instruction scan on summaries is not ported.
+- Recording and speaker data are not part of a summary.
+- The availability route always says a model may be used, with no real probe.
+- Capture stop and recording import do not schedule an automatic summary yet. Only a pasted transcript does.
+- The 524,288 byte body cap on edit is not enforced.
+- The review route for action candidates (accept or dismiss) is not built.
+- The chat approval card for editing a summary is not built, so chat refuses that edit.
+- A long meeting may exceed the call deadline, because one route call is one transaction.
+- Two calls racing at the same moment were not tested with a real race.
+- The failed-result codes are not yet listed in the app map as errors.
+- The model call runs while the meeting row is locked, so notes saved or summaries listed during a long generate can wait and time out. The old app held no lock during the call. The "busy" and "pending" answers therefore cannot occur.
+- If the job fails to publish after a pasted transcript is saved, a retry returns the first answer and queues nothing, so the summary stays waiting until it expires.
+
+## Part 5 (JS-251), partly built
+
+Only action review is built. Private export, the full account export and deletion are not.
+
+### Built
+
+- A signed-in owner can accept or dismiss an action item that a summary proposed from their own meeting.
+- Accepting creates one task in the owner's own Tasks. Meetings calls a new Tasks public call, so it never reads Tasks tables. The call is keyed on the meeting and the action, so a repeat or a regenerated summary makes no second task.
+- The route is `POST /api/meetings/records/:id/actions/:candidateId/review`. It replays by request key and refuses a changed repeat with 409.
+- Accept is refused with 409 while possible matches exist, unless the owner confirms. The title (1 to 500 characters) and the due time are checked again before the task is made.
+- If Tasks is not installed or fails, the answer is 503 and the action stays pending.
+- Tasks moved to version 0.1.2. Meetings does not require Tasks to install. Without it, accepting answers 503.
+- The manifest lists the route, the Tasks permission and four new errors. The chat approval list marks the route as blocked in chat.
+
+### Proof
+
+| Check                | Result                                                                                                                                                                 |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Task creation        | Tasks tests with a fake host show a repeated key returns the same task and adds no row.                                                                                |
+| Accept and dismiss   | Five Meetings tests with a fake host cover accept, replay, changed replay, conflict, missing action, match confirmation, bad title, bad due time, Tasks down, dismiss. |
+| Two-person privacy   | Real database. Another person and an administrator get 404. Seen leaking when row security was removed on the three tables, and fixed when restored.                   |
+| No text in the queue | The test marker never appears in the job queue.                                                                                                                        |
+
+### Not proven
+
+- Private export through Notes is not built. The create-only conflict rule is untested.
+- Only 2 of the 18 account export collections are real. The other 16, including audio chunks and the old bundle format, are still empty stubs.
+- Deletion is not built. Notes has no fence, seal or recording cleanup in Rust, and Meetings does not yet answer Memory's recording authority. The chat cleanup callback does not exist.
+- Accepting was proved against a fake Tasks host. The real database test installs Meetings alone.
+
+## Part 5B (JS-253), export built, deletion not built
+
+### What was built
+
+- **Private export of a summary into Notes.** Saving an export sends the rendered summary to the Notes module, which stores a private copy in the owner's own notes. Each summary version can be exported once. Asking again with the same key returns the first answer. Reusing a key for a different version is refused. If the saved copy was edited or deleted, it is never overwritten or recreated. A lost answer from Notes is recovered by checking whether the copy already exists.
+- **Plain-text match.** The rendered text matches the old TypeScript output byte for byte on a recorded sample.
+- **Account export section.** The section now returns all 18 collections. Sixteen are read straight from the database in the host so that times are formatted exactly as the old export did. Ready recording imports carry their stored audio, either as chunks with size and sha256 hash checked against the saved row, or as the retained legacy bundle text. A missing or altered file makes the export fail loudly.
+- **Fix to part 5A.** The Meetings component never declared the call into other modules, so the Tasks accept path from 5A could only work against a fake host. It is declared now, and Notes uses the same call.
+
+### What was proved
+
+- Native and WebAssembly builds pass with tests in both (12 new export tests against a stand-in Notes, plus the existing ones).
+- Real database tests: replay, key reuse, missing version, another person and the admin both get 404 on the export routes, and the row-level-security test fails when the protection is removed (the second person then sees the rows) and passes again once restored.
+- The account export test round-trips audio bytes and hashes, the legacy bundle text, millisecond times, and shows a second person sees nothing.
+- A marker planted in the summary never appears in queued jobs, activity rows, model activity rows, or stored receipts.
+- Live run on the real Rust server: the export routes answer for the owner, refuse cleanly when no summary exists, and show nothing to a second person. The server log holds no meeting text.
+
+### Not built
+
+- **Deletion service and chat cleanup.** Not started. Notes cleanup of recording blocks needs a database-backed Notes cleanup that does not exist in Rust yet, and it is large. Memory cleanup likewise. No recording content reaches Notes or Memory until part 6 builds those hooks, so the existing delete route from part 1 stays as it is. What is left: the fence, the Notes and Memory cleanup calls, the seal, the refusal on a conflict, and the survivor and no-searchable-content proofs.
+- **Writing recording audio** is part 8. The export reads it from the Meetings account folder where part 8 will write it.
+
+### Not proven
+
+- A real Notes copy created through the installed Notes module. The database test packs Meetings without Notes, so it sees a failed receipt, and the Notes behaviour is only proved against a stand-in. The live run also has no Notes.
+- The export index stays "delayed", because Notes cannot index private copies yet.
+- The account export through the real server. No server route for it exists yet, so it is proved only by calling the section directly.
+- A live summary export, because no model is configured on the live instance.
+- Survivors after delete, and no searchable recording content after delete. Both belong to the deletion service.
+
+## Part 5C (JS-255), stopped before building: Notes cleanup is large
+
+No code changed in this part. The check the brief asked for found that one of the two cleanup ports is missing and too big to add inside the deletion part.
+
+### What exists in Rust
+
+- **Memory cleanup is built.** The Memory package already answers `cleanup`, `assertComplete` and `retireSource` for recording episodes, facts and search documents, in batches of twenty receipts. It asks a recording authority whether a source is being cleaned and whether it is sealed. Until Meetings supplies that authority, the answer is always no, so nothing is admitted.
+- **Notes tables exist.** The managed actor, managed source, contribution, proposal and operation tables are created by the Notes package migrations and are already read by the Notes account export.
+
+### What is missing
+
+- **Notes has no fence or seal.** Nothing in Rust fences an actor or a source, opens a cleanup operation, seals it, or deletes under a seal. The old code is about 485 lines (`managed-source-lifecycle.ts`) plus about 70 lines of database lock helpers in `packages/db/src/managed-source-admission.ts`.
+- **Notes has no database-backed recording block cleanup.** The pure block text logic (render, inspect, change, cleanup with conflict detection, reconcile) and the block and snapshot keys are already ported in `blocks.rs` and `identity.rs`. Missing is destination lookup, the vault file change with conflict detection, receipt state and index invalidation. The old code is about 240 lines (`recording-contribution-cleanup.ts`), 240 (`contribution-destinations.ts`), 180 (`contribution-repository.ts`) and 110 (`contribution-state.ts`).
+- **Meetings has no deletion service and no authority.** The Meetings side of the old order (`deletion-service.ts`, 59 lines) is small, but it cannot be tested without the two ports above.
+
+### Why it stops here
+
+Together this is more than one context window of build and proof: a Notes lifecycle, Notes cleanup, the cross-module calls between Meetings, Notes and Memory, the authority that Memory asks, and then the proofs. Doing it half-way would leave a deletion that cannot refuse correctly, which is worse than none.
+
+### What is left, in order
+
+1. **Notes managed-source lifecycle.** Fence actor and source, open and read operations, seal, delete under seal. Public Notes API only. Two-person row-level-security tests seen failing with protection removed.
+2. **Notes recording block cleanup.** Batch of twenty, separate commits per file, conflict and pending outcomes, index invalidation, source receipt retirement in the sealing step.
+3. **Meetings deletion service and authority.** Fence the source, clean Notes, clean Memory, seal, then delete the meeting. Incomplete or conflicting cleanup refuses deletion with the same two plain errors as before. Implements the Memory recording authority. The chat cleanup callback and the delete route.
+4. **Proofs.** Survivors after delete (independent exported note copies stay), nothing searchable left, refused deletion on incomplete cleanup, second person denied, no meeting text in jobs, activity rows or logs, native and WebAssembly builds, and a live run on the real Rust server with a real Notes copy and the account export through the server.
+
+No recording content reaches Notes or Memory until part 6 builds the hooks that write it, so nothing is currently left behind by a meeting that is deleted. The deletion service still has to land before part 6 ships.
+
+### Not proven
+
+Everything in the 5C proof list. Nothing was built or run in this part.

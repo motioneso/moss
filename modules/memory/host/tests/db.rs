@@ -31,6 +31,9 @@ impl Embedder for Same {
         anyhow::ensure!(!self.fail_documents, "embedding service is down");
         Ok((unit(), ("stand-in".into(), "1".into())))
     }
+    fn model(&self, _: &CallScope) -> anyhow::Result<(String, String)> {
+        Ok(("stand-in".into(), "1".into()))
+    }
 }
 
 struct Fixture {
@@ -83,7 +86,7 @@ impl Fixture {
     }
 
     fn recalled(&self, actor: Uuid) -> Vec<Value> {
-        self.store(actor, "get", "memory.recall", json!({"query": "anything"}))["candidates"]
+        self.store(actor, "get", "memory.recall", json!({"query": "anything", "model": "stand-in"}))["candidates"]
             .as_array()
             .unwrap()
             .clone()
@@ -538,4 +541,233 @@ fn forget_refuses_a_recordings_memory() {
     let out = f.guest(f.a, false, "tool", json!({"tool":"memory.forget","parameters":{"factId":ids[0]},"approvalVersion":version}));
     assert!(out.is_err());
     assert_eq!(f.state(f.a, &ids)["total"], 1);
+}
+
+// ---- Part 8: the public API other modules call ----
+
+/// One public call through the real guest, signed in as `actor`. Returns the guest's answer.
+fn api(f: &Fixture, actor: Uuid, name: &str, parameters: Value) -> Value {
+    f.guest(actor, false, "api", json!({"name": name, "parameters": parameters})).unwrap()
+}
+
+fn ok(answer: &Value) -> &Value {
+    assert!(answer.get("error").is_none(), "call failed: {answer}");
+    &answer["ok"]
+}
+
+const PUBLIC_TABLES: [&str; 8] = [
+    "memory_chunks", "memory_file_index", "chat_memory_facts", "chat_memory_suppressions",
+    "memory_episodes", "memory_candidates", "memory_entities", "memory_aliases",
+];
+
+fn rls(f: &Fixture, on: bool) {
+    for t in PUBLIC_TABLES {
+        f.sql(&if on {
+            format!("ALTER TABLE app.{t} ENABLE ROW LEVEL SECURITY; ALTER TABLE app.{t} FORCE ROW LEVEL SECURITY")
+        } else {
+            format!("ALTER TABLE app.{t} DISABLE ROW LEVEL SECURITY")
+        });
+    }
+}
+
+/// Rows the person can count in the public tables with no owner filter in the query.
+fn bare_public(f: &Fixture, actor: Uuid) -> i64 {
+    f.rt.block_on(async {
+        let cx = DataContext::open(&f.db, &AccessContext::new(actor, "memory-proof")).await.unwrap();
+        let mut total = 0;
+        for t in PUBLIC_TABLES {
+            total += cx.db().query_one(&format!("SELECT count(*) FROM app.{t}"), &[]).await.unwrap().get::<_, i64>(0);
+        }
+        cx.commit().await.unwrap();
+        total
+    })
+}
+
+fn sha256_hex(text: &str) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(text.as_bytes()).iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// Seeds one row in every public table for `actor` through the API.
+fn seed_public(f: &Fixture, actor: Uuid) -> String {
+    let thread = Uuid::new_v4().to_string();
+    ok(&api(f, actor, "upsertChunks", json!({"sourceKind":"screen","sourcePath":"backtrack/1",
+        "chunks":[{"lineStart":0,"lineEnd":1,"text":"a screen"}]})));
+    ok(&api(f, actor, "embedTurn", json!({"threadId":thread,"userText":"hi","assistantText":"yo"})));
+    ok(&api(f, actor, "insertFact", json!({"category":"profile","content":"likes tea","provenance":"inferred"})));
+    ok(&api(f, actor, "insertSuppression", json!({"category":"fact","content":"old"})));
+    let episode = ok(&api(f, actor, "createEpisode", json!({"sourceKind":"chat","sourceRef":"t","excerpt":"said"})))["id"]
+        .as_str().unwrap().to_owned();
+    ok(&api(f, actor, "insertCandidate", json!({"episodeId":episode,"kind":"fact","action":"create",
+        "payloadJson":{"x":1},"candidateSignature":"sig-1","confidence":0.5,"importance":0.5,"provenance":"inferred"})));
+    let entity = ok(&api(f, actor, "createEntity", json!({"kind":"goal","name":"Run","summary":"a marathon"})))["entity"]["id"]
+        .as_str().unwrap().to_owned();
+    ok(&api(f, actor, "addAlias", json!({"entityId":entity,"alias":"Marathon"})));
+    entity
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn chunk_calls_match_the_old_backtrack_chat_and_briefings_shapes() {
+    let f = Fixture::new();
+    let thread = Uuid::new_v4().to_string();
+    // Backtrack: upsert under source kind screen, then delete by path.
+    let up = api(&f, f.a, "upsertChunks", json!({"sourceKind":"screen","sourcePath":"backtrack/7",
+        "chunks":[{"lineStart":0,"lineEnd":2,"text":"screen words"}]}));
+    assert_eq!(ok(&up)["written"], 1);
+    let found = api(&f, f.a, "searchChunks", json!({"query":"x","sourceKind":"screen","limit":5}));
+    let hit = &ok(&found)["chunks"][0];
+    assert_eq!((hit["sourcePath"].as_str(), hit["text"].as_str()), (Some("backtrack/7"), Some("screen words")));
+    assert_eq!(hit["similarity"].as_f64().unwrap(), 1.0);
+    // Chat's embed turn: one chunk per thread, lines 0 and 0, skipped when unchanged.
+    let turn = json!({"threadId":thread,"userText":"hello","assistantText":"hi there"});
+    assert_eq!(ok(&api(&f, f.a, "embedTurn", turn.clone()))["skipped"], false);
+    assert_eq!(ok(&api(&f, f.a, "embedTurn", turn))["skipped"], true);
+    let row = f.rt.block_on(f.root.query_one(
+        "SELECT count(*), min(content_hash), min(text), min(line_start + line_end) FROM app.memory_chunks
+         WHERE owner_user_id = $1 AND source_kind = 'chat' AND source_path = $2", &[&f.a, &thread])).unwrap();
+    assert_eq!(row.get::<_, i64>(0), 1);
+    let text = "User: hello\nAssistant: hi there";
+    assert_eq!((row.get::<_, String>(1), row.get::<_, String>(2)), (sha256_hex(text), text.to_owned()));
+    assert_eq!(row.get::<_, i32>(3), 0);
+    // Briefings: recent chunks come from files that have an index row.
+    let recent = api(&f, f.a, "listRecentChunks", json!({"sourceKind":"chat","limit":3}));
+    assert_eq!(ok(&recent)["chunks"].as_array().unwrap().len(), 1);
+    // The delete cap and its old error text.
+    let many: Vec<String> = (0..501).map(|i| format!("backtrack/{i}")).collect();
+    let capped = api(&f, f.a, "deleteChunksForSources", json!({"sourceKind":"screen","sourcePaths":many}));
+    assert_eq!(capped["error"], json!({"statusCode":400,"error":"deleteChunksForSources accepts at most 500 source paths per call, got 501"}));
+    let gone = api(&f, f.a, "deleteChunksForSources", json!({"sourceKind":"screen","sourcePaths":["backtrack/7"]}));
+    assert_eq!(ok(&gone)["deleted"], 1);
+    assert!(ok(&api(&f, f.a, "searchChunks", json!({"query":"x","sourceKind":"screen"})))["chunks"].as_array().unwrap().is_empty());
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn legacy_fact_calls_keep_the_old_chat_behaviour() {
+    let f = Fixture::new();
+    let fact = api(&f, f.a, "insertFact", json!({"category":"preference","content":"  Likes   Tea ","provenance":"inferred"}));
+    let id = ok(&fact)["fact"]["id"].as_str().unwrap().to_owned();
+    assert_eq!(ok(&fact)["fact"]["importance"], 0.5);
+    assert_eq!(ok(&api(&f, f.a, "listActiveFacts", json!({})))["facts"].as_array().unwrap().len(), 1);
+    // Importance: the old 400 text, and the old 404 when the fact is not found.
+    let bad = api(&f, f.a, "updateFactImportance", json!({"id":id,"importance":2}));
+    assert_eq!(bad["error"], json!({"statusCode":400,"error":"importance must be a number between 0 and 1"}));
+    assert_eq!(ok(&api(&f, f.a, "updateFactImportance", json!({"id":id,"importance":0.9})))["done"], true);
+    // Reject deletes the fact and records a suppression with the old signature.
+    assert_eq!(ok(&api(&f, f.a, "rejectFact", json!({"id":id})))["done"], true);
+    assert!(ok(&api(&f, f.a, "listActiveFacts", json!({})))["facts"].as_array().unwrap().is_empty());
+    let signature: String = f.rt.block_on(f.root.query_one(
+        "SELECT signature FROM app.chat_memory_suppressions WHERE owner_user_id = $1", &[&f.a])).unwrap().get(0);
+    assert_eq!(signature, sha256_hex("preference::likes tea"));
+    let suppressed = api(&f, f.a, "isSuppressed", json!({"category":"preference","content":"LIKES TEA"}));
+    assert_eq!(ok(&suppressed)["suppressed"], true);
+    // A confirmed fact cannot be rejected, and confirming needs an inferred fact.
+    let kept = ok(&api(&f, f.a, "insertFact", json!({"category":"fact","content":"kept","provenance":"volunteered"})))["fact"]["id"]
+        .as_str().unwrap().to_owned();
+    assert_eq!(ok(&api(&f, f.a, "rejectFact", json!({"id":kept})))["done"], false);
+    assert_eq!(ok(&api(&f, f.a, "confirmFact", json!({"id":kept})))["done"], false);
+    // Corrections paging clamps to 1..100 with an offset of at least 0.
+    let page = api(&f, f.a, "listCorrections", json!({"limit":1000,"offset":-4}));
+    assert_eq!(ok(&page)["corrections"].as_array().unwrap().len(), 1);
+    assert_eq!(ok(&api(&f, f.a, "supersedeFact", json!({"id":kept}))), &json!({}));
+    assert!(ok(&api(&f, f.a, "getActiveFact", json!({"id":kept})))["fact"].is_null());
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn candidate_episode_and_goal_entity_calls_match_the_old_shapes() {
+    let f = Fixture::new();
+    let entity = seed_public(&f, f.a);
+    let input = json!({"kind":"fact","action":"create","payloadJson":{"x":1},"candidateSignature":"sig-clamp",
+        "confidence":7,"importance":-3,"provenance":"inferred"});
+    let first = api(&f, f.a, "insertCandidate", input.clone());
+    let again = api(&f, f.a, "insertCandidate", input.clone());
+    assert_eq!(ok(&first)["candidate"]["id"], ok(&again)["candidate"]["id"], "same signature returns the first row");
+    assert_eq!((ok(&first)["candidate"]["confidence"].as_f64(), ok(&first)["candidate"]["importance"].as_f64()), (Some(1.0), Some(0.0)));
+    assert_eq!(ok(&first)["candidate"]["status"], "pending");
+    let mine = api(&f, f.b, "insertCandidate", input);
+    assert_ne!(ok(&mine)["candidate"]["id"], ok(&first)["candidate"]["id"], "another person gets their own row");
+    // Goals: alias lookup is exact, update renames, forget archives (the old status was refused by the table).
+    assert_eq!(ok(&api(&f, f.a, "findEntityByAlias", json!({"alias":"Marathon"})))["entityId"], entity.as_str());
+    assert!(ok(&api(&f, f.a, "findEntityByAlias", json!({"alias":"marathon"})))["entityId"].is_null());
+    ok(&api(&f, f.a, "updateEntity", json!({"id":entity,"name":"Run more","summary":"a half"})));
+    ok(&api(&f, f.a, "forgetEntity", json!({"id":entity})));
+    let row = f.rt.block_on(f.root.query_one("SELECT name, status FROM app.memory_entities WHERE id = $1::text::uuid", &[&entity])).unwrap();
+    assert_eq!((row.get::<_, String>(0), row.get::<_, String>(1)), ("Run more".into(), "archived".into()));
+    assert_eq!(api(&f, f.a, "nope", json!({}))["error"]["statusCode"], 404);
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_second_person_cannot_read_or_change_the_first_persons_public_data() {
+    let f = Fixture::new();
+    let entity = seed_public(&f, f.a);
+    let fact = ok(&api(&f, f.a, "listActiveFacts", json!({})))["facts"][0]["id"].as_str().unwrap().to_owned();
+    // The bare-count check sees A's rows once row security is off, so the proof below is meaningful.
+    assert_eq!(bare_public(&f, f.b), 0, "row security hides A's rows from B");
+    rls(&f, false);
+    let exposed = bare_public(&f, f.b);
+    let (chunks, listed, recent, corrections, found, got) = (
+        api(&f, f.b, "searchChunks", json!({"query":"x","sourceKind":"screen"})),
+        api(&f, f.b, "listActiveFacts", json!({})),
+        api(&f, f.b, "listRecentChunks", json!({"sourceKind":"chat"})),
+        api(&f, f.b, "listCorrections", json!({})),
+        api(&f, f.b, "findEntityByAlias", json!({"alias":"Marathon"})),
+        api(&f, f.b, "getActiveFact", json!({"id":fact})),
+    );
+    let writes = [
+        api(&f, f.b, "deleteFact", json!({"id":fact})),
+        api(&f, f.b, "confirmFact", json!({"id":fact})),
+        api(&f, f.b, "rejectFact", json!({"id":fact})),
+        api(&f, f.b, "updateFactImportance", json!({"id":fact,"importance":0.1})),
+        api(&f, f.b, "deleteChunksForSources", json!({"sourceKind":"screen","sourcePaths":["backtrack/1"]})),
+    ];
+    ok(&api(&f, f.b, "supersedeFact", json!({"id":fact})));
+    ok(&api(&f, f.b, "updateEntity", json!({"id":entity,"name":"hijack","summary":""})));
+    ok(&api(&f, f.b, "forgetEntity", json!({"id":entity})));
+    rls(&f, true);
+    assert!(exposed > 0, "A's rows were not exposed without row security, so the check proves nothing");
+    assert!(ok(&chunks)["chunks"].as_array().unwrap().is_empty());
+    assert!(ok(&listed)["facts"].as_array().unwrap().is_empty());
+    assert!(ok(&recent)["chunks"].as_array().unwrap().is_empty());
+    assert!(ok(&corrections)["corrections"].as_array().unwrap().is_empty());
+    assert!(ok(&found)["entityId"].is_null() && ok(&got)["fact"].is_null());
+    for w in &writes {
+        assert!(ok(w)["done"] == false || ok(w)["deleted"] == 0, "B changed A's data: {w}");
+    }
+    let state = f.rt.block_on(f.root.query_one(
+        "SELECT (SELECT count(*) FROM app.chat_memory_facts WHERE owner_user_id = $1 AND status = 'active'),
+                (SELECT count(*) FROM app.memory_chunks WHERE owner_user_id = $1 AND source_kind = 'screen'),
+                (SELECT count(*) FROM app.memory_entities WHERE owner_user_id = $1 AND name = 'Run' AND status = 'active')",
+        &[&f.a])).unwrap();
+    assert_eq!((state.get::<_, i64>(0), state.get::<_, i64>(1), state.get::<_, i64>(2)), (1, 1, 1));
+    // A still sees everything.
+    assert_eq!(ok(&api(&f, f.a, "listActiveFacts", json!({})))["facts"].as_array().unwrap().len(), 1);
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn memory_text_stays_out_of_errors_job_payloads_and_activity_rows() {
+    let f = Fixture::new();
+    let marker = format!("zq-marker-{}", Uuid::new_v4());
+    // A failed embedding refuses the call without echoing the text back.
+    let failed = f.guest(f.a, true, "api", json!({"name":"embedTurn","parameters":{
+        "threadId": Uuid::new_v4().to_string(), "userText": marker, "assistantText": "x"}}));
+    let shown = match &failed { Ok(v) => v.to_string(), Err(e) => e.clone() };
+    assert!(!shown.contains(&marker), "an error echoed memory text: {shown}");
+    assert!(shown.contains("503") || failed.is_err());
+    ok(&api(&f, f.a, "insertFact", json!({"category":"fact","content":marker})));
+    ok(&api(&f, f.a, "embedTurn", json!({"threadId":Uuid::new_v4().to_string(),"userText":marker,"assistantText":"y"})));
+    // No table that carries jobs, activity, audit or events holds the text.
+    let tables: Vec<String> = f.rt.block_on(f.root.query(
+        "SELECT table_schema || '.' || table_name FROM information_schema.tables
+         WHERE table_schema IN ('app', 'pgboss') AND table_type = 'BASE TABLE'
+           AND table_name ~ '(job|activity|audit|event|outbox|queue)'", &[])).unwrap()
+        .iter().map(|r| r.get(0)).collect();
+    for t in &tables {
+        let n: i64 = f.rt.block_on(f.root.query_one(&format!("SELECT count(*) FROM {t} x WHERE x::text LIKE $1"), &[&format!("%{marker}%")])).unwrap().get(0);
+        assert_eq!(n, 0, "{t} holds memory text");
+    }
+    eprintln!("checked {} job and activity tables", tables.len());
 }

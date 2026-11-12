@@ -2,13 +2,18 @@
   "schemaVersion": 2,
   "id": "meetings",
   "name": "Meetings",
-  "description": "Keeps each person's meeting records, personal notes and recording defaults private to their account. Create, rename, delete and take versioned notes on meetings, and set recording defaults. Transcripts, History search, recording types and pasted transcripts are included. Recording, summaries, exports and the Meetings screen are not part of this package yet.",
+  "description": "Keeps each person's meeting records, personal notes and recording defaults private to their account. Create, rename, delete and take versioned notes on meetings, and set recording defaults. Transcripts, History search, recording types and pasted transcripts are included. Summaries written by the configured model, with edits, history and an automatic summary after a pasted transcript, are included. Each action a summary proposes can be accepted into Tasks or dismissed. A summary version can be saved as a private copy in your notes, once, and a copy you edited is never overwritten. Your account export holds every meeting collection, including the stored audio of finished recording imports. Recording and the Meetings screen are not part of this package yet.",
   "publisher": "Moss",
   "version": "0.1.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
   "capabilities": [
+    {
+      "port": "api",
+      "operations": ["call"],
+      "resources": ["tasks", "notes"]
+    },
     {
       "port": "db",
       "operations": ["query"],
@@ -39,12 +44,38 @@
     },
     {
       "port": "kv",
-      "operations": ["get", "set", "lock"],
+      "operations": [
+        "get",
+        "set",
+        "lock",
+        "head",
+        "artifact",
+        "artifacts-meta",
+        "artifacts",
+        "candidates",
+        "candidate",
+        "review-set",
+        "request",
+        "expire-pending",
+        "reserve",
+        "finish",
+        "next",
+        "save",
+        "summary",
+        "summary-insert-manual",
+        "summary-set",
+        "list",
+        "receipt",
+        "intend",
+        "section"
+      ],
       "resources": [
         "meetings.preferences",
         "meetings.transcripts",
         "meetings.history",
-        "meetings.recording-types"
+        "meetings.recording-types",
+        "meetings.outputs",
+        "meetings.exports"
       ]
     },
     {
@@ -56,6 +87,16 @@
       "port": "context",
       "operations": ["uuid", "read"],
       "resources": ["new", "call"]
+    },
+    {
+      "port": "ai",
+      "operations": ["generate"],
+      "resources": ["summarization"]
+    },
+    {
+      "port": "jobs",
+      "operations": ["enqueue-after-commit", "enqueue-options"],
+      "resources": ["meetings.stop-summary"]
     }
   ],
   "database": {
@@ -140,31 +181,26 @@
       "path": "/records/:id/transcript",
       "signIn": true
     },
-
     {
       "method": "GET",
       "path": "/records/:id/transcript",
       "signIn": true
     },
-
     {
       "method": "GET",
       "path": "/records/:id/transcript/evidence",
       "signIn": true
     },
-
     {
       "method": "POST",
       "path": "/history/search",
       "signIn": true
     },
-
     {
       "method": "GET",
       "path": "/history/:id",
       "signIn": true
     },
-
     {
       "method": "GET",
       "path": "/recording-types",
@@ -199,9 +235,52 @@
       "method": "PUT",
       "path": "/preferences",
       "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/output-availability",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/records/:id/outputs",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/records/:id/outputs",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/records/:id/outputs",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/records/:id/outputs/:version",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/records/:id/actions/:candidate_id/review",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/records/:id/exports",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/records/:id/exports",
+      "signIn": true
     }
   ],
-  "requires": {},
+  "requires": {
+    "tasks": ">=0.1.2, <1.0.0",
+    "notes": ">=0.1.22, <1.0.0"
+  },
   "provides": {
     "prepareMeetingRoute": "1.0.0",
     "collectMeetingsExportSection": "1.0.0"
@@ -252,6 +331,26 @@
           "code": "meeting_invalid_input",
           "class": "validation",
           "description": "The title, notes or request is not valid"
+        },
+        {
+          "code": "meeting_action_unavailable",
+          "class": "validation",
+          "description": "That proposed action does not exist"
+        },
+        {
+          "code": "meeting_action_match_review_required",
+          "class": "validation",
+          "description": "The action may match an earlier one; confirm to create it anyway"
+        },
+        {
+          "code": "meeting_action_review_conflict",
+          "class": "validation",
+          "description": "The action was already reviewed with the opposite decision"
+        },
+        {
+          "code": "meeting_tasks_unavailable",
+          "class": "transient",
+          "description": "Tasks could not create the task, so the action stays pending"
         },
         {
           "code": "meeting_not_found",
@@ -329,7 +428,7 @@
     },
     {
       "id": "meetings.recording-identity",
-      "description": "Each person keeps a list of recording types (at most 32, names up to 80 characters, descriptions up to 500) and picks one for each meeting. A save must keep every existing type, so a type is retired instead of removed, and a stale save is refused. A pasted transcript (up to 100,000 characters) creates a meeting with its transcript in one step, and a repeated request key returns the first answer. Pasted transcripts do not start a summary yet. Replies are never cached, and nobody else, including admins, can see any of it.",
+      "description": "Each person keeps a list of recording types (at most 32, names up to 80 characters, descriptions up to 500) and picks one for each meeting. A save must keep every existing type, so a type is retired instead of removed, and a stale save is refused. A pasted transcript (up to 100,000 characters) creates a meeting with its transcript in one step, and a repeated request key returns the first answer. A pasted transcript also starts an automatic summary. Replies are never cached, and nobody else, including admins, can see any of it.",
       "errors": [
         {
           "code": "recording_type_configuration_invalid",
@@ -417,6 +516,109 @@
           "code": "meeting_not_found",
           "class": "validation",
           "description": "The meeting does not exist or is not yours"
+        }
+      ]
+    },
+    {
+      "id": "meetings.outputs",
+      "description": "A summary of a meeting is written by the model you configured from your own notes and transcript, using one of four templates. Only your meeting text is sent to the model, and every cited quote is checked against the transcript before the summary is saved. Accepting a proposed action makes one task in Tasks from the title you confirm, and accepting again never makes a second. A possible match with an earlier action needs your confirmation first. Each save is a new numbered version that is never changed, and an edit saves a new version after the same checks. A summary is marked stale when the notes or transcript change afterwards. A repeated request key returns the first answer. Nobody else, including admins, can see any of it.",
+      "errors": [
+        {
+          "code": "meeting_output_invalid_input",
+          "class": "validation",
+          "description": "The request is not valid or the summary text fails validation"
+        },
+        {
+          "code": "meeting_output_evidence_unavailable",
+          "class": "validation",
+          "description": "A quote in the summary cannot be found in the transcript"
+        },
+        {
+          "code": "meeting_output_limit",
+          "class": "validation",
+          "description": "The summary is over a size or version limit"
+        },
+        {
+          "code": "meeting_output_input_too_large",
+          "class": "validation",
+          "description": "The notes and transcript are too large to send to the model"
+        },
+        {
+          "code": "meeting_output_version_conflict",
+          "class": "validation",
+          "description": "The summary, notes or transcript changed since the request was prepared; the current versions are returned"
+        },
+        {
+          "code": "meeting_output_request_conflict",
+          "class": "validation",
+          "description": "This request key was already used with different content"
+        },
+        {
+          "code": "meeting_output_busy",
+          "class": "validation",
+          "description": "Another summary for this meeting is still being written"
+        },
+        {
+          "code": "meeting_output_unavailable",
+          "class": "validation",
+          "description": "That summary version does not exist"
+        },
+        {
+          "code": "meeting_not_found",
+          "class": "validation",
+          "description": "The meeting does not exist or is not yours"
+        }
+      ]
+    },
+    {
+      "id": "meetings.automatic-summary",
+      "description": "A pasted transcript starts a summary on its own, using the recording type's template or the general one. The summary is skipped when the meeting already has one, the transcript changed, or there is no readable text, and the screen says which. The background job carries only the meeting id.",
+      "errors": [
+        {
+          "code": "meeting_output_interrupted",
+          "class": "validation",
+          "description": "The automatic summary was not started in time and was dropped"
+        }
+      ]
+    },
+    {
+      "id": "meetings.exports",
+      "description": "A summary version can be saved once as a private copy in your own notes. The copy is created only when you ask, never overwritten, and a copy you edited or removed is reported as a conflict instead of being replaced. A repeated request key returns the first answer. Notes cannot search private copies yet, so the receipt shows the search step as delayed. Nobody else, including admins, can see any of it.",
+      "errors": [
+        {
+          "code": "meeting_export_request_conflict",
+          "class": "validation",
+          "description": "The request key was already used for another summary version"
+        },
+        {
+          "code": "meeting_export_content_conflict",
+          "class": "validation",
+          "description": "The saved receipt for this version was made from different content"
+        },
+        {
+          "code": "meeting_output_unavailable",
+          "class": "validation",
+          "description": "That summary version does not exist"
+        },
+        {
+          "code": "meeting_vault_conflict",
+          "class": "validation",
+          "description": "The private copy was edited or removed, so it was left alone"
+        },
+        {
+          "code": "meeting_vault_write_failed",
+          "class": "transient",
+          "description": "The private copy could not be saved, so try again"
+        },
+        {
+          "code": "meeting_index_delayed",
+          "class": "transient",
+          "description": "The private copy is saved but not yet searchable"
+        },
+        {
+          "code": "meeting_not_found",
+          "class": "validation",
+          "description": "That meeting does not exist"
         }
       ]
     }

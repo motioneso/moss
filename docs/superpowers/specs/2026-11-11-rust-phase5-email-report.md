@@ -281,3 +281,62 @@ None added. The host reuses the HTTP client, database layer and job queue alread
   covered.
 - The one older Google connect test named above, on a quiet box.
 - Behaviour across a server restart in the middle of a run.
+
+# Part 8: Email understanding
+
+## What was built
+
+- A pass that reads cached mail the person has not been understood yet and stores a summary and
+  signals on each message. It runs on request (`POST /understand`) and handles a batch at a time.
+  It returns only counts: how many were understood, how many failed, and whether an AI service
+  still needs choosing.
+- Mail the person sent from their own address, and sign-in code messages, are settled without any
+  model call.
+- Everything else goes to the person's configured AI model through the router. No provider or
+  model is named. The model sees only the cached subject, sender and preview text, and the received
+  day and today's day in the person's timezone.
+- A first call asks six yes/no questions and turns the answers into a category. A call that is
+  unsure, or that fails, falls back to the general model, which writes the summary and signals.
+  A first-pass gate then decides whether a message is noise, worth knowing, or maybe owed.
+- Failures count as attempts per message. A message that fails five times stops being retried.
+  A changed message (new revision) starts again from zero.
+- Triage feedback and action suppression (dismiss, reset, evidence, deadlines) are stored in the
+  Connectors tables and read through Email, one owner at a time.
+- If no AI service is chosen, or the service is down, the pass stops with a plain "Email could
+  not reach your AI service" message and counts no attempt, so mail is never abandoned because of
+  the service. The router hides which of the two it was.
+- The app map entries in the Email manifest cover the new routes, resources and two new features.
+
+## Proof
+
+- Fixed fake-model cases ported from the old tests: sign-in code rule (9), gate, sorting and
+  reply parsing (9), the whole pass with a scripted model (6).
+- The pass tests check that sign-in and own-sent mail make zero model calls, that a failure counts
+  an attempt and the pass carries on, that a missing AI setup writes nothing, and that prompts
+  carry only cached text and results carry none of it.
+- Email database tests with two people: pending mail carries the local day and known senders,
+  stored results leave the list, failures stop at five, a new revision resets attempts, and a
+  second person neither sees nor changes the first person's mail, suppression or feedback. The
+  protection was switched off in one test and the leak was seen.
+- Native and WebAssembly builds, with tests in both.
+- A live run on the real server over HTTPS with the stand-in mail setup: the pass without a
+  session is refused, the first pass settles the person's own message, the second finds nothing,
+  and the message text and address are found nowhere in the log, job payloads or activity rows.
+
+## Differences from the old app
+
+- The input is the cached preview (up to 500 characters), not the 20,000-character body.
+- Messages are handled one call at a time, not in batches.
+- The six questions are one structured call, because the Rust router has no sorting-model
+  capability. A failed sorting call falls back to the general model.
+- The bulk hint reads the list-unsubscribe flag when present, else the word "unsubscribe".
+- Accent folding uses a hand table, and the sign-in rule is hand-written, with no regex look-around.
+- A known sender is taken from who the person has written to, because Email may not read People.
+- Threads are linked by message id and references, because IMAP has no thread id.
+- Suppression needs Connectors installed.
+
+## Not proven
+
+- A real model pass. It needs a configured AI service and Ben.
+- Today and briefing refresh using these results (not part of this part).
+- Gmail mail (part 7 is separate).

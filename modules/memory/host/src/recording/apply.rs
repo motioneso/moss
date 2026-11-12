@@ -79,6 +79,16 @@ pub(crate) async fn publish(
     }
     let embedding = Embedding::from(&p["embedding"]);
     let status = transition(cx, owner, &receipt, &proposal, &embedding).await?;
+    // Admission is asked again after the row locks are held, so a source fenced in between
+    // rolls the publication back.
+    let after_lock = authority
+        .current(owner, &receipt.source_id)
+        .ok_or_else(changed)?;
+    if proposal.kind != "undo"
+        && (after_lock.version != receipt.source_version || after_lock.side != proposal.side)
+    {
+        return Err(conflict());
+    }
     cx.db()
         .execute(
             "UPDATE app.memory_recording_proposals SET state = 'applied'

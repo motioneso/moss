@@ -14,7 +14,9 @@ const env = {
   MEMORY_CORE_WASM: `${process.env.CARGO_TARGET_DIR ?? "/tmp/moss-memory-host"}/memory-guest/wasm32-unknown-unknown/release/moss_memory.wasm`
 };
 let status = 0;
-for (const suite of (process.env.MEMORY_SUITES ?? "db,dashboard,recording").split(",")) {
+for (const suite of (process.env.MEMORY_SUITES ?? "db,dashboard,recording,reembed,account").split(
+  ","
+)) {
   const run = spawnSync(
     "cargo",
     [
