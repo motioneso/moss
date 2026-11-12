@@ -5,6 +5,7 @@ pub mod lifecycle;
 pub mod package;
 pub mod ports;
 pub mod recording;
+pub mod reembed;
 pub mod store;
 
 pub const MODULE_ID: &str = "memory";

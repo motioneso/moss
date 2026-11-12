@@ -27,7 +27,8 @@
         "memory.entity-patch",
         "memory.entity-delete",
         "memory.subject",
-        "memory.recording"
+        "memory.recording",
+        "memory.reembed"
       ]
     },
     {
@@ -51,7 +52,8 @@
       "resources": [
         "memory.vault-ingest-tick",
         "memory.vault-ingest-sweep",
-        "memory.vault-ingest-nudge"
+        "memory.vault-ingest-nudge",
+        "memory.reembed-step"
       ]
     },
     {
@@ -84,7 +86,10 @@
       "sql/0338_memory_managed_note_snapshots.sql",
       "sql/0339_memory_recording_lineage.sql",
       "sql/0341_memory_recording_cleanup.sql",
-      "sql/0363_memory_ingest_nudges.sql"
+      "sql/0363_memory_ingest_nudges.sql",
+      "sql/0364_memory_reembed_runs.sql",
+      "sql/0365_memory_reembed_one_running.sql",
+      "sql/0366_memory_reembed_staged.sql"
     ],
     "ownedTables": [
       "app.memory_chunks",
@@ -103,7 +108,9 @@
       "app.memory_recording_fact_versions",
       "app.memory_recording_receipts",
       "app.memory_recording_proposals",
-      "app.memory_ingest_nudges"
+      "app.memory_ingest_nudges",
+      "app.memory_reembed_runs",
+      "app.memory_reembed_staged"
     ],
     "ledger": "core-legacy",
     "access": {
@@ -156,6 +163,12 @@
         "access": "owner-only"
       },
       "app.memory_ingest_nudges": {
+        "access": "owner-only"
+      },
+      "app.memory_reembed_runs": {
+        "access": "owner-only"
+      },
+      "app.memory_reembed_staged": {
         "access": "owner-only"
       }
     }
@@ -265,6 +278,21 @@
       "method": "DELETE",
       "path": "/graph/entities/:id",
       "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/reembed",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/reembed/start",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/reembed/cancel",
+      "signIn": true
     }
   ],
   "requires": {},
@@ -286,7 +314,7 @@
   "features": [
     {
       "id": "memory.vault-index",
-      "description": "Each account's notes are split into searchable pieces and indexed every fifteen minutes, covering the private note copies Moss saves and the folder named in the account's people notes preference. The Attachments and Exports folders are never indexed. Changed files are re-indexed, deleted files are dropped, and a change of search model re-indexes everything once. A restart does not re-index. Other modules can ask for one saved note copy to be indexed sooner through the requestVaultIndex API.",
+      "description": "Each account's notes are split into searchable pieces and indexed every fifteen minutes, covering the private note copies Moss saves and the folder named in the account's people notes preference. The Attachments and Exports folders are never indexed. Changed files are re-indexed, deleted files are dropped, and an unchanged note is not read again after a change of search model. The owner starts that re-embed from the Search model settings screen. A restart does not re-index. Other modules can ask for one saved note copy to be indexed sooner through the requestVaultIndex API.",
       "errors": [
         {
           "code": "memory-index-unavailable",
@@ -483,6 +511,35 @@
         }
       ],
       "remediations": []
+    },
+    {
+      "id": "memory.reembed",
+      "description": "After the search model changes, the Search model settings screen counts the passages made with another model, and the owner can re-embed them. The old vectors are kept until every new one is ready and then all swap in at once. Search only reads vectors made by the current model, so note search misses old passages until the run finishes. The owner can cancel a run, and a stopped or failed run leaves the old vectors as they were. Every fifteen minutes Moss also gives facts that were saved without a vector another try.",
+      "errors": [
+        {
+          "code": "reembed-already-running",
+          "class": "validation",
+          "description": "A re-embed is already running"
+        },
+        {
+          "code": "reembed-nothing-to-do",
+          "class": "validation",
+          "description": "Nothing needs a new search model"
+        },
+        {
+          "code": "reembed-stopped",
+          "class": "transient",
+          "description": "The re-embed stopped and the old search data is unchanged. Start it again.",
+          "remediationRef": "memory-set-up-embedding"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "memory-set-up-embedding",
+          "description": "Check the search model settings",
+          "path": "/settings/memory/search-model"
+        }
+      ]
     }
   ],
   "tools": {
@@ -509,6 +566,11 @@
     },
     "memory.vault-ingest-nudge": {
       "nudge-id": {
+        "kind": "id"
+      }
+    },
+    "memory.reembed-step": {
+      "run-id": {
         "kind": "id"
       }
     }

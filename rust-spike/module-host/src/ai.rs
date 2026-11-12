@@ -461,4 +461,7 @@ impl crate::memory_search::QueryEmbeddings for IntelligenceEmbeddings {
     fn embed_query(&self, scope: &CallScope, query: &str) -> Result<Vec<f64>> {
         self.embed(scope, EmbeddingKind::Query, query)
     }
+    fn query_model(&self, scope: &CallScope) -> Result<Option<String>> {
+        Ok(Some(self.ai.embedding_model(scope)?.0))
+    }
 }

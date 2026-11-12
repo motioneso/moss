@@ -94,12 +94,12 @@ fn subject_ids(facts: &[&Value]) -> Vec<String> {
 
 /// Up to 100 facts that could answer a query, each with its search text and how close its
 /// stored vector is to the query vector. `vector` is the embedded query.
-pub async fn recall(cx: &DataContext, p: &Value, vector: &str) -> Result<Value> {
+pub async fn recall(cx: &DataContext, p: &Value, vector: &str, model: &str) -> Result<Value> {
     let inactive = p["includeInactive"].as_bool().unwrap_or(false);
     let stale = p["includeStale"].as_bool().unwrap_or(false);
     let sql = format!(
         "SELECT {fact} AS fact, d.search_text,
-                (CASE WHEN d.embedding IS NULL THEN 0
+                (CASE WHEN d.embedding IS NULL OR d.embed_model_name IS DISTINCT FROM $4 THEN 0
                       ELSE 1 - (d.embedding <=> $1::text::vector) END)::float8 AS similarity,
                 floor(extract(epoch FROM now()) * 1000)::float8 AS now_ms
          FROM app.memory_facts f
@@ -117,7 +117,7 @@ pub async fn recall(cx: &DataContext, p: &Value, vector: &str) -> Result<Value> 
          LIMIT 100",
         fact = fact_json("f"),
     );
-    let rows = cx.db().query(&sql, &[&vector, &inactive, &stale]).await?;
+    let rows = cx.db().query(&sql, &[&vector, &inactive, &stale, &model]).await?;
     let mut now_ms = 0.0;
     let mut candidates = Vec::new();
     for row in &rows {
@@ -361,7 +361,7 @@ pub async fn run(cx: &DataContext, request: &Request, vector: Option<&str>) -> R
     let p = &request.parameters;
     match (request.operation.as_str(), request.resource.as_str()) {
         ("get", "memory.recall") => {
-            recall(cx, p, vector.ok_or_else(|| anyhow!("Missing vector"))?).await
+            recall(cx, p, vector.ok_or_else(|| anyhow!("Missing vector"))?, p["model"].as_str().unwrap_or("")).await
         }
         ("get", "memory.core") => core(cx, p).await,
         ("set", "memory.entity") => create_entity(cx, p).await,

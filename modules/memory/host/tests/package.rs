@@ -71,6 +71,8 @@ fn the_package_asks_only_for_its_own_memory_resources() {
         ("set", "memory.entity-patch"),
         ("set", "memory.entity-delete"),
         ("set", "memory.subject"),
+        ("get", "memory.reembed"),
+        ("set", "memory.reembed"),
     ] {
         ask("kv", operation, resource).unwrap();
     }
@@ -86,7 +88,7 @@ fn the_package_asks_only_for_its_own_memory_resources() {
 }
 
 #[test]
-fn the_twenty_one_routes_and_three_tools_are_declared() {
+fn the_twenty_four_routes_and_three_tools_are_declared() {
     let manifest = moss_memory_host::package::manifest().unwrap();
     let routes: Vec<_> = manifest.routes.iter().map(|r| (r.method.as_str(), r.path.as_str())).collect();
     assert_eq!(
@@ -112,7 +114,10 @@ fn the_twenty_one_routes_and_three_tools_are_declared() {
             ("POST", "/candidates/:id/suppress"),
             ("PATCH", "/graph/facts/:id"),
             ("PATCH", "/graph/entities/:id"),
-            ("DELETE", "/graph/entities/:id")
+            ("DELETE", "/graph/entities/:id"),
+            ("GET", "/reembed"),
+            ("POST", "/reembed/start"),
+            ("POST", "/reembed/cancel")
         ]
     );
     assert!(manifest.routes.iter().all(|r| r.sign_in));
@@ -125,7 +130,7 @@ fn the_twenty_one_routes_and_three_tools_are_declared() {
     let features: Vec<_> = manifest.features.iter().filter_map(|f| f["id"].as_str()).collect();
     for id in [
         "memory.recall", "memory.remember", "memory.vault-index", "memory.lifecycle",
-        "memory.conflict_groups", "memory.forget_approval",
+        "memory.conflict_groups", "memory.forget_approval", "memory.reembed",
     ] {
         assert!(features.contains(&id), "{id} must be in the app map");
     }
@@ -143,9 +148,12 @@ fn memory_is_required_bundled_and_cannot_be_removed() {
 #[test]
 fn the_sixteen_legacy_tables_match_the_frozen_inventory() {
     let manifest = moss_memory_host::package::manifest().unwrap();
-    assert_eq!(manifest.database.owned_tables.len(), 17);
+    assert_eq!(manifest.database.owned_tables.len(), 19);
     let mut expected = manifest.database.owned_tables.clone();
-    expected.retain(|t| t != "app.memory_ingest_nudges");
+    expected.retain(|t| {
+        !["app.memory_ingest_nudges", "app.memory_reembed_runs", "app.memory_reembed_staged"]
+            .contains(&t.as_str())
+    });
     expected.sort();
     let mut frozen = moss_module_host::legacy::tables("memory").to_vec();
     frozen.sort();
@@ -162,7 +170,7 @@ fn the_package_keeps_every_applied_sql_file_byte_for_byte() {
         &"0.1.0".parse().unwrap(),
     )
     .unwrap();
-    assert_eq!(package.manifest.database.migrations.len(), 23);
+    assert_eq!(package.manifest.database.migrations.len(), 26);
     assert_eq!(package.manifest.screens["/settings/memory"], "ui/index.html");
     assert_eq!(package.manifest.screens["/settings/memory/search-model"], "ui/embedding.html");
     moss_module_host::sql::check(&package, &Default::default()).unwrap();

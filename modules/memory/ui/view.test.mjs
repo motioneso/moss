@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { esc, factRows, reviewRows, historyRows, detail, empty, broken, pager } from "./view.mjs";
 import { memoryApi } from "./api.mjs";
+import { describe } from "./reembed.mjs";
 
 const fact = {
   id: "f1",
@@ -58,4 +59,19 @@ test("the api maps a failure status to an error and passes bodies through", asyn
     (e) => e.status === 409 && e.detail === "Ambiguous"
   );
   assert.deepEqual(calls[1], ["POST", "/candidates/c1/accept", {}]);
+});
+
+test("the re-embed section shows only what is true and offers one action", () => {
+  assert.equal(describe({ otherModel: 0, run: null }), null);
+  assert.deepEqual(describe({ otherModel: 3, run: null }), {
+    text: "3 passages use another model.",
+    button: "Re-embed",
+    act: "start"
+  });
+  assert.equal(describe({ otherModel: 1, run: null }).text, "1 passage uses another model.");
+  const going = describe({ otherModel: 3, run: { status: "running", staged: 2, total: 3 } });
+  assert.equal(going.text, "Re-embedding: 2 of 3 passages.");
+  assert.equal(going.act, "cancel");
+  assert.equal(describe({ otherModel: 3, run: { status: "failed" } }).act, "start");
+  assert.equal(describe({ otherModel: 0, run: { status: "done" } }), null);
 });

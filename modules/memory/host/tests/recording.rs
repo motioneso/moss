@@ -26,6 +26,9 @@ impl Embedder for Same {
     fn document(&self, _: &CallScope, _: &str) -> anyhow::Result<(Vec<f64>, (String, String))> {
         Ok((unit(), ("stand-in".into(), "1".into())))
     }
+    fn model(&self, _: &CallScope) -> anyhow::Result<(String, String)> {
+        Ok(("stand-in".into(), "1".into()))
+    }
 }
 
 /// Meetings' answers, changeable by the test.

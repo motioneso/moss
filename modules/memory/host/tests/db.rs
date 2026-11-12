@@ -31,6 +31,9 @@ impl Embedder for Same {
         anyhow::ensure!(!self.fail_documents, "embedding service is down");
         Ok((unit(), ("stand-in".into(), "1".into())))
     }
+    fn model(&self, _: &CallScope) -> anyhow::Result<(String, String)> {
+        Ok(("stand-in".into(), "1".into()))
+    }
 }
 
 struct Fixture {
@@ -83,7 +86,7 @@ impl Fixture {
     }
 
     fn recalled(&self, actor: Uuid) -> Vec<Value> {
-        self.store(actor, "get", "memory.recall", json!({"query": "anything"}))["candidates"]
+        self.store(actor, "get", "memory.recall", json!({"query": "anything", "model": "stand-in"}))["candidates"]
             .as_array()
             .unwrap()
             .clone()
