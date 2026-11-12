@@ -3,7 +3,12 @@
 //! stopped, cancelled or failed run leaves the old vectors exactly as they were. Only counts,
 //! ids and model names cross this boundary; passage text never leaves the database except to
 //! the embedding service.
+//!
+//! The two run tables belong to the module, so they are only reachable as the module's own
+//! database role. Passages and facts belong to the app role. Each statement block switches to
+//! the role that owns what it touches and switches back, all inside one transaction.
 use anyhow::Result;
+use moss_module_host::database::runtime_role;
 use safety_core::db::DataContext;
 use serde_json::{json, Value};
 
@@ -20,6 +25,36 @@ pub struct Pending {
     pub id: String,
     pub hash: String,
     pub text: String,
+}
+
+async fn module_role(cx: &DataContext) -> Result<()> {
+    cx.db().batch_execute(&format!("SET LOCAL ROLE {}", runtime_role(crate::MODULE_ID))).await?;
+    Ok(())
+}
+
+async fn app_role(cx: &DataContext) -> Result<()> {
+    cx.db().batch_execute("RESET ROLE").await?;
+    Ok(())
+}
+
+const TARGETS: [(&str, &str, &str); 2] = [
+    ("chunk", "app.memory_chunks", "text"),
+    ("document", "app.memory_search_documents", "search_text"),
+];
+
+/// Ids this run has already staged for one kind of passage.
+async fn staged_ids(cx: &DataContext, run: &str, kind: &str) -> Result<Vec<String>> {
+    module_role(cx).await?;
+    let rows = cx
+        .db()
+        .query(
+            "SELECT target_id::text FROM app.memory_reembed_staged
+             WHERE run_id = $1::text::uuid AND target_kind = $2",
+            &[&run, &kind],
+        )
+        .await?;
+    app_role(cx).await?;
+    Ok(rows.iter().map(|r| r.get(0)).collect())
 }
 
 /// Counts that the Memory screen shows. `other` counts passages whose vector was made by a
@@ -41,6 +76,7 @@ pub async fn status(cx: &DataContext, model: &(String, String)) -> Result<Value>
             &[&model.0],
         )
         .await?;
+    module_role(cx).await?;
     let run = cx
         .db()
         .query_opt(
@@ -56,6 +92,7 @@ pub async fn status(cx: &DataContext, model: &(String, String)) -> Result<Value>
             json!({"id": row.get::<_, String>(0), "status": row.get::<_, String>(1),
                    "total": row.get::<_, i32>(2), "staged": row.get::<_, i64>(3)})
         });
+    app_role(cx).await?;
     Ok(json!({
         "model": {"name": model.0, "version": model.1},
         "otherModel": counts.get::<_, i64>(0),
@@ -66,6 +103,7 @@ pub async fn status(cx: &DataContext, model: &(String, String)) -> Result<Value>
 
 /// Starts a run for the current model. Refused when one is already running or nothing needs it.
 pub async fn start(cx: &DataContext, model: &(String, String)) -> Result<Value> {
+    module_role(cx).await?;
     let running = cx
         .db()
         .query_opt(
@@ -74,6 +112,7 @@ pub async fn start(cx: &DataContext, model: &(String, String)) -> Result<Value> 
             &[],
         )
         .await?;
+    app_role(cx).await?;
     if running.is_some() {
         return Ok(refused(409, "A re-embed is already running"));
     }
@@ -81,6 +120,7 @@ pub async fn start(cx: &DataContext, model: &(String, String)) -> Result<Value> 
     if total == 0 {
         return Ok(refused(409, "Nothing needs a new search model"));
     }
+    module_role(cx).await?;
     let id: String = cx
         .db()
         .query_one(
@@ -91,12 +131,14 @@ pub async fn start(cx: &DataContext, model: &(String, String)) -> Result<Value> 
         )
         .await?
         .get(0);
+    app_role(cx).await?;
     Ok(json!({"id": id, "status": "running", "total": total, "staged": 0}))
 }
 
 /// The run's target model while it is still running.
 pub async fn running(cx: &DataContext, run: &str) -> Result<Option<(String, String)>> {
-    Ok(cx
+    module_role(cx).await?;
+    let found = cx
         .db()
         .query_opt(
             "SELECT model_name, model_version FROM app.memory_reembed_runs
@@ -105,100 +147,114 @@ pub async fn running(cx: &DataContext, run: &str) -> Result<Option<(String, Stri
             &[&run],
         )
         .await?
-        .map(|row| (row.get(0), row.get(1))))
+        .map(|row| (row.get(0), row.get(1)));
+    app_role(cx).await?;
+    Ok(found)
 }
 
 /// The next passages that still have no staged vector for this run.
 pub async fn next_batch(cx: &DataContext, run: &str, model: &str) -> Result<Vec<Pending>> {
     let mut out = Vec::new();
-    for (kind, table, column) in [
-        ("chunk", "app.memory_chunks", "text"),
-        ("document", "app.memory_search_documents", "search_text"),
-    ] {
+    for (kind, table, column) in TARGETS {
         let left = BATCH - out.len() as i64;
         if left <= 0 {
             break;
         }
+        let done = staged_ids(cx, run, kind).await?;
         let sql = format!(
             "SELECT t.id::text, md5(t.{column}), t.{column} FROM {table} t
              WHERE t.owner_user_id = app.current_actor_user_id() AND t.embedding IS NOT NULL
-               AND t.embed_model_name IS DISTINCT FROM $2
-               AND NOT EXISTS (SELECT 1 FROM app.memory_reembed_staged s
-                               WHERE s.run_id = $1::text::uuid AND s.target_kind = '{kind}'
-                                 AND s.target_id = t.id)
+               AND t.embed_model_name IS DISTINCT FROM $1
+               AND t.id <> ALL($2::text[]::uuid[])
              ORDER BY t.id LIMIT $3"
         );
-        for row in cx.db().query(&sql, &[&run, &model, &left]).await? {
+        for row in cx.db().query(&sql, &[&model, &done, &left]).await? {
             out.push(Pending { kind, id: row.get(0), hash: row.get(1), text: row.get(2) });
         }
     }
     Ok(out)
 }
 
-/// Stages one vector, but only while the passage still holds the text that was embedded.
+/// Stages one vector with the hash of the text that was embedded. The swap applies it only
+/// while the passage still has that text.
 pub async fn stage(cx: &DataContext, run: &str, item: &Pending, vector: &str) -> Result<()> {
-    let table = if item.kind == "chunk" { "app.memory_chunks" } else { "app.memory_search_documents" };
-    let column = if item.kind == "chunk" { "text" } else { "search_text" };
-    let sql = format!(
-        "INSERT INTO app.memory_reembed_staged(run_id, owner_user_id, target_kind, target_id, text_hash, embedding)
-         SELECT $1::text::uuid, app.current_actor_user_id(), '{kind}', t.id, md5(t.{column}), $4::text::vector
-         FROM {table} t
-         WHERE t.owner_user_id = app.current_actor_user_id() AND t.id = $2::text::uuid
-           AND md5(t.{column}) = $3
-         ON CONFLICT DO NOTHING",
-        kind = item.kind
-    );
-    cx.db().execute(&sql, &[&run, &item.id, &item.hash, &vector]).await?;
+    module_role(cx).await?;
+    cx.db()
+        .execute(
+            "INSERT INTO app.memory_reembed_staged(run_id, owner_user_id, target_kind, target_id, text_hash, embedding)
+             VALUES ($1::text::uuid, app.current_actor_user_id(), $2, $3::text::uuid, $4, $5::text::vector)
+             ON CONFLICT DO NOTHING",
+            &[&run, &item.kind, &item.id, &item.hash, &vector],
+        )
+        .await?;
+    app_role(cx).await?;
     Ok(())
 }
 
 /// Passages still waiting for a staged vector.
 pub async fn remaining(cx: &DataContext, run: &str, model: &str) -> Result<i64> {
-    let row = cx
-        .db()
-        .query_one(
-            "SELECT
-               (SELECT count(*) FROM app.memory_chunks t
-                 WHERE t.owner_user_id = app.current_actor_user_id() AND t.embedding IS NOT NULL
-                   AND t.embed_model_name IS DISTINCT FROM $2
-                   AND NOT EXISTS (SELECT 1 FROM app.memory_reembed_staged s WHERE s.run_id = $1::text::uuid
-                                   AND s.target_kind = 'chunk' AND s.target_id = t.id))::int8
-             + (SELECT count(*) FROM app.memory_search_documents t
-                 WHERE t.owner_user_id = app.current_actor_user_id() AND t.embedding IS NOT NULL
-                   AND t.embed_model_name IS DISTINCT FROM $2
-                   AND NOT EXISTS (SELECT 1 FROM app.memory_reembed_staged s WHERE s.run_id = $1::text::uuid
-                                   AND s.target_kind = 'document' AND s.target_id = t.id))::int8",
-            &[&run, &model],
-        )
-        .await?;
-    Ok(row.get(0))
+    let mut total = 0;
+    for (kind, table, _) in TARGETS {
+        let done = staged_ids(cx, run, kind).await?;
+        let row = cx
+            .db()
+            .query_one(
+                &format!(
+                    "SELECT count(*)::int8 FROM {table} t
+                     WHERE t.owner_user_id = app.current_actor_user_id() AND t.embedding IS NOT NULL
+                       AND t.embed_model_name IS DISTINCT FROM $1
+                       AND t.id <> ALL($2::text[]::uuid[])"
+                ),
+                &[&model, &done],
+            )
+            .await?;
+        total += row.get::<_, i64>(0);
+    }
+    Ok(total)
 }
 
-/// Swaps every staged vector in with one statement batch inside the caller's transaction, then
-/// marks the run done. A passage whose text changed since it was staged keeps its old vector.
+/// Swaps every staged vector in, a slice at a time, inside the caller's transaction, then marks
+/// the run done. A passage whose text changed since it was staged keeps its old vector.
 pub async fn swap(cx: &DataContext, run: &str, model: &(String, String)) -> Result<()> {
-    for (table, column, kind) in [
-        ("app.memory_chunks", "text", "chunk"),
-        ("app.memory_search_documents", "search_text", "document"),
-    ] {
-        let sql = format!(
-            "UPDATE {table} t SET embedding = s.embedding, embed_model_name = $2,
-                    embed_model_version = $3, updated_at = now()
-             FROM app.memory_reembed_staged s
-             WHERE s.run_id = $1::text::uuid AND s.target_kind = '{kind}' AND s.target_id = t.id
-               AND t.owner_user_id = app.current_actor_user_id()
-               AND md5(t.{column}) = s.text_hash"
-        );
-        cx.db().execute(&sql, &[&run, &model.0, &model.1]).await?;
+    for (kind, table, column) in TARGETS {
+        let mut after = String::from("00000000-0000-0000-0000-000000000000");
+        loop {
+            module_role(cx).await?;
+            let slice = cx
+                .db()
+                .query(
+                    "SELECT target_id::text, text_hash, embedding::text FROM app.memory_reembed_staged
+                     WHERE run_id = $1::text::uuid AND target_kind = $2 AND target_id > $3::text::uuid
+                     ORDER BY target_id LIMIT 500",
+                    &[&run, &kind, &after],
+                )
+                .await?;
+            app_role(cx).await?;
+            let Some(last) = slice.last() else { break };
+            after = last.get(0);
+            let ids: Vec<String> = slice.iter().map(|r| r.get(0)).collect();
+            let hashes: Vec<String> = slice.iter().map(|r| r.get(1)).collect();
+            let vectors: Vec<String> = slice.iter().map(|r| r.get(2)).collect();
+            cx.db()
+                .execute(
+                    &format!(
+                        "UPDATE {table} t SET embedding = s.vector::vector, embed_model_name = $4,
+                                embed_model_version = $5, updated_at = now()
+                         FROM unnest($1::text[], $2::text[], $3::text[]) AS s(id, hash, vector)
+                         WHERE t.id = s.id::uuid AND t.owner_user_id = app.current_actor_user_id()
+                           AND md5(t.{column}) = s.hash"
+                    ),
+                    &[&ids, &hashes, &vectors, &model.0, &model.1],
+                )
+                .await?;
+        }
     }
-    cx.db()
-        .execute("DELETE FROM app.memory_reembed_staged WHERE run_id = $1::text::uuid", &[&run])
-        .await?;
     close(cx, run, "done").await
 }
 
 /// Ends a run and drops what it staged. Old vectors are untouched.
 pub async fn close(cx: &DataContext, run: &str, status: &str) -> Result<()> {
+    module_role(cx).await?;
     cx.db()
         .execute(
             "UPDATE app.memory_reembed_runs SET status = $2, finished_at = now()
@@ -207,16 +263,16 @@ pub async fn close(cx: &DataContext, run: &str, status: &str) -> Result<()> {
             &[&run, &status],
         )
         .await?;
-    if status != "done" {
-        cx.db()
-            .execute("DELETE FROM app.memory_reembed_staged WHERE run_id = $1::text::uuid", &[&run])
-            .await?;
-    }
+    cx.db()
+        .execute("DELETE FROM app.memory_reembed_staged WHERE run_id = $1::text::uuid", &[&run])
+        .await?;
+    app_role(cx).await?;
     Ok(())
 }
 
 /// Cancels the running run, if any, and returns whether one was running.
 pub async fn cancel(cx: &DataContext) -> Result<Value> {
+    module_role(cx).await?;
     let run: Option<String> = cx
         .db()
         .query_opt(
@@ -226,6 +282,7 @@ pub async fn cancel(cx: &DataContext) -> Result<Value> {
         )
         .await?
         .map(|row| row.get(0));
+    app_role(cx).await?;
     let Some(run) = run else { return Ok(json!({"cancelled": false})) };
     close(cx, &run, "cancelled").await?;
     Ok(json!({"cancelled": true}))
@@ -251,7 +308,8 @@ pub async fn missing(cx: &DataContext, limit: i64) -> Result<Vec<(String, String
 /// Takes the run's row lock and says whether it is still running. Cancel takes the same lock,
 /// so a step never stages after a cancel has been committed.
 pub async fn hold(cx: &DataContext, run: &str) -> Result<bool> {
-    Ok(cx
+    module_role(cx).await?;
+    let held = cx
         .db()
         .query_opt(
             "SELECT 1 FROM app.memory_reembed_runs
@@ -260,11 +318,14 @@ pub async fn hold(cx: &DataContext, run: &str) -> Result<bool> {
             &[&run],
         )
         .await?
-        .is_some())
+        .is_some();
+    app_role(cx).await?;
+    Ok(held)
 }
 
 /// How far a run has got, as total passages and staged passages.
 pub async fn progress(cx: &DataContext, run: &str) -> Result<(i64, i64)> {
+    module_role(cx).await?;
     let row = cx
         .db()
         .query_one(
@@ -275,5 +336,6 @@ pub async fn progress(cx: &DataContext, run: &str) -> Result<(i64, i64)> {
             &[&run],
         )
         .await?;
+    app_role(cx).await?;
     Ok((row.get(0), row.get(1)))
 }
