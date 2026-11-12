@@ -10,6 +10,11 @@
   "abi": "moss:module@1",
   "capabilities": [
     {
+      "port": "api",
+      "operations": ["call"],
+      "resources": ["tasks"]
+    },
+    {
       "port": "db",
       "operations": ["query"],
       "resources": [
@@ -248,9 +253,16 @@
       "method": "GET",
       "path": "/records/:id/outputs/:version",
       "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/records/:id/actions/:candidateId/review",
+      "signIn": true
     }
   ],
-  "requires": {},
+  "requires": {
+    "tasks": ">=0.1.2, <1.0.0"
+  },
   "provides": {
     "prepareMeetingRoute": "1.0.0",
     "collectMeetingsExportSection": "1.0.0"
@@ -301,6 +313,26 @@
           "code": "meeting_invalid_input",
           "class": "validation",
           "description": "The title, notes or request is not valid"
+        },
+        {
+          "code": "meeting_action_unavailable",
+          "class": "validation",
+          "description": "That proposed action does not exist"
+        },
+        {
+          "code": "meeting_action_match_review_required",
+          "class": "validation",
+          "description": "The action may match an earlier one; confirm to create it anyway"
+        },
+        {
+          "code": "meeting_action_review_conflict",
+          "class": "validation",
+          "description": "The action was already reviewed with the opposite decision"
+        },
+        {
+          "code": "meeting_tasks_unavailable",
+          "class": "transient",
+          "description": "Tasks could not create the task, so the action stays pending"
         },
         {
           "code": "meeting_not_found",

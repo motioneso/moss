@@ -60,6 +60,7 @@ pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
         ("GET", "/records/:id/outputs/:version") => output_routes::get(host, &request),
         ("POST", "/records/:id/outputs") => output_routes::post(host, &request),
         ("PUT", "/records/:id/outputs") => output_routes::put(host, &request),
+        ("POST", "/records/:id/actions/:candidateId/review") => output_routes::review(host, &request),
         ("GET", "/preferences") => preferences::get(host),
         ("PUT", "/preferences") => preferences::put(host, &request.body),
         _ => return Response::new(404, json!({"message":"Route not found"})),

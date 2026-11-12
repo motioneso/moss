@@ -1,5 +1,5 @@
 //! Summary routes: list, read one version, generate and edit.
-use crate::output_service::{self as service, Answer, Edit, Generate};
+use crate::output_service::{self as service, Answer, Edit, Generate, Review};
 use crate::output_validation::TEMPLATES;
 use crate::outputs;
 use crate::schema::{id_params, int_value, strict_object, Failure, Kind};
@@ -193,4 +193,39 @@ pub fn put<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Respons
         return Ok(answer(service::refuse(400, "meeting_output_invalid_input")));
     };
     Ok(answer(service::edit(host, &id, &input)?))
+}
+
+pub fn review<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Response> {
+    let mut params = Value::Object(request.params.iter().map(|(k, v)| (k.clone(), Value::String(v.clone()))).collect());
+    if let Err(f) = strict_object(
+        "params",
+        &mut params,
+        &["id", "candidateId"],
+        &[("id", Kind::Uuid), ("candidateId", Kind::Uuid)],
+        0,
+    ) {
+        return Ok(invalid(f));
+    }
+    let id = params["id"].as_str().unwrap_or_default().to_lowercase();
+    let candidate = params["candidateId"].as_str().unwrap_or_default().to_lowercase();
+    let mut body = request.body.clone();
+    if let Err(f) = strict_object(
+        "body",
+        &mut body,
+        &["requestKey", "decision"],
+        &[
+            ("requestKey", Kind::Uuid),
+            ("decision", Kind::Enum(&["accept", "dismiss"])),
+            ("title", Kind::Text { min: 1, max: 500 }),
+            ("dueAt", Kind::NullableDateTime),
+            ("createDespitePossibleMatches", Kind::Bool),
+        ],
+        0,
+    ) {
+        return Ok(invalid(f));
+    }
+    let Ok(input) = serde_json::from_value::<Review>(body) else {
+        return Ok(answer(service::refuse(400, "meeting_output_invalid_input")));
+    };
+    Ok(answer(service::review(host, &id, &candidate, &input)?))
 }

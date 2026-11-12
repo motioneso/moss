@@ -24,6 +24,9 @@ pub enum Kind {
     Object,
     /// Present and checked elsewhere.
     Any,
+    Bool,
+    /// `null` or `format: "date-time"`.
+    NullableDateTime,
 }
 
 fn object<'a>(var: &str, value: &'a Value) -> Result<&'a Map<String, Value>, Failure> {
@@ -53,6 +56,12 @@ fn check(var: &str, name: &str, kind: Kind, value: &Value) -> Result<(), Failure
             Ok(())
         }
         Kind::Any => Ok(()),
+        Kind::Bool => match value {
+            Value::Bool(_) => Ok(()),
+            _ => Err(format!("{at} must be boolean")),
+        },
+        Kind::NullableDateTime if value.is_null() => Ok(()),
+        Kind::NullableDateTime => check(var, name, Kind::DateTime, value),
         Kind::Object => match value {
             Value::Object(_) => Ok(()),
             _ => Err(format!("{at} must be object")),
