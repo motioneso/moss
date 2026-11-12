@@ -2641,9 +2641,11 @@ dependencies = [
  "anyhow",
  "moss-module-host",
  "safety-core",
+ "serde",
  "serde_json",
  "tokio",
  "tokio-postgres",
+ "uuid",
 ]
 
 [[package]]
