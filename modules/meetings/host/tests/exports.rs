@@ -64,7 +64,9 @@ impl World {
         assert_eq!(self.call(actor, "POST", &format!("/records/{id}/transcript"), batch)["status"], 201);
         let cite = json!({"kind":"transcript","meetingId":id,"segmentId":"s1","segmentRevision":1,"startCharacter":0,"endCharacter":6});
         let reply = json!({"overview": format!("We reviewed {MARK}."), "decisions": [{"text": "Review the budget", "evidence": [cite]}],
-            "openQuestions": [], "actions": [], "warnings": []});
+            "openQuestions": [], "actions": [], "warnings": [],
+            "recording": {"title": "Budget review", "typeId": "work-meeting", "side": "work", "confidence": 0.9,
+                "reason": "It is about a budget", "ideaGroups": []}});
         self.model.replies.lock().unwrap().push(reply.to_string());
         let body = json!({"requestKey": K1, "expectedOutputVersion": 0, "expectedTranscriptRevision": 1,
             "expectedNotesRevision": 0, "templateId": "general", "templateVersion": 1});
