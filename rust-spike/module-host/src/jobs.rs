@@ -230,7 +230,7 @@ impl Installer {
                 "job",
                 &json!({"queue":local,"parameters":params}).to_string(),
             )
-            .map(|_| ())
+            .map(|o| safety_core::http::log(json!({"event":"TEMP_DIAG_JOB","params":params,"out":format!("{o:?}")})))
         })();
         runtime.block_on(queue.finish(&job, result.is_ok()))?;
         result?;
