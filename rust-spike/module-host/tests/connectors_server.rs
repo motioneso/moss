@@ -482,10 +482,22 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
         let r = client.get(format!("{origin}/api/m/calendar/events")).header("origin", &origin).header("cookie", &cookie).send().unwrap();
         json_of(&r.text().unwrap_or_default())["events"].as_array().cloned().unwrap_or_default()
     };
+    let jobs_now = || {
+        runtime.block_on(async {
+            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+            tokio::spawn(async move {
+                let _ = connection.await;
+            });
+            db.query("SELECT name, state, retry_count, left(coalesce(output::text,''),200) FROM pgboss.job WHERE name LIKE 'google%' ORDER BY created_on DESC LIMIT 6", &[])
+                .await
+                .map(|rows| rows.iter().map(|r| format!("{} {} retry={} {}", r.get::<_, String>(0), r.get::<_, String>(1), r.get::<_, i32>(2), r.get::<_, String>(3))).collect::<Vec<_>>())
+                .unwrap_or_else(|e| vec![format!("job query failed: {e}")])
+        })
+    };
     let wait_until = |what: &str, check: &dyn Fn() -> bool| {
         let started = Instant::now();
         while !check() {
-            assert!(started.elapsed() < Duration::from_secs(120), "Google sync did not settle: {what}; account {} mail {} events {}\n{}", account_row(), saved_mail().len(), saved_events().len(), log());
+            assert!(started.elapsed() < Duration::from_secs(120), "Google sync did not settle: {what}; account {} mail {} events {}; jobs {:?}\n{}", account_row(), saved_mail().len(), saved_events().len(), jobs_now(), log());
             std::thread::sleep(Duration::from_millis(500));
         }
     };
