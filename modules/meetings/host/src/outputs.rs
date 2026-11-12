@@ -134,14 +134,15 @@ pub async fn run(cx: &DataContext, operation: &str, parameters: &Value) -> Resul
             let key = key()?;
             let row = db
                 .query_opt(
-                    "SELECT input_json,result_json,expires_at<=clock_timestamp() FROM app.meeting_output_requests WHERE meeting_id=$1::text::uuid AND request_key=$2::text::uuid",
+                    "SELECT input_json,result_json,expires_at<=clock_timestamp(),to_char(expires_at AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') FROM app.meeting_output_requests WHERE meeting_id=$1::text::uuid AND request_key=$2::text::uuid",
                     &[&meeting, &key],
                 )
                 .await?;
             Ok(match row {
                 None => json!({"found": false}),
                 Some(r) => json!({"found": true, "inputJson": r.get::<_, String>(0),
-                    "resultJson": r.get::<_, Option<String>>(1), "expired": r.get::<_, bool>(2)}),
+                    "resultJson": r.get::<_, Option<String>>(1), "expired": r.get::<_, bool>(2),
+                    "expiresAt": r.get::<_, String>(3)}),
             })
         }
         "expire-pending" => {
