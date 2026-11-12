@@ -166,6 +166,10 @@ impl OnDevice {
                 let inner = inner.clone();
                 move || {
                     let outcome = Self::download(&inner);
+                    // The download already checked every file against its hash before keeping it.
+                    if outcome.is_ok() {
+                        inner.verified.store(true, Ordering::Release);
+                    }
                     let mut phase = inner.phase.lock().unwrap_or_else(|e| e.into_inner());
                     *phase = match outcome {
                         Ok(()) => Phase::Idle,
