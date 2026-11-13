@@ -48,4 +48,4 @@ Backtrack is now a Rust package in `modules/backtrack`. It keeps the screen text
 ## Notes
 
 - No Vikunja card was found for this task.
-- The first live run answered 503 once on the first signed-in call, and passed on the next run. The cause was not found.
+- Two live runs answered 503 on the first signed-in call. The server returns 503 until its module host has finished starting, so the live test now waits for that and then passes.
