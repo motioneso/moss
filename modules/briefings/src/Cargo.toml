@@ -56,3 +56,19 @@ path = "../tests/morning.rs"
 [[test]]
 name = "gather"
 path = "../tests/gather.rs"
+
+[[test]]
+name = "lenses"
+path = "../tests/lenses.rs"
+
+[[test]]
+name = "plan"
+path = "../tests/plan.rs"
+
+[[test]]
+name = "evening"
+path = "../tests/evening.rs"
+
+[[test]]
+name = "auto_plan"
+path = "../tests/auto_plan.rs"

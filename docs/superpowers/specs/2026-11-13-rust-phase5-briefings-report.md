@@ -278,3 +278,65 @@ a named provider), then tidies and stores the answer. The text replaces the plai
 - No Vikunja card for JS-267 was found, so no card comment was made.
 - No paired-device credential check was needed or built.
 - Reaching the server from another device was not checked from a phone or second computer.
+
+## Briefings evening and weekly review (part 20)
+
+Card JS-268. Part of [issue 4027](https://github.com/motioneso/moss/issues/4027). Release note
+Category: N/A.
+
+### What it does
+
+An evening review run now writes the end-of-day text through the person's configured model, the
+same way the morning briefing does. It reads only that person's own tasks, calendar and mail.
+
+- Tasks are sorted three ways using the person's own calendar day: done today, slipped (planned
+  for today and still open) and carried forward (planned for an earlier day and still open).
+- Tomorrow's calendar shows tomorrow's events and what is left of today. All-day events are
+  matched by date, so daylight-saving changes do not move them.
+- Mail shows only what arrived today and is not already an action row.
+- The evening text refers to the morning briefing of the same day, when one succeeded, and to the
+  saved day plan, including what changed overnight (marked "review before accepting").
+- When the model fails, the run keeps a plain list with the same six headings and two reflection
+  questions, and records why.
+- The weekly review is written like the morning briefing, as in the old app.
+- A person's calendar switches are honored. A calendar left out of briefings is not read, and
+  with planning off the run asks Calendar for nothing.
+- After a succeeded run that found calendar signals, Briefings asks Calendar to reserve blocks on
+  the person's own day plan. Calendar owns the plan tables and the revision check. Briefings
+  keeps only ids and a batch key. A failed Calendar call never loses the briefing, and a repeated
+  scheduled fire finds the unfinished batch instead of adding a second.
+- Morning runs also read the saved day plan and keep it with the run.
+
+### Proof
+
+| Claim                                                                                   | Where                                         |
+| --------------------------------------------------------------------------------------- | --------------------------------------------- |
+| Three task lenses, tomorrow's events, today's mail, six headings, plain list on failure | native tests ported from the old evening ones |
+| Day edges, all-day events and daylight saving                                           | native tests                                  |
+| Saved plan, overnight changes and the plan section                                      | native tests                                  |
+| Outside text (task titles, events, mail) cannot close a block or reach the instructions | native tests, fixed instruction block checked |
+| Day plan step uses only Calendar's public API, only for a succeeded run, not when off   | native tests                                  |
+| A repeated scheduled fire resumes instead of adding blocks                              | native test                                   |
+| Only the run owner's data is read                                                       | native tests                                  |
+| Briefing text is in no queue row, job payload, notification or activity row             | native and installed tests                    |
+| A second person cannot read an evening run; seen failing without row security           | installed test, red and green                 |
+| Native and WebAssembly builds, tests in both                                            | gate                                          |
+| Real Rust server over HTTPS: an evening run stored the model's text                     | live run                                      |
+| Calendar cannot report the switches: nothing is read or planned from it                 | test                                          |
+| A saved block that already ended is not called lost (Calendar hides ended events)       | test                                          |
+
+### Changes outside Briefings
+
+- Calendar 0.29.0 adds a read of the person's two calendar switches, with a test and a changelog
+  entry. Its feature text now says Briefings reads them.
+- The Briefings manifest asks to call Calendar and the app map names the new features.
+
+### Not proven
+
+- Blocks reserved by a briefing are not applied to the connected calendar. Rust has no apply
+  queue yet, so only the reservation is made.
+- The model in the live run is a stand-in server behind the real router, not a real vendor model.
+- Not wired yet, so those parts of the evening prompt are empty: commitments, chat of the day,
+  goals, sports and news.
+- The Calendar preference settings for signals still use the old defaults.
+- Reaching the server from a phone or second computer was not checked.
