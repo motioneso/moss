@@ -327,13 +327,6 @@ fn installed_backtrack_package_serves_routes_from_the_real_server() {
     const K2: &str = "22222222-2222-4222-8222-222222222222";
     const K3: &str = "33333333-3333-4333-8333-333333333333";
     assert_eq!(call(Method::GET, "/status", None, None).0, 401);
-    // The server loads the installed packages in the background, so wait until it answers.
-    for _ in 0..120 {
-        if call(Method::GET, "/status", Some(&cookie), None).0 != 503 {
-            break;
-        }
-        std::thread::sleep(Duration::from_secs(1));
-    }
     // Both people start empty and see the storage switch as off.
     // The server answers 503 until its module host has finished starting.
     let started = std::time::Instant::now();
