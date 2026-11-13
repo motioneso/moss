@@ -245,6 +245,7 @@ a named provider), then tidies and stores the answer. The text replaces the plai
 | Section, task and catch-up caps, and the output limit sent to the router                   | native tests                                   |
 | Shared tasks owned by someone else never reach the prompt; seen failing without the filter | native tests (briefings and Tasks)             |
 | Unsure and dated mail is marked in the prompt and kept out of signals                      | native test                                    |
+| The plain digest after a model failure uses the filtered mail, never a settled bill        | native test, red then green                    |
 | Evidence rows, signals, ordering, tidy rules                                               | native tests, rules taken from the old tests   |
 | Action rows and email catch-up are saved with the run                                      | native test                                    |
 | No model gives a plain digest and a reason; evening and weekly runs make no model call     | native tests                                   |

@@ -83,6 +83,7 @@ fn find<'a>(sections: &'a [Section], key: &str) -> Option<&'a Section> {
 fn digest(sections: &[Section]) -> String {
     let text = sections
         .iter()
+        .filter(|s| s.count > 0 || !s.lines.is_empty())
         .map(|s| {
             let plural = if s.count == 1 { "" } else { "s" };
             let lines = s.lines.iter().map(|l| format!("\n- {l}")).collect::<String>();
@@ -208,7 +209,7 @@ impl Composer for MorningComposer {
             into.insert("calendarSignals".into(), json!([]));
             into.insert("emailSignals".into(), json!([]));
             into.insert("structuredPayload".into(), if payload["actionRows"].as_array().is_some_and(|r| !r.is_empty()) || !payload["catchUp"].is_null() { payload } else { empty_payload() });
-            return Ok(Composed { status: "succeeded", summary_text: digest(&gathered.sections), source_metadata: metadata });
+            return Ok(Composed { status: "succeeded", summary_text: digest(&prompt_sections), source_metadata: metadata });
         };
         let titles: Vec<String> = calendar_raw.iter().filter_map(|e| e["title"].as_str().map(str::to_owned)).collect();
         // The router returns text only, so the model is named as the configured one.

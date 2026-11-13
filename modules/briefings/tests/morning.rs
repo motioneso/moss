@@ -378,3 +378,17 @@ fn ranked_signals_lead_the_prompt_and_the_task_list_stops_at_eight_items() {
     assert!(email.iter().any(|l| l.contains("SIGNAL") && l.to_lowercase().contains("urgent")), "{email:?}");
     assert_eq!(prompt_of_block(&prompt, "tasks").len(), 8);
 }
+
+#[test]
+fn the_plain_digest_uses_filtered_mail_and_never_shows_settled_bills() {
+    let fake = base();
+    *fake.ai_reply.borrow_mut() = None;
+    let mut bill = mail("b1", "Invoice #A-77 payment due", "needs_action", "2026-11-11T07:00:00.000Z");
+    bill["summary"] = json!("Overdue, pay now");
+    let mut paid = mail("b2", "Payment received for Invoice #A-77", "fyi", "2026-11-12T07:00:00.000Z");
+    paid["summary"] = json!("Thanks, payment received");
+    feed(&fake, A, vec![], vec![], vec![bill, paid]);
+    let done = compose(&fake, "morning");
+    assert_eq!(done.source_metadata["degradedReason"], "no_model");
+    assert!(!done.summary_text.contains("Overdue, pay now"), "{}", done.summary_text);
+}
