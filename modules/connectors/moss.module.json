@@ -11,10 +11,7 @@
   "capabilities": [
     {
       "port": "kv",
-      "operations": [
-        "get",
-        "set"
-      ],
+      "operations": ["get", "set"],
       "resources": [
         "connectors.providers",
         "connectors.accounts",
@@ -51,11 +48,7 @@
     },
     {
       "port": "jobs",
-      "operations": [
-        "enqueue-options",
-        "schedule",
-        "unschedule"
-      ],
+      "operations": ["enqueue-options", "schedule", "unschedule"],
       "resources": [
         "imap-sync",
         "google-sync",
@@ -69,24 +62,13 @@
     },
     {
       "port": "api",
-      "operations": [
-        "call"
-      ],
-      "resources": [
-        "email",
-        "calendar"
-      ]
+      "operations": ["call"],
+      "resources": ["email", "calendar"]
     },
     {
       "port": "context",
-      "operations": [
-        "read",
-        "uuid"
-      ],
-      "resources": [
-        "call",
-        "new"
-      ]
+      "operations": ["read", "uuid"],
+      "resources": ["call", "new"]
     }
   ],
   "database": {
@@ -214,9 +196,7 @@
     "listEmailContext": "1.0.0",
     "listSavedEmailContext": "1.0.0"
   },
-  "icons": [
-    "icons/connectors.svg"
-  ],
+  "icons": ["icons/connectors.svg"],
   "accounts": {
     "supportsUserDisable": false,
     "defaultEnabled": true
@@ -455,6 +435,22 @@
           "path": "/settings/connections"
         }
       ]
+    },
+    {
+      "id": "connectors.email-context",
+      "description": "The assistant tool email.listVisibleMessages lists the person's recent mail with a short summary and an action label. For a connected Gmail account it reads live and triages up to two unsummarised messages through Email; if Gmail or the model is slow it falls back to saved mail. For mail-server (IMAP) accounts it reads saved mail only. Bodies are never returned."
+    },
+    {
+      "id": "connectors.monitors",
+      "description": "Each connected Google account gets an email check every 15 minutes and a calendar check every 30 minutes, scheduled when the account is connected and cancelled when it is revoked. Each check writes a health row of times and counts only. The checks do not yet create tasks from mail or apply suppression.",
+      "errors": [
+        {
+          "code": "connectors-unavailable",
+          "class": "transient",
+          "description": "Connection storage is unavailable",
+          "remediationRef": "connectors-check-package"
+        }
+      ]
     }
   ],
   "tools": {
@@ -500,11 +496,7 @@
       },
       "phase": {
         "kind": "choice",
-        "choices": [
-          "calendar",
-          "email-day",
-          "email"
-        ]
+        "choices": ["calendar", "email-day", "email"]
       },
       "cursor": {
         "kind": "count"
@@ -523,25 +515,14 @@
       },
       "trigger": {
         "kind": "choice",
-        "choices": [
-          "schedule",
-          "manual",
-          "assistant",
-          "on-connect"
-        ]
+        "choices": ["schedule", "manual", "assistant", "on-connect"]
       },
       "recent-only": {
         "kind": "flag"
       },
       "error": {
         "kind": "choice",
-        "choices": [
-          "none",
-          "auth-error",
-          "calendar-error",
-          "email-error",
-          "email-message-error"
-        ]
+        "choices": ["none", "auth-error", "calendar-error", "email-error", "email-message-error"]
       },
       "email-on": {
         "kind": "flag"
@@ -577,11 +558,7 @@
       },
       "phase": {
         "kind": "choice",
-        "choices": [
-          "calendar",
-          "email-day",
-          "email"
-        ]
+        "choices": ["calendar", "email-day", "email"]
       },
       "cursor": {
         "kind": "count"
@@ -600,25 +577,14 @@
       },
       "trigger": {
         "kind": "choice",
-        "choices": [
-          "schedule",
-          "manual",
-          "assistant",
-          "on-connect"
-        ]
+        "choices": ["schedule", "manual", "assistant", "on-connect"]
       },
       "recent-only": {
         "kind": "flag"
       },
       "error": {
         "kind": "choice",
-        "choices": [
-          "none",
-          "auth-error",
-          "calendar-error",
-          "email-error",
-          "email-message-error"
-        ]
+        "choices": ["none", "auth-error", "calendar-error", "email-error", "email-message-error"]
       },
       "email-on": {
         "kind": "flag"

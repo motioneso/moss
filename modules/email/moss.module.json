@@ -10,10 +10,7 @@
   "capabilities": [
     {
       "port": "kv",
-      "operations": [
-        "get",
-        "set"
-      ],
+      "operations": ["get", "set"],
       "resources": [
         "email.messages",
         "email.preferences",
@@ -30,19 +27,12 @@
     },
     {
       "port": "ai",
-      "operations": [
-        "generate"
-      ],
-      "resources": [
-        "chat",
-        "structured"
-      ]
+      "operations": ["generate"],
+      "resources": ["chat", "structured"]
     }
   ],
   "database": {
-    "ownedTables": [
-      "app.email_messages"
-    ],
+    "ownedTables": ["app.email_messages"],
     "migrations": [
       "sql/0012_email_module.sql",
       "sql/0021_email_owner_or_share.sql",
@@ -54,9 +44,7 @@
       "sql/0249_email_judgement_requested_at.sql"
     ],
     "ledger": "core-legacy",
-    "ownerDelete": [
-      "app.email_messages"
-    ],
+    "ownerDelete": ["app.email_messages"],
     "access": {
       "app.email_messages": {
         "access": "owner-or-share",
@@ -139,9 +127,7 @@
     "emailTriageContext": "1.0.0",
     "listSavedMessages": "1.0.0"
   },
-  "icons": [
-    "icons/email.svg"
-  ],
+  "icons": ["icons/email.svg"],
   "accounts": {
     "supportsUserDisable": false,
     "defaultEnabled": true
@@ -216,6 +202,10 @@
           "path": "/settings/modules"
         }
       ]
+    },
+    {
+      "id": "email.thread-reads",
+      "description": "Connectors reads saved threads, newer replies, recent messages and saved triage for the signed-in person only, and asks Email to triage one message. Another person's mail is never reachable, even through a share."
     }
   ],
   "tools": {},

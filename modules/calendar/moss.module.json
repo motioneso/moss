@@ -10,9 +10,7 @@
   "capabilities": [
     {
       "port": "db",
-      "operations": [
-        "query"
-      ],
+      "operations": ["query"],
       "resources": [
         "app.calendar_events",
         "app.day_plans",
@@ -23,40 +21,22 @@
     },
     {
       "port": "context",
-      "operations": [
-        "read",
-        "uuid"
-      ],
-      "resources": [
-        "call",
-        "new"
-      ]
+      "operations": ["read", "uuid"],
+      "resources": ["call", "new"]
     },
     {
       "port": "api",
-      "operations": [
-        "call"
-      ],
-      "resources": [
-        "tasks",
-        "connectors"
-      ]
+      "operations": ["call"],
+      "resources": ["tasks", "connectors"]
     },
     {
       "port": "jobs",
-      "operations": [
-        "enqueue"
-      ],
-      "resources": [
-        "calendar-cache-evict-event"
-      ]
+      "operations": ["enqueue"],
+      "resources": ["calendar-cache-evict-event"]
     },
     {
       "port": "kv",
-      "operations": [
-        "get",
-        "set"
-      ],
+      "operations": ["get", "set"],
       "resources": [
         "calendar.briefing-settings",
         "calendar.chat-context",
@@ -94,9 +74,7 @@
       "sql/0236_day_plan_worker_apply_grants.sql"
     ],
     "ledger": "core-legacy",
-    "ownerDelete": [
-      "app.calendar_events"
-    ],
+    "ownerDelete": ["app.calendar_events"],
     "access": {
       "app.calendar_events": {
         "access": "owner-or-share",
@@ -218,9 +196,7 @@
     "upsertCachedEvent": "1.0.0",
     "pruneCachedEvents": "1.0.0"
   },
-  "icons": [
-    "icons/calendar.svg"
-  ],
+  "icons": ["icons/calendar.svg"],
   "accounts": {
     "supportsUserDisable": true,
     "defaultEnabled": true
@@ -372,6 +348,10 @@
     {
       "id": "calendar.saved_day_plan_operation_status",
       "description": "Read saved apply progress through the installed API and original Calendar URL. Preserves selected item order, pending or completed status and access-denied guidance. Owner-only stored operations remain private. Reading never runs a provider action; apply, retry, recovery and confirmation execution remain unavailable. Invalid ids are rejected, missing operations return not found, and unreadable stored batches return an error. Read the current account’s plan and operation ids before retrying."
+    },
+    {
+      "id": "calendar.preview-busy-check",
+      "description": "When Connectors is installed, the day-plan preview checks proposed times against the person's connected calendar events and marks busy times. Without Connectors the preview works as before and skips the check."
     }
   ],
   "tools": {
