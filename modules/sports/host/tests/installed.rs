@@ -6,6 +6,7 @@ mod replay;
 mod support;
 use access_context::AccessContext;
 use moss_module_host::{
+    account_preferences::{AccountPreferencesPorts, Binding, JsonShape},
     application::{Application, Configuration},
     registry::Source,
     runtime::{CallScope, Host, Limits, Request},
@@ -59,6 +60,24 @@ fn rows_as(
     })
 }
 
+/// The two saved-setting keys the shell grants Sports, bound the same way here.
+fn preferences(db: safety_core::db::Database, next: Arc<dyn moss_module_host::runtime::Ports>) -> anyhow::Result<AccountPreferencesPorts> {
+    AccountPreferencesPorts::new(
+        db,
+        std::collections::BTreeMap::from([
+            (
+                ("sports".into(), "standings-competitions".into()),
+                Binding::Json { key: "sports.standings_competition_keys".into(), shape: JsonShape::TextList { max_items: 64, max_len: 200 } },
+            ),
+            (
+                ("sports".into(), "standings-last-viewed".into()),
+                Binding::Json { key: "sports.standings_last_viewed".into(), shape: JsonShape::LastViewed },
+            ),
+        ]),
+        next,
+    )
+}
+
 /// One installed Sports package on a fresh database.
 struct World {
     f: support::Fixture,
@@ -81,7 +100,8 @@ impl World {
         let reg = tempfile::tempdir().unwrap();
         let bytes = moss_sports_host::package::pack(&root(), &component()).unwrap();
         let (key, publisher, artifact) = registry::publish(reg.path(), &bytes);
-        let app = Application::open_extended(
+        let prefs_db = f.db.clone();
+        let app = Application::open_extended_with(
             dir.path(),
             f.db.clone(),
             f.access(f.a),
@@ -94,6 +114,7 @@ impl World {
                 compiled_cache: None,
                 fuel_ceiling: Some(250_000_000),
             },
+            move |next| Ok(Arc::new(preferences(prefs_db, next)?)),
         )
         .unwrap();
         let source = app
@@ -116,11 +137,18 @@ impl World {
     fn export(&self, actor: uuid::Uuid) -> Value {
         let manifest = moss_sports_host::package::manifest().unwrap();
         let payload = json!({"name":"collectSportsSourcesExportSection","parameters":{}}).to_string();
+        let ports: Arc<dyn moss_module_host::runtime::Ports> = Arc::new(
+            moss_module_host::transactional_database::TransactionalDatabasePorts::new(
+                self.f.db.clone(),
+                Arc::new(moss_module_host::context::ContextPorts::new(self.app.services.clone())),
+            )
+            .unwrap(),
+        );
         let out = Host::new(Limits::default()).unwrap().call(
             &component(),
             Arc::new(manifest),
             AccessContext::new(actor, "sports-export"),
-            self.app.services.clone(),
+            ports,
             "api",
             &payload,
         );
@@ -184,7 +212,7 @@ fn another_person_cannot_see_change_or_remove_a_follow_and_the_check_fails_witho
     let w = World::new();
     let (a, b, admin) = (w.f.a, w.f.b, w.f.admin);
     let mine = w.call(a, "POST", "/follows", json!({"competitionKey":"nfl"}));
-    let id = mine["body"]["id"].as_str().unwrap().to_owned();
+    let id = mine["body"]["id"].as_str().unwrap_or_else(|| panic!("follow answer: {mine}")).to_owned();
     w.call(a, "PUT", "/standings-preferences", json!({"selectedCompetitionKeys":["nba"]}));
 
     assert_eq!(w.call(b, "GET", "/follows", Value::Null)["body"], json!([]));
