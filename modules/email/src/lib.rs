@@ -10,6 +10,7 @@ mod abi;
 pub mod cache;
 pub mod fastify;
 pub mod messages;
+pub mod providers;
 pub mod settings;
 pub mod understand;
 #[cfg(not(target_arch = "wasm32"))]
@@ -70,6 +71,9 @@ fn api(host: &impl Host, name: &str, input: &Value) -> Result<Value> {
         "updateCachedMessage" => cache::update(host, input),
         "listCachedMessageKeys" => cache::keys(host, input),
         "pruneCachedMessages" => cache::prune(host, input),
+        "listThreadMessages" => providers::thread_messages(host, input),
+        "listThreadsWithNewerMessages" => providers::newer_threads(host, input),
+        "collectMonitorSignals" => providers::monitor_signals(host, input),
         "understandMessages" => {
             understand::pass::run(host, input["limit"].as_i64().unwrap_or(10).clamp(1, 50))
         }
