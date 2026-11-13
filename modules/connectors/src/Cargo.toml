@@ -36,3 +36,7 @@ path = "tests/calendar_context.rs"
 [[bin]]
 name = "connectors-oracle"
 path = "bin/oracle.rs"
+
+[[test]]
+name = "live_tools"
+path = "tests/live_tools.rs"

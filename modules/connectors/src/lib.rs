@@ -7,6 +7,7 @@ use serde_json::{json, Value};
 mod abi;
 pub mod accounts;
 pub mod calendar_context;
+pub mod live_tools;
 pub mod fastify;
 pub mod google;
 pub mod google_sync;
@@ -80,6 +81,9 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
                     serde_json::to_string(&google::guidance())
                         .map_err(|_| "Invalid connectors response".into())
                 }
+                Some("gmail.searchLive") => live(live_tools::search(host, &input["parameters"])),
+                Some("gmail.getLiveMessage") => live(live_tools::message(host, &input["parameters"])),
+                Some("calendar.listLiveEvents") => live(live_tools::events(host, &input["parameters"])),
                 _ => Err("Connectors tool is unavailable".into()),
             }
         }
@@ -87,8 +91,14 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
     }
 }
 
+fn live(result: Result<Value>) -> std::result::Result<String, String> {
+    let value = result.map_err(|e| e.message)?;
+    serde_json::to_string(&value).map_err(|_| "Invalid connectors response".into())
+}
+
 fn api(host: &impl Host, name: &str, input: &Value) -> Result<Value> {
     match name {
+        "listCalendarContext" => calendar_context::list(host, input),
         "connectionDiagnostics" => accounts::diagnostics(host, input["limit"].as_i64().unwrap_or(10)),
         _ => Err(Error::new(404, "Connectors operation not found")),
     }

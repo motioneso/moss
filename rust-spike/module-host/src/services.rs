@@ -339,6 +339,7 @@ impl ServicePorts {
                         .module()
                         .requires
                         .get(&r.resource)
+                        .or_else(|| scope.module().optional_requires.get(&r.resource))
                         .is_some_and(|v| v.matches(&target.manifest.version)),
                     "The public API dependency is incompatible"
                 );

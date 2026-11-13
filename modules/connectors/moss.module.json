@@ -4,14 +4,17 @@
   "name": "Connectors",
   "description": "Keeps the mail and calendar connections of each account, their sign-in secrets and the Email and Calendar permissions. Connecting Google works by pasting your own Google client details. Yahoo, Proton Bridge, iCloud and Fastmail mail connect with an app password. Google mail and calendar sync into the Email and Calendar caches. Outlook sign-in and calendar syncing are not part of this package yet.",
   "publisher": "Moss",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
   "capabilities": [
     {
       "port": "kv",
-      "operations": ["get", "set"],
+      "operations": [
+        "get",
+        "set"
+      ],
       "resources": [
         "connectors.providers",
         "connectors.accounts",
@@ -47,7 +50,11 @@
     },
     {
       "port": "jobs",
-      "operations": ["enqueue-options", "schedule", "unschedule"],
+      "operations": [
+        "enqueue-options",
+        "schedule",
+        "unschedule"
+      ],
       "resources": [
         "imap-sync",
         "google-sync",
@@ -59,13 +66,24 @@
     },
     {
       "port": "api",
-      "operations": ["call"],
-      "resources": ["email", "calendar"]
+      "operations": [
+        "call"
+      ],
+      "resources": [
+        "email",
+        "calendar"
+      ]
     },
     {
       "port": "context",
-      "operations": ["read", "uuid"],
-      "resources": ["call", "new"]
+      "operations": [
+        "read",
+        "uuid"
+      ],
+      "resources": [
+        "call",
+        "new"
+      ]
     }
   ],
   "database": {
@@ -188,8 +206,12 @@
     "email": ">=0.2.0, <1.0.0",
     "calendar": ">=0.27.0, <1.0.0"
   },
-  "provides": {},
-  "icons": ["icons/connectors.svg"],
+  "provides": {
+    "listCalendarContext": "1.0.0"
+  },
+  "icons": [
+    "icons/connectors.svg"
+  ],
   "accounts": {
     "supportsUserDisable": false,
     "defaultEnabled": true
@@ -434,6 +456,18 @@
     "connectors.startGoogleGuidance": {
       "description": "Explain, step by step, how the user connects their Google account (Gmail + Calendar). Read-only guidance; the user completes the secret-entry steps in Settings.",
       "risk": "read"
+    },
+    "gmail.searchLive": {
+      "description": "Search the user's live Gmail. Returns bounded message metadata and snippets, not full bodies.",
+      "risk": "read"
+    },
+    "gmail.getLiveMessage": {
+      "description": "Fetch one live Gmail message by id. Returns a capped plain-text body.",
+      "risk": "read"
+    },
+    "calendar.listLiveEvents": {
+      "description": "List live primary-calendar events for a bounded time window.",
+      "risk": "read"
     }
   },
   "jobs": {
@@ -457,7 +491,11 @@
       },
       "phase": {
         "kind": "choice",
-        "choices": ["calendar", "email-day", "email"]
+        "choices": [
+          "calendar",
+          "email-day",
+          "email"
+        ]
       },
       "cursor": {
         "kind": "count"
@@ -476,14 +514,25 @@
       },
       "trigger": {
         "kind": "choice",
-        "choices": ["schedule", "manual", "assistant", "on-connect"]
+        "choices": [
+          "schedule",
+          "manual",
+          "assistant",
+          "on-connect"
+        ]
       },
       "recent-only": {
         "kind": "flag"
       },
       "error": {
         "kind": "choice",
-        "choices": ["none", "auth-error", "calendar-error", "email-error", "email-message-error"]
+        "choices": [
+          "none",
+          "auth-error",
+          "calendar-error",
+          "email-error",
+          "email-message-error"
+        ]
       },
       "email-on": {
         "kind": "flag"
@@ -509,7 +558,11 @@
       },
       "phase": {
         "kind": "choice",
-        "choices": ["calendar", "email-day", "email"]
+        "choices": [
+          "calendar",
+          "email-day",
+          "email"
+        ]
       },
       "cursor": {
         "kind": "count"
@@ -528,14 +581,25 @@
       },
       "trigger": {
         "kind": "choice",
-        "choices": ["schedule", "manual", "assistant", "on-connect"]
+        "choices": [
+          "schedule",
+          "manual",
+          "assistant",
+          "on-connect"
+        ]
       },
       "recent-only": {
         "kind": "flag"
       },
       "error": {
         "kind": "choice",
-        "choices": ["none", "auth-error", "calendar-error", "email-error", "email-message-error"]
+        "choices": [
+          "none",
+          "auth-error",
+          "calendar-error",
+          "email-error",
+          "email-message-error"
+        ]
       },
       "email-on": {
         "kind": "flag"
