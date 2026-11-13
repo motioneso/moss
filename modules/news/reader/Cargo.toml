@@ -21,6 +21,10 @@ serde = { version = "1", features = ["derive"] }
 [dev-dependencies]
 serde_json = "1"
 
+[[example]]
+name = "live_read"
+path = "tools/live_read.rs"
+
 [[test]]
 name = "privacy"
 path = "tests/privacy.rs"
