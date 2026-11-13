@@ -18,10 +18,19 @@ pub fn files(root: &Path, component: &[u8]) -> Result<BTreeMap<String, Vec<u8>>>
         ("CHANGELOG.md".into(), include_bytes!("../../CHANGELOG.md").to_vec()),
     ]);
     for path in &manifest.database.migrations {
-        let frozen = moss_module_host::legacy::entry("backtrack", path)
-            .ok_or_else(|| anyhow::anyhow!("Backtrack SQL is not in the legacy inventory"))?;
-        let bytes = std::fs::read(root.join("packages/backtrack").join(path))?;
-        anyhow::ensure!(frozen.raw == moss_module_host::trust::digest(&bytes), "Legacy Backtrack SQL changed");
+        let bytes = if let Some(frozen) = moss_module_host::legacy::entry("backtrack", path) {
+            let bytes = std::fs::read(root.join("packages/backtrack").join(path))?;
+            anyhow::ensure!(frozen.raw == moss_module_host::trust::digest(&bytes), "Legacy Backtrack SQL changed");
+            bytes
+        } else {
+            let bytes = std::fs::read(root.join("modules/backtrack").join(path))?;
+            let pinned = match path.as_str() {
+                "sql/0367_backtrack_index_stamp.sql" => "34fa39f2023e9ac7040924a587b78cc156a3beb899cf70bb44290e8c1fe497e7",
+                _ => "",
+            };
+            anyhow::ensure!(moss_module_host::trust::digest(&bytes) == pinned, "Backtrack migration bytes changed: {path}");
+            bytes
+        };
         files.insert(path.clone(), bytes);
     }
     Ok(files)

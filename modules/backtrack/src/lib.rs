@@ -5,6 +5,7 @@ pub mod approval;
 pub mod chunking;
 pub mod clock;
 pub mod codes;
+pub mod index;
 pub mod ingest;
 pub mod jobs;
 pub mod lifecycle;

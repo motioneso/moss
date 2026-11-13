@@ -119,14 +119,54 @@ pub async fn delete(cx: &DataContext, parameters: &Value) -> Result<Value> {
     Ok(json!({"deleted": deleted}))
 }
 
-/// Removes this person's text past 37 days and markers past 38 days.
-pub async fn upkeep(cx: &DataContext) -> Result<Value> {
+const LIVE: &str = "started_at >= now() - interval '37 days' AND created_at >= now() - interval '37 days'";
+const IDS_PER_CALL: usize = 500;
+
+fn uuids(parameters: &Value, key: &str, max: usize) -> Result<Vec<String>> {
+    let list = parameters.get(key).and_then(Value::as_array).ok_or_else(|| anyhow::anyhow!("{key} required"))?;
+    ensure!(list.len() <= max, "Too many ids");
+    list.iter().map(|v| v.as_str().map(str::to_owned).ok_or_else(|| anyhow::anyhow!("Invalid id"))).collect()
+}
+
+/// Ids of the segments a delete over this range would remove.
+pub async fn segment_ids(cx: &DataContext, parameters: &Value) -> Result<Value> {
+    let from = text(parameters, "from");
+    let to = text(parameters, "to");
+    let rows = cx
+        .db()
+        .query(
+            "SELECT id::text FROM app.backtrack_segments WHERE owner_user_id=app.current_actor_user_id() \
+             AND NOT (ended_at < COALESCE($1::text::timestamptz,'-infinity'::timestamptz) \
+             OR started_at >= COALESCE($2::text::timestamptz,'infinity'::timestamptz))",
+            &[&from, &to],
+        )
+        .await?;
+    Ok(json!({"ids": rows.iter().map(|r| r.get::<_, String>(0)).collect::<Vec<_>>()}))
+}
+
+/// The next batch of this person's segments past 37 days, by start or arrival.
+pub async fn expired(cx: &DataContext) -> Result<Value> {
+    let rows = cx
+        .db()
+        .query(
+            "SELECT id::text FROM app.backtrack_segments WHERE owner_user_id=app.current_actor_user_id() \
+             AND (started_at < now() - interval '37 days' OR created_at < now() - interval '37 days') \
+             ORDER BY created_at LIMIT 500",
+            &[],
+        )
+        .await?;
+    Ok(json!({"ids": rows.iter().map(|r| r.get::<_, String>(0)).collect::<Vec<_>>()}))
+}
+
+/// Removes the listed expired segments and this person's deletion markers past 38 days.
+pub async fn upkeep(cx: &DataContext, parameters: &Value) -> Result<Value> {
+    let ids = uuids(parameters, "ids", IDS_PER_CALL)?;
     let segments = cx
         .db()
         .execute(
             "DELETE FROM app.backtrack_segments WHERE owner_user_id=app.current_actor_user_id() \
-             AND (started_at < now() - interval '37 days' OR created_at < now() - interval '37 days')",
-            &[],
+             AND id = ANY($1::text[]::uuid[])",
+            &[&ids],
         )
         .await?;
     let markers = cx
@@ -137,6 +177,63 @@ pub async fn upkeep(cx: &DataContext) -> Result<Value> {
         )
         .await?;
     Ok(json!({"segments": segments, "markers": markers}))
+}
+
+/// Whether any text has waited over ten minutes without being indexed.
+pub async fn stale(cx: &DataContext) -> Result<Value> {
+    let found: bool = cx
+        .db()
+        .query_one(
+            "SELECT EXISTS(SELECT 1 FROM app.backtrack_segments WHERE owner_user_id=app.current_actor_user_id() \
+             AND indexed_at IS NULL AND created_at < now() - interval '10 minutes')",
+            &[],
+        )
+        .await?
+        .get(0);
+    Ok(json!({"stale": found}))
+}
+
+/// The oldest unindexed live segments, for the index job.
+pub async fn pending(cx: &DataContext) -> Result<Value> {
+    let rows = cx
+        .db()
+        .query(
+            &format!(
+                "SELECT jsonb_build_object('id',id::text,'windowTitle',window_title,'address',address,'body',body) \
+                 FROM app.backtrack_segments WHERE owner_user_id=app.current_actor_user_id() \
+                 AND indexed_at IS NULL AND {LIVE} ORDER BY created_at, id LIMIT 200"
+            ),
+            &[],
+        )
+        .await?;
+    Ok(json!({"segments": rows.iter().map(|r| r.get::<_, Value>(0)).collect::<Vec<_>>()}))
+}
+
+pub async fn mark_indexed(cx: &DataContext, parameters: &Value) -> Result<Value> {
+    let ids = uuids(parameters, "ids", 200)?;
+    let marked = cx
+        .db()
+        .execute(
+            "UPDATE app.backtrack_segments SET indexed_at=now() WHERE owner_user_id=app.current_actor_user_id() \
+             AND id = ANY($1::text[]::uuid[])",
+            &[&ids],
+        )
+        .await?;
+    Ok(json!({"marked": marked}))
+}
+
+/// A job key that is the same for one person within one minute, so a burst of uploads queues
+/// one index run. It is a hash of the person and the minute, never of any text.
+pub async fn index_key(cx: &DataContext) -> Result<Value> {
+    let key: String = cx
+        .db()
+        .query_one(
+            "SELECT md5(app.current_actor_user_id()::text || ':backtrack-index:' || floor(extract(epoch from now())/60)::text)::uuid::text",
+            &[],
+        )
+        .await?
+        .get(0);
+    Ok(json!({"key": key}))
 }
 
 pub async fn status(cx: &DataContext) -> Result<Value> {

@@ -2,7 +2,7 @@
 use moss_module_sdk::{Error, Host, Result};
 use serde_json::Value;
 
-pub const QUEUES: [&str; 1] = [crate::upkeep::QUEUE];
+pub const QUEUES: [&str; 2] = [crate::upkeep::QUEUE, crate::index::QUEUE];
 
 /// The only keys a job payload may carry. Anything else could be private content.
 pub const METADATA_KEYS: [&str; 2] = ["queue", "parameters"];
@@ -19,6 +19,7 @@ pub fn handle<H: Host + ?Sized>(host: &H, payload: &str) -> Result<String> {
     }
     match value["queue"].as_str() {
         Some(crate::upkeep::QUEUE) => crate::upkeep::run(host),
+        Some(crate::index::QUEUE) => crate::index::run(host),
         _ => Err(Error::new("No Backtrack job handler for this queue")),
     }
 }

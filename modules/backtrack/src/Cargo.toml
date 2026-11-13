@@ -56,3 +56,7 @@ path = "../tests/lifecycle.rs"
 [[test]]
 name = "chunking"
 path = "../tests/chunking.rs"
+
+[[test]]
+name = "index"
+path = "../tests/index.rs"

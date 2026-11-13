@@ -20,7 +20,13 @@
         "overlaps",
         "insert",
         "delete",
+        "segment-ids",
+        "expired",
         "upkeep",
+        "stale",
+        "pending",
+        "mark-indexed",
+        "index-key",
         "status",
         "export"
       ],
@@ -32,13 +38,23 @@
       "resources": ["call"]
     },
     {
+      "port": "api",
+      "operations": ["call"],
+      "resources": ["memory"]
+    },
+    {
       "port": "jobs",
       "operations": ["schedule"],
       "resources": ["backtrack.upkeep"]
+    },
+    {
+      "port": "jobs",
+      "operations": ["enqueue-after-commit"],
+      "resources": ["backtrack.index"]
     }
   ],
   "database": {
-    "migrations": ["sql/0282_backtrack_segments.sql"],
+    "migrations": ["sql/0282_backtrack_segments.sql", "sql/0367_backtrack_index_stamp.sql"],
     "ownedTables": [
       "app.backtrack_segments",
       "app.backtrack_preferences",
@@ -69,7 +85,9 @@
       "signIn": true
     }
   ],
-  "requires": {},
+  "requires": {
+    "memory": ">=0.1.0, <1.0.0"
+  },
   "provides": {
     "prepareBacktrackRoute": "1.0.0",
     "collectBacktrackSegmentsExportSection": "1.0.0"
@@ -85,7 +103,8 @@
     "removable": false
   },
   "jobs": {
-    "backtrack.upkeep": {}
+    "backtrack.upkeep": {},
+    "backtrack.index": {}
   },
   "screens": {},
   "navigation": [],

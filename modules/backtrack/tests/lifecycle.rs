@@ -19,7 +19,7 @@ fn the_upkeep_job_runs_under_the_lock_and_reports_counts() {
     let host = Fake::default();
     let out = handle(&host, "job", &json!({"queue":"backtrack.upkeep","parameters":{}}).to_string()).unwrap();
     assert_eq!(serde_json::from_str::<serde_json::Value>(&out).unwrap(), json!({"segments":2,"markers":1}));
-    assert_eq!(host.ops(), ["kv.lock", "kv.upkeep"]);
+    assert_eq!(host.ops(), ["kv.lock", "kv.expired", "kv.upkeep", "kv.stale"]);
 }
 
 #[test]
@@ -27,7 +27,8 @@ fn job_payloads_with_content_or_unknown_queues_are_refused() {
     for payload in [
         json!({"queue":"backtrack.upkeep","parameters":{"body":"text"}}),
         json!({"queue":"backtrack.upkeep","body":"text"}),
-        json!({"queue":"backtrack.index","parameters":{}}),
+        json!({"queue":"backtrack.index","parameters":{"segmentIds":["a"]}}),
+        json!({"queue":"backtrack.somethingelse","parameters":{}}),
     ] {
         assert!(handle(&Fake::default(), "job", &payload.to_string()).is_err(), "{payload}");
     }
