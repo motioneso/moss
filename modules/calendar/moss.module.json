@@ -4,7 +4,7 @@
   "name": "Calendar",
   "description": "Calendar cached-event screens and draft tools; signed-in HTTPS Calendar pages; provider execution and full shell composition remain incomplete.",
   "publisher": "Moss",
-  "version": "0.28.0",
+  "version": "0.29.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -193,6 +193,7 @@
     "saveDraft": "1.0.0",
     "reserveAutoPlan": "1.0.0",
     "findUnfinishedBatch": "1.0.0",
+    "getSourceSwitches": "1.0.0",
     "upsertCachedEvent": "1.0.0",
     "pruneCachedEvents": "1.0.0"
   },
@@ -204,7 +205,7 @@
   "features": [
     {
       "id": "calendar.source-switches",
-      "description": "The Calendar settings screen has two switches, Include in briefings and Use for planning, both on by default. They save to the account's source-behavior preferences and change nothing for other modules. The Briefings module does not read them in this Rust version yet."
+      "description": "The Calendar settings screen has two switches, Include in briefings and Use for planning, both on by default. They save to the account's source-behavior preferences and change nothing for other modules. The Briefings module reads them: it leaves tomorrow's calendar out of the evening briefing when the first is off, and plans no day blocks when the second is off."
     },
     {
       "id": "calendar.cache-api",

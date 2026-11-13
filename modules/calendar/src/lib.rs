@@ -133,10 +133,21 @@ fn api(host: &impl Host, name: &str, input: Value) -> Result<Value> {
         "saveDraft" => plans::save(host, serde_json::from_value(input)?),
         "reserveAutoPlan" => Ok(json!({"reservation":auto_plan::reserve(host, serde_json::from_value(input)?)?})),
         "findUnfinishedBatch" => auto_plan::find_unfinished(host, serde_json::from_value(input)?),
+        "getSourceSwitches" => source_switches(host, &input),
         "upsertCachedEvent" => cache::upsert(host, &input),
         "pruneCachedEvents" => cache::prune(host, &input),
         _ => Err(Error::new(404, "Calendar data operation not found")),
     }
+}
+/// The account's two source switches, each true unless the person turned it off. Briefings
+/// reads this to honor the calendar choices. It takes no parameters and writes nothing.
+fn source_switches(host: &impl Host, input: &Value) -> Result<Value> {
+    if !input.as_object().is_some_and(|o| o.is_empty()) {
+        return Err(Error::new(400, "Invalid calendar request"));
+    }
+    let stored = host.call("kv", "get", "calendar.source-behaviors", json!({}))?;
+    let on = |key: &str| stored[key].as_bool().unwrap_or(true);
+    Ok(json!({"briefings": on("briefings"), "planning": on("planning")}))
 }
 /// The original HTTP routes name the day `date` and resolve a missing
 /// timezone from the account. Installed callers already send `localDay`.

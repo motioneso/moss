@@ -1,5 +1,9 @@
 # Calendar package
 
+## 0.29.0
+
+- Add a read-only `getSourceSwitches` call so Briefings can honor the Include in briefings and Use for planning switches. It returns both values, true unless turned off, and writes nothing.
+
 ## 0.26.0
 
 - Day plans now check task references against the real Tasks package, under the signed-in account. A task that does not exist, or belongs to another account, is refused the same way (404). Calendar now requires Tasks to be installed.

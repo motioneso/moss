@@ -9,6 +9,7 @@ pub mod external;
 pub mod gather;
 pub mod gather_types;
 pub mod jobs;
+pub mod lenses;
 pub mod lifecycle;
 pub mod morning;
 pub mod morning_order;

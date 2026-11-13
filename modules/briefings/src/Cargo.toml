@@ -56,3 +56,7 @@ path = "../tests/morning.rs"
 [[test]]
 name = "gather"
 path = "../tests/gather.rs"
+
+[[test]]
+name = "lenses"
+path = "../tests/lenses.rs"
