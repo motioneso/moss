@@ -58,6 +58,7 @@ Backtrack is now a Rust package in `modules/backtrack`. It keeps the screen text
 - Long text is cut into pieces of at most 500 estimated tokens. The cutting rules and their nine tests come from the old TypeScript version.
 - The job runs after an upload, and the hourly sweep queues it again for anything left waiting over ten minutes. It carries no text, only the person's identity, and it picks its own work from the stored rows.
 - Deleting history, and the sweep that removes text older than 37 days, remove the search pieces first and the rows second. If Memory is down, the text and the delete marker stay, so nothing is left behind in search.
+- One index run reads a limited amount of text, and a larger backlog continues in follow-up runs. Each request queues its run under a fresh key, so no upload is dropped as a repeat. An extra run finds nothing and ends.
 - Which segments are indexed is kept in a new table of marks. The module cannot change the old segment table's permissions, so the marks live beside it.
 - Backtrack now needs Memory installed. The manifest and the app map describe the new behavior.
 
@@ -73,6 +74,8 @@ Backtrack is now a Rust package in `modules/backtrack`. It keeps the screen text
 
 ### Not proven (part 14)
 
+- The Mac check was run before the last review fixes. When the final gate ran, the Mac could not be reached over the private network, so that last run covered the server only.
+- The compute cost of indexing one full-size 8 KB segment was not measured.
 - A real embedding pass. The tests use a fake embedder, so no real model embedded real screen text. Ben needs to try this with his own model.
 - Device pairing. A real Mac still cannot upload, so no real upload reached the index job on the live server. Indexing from uploads is proven only through the fake link.
 - Searching the text. Search results and the screen are part 15.
