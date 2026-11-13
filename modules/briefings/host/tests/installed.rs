@@ -34,6 +34,27 @@ fn root() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..")
 }
 
+/// Reads as the app role with the actor set, so row security applies as it does at run time.
+fn rows_as(
+    f: &support::Fixture,
+    actor: uuid::Uuid,
+    sql: &str,
+    params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+) -> Vec<tokio_postgres::Row> {
+    f.rt.block_on(async {
+        let (mut client, conn) =
+            tokio_postgres::connect(&std::env::var("JS48_APP_URL").unwrap(), tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(async move {
+            let _ = conn.await;
+        });
+        let tx = client.transaction().await.unwrap();
+        tx.execute("SELECT set_config('app.actor_user_id', $1, true)", &[&actor.to_string()]).await.unwrap();
+        let rows = tx.query(sql, params).await.unwrap();
+        tx.commit().await.unwrap();
+        rows
+    })
+}
+
 #[test]
 #[ignore = "Only through verify-gate"]
 fn installed_briefings_keep_definitions_and_runs_private_and_schedule_in_the_owner_zone() {
@@ -59,7 +80,7 @@ fn installed_briefings_keep_definitions_and_runs_private_and_schedule_in_the_own
         f.access(f.a),
         Configuration {
             migrations: Secret::new(std::env::var("JS48_BOOTSTRAP_URL").unwrap()),
-            producer: Secret::new(std::env::var("JS48_BOOTSTRAP_URL").unwrap()),
+            producer: Secret::new(std::env::var("JS48_APP_URL").unwrap()),
             cipher: Arc::new(SecretCipher::connectors(&Default::default()).unwrap()),
             intelligence: Arc::new(NoAi),
             version: "0.1.0".parse().unwrap(),
@@ -86,15 +107,9 @@ fn installed_briefings_keep_definitions_and_runs_private_and_schedule_in_the_own
         json!({"title":format!("Plan {MARK}"),"briefingType":"morning","cadence":"daily"}));
     assert_eq!(made["status"], 201, "{made}");
     let id = made["body"]["definition"]["id"].as_str().unwrap().to_owned();
-    let schedules: Vec<(String, String)> = f.rt.block_on(async {
-        f.root
-            .query("SELECT cron, timezone FROM moss_queue.schedules WHERE actor_user_id=$1 AND queue='briefings.briefings-run'", &[&f.a])
-            .await
-            .unwrap()
-            .iter()
-            .map(|r| (r.get(0), r.get(1)))
-            .collect()
-    });
+    let schedule_sql = "SELECT cron, timezone FROM moss_queue.schedules WHERE queue LIKE '%.briefings-run'";
+    let schedules: Vec<(String, String)> =
+        rows_as(&f, f.a, schedule_sql, &[]).iter().map(|r| (r.get(0), r.get(1))).collect();
     assert_eq!(schedules.len(), 1, "one schedule for the definition");
     assert_eq!(schedules[0].0, "0 7 * * *");
     println!("SCHEDULE cron={} timezone={}", schedules[0].0, schedules[0].1);
@@ -148,9 +163,7 @@ fn installed_briefings_keep_definitions_and_runs_private_and_schedule_in_the_own
     share("manage");
     let edited = call(f.b, "PATCH", &format!("/definitions/{id}"), json!({"title":"Managed","cadence":"manual"}));
     assert_eq!(edited["status"], 200, "{edited}");
-    let still: i64 = f.rt.block_on(async {
-        f.root.query_one("SELECT count(*) FROM moss_queue.schedules WHERE actor_user_id=$1 AND queue='briefings.briefings-run'", &[&f.a]).await.unwrap().get(0)
-    });
+    let still = rows_as(&f, f.a, schedule_sql, &[]).len() as i64;
     assert_eq!(still, 1, "a manager must not remove the owner's schedule");
     f.rt.block_on(f.root.execute("DELETE FROM app.shares", &[])).unwrap();
 
@@ -173,22 +186,28 @@ fn installed_briefings_keep_definitions_and_runs_private_and_schedule_in_the_own
     assert!(!reads_run());
 
     // The briefing title and text never reach the queue or any module bookkeeping table.
-    let leaked: i64 = f.rt.block_on(async {
+    let mut leaked = 0;
+    for actor in [f.a, f.b] {
+        for table in ["moss_queue.jobs", "moss_queue.schedules"] {
+            let sql = format!("SELECT count(*) FROM {table} t WHERE t::text LIKE $1");
+            leaked += rows_as(&f, actor, &sql, &[&format!("%{MARK}%")])[0].get::<_, i64>(0);
+        }
+    }
+    leaked += f.rt.block_on(async {
         let mut total = 0;
         for table in f
             .root
-            .query("SELECT schemaname||'.'||tablename FROM pg_tables WHERE schemaname IN ('moss_queue','moss_modules')", &[])
+            .query("SELECT schemaname||'.'||tablename FROM pg_tables WHERE schemaname='moss_modules'", &[])
             .await
             .unwrap()
         {
             let name: String = table.get(0);
-            let hits: i64 = f
+            total += f
                 .root
                 .query_one(&format!("SELECT count(*) FROM {name} t WHERE t::text LIKE $1"), &[&format!("%{MARK}%")])
                 .await
                 .unwrap()
-                .get(0);
-            total += hits;
+                .get::<_, i64>(0);
         }
         total
     });
