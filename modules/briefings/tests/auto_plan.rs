@@ -46,6 +46,7 @@ fn reservation() -> Value {
 #[test]
 fn a_succeeded_run_reserves_blocks_through_calendars_public_api_only() {
     let (fake, id) = setup();
+    fake.answer(A, "calendar", "getSourceSwitches", Some(json!({"briefings": true, "planning": true})));
     fake.answer(A, "calendar", "reserveAutoPlan", Some(reservation()));
     let out = fire(&fake, &id);
     assert_eq!(out["dayPlanAuto"]["planId"], "plan-1");
@@ -91,6 +92,7 @@ fn a_calendar_failure_does_not_lose_the_briefing() {
 #[test]
 fn a_repeated_fire_resumes_the_unfinished_batch_and_adds_nothing() {
     let (fake, id) = setup();
+    fake.answer(A, "calendar", "getSourceSwitches", Some(json!({"briefings": true, "planning": true})));
     fake.answer(A, "calendar", "reserveAutoPlan", Some(reservation()));
     fire(&fake, &id);
     fake.answer(A, "calendar", "findUnfinishedBatch", Some(json!({"operationId": "op-1"})));
@@ -115,4 +117,14 @@ fn the_briefing_text_never_reaches_a_job_payload_or_a_notification() {
     // The signal summary is the person's own derived text, sent to their own Calendar only.
     assert!(reserve_calls.iter().all(|(person, module, ..)| person == A && module == "calendar"));
     assert!(!fake.runs.borrow()[0]["source_metadata"]["dayPlanAuto"].to_string().contains(SECRET));
+}
+
+#[test]
+fn a_calendar_that_cannot_report_the_switches_is_treated_as_everything_off() {
+    let (fake, id) = setup();
+    fake.answer(A, "calendar", "getSourceSwitches", None);
+    fake.answer(A, "calendar", "reserveAutoPlan", Some(reservation()));
+    let out = fire(&fake, &id);
+    assert!(out.get("dayPlanAuto").is_none());
+    assert!(fake.api_calls.borrow().iter().all(|(_, _, name, _)| name != "reserveAutoPlan"));
 }

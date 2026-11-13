@@ -114,7 +114,7 @@ impl Composer for MorningComposer {
         let assessment = email_evidence::assess(&email_raw, gathered.now, gathered.zone);
         let plan = plan_context::resolve(host, gathered.now, gathered.zone, &mut gaps);
         let task_items = raw("tasks");
-        let day_plan = plan_prose::section(&plan, &task_items, calendar_loaded(&gathered, subject, &gaps).then_some(&calendar_raw[..]), gathered.zone);
+        let day_plan = plan_prose::section(&plan, &task_items, calendar_loaded(&gathered, subject, &gaps).then_some(&calendar_raw[..]), gathered.zone, gathered.now);
 
         // The prompt's mail lines skip rows already shown and mail the evidence rules out.
         let mail: Vec<Value> = assessment
@@ -194,7 +194,7 @@ pub(crate) fn calendar_loaded(g: &Gathered, subject: &Subject<'_>, gaps: &[Gap])
         && g.sections.iter().any(|s| s.key == "calendar")
         && g.source_context["calendar"]["accounts"].as_array().is_some_and(|a| !a.is_empty())
         && g.source_context["calendar"]["gaps"].as_array().is_some_and(|a| a.is_empty())
-        && !gaps.iter().any(|gap| gap.source == "calendar" && matches!(gap.reason, Reason::ToolFailed | Reason::SourceAuth))
+        && !gaps.iter().any(|gap| gap.source == "calendar" && matches!(gap.reason, Reason::ToolFailed | Reason::SourceAuth | Reason::Truncated))
 }
 
 /// Marks each evidence row with its place among the email signals.

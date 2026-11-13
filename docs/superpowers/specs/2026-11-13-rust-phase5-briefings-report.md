@@ -311,6 +311,8 @@ same way the morning briefing does. It reads only that person's own tasks, calen
 | A second person cannot read an evening run; seen failing without row security           | installed test, red and green                 |
 | Native and WebAssembly builds, tests in both                                            | gate                                          |
 | Real Rust server over HTTPS: an evening run stored the model's text                     | live run                                      |
+| Calendar cannot report the switches: nothing is read or planned from it                 | test                                          |
+| A saved block that already ended is not called lost (Calendar hides ended events)       | test                                          |
 
 ### Changes outside Briefings
 

@@ -36,7 +36,7 @@ fn block_line(block: &Value, zone: chrono_tz::Tz) -> String {
 }
 
 /// `calendar` is `None` when the calendar was not read.
-pub fn section(plan: &Value, tasks: &[Value], calendar: Option<&[Value]>, zone: chrono_tz::Tz) -> Section {
+pub fn section(plan: &Value, tasks: &[Value], calendar: Option<&[Value]>, zone: chrono_tz::Tz, now: chrono::DateTime<chrono::Utc>) -> Section {
     if !plan.is_object() {
         return Section::empty(KEY, LABEL);
     }
@@ -63,7 +63,7 @@ pub fn section(plan: &Value, tasks: &[Value], calendar: Option<&[Value]>, zone: 
     }
     let blocks = list(&plan["blocks"]);
     lines.extend(blocks.iter().map(|b| block_line(b, zone)));
-    lines.extend(overnight_changes(plan, calendar, tasks));
+    lines.extend(overnight_changes(plan, calendar, tasks, now));
     if intent.is_object() && blocks.is_empty() {
         lines.push(NO_BLOCKS_LINE.to_owned());
     }

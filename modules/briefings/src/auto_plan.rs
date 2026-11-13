@@ -7,8 +7,9 @@ use crate::util::owner_zone;
 use moss_module_sdk::{query::{Filter, Query}, Client, Host, Result};
 use serde_json::{json, Value};
 
-/// The two calendar switches. Both are on unless the person turned them off, and a calendar
-/// that cannot be asked leaves them on, because the person has made no choice we can see.
+/// The two calendar switches. Calendar reports a missing choice as on. When Calendar cannot be
+/// asked, or answers in an unknown shape, both read as off, so nothing is read or planned
+/// against a choice we could not see.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Switches {
     /// Include the calendar in briefings.
@@ -19,7 +20,7 @@ pub struct Switches {
 
 pub fn switches<H: Host + ?Sized>(host: &H) -> Switches {
     let reply = api(host, "calendar", "getSourceSwitches", json!({})).unwrap_or(Value::Null);
-    let on = |key: &str| reply[key].as_bool().unwrap_or(true);
+    let on = |key: &str| reply[key].as_bool().unwrap_or(false);
     Switches { briefings: on("briefings"), planning: on("planning") }
 }
 

@@ -51,7 +51,9 @@ fn is_ref(event: &Value, reference: &str) -> bool {
 }
 
 /// `calendar` is `None` when the calendar was not read, which is different from no events.
-pub fn overnight_changes(plan: &Value, calendar: Option<&[Value]>, tasks: &[Value]) -> Vec<String> {
+/// Calendar leaves out events that have already ended, so a missing event counts as lost only
+/// while its block is still ahead of `now`.
+pub fn overnight_changes(plan: &Value, calendar: Option<&[Value]>, tasks: &[Value], now: DateTime<Utc>) -> Vec<String> {
     let mut lines: Vec<String> = vec![];
     let blocks = plan["blocks"].as_array().cloned().unwrap_or_default();
     if let Some(events) = calendar {
@@ -61,6 +63,7 @@ pub fn overnight_changes(plan: &Value, calendar: Option<&[Value]>, tasks: &[Valu
             let reference = text(&block["actualPlacement"]["calendarEventRef"]);
             if let Some(reference) = reference {
                 match events.iter().find(|e| is_ref(e, reference)) {
+                    None if window(block).is_none_or(|(_, end)| end <= now) => {}
                     None => {
                         lines.push(format!("Overnight change: \"{name}\" lost its calendar event; {RECOMMENDATION}."));
                         continue;

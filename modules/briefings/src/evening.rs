@@ -179,7 +179,7 @@ impl EveningComposer {
 
         let plan = plan_context::resolve(host, now, zone, &mut gaps);
         let raw_calendar = calendar.as_ref().map(|c| c.raw.clone()).unwrap_or_default();
-        let day_plan = plan_prose::section(&plan, &tasks.raw, calendar_loaded(&gathered, subject, &gaps).then_some(&raw_calendar[..]), zone);
+        let day_plan = plan_prose::section(&plan, &tasks.raw, calendar_loaded(&gathered, subject, &gaps).then_some(&raw_calendar[..]), zone, gathered.now);
         let morning = morning_plan(host, now, zone);
         let morning_section = Section {
             key: "morning_plan",

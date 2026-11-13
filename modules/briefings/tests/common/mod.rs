@@ -320,6 +320,8 @@ impl Host for Fake {
                 let found = self.answers.borrow().iter().rev().find(|(p, m, n, _)| p == actor && m == resource && *n == name).cloned();
                 match found {
                     Some((_, _, _, Some(answer))) => Ok(answer),
+                    // Calendar always reports the switches, on unless the person turned one off.
+                    None if resource == "calendar" && name == "getSourceSwitches" => Ok(json!({"briefings": true, "planning": true})),
                     _ => Err(moss_module_sdk::Error::new("Public call unavailable")),
                 }
             }
