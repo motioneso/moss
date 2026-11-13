@@ -84,6 +84,8 @@ impl World {
                     .unwrap();
             }
         });
+        // An earlier test in this database installed the package into a folder that is gone.
+        f.rt.block_on(f.root.execute("DELETE FROM moss_modules.catalog", &[])).unwrap();
         let dir = tempfile::tempdir().unwrap();
         let reg = tempfile::tempdir().unwrap();
         let bytes = moss_briefings_host::package::pack(&root(), &component()).unwrap();
