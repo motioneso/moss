@@ -34,6 +34,7 @@ pub mod mail_probe;
 pub mod package;
 pub mod refresh;
 pub mod store;
+pub mod write;
 
 pub const MODULE_ID: &str = "connectors";
 
@@ -187,6 +188,8 @@ impl Ports for ConnectorsPorts {
                     || request.resource == "connectors.context-setup"
                 {
                     live::run(&cx, &self.cipher, &self.google, request).await?
+                } else if request.resource.starts_with("connectors.write-") {
+                    write::run(&cx, &self.cipher, &self.google, &self.mail, request).await?
                 } else if request.resource.starts_with("connectors.refresh-") {
                     refresh::run(&cx, request).await?
                 } else if request.resource.starts_with("connectors.google-") {

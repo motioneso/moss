@@ -155,6 +155,22 @@ impl MailStandIn {
         uid
     }
 
+    /// The raw text and flags of every message in a folder, oldest first.
+    pub fn folder_messages(&self, folder: &str) -> Vec<(String, Vec<String>)> {
+        self.with(|s| {
+            s.folders
+                .iter()
+                .find(|f| f.name == folder)
+                .map(|f| {
+                    f.messages
+                        .iter()
+                        .map(|m| (String::from_utf8_lossy(&m.body).into_owned(), m.flags.iter().cloned().collect()))
+                        .collect()
+                })
+                .unwrap_or_default()
+        })
+    }
+
     /// Changes a message's content in place, keeping its UID, as a server-side edit would.
     pub fn replace_body(&self, folder: &str, uid: u32, raw: &str) {
         self.with(|s| {

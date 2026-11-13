@@ -116,6 +116,18 @@ impl GoogleConfig {
     /// A read from the Gmail or Calendar API. The outer error is a transport failure. The
     /// answer is the status and the body. Nothing here records the token or the body.
     pub(crate) async fn get(&self, url: Url, token: &str) -> Result<(u16, Vec<u8>)> {
+        self.request(Method::GET, url, token, None).await
+    }
+
+    /// A write to the Gmail or Calendar API. It is sent once and never retried, because a
+    /// repeated send would send twice.
+    pub(crate) async fn request(
+        &self,
+        method: Method,
+        url: Url,
+        token: &str,
+        body: Option<Value>,
+    ) -> Result<(u16, Vec<u8>)> {
         let transport = Arc::clone(&self.transport);
         let (hosts, allow_private) = (self.api_hosts.clone(), self.allow_private);
         let mut headers = HeaderMap::new();
@@ -128,9 +140,9 @@ impl GoogleConfig {
                 url: &url,
                 hosts: &hosts,
                 allow_private,
-                method: Method::GET,
+                method,
                 headers,
-                body: None,
+                body,
                 timeout: HTTP_LIMIT,
             })
         })

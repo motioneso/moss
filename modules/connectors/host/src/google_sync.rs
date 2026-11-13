@@ -72,7 +72,7 @@ fn clean(text: &str) -> Option<String> {
     (!kept.is_empty()).then_some(kept)
 }
 
-fn reason_of(body: &[u8]) -> Option<String> {
+pub(crate) fn reason_of(body: &[u8]) -> Option<String> {
     let value: Value = serde_json::from_slice(body).ok()?;
     let error = &value["error"];
     error["errors"][0]["reason"]
