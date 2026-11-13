@@ -9,6 +9,7 @@ const checks = spawnSync("modules/connectors/tools/check.sh", {
 if (checks.status !== 0) process.exit(checks.status ?? 1);
 const target = process.env.CARGO_TARGET_DIR ?? "/tmp/moss-connectors-host";
 const wasm = `${target}/connectors-guest/wasm32-unknown-unknown/release/moss_connectors.wasm`;
+const suites = (process.env.CONNECTORS_TESTS ?? "db,google_sync,google,imap,refresh").split(",");
 const run = spawnSync(
   "cargo",
   [
@@ -19,14 +20,7 @@ const run = spawnSync(
     "--no-fail-fast",
     "--manifest-path",
     "modules/connectors/host/Cargo.toml",
-    "--test",
-    "db",
-    "--test",
-    "google_sync",
-    "--test",
-    "google",
-    "--test",
-    "imap",
+    ...suites.flatMap((suite) => ["--test", suite]),
     "--",
     "--ignored",
     "--nocapture",
@@ -38,6 +32,7 @@ const run = spawnSync(
       ...process.env,
       JS48_APP_URL: urls.app,
       JS48_BOOTSTRAP_URL: urls.bootstrap,
+      JS48_WORKER_URL: urls.worker,
       CONNECTORS_CORE_WASM: wasm
     }
   }

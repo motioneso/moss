@@ -6,3 +6,8 @@
 - Read and write the same tables as the original server. Secrets are sealed in the original format and never returned, logged or sent through jobs.
 - Add the connection health labels for mail and for Outlook calendar, and the Settings, Connections screen.
 - Google, IMAP and Outlook sign-in and sync are not included. Revoking an account does not stop any sync job, because this package starts none.
+
+## 0.4.0
+
+- Add Refresh email. A signed-in person can ask all their connected Google and IMAP accounts to sync recent mail now, and see each account finish as succeeded, partial or failed.
+- Today shows a Refresh email button when mail is more than a day old.

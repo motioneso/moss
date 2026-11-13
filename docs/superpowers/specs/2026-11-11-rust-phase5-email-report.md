@@ -350,3 +350,51 @@ None added. The host reuses the HTTP client, database layer and job queue alread
 - A real model pass. It needs a configured AI service and Ben.
 - Today and briefing refresh using these results (not part of this part).
 - Gmail mail (part 7 is separate).
+
+# Part 9: Today refresh
+
+## What was built
+
+- A "Refresh email" control on the Today screen. It asks every connected Google and IMAP account
+  of the signed-in person to sync now and shows each account's progress.
+- Two routes: `POST /api/connectors/email-refresh` starts a refresh (202, or the running one when
+  asked again with the same key) and `GET /api/connectors/email-refresh/:refresh_id` reads it.
+- One refresh at a time per person. Each account gets its own job, and a sweep job re-sends
+  waiting accounts, fails ones that never finish, and stops itself when nothing is active.
+- A refresh reuses the Google sync (mail only, recent mail only) and the IMAP sync. No sync code
+  was rebuilt.
+- Progress rows hold only status, times, a fixed error code and counts. Job payloads carry ids,
+  counts and fixed choices.
+- Refresh steps that write progress counts run on the worker database role, as in the old app,
+  because the app role may not write those columns. Row-level security still limits every row to
+  the signed-in person.
+- The Today control touches Today only through its public surface. The Connectors manifest lists
+  the new resources, queues, routes and the `connectors.email-refresh` feature.
+
+## Proof
+
+- Ported tests for dispatch, the per-account queue, the sweep queue and retry: 7 guest unit tests
+  and 9 database tests against the real Wasm package with stand-in Google and mail servers.
+- Refresh never touches another person's account. A second person cannot start, read or change
+  the first person's refresh, and the leak was seen with row-level security switched off.
+- Mail text and secrets appear in no job payload (the leak test searches every queued payload).
+- Native and WebAssembly builds, with tests in both, for the package and the Today control.
+- A live run on the real Rust server with the stand-in servers: the refresh is accepted, a repeat
+  returns the same refresh, polling reaches "succeeded", and both account types succeed.
+
+## Third-party code
+
+None added.
+
+## Differences from the old app
+
+- The old 24-hour stale-email rule is not ported.
+- Refresh forces calendar sync off for Google and reads recent mail only.
+
+## Not proven
+
+- The Today button in a real browser. The live run covers the routes, not the screen.
+- Re-running the briefing after a refresh.
+- The live refresh saved 0 new messages, so it proves the flow and statuses, not a large sync.
+- `refused_attempts_answer_like_the_old_server` (Google limiter) failed once under load. It
+  covers untouched code and is timing-sensitive. It was not re-checked on main.

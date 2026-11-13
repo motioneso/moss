@@ -2,11 +2,14 @@
 //! listing with what Email has cached, fetches what is new or changed, writes it through
 //! Email's public API, then removes cached mail the server no longer lists and records the
 //! outcome. The host owns the network and the password, and no message text is kept here.
-use crate::{kv, Result};
+use crate::{kv, refresh, Result};
 use moss_module_sdk::{Client, Host};
 use serde_json::{json, Value};
 
 pub const QUEUE: &str = "imap-sync";
+/// A refresh the person asked for runs the same sync on its own queue, so the outcome can be
+/// recorded against the refresh.
+pub const REFRESH_QUEUE: &str = "email-refresh-imap";
 /// The folder the host syncs.
 const FOLDER: &str = "INBOX";
 const CRON: &str = "*/15 * * * *";
@@ -63,6 +66,23 @@ fn job_params(account: &str, cursor: u64, upserted: u64, failures: u64) -> Value
     json!({"account-id":account,"cursor":cursor,"upserted":upserted,"failures":failures})
 }
 
+/// The queue and parameters of a job, with the refresh id only on the refresh queue.
+fn queued(account: &str, cursor: u64, upserted: u64, failures: u64, refresh: Option<&str>) -> (&'static str, Value) {
+    let mut params = job_params(account, cursor, upserted, failures);
+    match refresh {
+        Some(id) => {
+            params["refresh-id"] = json!(id);
+            (REFRESH_QUEUE, params)
+        }
+        None => (QUEUE, params),
+    }
+}
+
+/// Starts a mail-only sync for a refresh.
+pub fn refresh_first(account: &str, refresh: &str) -> (&'static str, Value) {
+    queued(account, 0, 0, 0, Some(refresh))
+}
+
 /// Keeps one fifteen-minute sync schedule per mail account. The account id is the key, so a
 /// repeat call replaces the row. A scheduling failure never fails the caller.
 pub fn reconcile_schedule(host: &impl Host, account: &str) {
@@ -93,12 +113,16 @@ pub fn sync_soon(host: &impl Host, account: &str) {
 }
 
 fn enqueue(host: &impl Host, params: Value) -> Result<()> {
+    enqueue_on(host, QUEUE, params)
+}
+
+fn enqueue_on(host: &impl Host, queue: &str, params: Value) -> Result<()> {
     let context = host.call("context", "read", "call", json!({}))?;
     let key = host.call("context", "uuid", "new", json!({}))?;
     host.call(
         "jobs",
         "enqueue-options",
-        QUEUE,
+        queue,
         json!({"params":params,"idempotencyKey":key["id"],"availableAt":context["now"]}),
     )?;
     Ok(())
@@ -110,9 +134,11 @@ pub fn is_mail_provider(provider: &str) -> bool {
 
 pub fn handle(host: &impl Host, payload: &str) -> std::result::Result<String, String> {
     let job: Value = serde_json::from_str(payload).map_err(|_| "Invalid mail sync job")?;
-    if job["queue"] != QUEUE {
-        return Err("Connectors job is unavailable".into());
-    }
+    let refresh = match job["queue"].as_str() {
+        Some(QUEUE) => None,
+        Some(REFRESH_QUEUE) => Some(job["parameters"]["refresh-id"].as_str().ok_or("Invalid mail sync job")?),
+        _ => return Err("Connectors job is unavailable".into()),
+    };
     let p = &job["parameters"];
     let (Some(account), Some(cursor), Some(upserted), Some(failures)) = (
         p["account-id"].as_str(),
@@ -122,11 +148,25 @@ pub fn handle(host: &impl Host, payload: &str) -> std::result::Result<String, St
     ) else {
         return Err("Invalid mail sync job".into());
     };
-    let outcome = step(host, account, cursor, upserted, failures);
+    if let Some(id) = refresh {
+        if cursor == 0 && !refresh::begin(host, id, account, "imap").map_err(|e| e.message)? {
+            return Ok(json!({"outcome":"skipped"}).to_string());
+        }
+    }
+    let outcome = step(host, account, cursor, upserted, failures, refresh);
+    if let Some(id) = refresh {
+        match outcome {
+            // The account is mid-sync or the host failed, so a queue retry tries again. A stuck
+            // row is failed by the refresh sweep.
+            "busy" | "failed" if cursor == 0 => return Err("Mail sync is not ready".into()),
+            "inactive" => refresh::finish(host, id, account, "failed", Some("no-active-connection"), 0, 0),
+            _ => {}
+        }
+    }
     Ok(json!({"outcome":outcome}).to_string())
 }
 
-fn finish(host: &impl Host, account: &str, status: &str, error: Option<&str>, upserted: u64, failures: u64, truncated: bool) {
+fn finish(host: &impl Host, account: &str, status: &str, error: Option<&str>, upserted: u64, failures: u64, truncated: bool, refresh: Option<&str>) {
     let _ = kv(
         host,
         "set",
@@ -136,11 +176,15 @@ fn finish(host: &impl Host, account: &str, status: &str, error: Option<&str>, up
             "counts":{"emailUpserted":upserted,"emailFailures":failures,"truncated":truncated},
         }),
     );
+    if let Some(id) = refresh {
+        let (status, error) = refresh::outcome(error.unwrap_or("none"));
+        refresh::finish(host, id, account, status, error, upserted, failures);
+    }
 }
 
 /// One run of the job. Returns a short word for the job result. A host failure ends the
 /// run as failed instead of retrying, so a broken server is not hit again at once.
-fn step(host: &impl Host, account: &str, cursor: u64, upserted: u64, failures: u64) -> &'static str {
+fn step(host: &impl Host, account: &str, cursor: u64, upserted: u64, failures: u64, refresh: Option<&str>) -> &'static str {
     if cursor == 0 {
         match kv(host, "set", "connectors.imap-sync-start", json!({"accountId":account})) {
             Ok(started) => match started["state"].as_str() {
@@ -154,16 +198,16 @@ fn step(host: &impl Host, account: &str, cursor: u64, upserted: u64, failures: u
             Err(_) => return "failed",
         }
     }
-    match run_step(host, account, cursor as usize, upserted, failures) {
+    match run_step(host, account, cursor as usize, upserted, failures, refresh) {
         Ok(outcome) => outcome,
         Err(_) => {
-            finish(host, account, "failed", Some("email-error"), upserted, failures, false);
+            finish(host, account, "failed", Some("email-error"), upserted, failures, false, refresh);
             "failed"
         }
     }
 }
 
-fn run_step(host: &impl Host, account: &str, cursor: usize, mut upserted: u64, mut failures: u64) -> Result<&'static str> {
+fn run_step(host: &impl Host, account: &str, cursor: usize, mut upserted: u64, mut failures: u64, refresh: Option<&str>) -> Result<&'static str> {
     let listing = kv(host, "get", "connectors.imap-list", json!({"accountId":account}))?;
     match listing["result"].as_str() {
         None => {}
@@ -172,11 +216,11 @@ fn run_step(host: &impl Host, account: &str, cursor: usize, mut upserted: u64, m
             return Ok("inactive");
         }
         Some("auth_failed") => {
-            finish(host, account, "failed", Some("auth-error"), upserted, failures, false);
+            finish(host, account, "failed", Some("auth-error"), upserted, failures, false, refresh);
             return Ok("auth-error");
         }
         Some(_) => {
-            finish(host, account, "failed", Some("email-error"), upserted, failures, false);
+            finish(host, account, "failed", Some("email-error"), upserted, failures, false, refresh);
             return Ok("failed");
         }
     }
@@ -240,7 +284,8 @@ fn run_step(host: &impl Host, account: &str, cursor: usize, mut upserted: u64, m
     }
     let next = cursor + STEP;
     if next < entries.len() {
-        enqueue(host, job_params(account, next as u64, upserted, failures))?;
+        let (queue, params) = queued(account, next as u64, upserted, failures, refresh);
+        enqueue_on(host, queue, params)?;
         return Ok("continued");
     }
     // Only a complete listing proves a cached message is gone from the server.
@@ -253,7 +298,7 @@ fn run_step(host: &impl Host, account: &str, cursor: usize, mut upserted: u64, m
         )?;
     }
     let (status, error) = if failures == 0 { ("success", None) } else { ("partial", Some("email-message-error")) };
-    finish(host, account, status, error, upserted, failures, truncated);
+    finish(host, account, status, error, upserted, failures, truncated, refresh);
     Ok("done")
 }
 
