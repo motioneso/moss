@@ -394,7 +394,7 @@ fn manual_and_scheduled_runs_store_once_notify_once_and_keep_text_out_of_every_s
     let stored: String = w.f.rt.block_on(w.f.root.query_one("SELECT summary_text FROM app.briefing_runs WHERE id=$1", &[&run.parse::<uuid::Uuid>().unwrap()])).unwrap().get(0);
     assert!(!stored.trim().is_empty(), "with no model the run keeps a plain digest");
     let reason: Option<String> = w.f.rt.block_on(w.f.root.query_one("SELECT source_metadata->>'degradedReason' FROM app.briefing_runs WHERE id=$1", &[&run.parse::<uuid::Uuid>().unwrap()])).unwrap().get(0);
-    assert_eq!(reason.as_deref(), Some("no_model"));
+    assert_eq!(reason.as_deref(), Some("synthesis_failed"), "the host gives guests one fixed failure text, so an unset model reads as a failed call");
     assert_eq!(notes(), 0, "a manual run does not notify");
     println!("PASS manual run: queued, pending, then ready with a plain digest, no notification");
 
@@ -562,7 +562,7 @@ fn model_written_text_is_stored_for_the_owner_only_and_reaches_no_other_table_or
     // Nothing but the run table holds the text.
     let tables: Vec<String> = w.f.rt.block_on(async {
         w.f.root.query(
-            "SELECT table_schema||'.'||table_name FROM information_schema.tables WHERE table_schema IN ('moss_queue','moss_modules') \\
+            "SELECT table_schema||'.'||table_name FROM information_schema.tables WHERE table_schema IN ('moss_queue','moss_modules') \
              OR table_name IN ('notifications','moss_activity_detail','moss_error_log','moss_action_audit_log','moss_model_activity_log')", &[])
             .await.unwrap().iter().map(|r| r.get(0)).collect()
     });

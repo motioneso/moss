@@ -73,7 +73,7 @@ fn digest(sections: &[Section]) -> String {
 
 /// Maps a router failure to the stored reason. The router gives no credential detail.
 fn failure_reason(message: &str) -> &'static str {
-    if message.contains("not set up") { "no_model" } else { "synthesis_failed" }
+    if message.contains("not set up") || message.contains("not configured") { "no_model" } else { "synthesis_failed" }
 }
 
 impl Composer for MorningComposer {
