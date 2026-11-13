@@ -12,6 +12,7 @@ pub mod email_context;
 pub mod email_writes;
 pub mod live_tools;
 pub mod monitors;
+pub mod outlook_scan;
 pub mod outlook_source;
 pub mod fastify;
 pub mod google;
