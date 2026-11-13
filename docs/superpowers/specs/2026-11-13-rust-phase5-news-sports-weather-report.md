@@ -80,6 +80,9 @@ anything that does not fit. There is no Weather package yet (part 20b), so nobod
 - Both are stored in the same two saved-setting entries the old Settings routes used, so a place
   saved today is still there after the move.
 - A stored value that no longer fits reads as "not set" instead of reaching the package.
+- The two grants live in one function that both the server and the tests use, so the tests
+  cannot drift from what the server grants. The permission the Weather manifest will carry is
+  checked in as a test file, and a test checks that each resource it names has a grant.
 - The server grants these two entries to the module named weather and to no other. The package
   cannot pick the entry, the person or the checks.
 
@@ -107,10 +110,15 @@ package takes is the one exercised. Nothing in this part compiles to WebAssembly
 ### App map
 
 No entry changes. The Account screen's weather unit and place wording stays true because the old
-routes still serve them. The Weather package declares its entries in its manifest in part 20b.
+routes still serve them. The Weather package declares its entries, and the permission fragment
+checked in here, in its manifest in part 20b.
 
 ### Not proven
 
+- Server log files. The port writes no log lines and its refusal message holds no input, but the
+  test does not capture the server's log output.
+- The server's own grant for Weather through a real guest. The tests use the same grant function
+  the server uses, but no installed guest reaches it through the server until part 20b.
 - A Weather package using these two entries on the real server. None exists until part 20b, so
   the live run used Sports, which shares the same port and the same wiring.
 - A phone or another computer reaching the server. This part adds no listener or screen.

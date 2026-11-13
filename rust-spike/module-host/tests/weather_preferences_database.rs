@@ -3,7 +3,7 @@
 mod common;
 use access_context::AccessContext;
 use moss_module_host::{
-    account_preferences::{AccountPreferencesPorts, Binding, JsonShape, WEATHER_UNITS},
+    account_preferences::{weather_bindings, AccountPreferencesPorts},
     manifest::Capability,
     runtime::{DenyPorts, Host, Limits},
 };
@@ -42,23 +42,21 @@ fn weather_place_and_unit_are_validated_private_and_shared_with_typescript() {
     let ports = Arc::new(
         AccountPreferencesPorts::new(
             database,
-            BTreeMap::from([
-                (("weather".into(), "location".into()), Binding::Json { key: LOCATION.into(), shape: JsonShape::Place }),
-                (("weather".into(), "unit".into()), Binding::Json { key: UNIT.into(), shape: JsonShape::Choice(WEATHER_UNITS) }),
-            ]),
+            weather_bindings(),
             Arc::new(DenyPorts),
         )
         .unwrap(),
     );
-    // The manifest declares exactly the two resources and the two operations.
+    // The checked-in declaration the Weather manifest will carry: the two resources and
+    // the two operations. Every declared resource must have a binding in the shell's map.
+    let declared: Capability = serde_json::from_str(include_str!("data/weather-preferences-capability.json")).unwrap();
+    for resource in &declared.resources {
+        assert!(weather_bindings().contains_key(&("weather".to_string(), resource.clone())), "{resource}");
+    }
+    assert_eq!(declared.resources.len(), weather_bindings().len());
     let mut manifest = common::manifest("1.0.0");
     manifest.id = "weather".into();
-    manifest.capabilities = vec![Capability {
-        port: "kv".into(),
-        operations: ["preference.read".into(), "preference.write".into()].into(),
-        resources: ["location".into(), "unit".into()].into(),
-        allow_private: false,
-    }];
+    manifest.capabilities = vec![declared];
     manifest.validate(&"0.1.0".parse().unwrap()).unwrap();
     let host = Host::new(Limits::default()).unwrap();
     let wasm = common::wasm();
@@ -158,10 +156,20 @@ fn weather_place_and_unit_are_validated_private_and_shared_with_typescript() {
     let refusal = format!("{:?}", write(owner, "location", json!({"lat":0,"lon":0,"label":MARKER,"note":"extra"})).unwrap_err());
     assert!(!refusal.contains(MARKER), "{refusal}");
     write(owner, "location", json!({"lat":1,"lon":2,"label":MARKER})).unwrap();
-    let tables = rt.block_on(bootstrap.query("SELECT table_schema||'.'||table_name FROM information_schema.tables WHERE table_type='BASE TABLE' AND table_schema IN ('app','moss_queue','moss_modules') AND table_name<>'preferences'", &[])).unwrap();
-    for table in tables {
-        let name: String = table.get(0);
-        let count: i64 = rt.block_on(bootstrap.query_one(&format!("SELECT count(*) FROM {name} t WHERE t::text LIKE '%'||$1||'%'"), &[&MARKER])).unwrap().get(0);
-        assert_eq!(count, 0, "the planted place text reached {name}");
-    }
+    let scan = || {
+        let tables = rt.block_on(bootstrap.query("SELECT table_schema||'.'||table_name FROM information_schema.tables WHERE table_type='BASE TABLE' AND table_schema IN ('app','moss_queue','moss_modules') AND table_name<>'preferences'", &[])).unwrap();
+        for table in tables {
+            let name: String = table.get(0);
+            let count: i64 = rt.block_on(bootstrap.query_one(&format!("SELECT count(*) FROM {name} t WHERE t::text LIKE '%'||$1||'%'"), &[&MARKER])).unwrap().get(0);
+            assert_eq!(count, 0, "the planted place text reached {name}");
+        }
+    };
+    // Negative control: a planted leak in another table must make the scan fail.
+    rt.block_on(bootstrap.execute("UPDATE app.users SET name=$2 WHERE id=$1", &[&other, &MARKER])).unwrap();
+    let leak = catch_unwind(AssertUnwindSafe(scan));
+    rt.block_on(bootstrap.execute("UPDATE app.users SET name='Weather proof' WHERE id=$1", &[&other])).unwrap();
+    assert!(leak.is_err(), "the scan must catch a planted leak");
+    println!("privacy scan FAILED with a leak planted");
+    scan();
+    println!("privacy scan PASSED with no leak");
 }

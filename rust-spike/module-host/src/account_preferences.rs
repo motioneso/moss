@@ -71,6 +71,20 @@ impl JsonShape {
         }
     }
 }
+/// Weather's two bindings, as the shell grants them. The `weather` module reads and writes
+/// the preference keys the old Settings routes used.
+pub fn weather_bindings() -> BTreeMap<(String, String), Binding> {
+    BTreeMap::from([
+        (
+            ("weather".into(), "location".into()),
+            Binding::Json { key: "weather-location".into(), shape: JsonShape::Place },
+        ),
+        (
+            ("weather".into(), "unit".into()),
+            Binding::Json { key: "weather-unit".into(), shape: JsonShape::Choice(WEATHER_UNITS) },
+        ),
+    ])
+}
 pub struct AccountPreferencesPorts {
     database: Database,
     runtime: tokio::runtime::Runtime,

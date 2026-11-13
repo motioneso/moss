@@ -2,6 +2,7 @@
 // Rust port read them, then checks that TypeScript reads what Rust wrote.
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import pg from "pg";
 import { createDatabase, DataContextRunner, getMossDatabaseUrls } from "@moss/db";
 import { PreferencesRepository } from "../../../packages/structured-state/src/preferences-repository.js";
@@ -62,7 +63,7 @@ try {
       "weather-location": { lat: 35.6762, lon: 139.6503, label: "Tokyo" },
       "weather-unit": "metric"
     };
-    if (JSON.stringify(after) !== JSON.stringify(expected)) {
+    if (!isDeepStrictEqual(after, expected)) {
       console.error("TypeScript did not read back what Rust wrote", after);
       status = 1;
     } else {

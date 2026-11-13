@@ -17,7 +17,7 @@ use axum::{
     Extension, Json, Router,
 };
 use moss_module_host::{
-    account_preferences::{AccountPreferencesPorts, Binding, JsonShape, WEATHER_UNITS},
+    account_preferences::{weather_bindings, AccountPreferencesPorts, Binding, JsonShape},
     ai::{
         EmbeddingsOnly, FixedEmbeddings, Intelligence, IntelligenceEmbeddings,
         DEFAULT_EMBEDDING_MODEL,
@@ -202,9 +202,8 @@ impl Intelligence for SplitIntelligence {
 /// Sports keeps its standings choices, and Weather its place and unit, in fixed account
 /// preference keys. Weather's keys are the ones the old Settings routes wrote.
 fn module_preferences(database: Database, next: Arc<dyn Ports>) -> Result<Arc<dyn Ports>> {
-    Ok(Arc::new(AccountPreferencesPorts::new(
-        database,
-        BTreeMap::from([
+    let mut bindings = weather_bindings();
+    bindings.extend([
             (
                 ("sports".into(), "standings-competitions".into()),
                 Binding::Json {
@@ -219,17 +218,8 @@ fn module_preferences(database: Database, next: Arc<dyn Ports>) -> Result<Arc<dy
                     shape: JsonShape::LastViewed,
                 },
             ),
-            (
-                ("weather".into(), "location".into()),
-                Binding::Json { key: "weather-location".into(), shape: JsonShape::Place },
-            ),
-            (
-                ("weather".into(), "unit".into()),
-                Binding::Json { key: "weather-unit".into(), shape: JsonShape::Choice(WEATHER_UNITS) },
-            ),
-        ]),
-        next,
-    )?))
+        ]);
+    Ok(Arc::new(AccountPreferencesPorts::new(database, bindings, next)?))
 }
 
 /// Account preference and linked-notes ports for People. Keys, resources and roots are
