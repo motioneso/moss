@@ -3,12 +3,20 @@
 use crate::capture_auth as auth;
 use crate::capture_errors::{respond, CaptureCode, Failure, Stop};
 use crate::capture_input as input;
-use crate::{capture_connection, capture_start};
+use crate::{capture_audio_service, capture_connection, capture_service, capture_start, capture_status};
 use moss_module_sdk::{Host, Response, RouteRequest};
 use serde_json::{json, Value};
 
 fn meeting(request: &RouteRequest) -> Result<String, Failure> {
     input::uuid(&request.params.get("id").map_or(Value::Null, |id| json!(id)))
+}
+
+/// Every body but a clip is at most 128 KiB.
+fn small(body: &Value) -> Result<(), Stop> {
+    if body.to_string().len() > 131_072 {
+        return Err(Failure::new(CaptureCode::Limit).into());
+    }
+    Ok(())
 }
 
 /// The route, or `None` when the path is not a Mac link route.
@@ -23,6 +31,15 @@ pub fn dispatch<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Option<Re
         ("POST", "/records/:id/capture/cancel-start") => {
             meeting(request).map_err(Stop::from).and_then(|id| capture_start::cancel_start(host, &id, body))
         }
+        ("POST", "/capture/status") => small(body).and_then(|_| input::status(body).map_err(Stop::from)).and_then(|r| capture_status::native_status(host, &r)),
+        ("POST", "/capture/control") => small(body).and_then(|_| input::control(body, true).map_err(Stop::from)).and_then(|c| capture_service::native_control(host, &c)),
+        ("POST", "/capture/audio") => input::audio(body).map_err(Stop::from).and_then(|_| capture_audio_service::audio(host, body)),
+        ("GET", "/records/:id/capture") => meeting(request).map_err(Stop::from).and_then(|id| capture_status::browser_status(host, &id)),
+        ("POST", "/records/:id/capture/control") => meeting(request).map_err(Stop::from).and_then(|id| {
+            small(body)?;
+            let control = input::control(body, false)?;
+            capture_service::browser_control(host, &id, &control)
+        }),
         ("POST", "/recording-capability/attempt") => attempt(host, body),
         ("POST", "/recording-capability/decide") => decide(host, body),
         _ => return None,
