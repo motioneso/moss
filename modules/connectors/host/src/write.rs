@@ -100,7 +100,7 @@ async fn write(
         if left.is_zero() {
             return Ok(fail(None, Some("timeout".into()), false));
         }
-        let sent = config.request(method.clone(), url.clone(), &token, body.clone());
+        let sent = config.request(method.clone(), url.clone(), &token, body.clone(), left);
         let Ok(Ok((status, raw))) = tokio::time::timeout(left, sent).await else {
             return Ok(fail(None, Some("timeout".into()), false));
         };
@@ -280,6 +280,8 @@ async fn imap(
     let text = format!("From: {}\r\n{text}", login.username.replace(['\r', '\n'], ""));
     let text = text.as_str();
     let left = deadline.saturating_duration_since(Instant::now());
+    // Set once the mail has gone, so a later stall cannot turn the send into a reported failure.
+    let gone = std::cell::Cell::new(false);
     let work = async {
         if request.resource == "connectors.write-imap-send" {
             let to: lettre::Address = store::text(p, "to")?.parse().map_err(|_| anyhow!("Invalid recipient"))?;
@@ -295,6 +297,7 @@ async fn imap(
                 let result = if auth { "auth_failed" } else if tls { "tls_failed" } else { "failed" };
                 return Ok(json!({"result":result}));
             }
+            gone.set(true);
             // The copy in Sent is best effort. The mail has already gone.
             let filed = file(&login, text, true).await;
             return Ok(json!({"result":"ok","filed":filed.is_ok()}));
@@ -306,6 +309,7 @@ async fn imap(
     };
     match tokio::time::timeout(left, work).await {
         Ok(answer) => answer,
+        Err(_) if gone.get() => Ok(json!({"result":"ok","filed":false})),
         Err(_) => Ok(json!({"result":"unreachable"})),
     }
 }

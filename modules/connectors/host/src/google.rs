@@ -116,17 +116,19 @@ impl GoogleConfig {
     /// A read from the Gmail or Calendar API. The outer error is a transport failure. The
     /// answer is the status and the body. Nothing here records the token or the body.
     pub(crate) async fn get(&self, url: Url, token: &str) -> Result<(u16, Vec<u8>)> {
-        self.request(Method::GET, url, token, None).await
+        self.request(Method::GET, url, token, None, HTTP_LIMIT).await
     }
 
     /// A write to the Gmail or Calendar API. It is sent once and never retried, because a
-    /// repeated send would send twice.
+    /// repeated send would send twice. `limit` bounds the HTTP call itself, so the request
+    /// cannot finish after the caller has already reported a failure.
     pub(crate) async fn request(
         &self,
         method: Method,
         url: Url,
         token: &str,
         body: Option<Value>,
+        limit: Duration,
     ) -> Result<(u16, Vec<u8>)> {
         let transport = Arc::clone(&self.transport);
         let (hosts, allow_private) = (self.api_hosts.clone(), self.allow_private);
@@ -143,7 +145,7 @@ impl GoogleConfig {
                 method,
                 headers,
                 body,
-                timeout: HTTP_LIMIT,
+                timeout: limit.min(HTTP_LIMIT),
             })
         })
         .await
