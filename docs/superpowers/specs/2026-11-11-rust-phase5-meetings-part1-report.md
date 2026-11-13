@@ -426,13 +426,14 @@ and for claiming it afterwards, except for the pieces listed under "Not built" a
 
 ### What was proved
 
-| Check                | How                                                                                                                     |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Link flow            | Seventeen tests against a fake Mac app: link, start, confirm, cancel, claim, repeats, refusals, and the age of a start. |
-| Guard removal        | Eight checks each remove one safety rule from the code and must turn a test red. All eight did.                         |
-| Real database        | A link, start, cancel and claim run against a real database.                                                            |
-| Two-person privacy   | Another person cannot see or change a link. Seen leaking with row security removed, and clean when restored.            |
-| No text in the queue | A planted marker never appears in queued work, activity rows or link rows.                                              |
+| Check                | How                                                                                                                                                                                                                                       |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Link flow            | Seventeen tests against a fake Mac app: link, start, confirm, cancel, claim, repeats, refusals, and the age of a start.                                                                                                                   |
+| Guard removal        | Eight checks each remove one safety rule from the code and must turn a test red. All eight did.                                                                                                                                           |
+| Live run             | Real Rust server over HTTPS: every capture route refuses with a code only for the owner and another person alike, and a caller with no session gets 401. The real server cannot vouch for sessions or Macs yet, so no link was made live. |
+| Real database        | A link, start, cancel and claim run against a real database.                                                                                                                                                                              |
+| Two-person privacy   | Another person cannot see or change a link. Seen leaking with row security removed, and clean when restored.                                                                                                                              |
+| No text in the queue | A planted marker never appears in queued work, activity rows or link rows.                                                                                                                                                                |
 
 ### Error codes
 
