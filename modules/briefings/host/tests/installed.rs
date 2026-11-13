@@ -67,8 +67,12 @@ impl World {
     fn new(zone: &str) -> Self {
         let f = support::Fixture::new();
         f.rt.block_on(async {
-            f.root.batch_execute(moss_platform_jobs::MIGRATION).await.unwrap();
-            f.root.batch_execute(moss_module_host::jobs::MIGRATION).await.unwrap();
+            // The queue tables are created once per database, however many tests run here.
+            let ready = f.root.query_one("SELECT to_regclass('moss_queue.jobs') IS NOT NULL", &[]).await.unwrap().get::<_, bool>(0);
+            if !ready {
+                f.root.batch_execute(moss_platform_jobs::MIGRATION).await.unwrap();
+                f.root.batch_execute(moss_module_host::jobs::MIGRATION).await.unwrap();
+            }
             {
                 let who = f.a;
                 f.root
