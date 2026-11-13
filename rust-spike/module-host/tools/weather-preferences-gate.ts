@@ -11,7 +11,6 @@ const urls = getMossDatabaseUrls();
 const bootstrap = new pg.Client({ connectionString: urls.bootstrap });
 const app = createDatabase({ connectionString: urls.app });
 const user = randomUUID();
-let status = 1;
 try {
   await bootstrap.connect();
   await bootstrap.query("INSERT INTO app.users(id,email,name) VALUES($1,$2,'Weather oracle')", [
@@ -54,7 +53,7 @@ try {
       }
     }
   );
-  status = run.status ?? 1;
+  let status = run.status ?? 1;
   if (status === 0) {
     const after = await runner.withDataContext({ actorUserId: user }, (scope) =>
       repository.getMany(scope, ["weather-location", "weather-unit"])
@@ -70,8 +69,8 @@ try {
       console.log("PASS: TypeScript reads the place and unit Rust wrote");
     }
   }
+  process.exitCode = status;
 } finally {
   await bootstrap.query("DELETE FROM app.users WHERE id=$1", [user]).catch(() => undefined);
   await Promise.allSettled([bootstrap.end(), app.destroy()]);
 }
-process.exit(status);
