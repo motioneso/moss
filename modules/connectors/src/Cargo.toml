@@ -69,3 +69,7 @@ path = "tests/outlook_availability.rs"
 [[test]]
 name = "outlook_routes"
 path = "tests/outlook_routes.rs"
+
+[[test]]
+name = "outlook_write_refusal"
+path = "tests/outlook_write_refusal.rs"
