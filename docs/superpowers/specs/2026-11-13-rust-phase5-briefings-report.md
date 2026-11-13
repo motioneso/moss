@@ -219,13 +219,18 @@ a named provider), then tidies and stores the answer. The text replaces the plai
 
 - Anything that came from outside (mail, calendar entries, task titles) goes into marked data
   blocks and is cleaned first. The instruction block above them is fixed text with nothing filled
-  in, so an email cannot give the model orders.
-- Each section keeps at most 8 lines and 1200 characters. The email catch-up keeps at most 8
+  in, so an email cannot forge or close the instruction block. This is structural separation only.
+  It does not make the model immune to persuasion inside the data blocks.
+- Each section, tasks included, keeps at most 8 lines and 1200 characters. The email catch-up keeps at most 8
   entries and reports how many it left out.
 - Each email gets an evidence row (reported today, settled by a later payment confirmation,
   informational, or current status unknown), as in the old app.
 - Calendar and email signals (prep needed, high-stakes meeting, tight travel, open gap, time
-  sensitive, needs reply) are worked out with the old rules and stored with the run, top 5 each.
+  sensitive, needs reply) are worked out with the old rules, stored with the run (top 5 each) and
+  placed first in their prompt sections. Mail that is dated or whose status is unknown is marked
+  so in the prompt and kept out of signals.
+- Tasks come only from the run owner's own list. Tasks other people shared with the owner are
+  filtered out before they reach the model.
 - Suggested tasks from email become action rows, earliest due first, at most 8. Email that is
   already a row is not repeated in the catch-up.
 - The written text is put in clock order, with news and sports last, and sections that only repeat
@@ -237,7 +242,9 @@ a named provider), then tidies and stores the answer. The text replaces the plai
 | ------------------------------------------------------------------------------------------ | ---------------------------------------------- |
 | The instruction block has no filled-in outside value; seen failing when one was added      | static test, red then green                    |
 | Hostile mail and calendar text cannot close a block or open a new instruction block        | native test                                    |
-| Section and catch-up caps, and the output limit sent to the router                         | native tests                                   |
+| Section, task and catch-up caps, and the output limit sent to the router                   | native tests                                   |
+| Shared tasks owned by someone else never reach the prompt; seen failing without the filter | native tests (briefings and Tasks)             |
+| Unsure and dated mail is marked in the prompt and kept out of signals                      | native test                                    |
 | Evidence rows, signals, ordering, tidy rules                                               | native tests, rules taken from the old tests   |
 | Action rows and email catch-up are saved with the run                                      | native test                                    |
 | No model gives a plain digest and a reason; evening and weekly runs make no model call     | native tests                                   |
@@ -249,7 +256,8 @@ a named provider), then tidies and stores the answer. The text replaces the plai
 
 ### Changes outside Briefings
 
-- Tasks 0.1.4 adds a narrow read of suggested tasks for the briefing, with its changelog entry.
+- Tasks 0.1.4 adds a narrow read of suggested tasks for the briefing, limited to tasks the caller
+  owns, with its changelog entry.
 - The Briefings manifest asks for the AI capability and the app map names the feature.
 - The live server test now configures a provider and model for the owner.
 
@@ -265,5 +273,6 @@ a named provider), then tidies and stores the answer. The text replaces the plai
 - Calendar and email preference settings use the old defaults, not the person's saved choices.
 - The catch-up has no "as of" time because connector sync freshness is not read yet.
 - Evening and weekly briefings still use the plain digest.
+- No Vikunja card for JS-267 was found, so no card comment was made.
 - No paired-device credential check was needed or built.
 - Reaching the server from another device was not checked from a phone or second computer.
