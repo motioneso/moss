@@ -114,7 +114,7 @@ mod tests {
             format!("mm2_{USER}.{GRANT}.{SECRET}"),
             format!("mm1_{USER}.{GRANT}.{}", &SECRET[1..]),
             format!("mm1_{USER}.{GRANT}.{SECRET}.x"),
-            format!("mm1_{USER}.{GRANT}.{SECRET[..42].to_owned()}!"),
+            format!("mm1_{USER}.{GRANT}.{}!", &SECRET[..42]),
             format!("{USER}.{GRANT}.{SECRET}"),
         ] {
             assert_eq!(parse_credential(&text, GRANT), None, "{text}");
