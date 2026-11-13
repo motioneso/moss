@@ -73,8 +73,8 @@ pub struct Scheduled<'a> {
     pub metadata: &'a Metadata,
 }
 
-fn schedule_params(definition: &Scheduled<'_>, cron: &str, zone: &str) -> Value {
-    json!({
+fn schedule_params(definition: &Scheduled<'_>, cron: &str, zone: &str, keep: bool) -> Value {
+    let mut params = json!({
         "cron": cron,
         "timezone": zone,
         "key": definition.id,
@@ -83,22 +83,29 @@ fn schedule_params(definition: &Scheduled<'_>, cron: &str, zone: &str) -> Value 
             "run-kind": "scheduled",
             "briefing-type": definition.briefing_type,
         },
-    })
+    });
+    if keep {
+        params["keepExisting"] = json!(true);
+    }
+    params
 }
 
 /// Registers the definition's cron in the owner's zone, or removes it when the definition is
 /// manual or switched off. The owner's zone wins over the one stored on the definition.
+/// With `keep` an already-registered schedule keeps its next fire time, so a read-only
+/// caller cannot push an overdue fire to the next day.
 pub fn reconcile<H: Host + ?Sized>(
     host: &H,
     definition: &Scheduled<'_>,
     owner_zone: Option<&str>,
+    keep: bool,
 ) -> Result<()> {
     if definition.enabled && matches!(definition.cadence, "daily" | "weekly") {
         let cron = cron_expr_for(definition.cadence, definition.metadata);
         let zone = owner_zone
             .map(str::to_owned)
             .unwrap_or_else(|| timezone_for(definition.metadata));
-        host.call("jobs", "schedule", QUEUE, schedule_params(definition, &cron, &zone))?;
+        host.call("jobs", "schedule", QUEUE, schedule_params(definition, &cron, &zone, keep))?;
         return Ok(());
     }
     // The keyed schedule call is idempotent and returns the stable id to cancel.
@@ -106,7 +113,7 @@ pub fn reconcile<H: Host + ?Sized>(
         "jobs",
         "schedule",
         QUEUE,
-        schedule_params(definition, DEFAULT_CRON, DEFAULT_ZONE),
+        schedule_params(definition, DEFAULT_CRON, DEFAULT_ZONE, keep),
     )?;
     if let Some(id) = registered["id"].as_str() {
         host.call("jobs", "unschedule", QUEUE, json!({"id":id}))?;
@@ -119,8 +126,9 @@ pub fn reconcile_quietly<H: Host + ?Sized>(
     host: &H,
     definition: &Scheduled<'_>,
     owner_zone: Option<&str>,
+    keep: bool,
 ) {
-    let _ = reconcile(host, definition, owner_zone);
+    let _ = reconcile(host, definition, owner_zone, keep);
 }
 
 #[derive(Debug, PartialEq, Eq)]

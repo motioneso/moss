@@ -50,3 +50,45 @@ fn a_missing_run_and_someone_elses_run_look_the_same() {
     let got = fake.route("GET", "/definitions/:id/runs", &[("id", "00000000-0000-4000-8000-0000000000ff")], json!({}));
     assert_eq!(got, (404, json!({"error":"Briefing definition not found"})));
 }
+
+#[test]
+fn the_oldest_run_stays_reachable_past_a_thousand_newer_ones() {
+    let (fake, id) = setup();
+    let ai = json!({"aiModel":{"provider":"p","model":"m"}});
+    fake.seed_run(&id, A, "00000000-0000-4000-8000-000000000001", "2020-01-01T07:00:00.000Z", ai.clone());
+    for n in 0..1001u32 {
+        let run = format!("00000000-0000-4000-8000-{:012}", n + 10);
+        fake.seed_run(&id, A, &run, "2026-11-11T07:00:00.000Z", ai.clone());
+    }
+    let (status, out) = fake.route(
+        "GET",
+        "/definitions/:id/runs/:run_id",
+        &[("id", &id), ("run_id", "00000000-0000-4000-8000-000000000001")],
+        json!({}),
+    );
+    assert_eq!(status, 200, "{out}");
+    assert_eq!(out["latest"], false);
+}
+
+#[test]
+fn a_run_id_that_is_not_an_id_is_not_available() {
+    let (fake, id) = setup();
+    let (status, out) = fake.route(
+        "GET",
+        "/definitions/:id/runs/:run_id",
+        &[("id", &id), ("run_id", "nope")],
+        json!({}),
+    );
+    assert_eq!(status, 404);
+    assert_eq!(out["code"], "briefing_run_not_available");
+}
+
+#[test]
+fn listing_definitions_keeps_existing_fire_times_but_saving_resets_them() {
+    let (fake, _) = setup();
+    fake.jobs.borrow_mut().clear();
+    fake.route("GET", "/definitions", &[], json!({}));
+    let listed = fake.jobs.borrow().clone();
+    assert!(!listed.is_empty());
+    assert!(listed.iter().all(|(op, _, p)| op != "schedule" || p["keepExisting"] == json!(true)));
+}

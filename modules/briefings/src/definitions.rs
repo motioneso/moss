@@ -34,7 +34,7 @@ fn metadata_of(row: &Value) -> Metadata {
     row["schedule_metadata"].as_object().cloned().unwrap_or_default()
 }
 
-fn reconcile_row<H: Host + ?Sized>(host: &H, row: &Value, zone: Option<&str>) {
+fn reconcile_row<H: Host + ?Sized>(host: &H, row: &Value, zone: Option<&str>, keep: bool) {
     let metadata = metadata_of(row);
     let definition = Scheduled {
         id: row["id"].as_str().unwrap_or_default(),
@@ -43,7 +43,7 @@ fn reconcile_row<H: Host + ?Sized>(host: &H, row: &Value, zone: Option<&str>) {
         enabled: row["enabled"].as_bool().unwrap_or(false),
         metadata: &metadata,
     };
-    schedule::reconcile_quietly(host, &definition, zone);
+    schedule::reconcile_quietly(host, &definition, zone, keep);
 }
 
 pub fn find<H: Host + ?Sized>(host: &H, id: &str) -> Result<Option<Value>> {
@@ -64,7 +64,7 @@ pub fn list<H: Host + ?Sized>(host: &H) -> Result<Response> {
     let context = call(host)?;
     let zone = owner_zone(host, &context.now);
     for row in rows.iter().filter(|r| r["owner_user_id"].as_str() == Some(context.actor.as_str())) {
-        reconcile_row(host, row, zone.as_deref());
+        reconcile_row(host, row, zone.as_deref(), true);
     }
     let definitions = rows.iter().map(dto).collect::<Result<Vec<_>>>()?;
     Ok(Response::new(200, json!({"definitions":definitions,"externalSources":[]})))
@@ -104,7 +104,7 @@ pub fn create<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Resp
         .into_iter()
         .next()
         .ok_or_else(|| Error::new("Briefing definition was not saved"))?;
-    reconcile_row(host, &row, zone.as_deref());
+    reconcile_row(host, &row, zone.as_deref(), false);
     Ok(Response::new(201, json!({"definition":dto(&row)?})))
 }
 
@@ -149,7 +149,7 @@ pub fn update<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Resp
     // A manager through a share edits the definition but never moves the owner's schedule.
     if row["owner_user_id"].as_str() == Some(context.actor.as_str()) {
         let zone = owner_zone(host, &context.now);
-        reconcile_row(host, &row, zone.as_deref());
+        reconcile_row(host, &row, zone.as_deref(), false);
     }
     Ok(Response::new(200, json!({"definition":dto(&row)?})))
 }

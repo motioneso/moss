@@ -34,18 +34,18 @@ catch-up filter (parts 17 to 21). Meetings device pairing (part 7) is parked and
 
 ### Proof
 
-| Claim                                                                      | Where                            |
-| -------------------------------------------------------------------------- | -------------------------------- |
-| 22 native tests: definitions, schedules, runs, privacy                     | package tests, native            |
-| The same code as WebAssembly loads in the real host                        | package tests                    |
-| Two people, view and manage shares, an administrator, all kept apart       | installed test                   |
-| Row security removed leaks both tables, and restored stops it (seen red)   | installed test, RED and GREEN    |
-| A planted marker in a title and in run text never reaches queue or modules | installed test                   |
-| Daily 7:00 registers once in the owner's zone, manual removes it           | installed test, reads the queue  |
-| 26 steps replayed against the old routes give the same answers             | installed test, runs the old app |
-| The registered schedules match what the old routes registered              | installed test                   |
-| Real Rust server over HTTPS, two people, create, read, refuse, edit        | live run                         |
-| Alignment across zones with a fixed clock                                  | native schedule tests            |
+| Claim                                                                                     | Where                            |
+| ----------------------------------------------------------------------------------------- | -------------------------------- |
+| 22 native tests: definitions, schedules, runs, privacy                                    | package tests, native            |
+| The same code as WebAssembly loads in the real host                                       | package tests                    |
+| Two people, view and manage shares, an administrator, all kept apart                      | installed test                   |
+| Row security removed leaks both tables, and restored stops it (seen red)                  | installed test, RED and GREEN    |
+| A planted marker in a title and in run text never reaches queue or modules                | installed test                   |
+| Daily 7:00 registers once in the owner's saved zone (Pacific/Auckland), manual removes it | installed test, reads the queue  |
+| 26 steps replayed against the old routes give the same answers                            | installed test, runs the old app |
+| The registered schedules match what the old routes registered                             | installed test                   |
+| Real Rust server over HTTPS, two people, create, read, refuse, edit                       | live run                         |
+| Alignment across zones with a fixed clock                                                 | native schedule tests            |
 
 ### Every code the old routes can give
 
@@ -88,6 +88,6 @@ The app map also names briefing_not_set_up, which belongs to part 17.
 - A manager who edits a shared definition does not change the owner's schedule. The old app would
   have. This is a deliberate safety difference.
 - Time zone names are matched with the Rust zone database, which is case sensitive.
-- The seeded account time zone in the installed test is not shown to have been used, because the
-  schedule used the default zone.
+- Opening the definitions list re-registers each schedule only when none exists. A schedule whose
+  time or zone drifted is corrected by the next edit, not by the list.
 - Odd inputs the old validator coerces (for example numbers sent as text) are not all replayed.

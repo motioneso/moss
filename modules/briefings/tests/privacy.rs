@@ -2,6 +2,8 @@ mod common;
 use common::*;
 use serde_json::json;
 
+const MARK: &str = "PRIVATE-MARK-7f3a";
+
 fn owned_definition(fake: &Fake) -> String {
     let (_, out) = fake.route("POST", "/definitions", &[], json!({"title":"Private plan","cadence":"daily"}));
     out["definition"]["id"].as_str().unwrap().to_owned()
@@ -79,7 +81,17 @@ fn briefing_text_never_reaches_job_calls() {
 
 #[test]
 fn a_host_failure_returns_the_fixed_message() {
-    // A saved zone lookup failing must not fail the save, and a broken query must not leak text.
+    // A failing query carrying private text must reach the caller only as the fixed message.
+    let fake = Fake::new();
+    *fake.db_failure.borrow_mut() = Some(format!("db error near {MARK}"));
+    let (status, body) = fake.route("GET", "/definitions", &[], json!({}));
+    assert_eq!(status, 500);
+    assert_eq!(body, json!({"message":"Internal server error"}));
+    assert!(!body.to_string().contains(MARK));
+}
+
+#[test]
+fn a_failed_zone_lookup_does_not_fail_the_save() {
     let fake = Fake::new();
     let (status, _) = fake.route("POST", "/definitions", &[], json!({"title":"No zone known"}));
     assert_eq!(status, 201);

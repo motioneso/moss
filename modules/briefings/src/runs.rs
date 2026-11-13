@@ -169,23 +169,41 @@ fn plan_state(stored: &Value) -> Value {
     json!({"status":"unavailable","storedRevision":revision,"currentRevision":null,"current":null})
 }
 
+fn is_uuid(text: &str) -> bool {
+    text.len() == 36
+        && text.char_indices().all(|(i, c)| match i {
+            8 | 13 | 18 | 23 => c == '-',
+            _ => c.is_ascii_hexdigit(),
+        })
+}
+
 pub fn get<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Response> {
     let id = request.params.get("id").cloned().unwrap_or_default();
     let run_id = request.params.get("run_id").cloned().unwrap_or_default();
     let Some(definition) = definitions::find(host, &id)? else { return Ok(missing()) };
+    if !is_uuid(&run_id) {
+        return Ok(missing());
+    }
     let definition_id = definition["id"].as_str().unwrap_or_default().to_owned();
     let actor = call(host)?.actor;
-    let rows = run_rows(host, &definition_id)?;
-    let first = rows.first().and_then(|r| r["id"].as_str()).map(str::to_owned);
+    // The row is fetched by id, so it stays reachable however many newer runs exist.
+    let query = Query::select(Filter::And {
+        filters: vec![Filter::eq("id", run_id.as_str()), Filter::eq("definition_id", definition_id.as_str())],
+    });
+    let found: Vec<Value> = Client(host).query(TABLE, &query)?;
     // The row must be the caller's own run of this definition.
-    let Some(row) = rows
-        .iter()
-        .find(|r| r["id"].as_str() == Some(run_id.as_str()) && r["owner_user_id"].as_str() == Some(actor.as_str()))
-    else {
+    let Some(row) = found.iter().find(|r| r["owner_user_id"].as_str() == Some(actor.as_str())) else {
         return Ok(missing());
     };
+    let mut newest = Query::select(Filter::eq("definition_id", definition_id.as_str()));
+    newest.order = vec![
+        Order { column: "created_at".into(), descending: true },
+        Order { column: "id".into(), descending: false },
+    ];
+    newest.limit = Some(1);
+    let first: Vec<Value> = Client(host).query(TABLE, &newest)?;
+    let latest = first.first().and_then(|r| r["id"].as_str()) == Some(run_id.as_str());
     let (shaped, stored) = dto(row)?;
-    let latest = first.as_deref() == Some(run_id.as_str());
     Ok(Response::new(
         200,
         json!({"state":"ready","run":shaped,"latest":latest,"plan":plan_state(&stored)}),

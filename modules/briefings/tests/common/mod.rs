@@ -24,6 +24,8 @@ pub struct Fake {
     /// The account's saved time zone per person. A missing entry makes the lookup fail.
     pub zones: RefCell<Vec<(String, String)>>,
     pub calls: RefCell<Vec<String>>,
+    /// When set, every database call fails with this message.
+    pub db_failure: RefCell<Option<String>>,
     ids: Cell<u32>,
 }
 
@@ -37,6 +39,7 @@ impl Fake {
             jobs: RefCell::new(vec![]),
             zones: RefCell::new(vec![]),
             calls: RefCell::new(vec![]),
+            db_failure: RefCell::new(None),
             ids: Cell::new(0),
         }
     }
@@ -185,6 +188,9 @@ impl Host for Fake {
                 Ok(json!({}))
             }
             ("db", "query") => {
+                if let Some(message) = self.db_failure.borrow().as_ref() {
+                    return Err(moss_module_sdk::Error::new(message));
+                }
                 let query: Query = serde_json::from_value(parameters)?;
                 Ok(Value::Array(self.query(resource, query)))
             }

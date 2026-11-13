@@ -66,11 +66,11 @@ fn installed_briefings_keep_definitions_and_runs_private_and_schedule_in_the_own
         f.root.batch_execute(moss_module_host::jobs::MIGRATION).await.unwrap();
         f.root
             .execute(
-                "INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'locale.timezone','\"Pacific/Auckland\"')",
+                "INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'locale','{\"timezone\":\"Pacific/Auckland\"}'::jsonb)",
                 &[&f.a],
             )
             .await
-            .ok();
+            .unwrap();
     });
     let dir = tempfile::tempdir().unwrap();
     let reg = tempfile::tempdir().unwrap();
@@ -114,6 +114,7 @@ fn installed_briefings_keep_definitions_and_runs_private_and_schedule_in_the_own
         rows_as(&f, f.a, schedule_sql, &[]).iter().map(|r| (r.get(0), r.get(1))).collect();
     assert_eq!(schedules.len(), 1, "one schedule for the definition");
     assert_eq!(schedules[0].0, "0 7 * * *");
+    assert_eq!(schedules[0].1, "Pacific/Auckland", "schedule uses the owner's zone");
     println!("SCHEDULE cron={} timezone={}", schedules[0].0, schedules[0].1);
 
     // A run exists for A only.
