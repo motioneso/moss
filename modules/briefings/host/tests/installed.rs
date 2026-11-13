@@ -1,0 +1,289 @@
+//! Real installed-package proofs. Run only through scripts/run-gate.sh.
+#[path = "support/registry.rs"]
+mod registry;
+#[path = "support/replay.rs"]
+mod replay;
+mod support;
+use moss_module_host::{
+    application::{Application, Configuration},
+    registry::Source,
+    runtime::{CallScope, Request},
+};
+use safety_core::secret::{Secret, SecretCipher};
+use serde_json::{json, Value};
+use std::sync::Arc;
+
+const MARK: &str = "PLANTED-MARKER-4f1c9b";
+
+struct NoAi;
+impl moss_module_host::ai::Intelligence for NoAi {
+    fn generate(&self, _: &CallScope, _: &Request) -> anyhow::Result<Value> {
+        anyhow::bail!("Briefings has no AI")
+    }
+    fn embed(&self, _: &CallScope, _: &Request) -> anyhow::Result<Value> {
+        anyhow::bail!("Briefings has no embeddings")
+    }
+}
+
+fn component() -> Vec<u8> {
+    std::fs::read(
+        std::env::var("BRIEFINGS_COMPONENT_WASM")
+            .expect("Run modules/briefings/tools/check.sh to build the component"),
+    )
+    .unwrap()
+}
+fn root() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..")
+}
+
+/// Reads as the app role with the actor set, so row security applies as it does at run time.
+fn rows_as(
+    f: &support::Fixture,
+    actor: uuid::Uuid,
+    sql: &str,
+    params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+) -> Vec<tokio_postgres::Row> {
+    f.rt.block_on(async {
+        let (mut client, conn) =
+            tokio_postgres::connect(&std::env::var("JS48_APP_URL").unwrap(), tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(async move {
+            let _ = conn.await;
+        });
+        let tx = client.transaction().await.unwrap();
+        tx.execute("SELECT set_config('app.actor_user_id', $1, true)", &[&actor.to_string()]).await.unwrap();
+        let rows = tx.query(sql, params).await.unwrap();
+        tx.commit().await.unwrap();
+        rows
+    })
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn installed_briefings_keep_definitions_and_runs_private_and_schedule_in_the_owner_zone() {
+    let f = support::Fixture::new();
+    f.rt.block_on(async {
+        f.root.batch_execute(moss_platform_jobs::MIGRATION).await.unwrap();
+        f.root.batch_execute(moss_module_host::jobs::MIGRATION).await.unwrap();
+        f.root
+            .execute(
+                "INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'locale','{\"timezone\":\"Pacific/Auckland\"}'::jsonb)",
+                &[&f.a],
+            )
+            .await
+            .unwrap();
+    });
+    let dir = tempfile::tempdir().unwrap();
+    let reg = tempfile::tempdir().unwrap();
+    let bytes = moss_briefings_host::package::pack(&root(), &component()).unwrap();
+    let (key, publisher, artifact) = registry::publish(reg.path(), &bytes);
+    let app = Application::open_extended(
+        dir.path(),
+        f.db.clone(),
+        f.access(f.a),
+        Configuration {
+            migrations: Secret::new(std::env::var("JS48_BOOTSTRAP_URL").unwrap()),
+            producer: Secret::new(std::env::var("JS48_APP_URL").unwrap()),
+            cipher: Arc::new(SecretCipher::connectors(&Default::default()).unwrap()),
+            intelligence: Arc::new(NoAi),
+            version: "0.1.0".parse().unwrap(),
+            compiled_cache: None,
+            fuel_ceiling: None,
+        },
+    )
+    .unwrap();
+    let source = app
+        .installer
+        .refresh(&f.access(f.a), Source::Folder(reg.path().into()), &key, &publisher, "briefings-test-registry")
+        .unwrap();
+    app.installer.install(&f.access(f.a), &source, &artifact, true).unwrap();
+    let call = |actor, method: &str, path: &str, body: Value| -> Value {
+        serde_json::from_str(
+            &app.dispatch_extended(f.access(actor), method, &format!("/api/m/briefings{path}"), &body.to_string())
+                .unwrap(),
+        )
+        .unwrap()
+    };
+
+    // Person A saves a daily definition. Its schedule is registered in the queue.
+    let made = call(f.a, "POST", "/definitions",
+        json!({"title":format!("Plan {MARK}"),"briefingType":"morning","cadence":"daily"}));
+    assert_eq!(made["status"], 201, "{made}");
+    let id = made["body"]["definition"]["id"].as_str().unwrap().to_owned();
+    let schedule_sql = "SELECT cron, timezone FROM moss_queue.schedules WHERE queue LIKE '%.briefings-run'";
+    let schedules: Vec<(String, String)> =
+        rows_as(&f, f.a, schedule_sql, &[]).iter().map(|r| (r.get(0), r.get(1))).collect();
+    assert_eq!(schedules.len(), 1, "one schedule for the definition");
+    assert_eq!(schedules[0].0, "0 7 * * *");
+    assert_eq!(schedules[0].1, "Pacific/Auckland", "schedule uses the owner's zone");
+    println!("SCHEDULE cron={} timezone={}", schedules[0].0, schedules[0].1);
+
+    // A run exists for A only.
+    f.rt.block_on(async {
+        let definition: uuid::Uuid = id.parse().unwrap();
+        f.root
+            .execute(
+                "INSERT INTO app.briefing_runs(id,definition_id,owner_user_id,status,run_kind,briefing_type,summary_text,source_metadata) \
+                 VALUES(gen_random_uuid(),$1,$2,'succeeded','manual','morning',$3,'{\"aiModel\":{\"provider\":\"p\",\"model\":\"m\"}}'::jsonb)",
+                &[&definition, &f.a, &format!("Briefing {MARK}")],
+            )
+            .await
+            .unwrap();
+    });
+    let own = call(f.a, "GET", &format!("/definitions/{id}/runs"), Value::Null);
+    assert_eq!(own["body"]["runs"].as_array().unwrap().len(), 1, "{own}");
+    let run_id = own["body"]["runs"][0]["id"].as_str().unwrap().to_owned();
+
+    // Person B and an administrator see nothing and change nothing.
+    let missing = call(f.b, "PATCH", "/definitions/99999999-9999-4999-8999-999999999999", json!({"title":"x"}))["status"].clone();
+    for actor in [f.b, f.admin] {
+        assert_eq!(call(actor, "GET", "/definitions", Value::Null)["body"]["definitions"], json!([]));
+        assert_eq!(call(actor, "PATCH", &format!("/definitions/{id}"), json!({"title":"intruder"}))["status"], missing);
+        assert_eq!(call(actor, "GET", &format!("/definitions/{id}/runs"), Value::Null)["status"], 404);
+        assert_eq!(call(actor, "GET", &format!("/definitions/{id}/runs/{run_id}"), Value::Null)["status"], 404);
+    }
+
+    // A view share shows B the definition but never a run, and B cannot edit.
+    let share = |level: &str| {
+        f.rt.block_on(async {
+            let definition: uuid::Uuid = id.parse().unwrap();
+            f.root.execute("DELETE FROM app.shares WHERE resource_id=$1", &[&definition]).await.unwrap();
+            f.root
+                .execute(
+                    "INSERT INTO app.shares(resource_type,resource_id,owner_user_id,grantee_user_id,level) VALUES('briefing_definition',$1,$2,$3,$4)",
+                    &[&definition, &f.a, &f.b, &level],
+                )
+                .await
+                .unwrap();
+        })
+    };
+    share("view");
+    assert_eq!(call(f.b, "GET", "/definitions", Value::Null)["body"]["definitions"].as_array().unwrap().len(), 1);
+    assert_eq!(call(f.b, "PATCH", &format!("/definitions/{id}"), json!({"title":"viewer"}))["status"], 404);
+    assert_eq!(call(f.b, "GET", &format!("/definitions/{id}/runs"), Value::Null)["body"]["runs"], json!([]));
+    assert_eq!(call(f.b, "GET", &format!("/definitions/{id}/runs/{run_id}"), Value::Null)["status"], 404);
+
+    // A manage share lets B edit, and B's edit leaves the owner's schedule alone.
+    share("manage");
+    let edited = call(f.b, "PATCH", &format!("/definitions/{id}"), json!({"title":"Managed","cadence":"manual"}));
+    assert_eq!(edited["status"], 200, "{edited}");
+    let still = rows_as(&f, f.a, schedule_sql, &[]).len() as i64;
+    assert_eq!(still, 1, "a manager must not remove the owner's schedule");
+    f.rt.block_on(f.root.execute("DELETE FROM app.shares", &[])).unwrap();
+
+    // The same checks must fail with row security removed, then pass once it is restored.
+    let reads_definition = || call(f.b, "GET", "/definitions", Value::Null)["body"]["definitions"].as_array().is_some_and(|d| !d.is_empty());
+    let reads_run = || {
+        // B needs a view of the definition to reach runs, so share it while the run table is open.
+        call(f.b, "GET", &format!("/definitions/{id}/runs"), Value::Null)["body"]["runs"].as_array().is_some_and(|r| !r.is_empty())
+    };
+    for table in ["app.briefing_definitions", "app.briefing_runs"] {
+        f.rt.block_on(f.root.batch_execute(&format!("ALTER TABLE {table} DISABLE ROW LEVEL SECURITY"))).unwrap();
+        let open = if table == "app.briefing_definitions" { reads_definition() } else { share("view"); reads_run() };
+        f.rt.block_on(f.root.batch_execute(&format!("ALTER TABLE {table} ENABLE ROW LEVEL SECURITY; ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))).unwrap();
+        assert!(open, "RED expected: {table} shows another person's data with row security removed");
+        println!("RED {table}: another person sees the data with row security removed");
+        println!("GREEN {table}: row security restored");
+    }
+    f.rt.block_on(f.root.execute("DELETE FROM app.shares", &[])).unwrap();
+    assert!(!reads_definition());
+    assert!(!reads_run());
+
+    // The briefing title and text never reach the queue or any module bookkeeping table.
+    let mut leaked = 0;
+    for actor in [f.a, f.b] {
+        for table in ["moss_queue.jobs", "moss_queue.schedules"] {
+            let sql = format!("SELECT count(*) FROM {table} t WHERE t::text LIKE $1");
+            leaked += rows_as(&f, actor, &sql, &[&format!("%{MARK}%")])[0].get::<_, i64>(0);
+        }
+    }
+    leaked += f.rt.block_on(async {
+        let mut total = 0;
+        for table in f
+            .root
+            .query("SELECT schemaname||'.'||tablename FROM pg_tables WHERE schemaname='moss_modules'", &[])
+            .await
+            .unwrap()
+        {
+            let name: String = table.get(0);
+            total += f
+                .root
+                .query_one(&format!("SELECT count(*) FROM {name} t WHERE t::text LIKE $1"), &[&format!("%{MARK}%")])
+                .await
+                .unwrap()
+                .get::<_, i64>(0);
+        }
+        total
+    });
+    assert_eq!(leaked, 0, "briefing text reached the job queue or module tables");
+
+    // Replay: the old routes and the installed package answer the same steps the same way.
+    // The old routes run as the administrator and the package as person B, both from nothing.
+    f.rt.block_on(async {
+        f.root.batch_execute("DELETE FROM app.shares; DELETE FROM app.briefing_definitions; DELETE FROM moss_queue.schedules").await.unwrap();
+    });
+    let mut old_schedule = std::collections::BTreeMap::new();
+    let mut note = |calls: Vec<Value>| {
+        for c in calls {
+            let key = c["key"].as_str().unwrap().to_owned();
+            if c["op"] == "schedule" {
+                old_schedule.insert(key, (c["cron"].as_str().unwrap().to_owned(), c["tz"].as_str().unwrap().to_owned()));
+            } else {
+                old_schedule.remove(&key);
+            }
+        }
+    };
+    let run_new = |steps: &[Value], vars: &Value| -> Vec<Value> {
+        steps
+            .iter()
+            .map(|step| {
+                let path = replay::fill(step["url"].as_str().unwrap(), vars).replacen("/api/briefings", "", 1);
+                call(f.b, step["method"].as_str().unwrap(), &path, step.get("body").cloned().unwrap_or(Value::Null))
+            })
+            .collect()
+    };
+    let compare = |label: &str, steps: &[Value], old: Vec<Value>, new: Vec<Value>| {
+        assert_eq!(old.len(), new.len());
+        for (i, (mut old, mut new)) in old.into_iter().zip(new).enumerate() {
+            let mut old = json!({"status":old["status"],"body":old["body"]});
+            let mut new = json!({"status":new["status"],"body":new["body"]});
+            replay::mask(&mut old);
+            replay::mask(&mut new);
+            assert_eq!(old, new, "{label} step {i} ({}) differs from the old route", steps[i]);
+        }
+    };
+    let first = replay::steps_before_ids();
+    let (old, calls) = replay::old_routes(f.admin, &first, json!({}));
+    note(calls);
+    let new = run_new(&first, &json!({}));
+    let old_def = old[1]["body"]["definition"]["id"].as_str().unwrap().to_owned();
+    let new_def = new[1]["body"]["definition"]["id"].as_str().unwrap().to_owned();
+    println!("OLD STATUSES {:?}", old.iter().map(|r| r["status"].as_i64().unwrap()).collect::<Vec<_>>());
+    compare("create and read", &first, old, new);
+    let seed_run = |owner: uuid::Uuid, def: &str| -> String {
+        f.rt.block_on(async {
+            let id = uuid::Uuid::new_v4();
+            f.root
+                .execute(
+                    "INSERT INTO app.briefing_runs(id,definition_id,owner_user_id,status,run_kind,briefing_type,summary_text,source_metadata) \
+                     VALUES($1,$2,$3,'succeeded','manual','morning','Replay text','{\"aiModel\":{\"provider\":\"p\",\"model\":\"m\"},\"calendarSignals\":[{\"type\":\"meeting\",\"summary\":\"Standup\",\"score\":70}]}'::jsonb)",
+                    &[&id, &def.parse::<uuid::Uuid>().unwrap(), &owner],
+                )
+                .await
+                .unwrap();
+            id.to_string()
+        })
+    };
+    let (old_run, new_run) = (seed_run(f.admin, &old_def), seed_run(f.b, &new_def));
+    let second = replay::steps_with_ids();
+    let (old, calls) = replay::old_routes(f.admin, &second, json!({"def":old_def,"run":old_run}));
+    note(calls);
+    let new = run_new(&second, &json!({"def":new_def,"run":new_run}));
+    compare("edit and runs", &second, old, new);
+    let mut expected: Vec<(String, String)> = old_schedule.into_values().collect();
+    let mut actual: Vec<(String, String)> =
+        rows_as(&f, f.b, schedule_sql, &[]).iter().map(|r| (r.get(0), r.get(1))).collect();
+    expected.sort();
+    actual.sort();
+    assert_eq!(actual, expected, "registered schedules differ from the old routes");
+    println!("PASS replay: {} old-route steps match, schedules match ({} registered)", first.len() + second.len(), actual.len());
+}

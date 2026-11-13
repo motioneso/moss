@@ -19,6 +19,8 @@
     "test:rust-tasks-server": "tsx rust-spike/module-host/tools/tasks-server-gate.ts",
     "test:rust-notes-server": "tsx modules/notes/tools/server-gate.ts",
     "test:rust-notes-ingest": "tsx modules/notes/tools/ingest-gate.ts",
+    "test:rust-briefings": "tsx modules/briefings/tools/gate.ts",
+    "test:rust-briefings-live": "bash modules/briefings/tools/live.sh",
     "test:rust-backtrack": "tsx modules/backtrack/tools/gate.ts",
     "test:rust-backtrack-live": "bash modules/backtrack/tools/live.sh",
     "test:rust-meetings": "tsx modules/meetings/tools/gate.ts",

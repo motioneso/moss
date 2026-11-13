@@ -1,0 +1,145 @@
+{
+  "schemaVersion": 2,
+  "id": "briefings",
+  "name": "Briefings",
+  "publisher": "Moss",
+  "version": "0.1.0",
+  "description": "Keeps each person's briefing definitions and past runs, private to the owner. A definition can be shared. Saving a definition sets or removes its scheduled run in the person's time zone, and the list moves run times after a time zone change. Writing a briefing, the run job, the screens and outside sources are not part of this package yet.",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "fuelLimit": 200000000,
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "db",
+      "operations": ["query"],
+      "resources": ["app.briefing_definitions", "app.briefing_runs"]
+    },
+    {
+      "port": "context",
+      "operations": ["read", "uuid", "local-date"],
+      "resources": ["call", "new", "account"]
+    },
+    {
+      "port": "jobs",
+      "operations": ["schedule", "unschedule"],
+      "resources": ["briefings-run"]
+    }
+  ],
+  "database": {
+    "migrations": [
+      "sql/0015_briefings_module.sql",
+      "sql/0026_briefings_owner_or_share.sql",
+      "sql/0085_briefing_runs_owner_only_select.sql",
+      "sql/0116_briefing_type.sql",
+      "sql/0124_scheduled_recurring_briefings.sql",
+      "sql/0237_briefing_selected_tool_names_allow_empty.sql"
+    ],
+    "ownedTables": ["app.briefing_definitions", "app.briefing_runs"],
+    "ledger": "core-legacy",
+    "access": {
+      "app.briefing_definitions": {
+        "access": "owner-or-share",
+        "resourceType": "briefing_definition",
+        "shareKey": "id"
+      },
+      "app.briefing_runs": {
+        "access": "owner-only"
+      }
+    }
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/definitions",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/definitions",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/definitions/:id",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/definitions/:id/runs",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/definitions/:id/runs/:run_id",
+      "signIn": true
+    }
+  ],
+  "requires": {},
+  "provides": {
+    "collectBriefingsExportSection": "1.0.0"
+  },
+  "icons": ["icons/briefings.svg"],
+  "accounts": {
+    "supportsUserDisable": false,
+    "defaultEnabled": true
+  },
+  "lifecycle": {
+    "required": true,
+    "bundled": true,
+    "removable": false
+  },
+  "jobs": {
+    "briefings-run": {
+      "definition-id": {
+        "kind": "id"
+      },
+      "run-kind": {
+        "kind": "choice",
+        "choices": ["manual", "scheduled"]
+      },
+      "briefing-type": {
+        "kind": "choice",
+        "choices": ["morning", "evening", "weekly_review"]
+      }
+    }
+  },
+  "screens": {},
+  "navigation": [],
+  "settings": [
+    {
+      "id": "briefings.settings",
+      "label": "Briefings",
+      "path": "/settings?section=modules&module=briefings",
+      "scope": "user",
+      "description": "Briefing times and sources can be changed through the Briefings routes. The Settings page for them is not part of this package yet."
+    }
+  ],
+  "features": [
+    {
+      "id": "briefings.definitions",
+      "description": "Each person keeps private briefing definitions for the morning briefing, the evening review and the weekly review. A definition holds a title, how often it runs, the time of day in the person's time zone, a switch and the read tools it may use. Saving a definition sets or removes its scheduled run. A person it is shared with can see it, and can change it only with manage access; only the owner's changes move the owner's schedule."
+    },
+    {
+      "id": "briefings.person_time",
+      "description": "Briefings run at the person's set time in their saved time zone. After a time zone change, the next visit to the definitions list moves the run times. The run itself and the written briefing are not part of this package yet."
+    },
+    {
+      "id": "briefings.history",
+      "description": "List past briefing runs newest first, or read one run by id. Earlier reports stay dated and read-only. A run written without AI returns empty summary text, so its source list is never shown. Only the owner sees runs, even for a definition shared with someone else.",
+      "errors": [
+        {
+          "code": "briefing_run_not_available",
+          "class": "validation",
+          "description": "The named briefing run is missing or owned by someone else; both cases look the same so runs cannot be probed."
+        }
+      ],
+      "remediations": [
+        {
+          "id": "briefings.history.reread",
+          "description": "Pick the newest run in the briefing history and read it instead.",
+          "path": "/today"
+        }
+      ]
+    }
+  ]
+}
