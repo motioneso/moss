@@ -32,7 +32,7 @@ fn view_access_reads_but_cannot_edit_and_never_sees_runs() {
     assert_eq!(fake.route("PATCH", "/definitions/:id", &[("id", &id)], json!({"title":"x"})).0, 404);
     let (status, runs) = fake.route("GET", "/definitions/:id/runs", &[("id", &id)], json!({}));
     assert_eq!((status, runs["runs"].clone()), (200, json!([])));
-    assert_eq!(fake.route("GET", "/definitions/:id/runs/:runId", &[("id", &id), ("runId", "00000000-0000-4000-8000-0000000000a1")], json!({})).0, 404);
+    assert_eq!(fake.route("GET", "/definitions/:id/runs/:run_id", &[("id", &id), ("run_id", "00000000-0000-4000-8000-0000000000a1")], json!({})).0, 404);
 }
 
 #[test]

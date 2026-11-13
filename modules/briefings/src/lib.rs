@@ -25,7 +25,7 @@ pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
         ("POST", "/definitions") => definitions::create(host, &request),
         ("PATCH", "/definitions/:id") => definitions::update(host, &request),
         ("GET", "/definitions/:id/runs") => runs::list(host, &request),
-        ("GET", "/definitions/:id/runs/:runId") => runs::get(host, &request),
+        ("GET", "/definitions/:id/runs/:run_id") => runs::get(host, &request),
         _ => return Response::new(404, json!({"message":"Route not found"})),
     };
     result.unwrap_or_else(|_| Response::new(500, json!({"message":"Internal server error"})))

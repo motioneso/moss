@@ -70,7 +70,7 @@
     },
     {
       "method": "GET",
-      "path": "/definitions/:id/runs/:runId",
+      "path": "/definitions/:id/runs/:run_id",
       "signIn": true
     }
   ],

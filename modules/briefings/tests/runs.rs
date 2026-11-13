@@ -20,8 +20,8 @@ fn runs_list_newest_first_and_a_run_reads_back() {
     assert_eq!(out["runs"][0]["id"], "00000000-0000-4000-8000-0000000000a2");
     let (status, out) = fake.route(
         "GET",
-        "/definitions/:id/runs/:runId",
-        &[("id", &id), ("runId", "00000000-0000-4000-8000-0000000000a1")],
+        "/definitions/:id/runs/:run_id",
+        &[("id", &id), ("run_id", "00000000-0000-4000-8000-0000000000a1")],
         json!({}),
     );
     assert_eq!(status, 200);
@@ -44,7 +44,7 @@ fn a_missing_run_and_someone_elses_run_look_the_same() {
     fake.seed_run(&id, B, "00000000-0000-4000-8000-0000000000b1", "2026-11-11T07:00:00.000Z", json!({}));
     let missing = json!({"error":"Briefing run is missing or owned by someone else","code":"briefing_run_not_available"});
     for run in ["00000000-0000-4000-8000-0000000000b1", "00000000-0000-4000-8000-0000000000ee"] {
-        let got = fake.route("GET", "/definitions/:id/runs/:runId", &[("id", &id), ("runId", run)], json!({}));
+        let got = fake.route("GET", "/definitions/:id/runs/:run_id", &[("id", &id), ("run_id", run)], json!({}));
         assert_eq!(got, (404, missing.clone()));
     }
     let got = fake.route("GET", "/definitions/:id/runs", &[("id", "00000000-0000-4000-8000-0000000000ff")], json!({}));

@@ -171,7 +171,7 @@ fn plan_state(stored: &Value) -> Value {
 
 pub fn get<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Response> {
     let id = request.params.get("id").cloned().unwrap_or_default();
-    let run_id = request.params.get("runId").cloned().unwrap_or_default();
+    let run_id = request.params.get("run_id").cloned().unwrap_or_default();
     let Some(definition) = definitions::find(host, &id)? else { return Ok(missing()) };
     let definition_id = definition["id"].as_str().unwrap_or_default().to_owned();
     let actor = call(host)?.actor;
