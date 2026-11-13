@@ -206,9 +206,10 @@ pub fn list(host: &impl Host, input: &Value) -> Result<Value> {
                     let result = if triaged < TRIAGE_CAP && within {
                         triaged += 1;
                         if context.is_none() {
-                            context = Some(Client(host).api("email", "emailTriageContext", json!({}))?);
+                            context = Client(host).api("email", "emailTriageContext", json!({})).ok();
                         }
-                        triage(host, message, context.as_ref().unwrap_or(&Value::Null))?
+                        // A failed or slow model call leaves the item untriaged instead of failing the read.
+                        triage(host, message, context.as_ref().unwrap_or(&Value::Null)).ok().flatten()
                     } else {
                         None
                     };

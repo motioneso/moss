@@ -247,3 +247,15 @@ fn a_cached_event_that_ends_before_the_requested_window_is_left_out() {
     let titles: Vec<&str> = out["items"].as_array().unwrap().iter().filter_map(|i| i["title"].as_str()).collect();
     assert_eq!(titles, ["tomorrow"], "{out}");
 }
+
+#[test]
+fn a_live_read_that_stopped_before_the_last_page_marks_the_result_truncated() {
+    let host = script(
+        vec![account("g1", "google", "google", "active", &GOOGLE_SCOPES)],
+        json!({"g1":{"events":[live_event("e1", "2026-03-02T10:00:00.000Z", "2026-03-02T11:00:00.000Z", 0, None)],"more":true}}),
+        vec![],
+    );
+    let out = list(&host, &json!({})).unwrap();
+    assert_eq!(out["items"].as_array().unwrap().len(), 1);
+    assert_eq!(out["truncated"], true);
+}

@@ -195,6 +195,7 @@ pub fn list(host: &impl Host, input: &Value) -> Result<Value> {
     }
     let mut reader = Reader { host, cached: None, now, window: Window { start, end } };
     let (mut items, mut accounts, mut gaps) = (Vec::<Value>::new(), Vec::<Value>::new(), Vec::<Value>::new());
+    let mut more = false;
     for account in capable {
         let id = account["id"].as_str().unwrap_or("");
         let stored = &setup["grants"][id];
@@ -231,6 +232,9 @@ pub fn list(host: &impl Host, input: &Value) -> Result<Value> {
             json!({"accountId":id,"timeMin":iso(start),"timeMax":iso(end)}),
         )?;
         if let Some(events) = live["events"].as_array() {
+            if live["more"] == true {
+                more = true;
+            }
             items.extend(
                 events.iter().map(|e| live_item(e, &meta)).filter(|i| in_window(i, now, &reader.window)),
             );
@@ -252,7 +256,7 @@ pub fn list(host: &impl Host, input: &Value) -> Result<Value> {
         }));
     }
     items.sort_by(|a, b| a["startsAt"].as_str().cmp(&b["startsAt"].as_str()));
-    let truncated = items.len() > limit;
+    let truncated = more || items.len() > limit;
     items.truncate(limit);
     let zone = setup["timezone"]
         .as_str()

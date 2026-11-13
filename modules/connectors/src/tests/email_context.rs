@@ -15,6 +15,7 @@ struct Script {
     tick: i64,
     clock: Cell<i64>,
     calls: RefCell<Vec<String>>,
+    fail_triage: bool,
 }
 
 impl Host for Script {
@@ -32,6 +33,7 @@ impl Host for Script {
             ("api", _, "email") => match name.as_str() {
                 "listSavedMessages" => json!(self.saved),
                 "emailTriageContext" => json!({"today":"2026-03-02","ownAddresses":["me@example.test"]}),
+                "triageMessage" if self.fail_triage => return Err(Error::new("model timed out")),
                 "triageMessage" => json!({"summary":"Asks for a reply","signals":{
                     "importance":"high","confidence":0.9,
                     "actionability":{"category":"needs_reply","reason":"Asked a question"}}}),
@@ -65,6 +67,7 @@ fn script(accounts: Vec<Value>, live: Value, saved: Vec<Value>) -> Script {
         tick: 0,
         clock: Cell::new(0),
         calls: RefCell::default(),
+        fail_triage: false,
     }
 }
 
@@ -212,4 +215,13 @@ fn a_partial_or_paged_live_list_says_it_is_truncated() {
         assert_eq!(out["truncated"], true, "{out}");
         assert_eq!(out["items"][0]["source"], "live");
     }
+}
+
+#[test]
+fn a_failing_triage_call_leaves_the_mail_untriaged_instead_of_failing_the_read() {
+    let mut h = script(vec![account("g1", "google", "active")], json!({"g1":{"messages":[msg("n1")]}}), vec![]);
+    h.fail_triage = true;
+    let out = list(&h, &json!({})).unwrap();
+    assert_eq!(out["items"].as_array().unwrap().len(), 1);
+    assert_eq!(out["items"][0]["actionability"], "unknown");
 }

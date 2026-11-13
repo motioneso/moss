@@ -103,7 +103,8 @@ async fn calendar(
             break;
         }
     }
-    Ok(Ok(json!({"events":events})))
+    // A page token left after the last allowed page means events were not read.
+    Ok(Ok(json!({"events":events,"more":token.is_some()})))
 }
 
 const HEADERS: [&str; 6] = ["From", "To", "Cc", "Subject", "Message-ID", "References"];
