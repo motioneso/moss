@@ -4,7 +4,13 @@ import { join } from "node:path";
 import { getMossDatabaseUrls } from "@moss/db";
 
 if (process.env.JARVIS_GATE_RUN !== "1") throw new Error("Use verify-gate");
-for (const name of ["CARGO_HOME", "RUSTUP_HOME", "CARGO_TARGET_DIR", "JS261_BACKTRACK_PACKAGE"]) {
+for (const name of [
+  "CARGO_HOME",
+  "RUSTUP_HOME",
+  "CARGO_TARGET_DIR",
+  "JS261_BACKTRACK_PACKAGE",
+  "JS231_MEMORY_PACKAGE"
+]) {
   if (!process.env[name]) throw new Error(`Set ${name}`);
 }
 const urls = getMossDatabaseUrls();
