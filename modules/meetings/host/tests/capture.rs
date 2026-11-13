@@ -48,6 +48,9 @@ impl CaptureAuthority for Auth {
     fn processing_route(&self, _: Uuid) -> anyhow::Result<Option<String>> {
         Ok(Some("route-1".into()))
     }
+    fn grant_credential(&self, _: Uuid, _: &str) -> anyhow::Result<Option<String>> {
+        Ok(None)
+    }
 }
 
 static SERIAL: Mutex<()> = Mutex::new(());

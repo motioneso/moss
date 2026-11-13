@@ -28,6 +28,8 @@ pub struct CaptureCfg {
     pub native: Option<(String, i64, String)>,
     pub recording: Option<String>,
     pub route: Option<String>,
+    /// The Mac's bearer credential for this request.
+    pub credential: Option<String>,
 }
 
 pub struct Fake {
@@ -176,6 +178,7 @@ impl Fake {
                 json!({"found": true, "deviceId": device, "deviceName": "Mac", "capabilityRevision": rev, "expiresAt": ends})
             }),
             "recording" => cfg.recording.map_or(json!({"found": false}), |ends| json!({"found": true, "expiresAt": ends})),
+            "credential" => cfg.credential.map_or(json!({"found": false}), |c| json!({"found": true, "credential": c})),
             "processing" => json!({"ready": cfg.route.is_some(), "modelRoute": cfg.route}),
             other => panic!("unexpected capture operation {other}"),
         }

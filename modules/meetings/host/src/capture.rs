@@ -36,6 +36,9 @@ pub trait CaptureAuthority: Send + Sync {
     fn recording(&self, owner: Uuid, device_id: &str, capability_revision: i64) -> Result<Option<String>>;
     /// The model route that can write this account's meeting text, or `None` when there is none.
     fn processing_route(&self, owner: Uuid) -> Result<Option<String>>;
+    /// The Mac's bearer credential on this request (`mm1_` text), or `None`. The implementation
+    /// must also have set the actor from the user id inside the credential.
+    fn grant_credential(&self, owner: Uuid, request_id: &str) -> Result<Option<String>>;
 }
 
 /// Used until pairing exists. Nothing is allowed.
@@ -51,6 +54,9 @@ impl CaptureAuthority for Refusing {
         Ok(None)
     }
     fn processing_route(&self, _: Uuid) -> Result<Option<String>> {
+        Ok(None)
+    }
+    fn grant_credential(&self, _: Uuid, _: &str) -> Result<Option<String>> {
         Ok(None)
     }
 }
@@ -132,6 +138,10 @@ impl MeetingsPorts {
                     None => json!({"found": false}),
                 })
             }
+            "credential" => Ok(match self.capture_authority.grant_credential(owner, scope.access().request_id())? {
+                Some(credential) => json!({"found": true, "credential": credential}),
+                None => json!({"found": false}),
+            }),
             "processing" => Ok(match self.capture_authority.processing_route(owner)? {
                 Some(route) => json!({"ready": true, "modelRoute": route}),
                 None => json!({"ready": false}),

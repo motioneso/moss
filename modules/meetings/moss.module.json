@@ -79,7 +79,8 @@
         "browser",
         "native",
         "recording",
-        "processing"
+        "processing",
+        "credential"
       ],
       "resources": [
         "meetings.preferences",
