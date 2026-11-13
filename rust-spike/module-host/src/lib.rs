@@ -22,6 +22,8 @@ pub mod jobs;
 pub mod ai;
 pub mod credentials;
 pub mod network;
+pub mod public_web;
+pub mod robots;
 pub mod services;
 
 pub mod legacy;
@@ -64,11 +66,11 @@ pub mod folder_settings;
 pub mod folder_sync_status;
 pub mod memory_cleanup;
 pub mod memory_ingest;
+pub mod memory_search;
 pub mod memory_snapshot;
 pub mod memory_vault;
-pub mod memory_search;
 
 mod notifications;
-mod quiet_hours;
 mod producer_queue;
+mod quiet_hours;
 pub mod worker;
