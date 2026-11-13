@@ -321,7 +321,7 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
         let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
         tokio::spawn(async move { let _ = connection.await; });
         db.execute("INSERT INTO app.ai_provider_configs(id,owner_user_id,provider_kind,display_name,base_url,encrypted_credential,is_instance_default) VALUES($1,$2,'openai-compatible','Test provider',$3,$4,true)", &[&provider, &owner, &format!("http://127.0.0.1:{provider_port}"), &sealed]).await.unwrap();
-        db.execute("INSERT INTO app.ai_configured_models(id,provider_config_id,owner_user_id,provider_model_id,display_name,capabilities) VALUES($1,$2,$3,'test-model-267','Test model',ARRAY['chat','json'])", &[&model, &provider, &owner]).await.unwrap();
+        db.execute("INSERT INTO app.ai_configured_models(id,provider_config_id,owner_user_id,provider_model_id,display_name,capabilities) VALUES($1,$2,$3,'test-model-267','Test model',ARRAY['chat','json','summarization'])", &[&model, &provider, &owner]).await.unwrap();
     });
     let _server = start(true);
     // Setup allows one owner over HTTP, so the second person is made in the database with the
