@@ -360,6 +360,28 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
     // The owner switching it to manual removes the schedule and leaves the data.
     let (status, text) = call(Method::PATCH, &format!("/definitions/{id}"), Some(&cookie), Some(json!({"cadence": "manual"})));
     assert_eq!((status, json_of(&text)["definition"]["cadence"].clone()), (200, json!("manual")), "{text}");
+    // A manual run queues, finishes through the real worker and reads back as ready. The other
+    // person can neither queue it nor read its status.
+    let (status, text) = call(Method::POST, &format!("/definitions/{id}/run"), Some(&other), Some(json!({})));
+    assert_eq!(status, 404, "{text}");
+    let (status, text) = call(Method::POST, &format!("/definitions/{id}/run"), Some(&cookie), Some(json!({})));
+    assert_eq!(status, 202, "{text}\n{}", log());
+    let queued = json_of(&text);
+    let (job, fresh) = (queued["jobId"].as_str().unwrap().to_owned(), queued["runId"].as_str().unwrap().to_owned());
+    let status_path = format!("/definitions/{id}/runs/{fresh}?jobId={job}");
+    assert_eq!(call(Method::GET, &status_path, Some(&other), None).0, 404);
+    let waited = std::time::Instant::now();
+    let finished = loop {
+        let (status, text) = call(Method::GET, &status_path, Some(&cookie), None);
+        assert_eq!(status, 200, "{text}\n{}", log());
+        let state = json_of(&text)["state"].as_str().unwrap_or_default().to_owned();
+        if state != "pending" || waited.elapsed() > std::time::Duration::from_secs(90) {
+            break (state, text);
+        }
+        std::thread::sleep(std::time::Duration::from_secs(1));
+    };
+    println!("live manual run finished as {} after {:?}", finished.0, waited.elapsed());
+    assert_eq!(finished.0, "ready", "{}\n{}", finished.1, log());
     // Nothing the test sent reached the server log.
     assert!(!log().contains(MARK));
     println!("briefings live: definitions, runs and privacy for two people worked over HTTPS");
