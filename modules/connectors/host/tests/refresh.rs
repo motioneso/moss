@@ -76,7 +76,7 @@ impl Ports for Seen {
                 let fresh = self.keys.lock().unwrap().insert((request.resource.clone(), key));
                 if fresh { json!({"id":"job"}) } else { Value::Null }
             }
-            ("jobs", _) => json!({"id":"row-1"}),
+            ("jobs", _) => json!({"id":Uuid::new_v4().to_string()}),
             ("api", "listCachedMessageKeys") => json!({"keys":[]}),
             ("api", _) => json!({}),
             _ => anyhow::bail!("unexpected {port}"),
@@ -239,7 +239,8 @@ impl Fixture {
 
     fn mail_body(&self) {
         let raw = format!("From: Alice <alice@example.com>\r\nTo: bob@example.com\r\nSubject: Hello\r\nMessage-ID: <h@example.com>\r\nContent-Type: text/plain\r\n\r\n{BODY_TEXT}");
-        self.mail.add_message("INBOX", &raw);
+        let today = chrono::Utc::now().format("%d-%b-%Y 09:15:00 +0000").to_string();
+        self.mail.add_message_dated("INBOX", &raw, &today);
     }
 }
 

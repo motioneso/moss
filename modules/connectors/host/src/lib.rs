@@ -149,10 +149,7 @@ impl Ports for ConnectorsPorts {
                 let result = if request.resource.starts_with("connectors.sync-google-") {
                     google_sync::run(&cx, &self.cipher, &self.google, &self.runs, request).await?
                 } else if request.resource.starts_with("connectors.refresh-") {
-                    refresh::run(&cx, request).await.map_err(|e| {
-                        eprintln!("REFRESH-ERR {} {e:#}", request.resource);
-                        e
-                    })?
+                    refresh::run(&cx, request).await?
                 } else if request.resource.starts_with("connectors.google-") {
                     google::run(&cx, &self.cipher, &self.google, request).await?
                 } else if request.resource.starts_with("connectors.imap-sync-")
