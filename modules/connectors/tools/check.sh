@@ -19,4 +19,4 @@ pnpm exec tsx modules/connectors/tools/google-fixtures.ts --check
 CARGO_TARGET_DIR="$guest" RUSTFLAGS='-C link-arg=--import-memory -C link-arg=--initial-memory=2097152 -C link-arg=--max-memory=67108864' \
   cargo +1.95.0 build --locked --offline --release --lib --target wasm32-unknown-unknown --manifest-path modules/connectors/src/Cargo.toml
 export CONNECTORS_CORE_WASM="$guest/wasm32-unknown-unknown/release/moss_connectors.wasm"
-cargo +1.95.0 test --locked --offline --manifest-path modules/connectors/host/Cargo.toml --test package --test google --test google_sync --test imap --test refresh --test mail_probe --test sync_speed --test writes -- --nocapture
+cargo +1.95.0 test --locked --offline --manifest-path modules/connectors/host/Cargo.toml --test package --test google --test google_sync --test imap --test refresh --test outlook --test mail_probe --test sync_speed --test writes -- --nocapture

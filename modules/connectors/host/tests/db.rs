@@ -262,3 +262,45 @@ fn a_second_person_cannot_write_a_monitor_health_row_for_another_persons_account
     assert_eq!(leaked, json!({"saved": true}), "the proof did not notice the missing protection");
     assert_eq!(rows_for(&f), 2);
 }
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_second_person_cannot_write_an_outlook_health_row_for_another_persons_account() {
+    let f = Fixture::new();
+    let made = f.call(
+        f.a,
+        "set",
+        "connectors.account-write",
+        json!({"action":"create","providerId":"outlook-browser-calendar","scopes":["calendar.readonly"],
+               "status":"active","tokenPayload":{"kind":"browser-binding"}}),
+    );
+    let id = made["id"].as_str().unwrap().to_owned();
+    let key = format!("connector.{id}.outlook_calendar_health");
+    let rows_for = |f: &Fixture| -> i64 {
+        f.rt.block_on(f.root.query_one("SELECT count(*) FROM app.preferences WHERE key=$1", &[&key]))
+            .unwrap()
+            .get(0)
+    };
+    let params = json!({"accountId": id, "value": {"state": "current"}});
+    assert_eq!(f.call(f.a, "set", "connectors.outlook-health", params.clone()), json!({"saved": true}));
+    assert_eq!(rows_for(&f), 1);
+    let refused = f.call(f.b, "set", "connectors.outlook-health", params.clone());
+    assert_eq!(refused, json!({"saved": false}), "another person wrote a health row: {refused}");
+    assert_eq!(rows_for(&f), 1);
+    // A Google account is never an Outlook source, even for its owner.
+    let google = f.create(f.a)["id"].as_str().unwrap().to_owned();
+    let other = f.call(f.a, "set", "connectors.outlook-health", json!({"accountId": google, "value": {"state": "current"}}));
+    assert_eq!(other, json!({"saved": false}));
+    // With the protection removed the same call writes, so the check above notices.
+    f.rt.block_on(f.root.batch_execute(
+        "ALTER TABLE app.connector_accounts NO FORCE ROW LEVEL SECURITY; ALTER TABLE app.connector_accounts DISABLE ROW LEVEL SECURITY;",
+    ))
+    .unwrap();
+    let leaked = f.call(f.b, "set", "connectors.outlook-health", params);
+    f.rt.block_on(f.root.batch_execute(
+        "ALTER TABLE app.connector_accounts ENABLE ROW LEVEL SECURITY; ALTER TABLE app.connector_accounts FORCE ROW LEVEL SECURITY;",
+    ))
+    .unwrap();
+    assert_eq!(leaked, json!({"saved": true}), "the proof did not notice the missing protection");
+    assert_eq!(rows_for(&f), 2);
+}
