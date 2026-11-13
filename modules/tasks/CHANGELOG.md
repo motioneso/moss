@@ -3,6 +3,7 @@
 ## 0.1.4
 
 - `listBriefingTasks` also accepts status `suggested`, which returns the caller's suggested tasks with description, source, source reference, update time and suggestion metadata, so Briefings can show action rows.
+- `listBriefingTasks` returns only tasks owned by the caller, so tasks other people shared with them never reach a briefing.
 
 ## 0.1.3
 

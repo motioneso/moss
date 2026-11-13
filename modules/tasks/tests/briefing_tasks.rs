@@ -6,6 +6,9 @@ use std::cell::RefCell;
 struct Rows(RefCell<Vec<(String, Value)>>);
 impl Host for Rows {
     fn call(&self, port: &str, operation: &str, table: &str, query: Value) -> Result<Value> {
+        if port == "context" {
+            return Ok(json!({"actorUserId":"o","now":"2026-11-08T00:00:00.000Z"}));
+        }
         assert_eq!((port, operation), ("db", "query"));
         self.0.borrow_mut().push((table.to_owned(), query));
         if table != "app.tasks" {
@@ -74,4 +77,30 @@ fn suggested_tasks_also_carry_the_action_row_fields() {
     let queries = rows.0.borrow();
     let task_query = queries.iter().find(|(t, _)| t == "app.tasks").unwrap().1.to_string();
     assert!(task_query.contains("suggested"), "{task_query}");
+}
+
+#[test]
+fn a_task_shared_by_another_person_never_leaves() {
+    struct Shared;
+    impl Host for Shared {
+        fn call(&self, port: &str, _: &str, table: &str, _: Value) -> Result<Value> {
+            if port == "context" {
+                return Ok(json!({"actorUserId":"alice","now":"2026-11-08T00:00:00.000Z"}));
+            }
+            if table != "app.tasks" {
+                return Ok(json!([]));
+            }
+            let stamp = "2026-11-08T00:00:00.000Z";
+            let row = |id: &str, owner: &str, title: &str| json!({"id":id,"owner_user_id":owner,"list_id":"l",
+                "parent_task_id":null,"title":title,"description":null,"status":"todo","priority":null,
+                "position":0,"due_at":null,"do_at":null,"effort":null,"source":"user","source_ref":null,
+                "completed_at":null,"created_at":stamp,"updated_at":stamp,"suggestion_metadata":null,
+                "recurrence":null,"recurrence_series_id":null});
+            Ok(json!([row("11111111-1111-4111-8111-111111111111","alice","Mine"),
+                      row("22222222-2222-4222-8222-222222222222","bob","Bobs shared task")]))
+        }
+    }
+    let request = json!({"name":"listBriefingTasks","parameters":{"status":"todo"}});
+    let out = moss_tasks_module::handle(&Shared, "api", &request.to_string()).unwrap();
+    assert!(out.contains("Mine") && !out.contains("Bobs shared task"), "{out}");
 }
