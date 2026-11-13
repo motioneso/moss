@@ -440,7 +440,9 @@ fn manual_and_scheduled_runs_store_once_notify_once_and_keep_text_out_of_every_s
     assert!(payloads.len() >= 4, "{payloads:?}");
     for payload in &payloads {
         let value: Value = serde_json::from_str(payload).unwrap();
-        let keys: std::collections::BTreeSet<&str> = value.as_object().unwrap().keys().map(String::as_str).collect();
+        // The queue wraps the module's params in its own metadata envelope. Only the params are the module's.
+        let params = value["params"].as_object().unwrap();
+        let keys: std::collections::BTreeSet<&str> = params.keys().map(String::as_str).collect();
         assert!(keys.is_subset(&["definition-id", "briefing-run-id", "briefing-type", "run-kind"].into_iter().collect()), "{payload}");
     }
     println!("PASS privacy: scanned {} tables and {} job payloads, found no briefing text", tables.len(), payloads.len());
