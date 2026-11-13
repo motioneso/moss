@@ -324,7 +324,7 @@ fn installed_backtrack_package_serves_routes_from_the_real_server() {
     // Both people start empty and see the storage switch as off.
     for who in [&cookie, &other] {
         let (status, text) = call(Method::GET, "/status", Some(who), None);
-        assert_eq!(status, 200, "{text}");
+        assert_eq!(status, 200, "{text}\n{}", log());
         let body = json_of(&text);
         assert_eq!((body["days"].clone(), body["storage"].clone()), (json!(0), json!("off")));
     }
