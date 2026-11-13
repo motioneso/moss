@@ -313,10 +313,9 @@ pub async fn run(cx: &DataContext, operation: &str, parameters: &Value) -> Resul
             let grant = p.grant_id.as_deref().ok_or_else(|| anyhow::anyhow!("Grant required"))?;
             let due = p.due_at.as_deref().ok_or_else(|| anyhow::anyhow!("Due time required"))?;
             uuid(grant)?;
-            let due = chrono::DateTime::parse_from_rfc3339(due)?.with_timezone(&chrono::Utc);
             let status = if p.code.is_some() { "skipped" } else { "waiting" };
             db.execute(
-                "INSERT INTO app.meeting_stop_summaries(meeting_id,grant_id,request_key,template_id,status,code,due_at) VALUES($1::text::uuid,$2::text::uuid,$3::text::uuid,$4,$5,$6,$7)",
+                "INSERT INTO app.meeting_stop_summaries(meeting_id,grant_id,request_key,template_id,status,code,due_at) VALUES($1::text::uuid,$2::text::uuid,$3::text::uuid,$4,$5,$6,$7::text::timestamptz)",
                 &[&meeting, &grant, &key, &template, &status, &p.code, &due],
             )
             .await?;
