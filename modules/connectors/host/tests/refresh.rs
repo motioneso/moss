@@ -99,8 +99,6 @@ struct Fixture {
     fake: GoogleStandIn,
     mail: MailStandIn,
     ports: Arc<ConnectorsPorts>,
-    /// Jobs run as the worker role, as they do in the real server.
-    job_ports: Arc<ConnectorsPorts>,
     seen: Arc<Seen>,
     a: Uuid,
     b: Uuid,
@@ -143,21 +141,20 @@ impl Fixture {
             smtp_security: Smtp::ImplicitTls,
         };
         let seen = Arc::new(Seen::default());
-        let build = |db: Database| {
+        let build = |db: Database, worker: Database| {
             let google = GoogleConfig::test_only_loopback(&fake.token_url()).unwrap().with_retry_delay(Duration::from_millis(5));
             let imap = MailConfig::test_only_loopback(servers.clone(), vec![der(&tls::SELF_SIGNED)]).unwrap();
-            Arc::new(ConnectorsPorts::new(db, seen.clone(), KEY).unwrap().with_google(google).with_mail(imap))
+            Arc::new(ConnectorsPorts::new(db, seen.clone(), KEY).unwrap().with_worker(worker).with_google(google).with_mail(imap))
         };
-        let ports = build(db);
-        let job_ports = build(worker_db);
-        Self { rt, root, fake, mail, ports, job_ports, seen, a, b, cursor: Mutex::new(0) }
+        let ports = build(db, worker_db);
+        Self { rt, root, fake, mail, ports, seen, a, b, cursor: Mutex::new(0) }
     }
 
     fn call(&self, actor: Uuid, entry: &str, payload: Value) -> Value {
         let wasm = package::component(&std::fs::read(std::env::var("CONNECTORS_CORE_WASM").expect("CONNECTORS_CORE_WASM")).unwrap()).unwrap();
         let out = Host::new(Limits::default())
             .unwrap()
-            .call(&wasm, Arc::new(package::manifest().unwrap()), AccessContext::new(actor, "refresh-proof"), if entry == "job" { self.job_ports.clone() } else { self.ports.clone() }, entry, &payload.to_string())
+            .call(&wasm, Arc::new(package::manifest().unwrap()), AccessContext::new(actor, "refresh-proof"), self.ports.clone(), entry, &payload.to_string())
             .unwrap_or_else(|e| panic!("{entry} {}: {e}", payload.to_string().chars().take(400).collect::<String>()));
         serde_json::from_str(&out).unwrap()
     }

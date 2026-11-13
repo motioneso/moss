@@ -311,6 +311,7 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
         .admin_user_id
         .ok_or_else(|| anyhow::anyhow!("No module has been installed yet"))?;
     let connectors_key = settings.connector_key.clone();
+    let connectors_worker_url = settings.worker_url.clone();
     let google_test_url = settings.test_only_google_token_url.clone();
     let mail_test = settings.test_only_mail;
     let cipher = SecretCipher::connectors(
@@ -434,7 +435,8 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
             let services = Arc::new(CalendarPorts::new(calendar_database, services)?) as Arc<dyn Ports>;
             // Connectors answers only its own account calls and seals secrets with the
             // connector key. Every other call passes through.
-            let mut connectors = ConnectorsPorts::new(connectors_database, services, &connectors_key)?;
+            let mut connectors = ConnectorsPorts::new(connectors_database, services, &connectors_key)?
+                .with_worker_url(&connectors_worker_url)?;
             if let Some(url) = &google_test_url {
                 eprintln!("WARNING: test_only_google_token_url is set. Google sign-in talks to {url}, not Google.");
                 connectors = connectors.with_google(moss_connectors_host::google::GoogleConfig::test_only_loopback(url)?);

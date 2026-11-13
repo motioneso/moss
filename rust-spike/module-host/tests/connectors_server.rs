@@ -779,6 +779,30 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
         assert_eq!(account["lastSyncStatus"], "success", "{account}");
         // A second run may follow the one that changed the cache and find nothing left to fetch.
         assert!(account["lastSyncCounts"]["emailUpserted"].as_u64().unwrap() <= 1, "unchanged messages are not fetched again: {account}");
+        // Today's refresh asks every connected account to sync now and reports each one.
+        let key = "5b1f6a7e-3c2d-4e8f-9a0b-1c2d3e4f5a6b";
+        let (status, text) = call(Method::POST, "/email-refresh", Some(&cookie), Some(json!({"idempotencyKey": key})));
+        assert_eq!(status, 202, "{text}");
+        let started_refresh = json_of(&text);
+        let refresh_id = started_refresh["refreshId"].as_str().unwrap().to_owned();
+        let again = call(Method::POST, "/email-refresh", Some(&cookie), Some(json!({"idempotencyKey": key})));
+        assert_eq!(json_of(&again.1)["refreshId"], refresh_id.as_str(), "a repeated key returns the same refresh");
+        let began = Instant::now();
+        let done = loop {
+            let (status, text) = call(Method::GET, &format!("/email-refresh/{refresh_id}"), Some(&cookie), None);
+            assert_eq!(status, 200, "{text}");
+            let state = json_of(&text);
+            if !matches!(state["status"].as_str(), Some("queued" | "running")) {
+                break state;
+            }
+            assert!(began.elapsed() < Duration::from_secs(120), "refresh did not settle: {state}\n{}", log());
+            std::thread::sleep(Duration::from_millis(500));
+        };
+        assert_eq!(done["status"], "succeeded", "{done}");
+        let kinds: std::collections::BTreeSet<String> = done["accounts"].as_array().unwrap().iter().map(|a| a["providerType"].as_str().unwrap().to_owned()).collect();
+        assert_eq!(kinds, ["google", "imap"].map(String::from).into(), "{done}");
+        assert!(done["accounts"].as_array().unwrap().iter().all(|a| a["status"] == "succeeded"), "{done}");
+        println!("PASS email refresh on the real server: {done}");
         let password = mail_lines["password"].clone();
         assert!(!log().contains(&password), "mail password in the server log");
         for word in ["PLAN-BODY-SENTINEL", "LUNCH-BODY-SENTINEL", "INVOICE-BODY-SENTINEL", "CHANGED-BODY-SENTINEL"] {

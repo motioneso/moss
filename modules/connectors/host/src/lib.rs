@@ -4,7 +4,7 @@
 use anyhow::{ensure, Result};
 use moss_module_host::runtime::{CallScope, Ports, Request};
 use portability::secrets::{resolve_keyring, JsonSecretCipher};
-use safety_core::db::{DataContext, Database};
+use safety_core::db::{DataContext, Database, RuntimeRole};
 use serde_json::Value;
 use std::{
     collections::HashMap,
@@ -38,6 +38,8 @@ pub const MODULE_ID: &str = "connectors";
 
 pub struct ConnectorsPorts {
     database: Database,
+    /// Worker-role connection for the refresh steps that write progress counts.
+    worker: Option<Database>,
     runtime: tokio::runtime::Runtime,
     next: Arc<dyn Ports>,
     cipher: JsonSecretCipher,
@@ -65,6 +67,7 @@ impl ConnectorsPorts {
     pub fn new(database: Database, next: Arc<dyn Ports>, key: &str) -> Result<Self> {
         Ok(Self {
             database,
+            worker: None,
             runtime: tokio::runtime::Runtime::new()?,
             next,
             cipher: connector_cipher(key)?,
@@ -115,6 +118,28 @@ impl ConnectorsPorts {
         })
     }
 
+    /// Runs the refresh progress steps on a worker-role connection. Row-level security still
+    /// limits every row to the signed-in person, and the app role may not write these columns.
+    pub fn with_worker(mut self, worker: Database) -> Self {
+        self.worker = Some(worker);
+        self
+    }
+
+    /// Opens the worker-role connection from its URL. Safe to call from async code.
+    pub fn with_worker_url(self, url: &str) -> Result<Self> {
+        let worker = std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    self.runtime
+                        .block_on(Database::connect(url, 4, RuntimeRole::Worker))
+                })
+                .join()
+                .map_err(|_| anyhow::anyhow!("Worker connection failed"))?
+                .map_err(|_| anyhow::anyhow!("Connectors worker database unavailable"))
+        })?;
+        Ok(self.with_worker(worker))
+    }
+
     /// Points the mail login test at stand-in servers. Only for tests and the test-only setting.
     pub fn with_mail(mut self, mail: imap::MailConfig) -> Self {
         self.mail = mail;
@@ -141,9 +166,18 @@ impl Ports for ConnectorsPorts {
             !scope.remaining().is_zero(),
             "Connectors deadline expired"
         );
+        let database = match (&self.worker, request.resource.as_str()) {
+            (
+                Some(worker),
+                "connectors.refresh-account-start"
+                | "connectors.refresh-account-finish"
+                | "connectors.refresh-sweep",
+            ) => worker,
+            _ => &self.database,
+        };
         self.runtime.block_on(async {
             tokio::time::timeout(scope.remaining(), async {
-                let cx = DataContext::open_bounded(&self.database, scope.access(), scope.remaining())
+                let cx = DataContext::open_bounded(database, scope.access(), scope.remaining())
                     .await
                     .map_err(|_| anyhow::anyhow!("Connectors data unavailable"))?;
                 let result = if request.resource.starts_with("connectors.sync-google-") {
