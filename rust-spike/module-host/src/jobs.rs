@@ -91,6 +91,18 @@ impl JobPorts {
         })
     }
 }
+/// One stable schedule row per account, queue and key.
+fn schedule_id(scope: &CallScope, queue: &str, key: &str) -> uuid::Uuid {
+    use sha2::Digest;
+    let mut hash = sha2::Sha256::new();
+    for part in [module_key(&scope.module().id).as_str(), &scope.access().actor_user_id().to_string(), queue, key] {
+        hash.update((part.len() as u64).to_be_bytes());
+        hash.update(part.as_bytes());
+    }
+    let mut bytes = [0u8; 16];
+    bytes.copy_from_slice(&hash.finalize()[..16]);
+    uuid::Builder::from_random_bytes(bytes).into_uuid()
+}
 impl Ports for JobPorts {
     fn invoke(&self, scope: &CallScope, port: &str, request: &Request) -> Result<Value> {
         if port != "jobs" {
@@ -139,14 +151,7 @@ impl Ports for JobPorts {
                     // A key makes the schedule one stable row per account, queue and key, so repeated
                     // reconciles replace it instead of adding another.
                     let id=match request.parameters["key"].as_str(){
-                        Some(key)=>{
-                            use sha2::Digest;
-                            let mut hash=sha2::Sha256::new();
-                            for part in [module_key(&scope.module().id).as_str(),&scope.access().actor_user_id().to_string(),&spec.name,key]{hash.update((part.len() as u64).to_be_bytes());hash.update(part.as_bytes());}
-                            let mut bytes=[0u8;16];
-                            bytes.copy_from_slice(&hash.finalize()[..16]);
-                            uuid::Builder::from_random_bytes(bytes).into_uuid()
-                        }
+                        Some(key)=>schedule_id(scope,&spec.name,key),
                         None=>uuid::Uuid::new_v4(),
                     };
                     // With keepExisting an already-scheduled job keeps its next run time, so frequent
@@ -159,6 +164,32 @@ impl Ports for JobPorts {
                     }
                     queue.schedule(actor(scope),id,&spec.name,payload,request.parameters["cron"].as_str().context("Cron required")?,request.parameters["timezone"].as_str().context("Timezone required")?,chrono::Utc::now()).await?;
                     Ok(json!({"id":id}))
+                }
+                "read"|"list-open"|"read-schedule"=> {
+                    // Row security on the queue limits every answer to the caller's own rows.
+                    let cx=DataContext::open(&self.app,scope.access()).await.map_err(|_|anyhow::anyhow!("Cannot open the job read context"))?;
+                    let shape=|row:&tokio_postgres::Row|json!({"id":row.get::<_,uuid::Uuid>(0),"state":row.get::<_,String>(1),"params":row.get::<_,serde_json::Value>(2)["params"]});
+                    let answer=match request.operation.as_str(){
+                        "read"=>{
+                            let row=match request.parameters["id"].as_str(){
+                                Some(id)=>{let id:uuid::Uuid=id.parse()?;cx.db().query_opt("SELECT id,state,payload FROM moss_queue.jobs WHERE queue=$1 AND id=$2",&[&spec.name,&id]).await?}
+                                None=>{let key:uuid::Uuid=request.parameters["idempotencyKey"].as_str().context("Job id required")?.parse()?;cx.db().query_opt("SELECT id,state,payload FROM moss_queue.jobs WHERE queue=$1 AND idempotency_key=$2",&[&spec.name,&key]).await?}
+                            };
+                            json!({"job":row.as_ref().map(shape)})
+                        }
+                        "list-open"=>{
+                            let rows=cx.db().query("SELECT id,state,payload FROM moss_queue.jobs WHERE queue=$1 AND state IN ('pending','running') ORDER BY run_at,id LIMIT 100",&[&spec.name]).await?;
+                            json!({"jobs":rows.iter().map(shape).collect::<Vec<_>>()})
+                        }
+                        _=>{
+                            let key=request.parameters["key"].as_str().context("Schedule key required")?;
+                            let id=schedule_id(scope,&spec.name,key);
+                            let row=cx.db().query_opt("SELECT timezone,cron FROM moss_queue.schedules WHERE id=$1 AND queue=$2 AND disabled_reason IS NULL",&[&id,&spec.name]).await?;
+                            json!({"schedule":row.map(|r|json!({"timezone":r.get::<_,String>(0),"cron":r.get::<_,String>(1)}))})
+                        }
+                    };
+                    cx.commit().await.map_err(|_|anyhow::anyhow!("Cannot close the job read context"))?;
+                    Ok(answer)
                 }
                 "unschedule"=> {
                     let id:uuid::Uuid=request.parameters["id"].as_str().context("Schedule id required")?.parse()?;
