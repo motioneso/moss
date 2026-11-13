@@ -4,7 +4,7 @@
   "name": "Briefings",
   "publisher": "Moss",
   "version": "0.1.0",
-  "description": "Keeps each person's briefing definitions and past runs, private to the owner. A definition can be shared. Saving a definition sets or removes its scheduled run in the person's time zone, and the list moves run times after a time zone change. A manual or scheduled run saves a dated briefing and, for a scheduled run, tells the person once. Writing the briefing text with a model, the screens and outside sources are not part of this package yet.",
+  "description": "Keeps each person's briefing definitions and past runs, private to the owner. A definition can be shared. Saving a definition sets or removes its scheduled run in the person's time zone, and the list moves run times after a time zone change. A manual or scheduled run saves a dated briefing and, for a scheduled run, tells the person once. A run now reads the person's own open tasks, finished tasks, calendar and mail summaries through those modules, and shows a visible gap for any source that is missing, empty, cut short or not signed in. Chat of the day, commitments, saved priorities and outside contributions have no source yet and show as gaps. Writing the briefing text with a model and the screens are not part of this package yet.",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
@@ -13,6 +13,11 @@
       "port": "db",
       "operations": ["query"],
       "resources": ["app.briefing_definitions", "app.briefing_runs"]
+    },
+    {
+      "port": "api",
+      "operations": ["call"],
+      "resources": ["connectors", "tasks"]
     },
     {
       "port": "context",
@@ -154,7 +159,7 @@
     },
     {
       "id": "briefings.run",
-      "description": "Run now queues one briefing for the person's own definition and returns at once with the run id. Asking again with the same key while the first run is still queued or running is refused, and a finished key may be used again. Each local day has at most one scheduled run per definition. A run that takes longer than six minutes is dropped and saves nothing. The person is told once, without any briefing text, when a scheduled run finishes. With no model written yet, the briefing holds a short standard line.",
+      "description": "Run now queues one briefing for the person's own definition and returns at once with the run id. Asking again with the same key while the first run is still queued or running is refused, and a finished key may be used again. Each local day has at most one scheduled run per definition. A run that takes longer than six minutes is dropped and saves nothing. The person is told once, without any briefing text, when a scheduled run finishes. The run gathers the person's own tasks, calendar and mail, caps each section, and records which sources were missing, empty, cut short or not signed in, never the text itself. With no model written yet, the briefing holds a short standard line.",
       "errors": [
         {
           "code": "briefing_run_in_flight",
@@ -187,6 +192,22 @@
           "path": "/today"
         }
       ]
+    },
+    {
+      "id": "briefings.gathering",
+      "description": "Each briefing run reads only the run owner's tasks, calendar and mail through the Tasks and Connectors public calls, and never another module's tables. A source that is off, failing, empty, too long or needing a new sign-in shows as a gap on the run. Outside contributions are limited to twenty items with capped headline, title and detail lengths, and links must stay inside the app.",
+      "errors": [],
+      "remediations": [
+        {
+          "id": "briefings.gathering.reconnect",
+          "description": "Reconnect the mail or calendar account that needs a new sign-in, then run the briefing again.",
+          "path": "/settings/connections"
+        }
+      ]
     }
-  ]
+  ],
+  "optionalRequires": {
+    "connectors": ">=0.5.0, <1.0.0",
+    "tasks": ">=0.1.3, <1.0.0"
+  }
 }

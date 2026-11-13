@@ -62,6 +62,21 @@ pub fn handle<H: moss_module_sdk::Host + ?Sized>(
                 Reference(Reference),
                 #[serde(rename = "createMeetingTask")]
                 MeetingTask(MeetingTask),
+                #[serde(rename = "listBriefingTasks")]
+                Briefing(BriefingTasks),
+            }
+            /// Open or recently finished tasks for a briefing, read for the caller only.
+            #[derive(serde::Deserialize)]
+            #[serde(rename_all = "camelCase", deny_unknown_fields)]
+            struct BriefingTasks {
+                status: BriefingStatus,
+                completed_after: Option<String>,
+            }
+            #[derive(serde::Deserialize)]
+            #[serde(rename_all = "lowercase")]
+            enum BriefingStatus {
+                Todo,
+                Done,
             }
             #[derive(serde::Deserialize)]
             #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -106,6 +121,28 @@ pub fn handle<H: moss_module_sdk::Host + ?Sized>(
                     "status":dto["status"],"dueAt":dto["dueAt"]}})
                 .to_string());
             }
+            if let Api::Briefing(b) = api {
+                let repo = repository::Repository::new(host);
+                let mut input = serde_json::json!({"status": match b.status {
+                    BriefingStatus::Todo => "todo",
+                    BriefingStatus::Done => "done",
+                }});
+                if let Some(after) = b.completed_after {
+                    input["completedAfter"] = after.into();
+                }
+                let listed = list::execute(&repo, &input)
+                    .map_err(|_| moss_module_sdk::Error::new("Briefing tasks unavailable"))?;
+                // Only these fields leave. Notes, tags and ownership stay behind.
+                let items: Vec<_> = listed["data"]["items"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .map(|t| serde_json::json!({
+                        "id":t["id"],"title":t["title"],"status":t["status"],
+                        "dueAt":t["dueAt"],"priority":t["priority"]}))
+                    .collect();
+                return Ok(serde_json::json!({"items":items}).to_string());
+            }
             if let Api::MeetingTask(m) = api {
                 let task = repository::Repository::new(host)
                     .create_meeting_task(&m.title, m.due_at.as_deref(), &m.source_ref, &m.external_key)
@@ -116,7 +153,7 @@ pub fn handle<H: moss_module_sdk::Host + ?Sized>(
                 Api::Prepare(request) => {
                     approval::prepare(host, &request.tool, &request.input_json)
                 }
-                Api::Reference(_) | Api::MeetingTask(_) => unreachable!(),
+                Api::Reference(_) | Api::MeetingTask(_) | Api::Briefing(_) => unreachable!(),
                 Api::PrepareRoute(r) => approval::prepare_route(
                     host,
                     &r.route,

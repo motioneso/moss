@@ -47,3 +47,7 @@ path = "../tests/privacy.rs"
 [[test]]
 name = "run_job"
 path = "../tests/run_job.rs"
+
+[[test]]
+name = "gather"
+path = "../tests/gather.rs"

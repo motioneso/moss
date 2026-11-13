@@ -1,6 +1,8 @@
 //! Writing the briefing text. The run job asks a `Composer` for the finished run. The
-//! composition that gathers sources and calls a model through the router is a later part, so
-//! the only composer here returns the fixed fallback text and makes no model call.
+//! composition that calls a model through the router is a later part, so the only composer
+//! here gathers the sources and returns the fixed fallback text without a model call.
+use crate::external::NoContributors;
+use crate::gather::gather;
 use crate::run_job::Deadline;
 use moss_module_sdk::{Host, Result};
 use serde_json::{json, Value};
@@ -46,11 +48,17 @@ pub fn fallback(reason: &str) -> Composed {
     }
 }
 
-/// Always answers with the fallback, so no source is read and no model is called.
+/// Gathers the sources and answers with the fallback text, so no model is called. The saved
+/// metadata names gaps, counts and reasons only, never any text a source returned.
 pub struct StubComposer;
 
 impl Composer for StubComposer {
-    fn compose<H: Host + ?Sized>(&self, _host: &H, _subject: &Subject<'_>) -> Result<Composed> {
-        Ok(fallback("no_model"))
+    fn compose<H: Host + ?Sized>(&self, host: &H, subject: &Subject<'_>) -> Result<Composed> {
+        let gathered = gather(host, subject, &NoContributors)?;
+        let mut composed = fallback("no_model");
+        if let (Some(into), Some(from)) = (composed.source_metadata.as_object_mut(), gathered.metadata().as_object()) {
+            into.extend(from.clone());
+        }
+        Ok(composed)
     }
 }

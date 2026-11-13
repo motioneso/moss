@@ -382,6 +382,13 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
     };
     println!("live manual run finished as {} after {:?}", finished.0, waited.elapsed());
     assert_eq!(finished.0, "ready", "{}\n{}", finished.1, log());
+    // Gathering ran for the owner: the run records which sources it could not read, and no text.
+    let (status, text) = call(Method::GET, &format!("/definitions/{id}/runs/{fresh}"), Some(&cookie), None);
+    assert_eq!(status, 200, "{text}");
+    let detail = json_of(&text);
+    println!("live run source metadata: {}", detail["run"]["sourceMetadata"]);
+    assert!(detail["run"]["sourceMetadata"]["sourcesFromCache"].is_boolean() || detail["run"]["sourceMetadata"]["gaps"].is_array(), "{text}");
+    assert!(!text.contains(MARK));
     // Nothing the test sent reached the server log.
     assert!(!log().contains(MARK));
     println!("briefings live: definitions, runs and privacy for two people worked over HTTPS");
