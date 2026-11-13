@@ -38,7 +38,11 @@
         "connectors.refresh-dispatch",
         "connectors.refresh-account-start",
         "connectors.refresh-account-finish",
-        "connectors.refresh-sweep"
+        "connectors.refresh-sweep",
+        "connectors.context-setup",
+        "connectors.live-calendar",
+        "connectors.live-gmail-list",
+        "connectors.live-gmail-get"
       ]
     },
     {

@@ -15,6 +15,7 @@ moss-module-sdk = { path = "../../../rust-spike/module-sdk" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 chrono = { version = "0.4", default-features = false, features = ["std"] }
+chrono-tz = "0.10"
 
 [[test]]
 name = "routes"
@@ -27,6 +28,10 @@ path = "tests/grants.rs"
 [[test]]
 name = "health"
 path = "tests/health.rs"
+
+[[test]]
+name = "calendar_context"
+path = "tests/calendar_context.rs"
 
 [[bin]]
 name = "connectors-oracle"

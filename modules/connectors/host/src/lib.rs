@@ -29,6 +29,7 @@ pub mod google_parse;
 pub mod google_sync;
 pub mod imap;
 pub mod imap_sync;
+pub mod live;
 pub mod mail_probe;
 pub mod package;
 pub mod refresh;
@@ -182,6 +183,10 @@ impl Ports for ConnectorsPorts {
                     .map_err(|_| anyhow::anyhow!("Connectors data unavailable"))?;
                 let result = if request.resource.starts_with("connectors.sync-google-") {
                     google_sync::run(&cx, &self.cipher, &self.google, &self.runs, request).await?
+                } else if request.resource.starts_with("connectors.live-")
+                    || request.resource == "connectors.context-setup"
+                {
+                    live::run(&cx, &self.cipher, &self.google, request).await?
                 } else if request.resource.starts_with("connectors.refresh-") {
                     refresh::run(&cx, request).await?
                 } else if request.resource.starts_with("connectors.google-") {

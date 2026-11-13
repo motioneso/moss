@@ -47,21 +47,21 @@ struct Run {
 }
 
 /// Why a Google call gave nothing. Holds only the status, a cleaned reason and the call name.
-struct Failure {
-    status: Option<u16>,
-    reason: Option<String>,
-    operation: &'static str,
-    sign_in: bool,
+pub(crate) struct Failure {
+    pub(crate) status: Option<u16>,
+    pub(crate) reason: Option<String>,
+    pub(crate) operation: &'static str,
+    pub(crate) sign_in: bool,
 }
 
 impl Failure {
-    fn answer(&self) -> Value {
+    pub(crate) fn answer(&self) -> Value {
         let result = if self.sign_in { "auth_failed" } else { "failed" };
         json!({"result":result,"error":{"status":self.status,"reason":self.reason,"operation":self.operation}})
     }
 }
 
-type Fetched = std::result::Result<Value, Failure>;
+pub(crate) type Fetched = std::result::Result<Value, Failure>;
 
 fn clean(text: &str) -> Option<String> {
     let kept: String = text
@@ -88,7 +88,7 @@ fn retryable(status: u16, reason: &Option<String>) -> bool {
 }
 
 /// One Google read, retried on transient refusals and refreshed once on a 401.
-async fn call(
+pub(crate) async fn call(
     cx: &DataContext,
     cipher: &JsonSecretCipher,
     config: &GoogleConfig,
@@ -289,7 +289,7 @@ fn lost() -> Value {
     json!({"result":"lost"})
 }
 
-fn list_url(base: &Url, tail: &str, query: &[(&str, &str)]) -> Result<Url> {
+pub(crate) fn list_url(base: &Url, tail: &str, query: &[(&str, &str)]) -> Result<Url> {
     let mut url = Url::parse(&format!("{}/{}", base.as_str().trim_end_matches('/'), tail))?;
     url.query_pairs_mut().extend_pairs(query);
     Ok(url)
@@ -508,7 +508,7 @@ async fn fetch(
     Ok(Ok(json!({"messages":messages,"failures":failures,"gone":gone,"stale":stale,"processed":processed,"error":error})))
 }
 
-fn urlencode(text: &str) -> String {
+pub(crate) fn urlencode(text: &str) -> String {
     text.bytes()
         .map(|b| match b {
             b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => (b as char).to_string(),

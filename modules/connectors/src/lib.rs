@@ -6,6 +6,7 @@ use serde_json::{json, Value};
 #[cfg(target_arch = "wasm32")]
 mod abi;
 pub mod accounts;
+pub mod calendar_context;
 pub mod fastify;
 pub mod google;
 pub mod google_sync;
