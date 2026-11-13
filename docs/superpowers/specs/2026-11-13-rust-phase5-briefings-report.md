@@ -274,6 +274,7 @@ a named provider), then tidies and stores the answer. The text replaces the plai
 - Calendar and email preference settings use the old defaults, not the person's saved choices.
 - The catch-up has no "as of" time because connector sync freshness is not read yet.
 - Evening and weekly briefings still use the plain digest.
+- The live test failed once with a 404 on the owner's own run status right after queueing, then passed on an unchanged rerun. The cause was not found; the status code is not part of this change.
 - No Vikunja card for JS-267 was found, so no card comment was made.
 - No paired-device credential check was needed or built.
 - Reaching the server from another device was not checked from a phone or second computer.
