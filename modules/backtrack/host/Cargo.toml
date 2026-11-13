@@ -1,0 +1,32 @@
+[package]
+name = "moss-backtrack-host"
+version = "0.1.0"
+edition = "2021"
+publish = false
+autoexamples = false
+
+[workspace]
+
+[dependencies]
+anyhow = "1"
+moss-module-host = { path = "../../../rust-spike/module-host" }
+moss-backtrack-module = { path = "../src" }
+safety-core = { path = "../../../rust-spike/safety-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = "1"
+tokio = { version = "1", features = ["rt-multi-thread"] }
+tokio-postgres = { version = "0.7", features = ["with-serde_json-1", "with-uuid-1"] }
+access-context = { path = "../../../rust-spike/access-context" }
+
+[dev-dependencies]
+moss-platform-jobs = { path = "../../../rust-spike/module-host/bridges/jobs" }
+ring = "0.17"
+base64 = "0.22"
+chrono = "0.4"
+tempfile = "3"
+uuid = { version = "1", features = ["v4"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
+
+[profile.dev]
+debug = 0

@@ -1,0 +1,53 @@
+[package]
+name = "moss-backtrack-module"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Guest-safe Backtrack screen history, pause switch and retention"
+
+[workspace]
+
+[lib]
+path = "lib.rs"
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+moss-module-sdk = { path = "../../../rust-spike/module-sdk" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+sha2 = "0.10"
+regex = { version = "1", default-features = false, features = ["std", "unicode-perl", "unicode-case", "perf"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wit-bindgen = { version = "=0.57.1", default-features = false, features = ["macros", "realloc"] }
+
+[profile.release]
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
+
+[[test]]
+name = "codes"
+path = "../tests/codes.rs"
+
+[[test]]
+name = "redaction"
+path = "../tests/redaction.rs"
+
+[[test]]
+name = "ingest"
+path = "../tests/ingest.rs"
+
+[[test]]
+name = "user_routes"
+path = "../tests/user_routes.rs"
+
+[[test]]
+name = "privacy"
+path = "../tests/privacy.rs"
+
+[[test]]
+name = "lifecycle"
+path = "../tests/lifecycle.rs"

@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 2,
+  "id": "backtrack",
+  "name": "Backtrack",
+  "description": "Keeps the screen text a linked Mac sends, private to each account, for 37 days. A person can pause storing, see what is kept and delete it, with or without a Mac linked. A Mac sends its text through the upload route, which checks the Mac's clock, hides secrets again and drops anything inside a time the person already deleted. An hourly job removes old text. Your account export holds your stored text. Searching this text and the Backtrack screen are not part of this package yet.",
+  "publisher": "Moss",
+  "version": "0.1.0",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "fuelLimit": 200000000,
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "kv",
+      "operations": [
+        "link",
+        "lock",
+        "storage",
+        "paused",
+        "set-paused",
+        "overlaps",
+        "insert",
+        "delete",
+        "upkeep",
+        "status",
+        "export"
+      ],
+      "resources": ["backtrack.store"]
+    },
+    {
+      "port": "context",
+      "operations": ["read"],
+      "resources": ["call"]
+    },
+    {
+      "port": "jobs",
+      "operations": ["schedule"],
+      "resources": ["backtrack.upkeep"]
+    }
+  ],
+  "database": {
+    "migrations": ["sql/0282_backtrack_segments.sql"],
+    "ownedTables": [
+      "app.backtrack_segments",
+      "app.backtrack_preferences",
+      "app.backtrack_deletions"
+    ],
+    "ledger": "core-legacy",
+    "ownerDelete": ["app.backtrack_deletions"]
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/status",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/preferences",
+      "signIn": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/segments",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/ingest",
+      "signIn": true
+    }
+  ],
+  "requires": {},
+  "provides": {
+    "prepareBacktrackRoute": "1.0.0",
+    "collectBacktrackSegmentsExportSection": "1.0.0"
+  },
+  "icons": ["icons/backtrack.svg"],
+  "accounts": {
+    "supportsUserDisable": false,
+    "defaultEnabled": true
+  },
+  "lifecycle": {
+    "required": true,
+    "bundled": true,
+    "removable": false
+  },
+  "jobs": {
+    "backtrack.upkeep": {}
+  },
+  "screens": {},
+  "navigation": [],
+  "settings": [
+    {
+      "id": "backtrack.module-settings",
+      "label": "Backtrack",
+      "path": "/settings?section=modules&module=backtrack",
+      "scope": "user",
+      "description": "Pausing, the days and size kept and deleting history can be reached through the Backtrack routes. The Settings page for them is not part of this package yet."
+    }
+  ],
+  "features": [
+    {
+      "id": "backtrack.day_memory",
+      "description": "A linked Mac can send the text on its screen through the day. Moss keeps it for 37 days, plus up to one hourly run, and an admin must turn storage on first. Each person sees only their own text.",
+      "errors": [
+        {
+          "code": "backtrack_unavailable",
+          "class": "transient",
+          "description": "Backtrack storage is not turned on for this Moss yet. An admin turns it on with the Backtrack storage instance switch."
+        },
+        {
+          "code": "backtrack_paused",
+          "class": "validation",
+          "description": "Recording is paused from Moss, so nothing new is stored. Turn recording back on to resume."
+        },
+        {
+          "code": "backtrack_clock",
+          "class": "validation",
+          "description": "A Mac's clock is more than an hour off, so its upload is refused and kept on the Mac. Correct the Mac's date and time."
+        }
+      ]
+    },
+    {
+      "id": "backtrack.recording-switch",
+      "description": "One switch pauses storing for every Mac of the account. The status route reports whether it is paused and how many Macs, days and bytes are kept.",
+      "errors": []
+    },
+    {
+      "id": "backtrack.delete_history",
+      "description": "Delete stored Backtrack history through the delete route or in chat. Approval names either all history or the selected time range and says deletion is permanent. It works with no Mac linked, even when storage is off. A later upload from inside a deleted time is discarded.",
+      "errors": []
+    },
+    {
+      "id": "backtrack.mac_sending",
+      "description": "A linked Mac sends about once a minute. Text Moss cannot take yet waits on the Mac, encrypted, up to a day. Uploads hide secrets a second time on the server.",
+      "errors": []
+    }
+  ]
+}

@@ -2993,6 +2993,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "moss-backtrack-host"
+version = "0.1.0"
+dependencies = [
+ "access-context",
+ "anyhow",
+ "moss-backtrack-module",
+ "moss-module-host",
+ "safety-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-postgres",
+ "uuid",
+]
+
+[[package]]
+name = "moss-backtrack-module"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "moss-module-sdk",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "wit-bindgen",
+]
+
+[[package]]
 name = "moss-calendar"
 version = "0.1.0"
 dependencies = [
@@ -3259,6 +3288,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
+ "moss-backtrack-host",
  "moss-calendar-host",
  "moss-connectors-host",
  "moss-email-host",
