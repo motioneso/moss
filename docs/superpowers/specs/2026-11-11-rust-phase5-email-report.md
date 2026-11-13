@@ -442,7 +442,8 @@ None added.
 - Mail-server (IMAP) context is saved mail only, with no live read.
 - The monitors write health rows but do not yet create tasks from mail or apply suppression, so
   they always report zero created.
-- Live triage is capped at two messages per read.
+- Live triage is capped at two messages per read. A failed model call leaves that message untriaged; a model call that outlives the whole read was not tested.
+- A live read that stops at its page limit marks the result as truncated for both mail and calendar.
 - A real Gmail account and a real model were not used.
 - `refused_attempts_answer_like_the_old_server` (Google limiter) failed in both Connectors gate
   runs here. It sits in code this part did not change and depends on timing under load.
