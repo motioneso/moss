@@ -130,8 +130,18 @@ pub fn binding(binding: &Option<OutlookBinding>, actor: Uuid) -> Value {
     }
 }
 
-/// Reads one view for a run, starting the run on its first call.
+/// Reads one view for a run, starting the run on its first call. The blocking client is built,
+/// used and dropped where blocking is allowed, never on an async worker.
 pub async fn step(
+    binding: &Option<OutlookBinding>,
+    runs: &OutlookRuns,
+    actor: Uuid,
+    run_id: Uuid,
+) -> Result<Value> {
+    tokio::task::block_in_place(|| step_blocking(binding, runs, actor, run_id))
+}
+
+fn step_blocking(
     binding: &Option<OutlookBinding>,
     runs: &OutlookRuns,
     actor: Uuid,
@@ -153,12 +163,7 @@ pub async fn step(
         },
         started: Instant::now(),
     });
-    let (run, outcome) = tokio::task::spawn_blocking(move || {
-        let outcome = run.session.step(&mut run.browser);
-        (run, outcome)
-    })
-    .await?;
-    Ok(match outcome {
+    Ok(match run.session.step(&mut run.browser) {
         Ok(Step::More) => {
             runs.0.lock().expect("runs").insert(run_id, run);
             json!({"done":false})
