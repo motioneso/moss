@@ -17,7 +17,7 @@
     {
       "port": "api",
       "operations": ["call"],
-      "resources": ["connectors", "tasks"]
+      "resources": ["calendar", "connectors", "tasks"]
     },
     {
       "port": "context",
@@ -220,9 +220,18 @@
           "path": "/settings/connections"
         }
       ]
+    },
+    {
+      "id": "briefings.evening-composition",
+      "description": "An evening run writes the end-of-day review through the configured model. It sorts the person's own tasks into done today, slipped today and carried forward from earlier days, previews tomorrow's calendar, lists the mail that arrived today, and refers to the morning briefing and the saved day plan when they exist. Tasks, calendar events and mail are treated as outside text and cannot instruct the model. When no model answers, the run keeps a plain list with the same six headings and two reflection questions, and records why. A weekly review is written like the morning briefing."
+    },
+    {
+      "id": "briefings.day-plan",
+      "description": "A succeeded run that found calendar signals asks Calendar to reserve blocks on the person's own day plan, only when the person's Use for planning switch on Calendar is on. A calendar the person left out of briefings with the Include in briefings switch is not read at all. Briefings reads the saved day plan for context and shows overnight changes for review. Calendar owns the plan, the blocks and the revision check. The run keeps only ids and a batch key. Applying the blocks to the connected calendar is not part of this package yet."
     }
   ],
   "optionalRequires": {
+    "calendar": ">=0.29.0, <1.0.0",
     "connectors": ">=0.5.0, <1.0.0",
     "tasks": ">=0.1.4, <1.0.0"
   }
