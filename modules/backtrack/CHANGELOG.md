@@ -7,4 +7,5 @@
 - A paired Mac can send screen text. Nothing is stored while recording is paused, and a Mac whose clock is more than an hour off is refused.
 - Screen text is stored for 37 days. An hourly job removes older text.
 - Your account export includes your Backtrack history.
-- Searching the history and the Backtrack screen are not part of this package yet.
+- Stored screen text is added to Memory's search, and removed from it when the history is deleted or expires. Memory must be installed.
+- The Backtrack screen is not part of this package yet.

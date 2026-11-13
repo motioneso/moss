@@ -48,6 +48,9 @@ impl World {
     fn visible(&self, actor: Uuid, table: &str) -> i64 {
         self.f.rt.block_on(async {
             let cx = DataContext::open(&self.f.db, &self.f.access(actor)).await.unwrap();
+            if table == "app.backtrack_index_marks" {
+                cx.db().batch_execute(&format!("SET LOCAL ROLE {}", moss_module_host::database::runtime_role("backtrack"))).await.unwrap();
+            }
             cx.db().query_one(&format!("SELECT count(*) FROM {table}"), &[]).await.unwrap().get(0)
         })
     }
@@ -214,6 +217,8 @@ fn screen_text_never_reaches_job_payloads_activity_rows_or_the_log() {
     let mut s = segment(10, &format!("body {LEAK}"));
     s["address"] = json!(format!("https://example.test/{LEAK}"));
     assert_eq!(w.call(w.f.a, "POST", "/ingest", upload(vec![s]))["body"]["accepted"], 1);
+    // The index job runs too, so its queue rows and logs are scanned with the rest.
+    w.run_jobs();
     // Refusals and a deletion carry no text either.
     w.call(w.f.a, "PUT", "/preferences", json!({"paused": true}));
     w.call(w.f.a, "POST", "/ingest", upload(vec![segment(10, LEAK)]));
@@ -282,4 +287,176 @@ fn later_uploads_keep_the_due_sweep_time_and_a_delete_schedules_a_sweep() {
     assert_eq!(none(w.f.b), 0);
     w.call(w.f.b, "DELETE", "/segments", Value::Null);
     assert_eq!(none(w.f.b), 1, "a delete must leave a sweep scheduled for its marker");
+}
+
+impl World {
+    fn run_jobs(&self) {
+        let worker = Secret::new(std::env::var("JS48_WORKER_URL").unwrap());
+        for _ in 0..6 {
+            self.app.app.installer.run_job(&worker).unwrap();
+        }
+    }
+    /// Runs the worker and ignores a failed job, for a run that is meant to fail.
+    fn run_jobs_that_may_fail(&self) {
+        let worker = Secret::new(std::env::var("JS48_WORKER_URL").unwrap());
+        for _ in 0..3 {
+            let _ = self.app.app.installer.run_job(&worker);
+        }
+    }
+    fn chunks(&self, owner: Uuid) -> i64 {
+        self.count("SELECT count(*) FROM app.memory_chunks WHERE owner_user_id=$1 AND source_kind='screen' AND source_path LIKE 'backtrack/%'", owner)
+    }
+    fn unindexed(&self, owner: Uuid) -> i64 {
+        self.count("SELECT count(*) FROM app.backtrack_segments s WHERE s.owner_user_id=$1 AND NOT EXISTS(SELECT 1 FROM app.backtrack_index_marks m WHERE m.segment_id=s.id)", owner)
+    }
+    fn first_segment(&self, owner: Uuid) -> String {
+        self.f.rt.block_on(self.f.root.query_one("SELECT id::text FROM app.backtrack_segments WHERE owner_user_id=$1 ORDER BY created_at LIMIT 1", &[&owner])).unwrap().get(0)
+    }
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn an_upload_is_indexed_under_the_screen_source_and_stamped() {
+    let w = World::new();
+    w.link(w.f.a);
+    w.call(w.f.a, "POST", "/ingest", upload(vec![segment(10, &format!("indexed words {MARK}"))]));
+    assert_eq!((w.unindexed(w.f.a), w.chunks(w.f.a)), (1, 0));
+    w.run_jobs();
+    assert_eq!((w.unindexed(w.f.a), w.chunks(w.f.a)), (0, 1));
+    let id = w.first_segment(w.f.a);
+    let path: String = w.f.rt.block_on(w.f.root.query_one("SELECT source_path FROM app.memory_chunks WHERE owner_user_id=$1 AND source_kind='screen'", &[&w.f.a])).unwrap().get(0);
+    assert_eq!(path, format!("backtrack/{id}"));
+    println!("indexed: 1 chunk under {path}, stamp set");
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn deleting_removes_the_indexed_chunks() {
+    let w = World::new();
+    w.link(w.f.a);
+    w.call(w.f.a, "POST", "/ingest", upload(vec![segment(20, "one"), segment(10, "two")]));
+    w.run_jobs();
+    assert_eq!(w.chunks(w.f.a), 2);
+    assert_eq!(w.call(w.f.a, "DELETE", "/segments", Value::Null)["body"]["deleted"], 2);
+    assert_eq!((w.segments(w.f.a), w.chunks(w.f.a)), (0, 0));
+    println!("delete removed 2 segments and their 2 chunks");
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn the_index_job_works_only_on_its_own_persons_text_and_row_security_shows_it() {
+    let w = World::new();
+    w.link(w.f.a);
+    w.link(w.f.b);
+    w.call(w.f.a, "POST", "/ingest", upload(vec![segment(10, "alpha")]));
+    w.call(w.f.b, "POST", "/ingest", upload(vec![segment(10, "beta")]));
+    w.run_jobs();
+    assert_eq!((w.chunks(w.f.a), w.chunks(w.f.b)), (1, 1));
+    // B reads only B's chunk and B's own index mark.
+    assert_eq!(w.visible(w.f.b, "app.memory_chunks"), 1);
+    assert_eq!(w.visible(w.f.b, "app.backtrack_index_marks"), 1);
+    // With row security removed from the chunk table, B sees A's chunk: the check can fail.
+    let table = "app.memory_chunks";
+    w.f.rt.block_on(w.f.root.batch_execute(&format!("ALTER TABLE {table} DISABLE ROW LEVEL SECURITY"))).unwrap();
+    let open = w.visible(w.f.b, table);
+    w.f.rt.block_on(w.f.root.batch_execute(&format!("ALTER TABLE {table} ENABLE ROW LEVEL SECURITY; ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))).unwrap();
+    assert!(open > 1, "RED expected: B sees {open} chunk(s) with row security removed");
+    println!("RED {table}: another person sees {open} chunk(s) with row security removed");
+    assert_eq!(w.visible(w.f.b, table), 1);
+    println!("GREEN {table}: row security restored, B sees only their own chunk");
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn text_past_37_days_gets_no_chunk_and_an_embedder_failure_leaves_text_for_the_sweep() {
+    let w = World::new();
+    w.link(w.f.a);
+    let device = Uuid::new_v4();
+    w.f.rt.block_on(w.f.root.execute(
+        "INSERT INTO app.backtrack_segments(owner_user_id,device_id,started_at,ended_at,app_name,bundle_id,window_title,body,body_hash,client_started_at,created_at) \
+         VALUES($1,$2,now()-interval '38 days',now()-interval '38 days','A','b','t','old',sha256('old'::bytea),now()-interval '38 days',now()-interval '38 days')",
+        &[&w.f.a, &device],
+    )).unwrap();
+    w.app.embedder.0.store(true, std::sync::atomic::Ordering::SeqCst);
+    w.call(w.f.a, "POST", "/ingest", upload(vec![segment(10, "fresh")]));
+    w.run_jobs_that_may_fail();
+    assert_eq!(w.chunks(w.f.a), 0, "the embedder was down");
+    assert_eq!(w.unindexed(w.f.a), 2);
+    // Embedder back. The sweep removes the 38-day text and queues the fresh one again.
+    w.app.embedder.0.store(false, std::sync::atomic::Ordering::SeqCst);
+    w.f.rt.block_on(w.f.root.execute("UPDATE app.backtrack_segments SET created_at=now()-interval '11 minutes' WHERE owner_user_id=$1 AND body='fresh'", &[&w.f.a])).unwrap();
+    w.f.rt.block_on(w.f.root.execute("UPDATE moss_queue.schedules SET next_at=now()-interval '1 minute' WHERE actor_user_id=$1 AND queue LIKE '%backtrack.upkeep'", &[&w.f.a])).unwrap();
+    w.run_jobs();
+    assert_eq!((w.segments(w.f.a), w.chunks(w.f.a), w.unindexed(w.f.a)), (1, 1, 0));
+    println!("sweep removed the 38-day text and re-queued the fresh text, which then indexed");
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn the_sweep_removes_the_chunks_of_expired_segments() {
+    let w = World::new();
+    w.link(w.f.a);
+    w.call(w.f.a, "POST", "/ingest", upload(vec![segment(10, "soon old")]));
+    w.run_jobs();
+    assert_eq!(w.chunks(w.f.a), 1);
+    w.f.rt.block_on(w.f.root.execute("UPDATE app.backtrack_segments SET created_at=now()-interval '38 days' WHERE owner_user_id=$1", &[&w.f.a])).unwrap();
+    w.f.rt.block_on(w.f.root.execute("UPDATE moss_queue.schedules SET next_at=now()-interval '1 minute' WHERE actor_user_id=$1 AND queue LIKE '%backtrack.upkeep'", &[&w.f.a])).unwrap();
+    w.run_jobs();
+    assert_eq!((w.segments(w.f.a), w.chunks(w.f.a)), (0, 0));
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_later_upload_is_indexed_after_an_earlier_run_in_the_same_minute() {
+    let w = World::new();
+    w.link(w.f.a);
+    w.call(w.f.a, "POST", "/ingest", upload(vec![segment(10, "first")]));
+    w.run_jobs();
+    assert_eq!((w.unindexed(w.f.a), w.chunks(w.f.a)), (0, 1));
+    w.call(w.f.a, "POST", "/ingest", upload(vec![segment(20, "second")]));
+    w.run_jobs();
+    assert_eq!((w.unindexed(w.f.a), w.chunks(w.f.a)), (0, 2), "the second upload must not wait for the hourly sweep");
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn an_upload_after_a_delete_in_the_same_minute_is_still_indexed() {
+    let w = World::new();
+    w.link(w.f.a);
+    w.call(w.f.a, "POST", "/ingest", upload(vec![segment(10, "first")]));
+    w.run_jobs();
+    assert_eq!((w.unindexed(w.f.a), w.chunks(w.f.a)), (0, 1));
+    w.call(w.f.a, "DELETE", "/segments", Value::Null);
+    std::thread::sleep(std::time::Duration::from_millis(1200));
+    let mut second = segment(0, "second");
+    second["startedAt"] = json!(stamp(now() - chrono::Duration::milliseconds(500)));
+    w.call(w.f.a, "POST", "/ingest", upload(vec![second]));
+    w.run_jobs();
+    assert_eq!((w.unindexed(w.f.a), w.chunks(w.f.a)), (0, 1), "the new upload must not reuse the finished run's key");
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_backlog_larger_than_one_reply_is_indexed_in_several_runs() {
+    let w = World::new();
+    w.link(w.f.a);
+    let body = "a ".repeat(1000);
+    let segments: Vec<Value> = (0..12)
+        .map(|n| {
+            let mut one = segment(10 + n, &format!("w{n} {body}"));
+            one["windowTitle"] = json!(format!("Title {n}"));
+            one
+        })
+        .collect();
+    for part in segments.chunks(4) {
+        w.call(w.f.a, "POST", "/ingest", upload(part.to_vec()));
+    }
+    assert_eq!(w.unindexed(w.f.a), 12);
+    for _ in 0..6 {
+        w.run_jobs();
+        if w.unindexed(w.f.a) == 0 {
+            break;
+        }
+    }
+    assert_eq!(w.unindexed(w.f.a), 0, "every segment is indexed even when one reply cannot hold them all");
 }

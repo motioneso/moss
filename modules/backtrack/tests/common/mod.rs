@@ -14,11 +14,16 @@ pub struct Fake {
     pub paused: bool,
     pub overlaps: Vec<usize>,
     pub inserted: Option<u64>,
+    pub segment_ids: Vec<String>,
+    pub expired: Vec<String>,
+    pub pending: Vec<Value>,
+    pub stale: bool,
+    pub memory_fails: bool,
 }
 
 impl Default for Fake {
     fn default() -> Self {
-        Fake { calls: RefCell::default(), link: json!({"link":"device","deviceId":DEVICE}), storage: true, paused: false, overlaps: vec![], inserted: None }
+        Fake { calls: RefCell::default(), link: json!({"link":"device","deviceId":DEVICE}), storage: true, paused: false, overlaps: vec![], inserted: None, segment_ids: vec![], expired: vec![], pending: vec![], stale: false, memory_fails: false }
     }
 }
 
@@ -46,6 +51,14 @@ impl Host for Fake {
                 json!({"inserted": self.inserted.unwrap_or(n)})
             }
             ("kv", "delete") => json!({"deleted": 3}),
+            ("kv", "segment-ids") => json!({"ids": self.segment_ids}),
+            ("kv", "expired") => json!({"ids": self.expired}),
+            ("kv", "pending") => json!({"segments": self.pending}),
+            ("kv", "stale") => json!({"stale": self.stale}),
+            ("kv", "index-key") => json!({"key": "33333333-3333-4333-8333-333333333333"}),
+            ("kv", "mark-indexed") => json!({"marked": parameters["ids"].as_array().map_or(0, |a| a.len())}),
+            ("api", "call") if self.memory_fails => json!({"error": {"statusCode": 500, "error": "embedder down"}}),
+            ("api", "call") => json!({"ok": {}}),
             ("kv", "upkeep") => json!({"segments": 2, "markers": 1}),
             ("kv", "status") => json!({"paused": self.paused, "devices": 1, "segments": 4}),
             ("kv", "export") => json!([{"id": "x"}]),

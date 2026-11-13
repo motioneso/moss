@@ -40,7 +40,7 @@ fn a_job_failure_never_repeats_the_payload() {
 #[test]
 fn the_package_builds_and_the_manifest_validates() {
     let files = moss_backtrack_host::package::files(&root(), &component()).unwrap();
-    assert_eq!(files.keys().filter(|k| k.starts_with("sql/")).count(), 1);
+    assert_eq!(files.keys().filter(|k| k.starts_with("sql/")).count(), 2);
     for needed in ["moss.module.json", "code/module.wasm", "NOTICE", "CHANGELOG.md"] {
         assert!(files.contains_key(needed), "{needed} missing");
     }
@@ -67,10 +67,20 @@ fn changing_one_byte_of_the_legacy_sql_stops_the_build() {
     let to = copy.join("packages/backtrack/sql");
     std::fs::create_dir_all(&to).unwrap();
     std::fs::copy(root().join("packages/backtrack/sql/0282_backtrack_segments.sql"), to.join("0282_backtrack_segments.sql")).unwrap();
-    assert!(moss_backtrack_host::package::files(copy, &component()).is_ok(), "untouched copy builds");
+    let own = copy.join("modules/backtrack/sql");
+    std::fs::create_dir_all(&own).unwrap();
+    let name = "0367_backtrack_index_marks.sql";
+    std::fs::copy(root().join("modules/backtrack/sql").join(name), own.join(name)).unwrap();
+    assert!(moss_backtrack_host::package::files(copy, &component()).is_ok(), "untouched copy with the new migration builds");
     let target = to.join("0282_backtrack_segments.sql");
     let mut bytes = std::fs::read(&target).unwrap();
     bytes.push(b' ');
     std::fs::write(&target, bytes).unwrap();
     assert!(moss_backtrack_host::package::files(copy, &component()).is_err(), "a changed byte must stop the build");
+    // The new migration is pinned the same way.
+    std::fs::copy(root().join("packages/backtrack/sql/0282_backtrack_segments.sql"), &target).unwrap();
+    let mut mine = std::fs::read(own.join("0367_backtrack_index_marks.sql")).unwrap();
+    mine.push(b' ');
+    std::fs::write(own.join("0367_backtrack_index_marks.sql"), mine).unwrap();
+    assert!(moss_backtrack_host::package::files(copy, &component()).is_err(), "a changed migration must stop the build");
 }

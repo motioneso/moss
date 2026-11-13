@@ -2,6 +2,7 @@
 use crate::clock::write;
 use crate::codes::RANGE_MESSAGES;
 use crate::range::{parse_range, Range};
+use crate::index::{ids, remove_chunks};
 use crate::store::{call, lock, now};
 use moss_module_sdk::{Host, Response, Result, RouteRequest};
 use serde_json::{json, Value};
@@ -44,6 +45,17 @@ pub fn delete<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Resp
     };
     if from.is_some_and(|from| from >= to) {
         return Ok(Response::new(200, json!({"deleted": 0})));
+    }
+    // Search chunks go first, so a failure leaves the text and its marker untouched.
+    let mut after: Option<String> = None;
+    loop {
+        let window = json!({"from": from.map(write), "to": write(to), "after": after});
+        let page = ids(&call(host, "segment-ids", window)?);
+        remove_chunks(host, &page)?;
+        match page.last() {
+            Some(last) if page.len() >= 5000 => after = Some(last.clone()),
+            _ => break,
+        }
     }
     let reply = call(
         host,

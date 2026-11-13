@@ -150,6 +150,7 @@ pub fn post<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Respon
     };
     if inserted > 0 {
         crate::upkeep::keep_scheduled(host);
+        crate::index::enqueue(host);
     }
     Ok(Response::new(
         200,

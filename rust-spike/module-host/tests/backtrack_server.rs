@@ -63,11 +63,16 @@ fn installed_backtrack_package_serves_routes_from_the_real_server() {
     );
     assert!(!port.0.is_empty());
     let origin = format!("https://localhost:{}", port.0);
+    // MOSS_BACKTRACK_HOST names the address another device uses. When set, the listener binds
+    // every interface and trusts that origin, and MOSS_BACKTRACK_REMOTE_SSH names a device
+    // that asks the server for the signed-in status from there.
+    let remote = std::env::var("MOSS_BACKTRACK_HOST").ok().map(|host| format!("https://{host}:{}", port.0));
     let cert = root.join("tls/certificate.pem");
     assert!(Command::new(std::env::var("JS170_CERTIFICATE").unwrap())
         .args(["local-certificate"])
         .arg(root.join("tls"))
         .arg(&origin)
+        .args(&remote)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
@@ -97,9 +102,10 @@ fn installed_backtrack_package_serves_routes_from_the_real_server() {
         &root.join("credentials.json"),
         &json!({"app_url":app_url,"auth_url":auth_url,"auth_secret":"temporary-disposable-backtrack-signing-secret-235","connector_key":connector_key}),
     );
+    let origins: Vec<String> = [Some(origin.clone()), remote.clone()].into_iter().flatten().collect();
     private(
         &root.join("network.json"),
-        &json!({"listen":format!("127.0.0.1:{}",port.0),"origins":[origin],"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
+        &json!({"listen":format!("{}:{}",if remote.is_some() {"0.0.0.0"} else {"127.0.0.1"},port.0),"origins":origins,"sharing":remote.is_some(),"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
     );
     let client = reqwest::blocking::Client::builder()
         .add_root_certificate(reqwest::Certificate::from_pem(&fs::read(&cert).unwrap()).unwrap())
@@ -201,7 +207,7 @@ fn installed_backtrack_package_serves_routes_from_the_real_server() {
     // canonical installer, as the server would find it.
     let keys = Keys::new();
     fs::create_dir_all(root.join("registry/packages")).unwrap();
-    let artifacts: Vec<Artifact> = [("JS261_BACKTRACK_PACKAGE", "backtrack")]
+    let artifacts: Vec<Artifact> = [("JS231_MEMORY_PACKAGE", "memory"), ("JS261_BACKTRACK_PACKAGE", "backtrack")]
     .iter()
     .map(|(variable, id)| {
         let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
@@ -353,6 +359,23 @@ fn installed_backtrack_package_serves_routes_from_the_real_server() {
     assert_eq!((status, json_of(&text)["deleted"].clone()), (200, json!(0)), "{text}");
     let (status, _) = call(Method::DELETE, "/segments", Some(&other), Some(json!({"from": "2026-11-02T00:00:00.000Z", "to": "2026-11-01T00:00:00.000Z"})));
     assert_eq!(status, 400);
+    // A second device on the network reaches the same server and sees only its own account.
+    if let (Some(remote), Ok(device)) = (&remote, std::env::var("MOSS_BACKTRACK_REMOTE_SSH")) {
+        let ask = |cookie: &str| {
+            let line = format!(
+                "curl -sk -o /dev/null -w '%{{http_code}}' -H 'origin: {remote}' -H 'cookie: {cookie}' '{remote}/api/m/backtrack/status'"
+            );
+            let output = Command::new("ssh")
+                .args(["-o", "BatchMode=yes", "-o", "ConnectTimeout=15", &device])
+                .arg(line)
+                .output()
+                .unwrap();
+            String::from_utf8_lossy(&output.stdout).trim().to_owned()
+        };
+        let (signed_out, signed_in) = (ask("none=1"), ask(&cookie));
+        println!("backtrack live: another device got {signed_out} signed out and {signed_in} signed in");
+        assert_eq!((signed_out.as_str(), signed_in.as_str()), ("401", "200"), "the other device must reach the server");
+    }
     // Nothing the test sent reached the server log.
     assert!(!log().contains(MARK));
     println!("backtrack live: status, pause, delete and the Mac refusal worked over HTTPS for two people");
