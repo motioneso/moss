@@ -16,7 +16,8 @@ for (const name of [
   "transcripts",
   "exports",
   "reading",
-  "ring"
+  "ring",
+  "capture"
 ]) {
   const run = spawnSync(
     "cargo",

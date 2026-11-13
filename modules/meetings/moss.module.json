@@ -75,7 +75,11 @@
         "purge",
         "validate",
         "window",
-        "hand-off"
+        "hand-off",
+        "browser",
+        "native",
+        "recording",
+        "processing"
       ],
       "resources": [
         "meetings.preferences",
@@ -86,7 +90,8 @@
         "meetings.exports",
         "meetings.chat-notice",
         "meetings.recording-files",
-        "meetings.chat-voice"
+        "meetings.chat-voice",
+        "meetings.capture"
       ]
     },
     {
@@ -111,7 +116,8 @@
         "meetings.stop-summary",
         "meetings.recording-notice",
         "meetings.recording-memory",
-        "meetings.recording-import"
+        "meetings.recording-import",
+        "meetings.capture-maintenance"
       ]
     }
   ],
@@ -341,6 +347,46 @@
       "method": "POST",
       "path": "/voice-recordings/:id/retry",
       "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/capture/connection",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/capture/commands",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/capture/claim",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/capture/devices",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/records/:id/capture/start",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/records/:id/capture/cancel-start",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/recording-capability/attempt",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/recording-capability/decide",
+      "signIn": true
     }
   ],
   "requires": {
@@ -390,6 +436,14 @@
     "meetings.recording-memory": {
       "meeting-id": {
         "kind": "id"
+      }
+    },
+    "meetings.capture-maintenance": {
+      "grant-id": {
+        "kind": "id"
+      },
+      "sequence": {
+        "kind": "count"
       }
     }
   },
@@ -762,6 +816,67 @@
           "code": "import_unavailable",
           "class": "transient",
           "description": "Recording imports could not be reached"
+        }
+      ]
+    },
+    {
+      "id": "meetings.mac-link",
+      "description": "The Mac recorder app links to your account and reports which Macs can record. From a meeting you start recording on a Mac, or cancel a start that has not begun. A start needs a live Mac, a speech-to-text route and room under the start limits. Starting only reserves the recording and never begins capture by itself. The link is private to your account, and no admin can read it. The old relink routes answer that relinking is required. Pairing a Mac, the real device credential check, audio upload, pause, stop and source changes are not part of this package yet.",
+      "errors": [
+        {
+          "code": "meeting_capture_busy",
+          "class": "validation",
+          "description": "That Mac or meeting is already recording"
+        },
+        {
+          "code": "meeting_capture_conflict",
+          "class": "validation",
+          "description": "That start request was already used with different details"
+        },
+        {
+          "code": "meeting_capture_limit",
+          "class": "validation",
+          "description": "Too many saved start requests for this meeting"
+        },
+        {
+          "code": "meeting_capture_processing_unavailable",
+          "class": "transient",
+          "description": "No speech-to-text route is set up for recording"
+        },
+        {
+          "code": "meeting_capture_source_unavailable",
+          "class": "validation",
+          "description": "No single live Mac is available, or the chosen sources are not offered"
+        },
+        {
+          "code": "meeting_capture_unavailable",
+          "class": "transient",
+          "description": "Recording could not be started right now"
+        },
+        {
+          "code": "meeting_capture_rate_limited",
+          "class": "transient",
+          "description": "Too many starts in a short time, try again later"
+        },
+        {
+          "code": "meeting_capture_invalid_input",
+          "class": "validation",
+          "description": "The recording request is malformed"
+        },
+        {
+          "code": "meeting_capture_interrupted",
+          "class": "transient",
+          "description": "The recording start was interrupted"
+        },
+        {
+          "code": "recording_relink_required",
+          "class": "validation",
+          "description": "The Mac app must link again"
+        },
+        {
+          "code": "recording_connection_unavailable",
+          "class": "validation",
+          "description": "The Mac connection is missing, expired or revoked"
         }
       ]
     }

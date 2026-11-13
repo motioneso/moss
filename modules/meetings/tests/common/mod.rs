@@ -21,7 +21,19 @@ pub const HOST_COLLECTIONS: &[&str] = &[
     "capture_start_cancellations", "capture_start_limits",
 ];
 
+/// What the host's capture authority answers. A `None` means the caller is refused.
+#[derive(Clone, Default)]
+pub struct CaptureCfg {
+    pub browser: Option<(String, String)>,
+    pub native: Option<(String, i64, String)>,
+    pub recording: Option<String>,
+    pub route: Option<String>,
+}
+
 pub struct Fake {
+    pub capture: RefCell<CaptureCfg>,
+    /// Every job the module queued, as (queue, parameters).
+    pub jobs: RefCell<Vec<(String, Value)>>,
     pub actor: Cell<&'static str>,
     pub tables: RefCell<BTreeMap<String, Vec<Value>>>,
     pub prefs: RefCell<BTreeMap<String, Map<String, Value>>>,
@@ -46,6 +58,8 @@ pub struct Fake {
 impl Fake {
     pub fn new() -> Self {
         Self {
+            capture: RefCell::new(CaptureCfg::default()),
+            jobs: RefCell::new(vec![]),
             actor: Cell::new(A),
             tables: RefCell::new(BTreeMap::new()),
             prefs: RefCell::new(BTreeMap::new()),
@@ -148,6 +162,27 @@ fn chrono_free(text: &str) -> String {
 }
 
 impl Fake {
+    fn capture_call(&self, operation: &str, p: &Value) -> Value {
+        let cfg = self.capture.borrow().clone();
+        match operation {
+            "lock" if p["kind"] == "meeting" => {
+                let id = p["key"].clone();
+                let found = self.rows("app.meeting_records").iter().any(|r| r["id"] == id && r["owner_user_id"] == self.actor.get());
+                json!({"found": found})
+            }
+            "lock" => json!({}),
+            "browser" => cfg.browser.map_or(json!({"found": false}), |(id, ends)| json!({"found": true, "sessionId": id, "expiresAt": ends})),
+            "native" => cfg.native.map_or(json!({"found": false}), |(device, rev, ends)| {
+                json!({"found": true, "deviceId": device, "deviceName": "Mac", "capabilityRevision": rev, "expiresAt": ends})
+            }),
+            "recording" => cfg.recording.map_or(json!({"found": false}), |ends| json!({"found": true, "expiresAt": ends})),
+            "processing" => json!({"ready": cfg.route.is_some(), "modelRoute": cfg.route}),
+            other => panic!("unexpected capture operation {other}"),
+        }
+    }
+}
+
+impl Fake {
     /// The transcript store as the host adapter serves it: visible only to the owner.
     fn transcripts(&self, operation: &str, p: &Value) -> Value {
         let actor = self.actor.get();
@@ -219,7 +254,12 @@ impl Host for Fake {
     fn call(&self, port: &str, operation: &str, resource: &str, parameters: Value) -> Result<Value> {
         self.calls.borrow_mut().push(format!("{port}.{operation}.{resource}"));
         match (port, operation) {
-            ("context", "read") => Ok(json!({"now":self.stamp().replace("+00:00", "Z")})),
+            ("context", "read") => Ok(json!({"now":self.stamp().replace("+00:00", "Z"), "actorUserId": self.actor.get()})),
+            ("kv", _) if resource == "meetings.capture" => Ok(self.capture_call(operation, &parameters)),
+            ("jobs", _) if resource == "meetings.capture-maintenance" => {
+                self.jobs.borrow_mut().push((resource.into(), parameters));
+                Ok(json!({}))
+            }
             ("context", "uuid") => {
                 let n = self.ids.get();
                 self.ids.set(n + 1);
@@ -304,6 +344,14 @@ impl Fake {
                         row.insert("created_at".into(), json!(now));
                         row.insert("updated_at".into(), json!(now));
                         row.insert("creation_title".into(), query.values["title"].clone());
+                    }
+                    "app.meeting_capture_grants" => {
+                        let n = self.ids.get();
+                        self.ids.set(n + 1);
+                        row.insert("id".into(), json!(format!("00000000-0000-4000-8000-{n:012x}")));
+                        row.insert("credential_hash".into(), Value::Null);
+                        row.insert("created_at".into(), json!(now));
+                        row.insert("updated_at".into(), json!(now));
                     }
                     "app.meeting_recording_metadata" => {
                         for (k, v) in [("revision", json!(0)), ("type_id", Value::Null), ("type_source", json!("automatic")),

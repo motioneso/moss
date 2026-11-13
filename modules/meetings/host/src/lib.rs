@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 pub mod authority;
 pub mod chat;
+pub mod capture;
 pub mod devices;
 pub mod exports;
 pub mod files;
@@ -38,6 +39,7 @@ pub struct MeetingsPorts {
     chat: Arc<dyn chat::MainChat>,
     voice: Arc<dyn chat::VoiceChat>,
     devices: Arc<dyn devices::RingDevices>,
+    capture_authority: Arc<dyn capture::CaptureAuthority>,
 }
 impl MeetingsPorts {
     pub fn new(database: Database, next: Arc<dyn Ports>) -> Result<Self> {
@@ -49,6 +51,7 @@ impl MeetingsPorts {
             chat: Arc::new(chat::NoMainChat),
             voice: Arc::new(chat::NoVoiceChat),
             devices: Arc::new(devices::AnyDevice),
+            capture_authority: Arc::new(capture::Refusing),
         })
     }
 
@@ -56,6 +59,12 @@ impl MeetingsPorts {
     pub fn with_recordings(mut self, files: &std::path::Path) -> Result<Self> {
         self.recordings = Some(Arc::new(recordings::Recordings::new(&vault::Root::create(files)?)?));
         Ok(self)
+    }
+
+    /// Connects the sign-in, paired-device and model checks for the Mac recorder link.
+    pub fn with_capture_authority(mut self, authority: Arc<dyn capture::CaptureAuthority>) -> Self {
+        self.capture_authority = authority;
+        self
     }
 
     /// Connects the check for which ring devices may upload.
@@ -240,7 +249,7 @@ impl Ports for MeetingsPorts {
 
 impl MeetingsPorts {
     fn invoke_inner(&self, scope: &CallScope, port: &str, request: &Request) -> Result<Value> {
-        let ours = [RESOURCE, store::TRANSCRIPTS, store::HISTORY, store::RECORDING_TYPES, outputs::OUTPUTS, exports::EXPORTS, chat::NOTICE, chat::VOICE, files::FILES];
+        let ours = [RESOURCE, store::TRANSCRIPTS, store::HISTORY, store::RECORDING_TYPES, outputs::OUTPUTS, exports::EXPORTS, chat::NOTICE, chat::VOICE, files::FILES, capture::CAPTURE];
         if port != "kv" || !ours.contains(&request.resource.as_str()) || scope.module().id != "meetings" {
             return self.next.invoke(scope, port, request);
         }
@@ -256,6 +265,9 @@ impl MeetingsPorts {
             let voice = chat::voice(&request.parameters)?;
             let id = self.voice.hand_off(scope.access().actor_user_id(), &voice)?;
             return Ok(serde_json::json!({"requestId": id}));
+        }
+        if request.resource == capture::CAPTURE {
+            return self.capture(scope, request);
         }
         if request.resource == files::FILES {
             return self.files(scope, request);

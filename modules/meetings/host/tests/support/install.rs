@@ -74,6 +74,17 @@ pub fn install_ring(
     chat: Option<Arc<dyn moss_meetings_host::chat::MainChat>>,
     ring: Option<Ring>,
 ) -> Installed {
+    install_all(f, intelligence, chat, ring, None)
+}
+
+/// As `install_ring`, with a stand-in for the Mac link's credential checks.
+pub fn install_all(
+    f: &Fixture,
+    intelligence: Arc<dyn moss_module_host::ai::Intelligence>,
+    chat: Option<Arc<dyn moss_meetings_host::chat::MainChat>>,
+    ring: Option<Ring>,
+    capture: Option<Arc<dyn moss_meetings_host::capture::CaptureAuthority>>,
+) -> Installed {
     f.rt.block_on(async {
         let ready: bool = f.root.query_one("SELECT to_regnamespace('moss_queue') IS NOT NULL", &[]).await.unwrap().get(0);
         if !ready {
@@ -109,6 +120,9 @@ pub fn install_ring(
             let mut ports = moss_meetings_host::MeetingsPorts::new(database, Arc::new(memory))?;
             if let Some((files, voice, devices)) = ring.clone() {
                 ports = ports.with_recordings(&files)?.with_voice_chat(voice).with_devices(devices);
+            }
+            if let Some(authority) = capture.clone() {
+                ports = ports.with_capture_authority(authority);
             }
             Ok(match chat.clone() {
                 Some(chat) => Arc::new(ports.with_chat(chat)) as Arc<dyn moss_module_host::runtime::Ports>,

@@ -22,6 +22,18 @@ pub mod recording_filing;
 pub mod recording_jobs;
 pub mod recording_reading;
 pub mod records;
+pub mod capture_auth;
+pub mod capture_connection;
+pub mod capture_devices;
+pub mod capture_errors;
+pub mod capture_input;
+pub mod capture_limit;
+pub mod capture_maintenance;
+pub mod capture_selection;
+pub mod capture_start;
+pub mod capture_routes;
+pub mod capture_state;
+pub mod capture_store;
 pub mod ring_errors;
 pub mod ring_import;
 pub mod ring_source;
@@ -45,6 +57,9 @@ use serde_json::{json, Value};
 /// Routes use the module-relative path template. The first two failures are the shapes the
 /// TypeScript app returned for an unknown route and for a host failure.
 pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
+    if let Some(response) = capture_routes::dispatch(host, &request) {
+        return response;
+    }
     let records = records::Records::new(host);
     let result = match (request.method.as_str(), request.path.as_str()) {
         ("GET", "/records") => records.list(&request),

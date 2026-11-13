@@ -516,6 +516,19 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
         let (status, text) = call(Method::POST, "/recording-uploads", Some(&cookie), Some(manifest));
         assert!(status == 200 || status == 201, "{status} {text}");
     }
+    // Mac link through the real server. The real host does not yet vouch for browser sessions or
+    // Mac credentials (device pairing is parked), so every capture route refuses with a code only,
+    // for the owner and for another person alike, and a caller with no session never reaches it.
+    let start = json!({"requestKey": K1});
+    for (who, name) in [(&cookie, "owner"), (&other, "other")] {
+        let (status, text) = call(Method::GET, "/capture/devices", Some(who), None);
+        assert_eq!((status, json_of(&text)["code"].clone()), (401, json!("meeting_capture_unavailable")), "{name} {text}");
+        let (status, text) = call(Method::POST, &format!("/records/{pasted}/capture/start"), Some(who), Some(start.clone()));
+        assert_eq!((status, json_of(&text)["code"].clone()), (401, json!("meeting_capture_unavailable")), "{name} {text}");
+        assert!(!text.contains(MARK), "meeting text in a capture refusal");
+    }
+    let (status, _) = call(Method::POST, "/capture/commands", None, Some(json!({"connectionId": K1, "verifier": "x"})));
+    assert_eq!(status, 401);
     assert_eq!(call(Method::DELETE, &format!("/records/{id}"), Some(&cookie), None).0, 204);
     assert_eq!(call(Method::GET, &format!("/records/{id}"), Some(&cookie), None).0, 404);
     // Titles and notes stay out of the server log.

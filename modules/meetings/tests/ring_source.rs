@@ -39,7 +39,7 @@ fn error_codes_match_the_report() {
         concat!(env!("CARGO_MANIFEST_DIR"), "/../../../docs/superpowers/specs/2026-11-11-rust-phase5-meetings-part1-report.md"),
     )
     .expect("report");
-    let section = report.split("## Part 8").nth(1).expect("part 8 section");
+    let section = report.split("## Part 8").nth(1).expect("part 8 section").split("\n## Part 9").next().unwrap();
     let listed: Vec<&str> = section
         .lines()
         .filter_map(|l| l.strip_prefix("| `"))
@@ -167,4 +167,23 @@ fn enablement_request() {
     assert!(parse_enablement(&bad).is_none());
     let loose = json!({"version": 2, "sourceDeviceId": DEVICE, "requestKey": "k", "recordingIds": []});
     assert!(parse_enablement(&loose).is_none());
+}
+
+#[test]
+fn capture_error_codes_match_the_report() {
+    use moss_meetings_module::capture_errors::CaptureCode;
+    let report = std::fs::read_to_string(
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../../../docs/superpowers/specs/2026-11-11-rust-phase5-meetings-part1-report.md"),
+    )
+    .expect("report");
+    let section = report.split("## Part 9").nth(1).expect("part 9 section").split("\n## Part 10").next().unwrap();
+    let mut got: Vec<&str> = section
+        .lines()
+        .filter_map(|l| l.strip_prefix("| `"))
+        .filter_map(|l| l.split('`').next())
+        .collect();
+    let mut want: Vec<&str> = CaptureCode::ALL.iter().map(|c| c.as_str()).collect();
+    want.sort();
+    got.sort();
+    assert_eq!(got, want, "report table and CaptureCode enum differ");
 }

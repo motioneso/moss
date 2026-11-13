@@ -74,3 +74,19 @@ path = "../tests/recording_reading.rs"
 [[test]]
 name = "ring_source"
 path = "../tests/ring_source.rs"
+
+[[test]]
+name = "capture_limit"
+path = "../tests/capture_limit.rs"
+
+[[test]]
+name = "capture_selection"
+path = "../tests/capture_selection.rs"
+
+[[test]]
+name = "capture_devices"
+path = "../tests/capture_devices.rs"
+
+[[test]]
+name = "capture_flow"
+path = "../tests/capture_flow.rs"
