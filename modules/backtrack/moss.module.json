@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "backtrack",
   "name": "Backtrack",
-  "description": "Keeps the screen text a linked Mac sends, private to each account, for 37 days. A person can pause storing, see what is kept and delete it, with or without a Mac linked. A Mac sends its text through the upload route, which checks the Mac's clock, hides secrets again and drops anything inside a time the person already deleted. An hourly job removes old text. Your account export holds your stored text. Searching this text and the Backtrack screen are not part of this package yet.",
+  "description": "Keeps the screen text a linked Mac sends, private to each account, for 37 days. A person can pause storing, see what is kept and delete it, with or without a Mac linked. A Mac sends its text through the upload route, which checks the Mac's clock, hides secrets again and drops anything inside a time the person already deleted. Each person's text is added to Memory's search so it can be found by meaning, and it leaves the search when it is deleted or expires. An hourly job removes old text. Your account export holds your stored text. The Backtrack screen is not part of this package yet.",
   "publisher": "Moss",
   "version": "0.1.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
@@ -44,21 +44,17 @@
     },
     {
       "port": "jobs",
-      "operations": ["schedule"],
-      "resources": ["backtrack.upkeep"]
-    },
-    {
-      "port": "jobs",
-      "operations": ["enqueue-after-commit"],
-      "resources": ["backtrack.index"]
+      "operations": ["schedule", "enqueue-after-commit", "enqueue-options"],
+      "resources": ["backtrack.upkeep", "backtrack.index"]
     }
   ],
   "database": {
-    "migrations": ["sql/0282_backtrack_segments.sql", "sql/0367_backtrack_index_stamp.sql"],
+    "migrations": ["sql/0282_backtrack_segments.sql", "sql/0367_backtrack_index_marks.sql"],
     "ownedTables": [
       "app.backtrack_segments",
       "app.backtrack_preferences",
-      "app.backtrack_deletions"
+      "app.backtrack_deletions",
+      "app.backtrack_index_marks"
     ],
     "ledger": "core-legacy",
     "ownerDelete": ["app.backtrack_deletions"]
@@ -147,6 +143,11 @@
     {
       "id": "backtrack.delete_history",
       "description": "Delete stored Backtrack history through the delete route or in chat. Approval names either all history or the selected time range and says deletion is permanent. It works with no Mac linked, even when storage is off. A later upload from inside a deleted time is discarded.",
+      "errors": []
+    },
+    {
+      "id": "backtrack.search_index",
+      "description": "Stored screen text is added to Memory's search a few minutes after it arrives, so a later search can find it. Deleting history, or text reaching 37 days, removes it from the search as well. If the embedding service is down, the text waits and is retried by the next run or the hourly sweep.",
       "errors": []
     },
     {

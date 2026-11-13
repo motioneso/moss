@@ -25,7 +25,7 @@ pub fn files(root: &Path, component: &[u8]) -> Result<BTreeMap<String, Vec<u8>>>
         } else {
             let bytes = std::fs::read(root.join("modules/backtrack").join(path))?;
             let pinned = match path.as_str() {
-                "sql/0367_backtrack_index_stamp.sql" => "34fa39f2023e9ac7040924a587b78cc156a3beb899cf70bb44290e8c1fe497e7",
+                "sql/0367_backtrack_index_marks.sql" => "cdaaf18395aa2795715df27dedf1c5e2b4668c8f3c05bec86674598fb8daace3",
                 _ => "",
             };
             anyhow::ensure!(moss_module_host::trust::digest(&bytes) == pinned, "Backtrack migration bytes changed: {path}");

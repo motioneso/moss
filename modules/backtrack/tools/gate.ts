@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { getMossDatabaseUrls } from "@moss/db";
 if (process.env.JARVIS_GATE_RUN !== "1") throw new Error("Use verify-gate");
 const urls = getMossDatabaseUrls();
+const targetDir = process.env.CARGO_TARGET_DIR ?? "/tmp/moss-backtrack-host";
 const checks = spawnSync("modules/backtrack/tools/check.sh", {
   stdio: "inherit",
   env: process.env
@@ -33,7 +34,8 @@ for (const name of ["package", "installed"]) {
         JS48_APP_URL: urls.app,
         JS48_BOOTSTRAP_URL: urls.bootstrap,
         JS48_WORKER_URL: urls.worker,
-        BACKTRACK_COMPONENT_WASM: `${process.env.CARGO_TARGET_DIR ?? "/tmp/moss-backtrack-host"}/module.wasm`
+        BACKTRACK_COMPONENT_WASM: `${targetDir}/module.wasm`,
+        MEMORY_CORE_WASM: `${targetDir}/memory-guest/wasm32-unknown-unknown/release/moss_memory.wasm`
       }
     }
   );

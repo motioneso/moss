@@ -30,9 +30,30 @@ impl MacLinks for Macs {
     }
 }
 
+/// A stand-in embedder, so Memory can store a chunk without a real model. It can be made to fail.
+#[derive(Default)]
+pub struct Embedder(pub std::sync::atomic::AtomicBool);
+struct Shared(Arc<Embedder>);
+impl moss_memory_host::ports::Embedder for Shared {
+    fn query(&self, _: &CallScope, _: &str) -> anyhow::Result<Vec<f64>> {
+        Ok(unit())
+    }
+    fn document(&self, _: &CallScope, _: &str) -> anyhow::Result<(Vec<f64>, (String, String))> {
+        anyhow::ensure!(!self.0 .0.load(std::sync::atomic::Ordering::SeqCst), "embedder down");
+        Ok((unit(), ("stand-in".into(), "1".into())))
+    }
+    fn model(&self, _: &CallScope) -> anyhow::Result<(String, String)> {
+        Ok(("stand-in".into(), "1".into()))
+    }
+}
+fn unit() -> Vec<f64> {
+    (0..768).map(|i| if i == 0 { 1.0 } else { 0.0 }).collect()
+}
+
 pub struct Installed {
     pub app: Application,
     pub macs: Arc<Macs>,
+    pub embedder: Arc<Embedder>,
     _folders: (tempfile::TempDir, tempfile::TempDir),
 }
 
@@ -51,7 +72,8 @@ pub fn install(f: &Fixture) -> Installed {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let wasm = std::fs::read(std::env::var("BACKTRACK_COMPONENT_WASM").expect("Run modules/backtrack/tools/check.sh")).unwrap();
     let macs = Arc::new(Macs::default());
-    let (database, links) = (f.db.clone(), macs.clone());
+    let embedder = Arc::new(Embedder::default());
+    let (database, links, shared) = (f.db.clone(), macs.clone(), embedder.clone());
     let app = Application::open_extended_with(
         dir.path(),
         f.db.clone(),
@@ -66,17 +88,23 @@ pub fn install(f: &Fixture) -> Installed {
             fuel_ceiling: Some(250_000_000),
         },
         move |next| {
-            Ok(Arc::new(moss_backtrack_host::BacktrackPorts::new(database, next)?.with_links(links.clone()))
+            let memory = moss_memory_host::ports::MemoryPorts::new(database.clone(), Arc::new(Shared(shared.clone())), next)?;
+            Ok(Arc::new(moss_backtrack_host::BacktrackPorts::new(database, Arc::new(memory))?.with_links(links.clone()))
                 as Arc<dyn moss_module_host::runtime::Ports>)
         },
     )
     .unwrap();
-    let bytes = moss_backtrack_host::package::pack(&root, &wasm).unwrap();
-    let (key, publisher, artifact) = super::registry::publish_as(reg.path(), &bytes, moss_backtrack_host::package::manifest().unwrap(), "backtrack");
-    let source = app
-        .installer
-        .refresh(&f.access(f.a), Source::Folder(reg.path().join("backtrack")), &key, &publisher, "backtrack-test-registry")
-        .unwrap();
-    app.installer.install(&f.access(f.a), &source, &artifact, true).unwrap();
-    Installed { app, macs, _folders: (dir, reg) }
+    let put = |bytes: &[u8], manifest: moss_module_host::manifest::Manifest, label: &str| {
+        let (key, publisher, artifact) = super::registry::publish_as(reg.path(), bytes, manifest, label);
+        let source = app
+            .installer
+            .refresh(&f.access(f.a), Source::Folder(reg.path().join(label)), &key, &publisher, &format!("{label}-test-registry"))
+            .unwrap();
+        app.installer.install(&f.access(f.a), &source, &artifact, true).unwrap();
+    };
+    // Backtrack requires Memory, which is installed as the real package.
+    let core = std::fs::read(std::env::var("MEMORY_CORE_WASM").expect("Run modules/backtrack/tools/check.sh")).unwrap();
+    put(&moss_memory_host::package::pack(&root, &core).unwrap(), moss_memory_host::package::manifest().unwrap(), "memory");
+    put(&moss_backtrack_host::package::pack(&root, &wasm).unwrap(), moss_backtrack_host::package::manifest().unwrap(), "backtrack");
+    Installed { app, macs, embedder, _folders: (dir, reg) }
 }

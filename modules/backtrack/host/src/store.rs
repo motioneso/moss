@@ -107,16 +107,89 @@ pub async fn delete(cx: &DataContext, parameters: &Value) -> Result<Value> {
             &[&from, &to, &at],
         )
         .await?;
-    let deleted = cx
+    let removed = cx
         .db()
-        .execute(
+        .query(
             "DELETE FROM app.backtrack_segments WHERE owner_user_id=app.current_actor_user_id() \
              AND NOT (ended_at < COALESCE($1::text::timestamptz,'-infinity'::timestamptz) \
-             OR started_at >= COALESCE($2::text::timestamptz,'infinity'::timestamptz))",
+             OR started_at >= COALESCE($2::text::timestamptz,'infinity'::timestamptz)) RETURNING id::text",
             &[&from, &Some(to)],
         )
         .await?;
-    Ok(json!({"deleted": deleted}))
+    let ids: Vec<String> = removed.iter().map(|r| r.get::<_, String>(0)).collect();
+    drop_marks(cx, &ids).await?;
+    Ok(json!({"deleted": ids.len()}))
+}
+
+const MODULE_ID: &str = "backtrack";
+
+/// The index marks table belongs to the package, so its statements run as the package role.
+/// Statements on the segment table run as the app role. No statement joins the two.
+async fn as_module(cx: &DataContext) -> Result<()> {
+    cx.db().batch_execute(&format!("SET LOCAL ROLE {}", moss_module_host::database::runtime_role(MODULE_ID))).await?;
+    Ok(())
+}
+
+async fn as_app(cx: &DataContext) -> Result<()> {
+    cx.db().batch_execute("RESET ROLE").await?;
+    Ok(())
+}
+
+/// Removes the index marks of the listed segments.
+async fn drop_marks(cx: &DataContext, ids: &[String]) -> Result<()> {
+    as_module(cx).await?;
+    for part in ids.chunks(IDS_PER_CALL) {
+        cx.db()
+            .execute("DELETE FROM app.backtrack_index_marks WHERE segment_id = ANY($1::text[]::uuid[])", &[&part.to_vec()])
+            .await?;
+    }
+    as_app(cx).await
+}
+
+/// Ids of live segments that have no index mark, oldest first. `older_than_ten_minutes` limits
+/// the scan to segments that have waited too long.
+async fn unindexed(cx: &DataContext, limit: usize, older_than_ten_minutes: bool) -> Result<Vec<String>> {
+    const PAGE: i64 = 500;
+    let age = if older_than_ten_minutes { "AND created_at < now() - interval '10 minutes'" } else { "" };
+    let mut found: Vec<String> = Vec::new();
+    let mut after: Option<(String, String)> = None;
+    loop {
+        let (at, id) = after.clone().unwrap_or_else(|| ("-infinity".to_owned(), "00000000-0000-0000-0000-000000000000".to_owned()));
+        let page = cx
+            .db()
+            .query(
+                &format!(
+                    "SELECT id::text, created_at::text FROM app.backtrack_segments \
+                     WHERE owner_user_id=app.current_actor_user_id() AND {LIVE} {age} \
+                     AND (created_at, id) > ($1::text::timestamptz, $2::text::uuid) ORDER BY created_at, id LIMIT {PAGE}"
+                ),
+                &[&at, &id],
+            )
+            .await?;
+        if page.is_empty() {
+            return Ok(found);
+        }
+        let ids: Vec<String> = page.iter().map(|r| r.get::<_, String>(0)).collect();
+        after = page.last().map(|r| (r.get::<_, String>(1), r.get::<_, String>(0)));
+        as_module(cx).await?;
+        let marked = cx
+            .db()
+            .query("SELECT segment_id::text FROM app.backtrack_index_marks WHERE segment_id = ANY($1::text[]::uuid[])", &[&ids])
+            .await?;
+        as_app(cx).await?;
+        let marked: std::collections::HashSet<String> = marked.iter().map(|r| r.get::<_, String>(0)).collect();
+        for id in ids {
+            if !marked.contains(&id) {
+                found.push(id);
+                if found.len() >= limit {
+                    return Ok(found);
+                }
+            }
+        }
+        if page.len() < PAGE as usize {
+            return Ok(found);
+        }
+    }
 }
 
 const LIVE: &str = "started_at >= now() - interval '37 days' AND created_at >= now() - interval '37 days'";
@@ -176,34 +249,25 @@ pub async fn upkeep(cx: &DataContext, parameters: &Value) -> Result<Value> {
             &[],
         )
         .await?;
+    drop_marks(cx, &ids).await?;
     Ok(json!({"segments": segments, "markers": markers}))
 }
 
 /// Whether any text has waited over ten minutes without being indexed.
 pub async fn stale(cx: &DataContext) -> Result<Value> {
-    let found: bool = cx
-        .db()
-        .query_one(
-            "SELECT EXISTS(SELECT 1 FROM app.backtrack_segments WHERE owner_user_id=app.current_actor_user_id() \
-             AND indexed_at IS NULL AND created_at < now() - interval '10 minutes')",
-            &[],
-        )
-        .await?
-        .get(0);
-    Ok(json!({"stale": found}))
+    Ok(json!({"stale": !unindexed(cx, 1, true).await?.is_empty()}))
 }
 
 /// The oldest unindexed live segments, for the index job.
 pub async fn pending(cx: &DataContext) -> Result<Value> {
+    let ids = unindexed(cx, 200, false).await?;
     let rows = cx
         .db()
         .query(
-            &format!(
-                "SELECT jsonb_build_object('id',id::text,'windowTitle',window_title,'address',address,'body',body) \
-                 FROM app.backtrack_segments WHERE owner_user_id=app.current_actor_user_id() \
-                 AND indexed_at IS NULL AND {LIVE} ORDER BY created_at, id LIMIT 200"
-            ),
-            &[],
+            "SELECT jsonb_build_object('id',id::text,'windowTitle',window_title,'address',address,'body',body) \
+             FROM app.backtrack_segments WHERE owner_user_id=app.current_actor_user_id() \
+             AND id = ANY($1::text[]::uuid[]) ORDER BY created_at, id",
+            &[&ids],
         )
         .await?;
     Ok(json!({"segments": rows.iter().map(|r| r.get::<_, Value>(0)).collect::<Vec<_>>()}))
@@ -211,14 +275,27 @@ pub async fn pending(cx: &DataContext) -> Result<Value> {
 
 pub async fn mark_indexed(cx: &DataContext, parameters: &Value) -> Result<Value> {
     let ids = uuids(parameters, "ids", 200)?;
-    let marked = cx
+    let mine: Vec<String> = cx
         .db()
-        .execute(
-            "UPDATE app.backtrack_segments SET indexed_at=now() WHERE owner_user_id=app.current_actor_user_id() \
+        .query(
+            "SELECT id::text FROM app.backtrack_segments WHERE owner_user_id=app.current_actor_user_id() \
              AND id = ANY($1::text[]::uuid[])",
             &[&ids],
         )
+        .await?
+        .iter()
+        .map(|r| r.get::<_, String>(0))
+        .collect();
+    as_module(cx).await?;
+    let marked = cx
+        .db()
+        .execute(
+            "INSERT INTO app.backtrack_index_marks(segment_id,owner_user_id) \
+             SELECT x, app.current_actor_user_id() FROM unnest($1::text[]::uuid[]) AS x ON CONFLICT (segment_id) DO NOTHING",
+            &[&mine],
+        )
         .await?;
+    as_app(cx).await?;
     Ok(json!({"marked": marked}))
 }
 
@@ -270,7 +347,7 @@ pub async fn export(cx: &DataContext) -> Result<Value> {
                 "SELECT jsonb_build_object('id',id::text,'ownerUserId',owner_user_id::text,'deviceId',device_id::text,\
                  'startedAt',to_char(started_at AT TIME ZONE 'UTC','{TIME}'),'endedAt',to_char(ended_at AT TIME ZONE 'UTC','{TIME}'),\
                  'appName',app_name,'bundleId',bundle_id,'windowTitle',window_title,'address',address,'body',body,\
-                 'bodyHash',encode(body_hash,'hex'),'indexedAt',to_char(indexed_at AT TIME ZONE 'UTC','{TIME}'),\
+                 'bodyHash',encode(body_hash,'hex'),'indexedAt',NULL::text,\
                  'createdAt',to_char(created_at AT TIME ZONE 'UTC','{TIME}'),\
                  'clientStartedAt',to_char(client_started_at AT TIME ZONE 'UTC','{TIME}')) \
                  FROM app.backtrack_segments WHERE owner_user_id=app.current_actor_user_id() ORDER BY started_at DESC, id"
@@ -278,5 +355,18 @@ pub async fn export(cx: &DataContext) -> Result<Value> {
             &[],
         )
         .await?;
-    Ok(Value::Array(rows.iter().map(|r| r.get::<_, Value>(0)).collect()))
+    let mut out: Vec<Value> = rows.iter().map(|r| r.get::<_, Value>(0)).collect();
+    as_module(cx).await?;
+    let marks = cx
+        .db()
+        .query(&format!("SELECT segment_id::text, to_char(indexed_at AT TIME ZONE 'UTC','{TIME}') FROM app.backtrack_index_marks"), &[])
+        .await?;
+    as_app(cx).await?;
+    let marks: std::collections::HashMap<String, String> = marks.iter().map(|r| (r.get(0), r.get(1))).collect();
+    for row in &mut out {
+        if let Some(at) = row["id"].as_str().and_then(|id| marks.get(id)) {
+            row["indexedAt"] = json!(at);
+        }
+    }
+    Ok(Value::Array(out))
 }
