@@ -7,5 +7,6 @@ pub mod fixtures;
 pub mod google;
 pub mod imap;
 pub mod mail;
+pub mod outlook;
 pub mod smtp;
 pub mod tls;
