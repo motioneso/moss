@@ -98,3 +98,15 @@ fn changing_one_byte_of_the_legacy_sql_stops_the_build() {
     let err = moss_briefings_host::package::files(copy, &component()).unwrap_err();
     assert!(format!("{err:#}").contains("Legacy Briefings SQL changed"), "{err:#}");
 }
+
+#[test]
+fn the_chat_tools_are_declared_so_the_host_asks_before_a_rerun_and_not_before_a_read() {
+    let m = moss_briefings_host::package::manifest().unwrap();
+    let rerun = &m.tools["briefings.rerun"];
+    assert_eq!((rerun.risk.as_str(), rerun.approval_version), ("write", true));
+    assert_eq!(m.tools["briefings.getRunStatus"].risk, "read");
+    assert_eq!(
+        m.capability("tools").unwrap().resources,
+        ["briefings.rerun".to_owned(), "briefings.getRunStatus".to_owned()].into_iter().collect()
+    );
+}

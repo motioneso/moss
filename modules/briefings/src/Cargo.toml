@@ -72,3 +72,7 @@ path = "../tests/evening.rs"
 [[test]]
 name = "auto_plan"
 path = "../tests/auto_plan.rs"
+
+[[test]]
+name = "tools"
+path = "../tests/tools.rs"

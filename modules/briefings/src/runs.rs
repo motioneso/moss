@@ -16,7 +16,7 @@ pub const NOT_AVAILABLE: &str = "Briefing run is missing or owned by someone els
 pub const NOT_AVAILABLE_CODE: &str = "briefing_run_not_available";
 pub const IN_FLIGHT_CODE: &str = "briefing_run_in_flight";
 
-fn is_fallback(metadata: &Value) -> bool {
+pub(crate) fn is_fallback(metadata: &Value) -> bool {
     metadata["degraded"] == json!(true) && !metadata["aiModel"].is_object()
 }
 
@@ -38,7 +38,7 @@ fn collapse(part: &str) -> String {
     out
 }
 
-fn short_hash(parts: &[&str]) -> String {
+pub(crate) fn short_hash(parts: &[&str]) -> String {
     let joined = parts.iter().map(|p| collapse(p)).collect::<Vec<_>>().join("|");
     let digest = Sha256::digest(joined.as_bytes());
     digest.iter().take(8).map(|b| format!("{b:02x}")).collect()
@@ -52,6 +52,11 @@ fn priority_band(score: &Value) -> Value {
         Some(s) if s >= 30.0 => json!("normal"),
         Some(_) => json!("low"),
     }
+}
+
+/// The stable feedback id of one stored signal.
+pub(crate) fn signal_item_id(kind: &str, signal_type: &str, summary: &str) -> String {
+    format!("{kind}:{signal_type}:{}", short_hash(&[kind, signal_type, summary]))
 }
 
 /// Feedback targets the stored calendar and email signals give rise to.
@@ -68,7 +73,7 @@ fn feedback_items(metadata: &Value) -> Vec<Value> {
                 meta.insert("calendarFollowThrough".into(), signal["followThrough"].clone());
             }
             items.push(json!({
-                "feedbackItemId": format!("{kind}:{kind_of}:{}", short_hash(&[kind, kind_of, summary])),
+                "feedbackItemId": signal_item_id(kind, kind_of, summary),
                 "targetKind": "briefing_item",
                 "surface": "briefing",
                 "sourceKind": kind,
@@ -131,7 +136,7 @@ fn not_found(error: &str) -> Response {
     Response::new(404, json!({"error":error}))
 }
 
-fn run_rows<H: Host + ?Sized>(host: &H, definition_id: &str) -> Result<Vec<Value>> {
+pub(crate) fn run_rows<H: Host + ?Sized>(host: &H, definition_id: &str) -> Result<Vec<Value>> {
     let mut query = Query::select(Filter::eq("definition_id", definition_id));
     query.order = vec![
         Order { column: "created_at".into(), descending: true },
@@ -172,7 +177,7 @@ fn plan_state(stored: &Value) -> Value {
     json!({"status":"unavailable","storedRevision":revision,"currentRevision":null,"current":null})
 }
 
-fn is_uuid(text: &str) -> bool {
+pub(crate) fn is_uuid(text: &str) -> bool {
     text.len() == 36
         && text.char_indices().all(|(i, c)| match i {
             8 | 13 | 18 | 23 => c == '-',

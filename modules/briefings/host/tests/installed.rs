@@ -14,6 +14,7 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 
 const MARK: &str = "PLANTED-MARKER-4f1c9b";
+const TOOL_TEXT: &str = "WRITTEN-BY-TOOL-RUN-7d2e";
 
 /// Stands in for the router. The reply is set per test and every prompt is kept for checks.
 #[derive(Default)]
@@ -131,6 +132,20 @@ impl World {
                 .unwrap(),
         )
         .unwrap()
+    }
+    /// Runs one chat tool through the installed package, as the signed-in person.
+    fn tool(&self, actor: uuid::Uuid, name: &str, parameters: Value, version: Option<&str>) -> Value {
+        let mut payload = json!({"tool":name,"parameters":parameters});
+        if let Some(v) = version {
+            payload["approvalVersion"] = json!(v);
+        }
+        let out = self.app.installer.call("briefings", self.f.access(actor), "tool", &payload.to_string()).unwrap();
+        serde_json::from_str(&out).unwrap()
+    }
+    fn card_version(&self, actor: uuid::Uuid, input: Value) -> String {
+        let payload = json!({"name":"prepareBriefingAction","parameters":{"tool":"briefings.rerun","inputJson":input.to_string()}});
+        let out = self.app.installer.call("briefings", self.f.access(actor), "api", &payload.to_string()).unwrap();
+        serde_json::from_str::<Value>(&out).unwrap()["ok"]["version"].as_str().unwrap().to_owned()
     }
     /// Runs the worker until the queue has nothing due.
     fn work(&self) {
@@ -641,4 +656,67 @@ fn an_evening_run_is_written_through_the_router_for_the_owner_only_and_leaks_now
     println!("RED: with row security removed from the runs table B reads A's evening text");
     assert_eq!(others(b), 0, "restored");
     println!("GREEN: row security restored");
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn chat_tools_act_only_for_the_signed_in_person_and_leave_no_text_in_any_side_table() {
+    let w = World::new("UTC");
+    let (a, b) = (w.f.a, w.f.b);
+    zone_for(&w, b, "UTC");
+    *w.ai.reply.lock().unwrap() = Some(format!("Calm morning {TOOL_TEXT}."));
+    let id = make_definition(&w, a, "manual");
+    w.f.rt
+        .block_on(w.f.root.execute(
+            "INSERT INTO app.shares(resource_type,resource_id,owner_user_id,grantee_user_id,level) VALUES('briefing_definition',$1,$2,$3,'view')",
+            &[&id.parse::<uuid::Uuid>().unwrap(), &a, &b],
+        ))
+        .unwrap();
+    let by_id = json!({"definitionId":id});
+    let version = w.card_version(a, by_id.clone());
+    // B can read the shared definition. B still gets no card and no run.
+    let payload = json!({"name":"prepareBriefingAction","parameters":{"tool":"briefings.rerun","inputJson":by_id.to_string()}});
+    let card = w.app.installer.call("briefings", w.f.access(b), "api", &payload.to_string()).unwrap();
+    assert!(serde_json::from_str::<Value>(&card).unwrap()["ok"].is_null(), "B must get no approval card for A's briefing");
+    assert_eq!(w.tool(b, "briefings.rerun", by_id.clone(), Some(&version))["data"]["status"], "no_briefing");
+    let queue_rows = |who| -> i64 {
+        rows_as(&w.f, who, "SELECT count(*) FROM moss_queue.jobs WHERE queue LIKE '%.briefings-run-now'", &[])[0].get(0)
+    };
+    assert_eq!(queue_rows(a), 0);
+    // A queues a run, and a second ask reports it as running.
+    let queued = w.tool(a, "briefings.rerun", by_id.clone(), Some(&version));
+    assert_eq!(queued["data"]["status"], "queued", "{queued}");
+    assert_eq!(w.tool(a, "briefings.rerun", by_id.clone(), Some(&version))["data"]["status"], "already_running");
+    assert_eq!(queue_rows(a), 1);
+    let (job, run) = (queued["data"]["jobId"].as_str().unwrap().to_owned(), queued["data"]["runId"].as_str().unwrap().to_owned());
+    let status = |who, p: Value| w.tool(who, "briefings.getRunStatus", p, None);
+    let probe = json!({"runId":run,"jobId":job,"definitionId":id});
+    assert_eq!(status(a, probe.clone())["data"]["state"], "pending");
+    assert_eq!(status(b, probe.clone())["data"]["state"], "not_found");
+    println!("GREEN: B sees not_found for A's queued run and no approval card");
+
+    // With row security removed from the queue, the same status read leaks the pending state.
+    w.f.rt.block_on(w.f.root.batch_execute("ALTER TABLE moss_queue.jobs DISABLE ROW LEVEL SECURITY")).unwrap();
+    let open = status(b, probe.clone());
+    w.f.rt.block_on(w.f.root.batch_execute("ALTER TABLE moss_queue.jobs ENABLE ROW LEVEL SECURITY; ALTER TABLE moss_queue.jobs FORCE ROW LEVEL SECURITY")).unwrap();
+    assert_eq!(open["data"]["state"], "pending", "RED expected: B sees A's queued run with row security removed, got {open}");
+    println!("RED: with row security removed from the queue B sees A's queued run");
+    assert_eq!(status(b, probe.clone())["data"]["state"], "not_found", "restored");
+
+    // The run finishes. The text is readable by A only, and no side table carries it.
+    w.work();
+    let done = status(a, json!({"runId":run}));
+    assert_eq!(done["data"]["state"], "ready", "{done}");
+    assert_eq!(done["content"], "outside");
+    assert_eq!(status(b, json!({"runId":run}))["data"]["state"], "not_found");
+    let tables: Vec<String> = w.f.rt.block_on(async {
+        w.f.root.query(
+            "SELECT table_schema||'.'||table_name FROM information_schema.tables WHERE table_schema IN ('moss_queue','moss_modules') \
+             OR table_name IN ('notifications','moss_activity_detail','moss_error_log','moss_action_audit_log','moss_model_activity_log')", &[])
+            .await.unwrap().iter().map(|r| r.get(0)).collect()
+    });
+    for table in &tables {
+        let hits: i64 = w.f.rt.block_on(w.f.root.query_one(&format!("SELECT count(*) FROM {table} t WHERE to_jsonb(t)::text LIKE '%'||$1||'%'"), &[&TOOL_TEXT])).unwrap().get(0);
+        assert_eq!(hits, 0, "{table} holds the written text");
+    }
 }

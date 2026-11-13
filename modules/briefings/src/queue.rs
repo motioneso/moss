@@ -48,6 +48,32 @@ pub fn read_job<H: Host + ?Sized>(host: &H, job_id: &str) -> Result<Option<Job>>
     Ok(job_of(&answer["job"]))
 }
 
+/// One of the caller's own jobs from either queue. A scheduled fire holds no run id yet.
+pub fn read_any_job<H: Host + ?Sized>(host: &H, job_id: &str) -> Result<Option<Job>> {
+    for queue in [MANUAL, SCHEDULED] {
+        let answer = host.call("jobs", "read", queue, json!({"id":job_id}))?;
+        if let Some(job) = job_of(&answer["job"]) {
+            return Ok(Some(job));
+        }
+    }
+    Ok(None)
+}
+
+/// The caller's oldest queued or running job for one definition, from the manual queue or the
+/// schedule. Chat and Today share one answer, so neither starts a second run.
+pub fn find_open<H: Host + ?Sized>(host: &H, definition_id: &str) -> Result<Option<Job>> {
+    if let Some(job) = find_in_flight(host, definition_id)? {
+        return Ok(Some(job));
+    }
+    let answer = host.call("jobs", "list-open", SCHEDULED, json!({}))?;
+    Ok(answer["jobs"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(job_of)
+        .find(|job| job.definition_id.as_deref() == Some(definition_id)))
+}
+
 fn read_by_key<H: Host + ?Sized>(host: &H, key: &str) -> Result<Option<Job>> {
     let answer = host.call("jobs", "read", MANUAL, json!({"idempotencyKey":key}))?;
     Ok(job_of(&answer["job"]))

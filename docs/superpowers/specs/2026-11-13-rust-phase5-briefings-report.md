@@ -340,3 +340,51 @@ same way the morning briefing does. It reads only that person's own tasks, calen
   goals, sports and news.
 - The Calendar preference settings for signals still use the old defaults.
 - Reaching the server from a phone or second computer was not checked.
+
+## Briefings chat tools and actions (part 21)
+
+What was built:
+
+- Chat can re-run one of the person's own briefings (by type or by id). The run is queued only after
+  the person approves it. Approval is tied to the briefing's saved version, so an edit after approval
+  makes the old approval useless.
+- Chat can check a run: ready, still going, failed or not found. A scheduled run has no run number
+  while it waits, so it is followed by its job number and briefing.
+- A second re-run while one is still going is refused and reports "already running". This covers both
+  manual and scheduled runs.
+- Another person's briefing, run or job looks the same as one that does not exist. A briefing that
+  was only shared with the person can be seen but never re-run.
+- The approval card shows the briefing the person is about to re-run, built only from their own copy.
+- Briefing text that a status check returns is marked as outside text. A run written without the
+  model reads back with empty text.
+- A check that lets another module confirm a feedback target (a run, or one item in a run) belongs to
+  the person who is giving feedback.
+- The briefing text is never in a job, a log line, a notification or an activity row.
+
+Ported from the old tests: queued job holds only ids, shared briefings never picked, already-running
+from both queues, exactly one selector, stale or missing approval refused, missing briefing, status
+for ready, pending, failed and not found, another person's run and job.
+
+| Claim                                                                   | Where it was shown                      |
+| ----------------------------------------------------------------------- | --------------------------------------- |
+| Tools act only for the signed-in person                                 | native tests and the real-database test |
+| Second person blocked, and the block fails when row security is removed | real-database test, red then green      |
+| Briefing text in no job, notification or log table                      | real-database test                      |
+| Approval needed for a re-run, not for a status check                    | package test on the declared tools      |
+| Native and WebAssembly builds, tests in both                            | gate                                    |
+| The package with the new tools installs and serves on the real server   | live run                                |
+
+Not proven:
+
+- A real person's chat is not ported to the Rust app yet, so "through chat" here means through the
+  host's tool service and the installed package. No chat window ever called these tools.
+- The real server has no web route to the tool service, so the tools were not called over HTTPS.
+- The old app let the person set re-runs to run without asking. The host asks for every re-run, so
+  that setting is not honoured.
+- No chat layer reads the outside-text marker yet.
+- The feedback check takes the stored feedback record from its caller, because the Rust app has no
+  feedback module yet.
+- The paired-device credential check was parked by Ben and is not built.
+- Two re-run requests at the very same moment, one from chat and one from the manual button, could
+  each pass the "already running" check and both queue a run. The manual button already allowed
+  repeat runs, so this was not closed.
