@@ -197,7 +197,7 @@
   ],
   "requires": {
     "email": ">=0.4.0, <1.0.0",
-    "calendar": ">=0.29.0, <1.0.0"
+    "calendar": ">=0.30.0, <1.0.0"
   },
   "provides": {
     "listCalendarContext": "1.0.0",

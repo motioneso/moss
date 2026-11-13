@@ -49,3 +49,7 @@ path = "tests/auto_plan.rs"
 [[test]]
 name = "preview"
 path = "tests/preview.rs"
+
+[[test]]
+name = "mirror"
+path = "tests/mirror.rs"
