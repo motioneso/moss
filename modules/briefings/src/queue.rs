@@ -145,10 +145,18 @@ pub fn start_manual<H: Host + ?Sized>(
     if held.state == JobState::Pending {
         return Ok(Started::InFlight);
     }
-    // The first job is finished, so the same key starts a new run.
-    let again = key_id(definition_id, key, Some(&held.id));
-    Ok(match send(host, definition_id, &run_id, briefing_type, &again, &now)? {
-        Some(job_id) => Started::Queued { job_id, run_id },
-        None => Started::InFlight,
-    })
+    // The first job is finished, so the same key starts a new run. Each finished job leads to the
+    // next derived key, until one is free or still running.
+    let mut held = held;
+    for _ in 0..50 {
+        let again = key_id(definition_id, key, Some(&held.id));
+        if let Some(job_id) = send(host, definition_id, &run_id, briefing_type, &again, &now)? {
+            return Ok(Started::Queued { job_id, run_id });
+        }
+        match read_by_key(host, &again)? {
+            Some(next) if next.state != JobState::Pending => held = next,
+            _ => return Ok(Started::InFlight),
+        }
+    }
+    Ok(Started::Failed)
 }

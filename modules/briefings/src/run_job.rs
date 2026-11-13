@@ -81,7 +81,9 @@ fn local_day<H: Host + ?Sized>(host: &H, at: &str) -> Result<String> {
 
 /// A scheduled run already stored for the owner's current local day.
 fn todays_scheduled_run<H: Host + ?Sized>(host: &H, definition_id: &str, now: &str) -> Result<Option<String>> {
-    let mut query = Query::select(Filter::eq("definition_id", definition_id));
+    let mut query = Query::select(Filter::And {
+        filters: vec![Filter::eq("definition_id", definition_id), Filter::eq("run_kind", "scheduled")],
+    });
     query.order = vec![
         Order { column: "created_at".into(), descending: true },
         Order { column: "id".into(), descending: false },
@@ -174,6 +176,12 @@ pub fn run<H: Host + ?Sized, C: Composer>(host: &H, composer: &C, fire: &Fire) -
         return Ok(Outcome::of("gone", None));
     }
     if fire.scheduled {
+        // A fire already queued when the owner switched scheduling off does nothing.
+        if !definition["enabled"].as_bool().unwrap_or(false)
+            || definition["cadence"].as_str().unwrap_or("manual") == "manual"
+        {
+            return Ok(Outcome::of("skipped", None));
+        }
         if !aligned(host, &definition, instant(&now)?) {
             return Ok(Outcome::of("skipped", None));
         }

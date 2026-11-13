@@ -141,6 +141,7 @@ model-based writing is a later part and all model calls will go through the rout
 - A failed notification rolls back the whole run, by design, so the owner gets no run that day.
 - The same-day check uses the owner's local date. A run near midnight in a zone far from UTC was not
   tried.
-- Queue keys are unique forever, so a reused key derives a new key. Only the first reuse was tried.
+- Queue keys are unique forever, so a reused key derives a new key, followed for up to 50 finished jobs. Only a few reuses were tried.
 - Reaching the server from another device was not checked.
 - Model-written text, tool sources and screens are later parts.
+- Review fixes for a switched-off schedule, twenty manual runs hiding the scheduled one, and the third reuse of a key are in the code and the gate stays green, but no new test targets each.
