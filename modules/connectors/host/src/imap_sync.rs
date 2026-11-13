@@ -34,14 +34,14 @@ pub trait Io: AsyncRead + AsyncWrite + Unpin + Send + Debug {}
 impl<T: AsyncRead + AsyncWrite + Unpin + Send + Debug> Io for T {}
 type Stream = Box<dyn Io>;
 
-enum Fail {
+pub(crate) enum Fail {
     Auth,
     Tls,
     Unreachable,
 }
 
 impl Fail {
-    fn answer(&self) -> Value {
+    pub(crate) fn answer(&self) -> Value {
         let result = match self {
             Fail::Auth => "auth_failed",
             Fail::Tls => "tls_failed",
@@ -142,15 +142,15 @@ async fn finish(cx: &DataContext, id: Uuid, p: &Value) -> Result<Value> {
     Ok(json!({"saved":true}))
 }
 
-struct Login {
-    servers: Servers,
-    trust: Trust,
-    username: String,
-    password: String,
+pub(crate) struct Login {
+    pub(crate) servers: Servers,
+    pub(crate) trust: Trust,
+    pub(crate) username: String,
+    pub(crate) password: String,
 }
 
 /// The person's mail login, or None when the account is revoked, gone or not a mail account.
-async fn login(
+pub(crate) async fn login(
     cx: &DataContext,
     cipher: &JsonSecretCipher,
     config: &MailConfig,
@@ -182,7 +182,7 @@ async fn login(
     Ok(Some(Login { servers, trust, username, password }))
 }
 
-async fn open(login: &Login) -> std::result::Result<Session<Stream>, Fail> {
+pub(crate) async fn open(login: &Login) -> std::result::Result<Session<Stream>, Fail> {
     let servers = &login.servers;
     let tcp = TcpStream::connect((servers.imap_host.as_str(), servers.imap_port))
         .await

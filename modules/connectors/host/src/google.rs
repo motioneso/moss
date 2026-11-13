@@ -116,6 +116,20 @@ impl GoogleConfig {
     /// A read from the Gmail or Calendar API. The outer error is a transport failure. The
     /// answer is the status and the body. Nothing here records the token or the body.
     pub(crate) async fn get(&self, url: Url, token: &str) -> Result<(u16, Vec<u8>)> {
+        self.request(Method::GET, url, token, None, HTTP_LIMIT).await
+    }
+
+    /// A write to the Gmail or Calendar API. It is sent once and never retried, because a
+    /// repeated send would send twice. `limit` bounds the HTTP call itself, so the request
+    /// cannot finish after the caller has already reported a failure.
+    pub(crate) async fn request(
+        &self,
+        method: Method,
+        url: Url,
+        token: &str,
+        body: Option<Value>,
+        limit: Duration,
+    ) -> Result<(u16, Vec<u8>)> {
         let transport = Arc::clone(&self.transport);
         let (hosts, allow_private) = (self.api_hosts.clone(), self.allow_private);
         let mut headers = HeaderMap::new();
@@ -128,10 +142,10 @@ impl GoogleConfig {
                 url: &url,
                 hosts: &hosts,
                 allow_private,
-                method: Method::GET,
+                method,
                 headers,
-                body: None,
-                timeout: HTTP_LIMIT,
+                body,
+                timeout: limit.min(HTTP_LIMIT),
             })
         })
         .await
@@ -503,13 +517,10 @@ async fn post_token(
 struct PlainHttp;
 impl Transport for PlainHttp {
     fn send(&self, r: Outbound<'_>) -> Result<Response> {
-        let fields: Option<Vec<(String, String)>> = r.body.as_ref().map(|body| {
-            body.as_object()
-                .into_iter()
-                .flatten()
-                .filter_map(|(k, v)| v.as_str().map(|v| (k.clone(), v.to_string())))
-                .collect()
-        });
+        let form = r
+            .headers
+            .get(reqwest::header::CONTENT_TYPE)
+            .is_some_and(|h| h == "application/x-www-form-urlencoded");
         let mut request = reqwest::blocking::Client::builder()
             .no_proxy()
             .redirect(reqwest::redirect::Policy::none())
@@ -517,8 +528,18 @@ impl Transport for PlainHttp {
             .build()?
             .request(r.method, r.url.clone())
             .headers(r.headers);
-        if let Some(fields) = &fields {
-            request = request.form(fields);
+        if let Some(body) = &r.body {
+            if form {
+                let fields: Vec<(String, String)> = body
+                    .as_object()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|(k, v)| v.as_str().map(|v| (k.clone(), v.to_string())))
+                    .collect();
+                request = request.form(&fields);
+            } else {
+                request = request.json(body);
+            }
         }
         let response = request
             .send()

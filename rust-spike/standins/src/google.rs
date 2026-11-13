@@ -64,6 +64,7 @@ struct State_ {
     history_id: u64,
     oldest_history_id: u64,
     sent: Vec<String>,
+    drafts: Vec<(String, Option<String>)>,
     events: Vec<Value>,
     deleted_events: HashSet<String>,
     rate_limit_left: u32,
@@ -97,6 +98,7 @@ impl GoogleStandIn {
             history_id: 4821,
             oldest_history_id: 4821,
             sent: vec![],
+            drafts: vec![],
             events: vec![],
             deleted_events: HashSet::new(),
             rate_limit_left: 0,
@@ -107,6 +109,8 @@ impl GoogleStandIn {
             .route("/gmail/v1/users/me/profile", get(profile))
             .route("/gmail/v1/users/me/messages", get(list_messages))
             .route("/gmail/v1/users/me/messages/send", post(send))
+            .route("/gmail/v1/users/me/drafts", post(create_draft))
+            .route("/calendar/v3/freeBusy", post(free_busy))
             .route("/gmail/v1/users/me/messages/{id}", get(get_message))
             .route("/gmail/v1/users/me/history", get(history))
             .route("/calendar/v3/users/me/calendarList", get(calendar_list))
@@ -211,6 +215,11 @@ impl GoogleStandIn {
     /// Messages sent through the send endpoint, as decoded RFC 822 text.
     pub fn sent(&self) -> Vec<String> {
         self.with(|s| s.sent.clone())
+    }
+
+    /// Drafts saved through the drafts endpoint, as decoded RFC 822 text with the thread id sent.
+    pub fn drafts(&self) -> Vec<(String, Option<String>)> {
+        self.with(|s| s.drafts.clone())
     }
 
     /// Adds a calendar event directly, as if made in Google's own calendar.
@@ -510,6 +519,53 @@ async fn send(State(st): State<Shared>, h: HeaderMap, body: Bytes) -> Response {
     json_response(200, json!({"id": id, "threadId": thread, "labelIds": ["SENT"]}).to_string())
 }
 
+async fn create_draft(State(st): State<Shared>, h: HeaderMap, body: Bytes) -> Response {
+    guarded!(st, "POST", "/gmail/v1/users/me/drafts", h);
+    let parsed: Option<Value> = serde_json::from_slice(&body).ok();
+    let message = parsed.as_ref().map(|v| &v["message"]);
+    let raw = message
+        .and_then(|m| m.get("raw")?.as_str())
+        .and_then(|r| URL_SAFE_NO_PAD.decode(r.trim_end_matches('=')).ok())
+        .and_then(|b| String::from_utf8(b).ok());
+    let Some(raw) = raw else {
+        return json_response(400, fx::ERROR_400_INVALID_RAW.into());
+    };
+    let thread = message.and_then(|m| m.get("threadId")?.as_str().map(String::from));
+    let mut s = st.lock().unwrap();
+    s.counter += 1;
+    let id = format!("r-{}", s.counter);
+    let message_id = format!("18c3f2a1b4d5e{:03x}", 0x6f7 + s.counter);
+    s.drafts.push((raw, thread.clone()));
+    let thread = thread.unwrap_or_else(|| message_id.clone());
+    json_response(
+        200,
+        json!({"id": id, "message": {"id": message_id, "threadId": thread, "labelIds": ["DRAFT"]}}).to_string(),
+    )
+}
+
+/// Busy blocks are the timed events that overlap the asked window, as Google reports them.
+async fn free_busy(State(st): State<Shared>, h: HeaderMap, body: Bytes) -> Response {
+    guarded!(st, "POST", "/calendar/v3/freeBusy", h);
+    let input: Value = serde_json::from_slice(&body).unwrap_or(Value::Null);
+    let (min, max) = (input["timeMin"].as_str().unwrap_or(""), input["timeMax"].as_str().unwrap_or(""));
+    let id = input["items"][0]["id"].as_str().unwrap_or("primary").to_string();
+    let s = st.lock().unwrap();
+    let busy: Vec<Value> = s
+        .events
+        .iter()
+        .filter_map(|e| {
+            let (a, b) = (e["start"]["dateTime"].as_str()?, e["end"]["dateTime"].as_str()?);
+            let (pa, pb) = (chrono::DateTime::parse_from_rfc3339(a).ok()?, chrono::DateTime::parse_from_rfc3339(b).ok()?);
+            let (lo, hi) = (chrono::DateTime::parse_from_rfc3339(min).ok()?, chrono::DateTime::parse_from_rfc3339(max).ok()?);
+            (pa < hi && pb > lo).then(|| json!({"start": a, "end": b}))
+        })
+        .collect();
+    json_response(
+        200,
+        json!({"kind": "calendar#freeBusy", "timeMin": min, "timeMax": max, "calendars": {id: {"busy": busy}}}).to_string(),
+    )
+}
+
 // ---- Calendar ----
 
 async fn calendar_list(State(st): State<Shared>, h: HeaderMap) -> Response {
@@ -540,6 +596,12 @@ async fn insert_event(State(st): State<Shared>, h: HeaderMap, Path(_cal): Path<S
         return json_response(400, fx::ERROR_400_INVALID_RAW.into());
     };
     let mut s = st.lock().unwrap();
+    // Google refuses a client-chosen id that already exists.
+    if let Some(taken) = input["id"].as_str() {
+        if s.events.iter().any(|e| e["id"] == taken) || s.deleted_events.contains(taken) {
+            return json_response(409, json!({"error":{"code":409,"message":"The requested identifier already exists.","errors":[{"domain":"global","reason":"duplicate","message":"The requested identifier already exists."}],"status":"ALREADY_EXISTS"}}).to_string());
+        }
+    }
     s.counter += 1;
     let mut ev: Value = serde_json::from_str(fx::CALENDAR_EVENT).unwrap();
     let id = format!("fakeevent{:04}", s.counter);

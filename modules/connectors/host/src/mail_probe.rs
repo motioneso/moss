@@ -175,7 +175,12 @@ where
     }
 }
 
-async fn smtp(servers: &Servers, trust: &Trust, username: &str, password: &str) -> Outcome {
+pub(crate) fn smtp_transport(
+    servers: &Servers,
+    trust: &Trust,
+    username: &str,
+    password: &str,
+) -> Option<AsyncSmtpTransport<Tokio1Executor>> {
     let mut params = TlsParameters::builder(servers.smtp_host.clone());
     match &trust.only {
         None => params = params.certificate_store(CertificateStore::WebpkiRoots),
@@ -188,20 +193,26 @@ async fn smtp(servers: &Servers, trust: &Trust, username: &str, password: &str) 
             }
         }
     }
-    let Ok(params) = params.build_rustls() else {
-        return Outcome::Unreachable;
-    };
+    let params = params.build_rustls().ok()?;
     let tls = match servers.smtp_security {
         Smtp::ImplicitTls => Tls::Wrapper(params),
         Smtp::Starttls => Tls::Required(params),
         Smtp::None => Tls::Opportunistic(params),
     };
-    let transport = AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&servers.smtp_host)
-        .port(servers.smtp_port)
-        .tls(tls)
-        .credentials(Credentials::new(username.to_string(), password.to_string()))
-        .timeout(Some(LIMIT))
-        .build::<Tokio1Executor>();
+    Some(
+        AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&servers.smtp_host)
+            .port(servers.smtp_port)
+            .tls(tls)
+            .credentials(Credentials::new(username.to_string(), password.to_string()))
+            .timeout(Some(LIMIT))
+            .build::<Tokio1Executor>(),
+    )
+}
+
+async fn smtp(servers: &Servers, trust: &Trust, username: &str, password: &str) -> Outcome {
+    let Some(transport) = smtp_transport(servers, trust, username, password) else {
+        return Outcome::Unreachable;
+    };
     match transport.test_connection().await {
         Ok(_) => Outcome::Ok,
         Err(e) if is_tls_error(&e) || e.is_tls() => Outcome::TlsFailed,

@@ -34,6 +34,7 @@ pub async fn run(cx: &DataContext, request: &Request) -> Result<Value> {
         Some("newer") => newer(cx, p).await,
         Some("recent") => recent(cx, p).await,
         Some("saved") => saved(cx, p).await,
+        Some("reply") => reply(cx, p).await,
         _ => bail!("Unknown email read"),
     }
 }
@@ -130,4 +131,17 @@ async fn saved(cx: &DataContext, p: &Value) -> Result<Value> {
     );
     let rows = cx.db().query(&sql, &[&accounts, &limit]).await?;
     Ok(Value::Array(rows.iter().map(|row| row.get(0)).collect()))
+}
+
+/// What a reply needs from one cached message of the signed-in person: the account it came
+/// through, who sent it and how it threads. A message that is not theirs answers null.
+async fn reply(cx: &DataContext, p: &Value) -> Result<Value> {
+    let Ok(id) = Uuid::parse_str(text(p, "cacheMessageId")?) else {
+        return Ok(Value::Null);
+    };
+    let sql = "SELECT jsonb_build_object('accountId', m.connector_account_id::text, 'externalId', m.external_id,
+           'sender', m.sender, 'subject', m.subject, 'threadId', m.external_metadata->>'threadId',
+           'messageId', m.external_metadata->>'messageId', 'references', m.external_metadata->'references')
+         FROM app.email_messages m WHERE m.owner_user_id = app.current_actor_user_id() AND m.id = $1";
+    Ok(cx.db().query_opt(sql, &[&id]).await?.map_or(Value::Null, |row| row.get(0)))
 }

@@ -1,11 +1,11 @@
 //! A small hand-written IMAP4rev1 line protocol (with the CONDSTORE and UIDPLUS bits sync needs).
 //!
 //! Supported: CAPABILITY, NOOP, LOGIN, LIST, SELECT, EXAMINE, UID SEARCH, UID FETCH (with
-//! CHANGEDSINCE), UID STORE, UID EXPUNGE, EXPUNGE, CLOSE, LOGOUT. Everything else answers BAD.
+//! CHANGEDSINCE), UID STORE, UID EXPUNGE, EXPUNGE, CLOSE, CREATE, APPEND, LOGOUT. Everything else answers BAD.
 //! Wording follows Dovecot, whose replies most self-hosted servers copy.
 
 use crate::mail::{Folder, Io, Message, Shared};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 
 pub(crate) async fn serve(io: Box<dyn Io>, state: Shared) {
     let (r, mut w) = tokio::io::split(io);
@@ -81,6 +81,71 @@ pub(crate) async fn serve(io: Box<dyn Io>, state: Shared) {
                         out += &format!("{tag} OK [{mode}] {} completed\r\n", cmd.to_ascii_lowercase());
                     }
                 }
+            }
+            "CREATE" => {
+                let name = words(&args).first().cloned().unwrap_or_default();
+                let mut s = state.lock().unwrap();
+                if s.folders.iter().any(|f| f.name == name) {
+                    out += &format!("{tag} NO [ALREADYEXISTS] Mailbox already exists\r\n");
+                } else {
+                    s.folders.push(Folder {
+                        name,
+                        attributes: "\\HasNoChildren",
+                        uid_validity: 1_700_000_100,
+                        next_uid: 1,
+                        messages: vec![],
+                    });
+                    out += &format!("{tag} OK Create completed.\r\n");
+                }
+            }
+            "APPEND" => {
+                // `APPEND mailbox [(flags)] {size}` then the message after a continuation.
+                let size = args
+                    .rsplit_once('{')
+                    .and_then(|(_, n)| n.trim_end_matches('}').trim_end_matches('+').parse::<usize>().ok());
+                let (Some(size), Some(name)) = (size, words(&args).first().cloned()) else {
+                    out += &format!("{tag} BAD Error in IMAP command received by server.\r\n");
+                    if w.write_all(out.as_bytes()).await.is_err() {
+                        return;
+                    }
+                    continue;
+                };
+                let exists = state.lock().unwrap().folders.iter().any(|f| f.name == name);
+                if !exists {
+                    out += &format!("{tag} NO [TRYCREATE] Mailbox doesn't exist: {name}\r\n");
+                    if w.write_all(out.as_bytes()).await.is_err() {
+                        return;
+                    }
+                    continue;
+                }
+                if !args.ends_with("+}") {
+                    let _ = w.write_all(b"+ OK\r\n").await;
+                }
+                let mut body = vec![0u8; size];
+                if r.read_exact(&mut body).await.is_err() {
+                    return;
+                }
+                let mut tail = String::new();
+                let _ = r.read_line(&mut tail).await;
+                let flags: Vec<String> = args
+                    .split_once('(')
+                    .and_then(|(_, rest)| rest.split_once(')'))
+                    .map(|(f, _)| f.split_whitespace().map(String::from).collect())
+                    .unwrap_or_default();
+                let mut s = state.lock().unwrap();
+                s.modseq += 1;
+                let modseq = s.modseq;
+                let f = folder_mut(&mut s.folders, &name);
+                let uid = f.next_uid;
+                f.next_uid += 1;
+                f.messages.push(Message {
+                    uid,
+                    flags: flags.into_iter().collect(),
+                    body,
+                    internal_date: "02-Mar-2026 09:15:00 +0000".into(),
+                    modseq,
+                });
+                out += &format!("{tag} OK [APPENDUID {} {uid}] Append completed.\r\n", f.uid_validity);
             }
             "CLOSE" => {
                 selected = None;

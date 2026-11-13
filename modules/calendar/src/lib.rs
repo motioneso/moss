@@ -136,6 +136,7 @@ fn api(host: &impl Host, name: &str, input: Value) -> Result<Value> {
         "getSourceSwitches" => source_switches(host, &input),
         "upsertCachedEvent" => cache::upsert(host, &input),
         "pruneCachedEvents" => cache::prune(host, &input),
+        "evictCachedEvent" => jobs::evict(host, input["id"].as_str().unwrap_or("")),
         _ => Err(Error::new(404, "Calendar data operation not found")),
     }
 }

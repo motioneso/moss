@@ -4,7 +4,7 @@
   "name": "Connectors",
   "description": "Keeps the mail and calendar connections of each account, their sign-in secrets and the Email and Calendar permissions. Connecting Google works by pasting your own Google client details. Yahoo, Proton Bridge, iCloud and Fastmail mail connect with an app password. Google mail and calendar sync into the Email and Calendar caches. Outlook sign-in and calendar syncing are not part of this package yet.",
   "publisher": "Moss",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
@@ -43,6 +43,14 @@
         "connectors.live-calendar",
         "connectors.live-gmail-list",
         "connectors.live-gmail-get",
+        "connectors.write-gmail-draft",
+        "connectors.write-gmail-send",
+        "connectors.write-calendar-freebusy",
+        "connectors.write-calendar-insert",
+        "connectors.write-calendar-patch",
+        "connectors.write-calendar-delete",
+        "connectors.write-imap-send",
+        "connectors.write-imap-draft",
         "connectors.monitor-status"
       ]
     },
@@ -188,13 +196,17 @@
     }
   ],
   "requires": {
-    "email": ">=0.3.0, <1.0.0",
-    "calendar": ">=0.27.0, <1.0.0"
+    "email": ">=0.4.0, <1.0.0",
+    "calendar": ">=0.29.0, <1.0.0"
   },
   "provides": {
     "listCalendarContext": "1.0.0",
     "listEmailContext": "1.0.0",
-    "listSavedEmailContext": "1.0.0"
+    "listSavedEmailContext": "1.0.0",
+    "prepareEmailAction": "1.0.0",
+    "createCalendarEvent": "1.0.0",
+    "deleteCalendarEvent": "1.0.0",
+    "rescheduleCalendarEvent": "1.0.0"
   },
   "icons": ["icons/connectors.svg"],
   "accounts": {
@@ -443,9 +455,26 @@
     {
       "id": "connectors.monitors",
       "description": "Each connected Google account gets an email check every 15 minutes and a calendar check every 30 minutes, scheduled when the account is connected and cancelled when it is revoked. Each check writes a health row of times and counts only. The checks do not yet create tasks from mail or apply suppression."
+    },
+    {
+      "id": "connectors.email-writes",
+      "description": "The assistant can save a reply as a draft, and send one only after the person approves the exact text. A reply goes to the original sender on the same thread, from the person's own Gmail or mail account, and is sent once and never retried. A reply that cannot be sent says why in plain words, such as reconnecting Google to grant send permission."
+    },
+    {
+      "id": "connectors.calendar-writes",
+      "description": "Calendar can add a focus-time block to the person's own Google Calendar in the first free slot, move an event that has no guests, and delete an event. Each change shows up in Calendar at once. Outlook events are read-only. A change that needs calendar permission says to reconnect Google in Settings."
     }
   ],
   "tools": {
+    "email.draftReply": {
+      "description": "Save a reply to one cached email as a draft in the person's own mailbox. Input is the cached message id and the body only. The recipient, subject and thread come from the original message.",
+      "risk": "write"
+    },
+    "email.sendReply": {
+      "description": "Send a reply to one cached email from the person's own mailbox, to the original sender on the same thread. Sends only after the person approves the exact text shown.",
+      "risk": "destructive",
+      "approvalVersion": true
+    },
     "connectors.startGoogleGuidance": {
       "description": "Explain, step by step, how the user connects their Google account (Gmail + Calendar). Read-only guidance; the user completes the secret-entry steps in Settings.",
       "risk": "read"
