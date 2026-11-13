@@ -434,7 +434,8 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
                     .as_object()
                     .context("Schedule parameters required")?;
                 ensure!(
-                    p.len() == 3 + usize::from(p.contains_key("key"))
+                    p.len() == 3 + usize::from(p.contains_key("key")) + usize::from(p.contains_key("keepExisting"))
+                        && p.get("keepExisting").is_none_or(Value::is_boolean)
                         && p.get("key").is_none_or(|k| {
                             k.as_str().is_some_and(|s| !s.is_empty() && s.len() <= 128)
                         })
@@ -444,7 +445,7 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
                         && p.get("timezone")
                             .and_then(Value::as_str)
                             .is_some_and(|s| s.len() <= 128),
-                    "Schedule requires only cron, timezone, params and an optional key"
+                    "Schedule requires only cron, timezone, params, an optional key and an optional keepExisting flag"
                 );
                 &request.parameters["params"]
             } else {

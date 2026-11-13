@@ -7,11 +7,14 @@ use std::cell::RefCell;
 
 const MARKER: &str = "PLANTED-SCREEN-MARKER-7f3a91";
 
-/// Fails every store call with text that echoes the request it was given.
-struct Leaky;
+/// Behaves like the fake until the insert, which fails with text that echoes the request.
+struct Leaky(Fake);
 impl Host for Leaky {
-    fn call(&self, _: &str, _: &str, _: &str, parameters: Value) -> Result<Value> {
-        Err(Error::new(&format!("database said no to {parameters}")))
+    fn call(&self, p: &str, o: &str, r: &str, parameters: Value) -> Result<Value> {
+        if o == "insert" {
+            return Err(Error::new(&format!("database said no to {parameters}")));
+        }
+        self.0.call(p, o, r, parameters)
     }
 }
 
@@ -35,13 +38,13 @@ fn marked() -> Value {
 
 #[test]
 fn a_failing_host_never_puts_screen_text_in_the_response_or_the_error() {
-    let r = moss_backtrack_module::route(&Leaky, request("POST", "/ingest", marked()));
+    let r = moss_backtrack_module::route(&Leaky(Fake::default()), request("POST", "/ingest", marked()));
     assert_eq!(r.status, 500);
     assert!(!r.body.to_string().contains(MARKER));
     let payload = json!({"method":"POST","path":"/ingest","params":{},"query":{},"body":marked()}).to_string();
-    let out = moss_backtrack_module::handle(&Leaky, "route", &payload).unwrap();
+    let out = moss_backtrack_module::handle(&Leaky(Fake::default()), "route", &payload).unwrap();
     assert!(!out.contains(MARKER));
-    let err = moss_backtrack_module::handle(&Leaky, "job", &format!("{{\"body\":\"{MARKER}\"}}")).unwrap_err();
+    let err = moss_backtrack_module::handle(&Leaky(Fake::default()), "job", &format!("{{\"body\":\"{MARKER}\"}}")).unwrap_err();
     assert!(!err.to_string().contains(MARKER));
 }
 
