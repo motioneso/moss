@@ -360,7 +360,7 @@ fn manual_and_scheduled_runs_store_once_notify_once_and_keep_text_out_of_every_s
     let runs = |kind: &str| -> i64 {
         w.f.rt
             .block_on(w.f.root.query_one(
-                "SELECT count(*) FROM app.briefing_runs WHERE owner_user_id=$1 AND run_kind=$2",
+                "SELECT count(*) FROM app.briefing_runs WHERE owner_user_id=$1 AND run_kind::text=$2",
                 &[&a, &kind],
             ))
             .unwrap()
