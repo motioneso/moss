@@ -50,5 +50,9 @@ name = "run_job"
 path = "../tests/run_job.rs"
 
 [[test]]
+name = "morning"
+path = "../tests/morning.rs"
+
+[[test]]
 name = "gather"
 path = "../tests/gather.rs"

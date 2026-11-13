@@ -40,6 +40,10 @@ pub struct Fake {
     pub answers: RefCell<Vec<(String, String, String, Option<Value>)>>,
     /// Every public-API call as (person, module, name, parameters).
     pub api_calls: RefCell<Vec<(String, String, String, Value)>>,
+    /// The router's answer: `Ok(text)` or `Err(message)`. Unset fails like a server with no model.
+    pub ai_reply: RefCell<Option<std::result::Result<String, String>>>,
+    /// Every router call as (resource, parameters).
+    pub ai_calls: RefCell<Vec<(String, Value)>>,
     ids: Cell<u32>,
 }
 
@@ -60,6 +64,8 @@ impl Fake {
             schedules: RefCell::new(vec![]),
             answers: RefCell::new(vec![]),
             api_calls: RefCell::new(vec![]),
+            ai_reply: RefCell::new(None),
+            ai_calls: RefCell::new(vec![]),
             ids: Cell::new(0),
         }
     }
@@ -315,6 +321,14 @@ impl Host for Fake {
                 match found {
                     Some((_, _, _, Some(answer))) => Ok(answer),
                     _ => Err(moss_module_sdk::Error::new("Public call unavailable")),
+                }
+            }
+            ("ai", "generate") => {
+                self.ai_calls.borrow_mut().push((resource.into(), parameters));
+                match self.ai_reply.borrow().clone() {
+                    Some(Ok(text)) => Ok(json!({"text": text})),
+                    Some(Err(message)) => Err(moss_module_sdk::Error::new(&message)),
+                    None => Err(moss_module_sdk::Error::new("Text generation is not set up on this server")),
                 }
             }
             ("notify", "post") => {

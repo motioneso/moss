@@ -21,6 +21,8 @@ impl Host for ComponentHost {
             "context" => moss::module::context::call(&request),
             "jobs" => moss::module::jobs::call(&request),
             "notify" => moss::module::notify::call(&request),
+            "api" => moss::module::api::call(&request),
+            "ai" => moss::module::ai::call(&request),
             _ => return Err(Error::new("Unsupported Briefings host port")),
         }
         .map_err(|_| Error::new("Briefings host call failed"))?;

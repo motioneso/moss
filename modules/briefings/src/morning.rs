@@ -88,7 +88,10 @@ impl Composer for MorningComposer {
         // Action rows come from suggested tasks. A failed read leaves no rows and shows a gap.
         let rows = if subject.selected_tools.iter().any(|t| t == gather::TASKS) {
             match api(host, "tasks", "listBriefingTasks", json!({"status": "suggested"})) {
-                Ok(reply) => action_rows::project_action_rows(&items(&reply)),
+                Ok(reply) => {
+                    let suggested: Vec<Value> = items(&reply).into_iter().filter(|t| t["status"] == "suggested").collect();
+                    action_rows::project_action_rows(&suggested)
+                }
                 Err(_) => {
                     gaps.push(Gap { source: "action_rows", reason: Reason::ToolFailed });
                     action_rows::ActionRows { rows: vec![], source_refs: Default::default(), invalid_metadata: 0 }
