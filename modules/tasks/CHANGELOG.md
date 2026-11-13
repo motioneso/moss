@@ -1,5 +1,9 @@
 # Tasks package changes
 
+## 0.1.4
+
+- `listBriefingTasks` also accepts status `suggested`, which returns the caller's suggested tasks with description, source, source reference, update time and suggestion metadata, so Briefings can show action rows.
+
 ## 0.1.3
 
 - Add the public `listBriefingTasks` call, which gives Briefings the caller's open tasks, or tasks finished after a given time, with only id, title, status, due time and priority.

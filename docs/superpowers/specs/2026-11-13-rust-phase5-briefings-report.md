@@ -205,3 +205,65 @@ the person to sign in again). A source served from cache marks the run as using 
 - The awaiting-reply and worth-knowing email caps are not applied separately.
 - Reaching the server from another device was not checked from a phone or second computer.
 - The model-written briefing is part 19. The stub writer still produces the text.
+
+## Briefings morning composition (part 19)
+
+Card JS-267. Part of [issue 4027](https://github.com/motioneso/moss/issues/4027). Release note
+Category: N/A.
+
+### What it does
+
+A morning briefing run now asks the person's configured model to write the briefing. It builds the
+request from that person's own tasks, calendar and email, sends it through the AI router (never to
+a named provider), then tidies and stores the answer. The text replaces the plain digest from part 17. If the model is missing or fails, the run still finishes with the plain digest and says why.
+
+- Anything that came from outside (mail, calendar entries, task titles) goes into marked data
+  blocks and is cleaned first. The instruction block above them is fixed text with nothing filled
+  in, so an email cannot give the model orders.
+- Each section keeps at most 8 lines and 1200 characters. The email catch-up keeps at most 8
+  entries and reports how many it left out.
+- Each email gets an evidence row (reported today, settled by a later payment confirmation,
+  informational, or current status unknown), as in the old app.
+- Calendar and email signals (prep needed, high-stakes meeting, tight travel, open gap, time
+  sensitive, needs reply) are worked out with the old rules and stored with the run, top 5 each.
+- Suggested tasks from email become action rows, earliest due first, at most 8. Email that is
+  already a row is not repeated in the catch-up.
+- The written text is put in clock order, with news and sports last, and sections that only repeat
+  an event title are dropped.
+
+### Proof
+
+| Claim                                                                                      | Where                                          |
+| ------------------------------------------------------------------------------------------ | ---------------------------------------------- |
+| The instruction block has no filled-in outside value; seen failing when one was added      | static test, red then green                    |
+| Hostile mail and calendar text cannot close a block or open a new instruction block        | native test                                    |
+| Section and catch-up caps, and the output limit sent to the router                         | native tests                                   |
+| Evidence rows, signals, ordering, tidy rules                                               | native tests, rules taken from the old tests   |
+| Action rows and email catch-up are saved with the run                                      | native test                                    |
+| No model gives a plain digest and a reason; evening and weekly runs make no model call     | native tests                                   |
+| Only the run owner's data is read, and a second person's data never reaches the request    | native test                                    |
+| Model text is in no queue row, job payload or notification                                 | native and installed tests (13 tables scanned) |
+| A second person cannot read the stored text; seen failing without row security on the runs | installed test, red and green                  |
+| Native and WebAssembly builds, tests in both                                               | gate                                           |
+| Real Rust server over HTTPS, real router, stand-in model: run stored the model's text      | live run                                       |
+
+### Changes outside Briefings
+
+- Tasks 0.1.4 adds a narrow read of suggested tasks for the briefing, with its changelog entry.
+- The Briefings manifest asks for the AI capability and the app map names the feature.
+- The live server test now configures a provider and model for the owner.
+
+### Not proven
+
+- The model in the live run is a stand-in server in the test, behind the real router. No real
+  vendor model was called.
+- The host gives a guest one fixed failure text, so "no model set up" and "the call failed" both
+  show as a failed call on a real server. The "no model" reason is proven in native tests only.
+- Not wired yet, so those parts of the prompt are empty: chat of the day, commitments, weather,
+  notes vault, goals, sports, news, the priority model, calendar follow-through and plan context
+  (part 20).
+- Calendar and email preference settings use the old defaults, not the person's saved choices.
+- The catch-up has no "as of" time because connector sync freshness is not read yet.
+- Evening and weekly briefings still use the plain digest.
+- No paired-device credential check was needed or built.
+- Reaching the server from another device was not checked from a phone or second computer.

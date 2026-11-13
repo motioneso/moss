@@ -1,6 +1,7 @@
 //! Queue deliveries. A delivery is accepted only when it is metadata only, and the parameters
 //! match the queue they came on.
-use crate::compose::{Composer, StubComposer};
+use crate::compose::Composer;
+use crate::morning::MorningComposer;
 use crate::queue::{MANUAL, SCHEDULED};
 use crate::run_job::{self, Fire};
 use crate::text::is_uuid;
@@ -40,7 +41,7 @@ fn fire(queue: &str, parameters: &Value) -> Result<Fire> {
 }
 
 pub fn handle<H: Host + ?Sized>(host: &H, payload: &str) -> Result<String> {
-    handle_with(host, &StubComposer, payload)
+    handle_with(host, &MorningComposer, payload)
 }
 
 pub fn handle_with<H: Host + ?Sized, C: Composer>(

@@ -18,6 +18,7 @@ serde_json = "1"
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 chrono-tz = "0.10"
 sha2 = "0.10"
+regex = { version = "1", default-features = false, features = ["std", "unicode-perl", "unicode-case", "perf"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wit-bindgen = { version = "=0.57.1", default-features = false, features = ["macros", "realloc"] }
@@ -47,6 +48,10 @@ path = "../tests/privacy.rs"
 [[test]]
 name = "run_job"
 path = "../tests/run_job.rs"
+
+[[test]]
+name = "morning"
+path = "../tests/morning.rs"
 
 [[test]]
 name = "gather"

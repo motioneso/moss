@@ -60,3 +60,18 @@ fn another_status_or_an_unknown_field_is_refused() {
     }
     assert!(rows.0.borrow().is_empty(), "a refused call reads nothing");
 }
+
+#[test]
+fn suggested_tasks_also_carry_the_action_row_fields() {
+    let rows = Rows(Default::default());
+    let out: Value = serde_json::from_str(&call(&rows, json!({"status":"suggested"})).unwrap()).unwrap();
+    let item = &out["items"][0];
+    assert_eq!(item["description"], "Secret body");
+    for key in ["source", "sourceRef", "updatedAt", "suggestionMetadata"] {
+        assert!(item.get(key).is_some(), "{key}");
+    }
+    assert!(item.get("ownerUserId").is_none() && item.get("tags").is_none());
+    let queries = rows.0.borrow();
+    let task_query = queries.iter().find(|(t, _)| t == "app.tasks").unwrap().1.to_string();
+    assert!(task_query.contains("suggested"), "{task_query}");
+}

@@ -77,6 +77,7 @@ pub fn handle<H: moss_module_sdk::Host + ?Sized>(
             enum BriefingStatus {
                 Todo,
                 Done,
+                Suggested,
             }
             #[derive(serde::Deserialize)]
             #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -126,7 +127,9 @@ pub fn handle<H: moss_module_sdk::Host + ?Sized>(
                 let mut input = serde_json::json!({"status": match b.status {
                     BriefingStatus::Todo => "todo",
                     BriefingStatus::Done => "done",
+                    BriefingStatus::Suggested => "suggested",
                 }});
+                let suggested = matches!(b.status, BriefingStatus::Suggested);
                 if let Some(after) = b.completed_after {
                     input["completedAfter"] = after.into();
                 }
@@ -137,9 +140,19 @@ pub fn handle<H: moss_module_sdk::Host + ?Sized>(
                     .as_array()
                     .into_iter()
                     .flatten()
-                    .map(|t| serde_json::json!({
-                        "id":t["id"],"title":t["title"],"status":t["status"],
-                        "dueAt":t["dueAt"],"priority":t["priority"]}))
+                    .map(|t| if suggested {
+                        // Suggested tasks carry the fields an action row shows.
+                        serde_json::json!({
+                            "id":t["id"],"title":t["title"],"status":t["status"],
+                            "dueAt":t["dueAt"],"priority":t["priority"],
+                            "description":t["description"],"source":t["source"],
+                            "sourceRef":t["sourceRef"],"updatedAt":t["updatedAt"],
+                            "suggestionMetadata":t["suggestionMetadata"]})
+                    } else {
+                        serde_json::json!({
+                            "id":t["id"],"title":t["title"],"status":t["status"],
+                            "dueAt":t["dueAt"],"priority":t["priority"]})
+                    })
                     .collect();
                 return Ok(serde_json::json!({"items":items}).to_string());
             }

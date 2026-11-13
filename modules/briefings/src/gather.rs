@@ -36,6 +36,10 @@ pub struct Gathered {
     pub degraded: bool,
     pub contributions: Vec<Contribution>,
     pub candidates: Vec<Candidate>,
+    /// The run's clock, the owner's zone and the start of the catch-up window.
+    pub now: DateTime<Utc>,
+    pub zone: chrono_tz::Tz,
+    pub since: DateTime<Utc>,
 }
 
 impl Gathered {
@@ -52,7 +56,7 @@ impl Gathered {
     }
 }
 
-fn api<H: Host + ?Sized>(host: &H, module: &str, name: &str, parameters: Value) -> Result<Value> {
+pub fn api<H: Host + ?Sized>(host: &H, module: &str, name: &str, parameters: Value) -> Result<Value> {
     host.call("api", "call", module, json!({"name": name, "parameters": parameters}))
 }
 
@@ -60,12 +64,12 @@ fn selected(subject: &Subject<'_>, name: &str) -> bool {
     subject.selected_tools.iter().any(|n| n == name)
 }
 
-fn instant(text: &str) -> Option<DateTime<Utc>> {
+pub fn instant(text: &str) -> Option<DateTime<Utc>> {
     DateTime::parse_from_rfc3339(text).ok().map(|t| t.with_timezone(&Utc))
 }
 
 /// A time as the owner's wall clock, or the date text itself when it is not a full time.
-fn stamp(value: &Value, zone: chrono_tz::Tz) -> String {
+pub fn stamp(value: &Value, zone: chrono_tz::Tz) -> String {
     match value.as_str() {
         Some(text) => match instant(text) {
             Some(at) => at.with_timezone(&zone).format("%Y-%m-%d %H:%M").to_string(),
@@ -75,11 +79,11 @@ fn stamp(value: &Value, zone: chrono_tz::Tz) -> String {
     }
 }
 
-fn join(parts: Vec<String>) -> String {
+pub fn join(parts: Vec<String>) -> String {
     parts.into_iter().filter(|p| !p.is_empty()).collect::<Vec<_>>().join(" · ")
 }
 
-fn items(reply: &Value) -> Vec<Value> {
+pub fn items(reply: &Value) -> Vec<Value> {
     reply["items"].as_array().into_iter().flatten().filter(|v| v.is_object()).cloned().collect()
 }
 
@@ -202,32 +206,8 @@ fn calendar<H: Host + ?Sized>(host: &H, now: DateTime<Utc>, zone: chrono_tz::Tz,
 }
 
 const ACTION: [&str; 3] = ["needs_reply", "needs_action", "time_sensitive_info"];
-const REQUESTS: [&str; 12] = [
-    "please reply", "please confirm", "please review", "please pay", "action required", "action needed",
-    "amount due", "balance due", "payment due", "you must", "you need to", "unpaid",
-];
-const CONFIRMATIONS: [&str; 14] = [
-    "order confirmed", "order confirmation", "has been shipped", "has shipped", "was delivered",
-    "shipping confirmation", "delivery confirmation", "booking confirmed", "reservation confirmed",
-    "payment received", "payment confirmed", "purchase receipt", "payment receipt", "subscription renewed",
-];
 
-/// Mail that only confirms something already done. A request for action always wins.
-pub fn is_no_action_confirmation(item: &Value) -> bool {
-    if item["actionability"].as_str().is_some_and(|a| ACTION.contains(&a)) {
-        return false;
-    }
-    let text = ["subject", "snippet", "summary"]
-        .iter()
-        .filter_map(|k| item[*k].as_str())
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_lowercase();
-    if REQUESTS.iter().any(|r| text.contains(r)) {
-        return false;
-    }
-    CONFIRMATIONS.iter().any(|c| text.contains(c))
-}
+pub use crate::email_evidence::is_no_action_confirmation;
 
 fn actionable(item: &Value) -> bool {
     match item["actionability"].as_str() {
@@ -244,6 +224,23 @@ pub fn is_briefing_email(item: &Value) -> bool {
     item["answered"] != true && !is_no_action_confirmation(item) && (actionable(item) || item["awaitingJudgement"] == true)
 }
 
+/// Prompt lines for mail. Only these fields cross into the prompt. A body or any other field never does.
+pub fn email_lines(messages: &[Value]) -> Vec<String> {
+    messages
+        .iter()
+        .map(|m| {
+            let summary = sanitize_external(&m["summary"]);
+            join(vec![
+                sanitize_external(&m["sender"]),
+                sanitize_external(&m["subject"]),
+                sanitize_external(&m["actionability"]),
+                if summary.is_empty() { sanitize_external(&m["snippet"]) } else { summary },
+            ])
+        })
+        .filter(|l| !l.is_empty())
+        .collect()
+}
+
 fn email<H: Host + ?Sized>(host: &H, out: &mut Gathered) -> Section {
     let Some((messages, context, degraded, more)) =
         live(host, "listEmailContext", json!({"limit": EMAIL_LIMIT}), "email", &mut out.gaps)
@@ -256,22 +253,8 @@ fn email<H: Host + ?Sized>(host: &H, out: &mut Gathered) -> Section {
         out.gaps.push(Gap { source: "email", reason: Reason::Empty });
         return Section::empty("email", "EMAIL SUMMARIES + SIGNALS");
     }
-    // Only these fields cross into the prompt. A body or any other field never does.
-    let lines: Vec<String> = messages
-        .iter()
-        .filter(|m| is_briefing_email(m))
-        .map(|m| {
-            let summary = sanitize_external(&m["summary"]);
-            join(vec![
-                sanitize_external(&m["sender"]),
-                sanitize_external(&m["subject"]),
-                sanitize_external(&m["actionability"]),
-                if summary.is_empty() { sanitize_external(&m["snippet"]) } else { summary },
-            ])
-        })
-        .filter(|l| !l.is_empty())
-        .collect();
-    let (lines, cut) = cap_lines(lines);
+    let kept: Vec<Value> = messages.iter().filter(|m| is_briefing_email(m)).cloned().collect();
+    let (lines, cut) = cap_lines(email_lines(&kept));
     if cut || more {
         out.gaps.push(Gap { source: "email", reason: Reason::Truncated });
     }
@@ -302,9 +285,12 @@ pub fn gather<H: Host + ?Sized, C: Contributors + ?Sized>(
         degraded: false,
         contributions: vec![],
         candidates: vec![],
+        now,
+        zone,
+        since: previous_run(host, subject, now)?,
     };
     if selected(subject, TASKS) {
-        let since = previous_run(host, subject, now)?;
+        let since = out.since;
         let section = tasks(host, since, &mut out.gaps);
         out.sections.push(section);
         subject.deadline.check(host)?;

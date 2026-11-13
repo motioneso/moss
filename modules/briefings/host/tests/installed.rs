@@ -15,10 +15,19 @@ use std::sync::Arc;
 
 const MARK: &str = "PLANTED-MARKER-4f1c9b";
 
-struct NoAi;
-impl moss_module_host::ai::Intelligence for NoAi {
-    fn generate(&self, _: &CallScope, _: &Request) -> anyhow::Result<Value> {
-        anyhow::bail!("Briefings has no AI")
+/// Stands in for the router. The reply is set per test and every prompt is kept for checks.
+#[derive(Default)]
+struct Scripted {
+    reply: std::sync::Mutex<Option<String>>,
+    prompts: std::sync::Mutex<Vec<Value>>,
+}
+impl moss_module_host::ai::Intelligence for Scripted {
+    fn generate(&self, _: &CallScope, request: &Request) -> anyhow::Result<Value> {
+        self.prompts.lock().unwrap().push(request.parameters.clone());
+        match self.reply.lock().unwrap().clone() {
+            Some(text) => Ok(json!({"text": text})),
+            None => anyhow::bail!("The configured AI service is not set up"),
+        }
     }
     fn embed(&self, _: &CallScope, _: &Request) -> anyhow::Result<Value> {
         anyhow::bail!("Briefings has no embeddings")
@@ -59,6 +68,7 @@ fn rows_as(
 
 /// One installed Briefings package on a fresh database, with the person's saved zone.
 struct World {
+    ai: Arc<Scripted>,
     f: support::Fixture,
     app: Application,
     _dirs: (tempfile::TempDir, tempfile::TempDir),
@@ -86,6 +96,7 @@ impl World {
         });
         // An earlier test in this database installed the package into a folder that is gone.
         f.rt.block_on(f.root.execute("DELETE FROM moss_modules.catalog", &[])).unwrap();
+        let ai = Arc::new(Scripted::default());
         let dir = tempfile::tempdir().unwrap();
         let reg = tempfile::tempdir().unwrap();
         let bytes = moss_briefings_host::package::pack(&root(), &component()).unwrap();
@@ -98,10 +109,10 @@ impl World {
                 migrations: Secret::new(std::env::var("JS48_BOOTSTRAP_URL").unwrap()),
                 producer: Secret::new(std::env::var("JS48_APP_URL").unwrap()),
                 cipher: Arc::new(SecretCipher::connectors(&Default::default()).unwrap()),
-                intelligence: Arc::new(NoAi),
+                intelligence: ai.clone(),
                 version: "0.1.0".parse().unwrap(),
                 compiled_cache: None,
-                fuel_ceiling: None,
+                fuel_ceiling: Some(250_000_000),
             },
         )
         .unwrap();
@@ -110,7 +121,7 @@ impl World {
             .refresh(&f.access(f.a), Source::Folder(reg.path().into()), &key, &publisher, "briefings-test-registry")
             .unwrap();
         app.installer.install(&f.access(f.a), &source, &artifact, true).unwrap();
-        Self { f, app, _dirs: (dir, reg) }
+        Self { ai, f, app, _dirs: (dir, reg) }
     }
     fn call(&self, actor: uuid::Uuid, method: &str, path: &str, body: Value) -> Value {
         serde_json::from_str(
@@ -381,9 +392,11 @@ fn manual_and_scheduled_runs_store_once_notify_once_and_keep_text_out_of_every_s
     assert_eq!(after["body"]["state"], "ready", "{after}");
     assert_eq!(runs("manual"), 1);
     let stored: String = w.f.rt.block_on(w.f.root.query_one("SELECT summary_text FROM app.briefing_runs WHERE id=$1", &[&run.parse::<uuid::Uuid>().unwrap()])).unwrap().get(0);
-    assert_eq!(stored, FALLBACK, "the stub composer stores the fallback text");
+    assert!(!stored.trim().is_empty(), "with no model the run keeps a plain digest");
+    let reason: Option<String> = w.f.rt.block_on(w.f.root.query_one("SELECT source_metadata->>'degradedReason' FROM app.briefing_runs WHERE id=$1", &[&run.parse::<uuid::Uuid>().unwrap()])).unwrap().get(0);
+    assert_eq!(reason.as_deref(), Some("synthesis_failed"), "the host gives guests one fixed failure text, so an unset model reads as a failed call");
     assert_eq!(notes(), 0, "a manual run does not notify");
-    println!("PASS manual run: queued, pending, then ready with the fallback text, no notification");
+    println!("PASS manual run: queued, pending, then ready with a plain digest, no notification");
 
     // The same key while the first job waits is refused. After it finishes the key may be reused.
     let first = w.call(a, "POST", &format!("/definitions/{id}/run"), json!({"idempotencyKey":"k1"}));
@@ -510,4 +523,64 @@ fn a_run_with_no_source_modules_installed_records_visible_gaps_and_no_source_tex
     assert!(gaps.contains(&("priority".to_owned(), "unwired".to_owned())), "{gaps:?}");
     assert!(!metadata.to_string().contains(MARK), "{metadata}");
     println!("PASS installed run with no source modules: {} visible gaps recorded, no text", gaps.len());
+}
+
+const WRITTEN: &str = "WRITTEN-BY-MODEL-91ac";
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn model_written_text_is_stored_for_the_owner_only_and_reaches_no_other_table_or_payload() {
+    let w = World::new("UTC");
+    let (a, b) = (w.f.a, w.f.b);
+    zone_for(&w, b, "UTC");
+    *w.ai.reply.lock().unwrap() = Some(format!("Calm day {WRITTEN}.\n\n## Prepare\nBring notes at 9 AM."));
+    let id = make_definition(&w, a, "daily");
+    let queued = w.call(a, "POST", &format!("/definitions/{id}/run"), json!({}));
+    assert_eq!(queued["status"], 202, "{queued}");
+    let run = queued["body"]["runId"].as_str().unwrap().parse::<uuid::Uuid>().unwrap();
+    w.work();
+    w.make_schedule_due(a);
+    w.work();
+
+    // The model was asked once per run, through the router port, with the trusted block first.
+    let prompts = w.ai.prompts.lock().unwrap().clone();
+    assert!(prompts.len() >= 2, "{prompts:?}");
+    assert_eq!(prompts[0]["maxOutputTokens"], 2000);
+    assert!(prompts[0]["prompt"].as_str().unwrap().starts_with("<trusted_instructions>"));
+
+    // The owner's run holds the written text and a model name, and is not marked as a fallback.
+    let row = w.f.rt.block_on(w.f.root.query_one(
+        "SELECT summary_text, source_metadata FROM app.briefing_runs WHERE id=$1", &[&run])).unwrap();
+    let (text, meta): (String, Value) = (row.get(0), row.get(1));
+    assert!(text.contains(WRITTEN), "{text}");
+    assert_eq!(meta["aiModel"]["id"], "router");
+    assert_ne!(meta["degraded"], json!(true));
+    let read = w.call(a, "GET", &format!("/definitions/{id}/runs/{run}"), Value::Null);
+    assert!(read["body"].to_string().contains(WRITTEN), "the owner reads the written text: {read}");
+    println!("PASS owner run: written text stored, model named, not a fallback");
+
+    // Nothing but the run table holds the text.
+    let tables: Vec<String> = w.f.rt.block_on(async {
+        w.f.root.query(
+            "SELECT table_schema||'.'||table_name FROM information_schema.tables WHERE table_schema IN ('moss_queue','moss_modules') \
+             OR table_name IN ('notifications','moss_activity_detail','moss_error_log','moss_action_audit_log','moss_model_activity_log')", &[])
+            .await.unwrap().iter().map(|r| r.get(0)).collect()
+    });
+    for table in &tables {
+        let hits: i64 = w.f.rt.block_on(w.f.root.query_one(&format!("SELECT count(*) FROM {table} t WHERE to_jsonb(t)::text LIKE '%'||$1||'%'"), &[&WRITTEN])).unwrap().get(0);
+        assert_eq!(hits, 0, "{table} holds the written text");
+    }
+    println!("PASS leak scan: {} tables and every job payload hold no written text", tables.len());
+
+    // A second person cannot read it. Without row security the same read leaks it.
+    let others = |who| -> i64 { rows_as(&w.f, who, "SELECT count(*) FROM app.briefing_runs WHERE summary_text LIKE '%'||$1||'%'", &[&WRITTEN])[0].get(0) };
+    assert_eq!((others(a) > 0, others(b)), (true, 0));
+    println!("GREEN: B sees none of A's runs");
+    w.f.rt.block_on(w.f.root.batch_execute("ALTER TABLE app.briefing_runs DISABLE ROW LEVEL SECURITY")).unwrap();
+    let open = others(b);
+    w.f.rt.block_on(w.f.root.batch_execute("ALTER TABLE app.briefing_runs ENABLE ROW LEVEL SECURITY; ALTER TABLE app.briefing_runs FORCE ROW LEVEL SECURITY")).unwrap();
+    assert!(open > 0, "RED expected: B reads A's text with row security removed");
+    println!("RED: with row security removed from the runs table B reads A's text");
+    assert_eq!(others(b), 0, "restored");
+    println!("GREEN: row security restored");
 }
