@@ -338,6 +338,8 @@ impl Fake {
                     .filter(|r| r["owner_user_id"] == actor && matches(r, &query.filter, actor))
                     .cloned()
                     .collect();
+                // The installed host refuses a page over 1000 rows.
+                assert!(query.limit.is_none_or(|n| (1..=1000).contains(&n)), "query limit over 1000");
                 for order in query.order.iter().rev() {
                     rows.sort_by(|a, b| {
                         let o = cmp(&norm_value(&a[order.column.as_str()]), &norm_value(&b[order.column.as_str()]));

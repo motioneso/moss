@@ -23,10 +23,23 @@ fn compare(column: &str, op: Compare, value: Value) -> Filter {
     Filter::Compare { column: column.into(), op, value }
 }
 
+/// The host refuses a page over 1000 rows, so larger reads come in pages of 1000.
 fn rows<H: Host + ?Sized>(host: &H, filter: Filter, limit: u32) -> Result<Vec<Value>, Stop> {
-    let mut query = Query::select(filter);
-    query.limit = Some(limit);
-    Ok(Client(host).query(RECEIPTS, &query)?)
+    const PAGE: u32 = 1000;
+    let mut all: Vec<Value> = Vec::new();
+    while (all.len() as u32) < limit {
+        let mut query = Query::select(filter.clone());
+        query.limit = Some(PAGE.min(limit - all.len() as u32));
+        query.offset = all.len() as u32;
+        query.order = vec![Order { column: "request_key".into(), descending: false }];
+        let page = Client(host).query(RECEIPTS, &query)?;
+        let short = (page.len() as u32) < query.limit.unwrap_or(PAGE);
+        all.extend(page);
+        if short {
+            break;
+        }
+    }
+    Ok(all)
 }
 
 /// The receipt's recorded numbers as JSON.

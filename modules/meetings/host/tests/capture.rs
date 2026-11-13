@@ -33,6 +33,7 @@ impl moss_module_host::ai::Intelligence for NoAi {
 /// Every signed-in person has a browser session. Only the owner named in `mac` has a paired Mac.
 struct Auth {
     mac: Mutex<Option<Uuid>>,
+    credential: Mutex<Option<(Uuid, String)>>,
 }
 impl CaptureAuthority for Auth {
     fn browser(&self, owner: Uuid, _: &str) -> anyhow::Result<Option<Browser>> {
@@ -48,8 +49,8 @@ impl CaptureAuthority for Auth {
     fn processing_route(&self, _: Uuid) -> anyhow::Result<Option<String>> {
         Ok(Some("route-1".into()))
     }
-    fn grant_credential(&self, _: Uuid, _: &str) -> anyhow::Result<Option<String>> {
-        Ok(None)
+    fn grant_credential(&self, owner: Uuid, _: &str) -> anyhow::Result<Option<String>> {
+        Ok(self.credential.lock().unwrap().as_ref().filter(|(who, _)| *who == owner).map(|(_, text)| text.clone()))
     }
 }
 
@@ -66,7 +67,7 @@ impl World {
     fn new() -> Self {
         let serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
         let f = support::Fixture::new();
-        let auth = Arc::new(Auth { mac: Mutex::new(Some(f.a)) });
+        let auth = Arc::new(Auth { mac: Mutex::new(Some(f.a)), credential: Mutex::new(None) });
         let app = install_all(&f, Arc::new(NoAi), None, None, Some(auth.clone()));
         Self { f, app, auth, _serial: serial }
     }
@@ -84,6 +85,18 @@ impl World {
     fn meeting(&self, actor: Uuid, title: &str) -> String {
         let made = self.call(actor, "POST", "/records", json!({"requestKey": Uuid::new_v4().to_string(), "title": title}));
         made["body"]["meeting"]["id"].as_str().unwrap_or_else(|| panic!("{made}")).to_owned()
+    }
+    /// Claims the grant with the hash of a credential that names `owner` and the grant, then makes
+    /// that credential the one the stand-in presents.
+    fn pair_credential(&self, owner: Uuid, grant: &str) -> String {
+        let credential = format!("mm1_{owner}.{grant}.{SECRET}");
+        let hash = sha2::Sha256::digest(credential.as_bytes()).iter().map(|b| format!("{b:02x}")).collect::<String>();
+        let poll = self.call(owner, "POST", "/capture/commands", json!({"connectionId": CONN, "verifier": SECRET}));
+        assert_eq!(poll["body"]["command"]["grantId"], grant, "{poll}");
+        let claim = self.call(owner, "POST", "/capture/claim", json!({"connectionId": CONN, "verifier": SECRET, "grantId": grant, "credentialHash": hash}));
+        assert_eq!(claim["status"], 200, "{claim}");
+        *self.auth.credential.lock().unwrap() = Some((owner, credential.clone()));
+        credential
     }
     fn link(&self, actor: Uuid) {
         let inventory = json!({
@@ -215,4 +228,56 @@ fn holder(v: &Value) -> Option<&Value> {
         Value::Array(a) => a.iter().find_map(holder),
         _ => None,
     }
+}
+
+#[test]
+#[ignore = "run through scripts/run-gate.sh"]
+fn the_mac_sends_status_control_and_audio_with_its_credential_against_the_real_database() {
+    let w = World::new();
+    let a = w.f.a;
+    w.link(a);
+    let meeting = w.meeting(a, "Standup");
+    let started = w.call(a, "POST", &format!("/records/{meeting}/capture/start"), json!({"requestKey": K1}));
+    assert_eq!(started["status"], 200, "{started}");
+    let grant = started["body"]["capture"]["grantId"].as_str().unwrap().to_owned();
+    let generation = w.count(&format!("SELECT coalesce((state_json::jsonb->>'generation')::bigint, 1) FROM app.meeting_capture_grants WHERE id = '{grant}'"));
+    // Without a credential every Mac call is the same 401.
+    let inventory = json!({
+        "defaultMicrophoneId": "mic-uid",
+        "microphones": [{"deviceId": "mic-uid", "sourceId": "mic", "label": "Microphone"}],
+        "applications": [],
+        "computerAudio": {"available": true, "excludedProcessTreeIds": ["moss"]},
+        "microphonePermission": "granted", "systemAudioPermission": "granted",
+    });
+    let status = |phase: &str| {
+        w.call(a, "POST", "/capture/status", json!({"meetingId": meeting, "grantId": grant, "inventory": inventory, "observed": {"generation": generation, "phase": phase}}))
+    };
+    let early = status("recording");
+    assert_eq!(early["status"], 401, "{early}");
+    w.pair_credential(a, &grant);
+    let ok = status("recording");
+    assert_eq!(ok["status"], 200, "{ok}");
+    // A credential for another grant is refused.
+    *w.auth.credential.lock().unwrap() = Some((a, format!("mm1_{a}.{}.{SECRET}", Uuid::new_v4())));
+    assert_eq!(status("recording")["status"], 401);
+    *w.auth.credential.lock().unwrap() = Some((a, format!("mm1_{a}.{grant}.{}", "Z".repeat(43))));
+    assert_eq!(status("recording")["status"], 401, "wrong secret must be refused");
+    *w.auth.credential.lock().unwrap() = Some((a, format!("mm1_{a}.{grant}.{SECRET}")));
+    // Control and audio.
+    let paused = w.call(a, "POST", "/capture/control", json!({"meetingId": meeting, "grantId": grant, "requestKey": K2, "expectedGeneration": generation, "command": "pause"}));
+    assert_eq!(paused["status"], 200, "{paused}");
+    let generation = w.count(&format!("SELECT coalesce((state_json::jsonb->>'generation')::bigint, 1) FROM app.meeting_capture_grants WHERE id = '{grant}'"));
+    let samples: Vec<u8> = (0..8000i32).flat_map(|n| ((((n % 100) - 50) * 100) as i16).to_le_bytes()).collect();
+    let audio = w.call(a, "POST", "/capture/audio", json!({
+        "meetingId": meeting, "grantId": grant, "requestKey": Uuid::new_v4().to_string(), "generation": generation, "epoch": 1,
+        "sourceId": "mic", "sequence": 0, "startMs": 0, "endMs": 1000, "sampleRateHz": 8000,
+        "pcmBase64": base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &samples),
+    }));
+    assert!(audio["status"].as_i64().is_some(), "{audio}");
+    println!("AUDIO answer: {audio}");
+    assert_eq!(w.count(&format!("SELECT count(*) FROM moss_queue.jobs x WHERE x::text LIKE '%{}%'", "pcmBase64")), 0);
+    // Another person with their own credential for this grant is refused.
+    *w.auth.credential.lock().unwrap() = Some((w.f.b, format!("mm1_{}.{grant}.{SECRET}", w.f.b)));
+    let theirs = w.call(w.f.b, "POST", "/capture/status", json!({"meetingId": meeting, "grantId": grant, "inventory": inventory, "observed": {"generation": generation, "phase": "recording"}}));
+    assert_eq!(theirs["status"], 401, "{theirs}");
 }
