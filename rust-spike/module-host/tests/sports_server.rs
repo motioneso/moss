@@ -342,7 +342,7 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
     assert_eq!((status, json_of(&text)["error"].clone()), (400, json!(format!("Unknown competition: {MARK}"))), "{text}");
     let (status, text) = call(Method::POST, "/follows", Some(&cookie), Some(json!({"competitionKey":"nba","teamKey":"LAL"})));
     assert_eq!((status, json_of(&text)["error"].clone()), (400, json!("Unknown team: LAL")), "{text}");
-    let (status, text) = call(Method::POST, &format!("/follows/{id}/team"), Some(&cookie), Some(json!({"teamKey":"LAL"})));
+    let (status, text) = call(Method::POST, &format!("/follows/{id}/team"), Some(&cookie), Some(json!({"sourceTeamId":"lal"})));
     assert_eq!((status, json_of(&text)["error"].clone()), (400, json!("That follow is a whole competition, not a team.")), "{text}");
     // Standings choices are kept in catalog order and read back.
     let (status, text) = call(Method::PUT, "/standings-preferences", Some(&cookie), Some(json!({"selectedCompetitionKeys":["nhl","nba"]})));
@@ -360,7 +360,7 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
     assert_eq!(json_of(&text), json!({"selectedCompetitionKeys":null,"lastViewed":null}));
     let (status, text) = call(Method::DELETE, &format!("/follows/{id}"), Some(&other), None);
     assert_eq!((status, json_of(&text)), (200, json!({"ok":false})));
-    assert_eq!(call(Method::POST, &format!("/follows/{id}/team"), Some(&other), Some(json!({"teamKey":"LAL"}))).0, 404);
+    assert_eq!(call(Method::POST, &format!("/follows/{id}/team"), Some(&other), Some(json!({"sourceTeamId":"lal"}))).0, 404);
     let (_, list) = call(Method::GET, "/follows", Some(&cookie), None);
     assert_eq!(json_of(&list)["follows"].as_array().unwrap().len(), 1, "B's delete must not remove A's follow");
     // The owner removes the follow.

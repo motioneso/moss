@@ -77,8 +77,8 @@ pub fn steps_before_ids() -> Vec<Value> {
         send("POST", follows, json!({"competitionKey":"nba","teamKey":"LAL"})),
         send("POST", follows, json!([])),
         get(follows),
-        send("POST", &format!("{follows}/not-a-uuid/team"), json!({"teamKey":"LAL"})),
-        send("POST", &format!("{follows}/99999999-9999-4999-8999-999999999999/team"), json!({"teamKey":"LAL"})),
+        send("POST", &format!("{follows}/not-a-uuid/team"), json!({"sourceTeamId":"lal"})),
+        send("POST", &format!("{follows}/99999999-9999-4999-8999-999999999999/team"), json!({"sourceTeamId":"lal"})),
         send("DELETE", &format!("{follows}/99999999-9999-4999-8999-999999999999"), Value::Null),
         send("DELETE", &format!("{follows}/not-a-uuid"), Value::Null),
         send("PUT", prefs, json!({"selectedCompetitionKeys":["nhl","nba"]})),
@@ -95,7 +95,9 @@ pub fn steps_with_ids() -> Vec<Value> {
     let follows = "/api/sports/follows";
     vec![
         send("POST", &format!("{follows}/{{whole}}/team"), json!({"teamKey":"LAL"})),
-        send("POST", &format!("{follows}/{{whole}}/team"), json!({"teamKey":""})),
+        send("POST", &format!("{follows}/{{whole}}/team"), json!({"sourceTeamId":"lal"})),
+        send("POST", &format!("{follows}/{{whole}}/team"), json!({"sourceTeamId":""})),
+        send("POST", &format!("{follows}/{{whole}}/team"), json!({"sourceTeamId":"x".repeat(101)})),
         send("DELETE", &format!("{follows}/{{whole}}"), Value::Null),
         send("DELETE", &format!("{follows}/{{whole}}"), Value::Null),
         get(follows),

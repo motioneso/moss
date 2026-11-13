@@ -219,8 +219,7 @@ fn another_person_cannot_see_change_or_remove_a_follow_and_the_check_fails_witho
     assert_eq!(w.call(b, "GET", "/follows", Value::Null)["body"], json!({"follows":[]}));
     assert_eq!(w.call(admin, "GET", "/follows", Value::Null)["body"], json!({"follows":[]}), "an admin is just another person here");
     assert_eq!(w.call(b, "DELETE", &format!("/follows/{id}"), Value::Null)["body"], json!({"ok":false}));
-    // The team is checked first, as in the old routes, so with no team list this answers 400 before any lookup.
-    assert_eq!(w.call(b, "POST", &format!("/follows/{id}/team"), json!({"teamKey":"LAL"}))["status"], 400);
+    assert_eq!(w.call(b, "POST", &format!("/follows/{id}/team"), json!({"sourceTeamId":"lal"}))["status"], 404);
     assert_eq!(w.call(b, "GET", "/standings-preferences", Value::Null)["body"]["selectedCompetitionKeys"], Value::Null);
     assert_eq!(w.follow_rows(a), 1, "A's follow survived B's delete");
     let count_for = |who| -> i64 { rows_as(&w.f, who, "SELECT count(*) FROM app.sports_follows", &[])[0].get(0) };
