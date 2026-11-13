@@ -612,6 +612,9 @@
       },
       "run-id": {
         "kind": "id"
+      },
+      "begun": {
+        "kind": "flag"
       }
     },
     "email-refresh-google": {

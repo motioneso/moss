@@ -106,13 +106,13 @@ fn guard(host: &impl Host, existing: Option<&Value>) -> Result<Value> {
     Ok(binding)
 }
 
+/// Placeholder run id for a first step. The job schema needs a UUID in every key.
+const NO_RUN: &str = "00000000-0000-0000-0000-000000000000";
+
 fn enqueue(host: &impl Host, id: &str, run: Option<&str>) -> Result<Value> {
     let clock = host.call("context", "read", "call", json!({}))?;
     let key = host.call("context", "uuid", "new", json!({}))?;
-    let mut params = json!({"account-id":id});
-    if let Some(run) = run {
-        params["run-id"] = json!(run);
-    }
+    let params = json!({"account-id":id,"run-id":run.unwrap_or(NO_RUN),"begun":run.is_some()});
     Ok(host.call(
         "jobs",
         "enqueue-options",
@@ -126,7 +126,7 @@ fn schedule(host: &impl Host, id: &str) {
         "jobs",
         "schedule",
         QUEUE,
-        json!({"cron":CRON,"timezone":"UTC","key":id,"params":{"account-id":id}}),
+        json!({"cron":CRON,"timezone":"UTC","key":id,"params":{"account-id":id,"run-id":NO_RUN,"begun":false}}),
     );
 }
 
@@ -135,7 +135,7 @@ fn unschedule(host: &impl Host, id: &str) {
         "jobs",
         "schedule",
         QUEUE,
-        json!({"cron":CRON,"timezone":"UTC","key":id,"params":{"account-id":id}}),
+        json!({"cron":CRON,"timezone":"UTC","key":id,"params":{"account-id":id,"run-id":NO_RUN,"begun":false}}),
     );
     if let Some(row) = saved.ok().and_then(|s| s["id"].as_str().map(String::from)) {
         let _ = host.call("jobs", "unschedule", QUEUE, json!({"id":row}));
@@ -207,7 +207,8 @@ fn outcome(name: &str) -> std::result::Result<String, String> {
 pub fn handle(host: &impl Host, payload: &str) -> std::result::Result<String, String> {
     let job: Value = serde_json::from_str(payload).map_err(|_| "Invalid Outlook calendar job")?;
     let id = job["parameters"]["account-id"].as_str().ok_or("Invalid Outlook calendar job")?;
-    run_step(host, id, job["parameters"]["run-id"].as_str()).map_err(|e| e.message).and_then(outcome)
+    let run = job["parameters"]["run-id"].as_str().filter(|_| job["parameters"]["begun"] == true);
+    run_step(host, id, run).map_err(|e| e.message).and_then(outcome)
 }
 
 fn run_step(host: &impl Host, id: &str, run: Option<&str>) -> Result<&'static str> {

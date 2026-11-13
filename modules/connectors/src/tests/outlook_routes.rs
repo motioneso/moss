@@ -92,6 +92,7 @@ fn job(host: &Stub, run: Option<&str>) -> Value {
     let mut parameters = json!({"account-id":"o1"});
     if let Some(run) = run {
         parameters["run-id"] = json!(run);
+        parameters["begun"] = json!(true);
     }
     let payload = json!({"queue":outlook::QUEUE,"parameters":parameters});
     serde_json::from_str(&handle(host, "job", &payload.to_string()).unwrap()).unwrap()
@@ -181,7 +182,7 @@ fn a_run_walks_one_view_per_step_then_imports_and_marks_current() {
     ]);
     assert_eq!(job(&host, None)["outcome"], "continued");
     let next = host.calls("outlook-calendar").into_iter().filter(|c| c["operation"] == "enqueue-options").last().unwrap();
-    assert_eq!(next["parameters"]["params"], json!({"account-id":"o1","run-id":"run-1"}));
+    assert_eq!(next["parameters"]["params"], json!({"account-id":"o1","run-id":"run-1","begun":true}));
     assert_eq!(job(&host, Some("run-1"))["outcome"], "imported");
     let health = host.health();
     assert_eq!((health["state"].clone(), health["failures"].clone()), (json!("current"), json!(0)));
