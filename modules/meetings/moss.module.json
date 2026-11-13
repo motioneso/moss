@@ -382,6 +382,31 @@
     },
     {
       "method": "POST",
+      "path": "/capture/status",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/capture/control",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/capture/audio",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/records/:id/capture",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/records/:id/capture/control",
+      "signIn": true
+    },
+    {
+      "method": "POST",
       "path": "/recording-capability/attempt",
       "signIn": true
     },
@@ -823,7 +848,7 @@
     },
     {
       "id": "meetings.mac-link",
-      "description": "The Mac recorder app links to your account and reports which Macs can record. From a meeting you start recording on a Mac, or cancel a start that has not begun. A start needs a live Mac, a speech-to-text route and room under the start limits. Starting only reserves the recording and never begins capture by itself. The link is private to your account, and no admin can read it. The old relink routes answer that relinking is required. Pairing a Mac, the real device credential check, audio upload, pause, stop and source changes are not part of this package yet.",
+      "description": "The Mac recorder app links to your account and reports which Macs can record. From a meeting you start recording on a Mac, or cancel a start that has not begun. A start needs a live Mac, a speech-to-text route and room under the start limits. Starting only reserves the recording and never begins capture by itself. The link is private to your account, and no admin can read it. The old relink routes answer that relinking is required. Audio upload, pause, resume, stop and source changes are handled with a 60 second finish window, and status reads show gaps. Pairing a Mac and the real device credential check are not part of this package yet.",
       "errors": [
         {
           "code": "meeting_capture_busy",
