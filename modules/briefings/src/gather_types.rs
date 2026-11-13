@@ -20,6 +20,8 @@ pub enum Reason {
     Unwired,
     /// A connected account needs the person to sign in or grant access again.
     SourceAuth,
+    /// Items arrived but none was kept after the filters.
+    FilteredOut,
 }
 
 impl Reason {
@@ -30,6 +32,7 @@ impl Reason {
             Reason::Empty => "empty",
             Reason::Unwired => "unwired",
             Reason::SourceAuth => "source_auth",
+            Reason::FilteredOut => "filtered_out",
         }
     }
 }

@@ -1,6 +1,9 @@
 //! Briefings package: definitions and runs routes, the run job, schedule alignment and account export.
 //! All effects cross the guest-safe SDK Host interface.
 pub mod action_rows;
+pub mod auto_plan;
+pub mod evening;
+pub mod evening_prompt;
 pub mod body;
 pub mod compose;
 pub mod definitions;

@@ -289,14 +289,19 @@ fn a_successful_run_names_the_router_and_is_not_degraded() {
 }
 
 #[test]
-fn evening_and_weekly_runs_make_no_model_call() {
+fn evening_and_weekly_runs_each_call_the_router_once_and_degrade_without_one() {
     for kind in ["evening", "weekly_review"] {
         let fake = base();
         feed(&fake, A, vec![task("t1", "Write plan", "todo")], vec![], vec![]);
         let done = compose(&fake, kind);
-        assert!(fake.ai_calls.borrow().is_empty(), "{kind}");
-        assert_eq!(done.source_metadata["degradedReason"], "no_model");
+        assert_eq!(fake.ai_calls.borrow().len(), 1, "{kind}");
+        assert_eq!(done.source_metadata["aiModel"]["id"], "router", "{kind}");
     }
+    let fake = base();
+    *fake.ai_reply.borrow_mut() = None;
+    feed(&fake, A, vec![task("t1", "Write plan", "todo")], vec![], vec![]);
+    let done = compose(&fake, "evening");
+    assert_eq!(done.source_metadata["degradedReason"], "no_model");
 }
 
 #[test]

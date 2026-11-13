@@ -2,9 +2,11 @@
 //! never its tables. A source that cannot be read, or whose module is not built yet, becomes a
 //! visible gap and never fails the run. Only the run owner's data is read, because the host
 //! carries the owner's identity into every call.
+use crate::auto_plan::switches;
 use crate::compose::Subject;
 use crate::external::{self, Contribution, Contributors};
 use crate::gather_types::*;
+use crate::lenses::local_day_start;
 use crate::priority::{self, Candidate};
 use crate::runs;
 use crate::trust::sanitize_external;
@@ -185,8 +187,10 @@ fn live<H: Host + ?Sized>(
     Some((items(&reply), context, degraded, more))
 }
 
-fn calendar<H: Host + ?Sized>(host: &H, now: DateTime<Utc>, zone: chrono_tz::Tz, out: &mut Gathered) -> Section {
-    let input = json!({"windowStart": now.to_rfc3339_opts(chrono::SecondsFormat::Millis, true), "limit": CALENDAR_LIMIT});
+/// Reads the calendar from `window_start`. The evening review starts at local midnight so a block
+/// placed earlier today still finds its event.
+fn calendar<H: Host + ?Sized>(host: &H, window_start: DateTime<Utc>, zone: chrono_tz::Tz, out: &mut Gathered) -> Section {
+    let input = json!({"windowStart": window_start.to_rfc3339_opts(chrono::SecondsFormat::Millis, true), "limit": CALENDAR_LIMIT});
     let Some((events, context, degraded, more)) = live(host, "listCalendarContext", input, "calendar", &mut out.gaps) else {
         return Section::empty("calendar", "CALENDAR");
     };
@@ -289,14 +293,18 @@ pub fn gather<H: Host + ?Sized, C: Contributors + ?Sized>(
         zone,
         since: previous_run(host, subject, now)?,
     };
+    let evening = subject.briefing_type == "evening";
     if selected(subject, TASKS) {
-        let since = out.since;
+        // The evening review over-reads completed tasks by two days. The local day decides.
+        let since = if evening { now - Duration::hours(48) } else { out.since };
         let section = tasks(host, since, &mut out.gaps);
         out.sections.push(section);
         subject.deadline.check(host)?;
     }
-    if selected(subject, CALENDAR) {
-        let section = calendar(host, now, zone, &mut out);
+    // A calendar the person left out of briefings is not read at all.
+    if selected(subject, CALENDAR) && switches(host).briefings {
+        let window = if evening { local_day_start(now, zone).unwrap_or(now) } else { now };
+        let section = calendar(host, window, zone, &mut out);
         out.sections.push(section);
         subject.deadline.check(host)?;
     }

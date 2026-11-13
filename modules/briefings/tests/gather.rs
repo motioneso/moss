@@ -69,7 +69,8 @@ fn only_selected_sources_are_read() {
     let fake = Fake::new();
     let out = run(&fake, &[CALENDAR]);
     assert!(out.sections.iter().all(|s| s.key == "calendar"));
-    assert!(fake.api_calls.borrow().iter().all(|(_, m, n, _)| (m.as_str(), n.as_str()) == ("connectors", "listCalendarContext")));
+    // Only the calendar read and the person's calendar switch are asked.
+    assert!(fake.api_calls.borrow().iter().all(|(_, m, n, _)| matches!((m.as_str(), n.as_str()), ("connectors", "listCalendarContext") | ("calendar", "getSourceSwitches"))));
 }
 
 #[test]
@@ -84,8 +85,8 @@ fn calendar_reads_through_the_connectors_call_and_formats_in_the_owner_zone() {
     let out = run(&fake, &[CALENDAR]);
     assert_eq!(section(&out, "calendar").lines, vec!["2026-11-11 09:00 · Standup"]);
     assert!(gap(&out, "calendar").is_none());
-    let call = fake.api_calls.borrow()[0].clone();
-    assert_eq!((call.1.as_str(), call.2.as_str()), ("connectors", "listCalendarContext"));
+    let call = fake.api_calls.borrow().iter().find(|c| c.2 == "listCalendarContext").cloned().expect("calendar read");
+    assert_eq!(call.1, "connectors");
     assert_eq!(call.3["windowStart"], NOW);
 }
 
