@@ -236,7 +236,10 @@ fn decode_reddit_entities(value: &str) -> String {
         let prefix = if hex { "&#x" } else { "&#" };
         let mut out = String::with_capacity(text.len());
         let mut rest = text;
-        while let Some(at) = rest.find(prefix).or_else(|| if hex { rest.find("&#X") } else { None }) {
+        while let Some(at) = match (rest.find(prefix), hex.then(|| rest.find("&#X")).flatten()) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        } {
             out.push_str(&rest[..at]);
             let after = &rest[at + prefix.len()..];
             let len = after

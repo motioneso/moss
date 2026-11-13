@@ -167,7 +167,8 @@ fn parse(input: &str) -> Option<Url> {
             if !digits.chars().all(|c| c.is_ascii_digit()) {
                 return None;
             }
-            let value: u32 = digits.trim_start_matches('0').parse().unwrap_or(0);
+            let trimmed = digits.trim_start_matches('0');
+            let value: u32 = if trimmed.is_empty() { 0 } else { trimmed.parse().ok()? };
             if value > 65535 {
                 return None;
             }
@@ -229,6 +230,9 @@ fn split_port(hostport: &str) -> (&str, Option<&str>) {
         return match hostport.find(']') {
             Some(close) => {
                 let after = &hostport[close + 1..];
+                if !after.is_empty() && !after.starts_with(':') {
+                    return (hostport, None);
+                }
                 (&hostport[..=close], after.strip_prefix(':'))
             }
             None => (hostport, None),
@@ -281,17 +285,11 @@ fn parse_host(text: &str) -> Option<String> {
     }
     if text.starts_with('[') {
         let inner = text.strip_prefix('[')?.strip_suffix(']')?;
-        if inner.is_empty()
-            || !inner
-                .chars()
-                .all(|c| c.is_ascii_hexdigit() || c == ':' || c == '.')
-        {
-            return None;
-        }
-        return Some(format!("[{}]", inner.to_ascii_lowercase()));
+        let groups = parse_ipv6(inner)?;
+        return Some(format!("[{}]", format_ipv6(&groups)));
     }
     let decoded = String::from_utf8(percent_decode(text)).ok()?;
-    let lowered = decoded.to_lowercase();
+    let lowered = map_host_characters(&decoded).to_lowercase();
     let ascii = to_ascii_host(&lowered)?;
     if ascii.is_empty() || ascii.chars().any(|c| FORBIDDEN_HOST.contains(&c) || c.is_ascii_control() || c == '\u{7f}') {
         return None;
@@ -300,6 +298,107 @@ fn parse_host(text: &str) -> Option<String> {
         return ipv4(&ascii);
     }
     Some(ascii)
+}
+
+/// The host mappings that matter in practice: fullwidth forms fold to ASCII and the ideographic
+/// full stops become dots, as the browser address parser does before punycode. Other Unicode
+/// compatibility folding is not applied.
+fn map_host_characters(host: &str) -> String {
+    host.chars()
+        .filter(|c| !matches!(c, '\u{ad}' | '\u{200b}' | '\u{2060}' | '\u{feff}'))
+        .map(|c| match c {
+            '\u{3002}' | '\u{ff0e}' | '\u{ff61}' => '.',
+            '\u{ff01}'..='\u{ff5e}' => char::from_u32(c as u32 - 0xfee0).unwrap_or(c),
+            _ => c,
+        })
+        .collect()
+}
+
+/// Parses IPv6 text into eight groups. Accepts one `::` and an optional dotted IPv4 tail.
+fn parse_ipv6(text: &str) -> Option<[u16; 8]> {
+    if text.is_empty() || text.contains(":::") || text.matches("::").count() > 1 {
+        return None;
+    }
+    let parse_side = |side: &str| -> Option<Vec<u16>> {
+        let mut out = Vec::new();
+        if side.is_empty() {
+            return Some(out);
+        }
+        let pieces: Vec<&str> = side.split(':').collect();
+        let last = pieces.len() - 1;
+        for (i, piece) in pieces.iter().enumerate() {
+            if piece.contains('.') {
+                let parts: Vec<&str> = piece.split('.').collect();
+                if i != last || parts.len() != 4 {
+                    return None;
+                }
+                let mut bytes = [0u16; 4];
+                for (k, part) in parts.iter().enumerate() {
+                    if part.is_empty() || part.len() > 3 || !part.chars().all(|c| c.is_ascii_digit()) {
+                        return None;
+                    }
+                    let v: u16 = part.parse().ok()?;
+                    if v > 255 || (part.len() > 1 && part.starts_with('0')) {
+                        return None;
+                    }
+                    bytes[k] = v;
+                }
+                out.push(bytes[0] << 8 | bytes[1]);
+                out.push(bytes[2] << 8 | bytes[3]);
+            } else {
+                if piece.is_empty() || piece.len() > 4 || !piece.chars().all(|c| c.is_ascii_hexdigit()) {
+                    return None;
+                }
+                out.push(u16::from_str_radix(piece, 16).ok()?);
+            }
+        }
+        Some(out)
+    };
+    let mut groups = [0u16; 8];
+    match text.split_once("::") {
+        Some((head, tail)) => {
+            let head = parse_side(head)?;
+            let tail = parse_side(tail)?;
+            if head.len() + tail.len() > 7 {
+                return None;
+            }
+            groups[..head.len()].copy_from_slice(&head);
+            groups[8 - tail.len()..].copy_from_slice(&tail);
+        }
+        None => {
+            let all = parse_side(text)?;
+            if all.len() != 8 {
+                return None;
+            }
+            groups.copy_from_slice(&all);
+        }
+    }
+    Some(groups)
+}
+
+/// The canonical text form: lowercase hex, no leading zeros, longest run of two or more zero
+/// groups (the first on a tie) written as `::`.
+fn format_ipv6(groups: &[u16; 8]) -> String {
+    let (mut best_start, mut best_len, mut start, mut len) = (0usize, 0usize, 0usize, 0usize);
+    for (i, g) in groups.iter().enumerate() {
+        if *g == 0 {
+            if len == 0 {
+                start = i;
+            }
+            len += 1;
+            if len > best_len {
+                best_start = start;
+                best_len = len;
+            }
+        } else {
+            len = 0;
+        }
+    }
+    let hex = |g: &[u16]| g.iter().map(|v| format!("{v:x}")).collect::<Vec<_>>().join(":");
+    if best_len < 2 {
+        return hex(groups);
+    }
+    format!("{}::{}", hex(&groups[..best_start]), hex(&groups[best_start + best_len..]))
 }
 
 fn to_ascii_host(host: &str) -> Option<String> {

@@ -626,6 +626,17 @@ const urlInputs = [
   "https://example.com/a#b#c",
   "https://example.com//double//slash",
   "https://example.com/a?b?c",
+  "https://example.com:4294967296/story",
+  "https://example.com:00080/",
+  "https://[::1]junk/story",
+  "https://[:::]/story",
+  "https://[1:2:3:4:5:6:7:8]/",
+  "https://[1::2::3]/",
+  "https://[::ffff:1.2.3.4]/",
+  "https://[1:2]/",
+  "https://\uff45\uff58\uff41\uff4d\uff50\uff4c\uff45\u3002com/story",
+  "https://\uff52\uff45\uff44\uff44\uff49\uff54.com/r/x",
+  "https://exa\u00admple.com/",
   "mailto:a@b.c",
   "https://",
   "https:///x",
@@ -869,6 +880,11 @@ addEntry(
 addEntry(
   "anchor with gt in href",
   entry({ content: `<a href="https://news.example/a>b">[link]</a>` })
+);
+addEntry("mixed hex case entity", entry({ title: "<![CDATA[&#X41;&#x42;&#x43;&#X44;]]>" }));
+addEntry(
+  "fullwidth reddit host",
+  entry(link("https://\uff52\uff45\uff44\uff44\uff49\uff54.com/r/x"))
 );
 addEntry(
   "numeric entity link",

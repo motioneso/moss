@@ -83,15 +83,16 @@ fn the_source_has_no_way_to_log_store_or_send_text() {
     ];
     let mut hits = vec![];
     for (name, text) in rust_sources() {
-        // Only the code before a unit-test module counts.
-        let code = text.split("#[cfg(test)]").next().unwrap_or("");
-        for (n, line) in code.lines().enumerate() {
+        assert!(!text.contains("#[cfg(test)]"), "{name}: tests belong in tests/, not src/");
+        for (n, line) in text.lines().enumerate() {
             let trimmed = line.trim_start();
             if trimmed.starts_with("//") {
                 continue;
             }
+            // Spaces inside a macro call must not hide it.
+            let squeezed: String = line.split_whitespace().collect();
             for word in forbidden {
-                if line.contains(word) {
+                if line.contains(word) || squeezed.contains(&word.split_whitespace().collect::<String>()) {
                     hits.push(format!("{name}:{}: {word}", n + 1));
                 }
             }
@@ -117,4 +118,16 @@ fn only_the_approved_libraries_are_used() {
     for needed in ["scraper", "quick-xml", "psl"] {
         assert!(names.contains(&needed), "missing {needed}");
     }
+}
+
+#[test]
+fn a_tag_with_tens_of_thousands_of_attributes_stays_fast() {
+    let attrs: String = (0..40_000).map(|n| format!("a{n}=\"\" ")).collect();
+    let xml = format!(
+        "<rss><channel><item><title {attrs}>T</title><link>https://example.com</link></item></channel></rss>"
+    );
+    let started = std::time::Instant::now();
+    let items = parse_public_feed_items(&xml);
+    assert_eq!(items.len(), 1);
+    assert!(started.elapsed().as_secs() < 2, "took {:?}", started.elapsed());
 }

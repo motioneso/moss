@@ -54,9 +54,10 @@ pub(crate) fn tag_name(e: &BytesStart<'_>) -> String {
 /// Attributes as decoded (name, value) pairs. The first copy of a repeated name wins.
 pub(crate) fn attributes(e: &BytesStart<'_>) -> Vec<(String, String)> {
     let mut out: Vec<(String, String)> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
     for attr in e.attributes().with_checks(false).flatten() {
         let key = attr.key.as_ref().to_string();
-        if out.iter().any(|(k, _)| *k == key) {
+        if !seen.insert(key.clone()) {
             continue;
         }
         let value = decode_xml_entities(&attr.value);

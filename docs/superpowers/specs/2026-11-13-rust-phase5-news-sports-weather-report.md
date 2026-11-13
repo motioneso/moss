@@ -208,16 +208,16 @@ Only the three Ben approved, pinned in the lock file: `scraper` 0.29.0, `quick-x
 
 ### What was proven
 
-| Claim                                                    | How                                                                                                                     |
-| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Same results as the old reader                           | The old TypeScript reader was run on 509 cases. The Rust reader matches every one.                                      |
-| Old fixture feeds give the same items                    | BBC, Guardian, NPR and Verge captures, run through each source's picture rules.                                         |
-| Edge cases match                                         | 69 invented feeds, 54 web addresses, 26 text cases, 19 dates, 31 subreddit inputs, 34 Reddit posts, 14 Reddit feeds.    |
-| Fixtures hold no personal data                           | A scan in the test run (emails, phone numbers, private addresses). Author names were removed from the fixtures.         |
-| Native and WebAssembly                                   | The same 509 cases pass natively and inside a WebAssembly module under Node.                                            |
-| A second person never sees the first person's text       | Test below.                                                                                                             |
-| Private text cannot reach logs, job payloads or activity | The library has no way to write or send anything. A source scan fails on any print, log, file, network or shared state. |
-| Real feeds                                               | The built reader parsed live BBC (30 items), NPR (10), Guardian (30), Verge (10) and the NFL subreddit (10 headlines).  |
+| Claim                                                    | How                                                                                                                                                                 |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Same results as the old reader                           | The old TypeScript reader was run on 522 cases. The Rust reader matches every one.                                                                                  |
+| Old fixture feeds give the same items                    | BBC, Guardian, NPR and Verge captures, run through each source's picture rules.                                                                                     |
+| Edge cases match                                         | 69 invented feeds, 54 web addresses, 26 text cases, 19 dates, 31 subreddit inputs, 34 Reddit posts, 14 Reddit feeds.                                                |
+| Fixtures hold no personal data                           | A scan in the test run (emails, phone numbers, private addresses). Author names were removed from the fixtures.                                                     |
+| Native and WebAssembly                                   | The same 522 cases pass natively and inside a WebAssembly module under Node.                                                                                        |
+| A second person never sees the first person's text       | Test below.                                                                                                                                                         |
+| Private text cannot reach logs, job payloads or activity | The library takes text in and returns values. A source scan flags print, log, file, network and shared-state calls. It is a guard, not a proof for all future code. |
+| Real feeds                                               | The built reader parsed live BBC (30 items), NPR (10), Guardian (30), Verge (10) and the NFL subreddit (10 headlines).                                              |
 
 ### Row-level security: honest answer
 
@@ -235,6 +235,11 @@ The golden file is regenerated from the old code with `modules/news/reader/tools
 
 - Not run through the real Rust server. The reader is not wired into any package until parts 3 and 4, so no server route calls it yet.
 - Not run in a browser or on a phone. There is no screen.
+- Host names fold fullwidth letters, ideographic full stops and soft hyphens, but other Unicode compatibility folding is not applied, so a rare look-alike host could still differ from the old code.
 - Public suffix answers match `tldts` on a 34-host list, not on every host.
 - Dates without a zone are read as UTC. The old code read them in the server's zone. Feeds seen so far always carry a zone.
 - Live feed shapes can drift. Only part 22's live pass checks that over time.
+
+### Review round 1
+
+Codex found no blocker and two major problems, both fixed: a feed tag with tens of thousands of attributes took 17 seconds (now linear, with a test), and look-alike host names (fullwidth letters) bypassed the Reddit-internal link rule. Four minor ones were fixed too: overflowing ports, malformed IPv6 hosts, mixed-case hex codes in Reddit titles, and gaps in the source scan.
