@@ -28,7 +28,7 @@ pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
         ("GET", "/definitions/:id/runs/:run_id") => runs::get(host, &request),
         _ => return Response::new(404, json!({"message":"Route not found"})),
     };
-    result.unwrap_or_else(|_| Response::new(500, json!({"message":"Internal server error"})))
+    result.unwrap_or_else(|e| Response::new(500, json!({"message":"Internal server error","debug":format!("{e:?}")})))
 }
 
 /// The same entry point runs natively in tests and inside the packaged component.
