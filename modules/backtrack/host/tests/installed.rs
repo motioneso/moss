@@ -407,3 +407,42 @@ fn the_sweep_removes_the_chunks_of_expired_segments() {
     w.run_jobs();
     assert_eq!((w.segments(w.f.a), w.chunks(w.f.a)), (0, 0));
 }
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_later_upload_is_indexed_after_an_earlier_run_in_the_same_minute() {
+    let w = World::new();
+    w.link(w.f.a);
+    w.call(w.f.a, "POST", "/ingest", upload(vec![segment(10, "first")]));
+    w.run_jobs();
+    assert_eq!((w.unindexed(w.f.a), w.chunks(w.f.a)), (0, 1));
+    w.call(w.f.a, "POST", "/ingest", upload(vec![segment(20, "second")]));
+    w.run_jobs();
+    assert_eq!((w.unindexed(w.f.a), w.chunks(w.f.a)), (0, 2), "the second upload must not wait for the hourly sweep");
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_backlog_larger_than_one_reply_is_indexed_in_several_runs() {
+    let w = World::new();
+    w.link(w.f.a);
+    let body = "a ".repeat(1000);
+    let segments: Vec<Value> = (0..12)
+        .map(|n| {
+            let mut one = segment(10 + n, &format!("w{n} {body}"));
+            one["windowTitle"] = json!(format!("Title {n}"));
+            one
+        })
+        .collect();
+    for part in segments.chunks(4) {
+        w.call(w.f.a, "POST", "/ingest", upload(part.to_vec()));
+    }
+    assert_eq!(w.unindexed(w.f.a), 12);
+    for _ in 0..6 {
+        w.run_jobs();
+        if w.unindexed(w.f.a) == 0 {
+            break;
+        }
+    }
+    assert_eq!(w.unindexed(w.f.a), 0, "every segment is indexed even when one reply cannot hold them all");
+}

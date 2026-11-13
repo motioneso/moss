@@ -47,8 +47,16 @@ pub fn delete<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Resp
         return Ok(Response::new(200, json!({"deleted": 0})));
     }
     // Search chunks go first, so a failure leaves the text and its marker untouched.
-    let window = json!({"from": from.map(write), "to": write(to)});
-    remove_chunks(host, &ids(&call(host, "segment-ids", window)?))?;
+    let mut after: Option<String> = None;
+    loop {
+        let window = json!({"from": from.map(write), "to": write(to), "after": after});
+        let page = ids(&call(host, "segment-ids", window)?);
+        remove_chunks(host, &page)?;
+        match page.last() {
+            Some(last) if page.len() >= 5000 => after = Some(last.clone()),
+            _ => break,
+        }
+    }
     let reply = call(
         host,
         "delete",

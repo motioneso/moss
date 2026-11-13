@@ -87,7 +87,7 @@ pub fn run<H: Host + ?Sized>(host: &H) -> Result<String> {
     if let Some(error) = failed {
         return Err(error);
     }
-    if segments.len() >= BATCH {
+    if segments.len() >= BATCH || pending["more"].as_bool().unwrap_or(false) {
         enqueue(host);
     }
     Ok(json!({"indexed": done.len()}).to_string())

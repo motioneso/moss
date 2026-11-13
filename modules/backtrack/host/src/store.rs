@@ -201,17 +201,19 @@ fn uuids(parameters: &Value, key: &str, max: usize) -> Result<Vec<String>> {
     list.iter().map(|v| v.as_str().map(str::to_owned).ok_or_else(|| anyhow::anyhow!("Invalid id"))).collect()
 }
 
-/// Ids of the segments a delete over this range would remove.
+/// One page (by id) of the segments a delete over this range would remove, after the id in `after`.
 pub async fn segment_ids(cx: &DataContext, parameters: &Value) -> Result<Value> {
     let from = text(parameters, "from");
     let to = text(parameters, "to");
+    let after = text(parameters, "after").unwrap_or("00000000-0000-0000-0000-000000000000").to_owned();
     let rows = cx
         .db()
         .query(
             "SELECT id::text FROM app.backtrack_segments WHERE owner_user_id=app.current_actor_user_id() \
              AND NOT (ended_at < COALESCE($1::text::timestamptz,'-infinity'::timestamptz) \
-             OR started_at >= COALESCE($2::text::timestamptz,'infinity'::timestamptz))",
-            &[&from, &to],
+             OR started_at >= COALESCE($2::text::timestamptz,'infinity'::timestamptz)) \
+             AND id > $3::text::uuid ORDER BY id LIMIT 5000",
+            &[&from, &to, &after],
         )
         .await?;
     Ok(json!({"ids": rows.iter().map(|r| r.get::<_, String>(0)).collect::<Vec<_>>()}))
@@ -270,7 +272,22 @@ pub async fn pending(cx: &DataContext) -> Result<Value> {
             &[&ids],
         )
         .await?;
-    Ok(json!({"segments": rows.iter().map(|r| r.get::<_, Value>(0)).collect::<Vec<_>>()}))
+    // A run has a fixed compute budget and a port reply may not pass 1 MiB, so the batch
+    // stops at a size budget and the rest follows in a continuation run. The first segment
+    // always goes through.
+    let mut size = 0;
+    let mut segments: Vec<Value> = Vec::new();
+    let mut more = ids.len() > rows.len();
+    for row in &rows {
+        let segment: Value = row.get(0);
+        size += segment.to_string().len();
+        if !segments.is_empty() && size > 16 * 1024 {
+            more = true;
+            break;
+        }
+        segments.push(segment);
+    }
+    Ok(json!({"segments": segments, "more": more}))
 }
 
 pub async fn mark_indexed(cx: &DataContext, parameters: &Value) -> Result<Value> {
@@ -299,14 +316,19 @@ pub async fn mark_indexed(cx: &DataContext, parameters: &Value) -> Result<Value>
     Ok(json!({"marked": marked}))
 }
 
-/// A job key that is the same for one person within one minute, so a burst of uploads queues
-/// one index run. It is a hash of the person and the minute, never of any text.
+/// A job key that is the same for one person within one minute while no segment has been
+/// marked in between, so a burst of uploads queues one index run, and a run that finished
+/// never blocks the next one. It is a hash of the person, the minute and a count, never of
+/// any text.
 pub async fn index_key(cx: &DataContext) -> Result<Value> {
+    as_module(cx).await?;
+    let marks: i64 = cx.db().query_one("SELECT count(*)::bigint FROM app.backtrack_index_marks", &[]).await?.get(0);
+    as_app(cx).await?;
     let key: String = cx
         .db()
         .query_one(
-            "SELECT md5(app.current_actor_user_id()::text || ':backtrack-index:' || floor(extract(epoch from now())/60)::text)::uuid::text",
-            &[],
+            "SELECT md5(app.current_actor_user_id()::text || ':backtrack-index:' || floor(extract(epoch from now())/60)::text || ':' || $1::bigint::text)::uuid::text",
+            &[&marks],
         )
         .await?
         .get(0);
