@@ -41,6 +41,7 @@ All checks ran on a throwaway database through the verify gate, against the inst
 | Typed text stays out of everything else  | Planted marker typed into every field, 37 tables and job payloads scanned                  | Not found; the guest test also failed first when a leak was added on purpose |
 | Export is the owner's only               | A's export holds A's follow and not B's, all five sections present                         | Passed                                                                       |
 | Package builds native and as WebAssembly | Guest tests native (29), package tests against the built component (6)                     | Passed                                                                       |
+| Works on the real server over HTTPS      | Real server, real login, two people add, change, list, remove follows and set standings    | Passed; each person saw only their own                                       |
 
 ### A deliberate fix
 

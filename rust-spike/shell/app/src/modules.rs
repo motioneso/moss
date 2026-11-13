@@ -199,6 +199,30 @@ impl Intelligence for SplitIntelligence {
     }
 }
 
+/// Sports keeps its standings choices in two fixed account preference keys.
+fn sports_preferences(database: Database, next: Arc<dyn Ports>) -> Result<Arc<dyn Ports>> {
+    Ok(Arc::new(AccountPreferencesPorts::new(
+        database,
+        BTreeMap::from([
+            (
+                ("sports".into(), "standings-competitions".into()),
+                Binding::Json {
+                    key: "sports.standings_competition_keys".into(),
+                    shape: JsonShape::TextList { max_items: 64, max_len: 200 },
+                },
+            ),
+            (
+                ("sports".into(), "standings-last-viewed".into()),
+                Binding::Json {
+                    key: "sports.standings_last_viewed".into(),
+                    shape: JsonShape::LastViewed,
+                },
+            ),
+        ]),
+        next,
+    )?))
+}
+
 /// Account preference and linked-notes ports for People. Keys, resources and roots are
 /// fixed here, never chosen by the guest.
 fn linked_notes(
@@ -223,20 +247,6 @@ fn linked_notes(
                     key: "sourceBehaviors".into(),
                     entry: "people.notes.suggest-updates".into(),
                     default: true,
-                },
-            ),
-            (
-                ("sports".into(), "standings-competitions".into()),
-                Binding::Json {
-                    key: "sports.standings_competition_keys".into(),
-                    shape: JsonShape::TextList { max_items: 64, max_len: 200 },
-                },
-            ),
-            (
-                ("sports".into(), "standings-last-viewed".into()),
-                Binding::Json {
-                    key: "sports.standings_last_viewed".into(),
-                    shape: JsonShape::LastViewed,
                 },
             ),
         ]),
@@ -353,6 +363,7 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
         anyhow::ensure!(base.is_absolute(), "Notes base needs an absolute path");
     }
     let preferences_database = database.clone();
+    let preferences_database_sports = database.clone();
     let calendar_database = database.clone();
     let connectors_database = database.clone();
     let meetings_database = database.clone();
@@ -440,6 +451,7 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
                 Ok(Arc::new(LinkedNotesPorts::new(Arc::new(folders), services)) as Arc<dyn Ports>)
             }
             }?;
+            let services = sports_preferences(preferences_database_sports, services)?;
             // Meetings answers only its own capture-preference calls, as the signed-in person.
             let authority_database = meetings_database.clone();
             let services = Arc::new(
