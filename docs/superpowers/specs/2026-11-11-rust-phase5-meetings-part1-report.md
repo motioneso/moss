@@ -407,3 +407,61 @@ The table lists every code the ring receivers return. A test fails if it differs
 - Reaching the server from another device. The live run used the local address. A try on the
   computer's own network address was refused because the server only listens on that address
   once the owner has switched sharing on, and that was not set up here.
+
+## Part 9: linking the Mac app
+
+Task JS-258. The server side of the Mac app link works for starting and cancelling a recording
+and for claiming it afterwards, except for the pieces listed under "Not built" and "Not proven".
+
+### What is built
+
+- A person can link one Mac app to their account. The server keeps the link, the start request
+  and the recording claim in the person's own rows.
+- Start recording asks the Mac app to begin and waits for it to confirm. Cancel start stops a
+  request that has not been confirmed yet. A second start while one is open is refused.
+- A background job tidies up requests that were never confirmed and links that went quiet.
+- The capture routes, the queue and the resource are declared in the Meetings manifest, and the
+  app map entry describes what works and what does not.
+- Chat sees the start and cancel actions as classed tools.
+
+### What was proved
+
+| Check                | How                                                                                                                     |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Link flow            | Seventeen tests against a fake Mac app: link, start, confirm, cancel, claim, repeats, refusals, and the age of a start. |
+| Guard removal        | Eight checks each remove one safety rule from the code and must turn a test red. All eight did.                         |
+| Real database        | A link, start, cancel and claim run against a real database.                                                            |
+| Two-person privacy   | Another person cannot see or change a link. Seen leaking with row security removed, and clean when restored.            |
+| No text in the queue | A planted marker never appears in queued work, activity rows or link rows.                                              |
+
+### Error codes
+
+The table lists every code the capture routes return. A test fails if it differs from the code.
+
+| Code                                     | Status          | Meaning                                       |
+| ---------------------------------------- | --------------- | --------------------------------------------- |
+| `meeting_capture_busy`                   | 409             | A recording is already running or starting    |
+| `meeting_capture_conflict`               | 409             | The request clashes with the current state    |
+| `meeting_capture_limit`                  | 413             | Over a size or length limit                   |
+| `meeting_capture_processing_unavailable` | 503             | Nothing is set up to turn the sound into text |
+| `meeting_capture_source_unavailable`     | 409             | The Mac app is not available as a source      |
+| `meeting_capture_unavailable`            | 401, 404 or 503 | Capture is not available to this person       |
+| `meeting_capture_rate_limited`           | 429             | Too many requests                             |
+| `meeting_capture_invalid_input`          | 400             | Bad request fields                            |
+| `meeting_capture_interrupted`            | 409             | The recording was interrupted                 |
+| `recording_relink_required`              | 410             | The Mac app must be linked again              |
+| `recording_connection_unavailable`       | 401             | The Mac app connection could not be used      |
+
+### Not built
+
+- Retry-After headers and long polling.
+- Screens.
+
+### Not proven
+
+- The device credential check. Device pairing (part 7) is parked, so a fake stands in for it.
+- Whether a browser session is still alive when a start is confirmed.
+- That Cancel start stops a transcript that has already begun.
+- The gone (410) answers on the paths under the recording capability route.
+- The real Mac app and a real model pass. The tests use a fake Mac app and scripted text.
+- That Chat blocks these tools the way the classes assume. That is a guess, marked as one.
