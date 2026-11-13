@@ -267,3 +267,27 @@ fn meeting_text_never_reaches_a_failure_or_a_job() {
     }
     assert!(!f.jobs.borrow().iter().any(|(_, p)| p.to_string().contains(marker)));
 }
+
+#[test]
+fn a_long_history_of_finished_grants_does_not_hide_a_new_start() {
+    let (f, meeting) = ready();
+    start(&f, &meeting, K2);
+    let open = f.rows("app.meeting_capture_grants")[0].clone();
+    let fillers: Vec<Value> = (0..1000)
+        .map(|n| {
+            let mut old = open.clone();
+            old["id"] = json!(format!("00000000-0000-4000-9000-{n:012x}"));
+            old["start_request_key"] = json!(format!("00000000-0000-4000-a000-{n:012x}"));
+            old["status"] = json!(if n % 2 == 0 { "revoked" } else { "complete" });
+            old
+        })
+        .collect();
+    {
+        let mut tables = f.tables.borrow_mut();
+        let grants = tables.get_mut("app.meeting_capture_grants").unwrap();
+        grants.splice(0..0, fillers);
+    }
+    let (status, answer) = poll(&f);
+    assert_eq!(status, 200);
+    assert_eq!(answer["command"]["grantId"], open["id"], "{answer}");
+}

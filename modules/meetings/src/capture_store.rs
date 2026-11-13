@@ -151,7 +151,15 @@ pub fn set_status<H: Host + ?Sized>(host: &H, grant: &str, status: &str) -> Resu
 }
 
 pub fn grants_for_device<H: Host + ?Sized>(host: &H, device: &str) -> Result<Vec<Value>, Stop> {
-    many(host, GRANTS, Filter::eq("device_id", device), 1000)
+    // Finished grants are left out so a long history cannot fill the page and hide an open one.
+    let open = Filter::And {
+        filters: vec![
+            Filter::eq("device_id", device),
+            Filter::Compare { column: "status".into(), op: moss_module_sdk::query::Compare::Ne, value: json!("revoked") },
+            Filter::Compare { column: "status".into(), op: moss_module_sdk::query::Compare::Ne, value: json!("complete") },
+        ],
+    };
+    many(host, GRANTS, open, 1000)
 }
 
 pub fn grants_for_meeting<H: Host + ?Sized>(host: &H, meeting: &str) -> Result<Vec<Value>, Stop> {
