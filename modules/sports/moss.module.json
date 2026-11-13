@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 2,
+  "id": "sports",
+  "name": "Sports",
+  "publisher": "Moss",
+  "version": "0.1.0",
+  "description": "Keeps each person's followed leagues and teams, private to the owner. A whole league can be followed once, and following it again returns the saved follow. A followed team is tied to the provider's permanent team number. The standings picker remembers the leagues a person chose and the standings view they last opened, under the same saved settings as before. Account export and deletion cover all six Sports tables. Following a team needs the provider's team list, which is not part of this package yet, so team follows are refused with the same fail-closed messages the old app gave when the provider was down. Scores, standings data, news sources, source setup, chat tools and the screens are not part of this package yet.",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "fuelLimit": 200000000,
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "db",
+      "operations": ["query"],
+      "resources": [
+        "app.sports_custom_sources",
+        "app.sports_espn_source_assignments",
+        "app.sports_follows",
+        "app.sports_headline_prefs",
+        "app.sports_policy_verdicts",
+        "app.sports_source_assignments"
+      ]
+    },
+    {
+      "port": "context",
+      "operations": ["read", "uuid"],
+      "resources": ["call", "new"]
+    },
+    {
+      "port": "kv",
+      "operations": ["preference.read", "preference.write"],
+      "resources": ["standings-competitions", "standings-last-viewed"]
+    }
+  ],
+  "database": {
+    "migrations": [
+      "sql/0133_sports_follows.sql",
+      "sql/0185_sports_whole_league_dedupe.sql",
+      "sql/0186_sports_whole_league_unique.sql",
+      "sql/0190_sports_custom_sources.sql",
+      "sql/0191_sports_public_source_runtime.sql",
+      "sql/0192_sports_legacy_feed_assignments_verified.sql",
+      "sql/0193_sports_legacy_feed_assignment_repair.sql",
+      "sql/0196_sports_news_source_scopes.sql",
+      "sql/0213_sports_reddit_sources.sql",
+      "sql/0217_sports_follows_source_team_id.sql",
+      "sql/0222_sports_source_photos.sql",
+      "sql/0242_sports_follows_worker_select.sql"
+    ],
+    "ownedTables": [
+      "app.sports_custom_sources",
+      "app.sports_espn_source_assignments",
+      "app.sports_follows",
+      "app.sports_headline_prefs",
+      "app.sports_policy_verdicts",
+      "app.sports_source_assignments"
+    ],
+    "ledger": "core-legacy",
+    "access": {
+      "app.sports_custom_sources": {
+        "access": "owner-only"
+      },
+      "app.sports_espn_source_assignments": {
+        "access": "owner-only"
+      },
+      "app.sports_follows": {
+        "access": "owner-only"
+      },
+      "app.sports_headline_prefs": {
+        "access": "owner-only"
+      },
+      "app.sports_policy_verdicts": {
+        "access": "owner-only"
+      },
+      "app.sports_source_assignments": {
+        "access": "owner-only"
+      }
+    }
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/follows",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/follows",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/follows/:id/team",
+      "signIn": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/follows/:id",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/standings-preferences",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/standings-preferences",
+      "signIn": true
+    }
+  ],
+  "requires": {},
+  "provides": {
+    "collectSportsSourcesExportSection": "1.0.0"
+  },
+  "icons": ["icons/sports.svg"],
+  "accounts": {
+    "supportsUserDisable": true,
+    "defaultEnabled": true
+  },
+  "lifecycle": {
+    "required": false,
+    "bundled": true,
+    "removable": true
+  },
+  "screens": {},
+  "navigation": [],
+  "settings": [
+    {
+      "id": "sports.follows",
+      "label": "Sports",
+      "path": "/settings?section=modules&module=sports",
+      "scope": "user",
+      "description": "Followed leagues and the standings choices can be changed through the Sports routes. The Settings page for them is not part of this package yet."
+    }
+  ],
+  "features": [
+    {
+      "id": "sports.follows",
+      "description": "Each person keeps private follows of whole leagues and of single teams. Following a whole league twice returns the first follow, so a league never appears twice. Removing a follow deletes only the person's own row. Following a team, or changing which team a saved follow means, needs the provider's team list, which is not part of this package yet, so it is refused until then.",
+      "errors": [
+        {
+          "code": "sports_team_list_unavailable",
+          "class": "validation",
+          "description": "The provider's team list is not available, so a team cannot be checked or followed yet."
+        }
+      ],
+      "remediations": [
+        {
+          "id": "sports.follows.whole-league",
+          "description": "Follow the whole league for now, then pick the team once team lists are available.",
+          "path": "/settings?section=modules&module=sports"
+        }
+      ]
+    },
+    {
+      "id": "sports.team_identity",
+      "description": "Follows are tied to the provider's permanent team number, so two teams sharing a short name never swap scores. A team saved before that is put on hold and Sports asks once which team was meant; picking one brings it back. Checking the pick against the provider's team list is not part of this package yet."
+    },
+    {
+      "id": "sports.remembered_standings",
+      "description": "The standings picker keeps the leagues a person chose and the competition and view they last opened, on any device, until they pick another. A name that is not a known league is refused. The picker itself is not part of this package yet."
+    }
+  ],
+  "optionalRequires": {}
+}

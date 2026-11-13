@@ -17,7 +17,7 @@ use axum::{
     Extension, Json, Router,
 };
 use moss_module_host::{
-    account_preferences::{AccountPreferencesPorts, Binding},
+    account_preferences::{AccountPreferencesPorts, Binding, JsonShape},
     ai::{
         EmbeddingsOnly, FixedEmbeddings, Intelligence, IntelligenceEmbeddings,
         DEFAULT_EMBEDDING_MODEL,
@@ -223,6 +223,20 @@ fn linked_notes(
                     key: "sourceBehaviors".into(),
                     entry: "people.notes.suggest-updates".into(),
                     default: true,
+                },
+            ),
+            (
+                ("sports".into(), "standings-competitions".into()),
+                Binding::Json {
+                    key: "sports.standings_competition_keys".into(),
+                    shape: JsonShape::TextList { max_items: 64, max_len: 200 },
+                },
+            ),
+            (
+                ("sports".into(), "standings-last-viewed".into()),
+                Binding::Json {
+                    key: "sports.standings_last_viewed".into(),
+                    shape: JsonShape::LastViewed,
                 },
             ),
         ]),

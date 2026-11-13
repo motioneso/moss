@@ -19,6 +19,37 @@ pub enum Binding {
         entry: String,
         default: bool,
     },
+    /// A whole JSON value under one key, replaced on write after the host checks its shape.
+    Json {
+        key: String,
+        shape: JsonShape,
+    },
+}
+/// Shapes the host accepts for a `Binding::Json` value. `null` clears the value.
+#[derive(Clone, Copy)]
+pub enum JsonShape {
+    /// An array of strings, each 1..=`max_len` bytes, at most `max_items` entries.
+    TextList { max_items: usize, max_len: usize },
+    /// An object with a `competitionKey` string and `viewKey` and `viewLabel` strings or nulls, within bounds.
+    LastViewed,
+}
+impl JsonShape {
+    fn accepts(self, value: &Value) -> bool {
+        if value.is_null() {
+            return true;
+        }
+        match self {
+            JsonShape::TextList { max_items, max_len } => value.as_array().is_some_and(|items| {
+                items.len() <= max_items
+                    && items.iter().all(|i| i.as_str().is_some_and(|t| !t.is_empty() && t.len() <= max_len))
+            }),
+            JsonShape::LastViewed => value.as_object().is_some_and(|o| {
+                let text = |k: &str, max: usize| o.get(k).and_then(Value::as_str).is_some_and(|t| !t.is_empty() && t.len() <= max);
+                let maybe = |k: &str, max: usize| o.get(k).is_some_and(|v| v.is_null() || v.as_str().is_some_and(|t| t.chars().count() <= max));
+                o.len() == 3 && text("competitionKey", 200) && maybe("viewKey", 100) && maybe("viewLabel", 200)
+            }),
+        }
+    }
 }
 pub struct AccountPreferencesPorts {
     database: Database,
@@ -119,7 +150,9 @@ impl AccountPreferencesPorts {
             return Ok(json!({"directories":directories}));
         }
         let key = match binding {
-            Binding::Folder { key, .. } | Binding::BooleanOverride { key, .. } => key,
+            Binding::Folder { key, .. }
+            | Binding::BooleanOverride { key, .. }
+            | Binding::Json { key, .. } => key,
         };
         let update = if write {
             ensure!(
@@ -147,6 +180,11 @@ impl AccountPreferencesPorts {
                         .and_then(Value::as_bool)
                         .context("Invalid preference boolean")?;
                     Some(json!({entry:enabled}))
+                }
+                Binding::Json { shape, .. } => {
+                    let value = request.parameters.get("value").context("Missing preference value")?;
+                    ensure!(shape.accepts(value), "Invalid preference value");
+                    Some(value.clone())
                 }
             }
         } else {
@@ -179,6 +217,7 @@ impl AccountPreferencesPorts {
             Binding::BooleanOverride { entry, default, .. } => {
                 json!({"enabled":value.get(entry).and_then(Value::as_bool).unwrap_or(*default)})
             }
+            Binding::Json { .. } => json!({"value":value}),
         })
     }
 }

@@ -1,0 +1,43 @@
+[package]
+name = "moss-sports-module"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Guest-safe Sports follows, standings choices and account export"
+
+[workspace]
+
+[lib]
+path = "lib.rs"
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+moss-module-sdk = { path = "../../../rust-spike/module-sdk" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wit-bindgen = { version = "=0.57.1", default-features = false, features = ["macros", "realloc"] }
+
+[profile.release]
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
+
+[[test]]
+name = "follows"
+path = "../tests/follows.rs"
+
+[[test]]
+name = "identity"
+path = "../tests/identity.rs"
+
+[[test]]
+name = "standings"
+path = "../tests/standings.rs"
+
+[[test]]
+name = "privacy"
+path = "../tests/privacy.rs"
