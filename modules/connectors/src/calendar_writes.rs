@@ -135,6 +135,12 @@ pub fn create(host: &impl Host, input: &Value) -> Result<Value> {
         Ok(account) => account,
         Err(text) => return Ok(refusal(text, {let mut o = shown; o["calendarMirror"] = json!("skipped-error"); o})),
     };
+    let setup = kv(host, "get", "connectors.context-setup", json!({}))?;
+    let clock = host.call("context", "read", "call", json!({}))?;
+    let now = instant(&clock["now"]).ok_or_else(|| Error::new(500, "Clock unavailable"))?;
+    if let Some(text) = crate::outlook_availability::issue(&setup, start, end, now) {
+        return Ok(refusal(text, {let mut o = shown; o["calendarMirror"] = json!("skipped-error"); o}));
+    }
     let (min, max) = query_window(account.timezone, start, end);
     let free = kv(
         host,

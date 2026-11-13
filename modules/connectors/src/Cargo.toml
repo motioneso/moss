@@ -61,3 +61,7 @@ path = "tests/outlook_source.rs"
 [[test]]
 name = "outlook_scan"
 path = "tests/outlook_scan.rs"
+
+[[test]]
+name = "outlook_availability"
+path = "tests/outlook_availability.rs"
