@@ -31,6 +31,7 @@ pub mod imap;
 pub mod imap_sync;
 pub mod live;
 pub mod mail_probe;
+pub mod outlook_scan;
 pub mod package;
 pub mod refresh;
 pub mod store;
@@ -49,6 +50,8 @@ pub struct ConnectorsPorts {
     mail: imap::MailConfig,
     flights: Mutex<HashMap<uuid::Uuid, Arc<Flight>>>,
     runs: google_sync::SyncRuns,
+    outlook: Option<outlook_scan::OutlookBinding>,
+    outlook_runs: outlook_scan::OutlookRuns,
 }
 
 /// The cipher the old server used for connector secrets, from the same key setting.
@@ -77,6 +80,8 @@ impl ConnectorsPorts {
             mail: imap::MailConfig::production(),
             flights: Mutex::default(),
             runs: google_sync::SyncRuns::default(),
+            outlook: None,
+            outlook_runs: outlook_scan::OutlookRuns::default(),
         })
     }
 
@@ -148,6 +153,12 @@ impl ConnectorsPorts {
         self
     }
 
+    /// Names the one person and Outlook account this machine's helper browser belongs to.
+    pub fn with_outlook(mut self, binding: Option<outlook_scan::OutlookBinding>) -> Self {
+        self.outlook = binding;
+        self
+    }
+
     /// Points Google token requests somewhere else. Only for tests and the test-only setting.
     pub fn with_google(mut self, google: google::GoogleConfig) -> Self {
         self.google = google;
@@ -182,7 +193,12 @@ impl Ports for ConnectorsPorts {
                 let cx = DataContext::open_bounded(database, scope.access(), scope.remaining())
                     .await
                     .map_err(|_| anyhow::anyhow!("Connectors data unavailable"))?;
-                let result = if request.resource.starts_with("connectors.sync-google-") {
+                let result = if request.resource == "connectors.outlook-binding" {
+                    outlook_scan::binding(&self.outlook, scope.access().actor_user_id())
+                } else if request.resource == "connectors.outlook-scan" {
+                    let run = store::text(&request.parameters, "runId")?.parse()?;
+                    outlook_scan::step(&self.outlook, &self.outlook_runs, scope.access().actor_user_id(), run).await?
+                } else if request.resource.starts_with("connectors.sync-google-") {
                     google_sync::run(&cx, &self.cipher, &self.google, &self.runs, request).await?
                 } else if request.resource.starts_with("connectors.live-")
                     || request.resource == "connectors.context-setup"

@@ -209,3 +209,11 @@ impl Session {
 fn parse(at: &str) -> Result<DateTime<Utc>> {
     DateTime::parse_from_rfc3339(at).map(|d| d.with_timezone(&Utc)).map_err(|_| CHANGED)
 }
+
+/// A short, stable name for one dedicated browser binding. The guest stores it with the health
+/// and compares it on every run, so a changed owner, account or endpoint stops the reader.
+pub fn fingerprint(owner: &str, account: &str, endpoint: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let text = serde_json::json!([owner, account.to_ascii_lowercase(), endpoint]).to_string();
+    Sha256::digest(text.as_bytes()).iter().map(|b| format!("{b:02x}")).collect()
+}
