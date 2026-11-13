@@ -44,3 +44,7 @@ path = "../tests/reference.rs"
 [[test]]
 name = "meeting_task"
 path = "../tests/meeting_task.rs"
+
+[[test]]
+name = "briefing_tasks"
+path = "../tests/briefing_tasks.rs"

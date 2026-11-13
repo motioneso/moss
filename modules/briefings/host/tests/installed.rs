@@ -483,3 +483,31 @@ fn another_person_cannot_read_run_status_or_queue_a_run_and_the_check_fails_with
     assert_eq!(probe(b)["status"], 404, "restored");
     println!("GREEN: row security restored, B reads 404 again");
 }
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_run_with_no_source_modules_installed_records_visible_gaps_and_no_source_text() {
+    let w = World::new("UTC");
+    let a = w.f.a;
+    let made = w.call(a, "POST", "/definitions", json!({
+        "title":format!("Plan {MARK}"),"briefingType":"morning","cadence":"manual",
+        "selectedToolNames":["tasks.list","calendar.listVisibleEvents","email.listVisibleMessages"]}));
+    assert_eq!(made["status"], 201, "{made}");
+    let id = made["body"]["definition"]["id"].as_str().unwrap().to_owned();
+    let queued = w.call(a, "POST", &format!("/definitions/{id}/run"), json!({}));
+    assert_eq!(queued["status"], 202, "{queued}");
+    w.work();
+    let metadata: Value = w.f.rt.block_on(w.f.root.query_one(
+        "SELECT source_metadata FROM app.briefing_runs WHERE owner_user_id=$1 ORDER BY created_at DESC LIMIT 1",
+        &[&a],
+    )).unwrap().get(0);
+    let gaps: Vec<(String, String)> = metadata["gaps"].as_array().unwrap().iter()
+        .map(|g| (g["source"].as_str().unwrap().to_owned(), g["reason"].as_str().unwrap().to_owned()))
+        .collect();
+    for source in ["tasks", "calendar", "email"] {
+        assert!(gaps.contains(&(source.to_owned(), "tool_failed".to_owned())), "{source} gap missing in {gaps:?}");
+    }
+    assert!(gaps.contains(&("priority".to_owned(), "unwired".to_owned())), "{gaps:?}");
+    assert!(!metadata.to_string().contains(MARK), "{metadata}");
+    println!("PASS installed run with no source modules: {} visible gaps recorded, no text", gaps.len());
+}

@@ -25,6 +25,8 @@ mod account;
 mod actions;
 #[path = "privacy/approval.rs"]
 mod approval;
+#[path = "privacy/briefing.rs"]
+mod briefing;
 #[path = "privacy/heartbeat.rs"]
 mod heartbeat;
 #[path = "privacy/jobs.rs"]
