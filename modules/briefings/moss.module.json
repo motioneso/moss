@@ -4,7 +4,7 @@
   "name": "Briefings",
   "publisher": "Moss",
   "version": "0.1.0",
-  "description": "Keeps each person's briefing definitions and past runs, private to the owner. A definition can be shared. Saving a definition sets or removes its scheduled run in the person's time zone, and the list moves run times after a time zone change. Writing a briefing, the run job, the screens and outside sources are not part of this package yet.",
+  "description": "Keeps each person's briefing definitions and past runs, private to the owner. A definition can be shared. Saving a definition sets or removes its scheduled run in the person's time zone, and the list moves run times after a time zone change. A manual or scheduled run saves a dated briefing and, for a scheduled run, tells the person once. Writing the briefing text with a model, the screens and outside sources are not part of this package yet.",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
@@ -21,8 +21,20 @@
     },
     {
       "port": "jobs",
-      "operations": ["schedule", "unschedule"],
-      "resources": ["briefings-run"]
+      "operations": [
+        "schedule",
+        "unschedule",
+        "enqueue-options",
+        "read",
+        "list-open",
+        "read-schedule"
+      ],
+      "resources": ["briefings-run", "briefings-run-now"]
+    },
+    {
+      "port": "notify",
+      "operations": ["post"],
+      "resources": ["briefings"]
     }
   ],
   "database": {
@@ -72,6 +84,11 @@
       "method": "GET",
       "path": "/definitions/:id/runs/:run_id",
       "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/definitions/:id/run",
+      "signIn": true
     }
   ],
   "requires": {},
@@ -101,6 +118,18 @@
         "kind": "choice",
         "choices": ["morning", "evening", "weekly_review"]
       }
+    },
+    "briefings-run-now": {
+      "definition-id": {
+        "kind": "id"
+      },
+      "briefing-run-id": {
+        "kind": "id"
+      },
+      "briefing-type": {
+        "kind": "choice",
+        "choices": ["morning", "evening", "weekly_review"]
+      }
     }
   },
   "screens": {},
@@ -121,7 +150,25 @@
     },
     {
       "id": "briefings.person_time",
-      "description": "Briefings run at the person's set time in their saved time zone. After a time zone change, the next visit to the definitions list moves the run times. The run itself and the written briefing are not part of this package yet."
+      "description": "Briefings run at the person's set time in their saved time zone. After a time zone change, the next visit to the definitions list moves the run times. A scheduled run that lands on the wrong local time is skipped and the schedule is moved."
+    },
+    {
+      "id": "briefings.run",
+      "description": "Run now queues one briefing for the person's own definition and returns at once with the run id. Asking again with the same key while the first run is still queued or running is refused, and a finished key may be used again. Each local day has at most one scheduled run per definition. A run that takes longer than six minutes is dropped and saves nothing. The person is told once, without any briefing text, when a scheduled run finishes. With no model written yet, the briefing holds a short standard line.",
+      "errors": [
+        {
+          "code": "briefing_run_in_flight",
+          "class": "validation",
+          "description": "A run with this key is already queued or running."
+        }
+      ],
+      "remediations": [
+        {
+          "id": "briefings.run.wait",
+          "description": "Wait for the first run to finish, then read it from the briefing history.",
+          "path": "/today"
+        }
+      ]
     },
     {
       "id": "briefings.history",
