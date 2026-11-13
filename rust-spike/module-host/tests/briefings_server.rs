@@ -93,6 +93,7 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
     let bootstrap_url = std::env::var("JS43_BOOTSTRAP_URL").unwrap();
     let auth_url = std::env::var("JS170_AUTH_URL").unwrap();
     let connector_key = "ab".repeat(32);
+    let ai_key = "cd".repeat(32);
     private(
         &root.join("credentials.json"),
         &json!({"app_url":app_url,"auth_url":auth_url,"auth_secret":"temporary-disposable-briefings-signing-secret-263","connector_key":connector_key}),
@@ -279,8 +280,49 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
 
     private(
         &root.join("modules.json"),
-        &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key}),
+        &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"ai_key":ai_key}),
     );
+    // The model the owner configures is a small server in this process behind the real router.
+    let requests: std::sync::Arc<std::sync::Mutex<Vec<Value>>> = Default::default();
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let provider_port = listener.local_addr().unwrap().port();
+    {
+        let requests = requests.clone();
+        std::thread::spawn(move || {
+            use std::io::{BufRead, BufReader, Read, Write};
+            for stream in listener.incoming().flatten() {
+                let mut reader = BufReader::new(stream.try_clone().unwrap());
+                let mut length = 0usize;
+                let mut line = String::new();
+                reader.read_line(&mut line).unwrap_or(0);
+                loop {
+                    let mut header = String::new();
+                    if reader.read_line(&mut header).unwrap_or(0) == 0 || header.trim().is_empty() {
+                        break;
+                    }
+                    if let Some(v) = header.to_lowercase().strip_prefix("content-length:") {
+                        length = v.trim().parse().unwrap_or(0);
+                    }
+                }
+                let mut body = vec![0; length];
+                reader.read_exact(&mut body).unwrap();
+                requests.lock().unwrap().push(serde_json::from_slice(&body).unwrap_or(Value::Null));
+                let answer = json!({"choices":[{"message":{"content":"Steady morning.\n\n## Prepare\nBring notes at 9 AM. WRITTEN-BY-STANDIN-MODEL"}}]}).to_string();
+                let mut stream = stream;
+                let _ = write!(stream, "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{answer}", answer.len());
+            }
+        });
+    }
+    let sealed = safety_core::secret::SecretCipher::ai(&[("JARVIS_AI_SECRET_KEY".into(), ai_key.clone())].into())
+        .unwrap()
+        .seal(&safety_core::secret::SecretFields::new().with("apiKey", safety_core::secret::Secret::new("TEST-NOT-A-REAL-KEY-267")));
+    let (provider, model) = (uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
+    runtime.block_on(async {
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(async move { let _ = connection.await; });
+        db.execute("INSERT INTO app.ai_provider_configs(id,owner_user_id,provider_kind,display_name,base_url,encrypted_credential,is_instance_default) VALUES($1,$2,'openai-compatible','Test provider',$3,$4,true)", &[&provider, &owner, &format!("http://127.0.0.1:{provider_port}"), &sealed]).await.unwrap();
+        db.execute("INSERT INTO app.ai_configured_models(id,provider_config_id,owner_user_id,provider_model_id,display_name,capabilities) VALUES($1,$2,$3,'test-model-267','Test model',ARRAY['chat','json'])", &[&model, &provider, &owner]).await.unwrap();
+    });
     let _server = start(true);
     // Setup allows one owner over HTTP, so the second person is made in the database with the
     // owner's password hash and then signs in through the real route.
@@ -389,6 +431,19 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
     println!("live run source metadata: {}", detail["run"]["sourceMetadata"]);
     assert!(detail["run"]["sourceMetadata"]["sourcesFromCache"].is_boolean() || detail["run"]["sourceMetadata"]["gaps"].is_array(), "{text}");
     assert!(!text.contains(MARK));
+    // The text came from the configured model through the real router, and the model got the
+    // trusted block first. The owner's definition title was never sent to it.
+    let written = detail["run"]["summaryText"].as_str().unwrap_or_default();
+    assert!(written.contains("WRITTEN-BY-STANDIN-MODEL"), "{text}\n{}", log());
+    assert_eq!(detail["run"]["sourceMetadata"]["aiModel"]["id"], "router", "{text}");
+    let sent = requests.lock().unwrap().clone();
+    assert!(!sent.is_empty(), "the router never reached the model");
+    let prompt = sent[0]["messages"][0]["content"].as_str().unwrap_or_default();
+    assert!(prompt.starts_with("<trusted_instructions>"), "{prompt}");
+    assert!(!prompt.contains(MARK));
+    println!("live model run: the router sent {} request(s); the stored text came from the model", sent.len());
+    let other_view = call(Method::GET, &format!("/definitions/{id}/runs/{fresh}"), Some(&other), None);
+    assert_eq!(other_view.0, 404);
     // Nothing the test sent reached the server log.
     assert!(!log().contains(MARK));
     println!("briefings live: definitions, runs and privacy for two people worked over HTTPS");
