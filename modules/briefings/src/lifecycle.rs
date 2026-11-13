@@ -18,12 +18,13 @@ const DEFINITION_FIELDS: [(&str, &str); 10] = [
     ("last_run_at", "lastRunAt"),
     ("created_at", "createdAt"),
 ];
-const RUN_FIELDS: [(&str, &str); 8] = [
+const RUN_FIELDS: [(&str, &str); 9] = [
     ("id", "id"),
     ("definition_id", "definitionId"),
     ("owner_user_id", "ownerUserId"),
     ("status", "status"),
     ("run_kind", "runKind"),
+    ("briefing_type", "briefingType"),
     ("summary_text", "summaryText"),
     ("source_metadata", "sourceMetadata"),
     ("created_at", "createdAt"),

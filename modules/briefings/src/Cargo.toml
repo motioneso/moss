@@ -27,3 +27,19 @@ lto = true
 opt-level = "s"
 panic = "abort"
 strip = true
+
+[[test]]
+name = "definitions"
+path = "../tests/definitions.rs"
+
+[[test]]
+name = "schedule"
+path = "../tests/schedule.rs"
+
+[[test]]
+name = "runs"
+path = "../tests/runs.rs"
+
+[[test]]
+name = "privacy"
+path = "../tests/privacy.rs"
