@@ -1509,6 +1509,7 @@ dependencies = [
  "moss-module-sdk",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -1639,6 +1640,7 @@ version = "0.0.0"
 dependencies = [
  "axum",
  "base64 0.22.1",
+ "chrono",
  "serde_json",
  "tokio",
  "tokio-rustls",

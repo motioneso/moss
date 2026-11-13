@@ -515,13 +515,10 @@ async fn post_token(
 struct PlainHttp;
 impl Transport for PlainHttp {
     fn send(&self, r: Outbound<'_>) -> Result<Response> {
-        let fields: Option<Vec<(String, String)>> = r.body.as_ref().map(|body| {
-            body.as_object()
-                .into_iter()
-                .flatten()
-                .filter_map(|(k, v)| v.as_str().map(|v| (k.clone(), v.to_string())))
-                .collect()
-        });
+        let form = r
+            .headers
+            .get(reqwest::header::CONTENT_TYPE)
+            .is_some_and(|h| h == "application/x-www-form-urlencoded");
         let mut request = reqwest::blocking::Client::builder()
             .no_proxy()
             .redirect(reqwest::redirect::Policy::none())
@@ -529,8 +526,18 @@ impl Transport for PlainHttp {
             .build()?
             .request(r.method, r.url.clone())
             .headers(r.headers);
-        if let Some(fields) = &fields {
-            request = request.form(fields);
+        if let Some(body) = &r.body {
+            if form {
+                let fields: Vec<(String, String)> = body
+                    .as_object()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|(k, v)| v.as_str().map(|v| (k.clone(), v.to_string())))
+                    .collect();
+                request = request.form(&fields);
+            } else {
+                request = request.json(body);
+            }
         }
         let response = request
             .send()

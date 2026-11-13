@@ -60,7 +60,7 @@ fn derive(host: &impl Host, cache_id: &str, body: &str) -> Result<std::result::R
     let Some(account) = account.filter(|a| a["status"] == "active") else {
         return Ok(Err(GONE));
     };
-    let google = match account["providerId"].as_str() {
+    let google = match account["providerType"].as_str() {
         Some("google") => true,
         Some("imap") => false,
         _ => return Ok(Err(UNSUPPORTED)),

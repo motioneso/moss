@@ -49,3 +49,7 @@ path = "tests/email_context.rs"
 [[test]]
 name = "monitors"
 path = "tests/monitors.rs"
+
+[[test]]
+name = "email_writes"
+path = "tests/email_writes.rs"
