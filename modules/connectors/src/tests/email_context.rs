@@ -190,3 +190,26 @@ fn the_saved_context_reports_a_gap_for_a_revoked_account() {
     assert!(out["items"].as_array().unwrap().is_empty());
     assert_eq!(out["gaps"][0]["reason"], "connector_revoked");
 }
+
+#[test]
+fn a_live_list_that_lost_every_message_read_falls_back_to_saved_mail() {
+    let h = script(
+        vec![account("g1", "google", "active")],
+        json!({"g1":{"messages":[],"skipped":3}}),
+        vec![row("m9", "g1", json!({}))],
+    );
+    let out = list(&h, &json!({})).unwrap();
+    assert_eq!(out["items"][0]["source"], "cache");
+    assert_eq!(out["items"][0]["degradedReason"], "live_read_incomplete");
+    assert_eq!(out["accounts"][0]["source"], "cache");
+}
+
+#[test]
+fn a_partial_or_paged_live_list_says_it_is_truncated() {
+    for live in [json!({"messages":[msg("a")],"skipped":1}), json!({"messages":[msg("a")],"skipped":0,"more":true})] {
+        let h = script(vec![account("g1", "google", "active")], json!({"g1":live}), vec![]);
+        let out = list(&h, &json!({})).unwrap();
+        assert_eq!(out["truncated"], true, "{out}");
+        assert_eq!(out["items"][0]["source"], "live");
+    }
+}

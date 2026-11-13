@@ -19,7 +19,7 @@ const BUDGET: Duration = Duration::from_millis(3000);
 const CALENDAR_PAGE: &str = "250";
 const CALENDAR_PAGES: usize = 3;
 const BODY_CHARS: usize = 20_000;
-const LIST_MAX: usize = 20;
+const LIST_MAX: usize = 30;
 
 pub async fn run(
     cx: &DataContext,
@@ -160,7 +160,8 @@ async fn gmail_list(
             Err(_) => skipped += 1,
         }
     }
-    Ok(Ok(json!({"messages":messages,"skipped":skipped})))
+    let more = !page["nextPageToken"].is_null() || page["messages"].as_array().is_some_and(|m| m.len() > limit);
+    Ok(Ok(json!({"messages":messages,"skipped":skipped,"more":more})))
 }
 
 async fn gmail_get(
@@ -200,7 +201,8 @@ fn decode(data: &str) -> String {
 
 fn strip_html(html: &str) -> String {
     let (mut out, mut tag, mut skip_until) = (String::new(), false, None::<&str>);
-    let lower = html.to_lowercase();
+    // ASCII lowercase keeps byte offsets identical to the original string.
+    let lower = html.to_ascii_lowercase();
     let mut i = 0;
     while i < html.len() {
         if !html.is_char_boundary(i) {
@@ -278,6 +280,11 @@ mod tests {
     fn html_loses_tags_styles_and_scripts() {
         let html = "<style>p{}</style><p>Hi&nbsp;<b>you</b></p><script>x()</script>";
         assert_eq!(body_text(&part("text/html", html)), "Hi you");
+    }
+
+    #[test]
+    fn html_with_characters_whose_lowercase_is_longer_does_not_panic() {
+        assert_eq!(body_text(&part("text/html", "\u{130}<p>Hello</p>")).trim(), "\u{130} Hello");
     }
 
     #[test]

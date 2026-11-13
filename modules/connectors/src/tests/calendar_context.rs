@@ -230,3 +230,20 @@ fn flags_mark_conflicts_early_late_and_places() {
     assert_eq!(marks[2], ["late"]);
     assert!(marks[3].is_empty(), "an all-day event is never early, late or in conflict");
 }
+
+#[test]
+fn a_cached_event_that_ends_before_the_requested_window_is_left_out() {
+    let outlook = account("o1", "outlook-browser-calendar", "calendar", "active", &["calendar.readonly"]);
+    let mut host = script(
+        vec![outlook],
+        json!({}),
+        vec![
+            cached("today", "o1", "2026-03-02T09:00:00.000Z", "2026-03-02T10:00:00.000Z"),
+            cached("tomorrow", "o1", "2026-03-03T09:00:00.000Z", "2026-03-03T10:00:00.000Z"),
+        ],
+    );
+    host.setup["outlook"] = json!({"o1":{"state":"current","lastCompleteAt":"2026-03-02T07:50:00.000Z"}});
+    let out = list(&host, &json!({"windowStart":"2026-03-03T00:00:00.000Z","windowEnd":"2026-03-04T00:00:00.000Z"})).unwrap();
+    let titles: Vec<&str> = out["items"].as_array().unwrap().iter().filter_map(|i| i["title"].as_str()).collect();
+    assert_eq!(titles, ["tomorrow"], "{out}");
+}

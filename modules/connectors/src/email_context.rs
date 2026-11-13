@@ -143,6 +143,7 @@ pub fn list(host: &impl Host, input: &Value) -> Result<Value> {
     let (mut items, mut accounts, mut gaps) = (Vec::<Value>::new(), Vec::<Value>::new(), Vec::<Value>::new());
     let mut context: Option<Value> = None;
     let mut triaged = 0;
+    let mut more = false;
     for account in capable {
         let id = account["id"].as_str().unwrap_or("");
         let meta = meta(account);
@@ -185,6 +186,15 @@ pub fn list(host: &impl Host, input: &Value) -> Result<Value> {
             accounts.push(json!({"account":meta,"source":"cache","degradedReason":reason}));
             continue;
         };
+        let skipped = live["skipped"].as_u64().unwrap_or(0);
+        if skipped > 0 && messages.is_empty() {
+            items.extend(from_cache(host, account, json!("live_read_incomplete"), limit)?);
+            accounts.push(json!({"account":meta,"source":"cache","degradedReason":"live_read_incomplete"}));
+            continue;
+        }
+        if skipped > 0 || live["more"] == true {
+            more = true;
+        }
         let rows = saved(host, std::slice::from_ref(&account["id"]), 200)?;
         for message in messages {
             let cached = rows.iter().find(|r| r["externalId"] == message["id"]);
@@ -213,7 +223,7 @@ pub fn list(host: &impl Host, input: &Value) -> Result<Value> {
         accounts.push(json!({"account":meta,"source":"live","degradedReason":null}));
     }
     items.sort_by(|a, b| b["receivedAt"].as_str().cmp(&a["receivedAt"].as_str()));
-    let truncated = items.len() as i64 > limit;
+    let truncated = more || items.len() as i64 > limit;
     items.truncate(limit as usize);
     Ok(json!({"items":items,"accounts":accounts,"gaps":gaps,"truncated":truncated}))
 }

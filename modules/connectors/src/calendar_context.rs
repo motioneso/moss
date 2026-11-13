@@ -89,7 +89,7 @@ struct Window {
 /// that spans the whole window with no place and no guests is routine noise and is dropped.
 fn in_window(item: &Value, now: DateTime<Utc>, window: &Window) -> bool {
     let (starts, ends) = (item["startsAt"].as_str().unwrap_or(""), item["endsAt"].as_str().unwrap_or(""));
-    if ends < iso(now).as_str() || starts >= iso(window.end).as_str() {
+    if ends < iso(now).as_str() || ends < iso(window.start).as_str() || starts >= iso(window.end).as_str() {
         return false;
     }
     let routine = item["allDay"] == true
