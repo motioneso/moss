@@ -1,0 +1,185 @@
+//! The SQL behind the Backtrack store. Every statement runs in the call's actor transaction, so
+//! the row policies on the three tables decide what is visible. Nothing here logs a value.
+use anyhow::{ensure, Result};
+use safety_core::db::DataContext;
+use serde_json::{json, Value};
+
+pub const STORE: &str = "backtrack.store";
+const TIME: &str = "YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"";
+
+fn text<'a>(parameters: &'a Value, key: &str) -> Option<&'a str> {
+    parameters.get(key).and_then(Value::as_str)
+}
+
+pub async fn lock(cx: &DataContext) -> Result<Value> {
+    cx.db()
+        .execute("SELECT pg_advisory_xact_lock(hashtextextended(app.current_actor_user_id()::text || ':backtrack',0))", &[])
+        .await?;
+    Ok(json!({"locked": true}))
+}
+
+/// The instance switch: the stored setting, else the environment, else off.
+pub async fn storage(cx: &DataContext, environment: Option<&str>) -> Result<Value> {
+    let row = cx
+        .db()
+        .query_opt("SELECT value->>'value' FROM app.instance_settings WHERE key='backtrack.storage'", &[])
+        .await?;
+    let stored: Option<String> = row.and_then(|r| r.get(0));
+    let value = stored.as_deref().or(environment).unwrap_or("off");
+    Ok(json!({"on": value == "on"}))
+}
+
+pub async fn paused(cx: &DataContext) -> Result<Value> {
+    let row = cx
+        .db()
+        .query_opt("SELECT paused FROM app.backtrack_preferences WHERE owner_user_id=app.current_actor_user_id()", &[])
+        .await?;
+    Ok(json!({"paused": row.map(|r| r.get::<_, bool>(0)).unwrap_or(false)}))
+}
+
+pub async fn set_paused(cx: &DataContext, parameters: &Value) -> Result<Value> {
+    let paused = parameters.get("paused").and_then(Value::as_bool).ok_or_else(|| anyhow::anyhow!("paused required"))?;
+    let row = cx
+        .db()
+        .query_one(
+            "INSERT INTO app.backtrack_preferences(owner_user_id,paused,updated_at) VALUES(app.current_actor_user_id(),$1,now()) \
+             ON CONFLICT(owner_user_id) DO UPDATE SET paused=EXCLUDED.paused,updated_at=now() RETURNING paused",
+            &[&paused],
+        )
+        .await?;
+    Ok(json!({"paused": row.get::<_, bool>(0)}))
+}
+
+/// Which of the given windows overlap a deletion marker.
+pub async fn overlaps(cx: &DataContext, parameters: &Value) -> Result<Value> {
+    let windows = parameters.get("windows").and_then(Value::as_array).ok_or_else(|| anyhow::anyhow!("windows required"))?;
+    ensure!(windows.len() <= 200, "Too many windows");
+    let mut hits = Vec::new();
+    for (index, pair) in windows.iter().enumerate() {
+        let (Some(from), Some(to)) = (pair[0].as_str(), pair[1].as_str()) else { anyhow::bail!("Invalid window") };
+        let hit: bool = cx
+            .db()
+            .query_one(
+                "SELECT EXISTS(SELECT 1 FROM app.backtrack_deletions d WHERE d.owner_user_id=app.current_actor_user_id() \
+                 AND d.range && tstzrange($1::text::timestamptz,$2::text::timestamptz,'[]'))",
+                &[&from, &to],
+            )
+            .await?
+            .get(0);
+        if hit {
+            hits.push(index);
+        }
+    }
+    Ok(json!({"indexes": hits}))
+}
+
+/// Stores the rows. A row already stored for this Mac, text and start time is skipped.
+pub async fn insert(cx: &DataContext, parameters: &Value) -> Result<Value> {
+    let device = text(parameters, "deviceId").ok_or_else(|| anyhow::anyhow!("deviceId required"))?;
+    let rows = parameters.get("segments").and_then(Value::as_array).ok_or_else(|| anyhow::anyhow!("segments required"))?;
+    ensure!(rows.len() <= 200, "Too many segments");
+    let mut inserted = 0u64;
+    for row in rows {
+        let field = |k: &str| text(row, k).ok_or_else(|| anyhow::anyhow!("segment field missing"));
+        let address = text(row, "address");
+        inserted += cx
+            .db()
+            .execute(
+                "INSERT INTO app.backtrack_segments(owner_user_id,device_id,started_at,ended_at,app_name,bundle_id,window_title,address,body,body_hash,client_started_at) \
+                 VALUES(app.current_actor_user_id(),$1::text::uuid,$2::text::timestamptz,$3::text::timestamptz,$4,$5,$6,$7,$8,decode($9,'hex'),$10::text::timestamptz) \
+                 ON CONFLICT(owner_user_id,device_id,body_hash,client_started_at) DO NOTHING",
+                &[&device, &field("startedAt")?, &field("endedAt")?, &field("appName")?, &field("bundleId")?, &field("windowTitle")?, &address, &field("body")?, &field("bodyHash")?, &field("clientStartedAt")?],
+            )
+            .await?;
+    }
+    Ok(json!({"inserted": inserted}))
+}
+
+/// Marker first, then the segments in the range, both under the person's lock.
+pub async fn delete(cx: &DataContext, parameters: &Value) -> Result<Value> {
+    let from = text(parameters, "from");
+    let to = text(parameters, "to").ok_or_else(|| anyhow::anyhow!("to required"))?;
+    let at = text(parameters, "deletedAt").ok_or_else(|| anyhow::anyhow!("deletedAt required"))?;
+    cx.db()
+        .execute(
+            "INSERT INTO app.backtrack_deletions(owner_user_id,range) VALUES(app.current_actor_user_id(),\
+             tstzrange($1::text::timestamptz,LEAST($2::text::timestamptz,$3::text::timestamptz),'[)'))",
+            &[&from, &to, &at],
+        )
+        .await?;
+    let deleted = cx
+        .db()
+        .execute(
+            "DELETE FROM app.backtrack_segments WHERE owner_user_id=app.current_actor_user_id() \
+             AND NOT (ended_at < COALESCE($1::text::timestamptz,'-infinity'::timestamptz) \
+             OR started_at >= COALESCE($2::text::timestamptz,'infinity'::timestamptz))",
+            &[&from, &Some(to)],
+        )
+        .await?;
+    Ok(json!({"deleted": deleted}))
+}
+
+/// Removes this person's text past 37 days and markers past 38 days.
+pub async fn upkeep(cx: &DataContext) -> Result<Value> {
+    let segments = cx
+        .db()
+        .execute(
+            "DELETE FROM app.backtrack_segments WHERE owner_user_id=app.current_actor_user_id() \
+             AND (started_at < now() - interval '37 days' OR created_at < now() - interval '37 days')",
+            &[],
+        )
+        .await?;
+    let markers = cx
+        .db()
+        .execute(
+            "DELETE FROM app.backtrack_deletions WHERE owner_user_id=app.current_actor_user_id() AND created_at < now() - interval '38 days'",
+            &[],
+        )
+        .await?;
+    Ok(json!({"segments": segments, "markers": markers}))
+}
+
+pub async fn status(cx: &DataContext) -> Result<Value> {
+    let paused = paused(cx).await?["paused"].clone();
+    let row = cx
+        .db()
+        .query_one(
+            &format!(
+                "SELECT count(DISTINCT device_id) FILTER (WHERE started_at >= now() - interval '30 days')::bigint, \
+                 count(DISTINCT date_trunc('day', started_at))::bigint, \
+                 coalesce(sum(octet_length(app_name)+octet_length(bundle_id)+octet_length(window_title)+coalesce(octet_length(address),0)+octet_length(body)),0)::bigint, \
+                 to_char(min(started_at) AT TIME ZONE 'UTC','{TIME}'), to_char(max(created_at) AT TIME ZONE 'UTC','{TIME}') \
+                 FROM app.backtrack_segments WHERE owner_user_id=app.current_actor_user_id()"
+            ),
+            &[],
+        )
+        .await?;
+    let mut body = json!({"paused": paused, "macs": row.get::<_, i64>(0), "days": row.get::<_, i64>(1), "bytes": row.get::<_, i64>(2)});
+    if let Some(oldest) = row.get::<_, Option<String>>(3) {
+        body["oldest"] = oldest.into();
+    }
+    if let Some(last) = row.get::<_, Option<String>>(4) {
+        body["lastReceivedAt"] = last.into();
+    }
+    Ok(body)
+}
+
+/// Every column of the person's own segments except the search column, with the hash as hex.
+pub async fn export(cx: &DataContext) -> Result<Value> {
+    let rows = cx
+        .db()
+        .query(
+            &format!(
+                "SELECT jsonb_build_object('id',id::text,'ownerUserId',owner_user_id::text,'deviceId',device_id::text,\
+                 'startedAt',to_char(started_at AT TIME ZONE 'UTC','{TIME}'),'endedAt',to_char(ended_at AT TIME ZONE 'UTC','{TIME}'),\
+                 'appName',app_name,'bundleId',bundle_id,'windowTitle',window_title,'address',address,'body',body,\
+                 'bodyHash',encode(body_hash,'hex'),'indexedAt',to_char(indexed_at AT TIME ZONE 'UTC','{TIME}'),\
+                 'createdAt',to_char(created_at AT TIME ZONE 'UTC','{TIME}'),\
+                 'clientStartedAt',to_char(client_started_at AT TIME ZONE 'UTC','{TIME}')) \
+                 FROM app.backtrack_segments WHERE owner_user_id=app.current_actor_user_id() ORDER BY started_at DESC, id"
+            ),
+            &[],
+        )
+        .await?;
+    Ok(Value::Array(rows.iter().map(|r| r.get::<_, Value>(0)).collect()))
+}
