@@ -88,7 +88,7 @@ fn installed_briefings_keep_definitions_and_runs_private_and_schedule_in_the_own
     let id = made["body"]["definition"]["id"].as_str().unwrap().to_owned();
     let schedules: Vec<(String, String)> = f.rt.block_on(async {
         f.root
-            .query("SELECT cron, timezone FROM moss_queue.schedules WHERE actor_user_id=$1 AND queue='briefings-run'", &[&f.a])
+            .query("SELECT cron, timezone FROM moss_queue.schedules WHERE actor_user_id=$1 AND queue='briefings.briefings-run'", &[&f.a])
             .await
             .unwrap()
             .iter()
@@ -149,7 +149,7 @@ fn installed_briefings_keep_definitions_and_runs_private_and_schedule_in_the_own
     let edited = call(f.b, "PATCH", &format!("/definitions/{id}"), json!({"title":"Managed","cadence":"manual"}));
     assert_eq!(edited["status"], 200, "{edited}");
     let still: i64 = f.rt.block_on(async {
-        f.root.query_one("SELECT count(*) FROM moss_queue.schedules WHERE actor_user_id=$1 AND queue='briefings-run'", &[&f.a]).await.unwrap().get(0)
+        f.root.query_one("SELECT count(*) FROM moss_queue.schedules WHERE actor_user_id=$1 AND queue='briefings.briefings-run'", &[&f.a]).await.unwrap().get(0)
     });
     assert_eq!(still, 1, "a manager must not remove the owner's schedule");
     f.rt.block_on(f.root.execute("DELETE FROM app.shares", &[])).unwrap();
