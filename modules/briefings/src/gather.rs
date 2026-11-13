@@ -278,6 +278,15 @@ fn email<H: Host + ?Sized>(host: &H, out: &mut Gathered) -> Section {
     Section { key: "email", label: "EMAIL SUMMARIES + SIGNALS", lines, count: messages.len(), raw: messages }
 }
 
+/// Source names a gap may carry. A fixed list keeps person-chosen text out of stored metadata.
+fn unwired_name(source: &str) -> Option<&'static str> {
+    crate::sources::VIRTUAL
+        .into_iter()
+        .chain(crate::sources::READ_TOOLS)
+        .map(|t| t.split('.').next().unwrap_or(t))
+        .find(|n| *n == source)
+}
+
 pub fn gather<H: Host + ?Sized, C: Contributors + ?Sized>(
     host: &H,
     subject: &Subject<'_>,
@@ -318,6 +327,18 @@ pub fn gather<H: Host + ?Sized, C: Contributors + ?Sized>(
     // The day's chats come from the Chat service, which has no public API for modules yet.
     if selected(subject, CHATS) {
         out.gaps.push(Gap { source: "chats", reason: Reason::Unwired });
+    }
+    // Any other selected source has no reader here yet, unless an outside module offers it.
+    let offered: Vec<String> = contributors.offers().into_iter().map(|o| o.tool_name).collect();
+    for tool in subject.selected_tools {
+        let source = tool.split('.').next().unwrap_or(tool);
+        let handled = matches!(source, "tasks" | "calendar" | "email" | "commitments" | "chat" | "chats");
+        if handled || offered.contains(tool) || out.gaps.iter().any(|g| g.source == source) {
+            continue;
+        }
+        if let Some(name) = unwired_name(source) {
+            out.gaps.push(Gap { source: name, reason: Reason::Unwired });
+        }
     }
     out.candidates = priority::candidates(&out.sections);
     if !out.sections.is_empty() {

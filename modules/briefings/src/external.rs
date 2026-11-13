@@ -56,7 +56,10 @@ fn text(value: &Value) -> Option<&str> {
 
 /// An in-app link only. A scheme or a scheme-relative `//host` link could leave the app.
 fn safe_href(value: &Value) -> Option<String> {
-    value.as_str().filter(|h| h.starts_with('/') && !h.starts_with("//")).map(str::to_owned)
+    value
+        .as_str()
+        .filter(|h| h.starts_with('/') && !h.starts_with("//") && !h.chars().any(|c| c == '\\' || c.is_control()))
+        .map(str::to_owned)
 }
 
 fn cut(value: String, max: usize) -> String {

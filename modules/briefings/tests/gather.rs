@@ -293,3 +293,25 @@ fn stored_metadata_carries_counts_and_reasons_never_source_text() {
     assert!(!stored.contains("SECRET-TITLE-9931"), "{stored}");
     assert!(stored.contains("\"count\":1"));
 }
+
+#[test]
+fn selected_sources_with_no_reader_show_unwired_gaps() {
+    let fake = Fake::new();
+    let g = run(&fake, &["news.topHeadlinesToday", "news.previewSource", "zzz.private-name", "goals.list", "vault"]);
+    let gaps: Vec<_> = g.gaps.iter().map(|x| (x.source, x.reason.as_str())).collect();
+    assert_eq!(gaps.iter().filter(|(s, _)| *s == "news").count(), 1);
+    assert!(gaps.contains(&("news", "unwired")));
+    assert!(gaps.contains(&("goals", "unwired")));
+    assert!(gaps.contains(&("vault", "unwired")));
+    // A name that is not a known source never reaches stored metadata.
+    assert!(!gaps.iter().any(|(s, _)| *s == "zzz"));
+}
+
+#[test]
+fn links_that_a_browser_could_read_as_another_site_are_dropped() {
+    for bad in ["/\\evil.example/x", "/\tevil.example", "/a\nb"] {
+        let raw = json!({"headline":"H","items":[{"id":"a","title":"A","detail":"B","href":bad}]});
+        let c = moss_briefings_module::external::parse("m", &raw).unwrap();
+        assert_eq!(c.items[0].href, None, "{bad}");
+    }
+}
