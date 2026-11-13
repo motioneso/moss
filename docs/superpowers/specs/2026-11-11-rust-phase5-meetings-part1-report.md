@@ -466,3 +466,61 @@ The table lists every code the capture routes return. A test fails if it differs
 - The gone (410) answers on the paths under the recording capability route.
 - The real Mac app and a real model pass. The tests use a fake Mac app and scripted text.
 - That Chat blocks these tools the way the classes assume. That is a guess, marked as one.
+
+## Part 10: Mac audio, status and control (JS-259)
+
+Branch `task/259-rust-port-phase-5-meetings-part-10-mac-a`. Parts 1 to 9 were checked, not rebuilt: link, grants, start, cancel start, the maintenance job, the two 410 routes, the recording-notice job, the state helpers and the start-time source selection.
+
+### Built
+
+| Piece                 | What it does                                                                                                                                                                  |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Audio route           | Takes one clip (at most 10 seconds, 3,840,000 bytes of sound). The whole body is capped at 5.2 MB and answers 413 over that. Every other capture body is capped at 128 KiB. |
+| Clip check            | Strict base64, sound length must match the stated times, sample rate 8,000 to 192,000. The fingerprint covers the numbers and the sound.                                       |
+| Admission             | Right recording, right source, no clip from the future or past the 60 second finish window, no clip after a pause or stop point. The Mac must report recording.              |
+| Transcription window  | Each clip goes to the model router as one window. Silent clips are filed as empty and never sent. A changed route fails closed.                                              |
+| Receipts              | A repeated clip answers the same and is not transcribed twice. Failed clips retry up to four times in a minute. A reused key with other audio is a conflict.                   |
+| Limits                | Two waiting clips per account, 120 clips a minute, 4,000 receipts per grant.                                                                                                  |
+| Gaps                  | A clip that cannot be transcribed leaves a gap. Lost lease and permission gaps are kept. The status view reports gaps and whether the gap limit was reached.                  |
+| Pause, resume, stop   | Browser and Mac controls. Stop starts the 60 second finish window and schedules the summary at its end, or at once when the Mac reports finished.                             |
+| Status                | The Mac posts its state and gets the recording view. The browser reads the same view.                                                                                         |
+| Mac credential        | A new host operation hands over the Mac's bearer credential. The module checks it against the grant's stored hash. A lost recording permission revokes the grant.            |
+| Recording-notice job  | Already built in part 9. It is not changed.                                                                                                                                   |
+
+### Proof
+
+| Check                | Result                                                                                                                                                                       |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Route tests          | 21 new tests through the real routes: clips, replay, conflict, bad clips, size cap, future clip, unknown source, silence, failed clip gap, credentials, pause, stop, final clip. |
+| Guard removal        | Seventeen checks each remove one rule and must turn a test red, eight from part 9 and nine new. All seventeen did, and the sources were restored byte for byte.                  |
+| Two-person privacy   | Another person holding the owner's credential is refused, and the test turns red when the fake row security is removed.                                                       |
+
+### Error codes
+
+Every code the capture routes return. A test fails if this table and the code differ. The last row is a result stored on a receipt and is not an HTTP error.
+
+| Code                                     | Status          | Where it appears                                          |
+| ---------------------------------------- | --------------- | --------------------------------------------------------- |
+| `meeting_capture_busy`                   | 409             | Two clips waiting for the account or one source           |
+| `meeting_capture_conflict`               | 409             | Stale generation or epoch, clip outside its window, reused key |
+| `meeting_capture_limit`                  | 413             | Body or receipt count over its limit                      |
+| `meeting_capture_processing_unavailable` | 503             | No model route at record or resume                        |
+| `meeting_capture_source_unavailable`     | 409             | Chosen sources are not available                          |
+| `meeting_capture_unavailable`            | 401, 404 or 503 | Bad credential, missing grant, no sign-in                 |
+| `meeting_capture_rate_limited`           | 429             | More than 120 clips a minute                              |
+| `meeting_capture_invalid_input`          | 400             | Bad fields, bad sound, unknown source                     |
+| `meeting_capture_interrupted`            | 409             | The Mac is not reporting recording, or its lease ran out  |
+| `meeting_capture_processing_failed`      | 200             | A clip that could not be turned into text, stored on its receipt |
+
+### Deviations
+
+- The browser status call returns at once with a retry delay of one second. There is no long poll.
+- The whole clip call runs under the device and meeting locks, because one module call is one transaction and cannot hold the old dispatch fence.
+- The pairing list in the browser status is always empty.
+
+### Not proven
+
+- The device credential check. Device pairing (part 7) is parked, so a fake stands in for it.
+- A real model pass on real audio. The tests use scripted text.
+- A real Mac app talking to the server.
+- Whether the host keeps the revoke when the call that triggered it answers with an error.

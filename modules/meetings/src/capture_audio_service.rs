@@ -14,6 +14,18 @@ use moss_module_sdk::{Host, Response};
 use serde_json::{json, Value};
 
 const PROCESSING: &str = "meeting_capture_processing_failed";
+const STAGES: &[&str] = &["configuration", "dispatch", "response", "validation"];
+const REASONS: &[&str] = &[
+    "configuration-unavailable",
+    "route-changed",
+    "provider-timeout",
+    "provider-rate-limited",
+    "provider-authentication",
+    "provider-unavailable",
+    "provider-network",
+    "provider-response-invalid",
+    "invalid-audio",
+];
 
 /// A failed clip's reviewed reason. Provider text never appears here.
 fn failure(reason: &str, stage: &str, retryable: bool, retry_after_ms: Option<i64>) -> Value {
@@ -114,8 +126,14 @@ fn transcribe<H: Host + ?Sized>(host: &H, clip: &Clip, reserved: &str) -> Result
     let reply = host.call("transcribe", "create", "audio", params).map_err(unavailable)?;
     if reply["ok"] != json!(true) {
         let retryable = reply["retryable"] == json!(true);
-        let name = |key: &str, fallback: &str| reply[key].as_str().unwrap_or(fallback).to_owned();
-        return Err(failure(&name("reason", "unknown"), &name("stage", "dispatch"), retryable, retryable.then_some(1000)));
+        // Only the host's closed lists pass. Anything else is stored as unknown.
+        let name = |key: &str, allowed: &[&str], fallback: &str| reply[key].as_str().filter(|v| allowed.contains(v)).unwrap_or(fallback).to_owned();
+        return Err(failure(
+            &name("reason", REASONS, "unknown"),
+            &name("stage", STAGES, "dispatch"),
+            retryable,
+            retryable.then_some(1000),
+        ));
     }
     if reply["route"].as_str() != Some(reserved) {
         return Err(failure("route-changed", "validation", false, None));

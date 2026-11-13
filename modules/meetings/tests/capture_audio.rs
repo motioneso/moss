@@ -357,3 +357,63 @@ fn a_malformed_status_or_control_body_is_a_400() {
     assert_eq!(f.route("POST", "/capture/control", &[], json!({"nope": 1})).0, 400);
     assert_eq!(f.route("POST", "/capture/audio", &[], json!({"nope": 1})).0, 400);
 }
+
+const MARKER: &str = "PLANTED-MARKER-7f3a91";
+
+#[test]
+fn spoken_text_stays_out_of_receipts_grants_jobs_and_answers() {
+    let (f, meeting, grant) = live();
+    let g = generation(&f);
+    *f.speech.borrow_mut() = json!({"ok": true, "route": "route-1", "segments": [{"startMs": 0, "endMs": 1000, "text": MARKER}]});
+    let (s, answer) = send(&f, clip(&meeting, &grant, g, 0, 0, 1000));
+    assert_eq!(s, 200, "{answer}");
+    // A failing clip must not echo provider text either.
+    *f.speech.borrow_mut() = json!({"ok": false, "reason": MARKER, "stage": MARKER, "retryable": false});
+    let (_, failed) = send(&f, clip(&meeting, &grant, g, 1, 1000, 2000));
+    let (_, control) = f.route(
+        "POST",
+        "/records/:id/capture/control",
+        &[("id", &meeting)],
+        json!({"grantId": grant, "requestKey": key(60), "expectedGeneration": g, "command": "stop"}),
+    );
+    let (_, view) = f.route("GET", "/records/:id/capture", &[("id", &meeting)], json!(null));
+    for (what, text) in [
+        ("answer", answer.to_string()),
+        ("control answer", control.to_string()),
+        ("browser view", view.to_string()),
+        ("failed answer", failed.to_string()),
+        ("jobs", format!("{:?}", f.jobs.borrow())),
+        ("receipts", format!("{:?}", f.rows("app.meeting_capture_receipts"))),
+        ("grants", format!("{:?}", f.rows("app.meeting_capture_grants"))),
+        ("stop summaries", format!("{:?}", f.rows("app.meeting_stop_summaries"))),
+    ] {
+        assert!(!text.contains(MARKER), "spoken text leaked into {what}");
+    }
+    assert!(format!("{:?}", f.batches.borrow()).contains(MARKER), "the transcript must hold the text");
+}
+
+#[test]
+fn the_status_view_reports_gaps_and_the_gap_limit() {
+    let (f, meeting, grant) = live();
+    let g = generation(&f);
+    let gaps: Vec<Value> = (0..32)
+        .map(|n| json!({"id": key(200 + n), "sourceId": "mic", "epoch": 1, "startMs": n * 10, "endMs": n * 10 + 5, "reason": "source-unavailable"}))
+        .collect();
+    let (s, body) = f.route(
+        "POST",
+        "/capture/status",
+        &[],
+        json!({"meetingId": meeting, "grantId": grant, "inventory": inventory(), "observed": {"generation": g, "phase": "recording"}, "gaps": gaps}),
+    );
+    assert_eq!(s, 200, "{body}");
+    let (_, view) = f.route("GET", "/records/:id/capture", &[("id", &meeting)], json!(null));
+    assert_eq!(view["capture"]["gaps"].as_array().unwrap().len(), 32, "{view}");
+    let too_many: Vec<Value> = (0..33).map(|n| json!({"id": key(300 + n), "sourceId": "mic", "epoch": 1, "startMs": 0, "endMs": 1, "reason": "paused"})).collect();
+    let (s, _) = f.route(
+        "POST",
+        "/capture/status",
+        &[],
+        json!({"meetingId": meeting, "grantId": grant, "inventory": inventory(), "observed": {"generation": g, "phase": "recording"}, "gaps": too_many}),
+    );
+    assert_eq!(s, 400);
+}

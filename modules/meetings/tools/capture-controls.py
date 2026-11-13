@@ -26,6 +26,7 @@ CONTROLS = [
     ("future clip admitted", "capture_audio.rs", "clip.end_ms > now_ms ||", "false ||", AUDIO, "a_clip_ending_in_the_future_conflicts"),
     ("unreported recording admitted", "capture_audio.rs", "|| observed[\"phase\"] != \"recording\"", "|| false", AUDIO, "a_mac_that_reports_recovering_is_interrupted"),
     ("lost permission keeps the grant", "capture_native.rs", "pub fn settle<H: Host + ?Sized>(host: &H, grant: &Value) -> Result<(), Stop> {", "pub fn settle<H: Host + ?Sized>(host: &H, grant: &Value) -> Result<(), Stop> {\n    if true {\n        return Ok(());\n    }", AUDIO, "a_lost_recording_permission_revokes_the_grant"),
+    ("provider text passes into the failure", "capture_audio_service.rs", ".filter(|v| allowed.contains(v))", "", AUDIO, "spoken_text_stays_out_of_receipts_grants_jobs_and_answers"),
     ("row level security removed", "../tests/common/mod.rs", ".filter(|r| r[\"owner_user_id\"] == actor && matches(r, &query.filter, actor))", ".filter(|r| matches(r, &query.filter, actor))", AUDIO, "another_person_cannot_send_audio_into_the_meeting"),
 ]
 
