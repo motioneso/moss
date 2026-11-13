@@ -63,6 +63,7 @@
         "save",
         "summary",
         "summary-insert-manual",
+        "summary-insert-capture",
         "summary-set",
         "list",
         "receipt",
