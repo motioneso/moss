@@ -174,7 +174,7 @@ fn no_page_text_or_account_address_reaches_a_job_payload_a_health_row_or_a_statu
     assert!(!queued.is_empty());
     for call in &queued {
         for value in call.params["params"].as_object().into_iter().flatten().map(|(_, v)| v) {
-            assert!(value.is_string(), "ids only");
+            assert!(value.is_string() || value.is_boolean(), "ids and flags only");
         }
     }
     let everything = format!("{} {} {}", serde_json::to_string(&queued.iter().map(|c| c.params.clone()).collect::<Vec<_>>()).unwrap(), status, serde_json::to_string(&rows).unwrap());

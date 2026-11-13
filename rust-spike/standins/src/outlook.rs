@@ -67,7 +67,7 @@ async fn answer(State(state): State<Shared>, Json(body): Json<Value>) -> Json<Va
     let op = body["op"].as_str().unwrap_or("").to_string();
     let mut page = state.lock().unwrap();
     page.ops.push(op.clone());
-    if page.signed_out && op != "close" {
+    if page.signed_out && !matches!(op.as_str(), "close" | "interrupted") {
         return Json(json!({"error":"sign-in-needed"}));
     }
     let end = page.week + Duration::days(7);
