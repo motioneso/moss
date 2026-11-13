@@ -136,10 +136,14 @@ pub fn handle<H: moss_module_sdk::Host + ?Sized>(
                 let listed = list::execute(&repo, &input)
                     .map_err(|_| moss_module_sdk::Error::new("Briefing tasks unavailable"))?;
                 // Only these fields leave. Notes, tags and ownership stay behind.
+                // A task someone shared with the caller is readable but is not the caller's own,
+                // so it must not enter their briefing.
+                let me = host.call("context", "read", "call", serde_json::json!({}))?;
                 let items: Vec<_> = listed["data"]["items"]
                     .as_array()
                     .into_iter()
                     .flatten()
+                    .filter(|t| !me["actorUserId"].is_null() && t["ownerUserId"] == me["actorUserId"])
                     .map(|t| if suggested {
                         // Suggested tasks carry the fields an action row shows.
                         serde_json::json!({

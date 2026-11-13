@@ -54,6 +54,28 @@ fn calendar_today(raw: &[Value], g: &Gathered) -> Section {
     Section { key: "calendar_today", label: "CALENDAR TODAY", lines, count, raw: vec![] }
 }
 
+/// One cleaned line per ranked signal. Signal summaries quote outside text, so they are cleaned.
+fn signal_lines(signals: &[Value]) -> Vec<String> {
+    signals
+        .iter()
+        .map(|s| format!("SIGNAL {}: {}", sanitize_external(&s["type"]), sanitize_external(&s["summary"])))
+        .collect()
+}
+
+/// Dated, status-unknown wording that stands in for the message summary.
+fn unsure_line(m: &Value, g: &Gathered) -> String {
+    let when = gather::instant(m["receivedAt"].as_str().unwrap_or_default())
+        .map(|t| t.with_timezone(&g.zone).format("%Y-%m-%d").to_string())
+        .unwrap_or_default();
+    let payment = m["briefingPaymentStatusUnknown"] == json!(true);
+    join(vec![
+        sanitize_external(&m["sender"]),
+        sanitize_external(&m["subject"]),
+        format!("received {when}"),
+        if payment { "payment status unknown".to_owned() } else { "current status unknown".to_owned() },
+    ])
+}
+
 fn find<'a>(sections: &'a [Section], key: &str) -> Option<&'a Section> {
     sections.iter().find(|s| s.key == key)
 }
@@ -106,20 +128,50 @@ impl Composer for MorningComposer {
         let (calendar_raw, email_raw) = (raw("calendar"), raw("email"));
         let assessment = email_evidence::assess(&email_raw, gathered.now, gathered.zone);
 
-        // The prompt's mail lines skip rows already shown and mail the evidence rules out.
+        // Mail the evidence rules cannot vouch for is told to the writer as dated and unknown
+        // status, and never feeds a signal.
+        let rows_ref = &rows.source_refs;
         let mail: Vec<Value> = assessment
             .eligible
             .iter()
             .filter(|m| gather::is_briefing_email(m))
-            .filter(|m| !action_rows::email_source_ref(m).is_some_and(|r| rows.source_refs.contains(&r)))
+            .filter(|m| !action_rows::email_source_ref(m).is_some_and(|r| rows_ref.contains(&r)))
             .cloned()
             .collect();
-        let (mail_lines, _) = cap_lines(email_lines(&mail));
+        let (unsure, sure): (Vec<Value>, Vec<Value>) =
+            mail.into_iter().partition(|m| m["briefingCurrentStatusUnknown"] == json!(true));
+
+        let mut tasks = find(&gathered.sections, "tasks").cloned().unwrap_or_else(|| Section::empty("tasks", "TASKS"));
+        tasks.lines = cap_lines(std::mem::take(&mut tasks.lines)).0;
+        let context = signals::context_tokens(&[&tasks.lines]);
+        let calendar_signals = signals::derive_calendar_signals(&calendar_raw, gathered.now, gathered.zone, &context, &CalendarSettings::default());
+        let certain_all: Vec<Value> = assessment.eligible.iter().filter(|m| m["briefingCurrentStatusUnknown"] != json!(true)).cloned().collect();
+        let email_signals = signals::derive_email_signals(&certain_all, gathered.now, gathered.zone, &context, &EmailSettings::default());
+
+        let covered: Vec<&str> = assessment
+            .eligible
+            .iter()
+            .filter(|m| action_rows::email_source_ref(m).is_some_and(|r| rows_ref.contains(&r)))
+            .filter_map(|m| m["id"].as_str())
+            .collect();
+        let open_signals: Vec<Value> = email_signals
+            .iter()
+            .filter(|s| !s["messageIds"].as_array().into_iter().flatten().any(|id| id.as_str().is_some_and(|i| covered.contains(&i))))
+            .cloned()
+            .collect();
+        let mut mail_lines = signal_lines(&open_signals);
+        mail_lines.extend(unsure.iter().map(|m| unsure_line(m, &gathered)));
+        mail_lines.extend(email_lines(&sure));
+        let (mail_lines, _) = cap_lines(mail_lines);
+        let mut calendar_today = calendar_today(&calendar_raw, &gathered);
+        let mut with_signals = signal_lines(&calendar_signals);
+        with_signals.extend(std::mem::take(&mut calendar_today.lines));
+        calendar_today.lines = cap_lines(with_signals).0;
         let mut prompt_sections: Vec<Section> = vec![
             Section::empty("commitments", "COMMITMENTS"),
-            find(&gathered.sections, "tasks").cloned().unwrap_or_else(|| Section::empty("tasks", "TASKS")),
+            tasks,
             find(&gathered.sections, "calendar").cloned().unwrap_or_else(|| Section::empty("calendar", "CALENDAR")),
-            calendar_today(&calendar_raw, &gathered),
+            calendar_today,
             Section::empty("weather", "WEATHER"),
             Section { key: "email", label: "EMAIL SUMMARIES + SIGNALS", count: email_raw.len(), lines: mail_lines, raw: vec![] },
             Section::empty("vault", "VAULT"),
@@ -127,11 +179,6 @@ impl Composer for MorningComposer {
             Section::empty("day_plan", "DAY PLAN"),
         ];
         prompt_sections.iter_mut().for_each(|s| s.raw.clear());
-
-        let task_lines = find(&prompt_sections, "tasks").map(|s| s.lines.clone()).unwrap_or_default();
-        let context = signals::context_tokens(&[&task_lines]);
-        let calendar_signals = signals::derive_calendar_signals(&calendar_raw, gathered.now, gathered.zone, &context, &CalendarSettings::default());
-        let email_signals = signals::derive_email_signals(&assessment.eligible, gathered.now, gathered.zone, &context, &EmailSettings::default());
 
         let catch_up = action_rows::build_email_catch_up(&email_raw, &rows.source_refs, gathered.since, email_evidence::is_no_action_confirmation);
         let payload = json!({"version": 1, "actionRows": rows.rows, "catchUp": catch_up});

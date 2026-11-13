@@ -346,3 +346,35 @@ fn the_trusted_block_source_has_no_interpolated_outside_value() {
     assert_eq!(placeholders, ["{MORNING_INSTRUCTIONS}", "{TRUST_BOUNDARY}"], "{body}");
     assert!(!body.contains("sections") && !body.contains("&") && !body.contains("param"), "{body}");
 }
+
+#[test]
+fn the_writer_is_told_when_mail_is_dated_or_its_status_is_unknown_and_such_mail_makes_no_signal() {
+    let fake = base();
+    let mut bill = mail("b1", "Invoice #A-77 payment due", "needs_action", "2026-11-11T07:00:00.000Z");
+    bill["summary"] = json!("Overdue, pay now");
+    let mut old = mail("o1", "Contract question", "needs_reply", "2026-11-08T08:00:00.000Z");
+    old["summary"] = json!("Please answer the contract question");
+    feed(&fake, A, vec![], vec![], vec![bill, old]);
+    let done = compose(&fake, "morning");
+    let lines = prompt_of_block(&fake.ai_calls.borrow()[0].1["prompt"], "email");
+    let all = lines.join("\n");
+    assert!(all.contains("payment status unknown"), "{all}");
+    assert!(all.contains("received 2026-11-08") && all.contains("current status unknown"), "{all}");
+    assert!(!all.contains("Overdue, pay now"), "the unverified demand is not passed on: {all}");
+    assert_eq!(done.source_metadata["emailSignals"], json!([]), "unsure mail makes no signal");
+}
+
+#[test]
+fn ranked_signals_lead_the_prompt_and_the_task_list_stops_at_eight_items() {
+    let fake = base();
+    let mut mails: Vec<Value> = (0..9).map(|i| mail(&format!("m{i}"), &format!("Update {i}"), "needs_action", "2026-11-11T08:00:00.000Z")).collect();
+    mails.push(mail("urgent", "Urgent: reply today", "needs_reply", "2026-11-11T09:00:00.000Z"));
+    let tasks: Vec<Value> = (0..20).map(|i| task(&format!("t{i}"), &format!("T{i}"), "todo")).collect();
+    feed(&fake, A, tasks, vec![], mails);
+    compose(&fake, "morning");
+    let prompt = fake.ai_calls.borrow()[0].1["prompt"].clone();
+    let email = prompt_of_block(&prompt, "email");
+    assert!(email[0].starts_with("- SIGNAL "), "{email:?}");
+    assert!(email.iter().any(|l| l.contains("SIGNAL") && l.to_lowercase().contains("urgent")), "{email:?}");
+    assert_eq!(prompt_of_block(&prompt, "tasks").len(), 8);
+}
