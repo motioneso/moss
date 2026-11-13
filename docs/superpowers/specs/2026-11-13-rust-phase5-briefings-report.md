@@ -91,3 +91,56 @@ The app map also names briefing_not_set_up, which belongs to part 17.
 - Opening the definitions list re-registers each schedule only when none exists. A schedule whose
   time or zone drifted is corrected by the next edit, not by the list.
 - Odd inputs the old validator coerces (for example numbers sent as text) are not all replayed.
+
+## Briefings run job (part 17)
+
+Card JS-265. Part of [issue 4027](https://github.com/motioneso/moss/issues/4027). Release note
+Category: N/A.
+
+### What was built
+
+The Briefings package now writes a briefing for its owner, either when they ask for one or when
+their saved schedule fires. It shows no screen yet. The text is a fixed fallback line, because the
+model-based writing is a later part and all model calls will go through the router.
+
+- Run now: a new route queues one run and answers at once with the job and run ids. Asking again
+  with the same key while the first is still queued or running is refused. Once the first has
+  finished, the same key starts a new run.
+- Scheduled run: the run id is made when the job fires, because a scheduled job cannot carry one.
+  A fire that lands in a different zone than the owner's is registered again, and it only runs when
+  it lands close enough to the owner's target time.
+- Once a day: a second scheduled fire on the same local day does nothing and sends nothing.
+- Deadline: a run that takes longer than six minutes fails with a fixed label and rolls back, so it
+  leaves no run row and no notification.
+- Notification: a successful scheduled run posts one notification with a fixed title and no
+  briefing text. The same run never posts twice.
+- Status: opening a run by its job id says pending, ready or failed. Another person gets the
+  usual "not found" answer.
+- Blocked tools: a definition with a non-read tool stores a blocked run with a fixed message.
+- Host: three small additions let a package list its open jobs, read one job and read a schedule.
+  The package now declares the notification port and the guest imports it.
+
+### Proof
+
+| Claim                                                                                  | Where                           |
+| -------------------------------------------------------------------------------------- | ------------------------------- |
+| Manual and scheduled runs, fallback text, pending and failed reads, 409 and reuse      | 9 native tests, fixed clock     |
+| Same-day skip sends no second notification                                             | native and installed test       |
+| Six-minute overrun rolls back the run and the notification                             | native test, fixed clock        |
+| Notification holds only a fixed title and an event key                                 | installed test, reads the row   |
+| Briefing text is in no queue row, job payload, notification or log table               | installed test, scans 13 tables |
+| A second person cannot read status or queue a run; seen failing without row security   | installed test, RED and GREEN   |
+| Old routes still match (26 steps)                                                      | installed replay test           |
+| Native and WebAssembly builds, tests in both                                           | gate                            |
+| Real Rust server over HTTPS: queue, worker finishes it, status ready, stranger refused | live run                        |
+
+### Not proven
+
+- Two scheduled fires at the same moment. Same-day checking has no lock, so a race could store two.
+- The real six-minute wait. The deadline is proven only on a fixed clock.
+- A failed notification rolls back the whole run, by design, so the owner gets no run that day.
+- The same-day check uses the owner's local date. A run near midnight in a zone far from UTC was not
+  tried.
+- Queue keys are unique forever, so a reused key derives a new key. Only the first reuse was tried.
+- Reaching the server from another device was not checked.
+- Model-written text, tool sources and screens are later parts.
