@@ -8,6 +8,7 @@ from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[1] / "src"
 FLOW = "capture_flow"
+AUDIO = "capture_audio"
 
 CONTROLS = [
     ("wrong secret accepted", "capture_auth.rs", "a.len() == stored_hash.len() &&", "true ||", FLOW, "a_wrong_secret_or_connection_is_refused"),
@@ -18,6 +19,14 @@ CONTROLS = [
     ("model route not required", "capture_start.rs", "return Err(Failure::new(CaptureCode::ProcessingUnavailable).into());", "return Ok(Response::new(200, json!({})));", FLOW, "a_start_needs_a_model_route_a_browser_and_a_real_meeting"),
     ("relink route answers 200", "capture_routes.rs", "Ok(Failure::new(CaptureCode::RelinkRequired).response())\n}\n\n/// Only", "Ok(Response::new(200, json!({})))\n}\n\n/// Only", FLOW, "the_old_relink_routes_always_answer_410"),
     ("failure echoes the request", "capture_errors.rs", "None => json!({\"code\": self.code.as_str()}),", "None => json!({\"code\": self.code.as_str(), \"echo\": \"PLANTED-MARKER-7f3a91\"}),", FLOW, "a_malformed_body_is_a_400_with_a_code_only"),
+    ("audio body cap removed", "capture_routes.rs", "capped(body, 5_200_000)", "capped(body, usize::MAX)", AUDIO, "an_oversize_audio_body_is_413"),
+    ("device credential not compared", "capture_native.rs", "|| !proof_matches(credential, stored)", "|| false", AUDIO, "a_wrong_or_missing_credential_is_the_same_401"),
+    ("replayed clip transcribed again", "capture_audio_service.rs", "if result[\"retryable\"] != json!(true) || !receipts::retry(host, &grant_id, &prior, at)? {", "if false {", AUDIO, "the_same_clip_again_answers_the_same_and_is_not_transcribed_twice"),
+    ("silent clip sent to the model", "capture_audio_service.rs", "    if near_silent(&clip.pcm) {\n        return Ok(vec![]);", "    if false {\n        return Ok(vec![]);", AUDIO, "a_silent_clip_is_not_sent_to_the_model"),
+    ("future clip admitted", "capture_audio.rs", "clip.end_ms > now_ms ||", "false ||", AUDIO, "a_clip_ending_in_the_future_conflicts"),
+    ("unreported recording admitted", "capture_audio.rs", "|| observed[\"phase\"] != \"recording\"", "|| false", AUDIO, "a_mac_that_reports_paused_is_interrupted"),
+    ("lost permission keeps the grant", "capture_native.rs", "pub fn settle<H: Host + ?Sized>(host: &H, grant: &Value) -> Result<(), Stop> {", "pub fn settle<H: Host + ?Sized>(host: &H, grant: &Value) -> Result<(), Stop> {\n    if true {\n        return Ok(());\n    }", AUDIO, "a_lost_recording_permission_revokes_the_grant"),
+    ("row level security removed", "../tests/common/mod.rs", ".filter(|r| r[\"owner_user_id\"] == actor && matches(r, &query.filter, actor))", ".filter(|r| matches(r, &query.filter, actor))", AUDIO, "another_person_cannot_send_audio_into_the_meeting"),
 ]
 
 
@@ -44,7 +53,7 @@ def main():
         print(("red as required   " if red else "NOT RED          ") + label, flush=True)
         if not red:
             failed.append(f"{label}: {test} did not fail with the guard removed")
-    code, out = run(FLOW, "")
+    code = max(run(FLOW, "")[0], run(AUDIO, "")[0])
     if code != 0:
         failed.append("restored sources are not green")
     print("green after restore" if code == 0 else "NOT green after restore")

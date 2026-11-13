@@ -195,8 +195,9 @@ fn a_clip_from_an_unknown_source_is_invalid() {
 }
 
 #[test]
-fn a_mac_that_has_not_reported_recording_is_interrupted() {
+fn a_mac_that_reports_paused_is_interrupted() {
     let (f, meeting, grant) = recording();
+    assert_eq!(status(&f, &meeting, &grant, "paused").0, 200);
     let g = generation(&f);
     let (s, body) = send(&f, clip(&meeting, &grant, g, 0, 0, 1000));
     assert_eq!((s, code(&body)), (409, "meeting_capture_interrupted"), "{body}");
@@ -246,7 +247,7 @@ fn another_person_cannot_send_audio_into_the_meeting() {
     let (f, meeting, grant) = live();
     let g = generation(&f);
     f.as_actor(B);
-    f.capture.borrow_mut().credential = Some(format!("mm1_{B}.{grant}.{SECRET2}"));
+    // B holds A's stolen credential. Only the owner rule stands between B and the grant.
     let (s, body) = send(&f, clip(&meeting, &grant, g, 0, 0, 1000));
     assert_eq!((s, code(&body)), (401, "meeting_capture_unavailable"), "{body}");
     assert_eq!(f.heard.borrow().len(), 0);
