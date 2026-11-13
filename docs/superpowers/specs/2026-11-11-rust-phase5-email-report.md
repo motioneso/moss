@@ -398,3 +398,51 @@ None added.
 - The live refresh saved 0 new messages, so it proves the flow and statuses, not a large sync.
 - `refused_attempts_answer_like_the_old_server` (Google limiter) failed once under load. It
   covers untouched code and is timing-sensitive. It was not re-checked on main.
+
+# Part 10: Source context and monitors
+
+## What was built
+
+- An assistant tool, `email.listVisibleMessages`, that lists the person's recent mail with a
+  short summary and an action label. For a Gmail account it reads live. It asks Email to triage
+  at most two messages that have no summary yet, within a time budget, and falls back to saved
+  mail when Gmail or the model is slow. Mail-server (IMAP) accounts return saved mail only.
+- Email gained read-only calls for threads, newer replies, recent messages and saved triage. Each
+  one is limited to the signed-in person's own rows, even when a message is shared with them.
+- Connectors runs a per-account email check every 15 minutes and a calendar check every 30
+  minutes. Each is scheduled when a Google account connects and cancelled when it is revoked.
+  Each check writes one health row (times and counts only).
+- The calendar preview now checks proposed times against the person's connected calendar events
+  when Connectors is installed, through a new optional dependency in the module manifest. Without
+  Connectors the preview works as before.
+- App map entries for all of the above in the Connectors, Email and Calendar manifests.
+
+## Proof
+
+- Package tests: email context 10, monitors 7, calendar context 11, live tools 6, preview 4.
+- Database tests: a second person reads nothing of the first person's mail through the thread,
+  newer, recent or saved reads, even with a share granted, and the share is shown to work for
+  the ordinary list so the empty answers come from the owner check. A second person cannot write
+  a health row for the first person's account, and the write succeeds when row-level security is
+  switched off, so the test notices a missing guard.
+- Mail text never appears in a job payload, a schedule row or the server log (monitor package
+  test and the live run's text scan).
+- A live run on the real Rust server with stand-in Google and mail servers: a connected Google
+  account has an email check at 15 minutes and a calendar check at 30, and revoking the account
+  removes both.
+- Email database gate: 22 of 22. Connectors gate: every test binary passed except the old Google
+  rate-limit test noted below.
+
+## Differences from the old app
+
+- The preview's busy check uses cached events and ignores the old placement window.
+
+## Not proven
+
+- Mail-server (IMAP) context is saved mail only, with no live read.
+- The monitors write health rows but do not yet create tasks from mail or apply suppression, so
+  they always report zero created.
+- Live triage is capped at two messages per read.
+- A real Gmail account and a real model were not used.
+- `refused_attempts_answer_like_the_old_server` (Google limiter) failed in both Connectors gate
+  runs here. It sits in code this part did not change and depends on timing under load.
