@@ -813,7 +813,7 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
                 });
                 let rows = db
                     .query(
-                        "SELECT queue, cron, payload::text FROM moss_queue.schedules WHERE queue IN ('email-monitor','calendar-monitor') AND payload::text LIKE '%' || $1 || '%' ORDER BY queue",
+                        "SELECT queue, cron, payload::text FROM moss_queue.schedules WHERE (queue LIKE '%.email-monitor' OR queue LIKE '%.calendar-monitor') AND payload::text LIKE '%' || $1 || '%' ORDER BY queue",
                         &[&google_account],
                     )
                     .await
@@ -823,8 +823,8 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
             })
         };
         let found = schedules(2, "after connect");
-        assert_eq!((found[0].0.as_str(), found[0].1.as_str()), ("calendar-monitor", "*/30 * * * *"));
-        assert_eq!((found[1].0.as_str(), found[1].1.as_str()), ("email-monitor", "*/15 * * * *"));
+        assert!(found[0].0.ends_with(".calendar-monitor") && found[0].1 == "*/30 * * * *", "{found:?}");
+        assert!(found[1].0.ends_with(".email-monitor") && found[1].1 == "*/15 * * * *", "{found:?}");
         for (_, _, payload) in &found {
             assert!(!payload.contains("BODY-SENTINEL") && !payload.contains(MARKER_TOKEN), "private text in a schedule: {payload}");
         }
