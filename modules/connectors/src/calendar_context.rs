@@ -181,6 +181,7 @@ pub fn list(host: &impl Host, input: &Value) -> Result<Value> {
         .as_array()
         .into_iter()
         .flatten()
+        .filter(|a| input["accountId"].is_null() || a["id"] == input["accountId"])
         .filter(|a| {
             let scopes: Vec<String> = a["scopes"]
                 .as_array()

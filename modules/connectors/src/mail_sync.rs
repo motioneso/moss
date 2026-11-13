@@ -87,6 +87,7 @@ pub fn refresh_first(account: &str, refresh: &str) -> (&'static str, Value) {
 /// repeat call replaces the row. A scheduling failure never fails the caller.
 pub fn reconcile_schedule(host: &impl Host, account: &str) {
     let _ = schedule(host, account);
+    crate::monitors::reconcile(host, account, false);
 }
 
 fn schedule(host: &impl Host, account: &str) -> Result<Value> {
@@ -101,6 +102,7 @@ fn schedule(host: &impl Host, account: &str) -> Result<Value> {
 /// Stops the account's schedule. The keyed schedule call is idempotent and returns the
 /// stable row id to cancel.
 pub fn cancel_schedule(host: &impl Host, account: &str) {
+    crate::monitors::cancel(host, account, false);
     let Ok(saved) = schedule(host, account) else { return };
     if let Some(id) = saved["id"].as_str() {
         let _ = host.call("jobs", "unschedule", QUEUE, json!({"id":id}));

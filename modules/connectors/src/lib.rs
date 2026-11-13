@@ -9,6 +9,7 @@ pub mod accounts;
 pub mod calendar_context;
 pub mod email_context;
 pub mod live_tools;
+pub mod monitors;
 pub mod fastify;
 pub mod google;
 pub mod google_sync;
@@ -70,6 +71,7 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
                 Some(google_sync::QUEUE | google_sync::SWEEP | google_sync::REFRESH_QUEUE) => {
                     google_sync::handle(host, payload)
                 }
+                Some(monitors::EMAIL_QUEUE | monitors::CALENDAR_QUEUE) => monitors::handle(host, payload),
                 Some(refresh::SWEEP) => refresh::handle(host, payload),
                 _ => mail_sync::handle(host, payload),
             }

@@ -45,7 +45,8 @@
         "connectors.context-setup",
         "connectors.live-calendar",
         "connectors.live-gmail-list",
-        "connectors.live-gmail-get"
+        "connectors.live-gmail-get",
+        "connectors.monitor-status"
       ]
     },
     {
@@ -61,7 +62,9 @@
         "google-sync-sweep",
         "email-refresh-google",
         "email-refresh-imap",
-        "email-refresh-sweep"
+        "email-refresh-sweep",
+        "email-monitor",
+        "calendar-monitor"
       ]
     },
     {
@@ -554,6 +557,16 @@
       }
     },
     "google-sync-sweep": {
+      "account-id": {
+        "kind": "id"
+      }
+    },
+    "email-monitor": {
+      "account-id": {
+        "kind": "id"
+      }
+    },
+    "calendar-monitor": {
       "account-id": {
         "kind": "id"
       }
