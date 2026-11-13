@@ -3,8 +3,12 @@
 pub mod body;
 pub mod compose;
 pub mod definitions;
+pub mod external;
+pub mod gather;
+pub mod gather_types;
 pub mod jobs;
 pub mod lifecycle;
+pub mod priority;
 pub mod queue;
 pub mod run_job;
 pub mod runs;
@@ -12,6 +16,7 @@ pub mod schedule;
 pub mod sources;
 pub mod status;
 pub mod text;
+pub mod trust;
 pub mod util;
 
 #[cfg(target_arch = "wasm32")]
