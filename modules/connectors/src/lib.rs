@@ -7,6 +7,7 @@ use serde_json::{json, Value};
 mod abi;
 pub mod accounts;
 pub mod calendar_context;
+pub mod calendar_writes;
 pub mod email_context;
 pub mod live_tools;
 pub mod monitors;
@@ -107,6 +108,9 @@ fn api(host: &impl Host, name: &str, input: &Value) -> Result<Value> {
         "listCalendarContext" => calendar_context::list(host, input),
         "listEmailContext" => email_context::list(host, input),
         "listSavedEmailContext" => email_context::list_saved(host, input["connectorAccountId"].as_str().unwrap_or("")),
+        "createCalendarEvent" => calendar_writes::create(host, input),
+        "deleteCalendarEvent" => calendar_writes::delete(host, input),
+        "rescheduleCalendarEvent" => calendar_writes::reschedule(host, input),
         "connectionDiagnostics" => accounts::diagnostics(host, input["limit"].as_i64().unwrap_or(10)),
         _ => Err(Error::new(404, "Connectors operation not found")),
     }
