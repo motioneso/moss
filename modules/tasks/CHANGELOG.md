@@ -1,5 +1,9 @@
 # Tasks package changes
 
+## 0.1.3
+
+- Add the public `listBriefingTasks` call, which gives Briefings the caller's open tasks, or tasks finished after a given time, with only id, title, status, due time and priority.
+
 ## 0.1.2
 
 - Add the public `createMeetingTask` call, which makes one task from an accepted meeting action and returns the same task when asked again.

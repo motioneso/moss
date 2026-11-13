@@ -4,7 +4,7 @@
   "name": "Tasks",
   "description": "Tasks component with package screens for lists, priority views, task editing, subtasks, tags, activity, focus, at-risk, overdue and summary reads. Full legacy parity remains unfinished.",
   "publisher": "Moss",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -95,6 +95,7 @@
   "provides": {
     "createMeetingTask": "1.0.0",
     "getTaskReference": "1.0.0",
+    "listBriefingTasks": "1.0.0",
     "prepareTaskAction": "1.0.0",
     "prepareTaskRoute": "1.0.0"
   },

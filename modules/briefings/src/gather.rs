@@ -46,7 +46,7 @@ impl Gathered {
             "gaps": self.gaps.iter().map(Gap::to_json).collect::<Vec<_>>(),
             "sections": self.sections.iter().map(|s| json!({"key": s.key, "count": s.count})).collect::<Vec<_>>(),
             "sourceContext": self.source_context,
-            "degraded": self.degraded,
+            "sourcesFromCache": self.degraded,
             "contributions": self.contributions.iter().map(|c| json!({"moduleId": c.module_id, "items": c.items.len()})).collect::<Vec<_>>(),
         })
     }

@@ -35,6 +35,11 @@ pub struct Fake {
     pub queue: RefCell<Vec<Value>>,
     /// Keyed schedules as (key, timezone, cron).
     pub schedules: RefCell<Vec<(String, String, String)>>,
+    /// Canned public-API answers as (person, module, name, answer). A missing entry fails the
+    /// call, like a module that is not installed. `None` makes the call fail.
+    pub answers: RefCell<Vec<(String, String, String, Option<Value>)>>,
+    /// Every public-API call as (person, module, name, parameters).
+    pub api_calls: RefCell<Vec<(String, String, String, Value)>>,
     ids: Cell<u32>,
 }
 
@@ -53,6 +58,8 @@ impl Fake {
             notifications: RefCell::new(vec![]),
             queue: RefCell::new(vec![]),
             schedules: RefCell::new(vec![]),
+            answers: RefCell::new(vec![]),
+            api_calls: RefCell::new(vec![]),
             ids: Cell::new(0),
         }
     }
@@ -61,6 +68,10 @@ impl Fake {
     }
     pub fn zone(&self, person: &str, zone: &str) {
         self.zones.borrow_mut().push((person.into(), zone.into()));
+    }
+    /// Teaches a person's public-API answer. `None` makes that call fail.
+    pub fn answer(&self, person: &str, module: &str, name: &str, answer: Option<Value>) {
+        self.answers.borrow_mut().push((person.into(), module.into(), name.into(), answer));
     }
     pub fn share(&self, definition: &str, person: &str, level: &str) {
         self.shares.borrow_mut().push((definition.into(), person.into(), level.into()));
@@ -295,6 +306,16 @@ impl Host for Fake {
                 let key = parameters["key"].as_str().unwrap_or("");
                 let found = self.schedules.borrow().iter().find(|(k, _, _)| k == key).cloned();
                 Ok(json!({"schedule": found.map(|(_, zone, cron)| json!({"timezone": zone, "cron": cron}))}))
+            }
+            ("api", "call") => {
+                let actor = self.actor.get();
+                let name = parameters["name"].as_str().unwrap_or("").to_owned();
+                self.api_calls.borrow_mut().push((actor.into(), resource.into(), name.clone(), parameters["parameters"].clone()));
+                let found = self.answers.borrow().iter().rev().find(|(p, m, n, _)| p == actor && m == resource && *n == name).cloned();
+                match found {
+                    Some((_, _, _, Some(answer))) => Ok(answer),
+                    _ => Err(moss_module_sdk::Error::new("Public call unavailable")),
+                }
             }
             ("notify", "post") => {
                 let mut sent = self.notifications.borrow_mut();
