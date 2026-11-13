@@ -1,18 +1,24 @@
 //! Briefings package: definitions and runs routes, the run job, schedule alignment and account export.
 //! All effects cross the guest-safe SDK Host interface.
+pub mod action_rows;
 pub mod body;
 pub mod compose;
 pub mod definitions;
+pub mod email_evidence;
 pub mod external;
 pub mod gather;
 pub mod gather_types;
 pub mod jobs;
 pub mod lifecycle;
+pub mod morning;
+pub mod morning_order;
+pub mod morning_prompt;
 pub mod priority;
 pub mod queue;
 pub mod run_job;
 pub mod runs;
 pub mod schedule;
+pub mod signals;
 pub mod sources;
 pub mod status;
 pub mod text;
