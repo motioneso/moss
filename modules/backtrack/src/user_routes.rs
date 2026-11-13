@@ -50,5 +50,6 @@ pub fn delete<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Resp
         "delete",
         json!({"from": from.map(write), "to": write(to), "deletedAt": write(at)}),
     )?;
+    crate::upkeep::keep_scheduled(host);
     Ok(Response::new(200, json!({"deleted": reply["deleted"].as_u64().unwrap_or(0)})))
 }

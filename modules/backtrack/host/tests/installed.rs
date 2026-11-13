@@ -263,3 +263,23 @@ fn the_account_export_holds_only_the_actors_own_text() {
     assert_eq!(rows[0]["bodyHash"].as_str().unwrap().len(), 64);
     assert!(rows[0].get("search").is_none());
 }
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn later_uploads_keep_the_due_sweep_time_and_a_delete_schedules_a_sweep() {
+    let w = World::new();
+    w.link(w.f.a);
+    w.call(w.f.a, "POST", "/ingest", upload(vec![segment(10, "first")]));
+    let due = |who| w.count("SELECT count(*) FROM moss_queue.schedules WHERE actor_user_id=$1 AND queue LIKE '%backtrack.upkeep' AND next_at < now()", who);
+    w.f.rt.block_on(w.f.root.execute("UPDATE moss_queue.schedules SET next_at=now()-interval '1 minute' WHERE actor_user_id=$1 AND queue LIKE '%backtrack.upkeep'", &[&w.f.a])).unwrap();
+    assert_eq!(due(w.f.a), 1);
+    // More uploads and a pause toggle arrive before the worker ticks. The due time must not move.
+    w.call(w.f.a, "POST", "/ingest", upload(vec![segment(20, "second")]));
+    w.call(w.f.a, "PUT", "/preferences", json!({"paused": false}));
+    assert_eq!(due(w.f.a), 1, "an upload must not push the sweep to the next hour");
+    // A person with no schedule yet gets one from a delete.
+    let none = |who| w.count("SELECT count(*) FROM moss_queue.schedules WHERE actor_user_id=$1 AND queue LIKE '%backtrack.upkeep'", who);
+    assert_eq!(none(w.f.b), 0);
+    w.call(w.f.b, "DELETE", "/segments", Value::Null);
+    assert_eq!(none(w.f.b), 1, "a delete must leave a sweep scheduled for its marker");
+}

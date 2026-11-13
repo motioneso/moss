@@ -24,6 +24,6 @@ pub fn keep_scheduled<H: Host + ?Sized>(host: &H) {
         "jobs",
         "schedule",
         QUEUE,
-        json!({"cron": CRON, "timezone": "UTC", "key": "backtrack-upkeep", "params": {}}),
+        json!({"cron": CRON, "timezone": "UTC", "key": "backtrack-upkeep", "keepExisting": true, "params": {}}),
     );
 }

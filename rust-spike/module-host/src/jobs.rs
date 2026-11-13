@@ -149,6 +149,14 @@ impl Ports for JobPorts {
                         }
                         None=>uuid::Uuid::new_v4(),
                     };
+                    // With keepExisting an already-scheduled job keeps its next run time, so frequent
+                    // callers cannot keep pushing the run past its due time.
+                    if request.parameters["keepExisting"].as_bool()==Some(true){
+                        let cx=DataContext::open(&self.app,scope.access()).await.map_err(|_|anyhow::anyhow!("Cannot open the schedule context"))?;
+                        let found=cx.db().query_opt("SELECT 1 FROM moss_queue.schedules WHERE id=$1 AND queue=$2 AND disabled_reason IS NULL",&[&id,&spec.name]).await?;
+                        cx.commit().await.map_err(|_|anyhow::anyhow!("Cannot close the schedule context"))?;
+                        if found.is_some(){return Ok(json!({"id":id}));}
+                    }
                     queue.schedule(actor(scope),id,&spec.name,payload,request.parameters["cron"].as_str().context("Cron required")?,request.parameters["timezone"].as_str().context("Timezone required")?,chrono::Utc::now()).await?;
                     Ok(json!({"id":id}))
                 }
