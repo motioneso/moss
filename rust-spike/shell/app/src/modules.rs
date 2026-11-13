@@ -17,7 +17,7 @@ use axum::{
     Extension, Json, Router,
 };
 use moss_module_host::{
-    account_preferences::{AccountPreferencesPorts, Binding, JsonShape},
+    account_preferences::{AccountPreferencesPorts, Binding, JsonShape, WEATHER_UNITS},
     ai::{
         EmbeddingsOnly, FixedEmbeddings, Intelligence, IntelligenceEmbeddings,
         DEFAULT_EMBEDDING_MODEL,
@@ -199,8 +199,9 @@ impl Intelligence for SplitIntelligence {
     }
 }
 
-/// Sports keeps its standings choices in two fixed account preference keys.
-fn sports_preferences(database: Database, next: Arc<dyn Ports>) -> Result<Arc<dyn Ports>> {
+/// Sports keeps its standings choices, and Weather its place and unit, in fixed account
+/// preference keys. Weather's keys are the ones the old Settings routes wrote.
+fn module_preferences(database: Database, next: Arc<dyn Ports>) -> Result<Arc<dyn Ports>> {
     Ok(Arc::new(AccountPreferencesPorts::new(
         database,
         BTreeMap::from([
@@ -217,6 +218,14 @@ fn sports_preferences(database: Database, next: Arc<dyn Ports>) -> Result<Arc<dy
                     key: "sports.standings_last_viewed".into(),
                     shape: JsonShape::LastViewed,
                 },
+            ),
+            (
+                ("weather".into(), "location".into()),
+                Binding::Json { key: "weather-location".into(), shape: JsonShape::Place },
+            ),
+            (
+                ("weather".into(), "unit".into()),
+                Binding::Json { key: "weather-unit".into(), shape: JsonShape::Choice(WEATHER_UNITS) },
             ),
         ]),
         next,
@@ -451,7 +460,7 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
                 Ok(Arc::new(LinkedNotesPorts::new(Arc::new(folders), services)) as Arc<dyn Ports>)
             }
             }?;
-            let services = sports_preferences(preferences_database_sports, services)?;
+            let services = module_preferences(preferences_database_sports, services)?;
             // Meetings answers only its own capture-preference calls, as the signed-in person.
             let authority_database = meetings_database.clone();
             let services = Arc::new(

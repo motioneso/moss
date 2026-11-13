@@ -62,3 +62,56 @@ differently from the old routes.
   parts.
 - The old routes reply to a missing follow on the team route with 404, but only once the team is
   accepted. Tested in the guest, not against a live team list.
+
+## Weather saved place and unit (part 20a)
+
+Card JS-275. Part of [issue 4027](https://github.com/motioneso/moss/issues/4027). Release note
+Category: N/A.
+
+### What was built
+
+The server can now keep a person's saved weather place and unit for a package, and refuses
+anything that does not fit. There is no Weather package yet (part 20b), so nobody sees a change.
+
+- A saved place must be a latitude within 90, a longitude within 180 and a name of 1 to 200
+  characters that is not blank, with nothing else in it. Length is counted the way the old app
+  counted it, so an emoji takes two.
+- A unit must be one of two words, metric or imperial.
+- Both are stored in the same two saved-setting entries the old Settings routes used, so a place
+  saved today is still there after the move.
+- A stored value that no longer fits reads as "not set" instead of reaching the package.
+- The server grants these two entries to the module named weather and to no other. The package
+  cannot pick the entry, the person or the checks.
+
+### Proof
+
+Run through the verify gate on a throwaway database, and with a single check removed at a time.
+
+| Claim                                       | Check                                                                                                                                   | Result                                                 |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Bad values are refused                      | Latitude 90.5 and -91, longitude 181 and -180.1, 201-character and blank names, an extra field, a missing field, wrong types, bad units | All refused; the stored values did not change          |
+| Each check can fail                         | Seven copies of the host, each with one check removed (both limits, name length, blank name, exact fields, unit list, read re-check)    | Each copy failed its own test; the real code passes    |
+| One person's write never touches another's  | Two people and an admin write and read; stored rows compared                                                                            | Each saw only their own; the owner's row was unchanged |
+| That check can fail                         | Row security removed on the preferences table, then restored                                                                            | Seen failing, then passing                             |
+| A value written by TypeScript reads in Rust | The real TypeScript preferences code saved a place and unit; Rust read them                                                             | Same values                                            |
+| And the other way                           | Rust saved a new place and unit; the TypeScript code read them                                                                          | Same values                                            |
+| Private text stays out of everything else   | A planted place name saved and also sent in refused writes; every table in three schemas scanned and the refusal message read           | Found only in the preference row it was saved to       |
+| The server still starts and serves          | Real server over HTTPS with the Sports package, which uses the same port; two people set and read standings choices                     | Passed                                                 |
+
+### Builds
+
+The checks live in the module host, which runs natively and has no WebAssembly build. The tests
+reach it through the real WebAssembly guest interface (the sample component), so the path a
+package takes is the one exercised. Nothing in this part compiles to WebAssembly.
+
+### App map
+
+No entry changes. The Account screen's weather unit and place wording stays true because the old
+routes still serve them. The Weather package declares its entries in its manifest in part 20b.
+
+### Not proven
+
+- A Weather package using these two entries on the real server. None exists until part 20b, so
+  the live run used Sports, which shares the same port and the same wiring.
+- A phone or another computer reaching the server. This part adds no listener or screen.
+- The 6-hour address guess, the forecast and the search routes. Those are part 20b.
