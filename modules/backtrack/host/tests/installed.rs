@@ -384,9 +384,6 @@ fn text_past_37_days_gets_no_chunk_and_an_embedder_failure_leaves_text_for_the_s
     assert_eq!(w.unindexed(w.f.a), 2);
     // Embedder back. The sweep removes the 38-day text and queues the fresh one again.
     w.app.embedder.0.store(false, std::sync::atomic::Ordering::SeqCst);
-    // The index job key is per person and minute, so wait for the next minute to queue it again.
-    let into_minute = now().timestamp() % 60;
-    std::thread::sleep(std::time::Duration::from_secs((61 - into_minute) as u64));
     w.f.rt.block_on(w.f.root.execute("UPDATE app.backtrack_segments SET created_at=now()-interval '11 minutes' WHERE owner_user_id=$1 AND body='fresh'", &[&w.f.a])).unwrap();
     w.f.rt.block_on(w.f.root.execute("UPDATE moss_queue.schedules SET next_at=now()-interval '1 minute' WHERE actor_user_id=$1 AND queue LIKE '%backtrack.upkeep'", &[&w.f.a])).unwrap();
     w.run_jobs();
@@ -419,6 +416,23 @@ fn a_later_upload_is_indexed_after_an_earlier_run_in_the_same_minute() {
     w.call(w.f.a, "POST", "/ingest", upload(vec![segment(20, "second")]));
     w.run_jobs();
     assert_eq!((w.unindexed(w.f.a), w.chunks(w.f.a)), (0, 2), "the second upload must not wait for the hourly sweep");
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn an_upload_after_a_delete_in_the_same_minute_is_still_indexed() {
+    let w = World::new();
+    w.link(w.f.a);
+    w.call(w.f.a, "POST", "/ingest", upload(vec![segment(10, "first")]));
+    w.run_jobs();
+    assert_eq!((w.unindexed(w.f.a), w.chunks(w.f.a)), (0, 1));
+    w.call(w.f.a, "DELETE", "/segments", Value::Null);
+    std::thread::sleep(std::time::Duration::from_millis(1200));
+    let mut second = segment(0, "second");
+    second["startedAt"] = json!(stamp(now() - chrono::Duration::milliseconds(500)));
+    w.call(w.f.a, "POST", "/ingest", upload(vec![second]));
+    w.run_jobs();
+    assert_eq!((w.unindexed(w.f.a), w.chunks(w.f.a)), (0, 1), "the new upload must not reuse the finished run's key");
 }
 
 #[test]

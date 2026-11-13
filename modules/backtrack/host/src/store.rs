@@ -316,22 +316,12 @@ pub async fn mark_indexed(cx: &DataContext, parameters: &Value) -> Result<Value>
     Ok(json!({"marked": marked}))
 }
 
-/// A job key that is the same for one person within one minute while no segment has been
-/// marked in between, so a burst of uploads queues one index run, and a run that finished
-/// never blocks the next one. It is a hash of the person, the minute and a count, never of
-/// any text.
+/// A fresh random job key for every request. The queue drops a job whose key it has seen,
+/// and a count or segment id read inside the uploading request cannot tell a finished run
+/// from a new upload, so a shared key can lose an upload. An extra run is cheap because it
+/// finds nothing to do. The key holds no text.
 pub async fn index_key(cx: &DataContext) -> Result<Value> {
-    as_module(cx).await?;
-    let marks: i64 = cx.db().query_one("SELECT count(*)::bigint FROM app.backtrack_index_marks", &[]).await?.get(0);
-    as_app(cx).await?;
-    let key: String = cx
-        .db()
-        .query_one(
-            "SELECT md5(app.current_actor_user_id()::text || ':backtrack-index:' || floor(extract(epoch from now())/60)::text || ':' || $1::bigint::text)::uuid::text",
-            &[&marks],
-        )
-        .await?
-        .get(0);
+    let key: String = cx.db().query_one("SELECT gen_random_uuid()::text", &[]).await?.get(0);
     Ok(json!({"key": key}))
 }
 
