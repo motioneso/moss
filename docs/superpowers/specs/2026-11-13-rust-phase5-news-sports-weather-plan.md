@@ -37,7 +37,7 @@ they are marked **Ben**.
   `rust-spike/Cargo.lock`). The legacy code uses `htmlparser2`, `css-select`, `tldts`, `sharp`
   and `playwright-core`. Ben approves a short crate list before parts 2, 15 and 17 start
   (section 7.2).
-- The work splits into 22 parts (section 7). Screens are 5 separate parts, each held for Ben's
+- The work splits into 27 parts (section 7). Screens are 5 separate parts, each held for Ben's
   agreement on the mockups before it is built.
 
 ## 2. What the legacy modules do
@@ -92,8 +92,12 @@ followed teams with form and the next game, scores, standings for chosen leagues
 "tonight" band. Today shows followed scores. A club followed in two competitions shows as one card
 (`2026-07-08-sports-followed-team-dedupe.md`).
 
-- **Scores, standings, rosters and news** come from ESPN's public, unofficial JSON at one host,
-  with no key (`source/espn-source.ts`, header comment). Results and standings are cached as
+- **Scores, standings, rosters and news** come from ESPN's public, unofficial JSON at two hosts,
+  with no key (`ESPN_FETCH_HOSTS`, `source/espn-source.ts:32`). `site.api.espn.com` serves scores,
+  standings, rosters and the news list. `content.core.api.espn.com` serves the body of the one
+  featured story on the overview: the id must be a bare number of four or more digits, the text is
+  sanitised and clipped, and any failure falls back to the summary (`espn-source.ts:770`,
+  `sports-service.ts:827`). Results and standings are cached as
   public data with a time limit (`@moss/datasets`, `sports-service.ts:168`).
 - **Following clubs everywhere.** The catalog lists leagues by confederation. The follow picker
   loads one league's clubs only when opened, and a server search looks across leagues with a cap
@@ -314,11 +318,17 @@ How it works today is in 2.2. **Decision.** Keep the same shape in Rust.
 1. **A host `browser` port** (part 15), as the registry design names it. A package asks to render
    one HTTPS address of a host it may reach, with a request id. It gets back bounded evidence
    (rendered text and link candidates, at most 5 pieces), never a live page.
-2. **The renderer has no network.** The host launches headless Chromium in its own process and
-   drives it over Chromium's debugging protocol, as port plan section 6 says. Every request the
-   page makes is intercepted and handed to the host's existing safe fetch
-   (`rust-spike/module-host/src/network.rs`, DNS pinning and redirect checks). Anything else is
-   refused. Limits stay: 20 seconds, 40 requests, 4 at once, only document, fetch, XHR, script
+2. **The renderer has no network, enforced by the operating system.** Legacy gets this from
+   Docker (`network_mode: none`, `infra/docker-compose.prod.yml:259`). Request interception alone
+   is not a boundary, because Chromium has paths outside page requests (DNS prefetch, WebRTC,
+   service workers, its own update and safe-browsing calls). **Decision.** The host starts
+   Chromium inside a fresh network namespace that holds only a downed loopback, so the process
+   cannot open any socket that leaves it. The host talks to it over
+   `--remote-debugging-pipe` (two inherited file descriptors), never a TCP port. Every page request
+   is paused through the debugging protocol's fetch interception and answered by the host's
+   existing safe fetch (`rust-spike/module-host/src/network.rs`, DNS pinning and redirect checks),
+   which runs outside the namespace. Anything the host does not answer fails, because there is no
+   route out. Limits stay: 20 seconds, 40 requests, 4 at once, only document, fetch, XHR, script
    and stylesheet requests (`browser-protocol.ts:1-24`).
 3. **Confirmation time only.** The port refuses calls from a job. Only a route the person
    triggered (preview or rebuild) may use it. Refresh never renders, as in legacy.
@@ -326,14 +336,22 @@ How it works today is in 2.2. **Decision.** Keep the same shape in Rust.
    party program on Ben's machine, so it needs Ben's yes (**Ben**, section 7.2). Until then the
    port reports `unsupported` and Sports falls back to plain-fetch discovery, which is today's
    behaviour when the sandbox is missing (`1909` spec, line 91-92).
-5. **Isolation on a desktop.** Production today relies on Docker for no-network and dropped
-   rights. The Rust app is leaving Docker. **Decision.** On Linux, the host starts Chromium with
-   its own sandbox on, a throwaway profile, and no proxy except the host's intercept, and refuses
-   to start if the sandbox is unavailable. **Guess** that macOS and Windows need their own checks.
-   Part 15 proves Linux first and reports the others as not proven.
+5. **Isolation on a desktop.** The Rust app is leaving Docker, so the operating system boundary
+   in item 2 replaces the container. **Decision.** On Linux, the host creates the network
+   namespace with an unprivileged user namespace, keeps Chromium's own sandbox on, uses a
+   throwaway profile, and refuses to start the browser if either the namespace or the sandbox is
+   unavailable. Some distributions restrict unprivileged user namespaces (Ubuntu 24.04 does
+   through AppArmor). There the port reports `unsupported` and Sports keeps plain-fetch
+   discovery. It never falls back to a browser with network. macOS and Windows have no proven
+   equivalent yet (**Guess**: a deny-network sandbox profile on macOS, an AppContainer without
+   network rights on Windows), so the port stays `unsupported` there until a later part proves
+   one.
 
 What a stand-in proves: the intercept refuses a direct request, a private address and a host
-outside the list (each seen failing with the guard removed); caps hold; a fixture page served by
+outside the list (each seen failing with the guard removed); the operating system boundary holds,
+shown by negative tests in which a fixture page tries a WebSocket, a WebRTC connection, a service
+worker fetch, a DNS lookup and a link prefetch to a listener the test runs on the host, and the
+listener sees nothing (seen failing when the browser is started without the namespace); caps hold; a fixture page served by
 the test harness renders to the expected evidence; a job call is refused. What only a real run
 proves: Chromium installs and starts on Ben's machine, and a real script-heavy publisher yields
 headlines.
@@ -396,11 +414,16 @@ exact hosts, so the review lists them by name. Only person-added sources use `pu
 ### 5.4 Weather settings move into Weather
 
 The place and unit routes live in core Settings today. **Decision.** Weather owns them in Rust,
-at the same paths, and stores the values through the existing account-preferences port
+at the same paths, and stores the values through the account-preferences port
 (`rust-spike/module-host/src/account_preferences.rs`) under the legacy preference keys, so a
-saved place survives the move. Reason: module isolation, and the search and reverse routes are
+saved place survives the move. The port cannot do this yet. It only knows folder bindings and
+boolean overrides (`account_preferences.rs:12`), and Weather needs a place object (latitude
+within 90, longitude within 180, a label of 1 to 200 characters,
+`packages/weather/src/preferences.ts:16-28`) and a unit string. **Decision.** Part 20a adds two
+host binding kinds, a validated place and a unit chosen from a fixed list. The host validates
+before writing, as it does for folders, so a package can never store a malformed value. Reason: module isolation, and the search and reverse routes are
 outside calls that belong with the module that declares those hosts. **Guess** that the host
-lets a package serve a path outside `/api/weather/`. If not, part 20 serves them under
+lets a package serve a path outside `/api/weather/`. If not, part 20b serves them under
 `/api/weather/` and keeps the old paths as host aliases for the support window.
 
 ### 5.5 Model calls
@@ -473,53 +496,63 @@ of the planned Rust screen, get a yes, then build. No redesign.
 
 ### 7.1 Parts
 
-| #   | Track    | Scope                                                                                                                                                                                                                                                                                                                                     | Size | Depends on        | Special proof                                                                                                                          |
-| --- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Platform | Host public-web fetch mode (5.2): manifest resource, address checks on every hop, robots gate with the Reddit exception, caps, the legacy failure reasons, install review wording, test-only resolver for fixtures.                                                                                                                       | M    | none              | Private, loopback, tailnet and redirect-to-private refused, each guard seen failing when removed; robots refusal; every failure reason |
-| 2   | News     | Shared reader crate `modules/news/reader`: RSS and Atom parsing, sanitising, Reddit listing reader, publisher identity (public suffix). Pure, no input or output. **New crates** (7.2).                                                                                                                                                   | M    | crate list        | Old-code fixture feeds parse to the same items; WebAssembly build; reviewer reads fixtures for personal data                           |
-| 3   | News     | Package skeleton: manifest, ledger, 8 tables, 9 SQL hashes, catalog, prefs, exclusions, topics, source delete, personalization read, data lifecycle. No network.                                                                                                                                                                          | M    | 1                 | Route parity against old handlers                                                                                                      |
-| 4   | News     | Adding a source: preview and save, feed finder, source resolution, policy check, preview store, subreddit sources. Uses parts 1 and 2.                                                                                                                                                                                                    | L    | 2, 3              | Each fetch failure reason reaches the preview; fixture sites with and without a feed link                                              |
-| 5   | News     | Building the page: candidates, filters, ranking through `structured` with the fixed-order fallback, compile snapshot, refresh state and history, `news.refresh` and `news.revalidate` jobs, the 04:43 daily schedule per person, source health, overview route.                                                                           | L    | 4                 | Canned model ranking and the fallback; drift enqueues one revalidation; payloads metadata only; schedule fires once per person         |
-| 6   | News     | Keyed publisher: NewsAPI connection, credential routes and messages, brokered key, legacy cipher compatibility, status tool. **Needs Ben** for one real key.                                                                                                                                                                              | M    | 5                 | Key never in package, logs or responses (marker key); TypeScript-written row decrypts in Rust and the reverse                          |
-| 7   | News     | Images and favicon routes (image host list, caps), story feedback, the five News chat tools, approval presentation, briefing evidence. Closes the Briefings news gap.                                                                                                                                                                     | M    | 5                 | Briefings shows news instead of a gap; `refreshNews` approval card from the stored record                                              |
-| 8   | News     | **Screen.** News page (mosaic, lead art, filters, story menu) and the Today widget. App map entries.                                                                                                                                                                                                                                      | L    | 7, Ben's yes      | Live on desktop and phone; empty, loading and broken states                                                                            |
-| 9   | News     | **Screen.** News settings (sources, add source, subreddits, described topics with the web-search gate, exclusions, keyed publisher, feedback).                                                                                                                                                                                            | M    | 6, Ben's yes      | Same live check; web-search gate shows its reason                                                                                      |
-| 10  | Sports   | Package skeleton: manifest, ledger, 6 tables, 12 SQL hashes, follows (add, set team, remove), follow identity, standings preferences, data lifecycle. No network.                                                                                                                                                                         | M    | none              | Whole-league dedupe rules from SQL 0185-0186; route parity                                                                             |
-| 11  | Sports   | ESPN source and the public cache: catalog with confederations and the full league table, lazy league rosters, cross-league search with the uncached cap and `partial`, scoreboard, standings, news fetch, ESPN asset hosts.                                                                                                               | L    | 1, 10             | Recorded ESPN fixtures; search cap holds; nothing personal in the install-wide cache                                                   |
-| 12  | Sports   | Overview: followed cards and groups, club dedupe across competitions, headline composition and ranking, standings views, results, gameday slides, local-day boundary, live status line, tonight band. Tools `followedFactsToday`, `heartbeatNextFixtures`, `latestResult`, `followTeam`, `unfollowTeam`. Closes the Briefings sports gap. | L    | 11                | Liverpool-in-two-competitions shows one card; evening games land on the right local day in two time zones; Briefings shows sports      |
-| 13  | Sports   | Added sources, plain fetch: list, preview, save, assignments preview and save, delete, source icons, sport scope, ESPN coverage, subreddit sources through the shared reader.                                                                                                                                                             | M    | 2, 12             | Each failure reason in the preview; two subreddits differing only by case are one source                                               |
-| 14  | Sports   | Recipes and refresh: recipe proposal through `structured`, strict schema check, refresh reader (no browser, no article bodies), health writes, drift, retry, rebuild. The nine source chat tools and their approval cards.                                                                                                                | L    | 13                | A model reply that names a new host is refused; refresh never renders; `removeSource` asks before deleting                             |
-| 15  | Platform | Host `browser` port (4.2): Chromium over its debugging protocol, request intercept into the safe fetch, caps, job calls refused, sandbox required. **Needs Ben** for the crate and the Chromium download.                                                                                                                                 | L    | 1, Ben's yes      | Direct request, private address and off-list host refused, each guard seen failing when removed; fixture page renders; Linux only      |
-| 16  | Sports   | Browser discovery: render fallback in preview and rebuild, recipe from rendered evidence, `unsupported` falls back to plain fetch.                                                                                                                                                                                                        | M    | 14, 15            | Fixture page that hides headlines until scripts run yields a recipe; port off gives today's fallback                                   |
-| 17  | Sports   | Source photos: photo rule proposal and check, photo pass with the deadline guard, re-encode, private vault copy, once-a-day relook, photo and delete-photos routes. **New crate** for re-encoding (7.2).                                                                                                                                  | M    | 14                | Photo skipped near the deadline; metadata stripped by re-encode; delete removes vault files                                            |
-| 18  | Sports   | **Screen.** Sports page (broadsheet grid, ticker, standings and picker, team news, around ticker, rotation control) and Today scores. App map entries.                                                                                                                                                                                    | L    | 12, Ben's yes     | Live on desktop and phone; keyboard on the ticker                                                                                      |
-| 19  | Sports   | **Screen.** Sports settings (follows with the confederation picker and search, standings leagues, story preferences, sources and assignments, source photos).                                                                                                                                                                             | L    | 14, 17, Ben's yes | Same live check; the search `partial` notice shows                                                                                     |
-| 20  | Weather  | Package: today and forecast routes, Open-Meteo forecast and geocoding, Nominatim reverse, IP guess, time-zone city, caches (5.3), place and unit routes moved from Settings (5.4), `weather.forecast` and the place tools. Closes the Briefings weather gap.                                                                              | M    | 1                 | Saved place survives the move; tailnet address skipped; stale after two hours; Briefings shows weather                                 |
-| 21  | Weather  | **Screen.** Place and unit in Profile, the Today header weather, the forecast chat card.                                                                                                                                                                                                                                                  | S    | 20, Ben's yes     | "Use my location" from a phone over HTTPS                                                                                              |
-| 22  | All      | Remainder: registry packaging and signing for all three, upgrade check on a copy of dev data, whole-module live pass against the real services from a second device, Briefings re-proof with all three. **Needs Ben** for the real pass.                                                                                                  | M    | 1-21              | Real ESPN, feeds, Reddit, Open-Meteo pass; upgrade keeps follows, sources, topics, keys and the saved place                            |
+| #   | Track    | Scope                                                                                                                                                                                                                                                                             | Size | Depends on         | Special proof                                                                                                                                                                    |
+| --- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Platform | Host public-web fetch mode (5.2): manifest resource, address checks on every hop, robots gate with the Reddit exception, caps, the legacy failure reasons, install review wording, test-only resolver for fixtures.                                                               | M    | none               | Private, loopback, tailnet and redirect-to-private refused, each guard seen failing when removed; robots refusal; every failure reason                                           |
+| 2   | News     | Shared reader crate `modules/news/reader`: RSS and Atom parsing, sanitising, Reddit listing reader, publisher identity (public suffix). Pure, no input or output. **New crates** (7.2).                                                                                           | M    | crate list         | Old-code fixture feeds parse to the same items; WebAssembly build; reviewer reads fixtures for personal data                                                                     |
+| 3   | News     | Package skeleton: manifest, ledger, 8 tables, 9 SQL hashes, catalog, prefs, exclusions, topics, source delete, personalization read, data lifecycle. No network.                                                                                                                  | M    | 1                  | Route parity against old handlers                                                                                                                                                |
+| 4   | News     | Adding a source: preview and save, feed finder, source resolution, policy check, preview store, subreddit sources. Uses parts 1 and 2.                                                                                                                                            | L    | 2, 3               | Each fetch failure reason reaches the preview; fixture sites with and without a feed link                                                                                        |
+| 5a  | News     | Compiling the page: candidates from active sources, filters and exclusions, ranking through `structured` with the fixed-order fallback, compile snapshot, overview route.                                                                                                         | M    | 4                  | Canned model ranking and the fallback match legacy order on fixtures; speed measured against the budget                                                                          |
+| 5b  | News     | Refreshing: refresh state and history, `news.refresh` and `news.revalidate` jobs, the 04:43 daily schedule per person, source health and drift.                                                                                                                                   | M    | 5a                 | Drift enqueues one revalidation; payloads metadata only; schedule fires once per person; health states from stored records                                                       |
+| 6   | News     | Keyed publisher: NewsAPI connection, credential routes and messages, brokered key, legacy cipher compatibility, status tool. **Needs Ben** for one real key.                                                                                                                      | M    | 5b                 | Key never in package, logs or responses (marker key); TypeScript-written row decrypts in Rust and the reverse                                                                    |
+| 7   | News     | Images and favicon routes (image host list, caps), story feedback, the five News chat tools, approval presentation, briefing evidence. Closes the Briefings news gap.                                                                                                             | M    | 5b                 | Briefings shows news instead of a gap; `refreshNews` approval card from the stored record                                                                                        |
+| 8   | News     | **Screen.** News page (mosaic, lead art, filters, story menu) and the Today widget. App map entries.                                                                                                                                                                              | L    | 7, Ben's yes       | Live on desktop and phone; empty, loading and broken states                                                                                                                      |
+| 9   | News     | **Screen.** News settings (sources, add source, subreddits, described topics with the web-search gate, exclusions, keyed publisher, feedback).                                                                                                                                    | M    | 6, Ben's yes       | Same live check; web-search gate shows its reason                                                                                                                                |
+| 10  | Sports   | Package skeleton: manifest, ledger, 6 tables, 12 SQL hashes, follows (add, set team, remove), follow identity, standings preferences, data lifecycle. No network.                                                                                                                 | M    | none               | Whole-league dedupe rules from SQL 0185-0186; route parity                                                                                                                       |
+| 11  | Sports   | ESPN source and the public cache: catalog with confederations and the full league table, lazy league rosters, cross-league search with the uncached cap and `partial`, scoreboard, standings, news list, both ESPN fetch hosts and the asset hosts.                               | L    | 1, 10              | Recorded ESPN fixtures; search cap holds; nothing personal in the install-wide cache                                                                                             |
+| 12a | Sports   | Overview core: followed cards and groups, club dedupe across competitions, results, standings views, local-day boundary.                                                                                                                                                          | M    | 11                 | Liverpool-in-two-competitions shows one card; evening games land on the right local day in two time zones; speed measured against the budget                                     |
+| 12b | Sports   | Overview stories and live parts: headline composition and ranking, the featured story body from the ESPN content host (bare-number id, sanitise, clip, fall back to the summary), gameday slides, live status line, tonight band.                                                 | M    | 12a                | Recorded article body is sanitised and clipped; a short or non-numeric id never reaches the fetch; a failed body fetch shows the summary; live: a real featured story body loads |
+| 12c | Sports   | Sports tools `followedFactsToday`, `heartbeatNextFixtures`, `latestResult`, `followTeam`, `unfollowTeam`. Closes the Briefings sports gap.                                                                                                                                        | S    | 12b                | Tool replies match the overview on fixtures; Briefings shows sports                                                                                                              |
+| 13  | Sports   | Added sources, plain fetch: list, preview, save, assignments preview and save, delete, source icons, sport scope, ESPN coverage, subreddit sources through the shared reader.                                                                                                     | M    | 2, 12a             | Each failure reason in the preview; two subreddits differing only by case are one source                                                                                         |
+| 14a | Sports   | Recipes and refresh: recipe proposal through `structured`, strict schema check, refresh reader (no browser, no article bodies), health writes, drift, retry, rebuild.                                                                                                             | M    | 13                 | A model reply that names a new host is refused; refresh never renders                                                                                                            |
+| 14b | Sports   | The nine source chat tools and their approval cards.                                                                                                                                                                                                                              | M    | 14a                | `removeSource` asks before deleting; approval cards come from stored records                                                                                                     |
+| 15  | Platform | Host `browser` port (4.2): Chromium over its debugging protocol, pipe transport, network namespace with no route out, page-request intercept into the safe fetch, caps, job calls refused, namespace and sandbox required. **Needs Ben** for the crate and the Chromium download. | L    | 1, Ben's yes       | Off-list, private and direct requests refused; WebSocket, WebRTC, service worker, DNS and prefetch reach nothing (seen reaching the listener without the namespace); Linux only  |
+| 16  | Sports   | Browser discovery: render fallback in preview and rebuild, recipe from rendered evidence, `unsupported` falls back to plain fetch.                                                                                                                                                | M    | 14a, 15            | Fixture page that hides headlines until scripts run yields a recipe; port off gives today's fallback                                                                             |
+| 17  | Sports   | Source photos: photo rule proposal and check, photo pass with the deadline guard, re-encode, private vault copy, once-a-day relook, photo and delete-photos routes. **New crate** for re-encoding (7.2).                                                                          | M    | 14a                | Photo skipped near the deadline; metadata stripped by re-encode; delete removes vault files                                                                                      |
+| 18  | Sports   | **Screen.** Sports page (broadsheet grid, ticker, standings and picker, team news, around ticker, rotation control) and Today scores. App map entries.                                                                                                                            | L    | 12c, Ben's yes     | Live on desktop and phone; keyboard on the ticker                                                                                                                                |
+| 19  | Sports   | **Screen.** Sports settings (follows with the confederation picker and search, standings leagues, story preferences, sources and assignments, source photos).                                                                                                                     | L    | 14b, 17, Ben's yes | Same live check; the search `partial` notice shows                                                                                                                               |
+| 20a | Platform | Account-preferences port: a validated place binding (latitude, longitude, label limits) and a unit binding from a fixed list, host wiring, manifest declaration.                                                                                                                  | S    | none               | Out-of-range or oversized values refused, each check seen failing when removed; one person's write never touches another's; a value written by TypeScript reads back in Rust     |
+| 20b | Weather  | Package: today and forecast routes, Open-Meteo forecast and geocoding, Nominatim reverse, IP guess, time-zone city, caches (5.3), place and unit routes moved from Settings (5.4), `weather.forecast` and the place tools. Closes the Briefings weather gap.                      | M    | 1, 20a             | Saved place survives the move; tailnet address skipped; stale after two hours; Briefings shows weather                                                                           |
+| 21  | Weather  | **Screen.** Place and unit in Profile, the Today header weather, the forecast chat card.                                                                                                                                                                                          | S    | 20b, Ben's yes     | "Use my location" from a phone over HTTPS                                                                                                                                        |
+| 22  | All      | Remainder: registry packaging and signing for all three, upgrade check on a copy of dev data, whole-module live pass against the real services from a second device, Briefings re-proof with all three. **Needs Ben** for the real pass.                                          | M    | 1-21               | Real ESPN, feeds, Reddit, Open-Meteo pass; upgrade keeps follows, sources, topics, keys and the saved place                                                                      |
 
-Ordering. Part 1 first. Weather (20, 21) can run right after it and is the recommended first
-proof of the fetch mode. News (2 to 9) and Sports (10 to 14) can run side by side once part 2
+Ordering. Part 1 first. Weather (20a, 20b, 21) can run right after it and is the recommended first
+proof of the fetch mode. News (2 to 9) and Sports (10 to 14b) can run side by side once part 2
 lands, because Sports needs the reader. Part 15 can run beside everything once Ben approves it.
-Parts 16 and 17 follow 14. Screens follow their data parts and Ben's yes. Part 22 is last.
+Parts 16 and 17 follow 14a. Screens follow their data parts and Ben's yes. Part 22 is last.
 
 ### 7.2 New crates and installs (Ben approves)
 
-| Need                                      | Legacy library              | Part  | Why                                                                         |
-| ----------------------------------------- | --------------------------- | ----- | --------------------------------------------------------------------------- |
-| HTML parser and CSS selectors             | `htmlparser2`, `css-select` | 2, 14 | Feed finding, recipes and photo rules read HTML. Must build for WebAssembly |
-| XML parser                                | `htmlparser2` (XML mode)    | 2     | RSS and Atom                                                                |
-| Public suffix list                        | `tldts`                     | 2     | Publisher identity and dedupe                                               |
-| Image decode and re-encode                | `sharp`                     | 17    | Strip metadata from photo copies                                            |
-| Chromium debugging-protocol client        | `playwright-core`           | 15    | Drive the renderer (or a small hand-written client over a websocket crate)  |
-| **Chromium itself, downloaded on demand** | bundled in the image        | 15    | A third-party program on the machine. Ben decides                           |
+Recommended choices. All are pure Rust except where noted. The package-side crates must build for
+`wasm32-wasip2`; the browser client runs only in the native host.
 
-Each part names its exact crates and versions for Ben before it starts. A part that cannot get
-its crate stops at a clean point and says so.
+| Need                                      | Legacy library              | Recommended                                                 | Part  | Builds as              | Why this one                                                                                  |
+| ----------------------------------------- | --------------------------- | ----------------------------------------------------------- | ----- | ---------------------- | --------------------------------------------------------------------------------------------- |
+| HTML parser and CSS selectors             | `htmlparser2`, `css-select` | `scraper` (on `html5ever` and `selectors`)                  | 2, 14 | Native and WebAssembly | Browser-grade parsing of broken markup; the same selector syntax recipes already store        |
+| XML parser                                | `htmlparser2` (XML mode)    | `quick-xml`                                                 | 2     | Native and WebAssembly | Streaming, no system libraries, tolerant enough for real RSS and Atom                         |
+| Public suffix list                        | `tldts`                     | `psl` (list compiled in)                                    | 2     | Native and WebAssembly | No file or network read at run time; the list updates with the crate version                  |
+| Image decode and re-encode                | `sharp`                     | `image` with only the JPEG, PNG and WebP features           | 17    | Native and WebAssembly | Decoding and re-encoding drops all metadata; no C library; features trimmed to keep size down |
+| Chromium debugging-protocol client        | `playwright-core`           | No new crate: a small hand-written client over the pipe     | 15    | Native host only       | The pipe transport needs only `serde_json` and `rustix`, which are already in the lock file   |
+| **Chromium itself, downloaded on demand** | bundled in the image        | A pinned Chrome for Testing build, checked against its hash | 15    | Native host only       | A third-party program on the machine. Ben decides                                             |
+
+The builder pins exact versions when the part starts and records them in the part's report. If
+a recommended crate fails the WebAssembly build or the speed budget, the builder stops at a clean
+point and names the alternative (`lol_html` for HTML, `roxmltree` for XML) rather than switching
+silently.
 
 ## 8. Kill gates and risks
 
-**Kill gate after part 12.** A person follows a club in two competitions, sees one card with
+**Kill gate after part 12c.** A person follows a club in two competitions, sees one card with
 scores and standings, and Briefings shows the sports section, all on the Rust server from a phone.
 Owner Ben. A miss re-plans parts 13 to 19. It is a measurement, not a no-go (the port plan treats
 kill gates as measurements).
@@ -533,16 +566,18 @@ Risks.
 - **ESPN is unofficial.** Its JSON can change without notice. Fixtures pass while the real feed
   breaks. Part 22's live pass is the only check. The legacy app carries the same risk.
 - **Browser isolation without Docker.** The legacy sandbox leans on container rules. Part 15
-  must replace them with process rules and may only prove Linux.
+  replaces them with a network namespace and a pipe, proves Linux only, and leaves the browser
+  `unsupported` wherever that boundary cannot be built.
 - **Chromium download is an install.** Without Ben's yes, Sports keeps plain-fetch discovery and
   some publishers stay unreadable, as today when the sandbox is off.
 - **Public-web fetch widens the host model.** It is a new trust surface. Part 1 is security work
   and its guards must each be seen failing.
-- **WebAssembly speed.** News compile and Sports overview do many parses per request. Parts 5 and
-  12 measure against the speed budget and move a hot path to the native list only by measurement
+- **WebAssembly speed.** News compile and Sports overview do many parses per request. Parts 5a and
+  12a measure against the speed budget and move a hot path to the native list only by measurement
   (registry rule 10).
-- **Size.** Parts 5, 11, 12 and 14 are the widest. A builder may stop at a clean point and say so
-  rather than compact twice.
+- **Size.** The widest work is already split (5a and 5b, 12a to 12c, 14a and 14b). Parts 4 and
+  11 stay L because each is one data path that cannot be finished in halves. Each part's proof
+  stands on its own, so a part is done or not done, never half done.
 - **Web research is not ported.** Described topics show the gate until it is, as legacy does when
   web search is off.
 
