@@ -1,6 +1,8 @@
 //! Real installed-package proofs. Run only through scripts/run-gate.sh.
 #[path = "support/registry.rs"]
 mod registry;
+#[path = "support/replay.rs"]
+mod replay;
 mod support;
 use moss_module_host::{
     application::{Application, Configuration},
@@ -212,4 +214,75 @@ fn installed_briefings_keep_definitions_and_runs_private_and_schedule_in_the_own
         total
     });
     assert_eq!(leaked, 0, "briefing text reached the job queue or module tables");
+
+    // Replay: the old routes and the installed package answer the same steps the same way.
+    // The old routes run as the administrator and the package as person B, both from nothing.
+    f.rt.block_on(async {
+        f.root.batch_execute("DELETE FROM app.shares; DELETE FROM app.briefing_definitions; DELETE FROM moss_queue.schedules").await.unwrap();
+    });
+    let mut old_schedule = std::collections::BTreeMap::new();
+    let mut note = |calls: Vec<Value>| {
+        for c in calls {
+            let key = c["key"].as_str().unwrap().to_owned();
+            if c["op"] == "schedule" {
+                old_schedule.insert(key, (c["cron"].as_str().unwrap().to_owned(), c["tz"].as_str().unwrap().to_owned()));
+            } else {
+                old_schedule.remove(&key);
+            }
+        }
+    };
+    let run_new = |steps: &[Value], vars: &Value| -> Vec<Value> {
+        steps
+            .iter()
+            .map(|step| {
+                let path = replay::fill(step["url"].as_str().unwrap(), vars).replacen("/api/briefings", "", 1);
+                call(f.b, step["method"].as_str().unwrap(), &path, step.get("body").cloned().unwrap_or(Value::Null))
+            })
+            .collect()
+    };
+    let compare = |label: &str, steps: &[Value], old: Vec<Value>, new: Vec<Value>| {
+        assert_eq!(old.len(), new.len());
+        for (i, (mut old, mut new)) in old.into_iter().zip(new).enumerate() {
+            let mut old = json!({"status":old["status"],"body":old["body"]});
+            let mut new = json!({"status":new["status"],"body":new["body"]});
+            replay::mask(&mut old);
+            replay::mask(&mut new);
+            assert_eq!(old, new, "{label} step {i} ({}) differs from the old route", steps[i]);
+        }
+    };
+    let first = replay::steps_before_ids();
+    let (old, calls) = replay::old_routes(f.admin, &first, json!({}));
+    note(calls);
+    let new = run_new(&first, &json!({}));
+    let old_def = old[1]["body"]["definition"]["id"].as_str().unwrap().to_owned();
+    let new_def = new[1]["body"]["definition"]["id"].as_str().unwrap().to_owned();
+    println!("OLD STATUSES {:?}", old.iter().map(|r| r["status"].as_i64().unwrap()).collect::<Vec<_>>());
+    compare("create and read", &first, old, new);
+    let seed_run = |owner: uuid::Uuid, def: &str| -> String {
+        f.rt.block_on(async {
+            let id = uuid::Uuid::new_v4();
+            f.root
+                .execute(
+                    "INSERT INTO app.briefing_runs(id,definition_id,owner_user_id,status,run_kind,briefing_type,summary_text,source_metadata) \
+                     VALUES($1,$2,$3,'succeeded','manual','morning','Replay text','{\"aiModel\":{\"provider\":\"p\",\"model\":\"m\"},\"calendarSignals\":[{\"type\":\"meeting\",\"summary\":\"Standup\",\"score\":70}]}'::jsonb)",
+                    &[&id, &def.parse::<uuid::Uuid>().unwrap(), &owner],
+                )
+                .await
+                .unwrap();
+            id.to_string()
+        })
+    };
+    let (old_run, new_run) = (seed_run(f.admin, &old_def), seed_run(f.b, &new_def));
+    let second = replay::steps_with_ids();
+    let (old, calls) = replay::old_routes(f.admin, &second, json!({"def":old_def,"run":old_run}));
+    note(calls);
+    let new = run_new(&second, &json!({"def":new_def,"run":new_run}));
+    compare("edit and runs", &second, old, new);
+    let mut expected: Vec<(String, String)> = old_schedule.into_values().collect();
+    let mut actual: Vec<(String, String)> =
+        rows_as(&f, f.b, schedule_sql, &[]).iter().map(|r| (r.get(0), r.get(1))).collect();
+    expected.sort();
+    actual.sort();
+    assert_eq!(actual, expected, "registered schedules differ from the old routes");
+    println!("PASS replay: {} old-route steps match, schedules match ({} registered)", first.len() + second.len(), actual.len());
 }

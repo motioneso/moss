@@ -21,8 +21,6 @@
     "test:rust-notes-ingest": "tsx modules/notes/tools/ingest-gate.ts",
     "test:rust-briefings": "tsx modules/briefings/tools/gate.ts",
     "test:rust-briefings-live": "bash modules/briefings/tools/live.sh",
-    "test:rust-briefings-oracle": "tsx modules/briefings/tools/routes-oracle.ts check",
-    "test:rust-briefings-oracle-write": "tsx modules/briefings/tools/routes-oracle.ts write",
     "test:rust-backtrack": "tsx modules/backtrack/tools/gate.ts",
     "test:rust-backtrack-live": "bash modules/backtrack/tools/live.sh",
     "test:rust-meetings": "tsx modules/meetings/tools/gate.ts",
