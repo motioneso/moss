@@ -3,6 +3,7 @@
 use crate::module_embedding::{ActivityRows, EmbeddingConfig, SettingsEmbeddings};
 use anyhow::Result;
 use moss_calendar_host::CalendarPorts;
+use moss_backtrack_host::BacktrackPorts;
 use moss_meetings_host::MeetingsPorts;
 use moss_connectors_host::ConnectorsPorts;
 use moss_email_host::EmailPorts;
@@ -341,6 +342,7 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
     let calendar_database = database.clone();
     let connectors_database = database.clone();
     let meetings_database = database.clone();
+    let backtrack_database = database.clone();
     let email_database = database.clone();
     let generator: Arc<dyn Intelligence> = match &settings.ai_key {
         Some(key) => crate::module_ai::intelligence(
@@ -430,6 +432,9 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
                 MeetingsPorts::new(meetings_database, services)?
                     .with_recordings(&settings.data.join("modules/files"))?,
             ) as Arc<dyn Ports>;
+            // Backtrack answers only its own screen-text calls, as the signed-in person. Mac uploads
+            // are refused until the device link check is supplied.
+            let services = Arc::new(BacktrackPorts::new(backtrack_database, services)?) as Arc<dyn Ports>;
             // Calendar keeps its settings in the account's real preferences and reads the
             // account timezone. The wrapper only answers calls made by the Calendar module.
             let services = Arc::new(CalendarPorts::new(calendar_database, services)?) as Arc<dyn Ports>;
