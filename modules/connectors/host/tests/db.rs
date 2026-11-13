@@ -230,3 +230,35 @@ fn sync_counts_keep_numbers_only_and_an_uppercase_id_is_not_found() {
     let rows = f.call(f.a, "get", "connectors.accounts", json!({"id": id}));
     assert_eq!(rows[0]["status"], "active");
 }
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_second_person_cannot_write_a_monitor_health_row_for_another_persons_account() {
+    let f = Fixture::new();
+    let id = f.create(f.a)["id"].as_str().unwrap().to_owned();
+    let key = format!("connector.{id}.monitor_status");
+    let rows_for = |f: &Fixture| -> i64 {
+        f.rt.block_on(f.root.query_one("SELECT count(*) FROM app.preferences WHERE key=$1", &[&key]))
+            .unwrap()
+            .get(0)
+    };
+    let params = json!({"accountId": id, "record": {"state": "ok"}});
+    let own = f.call(f.a, "set", "connectors.monitor-status", params.clone());
+    assert_eq!(own, json!({"saved": true}));
+    assert_eq!(rows_for(&f), 1);
+    let refused = f.call(f.b, "set", "connectors.monitor-status", params.clone());
+    assert_eq!(refused, Value::Null, "another person wrote a health row: {refused}");
+    assert_eq!(rows_for(&f), 1);
+    // With the protection removed the same call writes, so the check above notices.
+    f.rt.block_on(f.root.batch_execute(
+        "ALTER TABLE app.connector_accounts NO FORCE ROW LEVEL SECURITY; ALTER TABLE app.connector_accounts DISABLE ROW LEVEL SECURITY;",
+    ))
+    .unwrap();
+    let leaked = f.call(f.b, "set", "connectors.monitor-status", params);
+    f.rt.block_on(f.root.batch_execute(
+        "ALTER TABLE app.connector_accounts ENABLE ROW LEVEL SECURITY; ALTER TABLE app.connector_accounts FORCE ROW LEVEL SECURITY;",
+    ))
+    .unwrap();
+    assert_eq!(leaked, json!({"saved": true}), "the proof did not notice the missing protection");
+    assert_eq!(rows_for(&f), 2);
+}
