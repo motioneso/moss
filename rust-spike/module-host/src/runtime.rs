@@ -454,7 +454,8 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
             validate_job_parameters(manifest, &request.resource, parameters)?;
         }
         "api" => ensure!(
-            manifest.requires.contains_key(&request.resource),
+            manifest.requires.contains_key(&request.resource)
+                || manifest.optional_requires.contains_key(&request.resource),
             "The module did not declare this public API dependency"
         ),
         "events" if request.operation == "publish" => ensure!(

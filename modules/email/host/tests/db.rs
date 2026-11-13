@@ -1,6 +1,6 @@
 //! Database proofs for the Email adapter. Run only through scripts/run-gate.sh.
 use access_context::AccessContext;
-use moss_email_host::{store, understand};
+use moss_email_host::{store, threads, understand};
 use moss_module_host::runtime::Request;
 use safety_core::db::{DataContext, Database, RuntimeRole};
 use serde_json::{json, Value};
@@ -71,6 +71,8 @@ impl Fixture {
                 || resource.starts_with("email.understand")
             {
                 understand::run(&cx, &request).await.unwrap()
+            } else if resource == "email.thread" || resource == "email.recent" {
+                threads::run(&cx, &request).await.unwrap()
             } else {
                 store::run(&cx, &request).await.unwrap()
             };
@@ -534,4 +536,45 @@ fn a_second_person_sees_none_of_the_suppression_or_feedback_and_the_check_has_te
     f.sql("ALTER TABLE app.email_action_suppression ENABLE ROW LEVEL SECURITY; ALTER TABLE app.email_action_suppression FORCE ROW LEVEL SECURITY;
            ALTER TABLE app.email_triage_feedback ENABLE ROW LEVEL SECURITY; ALTER TABLE app.email_triage_feedback FORCE ROW LEVEL SECURITY;");
     assert!(leaked, "with the protection removed the second person must see the rows");
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_second_person_reads_none_of_the_mail_through_thread_and_context_reads() {
+    let f = Fixture::new();
+    let id = f.call(f.a, "set", "email.cache-write",
+        json!({"action":"insert","connectorAccountId":f.account_a.to_string(),"externalId":"t-1",
+               "fields":{"sender":"s@example.test","subject":"Secret thread","receivedAt":"2026-03-01T00:00:00.000Z",
+                         "snippet":"secret","externalMetadata":{"threadId":"th-1"}}}))["id"].as_str().unwrap().to_string();
+    f.call(f.a, "set", "email.cache-write",
+        json!({"action":"insert","connectorAccountId":f.account_a.to_string(),"externalId":"t-2",
+               "fields":{"sender":"s@example.test","subject":"Later","receivedAt":"2026-03-02T00:00:00.000Z",
+                         "externalMetadata":{"threadId":"th-1"}}}));
+    let accounts = json!([f.account_a.to_string()]);
+    let reads = |actor: Uuid| {
+        vec![
+            f.call(actor, "get", "email.thread", json!({"mode":"thread","threadRef":"th-1"})),
+            f.call(actor, "get", "email.thread", json!({"mode":"thread","threadRef":"t-1"})),
+            f.call(actor, "get", "email.thread", json!({"mode":"newer","threads":[{"threadRef":"th-1","afterExternalId":"t-1"}]})),
+            f.call(actor, "get", "email.recent", json!({"mode":"recent","accountIds":accounts,"since":"2026-01-01T00:00:00.000Z"})),
+            f.call(actor, "get", "email.thread", json!({"mode":"saved","accountIds":accounts,"limit":50})),
+        ]
+    };
+    for (i, out) in reads(f.a).iter().enumerate() {
+        assert!(!out.as_array().unwrap().is_empty(), "the owner read {i} came back empty");
+    }
+    for (i, out) in reads(f.b).iter().enumerate() {
+        assert_eq!(out, &json!([]), "another person read {i} saw mail: {out}");
+    }
+    // A view share does let the second person see the message in the ordinary list,
+    // so the empty answers above come from the owner check in these reads.
+    f.sql(&format!(
+        "INSERT INTO app.shares(resource_type,resource_id,owner_user_id,grantee_user_id,level) VALUES('email_message','{id}','{}','{}','view')",
+        f.a, f.b
+    ));
+    let listed = f.call(f.b, "get", "email.messages", json!({}));
+    assert_eq!(listed.as_array().unwrap().len(), 1, "the share did not take effect: {listed}");
+    for (i, out) in reads(f.b).iter().enumerate() {
+        assert_eq!(out, &json!([]), "a view share let another person read {i}: {out}");
+    }
 }

@@ -18,12 +18,13 @@ fn injected_public_references_use_declared_read_only_host_resources() {
         )
         .unwrap();
     }
-    // The only public API Calendar may call is Tasks, for task references.
+    // Calendar may call Tasks (task references) and, when installed, Connectors (busy-time check).
     for cap in manifest.capabilities.iter().filter(|cap| cap.port == "api") {
-        assert_eq!(cap.resources.iter().collect::<Vec<_>>(), ["tasks"]);
+        assert_eq!(cap.resources.iter().collect::<Vec<_>>(), ["connectors", "tasks"]);
         assert_eq!(cap.operations.iter().collect::<Vec<_>>(), ["call"]);
     }
     assert_eq!(manifest.requires.keys().collect::<Vec<_>>(), ["tasks"]);
+    assert_eq!(manifest.optional_requires.keys().collect::<Vec<_>>(), ["connectors"]);
 }
 
 pub fn core() -> Vec<u8> {

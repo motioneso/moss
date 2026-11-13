@@ -3055,6 +3055,7 @@ name = "moss-connectors"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "chrono-tz",
  "moss-module-sdk",
  "serde",
  "serde_json",
@@ -3067,6 +3068,7 @@ dependencies = [
  "access-context",
  "anyhow",
  "async-imap",
+ "base64 0.22.1",
  "chrono",
  "futures-util",
  "lettre",
@@ -3091,6 +3093,7 @@ dependencies = [
 name = "moss-email"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "moss-module-sdk",
  "serde",
  "serde_json",

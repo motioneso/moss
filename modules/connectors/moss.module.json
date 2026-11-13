@@ -4,7 +4,7 @@
   "name": "Connectors",
   "description": "Keeps the mail and calendar connections of each account, their sign-in secrets and the Email and Calendar permissions. Connecting Google works by pasting your own Google client details. Yahoo, Proton Bridge, iCloud and Fastmail mail connect with an app password. Google mail and calendar sync into the Email and Calendar caches. Outlook sign-in and calendar syncing are not part of this package yet.",
   "publisher": "Moss",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
@@ -38,7 +38,12 @@
         "connectors.refresh-dispatch",
         "connectors.refresh-account-start",
         "connectors.refresh-account-finish",
-        "connectors.refresh-sweep"
+        "connectors.refresh-sweep",
+        "connectors.context-setup",
+        "connectors.live-calendar",
+        "connectors.live-gmail-list",
+        "connectors.live-gmail-get",
+        "connectors.monitor-status"
       ]
     },
     {
@@ -50,7 +55,9 @@
         "google-sync-sweep",
         "email-refresh-google",
         "email-refresh-imap",
-        "email-refresh-sweep"
+        "email-refresh-sweep",
+        "email-monitor",
+        "calendar-monitor"
       ]
     },
     {
@@ -181,10 +188,14 @@
     }
   ],
   "requires": {
-    "email": ">=0.2.0, <1.0.0",
+    "email": ">=0.3.0, <1.0.0",
     "calendar": ">=0.27.0, <1.0.0"
   },
-  "provides": {},
+  "provides": {
+    "listCalendarContext": "1.0.0",
+    "listEmailContext": "1.0.0",
+    "listSavedEmailContext": "1.0.0"
+  },
   "icons": ["icons/connectors.svg"],
   "accounts": {
     "supportsUserDisable": false,
@@ -424,11 +435,35 @@
           "path": "/settings/connections"
         }
       ]
+    },
+    {
+      "id": "connectors.email-context",
+      "description": "The assistant tool email.listVisibleMessages lists the person's recent mail with a short summary and an action label. For a connected Gmail account it reads live and triages up to two unsummarised messages through Email; if Gmail or the model is slow it falls back to saved mail. For mail-server (IMAP) accounts it reads saved mail only. Bodies are never returned."
+    },
+    {
+      "id": "connectors.monitors",
+      "description": "Each connected Google account gets an email check every 15 minutes and a calendar check every 30 minutes, scheduled when the account is connected and cancelled when it is revoked. Each check writes a health row of times and counts only. The checks do not yet create tasks from mail or apply suppression."
     }
   ],
   "tools": {
     "connectors.startGoogleGuidance": {
       "description": "Explain, step by step, how the user connects their Google account (Gmail + Calendar). Read-only guidance; the user completes the secret-entry steps in Settings.",
+      "risk": "read"
+    },
+    "email.listVisibleMessages": {
+      "description": "List the user's recent email with a short summary and an action label for each message. Reads Gmail live when it can, and falls back to saved mail. Never returns full bodies.",
+      "risk": "read"
+    },
+    "gmail.searchLive": {
+      "description": "Search the user's live Gmail. Returns bounded message metadata and snippets, not full bodies.",
+      "risk": "read"
+    },
+    "gmail.getLiveMessage": {
+      "description": "Fetch one live Gmail message by id. Returns a capped plain-text body.",
+      "risk": "read"
+    },
+    "calendar.listLiveEvents": {
+      "description": "List live primary-calendar events for a bounded time window.",
       "risk": "read"
     }
   },
@@ -495,6 +530,16 @@
       }
     },
     "google-sync-sweep": {
+      "account-id": {
+        "kind": "id"
+      }
+    },
+    "email-monitor": {
+      "account-id": {
+        "kind": "id"
+      }
+    },
+    "calendar-monitor": {
       "account-id": {
         "kind": "id"
       }

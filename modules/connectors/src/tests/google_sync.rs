@@ -95,8 +95,8 @@ fn a_busy_account_ends_the_run_without_touching_anything() {
 fn an_inactive_account_loses_both_schedules() {
     let host = Script::new(started("inactive"));
     assert_eq!(run(&host, start_params())["outcome"], "inactive");
-    assert_eq!(host.named("jobs").iter().filter(|p| p["cron"].is_string()).count(), 2);
-    assert_eq!(host.named("unschedule").len(), 2);
+    assert_eq!(host.named("jobs").iter().filter(|p| p["cron"].is_string()).count(), 4);
+    assert_eq!(host.named("unschedule").len(), 4);
 }
 
 #[test]
@@ -244,7 +244,7 @@ fn a_refused_sign_in_stops_both_schedules_and_the_sweep_leaves_it_alone() {
         _ => None,
     });
     run(&host, start_params());
-    assert_eq!(host.named("unschedule").len(), 2);
+    assert_eq!(host.named("unschedule").len(), 4);
     let stuck = Script::new(|_, resource, _| {
         (resource == "connectors.accounts")
             .then(|| Ok(json!([{"id":"acct-1","status":"active","lastSyncStatus":"failed","lastSyncError":"auth-error"}])))
@@ -336,7 +336,7 @@ fn schedules_use_the_account_id_as_key_with_the_agreed_cron_lines() {
     reconcile_schedule(&host, "acct-1");
     let scheduled: Vec<Value> = host.named("jobs").into_iter().filter(|p| p["cron"].is_string()).collect();
     let crons: Vec<&str> = scheduled.iter().map(|p| p["cron"].as_str().unwrap()).collect();
-    assert_eq!(crons, vec!["*/15 * * * *", "*/30 * * * *"]);
+    assert_eq!(crons, vec!["*/15 * * * *", "*/30 * * * *", "*/15 * * * *", "*/30 * * * *"]);
     assert!(scheduled.iter().all(|p| p["key"] == "acct-1"));
     assert!(!scheduled[0]["params"].to_string().contains("token"));
 }
@@ -367,7 +367,7 @@ fn the_sweep_leaves_healthy_accounts_alone_and_restarts_failed_ones() {
 fn the_sweep_cancels_both_schedules_of_a_revoked_account() {
     let host = account_reply("revoked", json!("success"));
     assert_eq!(sweep(&host)["outcome"], "inactive");
-    assert_eq!(host.named("unschedule").len(), 2);
+    assert_eq!(host.named("unschedule").len(), 4);
 }
 
 fn route_host(accounts: Value) -> Script {

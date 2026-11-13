@@ -57,6 +57,10 @@ pub struct Manifest {
     pub provides: BTreeMap<String, Version>,
     #[serde(default)]
     pub requires: BTreeMap<String, VersionReq>,
+    /// Modules this one may call when present. They need not be installed first, which lets
+    /// two modules reach each other. A call fails closed while the other module is absent.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub optional_requires: BTreeMap<String, VersionReq>,
     #[serde(default)]
     pub navigation: Vec<Value>,
     #[serde(default)]

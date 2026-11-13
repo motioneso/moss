@@ -4,7 +4,7 @@
   "name": "Email",
   "description": "Keeps the cached mail messages that Connectors fills in, and the Email settings for briefings, task capture and drafted replies. It never contacts a mail service.",
   "publisher": "Moss",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -20,7 +20,9 @@
         "email.cache-keys",
         "email.understand",
         "email.suppression",
-        "email.triage-feedback"
+        "email.triage-feedback",
+        "email.thread",
+        "email.recent"
       ]
     },
     {
@@ -117,7 +119,13 @@
     "recordTriageFeedback": "1.0.0",
     "triageFeedbackCounts": "1.0.0",
     "listActionSuppression": "1.0.0",
-    "updateActionSuppression": "1.0.0"
+    "updateActionSuppression": "1.0.0",
+    "listThreadMessages": "1.0.0",
+    "listThreadsWithNewerMessages": "1.0.0",
+    "collectMonitorSignals": "1.0.0",
+    "triageMessage": "1.0.0",
+    "emailTriageContext": "1.0.0",
+    "listSavedMessages": "1.0.0"
   },
   "icons": ["icons/email.svg"],
   "accounts": {
@@ -194,6 +202,10 @@
           "path": "/settings/modules"
         }
       ]
+    },
+    {
+      "id": "email.thread-reads",
+      "description": "Connectors reads saved threads, newer replies, recent messages and saved triage for the signed-in person only, and asks Email to triage one message. Another person's mail is never reachable, even through a share."
     }
   ],
   "tools": {},

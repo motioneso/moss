@@ -174,6 +174,7 @@ impl Job {
 pub fn reconcile_schedule(host: &impl Host, account: &str) {
     let _ = schedule(host, QUEUE, CRON, &Job::new(account, "schedule", false).params(), account);
     let _ = schedule(host, SWEEP, SWEEP_CRON, &json!({"account-id":account}), account);
+    crate::monitors::reconcile(host, account, true);
 }
 
 fn schedule(host: &impl Host, queue: &str, cron: &str, params: &Value, key: &str) -> Result<Value> {
@@ -183,6 +184,7 @@ fn schedule(host: &impl Host, queue: &str, cron: &str, params: &Value, key: &str
 /// Stops both schedules of the account. The keyed schedule call is idempotent and returns the
 /// stable row id to cancel.
 pub fn cancel_schedule(host: &impl Host, account: &str) {
+    crate::monitors::cancel(host, account, true);
     for (queue, cron, params) in [
         (QUEUE, CRON, Job::new(account, "schedule", false).params()),
         (SWEEP, SWEEP_CRON, json!({"account-id":account})),

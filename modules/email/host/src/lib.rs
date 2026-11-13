@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 pub mod package;
 pub mod store;
+pub mod threads;
 pub mod understand;
 
 pub const MODULE_ID: &str = "email";
@@ -49,6 +50,8 @@ impl Ports for EmailPorts {
                     || request.resource == "email.triage-feedback"
                 {
                     understand::run(&cx, request).await?
+                } else if request.resource == "email.thread" || request.resource == "email.recent" {
+                    threads::run(&cx, request).await?
                 } else {
                     store::run(&cx, request).await?
                 };

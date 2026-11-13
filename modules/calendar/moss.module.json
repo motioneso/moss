@@ -4,7 +4,7 @@
   "name": "Calendar",
   "description": "Calendar cached-event screens and draft tools; signed-in HTTPS Calendar pages; provider execution and full shell composition remain incomplete.",
   "publisher": "Moss",
-  "version": "0.27.0",
+  "version": "0.28.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -27,7 +27,7 @@
     {
       "port": "api",
       "operations": ["call"],
-      "resources": ["tasks"]
+      "resources": ["tasks", "connectors"]
     },
     {
       "port": "jobs",
@@ -348,6 +348,10 @@
     {
       "id": "calendar.saved_day_plan_operation_status",
       "description": "Read saved apply progress through the installed API and original Calendar URL. Preserves selected item order, pending or completed status and access-denied guidance. Owner-only stored operations remain private. Reading never runs a provider action; apply, retry, recovery and confirmation execution remain unavailable. Invalid ids are rejected, missing operations return not found, and unreadable stored batches return an error. Read the current account’s plan and operation ids before retrying."
+    },
+    {
+      "id": "calendar.preview-busy-check",
+      "description": "When Connectors is installed, the day-plan preview checks proposed times against the person's connected calendar events and marks busy times. Without Connectors the preview works as before and skips the check."
     }
   ],
   "tools": {
@@ -358,6 +362,10 @@
     "calendar.dayPlanDraft": {
       "description": "Save evening intent and untimed task additions to the current day-plan draft for dialog review. Does not schedule events.",
       "risk": "write"
+    },
+    "calendar.listVisibleEvents": {
+      "description": "Read the actor's upcoming events from every connected calendar, live first with a cached fallback, with conflict and travel flags.",
+      "risk": "read"
     }
   },
   "jobs": {
@@ -387,5 +395,8 @@
       "description": "Saved account lookahead, prep-task and time-block choices. Time-block mode also saves the matching writeback permission. Auto grants standing permission also honored by the existing app; Rust action execution and source-behavior controls remain open.",
       "scope": "user"
     }
-  ]
+  ],
+  "optionalRequires": {
+    "connectors": ">=0.5.0, <1.0.0"
+  }
 }

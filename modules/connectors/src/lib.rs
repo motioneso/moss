@@ -6,6 +6,10 @@ use serde_json::{json, Value};
 #[cfg(target_arch = "wasm32")]
 mod abi;
 pub mod accounts;
+pub mod calendar_context;
+pub mod email_context;
+pub mod live_tools;
+pub mod monitors;
 pub mod fastify;
 pub mod google;
 pub mod google_sync;
@@ -67,6 +71,7 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
                 Some(google_sync::QUEUE | google_sync::SWEEP | google_sync::REFRESH_QUEUE) => {
                     google_sync::handle(host, payload)
                 }
+                Some(monitors::EMAIL_QUEUE | monitors::CALENDAR_QUEUE) => monitors::handle(host, payload),
                 Some(refresh::SWEEP) => refresh::handle(host, payload),
                 _ => mail_sync::handle(host, payload),
             }
@@ -79,6 +84,12 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
                     serde_json::to_string(&google::guidance())
                         .map_err(|_| "Invalid connectors response".into())
                 }
+                Some("email.listVisibleMessages") => {
+                    live(email_context::list(host, &input["parameters"]).map(|v| json!({"data":v})))
+                }
+                Some("gmail.searchLive") => live(live_tools::search(host, &input["parameters"])),
+                Some("gmail.getLiveMessage") => live(live_tools::message(host, &input["parameters"])),
+                Some("calendar.listLiveEvents") => live(live_tools::events(host, &input["parameters"])),
                 _ => Err("Connectors tool is unavailable".into()),
             }
         }
@@ -86,8 +97,16 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
     }
 }
 
+fn live(result: Result<Value>) -> std::result::Result<String, String> {
+    let value = result.map_err(|e| e.message)?;
+    serde_json::to_string(&value).map_err(|_| "Invalid connectors response".into())
+}
+
 fn api(host: &impl Host, name: &str, input: &Value) -> Result<Value> {
     match name {
+        "listCalendarContext" => calendar_context::list(host, input),
+        "listEmailContext" => email_context::list(host, input),
+        "listSavedEmailContext" => email_context::list_saved(host, input["connectorAccountId"].as_str().unwrap_or("")),
         "connectionDiagnostics" => accounts::diagnostics(host, input["limit"].as_i64().unwrap_or(10)),
         _ => Err(Error::new(404, "Connectors operation not found")),
     }

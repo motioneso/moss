@@ -127,6 +127,7 @@ pub async fn run(cx: &DataContext, cipher: &JsonSecretCipher, request: &Request)
             Ok(preference(cx, &key).await?)
         }
         ("set", "connectors.feature-grants") => set_grants(cx, p).await,
+        ("set", "connectors.monitor-status") => monitor_status(cx, p).await,
         ("get", "connectors.admin-accounts") => admin(cx).await,
         ("get", "connectors.diagnostics") => diagnostics(cx, p["limit"].as_i64().unwrap_or(11)).await,
         _ => bail!("Unknown connectors resource"),
@@ -396,3 +397,28 @@ const LABEL: &str = "case
     then 'network-error'
   else 'sync-error'
 end";
+
+/// Saves a monitor's health row under the signed-in person. The account must be theirs.
+async fn monitor_status(cx: &DataContext, p: &Value) -> Result<Value> {
+    let account = text(p, "accountId")?;
+    let found = cx
+        .db()
+        .query_opt("SELECT 1 FROM app.connector_accounts WHERE id::text = $1::text", &[&account])
+        .await?;
+    if found.is_none() {
+        return Ok(Value::Null);
+    }
+    let key = format!("connector.{account}.monitor_status");
+    cx.db()
+        .execute(
+            "INSERT INTO app.preferences(owner_user_id, key, value_json, updated_at)
+             VALUES (app.current_actor_user_id(), $1, $2, now())
+             ON CONFLICT (owner_user_id, key) DO UPDATE
+               SET value_json = EXCLUDED.value_json,
+                   revision = app.preferences.revision + 1,
+                   updated_at = EXCLUDED.updated_at",
+            &[&key, &p["record"]],
+        )
+        .await?;
+    Ok(json!({"saved":true}))
+}
