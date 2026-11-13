@@ -1,12 +1,11 @@
 //! Day-plan preview. Pure computation over the saved plan, matching the
 //! production preview: before/after timing, task eligibility, deadline risk
 //! and overlaps between selected changes. Busy intervals come from the
-//! provider-backed source context in the production composition; no such
-//! adapter exists in this host yet, so availability reports "unavailable"
-//! and no calendar-busy conflicts are claimed, exactly as the production
-//! route behaves when its source context dependency is absent.
+//! Connectors' calendar context. When Connectors is not installed or the
+//! read fails, availability reports "unavailable" and no calendar-busy
+//! conflicts are claimed.
 use crate::{context, plans, Error, Result};
-use moss_module_sdk::Host;
+use moss_module_sdk::{Client, Host};
 use serde_json::{json, Value};
 
 struct TaskFact {
@@ -58,6 +57,68 @@ fn ends_at(starts_at: &str, duration_minutes: i64) -> Result<String> {
 
 fn overlaps(a_start: &str, a_end: &str, b_start: &str, b_end: &str) -> bool {
     a_start < b_end && b_start < a_end
+}
+
+const BUSY_LIMIT: u64 = 200;
+
+fn local_day_start(day: &str, zone: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+    use chrono::TimeZone;
+    let zone: chrono_tz::Tz = zone.parse().ok()?;
+    let date = chrono::NaiveDate::parse_from_str(day, "%Y-%m-%d").ok()?;
+    let midnight = zone.from_local_datetime(&date.and_hms_opt(0, 0, 0)?).earliest()?;
+    Some(midnight.with_timezone(&chrono::Utc))
+}
+
+/// The plan's local day, widened to cover every selected placement.
+fn busy_window(plan: &Value, timing: &[(String, String, i64, Option<String>)]) -> Option<(String, String)> {
+    let start = local_day_start(plan["localDay"].as_str()?, plan["timeZone"].as_str()?)?;
+    let end = start + chrono::Duration::hours(24);
+    let fmt = |t: chrono::DateTime<chrono::Utc>| t.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    let (mut from, mut to) = (fmt(start), fmt(end));
+    for (_, s, minutes, _) in timing {
+        let e = ends_at(s, *minutes).ok()?;
+        if *s < from {
+            from = s.clone();
+        }
+        if e > to {
+            to = e;
+        }
+    }
+    Some((from, to))
+}
+
+/// Busy intervals from Connectors for the preview window, with how far the answer can be
+/// trusted. Any failure reads as unavailable.
+fn busy(host: &impl Host, plan: &Value, timing: &[(String, String, i64, Option<String>)]) -> (&'static str, Value, Vec<Value>) {
+    let Some((from, to)) = busy_window(plan, timing) else { return ("unavailable", Value::Null, vec![]) };
+    let Ok(context) = Client(host).api(
+        "connectors",
+        "listCalendarContext",
+        json!({"windowStart":from,"windowEnd":to,"limit":BUSY_LIMIT}),
+    ) else {
+        return ("unavailable", Value::Null, vec![]);
+    };
+    let accounts = context["accounts"].as_array().cloned().unwrap_or_default();
+    let complete = !accounts.is_empty()
+        && context["gaps"].as_array().map_or(true, |g| g.is_empty())
+        && context["truncated"] != true;
+    let availability = if !complete {
+        "unavailable"
+    } else if accounts.iter().all(|a| a["source"] == "live") {
+        "available"
+    } else {
+        "stale"
+    };
+    // A gap or a truncated read only limits what an absence of conflicts proves. Every
+    // returned timed event still feeds conflict detection.
+    let items = context["items"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|i| i["allDay"] != true)
+        .cloned()
+        .collect();
+    (availability, context["asOf"].clone(), items)
 }
 
 pub fn preview(host: &impl Host, plan_id: &str, body: Value) -> Result<Value> {
@@ -219,10 +280,33 @@ pub fn preview(host: &impl Host, plan_id: &str, body: Value) -> Result<Value> {
             }
         }
     }
+    let (availability, as_of, intervals) = busy(host, &plan, &with_timing);
+    for (block_id, start, minutes, reference) in &with_timing {
+        let end = ends_at(start, *minutes)?;
+        for event in &intervals {
+            if reference.is_some() && event["eventKey"].as_str() == reference.as_deref() {
+                continue;
+            }
+            let (from, to) = (event["startsAt"].as_str().unwrap_or(""), event["endsAt"].as_str().unwrap_or(""));
+            if overlaps(start, &end, from, to) {
+                let label = event["account"]["providerLabel"].clone();
+                conflicts.push(json!({
+                    "blockId": block_id,
+                    "kind": "calendar_busy",
+                    "withBlockId": null,
+                    "detail": format!("Overlaps \"{}\" on {}", event["title"].as_str().unwrap_or(""), label.as_str().unwrap_or("")),
+                    "calendarEvent": {
+                        "eventKey": event["eventKey"].as_str().unwrap_or(""),
+                        "title": event["title"], "startsAt": from, "endsAt": to, "accountLabel": label,
+                    },
+                }));
+            }
+        }
+    }
     Ok(json!({
         "revision": plan["revision"],
-        "calendarAvailability": "unavailable",
-        "calendarAsOf": null,
+        "calendarAvailability": availability,
+        "calendarAsOf": as_of,
         "blocks": out_blocks,
         "eligibleBlockIds": eligible_ids,
         "conflicts": conflicts,
