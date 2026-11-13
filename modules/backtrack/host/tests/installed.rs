@@ -152,8 +152,11 @@ fn a_replayed_upload_and_a_late_pre_delete_upload_add_nothing() {
     assert_eq!(w.call(w.f.a, "DELETE", "/segments", Value::Null)["body"]["deleted"], 2);
     let late = w.call(w.f.a, "POST", "/ingest", batch);
     assert_eq!((late["body"]["accepted"].clone(), late["body"]["discarded"].clone()), (json!(0), json!(2)));
-    // A capture from after the delete is kept.
-    assert_eq!(w.call(w.f.a, "POST", "/ingest", upload(vec![segment(0, "fresh")]))["body"]["accepted"], 1);
+    // A capture that starts after the delete is kept.
+    std::thread::sleep(std::time::Duration::from_millis(1200));
+    let mut fresh = segment(0, "fresh");
+    fresh["startedAt"] = json!(stamp(now() - chrono::Duration::milliseconds(500)));
+    assert_eq!(w.call(w.f.a, "POST", "/ingest", upload(vec![fresh]))["body"]["accepted"], 1);
     // A range delete only discards what falls inside it.
     let from = stamp(now() - chrono::Duration::hours(5));
     let to = stamp(now() - chrono::Duration::hours(4));
@@ -181,7 +184,7 @@ fn the_hourly_sweep_removes_old_text_and_markers_for_its_owner_only() {
             for (name, started, created) in [("old-start", "38 days", "1 hour"), ("old-created", "1 hour", "38 days"), ("edge-keep", "36 days 23 hours", "36 days 23 hours")] {
                 w.f.root.execute(
                     &format!("INSERT INTO app.backtrack_segments(owner_user_id,device_id,started_at,ended_at,app_name,bundle_id,window_title,body,body_hash,client_started_at,created_at) \
-                      VALUES($1,$2,now()-interval '{started}',now()-interval '{started}'+interval '1 minute','A','b','t',$3,sha256($3::bytea),now()-interval '{started}',now()-interval '{created}')"),
+                      VALUES($1,$2,now()-interval '{started}',now()-interval '{started}'+interval '1 minute','A','b','t',$3::text,sha256(convert_to($3::text,'UTF8')),now()-interval '{started}',now()-interval '{created}')"),
                     &[&who, &device, &name.to_string()],
                 ).await.unwrap_or_else(|e| panic!("{e:?}"));
             }
@@ -212,7 +215,8 @@ fn screen_text_never_reaches_job_payloads_activity_rows_or_the_log() {
     // Refusals and a deletion carry no text either.
     w.call(w.f.a, "PUT", "/preferences", json!({"paused": true}));
     w.call(w.f.a, "POST", "/ingest", upload(vec![segment(10, MARK)]));
-    w.call(w.f.a, "DELETE", "/segments", Value::Null);
+    let gone = w.call(w.f.a, "DELETE", "/segments", Value::Null);
+    println!("delete answered {}", gone["status"]);
     let tables: Vec<String> = w.f.rt.block_on(async {
         w.f.root
             .query(
