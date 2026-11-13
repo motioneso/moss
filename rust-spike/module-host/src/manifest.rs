@@ -144,7 +144,9 @@ pub struct Lifecycle {
 }
 impl Manifest {
     pub fn removable(&self) -> bool {
-        self.lifecycle.as_ref().is_none_or(|l| l.removable && !l.required)
+        self.lifecycle
+            .as_ref()
+            .is_none_or(|l| l.removable && !l.required)
     }
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -298,6 +300,13 @@ impl Manifest {
             }
             if matches!(cap.port.as_str(), "fetch" | "credentials") {
                 for host in &cap.resources {
+                    if cap.port == "fetch" && host == crate::public_web::PUBLIC_WEB {
+                        ensure!(
+                            !cap.allow_private,
+                            "Reading public websites cannot be combined with private network access"
+                        );
+                        continue;
+                    }
                     validate_host(host)?;
                 }
             }
@@ -538,7 +547,10 @@ impl Manifest {
         self.capabilities
             .iter()
             .map(|cap| {
+                let public_web = cap.port == "fetch"
+                    && cap.resources.contains(crate::public_web::PUBLIC_WEB);
                 let (group, headline) = match cap.port.as_str() {
+                    _ if public_web => ("network", "Read public websites you add"),
                     "db" | "kv" => ("data", "Store and read this module's data"),
                     "vault" | "attachments" => ("files", "Read the files you give this module"),
                     "fetch" | "credentials" => ("network", "Contact approved services"),
@@ -555,7 +567,20 @@ impl Manifest {
                     details: self
                         .permission_metadata(&cap.port)
                         .into_iter()
-                        .chain(cap.resources.iter().cloned())
+                        .chain(
+                            public_web
+                                .then(|| {
+                                    "Any public HTTPS website you add, never private or home-network addresses"
+                                        .to_string()
+                                })
+                                .into_iter(),
+                        )
+                        .chain(
+                            cap.resources
+                                .iter()
+                                .filter(|r| r.as_str() != crate::public_web::PUBLIC_WEB)
+                                .cloned(),
+                        )
                         .chain(std::iter::once(format!(
                             "Operations: {}",
                             cap.operations
@@ -587,6 +612,10 @@ pub struct Permission {
     pub allow_private: bool,
 }
 pub fn validate_host(host: &str) -> Result<()> {
+    ensure!(
+        host != crate::public_web::PUBLIC_WEB,
+        "The public-web name is reserved"
+    );
     let parsed = url::Url::parse(&format!("https://{host}"))?;
     ensure!(
         parsed.host_str() == Some(host)

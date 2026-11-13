@@ -368,6 +368,10 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
             crate::manifest::relative_path(&request.resource),
             "The file name is unsafe"
         ),
+        "fetch" if request.resource == crate::public_web::PUBLIC_WEB => ensure!(
+            request.parameters.get("url").is_some_and(Value::is_string),
+            "The request needs a URL"
+        ),
         "fetch" | "credentials" => {
             let url = request
                 .parameters
@@ -413,20 +417,34 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
                 "Unknown module queue"
             );
         }
-        "jobs" if matches!(request.operation.as_str(), "read" | "list-open" | "read-schedule") => {
+        "jobs"
+            if matches!(
+                request.operation.as_str(),
+                "read" | "list-open" | "read-schedule"
+            ) =>
+        {
             // Read-only views of the caller's own queue rows. Each takes a fixed parameter shape.
-            let params = request.parameters.as_object().context("Job read parameters required")?;
+            let params = request
+                .parameters
+                .as_object()
+                .context("Job read parameters required")?;
             let valid = match request.operation.as_str() {
                 "read" => {
                     params.len() == 1
                         && ["id", "idempotencyKey"].iter().any(|k| {
-                            params.get(*k).and_then(Value::as_str).is_some_and(|s| uuid::Uuid::parse_str(s).is_ok())
+                            params
+                                .get(*k)
+                                .and_then(Value::as_str)
+                                .is_some_and(|s| uuid::Uuid::parse_str(s).is_ok())
                         })
                 }
                 "list-open" => params.is_empty(),
                 _ => {
                     params.len() == 1
-                        && params.get("key").and_then(Value::as_str).is_some_and(|s| !s.is_empty() && s.len() <= 128)
+                        && params
+                            .get("key")
+                            .and_then(Value::as_str)
+                            .is_some_and(|s| !s.is_empty() && s.len() <= 128)
                 }
             };
             ensure!(valid, "The job read parameters are not valid");

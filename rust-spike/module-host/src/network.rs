@@ -11,7 +11,7 @@ use std::{
 use url::Url;
 const LIMIT: usize = 1024 * 1024;
 type Lookup = (String, u16, mpsc::Sender<std::io::Result<Vec<SocketAddr>>>);
-fn resolve(host: &str, port: u16, remaining: Duration) -> Result<Vec<SocketAddr>> {
+pub(crate) fn resolve(host: &str, port: u16, remaining: Duration) -> Result<Vec<SocketAddr>> {
     static WORKER: OnceLock<mpsc::SyncSender<Lookup>> = OnceLock::new();
     let worker = WORKER.get_or_init(|| {
         let (send, receive) = mpsc::sync_channel::<Lookup>(8);

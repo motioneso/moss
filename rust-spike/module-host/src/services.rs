@@ -23,6 +23,7 @@ pub struct ServicePorts {
     next: Arc<dyn Ports>,
     pub(crate) ai: Arc<dyn crate::ai::Intelligence>,
     pub(crate) network: Arc<dyn crate::network::Transport>,
+    public_web: Arc<crate::public_web::PublicWeb>,
 }
 impl ServicePorts {
     pub fn new(
@@ -39,7 +40,21 @@ impl ServicePorts {
             next,
             ai,
             network: Arc::new(crate::network::Network),
+            public_web: Arc::default(),
         })
+    }
+    /// One account's recent port activity for a module: port, operation, resource name and
+    /// success only. Never request or response data.
+    pub fn activity(&self, id: &str, access: &AccessContext) -> Result<Vec<Value>> {
+        Ok(self
+            .read(id, access, "activity")?
+            .as_array()
+            .cloned()
+            .unwrap_or_default())
+    }
+    pub fn with_public_web(mut self, public_web: crate::public_web::PublicWeb) -> Self {
+        self.public_web = Arc::new(public_web);
+        self
     }
     pub fn with_network(mut self, transport: Arc<dyn crate::network::Transport>) -> Self {
         self.network = transport;
@@ -243,6 +258,11 @@ impl ServicePorts {
         let access = scope.access();
         match port {
             "credentials" => self.broker(scope, r),
+            "fetch" if r.resource == crate::public_web::PUBLIC_WEB => {
+                Ok(self
+                    .public_web
+                    .fetch(&r.operation, &r.parameters, scope.remaining()))
+            }
             "ai" => self.ai.generate(scope, r),
             "embed" => self.ai.embed(scope, r),
             "transcribe" => self.ai.transcribe(scope, r),
