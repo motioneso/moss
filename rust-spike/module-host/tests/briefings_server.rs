@@ -444,6 +444,40 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
     println!("live model run: the router sent {} request(s); the stored text came from the model", sent.len());
     let other_view = call(Method::GET, &format!("/definitions/{id}/runs/{fresh}"), Some(&other), None);
     assert_eq!(other_view.0, 404);
+    // An evening review runs through the same real worker and router, with its own prompt.
+    let before = requests.lock().unwrap().len();
+    let (status, text) = call(Method::POST, "/definitions", Some(&cookie), Some(json!({"title": format!("Evening {MARK}"), "briefingType": "evening", "cadence": "manual"})));
+    assert_eq!(status, 201, "{text}");
+    let evening = json_of(&text)["definition"]["id"].as_str().unwrap().to_owned();
+    let (status, text) = call(Method::POST, &format!("/definitions/{evening}/run"), Some(&cookie), Some(json!({})));
+    assert_eq!(status, 202, "{text}\n{}", log());
+    let queued = json_of(&text);
+    let (job, run) = (queued["jobId"].as_str().unwrap().to_owned(), queued["runId"].as_str().unwrap().to_owned());
+    let path = format!("/definitions/{evening}/runs/{run}?jobId={job}");
+    let waited = std::time::Instant::now();
+    let state = loop {
+        let (status, text) = call(Method::GET, &path, Some(&cookie), None);
+        assert_eq!(status, 200, "{text}\n{}", log());
+        let state = json_of(&text)["state"].as_str().unwrap_or_default().to_owned();
+        if state != "pending" || waited.elapsed() > std::time::Duration::from_secs(90) {
+            break state;
+        }
+        std::thread::sleep(std::time::Duration::from_secs(1));
+    };
+    assert_eq!(state, "ready", "{}", log());
+    let (status, text) = call(Method::GET, &format!("/definitions/{evening}/runs/{run}"), Some(&cookie), None);
+    assert_eq!(status, 200, "{text}");
+    let detail = json_of(&text);
+    assert!(detail["run"]["summaryText"].as_str().unwrap_or_default().contains("WRITTEN-BY-STANDIN-MODEL"), "{text}");
+    assert_eq!(detail["run"]["sourceMetadata"]["aiModel"]["id"], "router", "{text}");
+    assert!(!text.contains(MARK));
+    let sent = requests.lock().unwrap().clone();
+    assert_eq!(sent.len(), before + 1, "the evening run makes one router request");
+    let prompt = sent[before]["messages"][0]["content"].as_str().unwrap_or_default();
+    assert!(prompt.starts_with("<trusted_instructions>") && prompt.contains("type=\"tasks_reconciliation\""), "{prompt}");
+    assert!(!prompt.contains(MARK));
+    assert_eq!(call(Method::GET, &format!("/definitions/{evening}/runs/{run}"), Some(&other), None).0, 404);
+    println!("live evening run: stored the model's text after {:?}; the other person gets 404", waited.elapsed());
     // Nothing the test sent reached the server log.
     assert!(!log().contains(MARK));
     println!("briefings live: definitions, runs and privacy for two people worked over HTTPS");

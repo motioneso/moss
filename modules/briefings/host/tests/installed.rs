@@ -584,3 +584,61 @@ fn model_written_text_is_stored_for_the_owner_only_and_reaches_no_other_table_or
     assert_eq!(others(b), 0, "restored");
     println!("GREEN: row security restored");
 }
+
+const EVENING_TEXT: &str = "EVENING-BY-MODEL-5d27";
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn an_evening_run_is_written_through_the_router_for_the_owner_only_and_leaks_nowhere() {
+    let w = World::new("UTC");
+    let (a, b) = (w.f.a, w.f.b);
+    zone_for(&w, b, "UTC");
+    *w.ai.reply.lock().unwrap() = Some(format!("A steady day {EVENING_TEXT}.\n\nWhat got done\nShipped it."));
+    let made = w.call(a, "POST", "/definitions", json!({"title":format!("Evening {MARK}"),"briefingType":"evening","cadence":"manual"}));
+    assert_eq!(made["status"], 201, "{made}");
+    let id = made["body"]["definition"]["id"].as_str().unwrap().to_owned();
+    let queued = w.call(a, "POST", &format!("/definitions/{id}/run"), json!({}));
+    assert_eq!(queued["status"], 202, "{queued}");
+    let run = queued["body"]["runId"].as_str().unwrap().parse::<uuid::Uuid>().unwrap();
+    w.work();
+
+    // The router saw the evening prompt, with the fixed trusted block first and the lens block after.
+    let prompts = w.ai.prompts.lock().unwrap().clone();
+    assert_eq!(prompts.len(), 1, "{prompts:?}");
+    let prompt = prompts[0]["prompt"].as_str().unwrap();
+    assert!(prompt.starts_with("<trusted_instructions>"));
+    assert!(prompt.contains("<external_source type=\"tasks_reconciliation\">"));
+    assert!(!prompt.contains(MARK), "the definition title is not briefing input");
+
+    let row = w.f.rt.block_on(w.f.root.query_one("SELECT summary_text, source_metadata FROM app.briefing_runs WHERE id=$1", &[&run])).unwrap();
+    let (text, meta): (String, Value) = (row.get(0), row.get(1));
+    assert!(text.contains(EVENING_TEXT), "{text}");
+    assert_eq!(meta["aiModel"]["id"], "router");
+    assert!(meta.get("dayPlanAuto").is_none(), "no calendar signals, so nothing is reserved: {meta}");
+    println!("PASS installed evening run: written text stored, model named, nothing reserved");
+
+    // Nothing but the run table holds the text.
+    let tables: Vec<String> = w.f.rt.block_on(async {
+        w.f.root.query(
+            "SELECT table_schema||'.'||table_name FROM information_schema.tables WHERE table_schema IN ('moss_queue','moss_modules') \
+             OR table_name IN ('notifications','moss_activity_detail','moss_error_log','moss_action_audit_log','moss_model_activity_log')", &[])
+            .await.unwrap().iter().map(|r| r.get(0)).collect()
+    });
+    for table in &tables {
+        let hits: i64 = w.f.rt.block_on(w.f.root.query_one(&format!("SELECT count(*) FROM {table} t WHERE to_jsonb(t)::text LIKE '%'||$1||'%'"), &[&EVENING_TEXT])).unwrap().get(0);
+        assert_eq!(hits, 0, "{table} holds the evening text");
+    }
+    println!("PASS leak scan: {} tables and every job payload hold no evening text", tables.len());
+
+    // A second person cannot read it. Without row security the same read leaks it.
+    let others = |who| -> i64 { rows_as(&w.f, who, "SELECT count(*) FROM app.briefing_runs WHERE summary_text LIKE '%'||$1||'%'", &[&EVENING_TEXT])[0].get(0) };
+    assert_eq!((others(a) > 0, others(b)), (true, 0));
+    println!("GREEN: B sees none of A's evening runs");
+    w.f.rt.block_on(w.f.root.batch_execute("ALTER TABLE app.briefing_runs DISABLE ROW LEVEL SECURITY")).unwrap();
+    let open = others(b);
+    w.f.rt.block_on(w.f.root.batch_execute("ALTER TABLE app.briefing_runs ENABLE ROW LEVEL SECURITY; ALTER TABLE app.briefing_runs FORCE ROW LEVEL SECURITY")).unwrap();
+    assert!(open > 0, "RED expected: B reads A's evening text with row security removed");
+    println!("RED: with row security removed from the runs table B reads A's evening text");
+    assert_eq!(others(b), 0, "restored");
+    println!("GREEN: row security restored");
+}
