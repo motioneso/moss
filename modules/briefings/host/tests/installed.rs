@@ -57,52 +57,91 @@ fn rows_as(
     })
 }
 
-#[test]
-#[ignore = "Only through verify-gate"]
-fn installed_briefings_keep_definitions_and_runs_private_and_schedule_in_the_owner_zone() {
-    let f = support::Fixture::new();
-    f.rt.block_on(async {
-        f.root.batch_execute(moss_platform_jobs::MIGRATION).await.unwrap();
-        f.root.batch_execute(moss_module_host::jobs::MIGRATION).await.unwrap();
-        f.root
-            .execute(
-                "INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'locale','{\"timezone\":\"Pacific/Auckland\"}'::jsonb)",
-                &[&f.a],
-            )
-            .await
-            .unwrap();
-    });
-    let dir = tempfile::tempdir().unwrap();
-    let reg = tempfile::tempdir().unwrap();
-    let bytes = moss_briefings_host::package::pack(&root(), &component()).unwrap();
-    let (key, publisher, artifact) = registry::publish(reg.path(), &bytes);
-    let app = Application::open_extended(
-        dir.path(),
-        f.db.clone(),
-        f.access(f.a),
-        Configuration {
-            migrations: Secret::new(std::env::var("JS48_BOOTSTRAP_URL").unwrap()),
-            producer: Secret::new(std::env::var("JS48_APP_URL").unwrap()),
-            cipher: Arc::new(SecretCipher::connectors(&Default::default()).unwrap()),
-            intelligence: Arc::new(NoAi),
-            version: "0.1.0".parse().unwrap(),
-            compiled_cache: None,
-            fuel_ceiling: None,
-        },
-    )
-    .unwrap();
-    let source = app
-        .installer
-        .refresh(&f.access(f.a), Source::Folder(reg.path().into()), &key, &publisher, "briefings-test-registry")
+/// One installed Briefings package on a fresh database, with the person's saved zone.
+struct World {
+    f: support::Fixture,
+    app: Application,
+    _dirs: (tempfile::TempDir, tempfile::TempDir),
+}
+impl World {
+    fn new(zone: &str) -> Self {
+        let f = support::Fixture::new();
+        f.rt.block_on(async {
+            f.root.batch_execute(moss_platform_jobs::MIGRATION).await.unwrap();
+            f.root.batch_execute(moss_module_host::jobs::MIGRATION).await.unwrap();
+            {
+                let who = f.a;
+                f.root
+                    .execute(
+                        "INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'locale',jsonb_build_object('timezone',$2::text))",
+                        &[&who, &zone],
+                    )
+                    .await
+                    .unwrap();
+            }
+        });
+        let dir = tempfile::tempdir().unwrap();
+        let reg = tempfile::tempdir().unwrap();
+        let bytes = moss_briefings_host::package::pack(&root(), &component()).unwrap();
+        let (key, publisher, artifact) = registry::publish(reg.path(), &bytes);
+        let app = Application::open_extended(
+            dir.path(),
+            f.db.clone(),
+            f.access(f.a),
+            Configuration {
+                migrations: Secret::new(std::env::var("JS48_BOOTSTRAP_URL").unwrap()),
+                producer: Secret::new(std::env::var("JS48_APP_URL").unwrap()),
+                cipher: Arc::new(SecretCipher::connectors(&Default::default()).unwrap()),
+                intelligence: Arc::new(NoAi),
+                version: "0.1.0".parse().unwrap(),
+                compiled_cache: None,
+                fuel_ceiling: None,
+            },
+        )
         .unwrap();
-    app.installer.install(&f.access(f.a), &source, &artifact, true).unwrap();
-    let call = |actor, method: &str, path: &str, body: Value| -> Value {
+        let source = app
+            .installer
+            .refresh(&f.access(f.a), Source::Folder(reg.path().into()), &key, &publisher, "briefings-test-registry")
+            .unwrap();
+        app.installer.install(&f.access(f.a), &source, &artifact, true).unwrap();
+        Self { f, app, _dirs: (dir, reg) }
+    }
+    fn call(&self, actor: uuid::Uuid, method: &str, path: &str, body: Value) -> Value {
         serde_json::from_str(
-            &app.dispatch_extended(f.access(actor), method, &format!("/api/m/briefings{path}"), &body.to_string())
+            &self
+                .app
+                .dispatch_extended(self.f.access(actor), method, &format!("/api/m/briefings{path}"), &body.to_string())
                 .unwrap(),
         )
         .unwrap()
-    };
+    }
+    /// Runs the worker until the queue has nothing due.
+    fn work(&self) {
+        let worker = Secret::new(std::env::var("JS48_WORKER_URL").unwrap());
+        for _ in 0..6 {
+            self.app.installer.run_job(&worker).unwrap();
+        }
+    }
+    fn count(&self, sql: &str, who: uuid::Uuid) -> i64 {
+        self.f.rt.block_on(self.f.root.query_one(sql, &[&who])).unwrap().get(0)
+    }
+    fn make_schedule_due(&self, who: uuid::Uuid) {
+        self.f
+            .rt
+            .block_on(self.f.root.execute(
+                "UPDATE moss_queue.schedules SET next_at=now()-interval '1 minute' WHERE actor_user_id=$1 AND queue LIKE '%.briefings-run'",
+                &[&who],
+            ))
+            .unwrap();
+    }
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn installed_briefings_keep_definitions_and_runs_private_and_schedule_in_the_owner_zone() {
+    let w = World::new("Pacific/Auckland");
+    let f = &w.f;
+    let call = |actor, method: &str, path: &str, body: Value| w.call(actor, method, path, body);
 
     // Person A saves a daily definition. Its schedule is registered in the queue.
     let made = call(f.a, "POST", "/definitions",
@@ -286,4 +325,153 @@ fn installed_briefings_keep_definitions_and_runs_private_and_schedule_in_the_own
     actual.sort();
     assert_eq!(actual, expected, "registered schedules differ from the old routes");
     println!("PASS replay: {} old-route steps match, schedules match ({} registered)", first.len() + second.len(), actual.len());
+}
+
+const FALLBACK: &str = "Briefing did not produce visible source items.";
+
+fn zone_for(w: &World, who: uuid::Uuid, zone: &str) {
+    w.f.rt
+        .block_on(w.f.root.execute(
+            "INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'locale',jsonb_build_object('timezone',$2::text))",
+            &[&who, &zone],
+        ))
+        .unwrap();
+}
+
+fn make_definition(w: &World, who: uuid::Uuid, cadence: &str) -> String {
+    let made = w.call(who, "POST", "/definitions", json!({"title":format!("Plan {MARK}"),"briefingType":"morning","cadence":cadence}));
+    assert_eq!(made["status"], 201, "{made}");
+    made["body"]["definition"]["id"].as_str().unwrap().to_owned()
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn manual_and_scheduled_runs_store_once_notify_once_and_keep_text_out_of_every_side_table() {
+    let w = World::new("UTC");
+    let (a, b) = (w.f.a, w.f.b);
+    zone_for(&w, b, "UTC");
+    let id = make_definition(&w, a, "daily");
+    let runs = |kind: &str| -> i64 {
+        w.f.rt
+            .block_on(w.f.root.query_one(
+                "SELECT count(*) FROM app.briefing_runs WHERE owner_user_id=$1 AND run_kind=$2",
+                &[&a, &kind],
+            ))
+            .unwrap()
+            .get(0)
+    };
+    let notes = || w.count("SELECT count(*) FROM app.notifications WHERE recipient_user_id=$1 AND module_id='briefings'", a);
+
+    // A manual run answers at once with ids, reads as pending, then as ready after the worker ran it.
+    let queued = w.call(a, "POST", &format!("/definitions/{id}/run"), json!({}));
+    assert_eq!(queued["status"], 202, "{queued}");
+    let (job, run) = (queued["body"]["jobId"].as_str().unwrap().to_owned(), queued["body"]["runId"].as_str().unwrap().to_owned());
+    let read = |who: uuid::Uuid| w.call(who, "GET", &format!("/definitions/{id}/runs/{run}?jobId={job}"), Value::Null);
+    let before = read(a);
+    assert_eq!((before["status"].clone(), before["body"]["state"].clone()), (json!(200), json!("pending")), "{before}");
+    assert_eq!(runs("manual"), 0);
+    w.work();
+    let after = read(a);
+    assert_eq!(after["body"]["state"], "ready", "{after}");
+    assert_eq!(runs("manual"), 1);
+    let stored: String = w.f.rt.block_on(w.f.root.query_one("SELECT summary_text FROM app.briefing_runs WHERE id=$1", &[&run.parse::<uuid::Uuid>().unwrap()])).unwrap().get(0);
+    assert_eq!(stored, FALLBACK, "the stub composer stores the fallback text");
+    assert_eq!(notes(), 0, "a manual run does not notify");
+    println!("PASS manual run: queued, pending, then ready with the fallback text, no notification");
+
+    // The same key while the first job waits is refused. After it finishes the key may be reused.
+    let first = w.call(a, "POST", &format!("/definitions/{id}/run"), json!({"idempotencyKey":"k1"}));
+    let again = w.call(a, "POST", &format!("/definitions/{id}/run"), json!({"idempotencyKey":"k1"}));
+    assert_eq!((first["status"].clone(), again["status"].clone(), again["body"]["code"].clone()), (json!(202), json!(409), json!("briefing_run_in_flight")), "{again}");
+    w.work();
+    let reuse = w.call(a, "POST", &format!("/definitions/{id}/run"), json!({"idempotencyKey":"k1"}));
+    assert_eq!(reuse["status"], 202, "{reuse}");
+    w.work();
+    assert_eq!(runs("manual"), 3);
+    println!("PASS key: refused while queued (409), accepted again once the first finished");
+
+    // A scheduled fire stores one run and notifies once. A second fire the same day does neither.
+    w.make_schedule_due(a);
+    w.work();
+    assert_eq!((runs("scheduled"), notes()), (1, 1));
+    w.make_schedule_due(a);
+    w.work();
+    assert_eq!((runs("scheduled"), notes()), (1, 1), "the same local day never runs or notifies twice");
+    println!("PASS scheduled run: one run and one notification, the second fire the same day did nothing");
+
+    let note = w.f.rt.block_on(w.f.root.query_one(
+        "SELECT title, coalesce(body,''), event_key, to_jsonb(n)::text FROM app.notifications n WHERE recipient_user_id=$1 AND module_id='briefings'",
+        &[&a],
+    )).unwrap();
+    let (title, body, event_key, whole): (String, String, String, String) = (note.get(0), note.get(1), note.get(2), note.get(3));
+    assert_eq!(title, "Your morning briefing is ready");
+    assert_eq!(body, "");
+    assert!(event_key.starts_with("briefing-run-"));
+    assert!(!whole.contains(MARK) && !whole.contains(FALLBACK), "{whole}");
+
+    // The definition title is planted. It must be in no queue row, no notification and no log table.
+    let tables: Vec<String> = w.f.rt.block_on(async {
+        w.f.root
+            .query(
+                "SELECT table_schema||'.'||table_name FROM information_schema.tables WHERE table_schema IN ('moss_queue','moss_modules') \
+                 OR table_name IN ('notifications','moss_activity_detail','moss_error_log','moss_action_audit_log','moss_model_activity_log')",
+                &[],
+            )
+            .await
+            .unwrap()
+            .iter()
+            .map(|r| r.get(0))
+            .collect()
+    });
+    assert!(tables.iter().any(|t| t.starts_with("moss_queue.")), "{tables:?}");
+    for table in &tables {
+        for needle in [MARK, FALLBACK] {
+            let hits: i64 = w.f.rt.block_on(w.f.root.query_one(&format!("SELECT count(*) FROM {table} t WHERE to_jsonb(t)::text LIKE '%'||$1||'%'"), &[&needle])).unwrap().get(0);
+            assert_eq!(hits, 0, "{table} holds briefing text");
+        }
+    }
+    let payloads: Vec<String> = w.f.rt.block_on(w.f.root.query("SELECT payload::text FROM moss_queue.jobs WHERE queue LIKE '%.briefings-run%'", &[])).unwrap().iter().map(|r| r.get(0)).collect();
+    assert!(payloads.len() >= 4, "{payloads:?}");
+    for payload in &payloads {
+        let value: Value = serde_json::from_str(payload).unwrap();
+        let keys: std::collections::BTreeSet<&str> = value.as_object().unwrap().keys().map(String::as_str).collect();
+        assert!(keys.is_subset(&["definition-id", "briefing-run-id", "briefing-type", "run-kind"].into_iter().collect()), "{payload}");
+    }
+    println!("PASS privacy: scanned {} tables and {} job payloads, found no briefing text", tables.len(), payloads.len());
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn another_person_cannot_read_run_status_or_queue_a_run_and_the_check_fails_without_row_security() {
+    let w = World::new("UTC");
+    let (a, b) = (w.f.a, w.f.b);
+    zone_for(&w, b, "UTC");
+    let id = make_definition(&w, a, "manual");
+    let queued = w.call(a, "POST", &format!("/definitions/{id}/run"), json!({}));
+    let (job, run) = (queued["body"]["jobId"].as_str().unwrap().to_owned(), queued["body"]["runId"].as_str().unwrap().to_owned());
+    // B has a view share, so B can name the definition. B is still not the job's owner.
+    w.f.rt
+        .block_on(w.f.root.execute(
+            "INSERT INTO app.shares(resource_type,resource_id,owner_user_id,grantee_user_id,level) VALUES('briefing_definition',$1,$2,$3,'view')",
+            &[&id.parse::<uuid::Uuid>().unwrap(), &a, &b],
+        ))
+        .unwrap();
+    let probe = |who| w.call(who, "GET", &format!("/definitions/{id}/runs/{run}?jobId={job}"), Value::Null);
+    assert_eq!(probe(a)["body"]["state"], "pending");
+    assert_eq!(probe(b)["status"], 404, "B must not learn that A has a run queued");
+    assert_eq!(w.call(b, "POST", &format!("/definitions/{id}/run"), json!({}))["status"], 404, "B cannot queue a run of A's definition");
+    let queue_rows = |who| -> i64 {
+        rows_as(&w.f, who, "SELECT count(*) FROM moss_queue.jobs WHERE queue LIKE '%.briefings-run-now'", &[])[0].get(0)
+    };
+    assert_eq!((queue_rows(a), queue_rows(b)), (1, 0));
+    println!("GREEN: B reads 404 for A's queued run and sees no queue rows");
+
+    // With row security removed from the queue, the same read leaks the pending state.
+    w.f.rt.block_on(w.f.root.batch_execute("ALTER TABLE moss_queue.jobs DISABLE ROW LEVEL SECURITY")).unwrap();
+    let open = probe(b);
+    w.f.rt.block_on(w.f.root.batch_execute("ALTER TABLE moss_queue.jobs ENABLE ROW LEVEL SECURITY; ALTER TABLE moss_queue.jobs FORCE ROW LEVEL SECURITY")).unwrap();
+    assert_eq!(open["body"]["state"], "pending", "RED expected: B sees A's queued run with row security removed, got {open}");
+    println!("RED: with row security removed from the queue B sees A's queued run");
+    assert_eq!(probe(b)["status"], 404, "restored");
+    println!("GREEN: row security restored, B reads 404 again");
 }

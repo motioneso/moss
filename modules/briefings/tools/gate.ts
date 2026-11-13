@@ -29,6 +29,7 @@ const run = spawnSync(
       ...process.env,
       JS48_APP_URL: urls.app,
       JS48_BOOTSTRAP_URL: urls.bootstrap,
+      JS48_WORKER_URL: urls.worker,
       BRIEFINGS_COMPONENT_WASM: `${process.env.CARGO_TARGET_DIR ?? "/tmp/moss-briefings-host"}/module.wasm`
     }
   }
