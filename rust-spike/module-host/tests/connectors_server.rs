@@ -803,6 +803,35 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
         assert_eq!(kinds, ["google", "imap"].map(String::from).into(), "{done}");
         assert!(done["accounts"].as_array().unwrap().iter().all(|a| a["status"] == "succeeded"), "{done}");
         println!("PASS email refresh on the real server: {done}");
+        // Each connected Google account has an email check (15 minutes) and a calendar check
+        // (30 minutes). Revoking the account removes both. The schedule rows hold ids only.
+        let schedules = |expect: i64, label: &str| {
+            runtime.block_on(async {
+                let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+                tokio::spawn(async move {
+                    let _ = connection.await;
+                });
+                let rows = db
+                    .query(
+                        "SELECT queue, cron, payload::text FROM moss_queue.schedules WHERE queue IN ('email-monitor','calendar-monitor') AND payload::text LIKE '%' || $1 || '%' ORDER BY queue",
+                        &[&google_account],
+                    )
+                    .await
+                    .unwrap();
+                assert_eq!(rows.len() as i64, expect, "{label}: {} monitor schedules", rows.len());
+                rows.iter().map(|r| (r.get::<_, String>(0), r.get::<_, String>(1), r.get::<_, String>(2))).collect::<Vec<_>>()
+            })
+        };
+        let found = schedules(2, "after connect");
+        assert_eq!((found[0].0.as_str(), found[0].1.as_str()), ("calendar-monitor", "*/30 * * * *"));
+        assert_eq!((found[1].0.as_str(), found[1].1.as_str()), ("email-monitor", "*/15 * * * *"));
+        for (_, _, payload) in &found {
+            assert!(!payload.contains("BODY-SENTINEL") && !payload.contains(MARKER_TOKEN), "private text in a schedule: {payload}");
+        }
+        let (status, text) = call(Method::POST, &format!("/accounts/{google_account}/revoke"), Some(&cookie), None);
+        assert_eq!(status, 200, "{text}");
+        schedules(0, "after revoke");
+        println!("PASS monitor schedules on the real server: email 15 min and calendar 30 min per Google account, removed on revoke");
         let password = mail_lines["password"].clone();
         assert!(!log().contains(&password), "mail password in the server log");
         for word in ["PLAN-BODY-SENTINEL", "LUNCH-BODY-SENTINEL", "INVOICE-BODY-SENTINEL", "CHANGED-BODY-SENTINEL"] {
