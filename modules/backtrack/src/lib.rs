@@ -2,6 +2,7 @@
 //! the Mac upload with its clock check, the hourly sweep and the account export.
 //! All effects cross the guest-safe SDK Host interface.
 pub mod approval;
+pub mod chunking;
 pub mod clock;
 pub mod codes;
 pub mod ingest;
