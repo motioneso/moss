@@ -219,7 +219,7 @@ impl PublicWeb {
         let mut current = first;
         for hops in 0..=REDIRECT_LIMIT {
             let host = self.check_destination(&current, options)?;
-            let robots_off = !gated || (options.skip_robots && host == ROBOTS_EXCEPTION_HOST);
+            let robots_off = !gated || (options.skip_robots && reddit_listing(&current));
             if !robots_off && !self.robots_allow(&current, options, deadline)? {
                 return Err(Failure::new("robots"));
             }
@@ -436,6 +436,19 @@ impl PublicWeb {
         };
         Ok(rules.allows(&path))
     }
+}
+
+/// The one robots exception: a subreddit's feed, `/r/<name>/<hot|new|top>.rss` on the Reddit host.
+fn reddit_listing(url: &Url) -> bool {
+    if url.host_str() != Some(ROBOTS_EXCEPTION_HOST) || url.query().is_some() {
+        return false;
+    }
+    let parts: Vec<&str> = url.path().split('/').collect();
+    matches!(
+        parts.as_slice(),
+        ["", "r", name, "hot.rss" | "new.rss" | "top.rss"]
+            if !name.is_empty() && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+    )
 }
 
 fn left(deadline: Instant) -> Fail<Duration> {

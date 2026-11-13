@@ -20,7 +20,9 @@ controls = [
     ("https-only rule", W, r'if url\.scheme\(\) == "http" \{', "if false {", "only_https_on_the_standard_port_without_a_password_is_allowed"),
     ("robots rules", W, r"if !robots_off && !self\.robots_allow", "if false && !self.robots_allow", "robots_rules_are_honoured_and_an_unreadable_file_blocks"),
     ("unreadable robots file blocks", W, r"_ => Robots::deny_all\(\),", "_ => Robots::allow_all(),", "robots_rules_are_honoured_and_an_unreadable_file_blocks"),
-    ("robots skip limited to the Reddit feed host", W, r"options\.skip_robots && host == ROBOTS_EXCEPTION_HOST", "options.skip_robots", "only_the_reddit_feed_address_may_skip_robots"),
+    ("robots skip limited to the Reddit feed path", W, r"options\.skip_robots && reddit_listing\(&current\)", "options.skip_robots", "only_the_reddit_feed_address_may_skip_robots"),
+    ("robots matching work budget", "src/robots.rs", r"\*budget = budget\.checked_sub\(1\)\?;", "let _ = &budget;", "robots::tests::long_disallow_is_kept_and_work_is_bounded"),
+    ("robots percent normalisation of the request path", "src/robots.rs", r"let path = normalize\(path\);", "let path = path.as_bytes().to_vec();", "robots::tests::percent_escapes_of_plain_characters_match"),
     ("activity omits request text", "src/services.rs", r'json!\(\{"port":port,"operation":r\.operation,"resource":r\.resource,', 'json!({"port":port,"operation":r.operation,"resource":r.resource,"parameters":r.parameters,', "activity_names_the_mode_only_and_belongs_to_one_person"),
     ("activity written to a shared account instead of the caller", "src/services.rs", r'scope\.access\(\),(\s*)"activity",', r'&AccessContext::new(uuid::Uuid::nil(), "write"),\1"activity",', "activity_names_the_mode_only_and_belongs_to_one_person"),
 ]
@@ -48,7 +50,7 @@ for name, file, pattern, replacement, test, *also in controls:
             if extra != 1:
                 raise SystemExit(f"Control did not find its second protection: {name}")
         path.write_text(changed)
-        if test.startswith("public_web::"):
+        if "::" in test:
             args = ["--lib", test, "--", "--exact"]
         else:
             args = ["--test", "public_web", test, "--", "--exact"]

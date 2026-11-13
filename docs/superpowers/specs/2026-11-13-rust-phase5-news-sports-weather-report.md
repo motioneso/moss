@@ -18,8 +18,8 @@ adds no crate.
   pinned to those answers, so a second lookup cannot swap in a private one. Private, loopback,
   home-network, tailnet and 6to4 addresses are refused.
 - The site's robots file is read first (longest match wins, an allow beats a disallow of equal
-  length, cached 30 minutes). A missing file allows everything. An unreadable or failing file blocks
-  the read. Only the Reddit feed host may skip it, and only when the package asks.
+  length, cached 30 minutes). Percent escapes of plain characters are compared decoded, blank lines and comments do not end a group, and a very long disallow stays in force. Matching has a work limit and refuses the read when it runs out. A missing file allows everything. An unreadable or failing file blocks
+  the read. Only a subreddit feed address (`/r/<name>/hot.rss`, `new.rss` or `top.rss` on the Reddit host) may skip it, and only when the package asks.
 - One call per host per second by default. A wait over 10 seconds is refused as `rate_limited`.
 - Caps: 500,000 bytes by default (5 MiB ceiling), 8 seconds by default (20 second ceiling).
 - Failure reasons: `blocked`, `robots`, `rate_limited`, `http_error`, `challenge`, `timeout`,
@@ -37,10 +37,17 @@ adds no crate.
 | Every redirect hop is checked again                                                                                  | test with six private targets plus http and non-standard port                                                                                                                                                                                                                |
 | Robots refusal, unreadable file blocks, Reddit-only exception                                                        | three tests                                                                                                                                                                                                                                                                  |
 | Every failure reason                                                                                                 | server failure test, size and time test, pacing test                                                                                                                                                                                                                         |
-| Each guard fails when removed                                                                                        | `tools/remove-public-web-protections.py`: 10 controls, all failed as expected                                                                                                                                                                                                |
+| Each guard fails when removed                                                                                        | `tools/remove-public-web-protections.py`: 12 controls, all failed as expected                                                                                                                                                                                                |
 | Second person cannot see the first person's activity, and no request text is recorded                                | activity test, plus two controls                                                                                                                                                                                                                                             |
 | Native tests                                                                                                         | 32 library tests, 12 fetch tests, and the boundaries, services, registry, install, frame and lifecycle suites                                                                                                                                                                |
 | Live run                                                                                                             | the `test:rust-public-web` gate through verify-gate: real moss-shell, real application, installed package, real internet. example.com read (200, 577 bytes); 10.0.0.5, 127.0.0.1, localhost, 100.64.0.9, [::1], http and port 8443 refused; server answered `/api/hello` 200 |
+
+### Review
+
+Round 1 (Codex) found four major and one minor issue in the robots rules (matching could hold the
+host's thread, the Reddit exception covered every Reddit path, percent-encoded paths bypassed
+disallows, blank lines dropped later rules, long disallows vanished). All five are fixed with tests.
+It found no way to reach a private address and no leak into the activity record.
 
 ### Not proven or not built
 

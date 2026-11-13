@@ -410,6 +410,10 @@ fn only_the_reddit_feed_address_may_skip_robots() {
     assert_eq!(v["ok"], true, "{v}");
     let v = w.get(json!({"url":w.url("deny.test","/x"),"skipRobots":true}));
     is(&v, "robots");
+    for path in ["/message/inbox", "/r/rust/", "/r/rust/hot.rss?x=1", "/r/ru%73t/hot.rss", "/r/rust/hot.json"] {
+        let v = w.get(json!({"url":w.url("www.reddit.com",path),"skipRobots":true}));
+        is(&v, "robots");
+    }
 }
 
 #[test]

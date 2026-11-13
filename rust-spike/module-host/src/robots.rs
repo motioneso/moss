@@ -15,29 +15,70 @@ pub struct Robots {
     rules: Vec<Rule>,
 }
 
+/// Longest pattern kept. A longer disallow is kept as a disallow of the whole site, so the
+/// rule can never silently disappear.
+const PATTERN_LIMIT: usize = 2048;
+/// Matcher steps allowed for one question, so a hostile file cannot hold the host's thread.
+const STEP_BUDGET: usize = 2_000_000;
+
+/// Decodes percent escapes of unreserved characters and upper-cases the rest, so `%70` and `p`
+/// compare equal.
+fn normalize(text: &str) -> Vec<u8> {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or("");
+            if let Ok(value) = u8::from_str_radix(hex, 16) {
+                if value.is_ascii_alphanumeric() || matches!(value, b'-' | b'.' | b'_' | b'~') {
+                    out.push(value);
+                } else {
+                    out.extend_from_slice(format!("%{value:02X}").as_bytes());
+                }
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    out
+}
+
 fn compile(value: &str, allow: bool) -> Option<Rule> {
-    if value.is_empty() || value.len() > 512 {
+    if value.is_empty() {
         return None;
+    }
+    if value.len() > PATTERN_LIMIT {
+        return (!allow).then(|| Rule {
+            allow: false,
+            length: 1,
+            pattern: b"/".to_vec(),
+            anchored: false,
+        });
     }
     let anchored = value.ends_with('$');
     let text = value.strip_suffix('$').unwrap_or(value);
+    let pattern = normalize(text);
     Some(Rule {
         allow,
-        length: value.chars().filter(|c| !matches!(c, '*' | '$')).count(),
-        pattern: text.as_bytes().to_vec(),
+        length: pattern.iter().filter(|c| **c != b'*').count() + usize::from(anchored),
+        pattern,
         anchored,
     })
 }
 
 /// Wildcard match with a single backtrack point, so hostile patterns cannot blow up.
-fn matches(rule: &Rule, path: &[u8]) -> bool {
+fn matches(rule: &Rule, path: &[u8], budget: &mut usize) -> Option<bool> {
     let pattern = &rule.pattern;
     let (mut p, mut s) = (0, 0);
     let mut star: Option<(usize, usize)> = None;
     loop {
+        *budget = budget.checked_sub(1)?;
         if p == pattern.len() {
             if !rule.anchored || s == path.len() {
-                return true;
+                return Some(true);
             }
         } else if pattern[p] == b'*' {
             star = Some((p, s));
@@ -54,7 +95,7 @@ fn matches(rule: &Rule, path: &[u8]) -> bool {
                 p = star_p + 1;
                 s = star_s + 1;
             }
-            _ => return false,
+            _ => return Some(false),
         }
     }
 }
@@ -77,9 +118,6 @@ impl Robots {
         for raw in body.lines() {
             let line = raw.split('#').next().unwrap_or("").trim();
             if line.is_empty() {
-                if !rules.is_empty() {
-                    flush(&mut agents, &mut rules, &mut groups);
-                }
                 continue;
             }
             let Some((field, value)) = line.split_once(':') else {
@@ -107,11 +145,20 @@ impl Robots {
         Self { rules }
     }
     pub fn allows(&self, path: &str) -> bool {
-        let best = self
-            .rules
-            .iter()
-            .filter(|rule| matches(rule, path.as_bytes()))
-            .max_by_key(|rule| (rule.length, rule.allow));
+        let path = normalize(path);
+        let mut budget = STEP_BUDGET;
+        let mut best: Option<&Rule> = None;
+        for rule in &self.rules {
+            match matches(rule, &path, &mut budget) {
+                None => return false,
+                Some(false) => {}
+                Some(true) => {
+                    if best.is_none_or(|b| (rule.length, rule.allow) > (b.length, b.allow)) {
+                        best = Some(rule);
+                    }
+                }
+            }
+        }
         best.is_none_or(|rule| rule.allow)
     }
     pub fn allow_all() -> Self {
@@ -160,11 +207,37 @@ mod tests {
         assert!(!r.allows("/q?x=1"));
     }
     #[test]
+    fn blank_lines_and_comments_do_not_end_a_group() {
+        let r = Robots::parse(
+            "User-agent: *\nAllow: /public\n\n# restricted paths\nDisallow: /\n",
+            "moss",
+        );
+        assert!(!r.allows("/private"));
+        assert!(r.allows("/public/x"));
+    }
+    #[test]
+    fn percent_escapes_of_plain_characters_match() {
+        let r = Robots::parse("User-agent: *\nDisallow: /private\nDisallow: /a%2fb\n", "moss");
+        assert!(!r.allows("/%70rivate/report"));
+        assert!(!r.allows("/a%2Fb"));
+        assert!(r.allows("/a/b"));
+    }
+    #[test]
+    fn long_disallow_is_kept_and_work_is_bounded() {
+        let r = Robots::parse(&format!("User-agent: *\nDisallow: /{}\n", "a".repeat(3000)), "moss");
+        assert!(!r.allows("/anything"));
+        let body = format!("User-agent: *\n{}", "Disallow: /*aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab$\n".repeat(2000));
+        let r = Robots::parse(&body, "moss");
+        let started = std::time::Instant::now();
+        assert!(!r.allows(&format!("/{}", "a".repeat(100_000))), "an exhausted budget must fail closed");
+        assert!(started.elapsed() < std::time::Duration::from_secs(2));
+    }
+    #[test]
     fn hostile_patterns_finish_quickly() {
         let body = format!("User-agent: *\nDisallow: {}b\n", "*a".repeat(200));
         let r = Robots::parse(&body, "moss");
         let started = std::time::Instant::now();
-        assert!(r.allows(&"a".repeat(5000)));
+        let _ = r.allows(&"a".repeat(5000));
         assert!(started.elapsed() < std::time::Duration::from_secs(2));
     }
 }
