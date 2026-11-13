@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Moss weekly — Week of November 9, 2026</title>
+<meta name="description" content="A quiet week on the surface: meeting summaries learn who was in the room, and explain themselves when they can't be written.">
+<link rel="stylesheet" href="../../weekly.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="shell">
+    <span class="wordmark">Moss weekly</span>
+    <span class="issue">Issue #45</span>
+  </div>
+</header>
+
+<main class="shell">
+
+  <div class="lede">
+    <h1>Week of November 9, 2026</h1>
+    <p>This was a quiet week for things you can see. Most of the work went into foundations that aren't ready to show yet, so the visible changes all landed in one place: meeting summaries. They know more about your meetings now, and they're more honest when something goes wrong.</p>
+  </div>
+
+  <section class="hero">
+    <div>
+      <p class="eyebrow">This week's headline</p>
+      <h2>Meeting summaries that know who was in the room</h2>
+    </div>
+    <div class="hero-body">
+      <p>Meeting summaries now draw on your own background: your name, the matching calendar event, and the notes you keep about the people involved. Names get spelled the way you spell them, and the summary reads like it was written by someone who knew what the meeting was for.</p>
+      <p>Summaries can also guess who is speaking. A guessed name is marked as a guess, and when I'm not sure I say &quot;Speaker 2&quot; rather than bluff. The names carry through wherever the summary goes, including copies, exports, and suggested tasks. Older summaries are left as they were.</p>
+      <p class="refs"><a href="https://github.com/motioneso/moss/pull/4026">PR&nbsp;#4026</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/4029">PR&nbsp;#4029</a></p>
+    </div>
+  </section>
+
+  <section class="band">
+    <h3>Improved</h3>
+    <hr class="hr">
+    <div class="items">
+      <article class="item">
+        <h4>Clearer reasons when a summary can't be written</h4>
+        <p>Instead of one catch-all error, Moss now says what happened: the AI helper couldn't be reached, it isn't available, or it was stopped to keep your meeting private.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/4011">PR&nbsp;#4011</a></p>
+      </article>
+      <article class="item">
+        <h4>A heads-up about suspicious lines in a recording</h4>
+        <p>If something said in a meeting looks like an order aimed at the AI rather than ordinary conversation, the summary now flags it so you can read that part with a raised eyebrow.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/4011">PR&nbsp;#4011</a></p>
+      </article>
+    </div>
+  </section>
+
+  <section class="band">
+    <h3>Fixed</h3>
+    <hr class="hr">
+    <ul class="fixes">
+      <li>When a summary is stopped to keep your meeting private, the owner gets a notification even if the summary was started automatically. <a href="https://github.com/motioneso/moss/pull/4015">#4015</a></li>
+      <li>Automatic summaries no longer report the AI helper as unreachable while chat is working fine. <a href="https://github.com/motioneso/moss/pull/4011">#4011</a></li>
+    </ul>
+  </section>
+
+  <div class="cta">
+    <a href="https://github.com/motioneso/moss">View Moss on GitHub</a>
+  </div>
+
+</main>
+
+<footer class="colophon">
+  <div class="shell">
+    Moss · a weekly record of what shipped. <a href="../">Past issues</a>.
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,53 @@
+{
+  "issue": 45,
+  "slug": "2026-11-13",
+  "weekOf": "November 9, 2026",
+  "summary": "A quiet week on the surface: meeting summaries learn who was in the room, and explain themselves when they can't be written.",
+  "intro": "This was a quiet week for things you can see. Most of the work went into foundations that aren't ready to show yet, so the visible changes all landed in one place: meeting summaries. They know more about your meetings now, and they're more honest when something goes wrong.",
+  "headline": {
+    "title": "Meeting summaries that know who was in the room",
+    "body": [
+      "Meeting summaries now draw on your own background: your name, the matching calendar event, and the notes you keep about the people involved. Names get spelled the way you spell them, and the summary reads like it was written by someone who knew what the meeting was for.",
+      "Summaries can also guess who is speaking. A guessed name is marked as a guess, and when I'm not sure I say \"Speaker 2\" rather than bluff. The names carry through wherever the summary goes, including copies, exports, and suggested tasks. Older summaries are left as they were."
+    ],
+    "prs": [
+      4026,
+      4029
+    ]
+  },
+  "sections": [
+    {
+      "title": "Improved",
+      "items": [
+        {
+          "title": "Clearer reasons when a summary can't be written",
+          "body": "Instead of one catch-all error, Moss now says what happened: the AI helper couldn't be reached, it isn't available, or it was stopped to keep your meeting private.",
+          "prs": [
+            4011
+          ]
+        },
+        {
+          "title": "A heads-up about suspicious lines in a recording",
+          "body": "If something said in a meeting looks like an order aimed at the AI rather than ordinary conversation, the summary now flags it so you can read that part with a raised eyebrow.",
+          "prs": [
+            4011
+          ]
+        }
+      ]
+    }
+  ],
+  "fixes": [
+    {
+      "text": "When a summary is stopped to keep your meeting private, the owner gets a notification even if the summary was started automatically.",
+      "prs": [
+        4015
+      ]
+    },
+    {
+      "text": "Automatic summaries no longer report the AI helper as unreachable while chat is working fine.",
+      "prs": [
+        4011
+      ]
+    }
+  ]
+}
