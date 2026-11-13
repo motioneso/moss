@@ -327,16 +327,16 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
     for who in [&cookie, &other] {
         let (status, text) = call(Method::GET, "/follows", Some(who), None);
         assert_eq!(status, 200, "{text}\n{}", log());
-        assert_eq!(json_of(&text), json!([]));
+        assert_eq!(json_of(&text), json!({"follows":[]}));
     }
     // The owner follows a league twice and gets the same row back.
     let (status, text) = call(Method::POST, "/follows", Some(&cookie), Some(json!({"competitionKey":"nfl"})));
     assert_eq!(status, 200, "{text}\n{}", log());
-    let id = json_of(&text)["id"].as_str().unwrap().to_owned();
+    let id = json_of(&text)["follow"]["id"].as_str().unwrap().to_owned();
     let (_, again) = call(Method::POST, "/follows", Some(&cookie), Some(json!({"competitionKey":"nfl"})));
-    assert_eq!(json_of(&again)["id"], json!(id));
+    assert_eq!(json_of(&again)["follow"]["id"], json!(id));
     let (_, list) = call(Method::GET, "/follows", Some(&cookie), None);
-    assert_eq!(json_of(&list).as_array().unwrap().len(), 1, "{list}");
+    assert_eq!(json_of(&list)["follows"].as_array().unwrap().len(), 1, "{list}");
     // Bad input gets the old words, and the typed text is never kept.
     let (status, text) = call(Method::POST, "/follows", Some(&cookie), Some(json!({"competitionKey": MARK})));
     assert_eq!((status, json_of(&text)["error"].clone()), (400, json!(format!("Unknown competition: {MARK}"))), "{text}");
@@ -355,14 +355,14 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
     assert_eq!(status, 400, "{text}");
     // The other person sees none of it and cannot change it.
     let (_, text) = call(Method::GET, "/follows", Some(&other), None);
-    assert_eq!(json_of(&text), json!([]));
+    assert_eq!(json_of(&text), json!({"follows":[]}));
     let (_, text) = call(Method::GET, "/standings-preferences", Some(&other), None);
     assert_eq!(json_of(&text), json!({"selectedCompetitionKeys":null,"lastViewed":null}));
     let (status, text) = call(Method::DELETE, &format!("/follows/{id}"), Some(&other), None);
     assert_eq!((status, json_of(&text)), (200, json!({"ok":false})));
     assert_eq!(call(Method::POST, &format!("/follows/{id}/team"), Some(&other), Some(json!({"teamKey":"LAL"}))).0, 404);
     let (_, list) = call(Method::GET, "/follows", Some(&cookie), None);
-    assert_eq!(json_of(&list).as_array().unwrap().len(), 1, "B's delete must not remove A's follow");
+    assert_eq!(json_of(&list)["follows"].as_array().unwrap().len(), 1, "B's delete must not remove A's follow");
     // The owner removes the follow.
     let (status, text) = call(Method::DELETE, &format!("/follows/{id}"), Some(&cookie), None);
     assert_eq!((status, json_of(&text)), (200, json!({"ok":true})));

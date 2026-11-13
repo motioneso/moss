@@ -169,7 +169,8 @@ fn whole_league_follows_never_repeat_and_the_old_sql_rules_hold() {
     let first = w.call(a, "POST", "/follows", json!({"competitionKey":"nfl"}));
     let again = w.call(a, "POST", "/follows", json!({"competitionKey":"nfl"}));
     assert_eq!(first["status"], 200, "{first}");
-    assert_eq!(first["body"]["id"], again["body"]["id"], "a repeat returns the same follow");
+    assert!(first["body"]["follow"]["id"].is_string(), "{first}");
+    assert_eq!(first["body"]["follow"]["id"], again["body"]["follow"]["id"], "a repeat returns the same follow");
     assert_eq!(w.follow_rows(a), 1);
     println!("PASS route: following the same league twice keeps one row");
 
@@ -212,11 +213,11 @@ fn another_person_cannot_see_change_or_remove_a_follow_and_the_check_fails_witho
     let w = World::new();
     let (a, b, admin) = (w.f.a, w.f.b, w.f.admin);
     let mine = w.call(a, "POST", "/follows", json!({"competitionKey":"nfl"}));
-    let id = mine["body"]["id"].as_str().unwrap_or_else(|| panic!("follow answer: {mine}")).to_owned();
+    let id = mine["body"]["follow"]["id"].as_str().unwrap_or_else(|| panic!("follow answer: {mine}")).to_owned();
     w.call(a, "PUT", "/standings-preferences", json!({"selectedCompetitionKeys":["nba"]}));
 
-    assert_eq!(w.call(b, "GET", "/follows", Value::Null)["body"], json!([]));
-    assert_eq!(w.call(admin, "GET", "/follows", Value::Null)["body"], json!([]), "an admin is just another person here");
+    assert_eq!(w.call(b, "GET", "/follows", Value::Null)["body"], json!({"follows":[]}));
+    assert_eq!(w.call(admin, "GET", "/follows", Value::Null)["body"], json!({"follows":[]}), "an admin is just another person here");
     assert_eq!(w.call(b, "DELETE", &format!("/follows/{id}"), Value::Null)["body"], json!({"ok":false}));
     assert_eq!(w.call(b, "POST", &format!("/follows/{id}/team"), json!({"teamKey":"LAL"}))["status"], 404);
     assert_eq!(w.call(b, "GET", "/standings-preferences", Value::Null)["body"]["selectedCompetitionKeys"], Value::Null);
@@ -299,8 +300,8 @@ fn the_installed_routes_answer_like_the_old_routes_step_for_step() {
     before.clear();
 
     // Steps that name a follow need the id each side made.
-    let whole_old = old[2]["body"]["id"].as_str().unwrap().to_owned();
-    let whole_new = new[2]["body"]["id"].as_str().unwrap().to_owned();
+    let whole_old = old[2]["body"]["follow"]["id"].as_str().unwrap().to_owned();
+    let whole_new = new[2]["body"]["follow"]["id"].as_str().unwrap().to_owned();
     let steps = replay::steps_with_ids();
     // The old side already holds one repeat whole-league follow per league, so the follow ids are looked up fresh.
     let old2 = replay::old_routes(old_actor, &steps, json!({"whole": whole_old}));
