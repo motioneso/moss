@@ -2,7 +2,7 @@
 //! never its tables. A source that cannot be read, or whose module is not built yet, becomes a
 //! visible gap and never fails the run. Only the run owner's data is read, because the host
 //! carries the owner's identity into every call.
-use crate::auto_plan::switches;
+use crate::auto_plan::read_switches;
 use crate::compose::Subject;
 use crate::external::{self, Contribution, Contributors};
 use crate::gather_types::*;
@@ -302,7 +302,11 @@ pub fn gather<H: Host + ?Sized, C: Contributors + ?Sized>(
         subject.deadline.check(host)?;
     }
     // A calendar the person left out of briefings is not read at all.
-    if selected(subject, CALENDAR) && switches(host).briefings {
+    let calendar_choice = if selected(subject, CALENDAR) { read_switches(host) } else { None };
+    if selected(subject, CALENDAR) && calendar_choice.is_none() {
+        out.gaps.push(Gap { source: "calendar", reason: Reason::ToolFailed });
+    }
+    if calendar_choice.is_some_and(|c| c.briefings) {
         let window = if evening { local_day_start(now, zone).unwrap_or(now) } else { now };
         let section = calendar(host, window, zone, &mut out);
         out.sections.push(section);

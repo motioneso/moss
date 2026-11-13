@@ -18,10 +18,15 @@ pub struct Switches {
     pub planning: bool,
 }
 
-pub fn switches<H: Host + ?Sized>(host: &H) -> Switches {
-    let reply = api(host, "calendar", "getSourceSwitches", json!({})).unwrap_or(Value::Null);
+/// The saved switches, or `None` when Calendar cannot be asked.
+pub fn read_switches<H: Host + ?Sized>(host: &H) -> Option<Switches> {
+    let reply = api(host, "calendar", "getSourceSwitches", json!({})).ok()?;
     let on = |key: &str| reply[key].as_bool().unwrap_or(false);
-    Switches { briefings: on("briefings"), planning: on("planning") }
+    Some(Switches { briefings: on("briefings"), planning: on("planning") })
+}
+
+pub fn switches<H: Host + ?Sized>(host: &H) -> Switches {
+    read_switches(host).unwrap_or(Switches { briefings: false, planning: false })
 }
 
 /// Signals that carry plan effects. A signal needs a text summary and a list of suggested actions.
