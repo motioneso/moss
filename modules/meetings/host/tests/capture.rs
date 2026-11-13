@@ -263,18 +263,27 @@ fn the_mac_sends_status_control_and_audio_with_its_credential_against_the_real_d
     *w.auth.credential.lock().unwrap() = Some((a, format!("mm1_{a}.{grant}.{}", "Z".repeat(43))));
     assert_eq!(status("recording")["status"], 401, "wrong secret must be refused");
     *w.auth.credential.lock().unwrap() = Some((a, format!("mm1_{a}.{grant}.{SECRET}")));
-    // Control and audio.
+    // Audio while recording, then control, then audio after the pause.
+    let samples: Vec<u8> = (0..8000i32).flat_map(|n| ((((n % 100) - 50) * 100) as i16).to_le_bytes()).collect();
+    let pcm = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &samples);
+    let send = |generation: i64, sequence: i64| {
+        w.call(a, "POST", "/capture/audio", json!({
+            "meetingId": meeting, "grantId": grant, "requestKey": Uuid::new_v4().to_string(), "generation": generation, "epoch": 1,
+            "sourceId": "mic", "sequence": sequence, "startMs": 0, "endMs": 1000, "sampleRateHz": 8000, "pcmBase64": pcm,
+        }))
+    };
+    // A clip may not end after the moment it is sent, so let the first second of the recording pass.
+    std::thread::sleep(std::time::Duration::from_millis(2500));
+    let live = send(generation, 0);
+    println!("AUDIO while recording: {live}");
+    assert_eq!(live["status"], 200, "{live}");
+    assert_eq!(w.count(&format!("SELECT count(*) FROM app.meeting_capture_receipts WHERE grant_id = '{grant}' AND kind = 'audio'")), 1);
     let paused = w.call(a, "POST", "/capture/control", json!({"meetingId": meeting, "grantId": grant, "requestKey": K2, "expectedGeneration": generation, "command": "pause"}));
     assert_eq!(paused["status"], 200, "{paused}");
     let generation = w.count(&format!("SELECT coalesce((state_json::jsonb->>'generation')::bigint, 1) FROM app.meeting_capture_grants WHERE id = '{grant}'"));
-    let samples: Vec<u8> = (0..8000i32).flat_map(|n| ((((n % 100) - 50) * 100) as i16).to_le_bytes()).collect();
-    let audio = w.call(a, "POST", "/capture/audio", json!({
-        "meetingId": meeting, "grantId": grant, "requestKey": Uuid::new_v4().to_string(), "generation": generation, "epoch": 1,
-        "sourceId": "mic", "sequence": 0, "startMs": 0, "endMs": 1000, "sampleRateHz": 8000,
-        "pcmBase64": base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &samples),
-    }));
-    assert!(audio["status"].as_i64().is_some(), "{audio}");
-    println!("AUDIO answer: {audio}");
+    let after = send(generation, 1);
+    println!("AUDIO after pause: {after}");
+    assert!(matches!(after["status"].as_i64(), Some(200 | 409)), "{after}");
     assert_eq!(w.count(&format!("SELECT count(*) FROM moss_queue.jobs x WHERE x::text LIKE '%{}%'", "pcmBase64")), 0);
     // Another person with their own credential for this grant is refused.
     *w.auth.credential.lock().unwrap() = Some((w.f.b, format!("mm1_{}.{grant}.{SECRET}", w.f.b)));

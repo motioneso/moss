@@ -8,15 +8,15 @@ Link, grants, start, cancel-start, maintenance job, the two 410 routes, the reco
 
 ## Legacy sources (packages/meetings/src)
 
-| File                                             | Part 10 uses                                                                                   |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| capture-routes.ts                                | audio, status, control, browser status and browser control routes, body schemas, 5.2 MB cap    |
-| capture-service.ts                               | status, browserStatus, browserControl, nativeControl, control, stopTranscript, audio           |
-| capture-domain.ts                                | applyCaptureControl, applyCaptureSourceChange, decode and admit audio, WAV, gaps, lease expiry |
-| capture-repository.ts                            | receipts, reserve, admitAudio, retry, finish, reconcileExpiredAudio, completeness              |
-| capture-processing.ts, capture-silence.ts        | clip transcription window, silence check                                                       |
+| File                                              | Part 10 uses                                                                                   |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| capture-routes.ts                                 | audio, status, control, browser status and browser control routes, body schemas, 5.2 MB cap    |
+| capture-service.ts                                | status, browserStatus, browserControl, nativeControl, control, stopTranscript, audio           |
+| capture-domain.ts                                 | applyCaptureControl, applyCaptureSourceChange, decode and admit audio, WAV, gaps, lease expiry |
+| capture-repository.ts                             | receipts, reserve, admitAudio, retry, finish, reconcileExpiredAudio, completeness              |
+| capture-processing.ts, capture-silence.ts         | clip transcription window, silence check                                                       |
 | capture-transcript-sources.ts, capture-waiters.ts | source records, long-poll                                                                      |
-| recording-notice-jobs.ts                         | recording-notice job (built in part 9)                                                         |
+| recording-notice-jobs.ts                          | recording-notice job (built in part 9)                                                         |
 
 ## Design
 
@@ -33,10 +33,11 @@ Link, grants, start, cancel-start, maintenance job, the two 410 routes, the reco
 - Planted-marker test: meeting text absent from logs, job payloads and activity rows.
 - Mutation controls for the new rules.
 - Native and WebAssembly builds with tests in both.
-- Live run on the real Rust server.
+- Live run against the installed package and a real database (done). It found that receipt reads of 4,000 rows fail on the host, which caps a page at 1,000. Reads are now paged.
 
 ## Not proven (expected)
 
 - Real paired-device credential check (part 7 parked).
 - A real model pass on real audio.
 - A real Mac app talking to the server.
+- Whether the host keeps a revoke when the call that triggered it answers with an error.
