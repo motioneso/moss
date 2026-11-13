@@ -23,7 +23,11 @@ const ZONE: &str = "COALESCE((SELECT NULLIF(value_json #>> '{}', '') FROM app.pr
 pub async fn run(cx: &DataContext, request: &Request) -> Result<Value> {
     let p = &request.parameters;
     match (request.operation.as_str(), request.resource.as_str()) {
-        ("get", "email.understand") => pending(cx, p["limit"].as_i64().unwrap_or(10).clamp(1, 50)).await,
+        ("get", "email.understand") => {
+            // A context-only read returns the date and own addresses with no messages.
+            let limit = if p["contextOnly"] == true { 0 } else { p["limit"].as_i64().unwrap_or(10).clamp(1, 50) };
+            pending(cx, limit).await
+        }
         ("set", "email.understand") => write(cx, p).await,
         ("get", "email.suppression") => suppression(cx, p).await,
         ("set", "email.suppression") => suppression_set(cx, p).await,

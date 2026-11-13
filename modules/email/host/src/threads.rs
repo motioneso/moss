@@ -33,6 +33,7 @@ pub async fn run(cx: &DataContext, request: &Request) -> Result<Value> {
         Some("thread") => thread(cx, text(p, "threadRef")?).await,
         Some("newer") => newer(cx, p).await,
         Some("recent") => recent(cx, p).await,
+        Some("saved") => saved(cx, p).await,
         _ => bail!("Unknown email read"),
     }
 }
@@ -100,5 +101,33 @@ async fn recent(cx: &DataContext, p: &Value) -> Result<Value> {
         r = received()
     );
     let rows = cx.db().query(&sql, &[&accounts, &since, &RECENT_LIMIT]).await?;
+    Ok(Value::Array(rows.iter().map(|row| row.get(0)).collect()))
+}
+
+/// The newest cached messages of the named accounts with their saved triage, for the email
+/// context. Only the signed-in person's own rows are read.
+async fn saved(cx: &DataContext, p: &Value) -> Result<Value> {
+    let accounts: Vec<Uuid> = p["accountIds"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|a| a.as_str().and_then(|a| Uuid::parse_str(a).ok()))
+        .collect();
+    if accounts.is_empty() {
+        return Ok(json!([]));
+    }
+    let limit = p["limit"].as_i64().unwrap_or(50).clamp(1, 200);
+    let sql = format!(
+        "SELECT jsonb_build_object('cacheMessageId', m.id::text, 'externalId', m.external_id,
+           'accountId', m.connector_account_id::text, 'sender', m.sender, 'recipients', to_jsonb(m.recipients),
+           'subject', m.subject, 'snippet', m.snippet, 'summary', m.summary, 'signals', m.signals,
+           'receivedAt', {r}, 'threadId', m.external_metadata->>'threadId',
+           'hasListUnsubscribe', m.external_metadata->'hasListUnsubscribe')
+         FROM app.email_messages m
+         WHERE m.owner_user_id = app.current_actor_user_id() AND m.connector_account_id = ANY($1)
+         ORDER BY m.received_at DESC, m.id LIMIT $2",
+        r = received()
+    );
+    let rows = cx.db().query(&sql, &[&accounts, &limit]).await?;
     Ok(Value::Array(rows.iter().map(|row| row.get(0)).collect()))
 }

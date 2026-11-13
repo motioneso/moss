@@ -40,3 +40,7 @@ path = "bin/oracle.rs"
 [[test]]
 name = "live_tools"
 path = "tests/live_tools.rs"
+
+[[test]]
+name = "email_context"
+path = "tests/email_context.rs"

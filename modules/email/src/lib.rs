@@ -74,6 +74,10 @@ fn api(host: &impl Host, name: &str, input: &Value) -> Result<Value> {
         "listThreadMessages" => providers::thread_messages(host, input),
         "listThreadsWithNewerMessages" => providers::newer_threads(host, input),
         "collectMonitorSignals" => providers::monitor_signals(host, input),
+        "triageMessage" => understand::pass::triage(host, input),
+        "emailTriageContext" => understand::pass::context(host),
+        "listSavedMessages" => kv(host, "get", "email.thread", json!({
+            "mode":"saved","accountIds":input["accountIds"],"limit":input["limit"]})),
         "understandMessages" => {
             understand::pass::run(host, input["limit"].as_i64().unwrap_or(10).clamp(1, 50))
         }

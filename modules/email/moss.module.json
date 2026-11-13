@@ -134,7 +134,10 @@
     "updateActionSuppression": "1.0.0",
     "listThreadMessages": "1.0.0",
     "listThreadsWithNewerMessages": "1.0.0",
-    "collectMonitorSignals": "1.0.0"
+    "collectMonitorSignals": "1.0.0",
+    "triageMessage": "1.0.0",
+    "emailTriageContext": "1.0.0",
+    "listSavedMessages": "1.0.0"
   },
   "icons": [
     "icons/email.svg"

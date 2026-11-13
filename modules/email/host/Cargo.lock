@@ -1292,6 +1292,7 @@ dependencies = [
 name = "moss-email"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "moss-module-sdk",
  "serde",
  "serde_json",

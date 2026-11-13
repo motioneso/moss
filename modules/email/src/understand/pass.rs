@@ -129,3 +129,24 @@ pub fn run(host: &impl Host, limit: i64) -> Result<Value> {
     }
     Ok(json!({"analysed":stored,"failed":failed,"needsConfiguration":needs_configuration}))
 }
+
+/// Reads one message's meaning without storing it. The caller supplies the message fields,
+/// today's date and the person's own addresses. Used for live mail that is not cached.
+pub fn triage(host: &impl Host, input: &Value) -> Result<Value> {
+    let own: Vec<String> = input["ownAddresses"]
+        .as_array()
+        .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .unwrap_or_default();
+    let today = input["today"].as_str().unwrap_or("");
+    Ok(match analyse(host, &input["message"], today, &own) {
+        Ok(result) => json!({"summary":result.summary,"signals":result.signals}),
+        Err(error) if extract::needs_configuration(&error) => json!({"error":"needs_configuration"}),
+        Err(_) => json!({"error":"failed"}),
+    })
+}
+
+/// Today's date and the person's own addresses, for callers that triage live mail.
+pub fn context(host: &impl Host) -> Result<Value> {
+    let batch = kv(host, "get", "email.understand", json!({"contextOnly":true}))?;
+    Ok(json!({"today":batch["today"],"ownAddresses":batch["ownAddresses"]}))
+}
