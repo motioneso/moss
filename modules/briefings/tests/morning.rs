@@ -339,7 +339,7 @@ fn briefing_text_never_reaches_job_payloads_or_notifications() {
 /// Reads the source of the trusted block builder. Its text may use only the two fixed constants.
 #[test]
 fn the_trusted_block_source_has_no_interpolated_outside_value() {
-    let source = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/morning_prompt.rs")).unwrap();
+    let source = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/morning_prompt.rs")).unwrap();
     let start = source.find("pub fn trusted_instructions()").expect("builder exists");
     let body = &source[start..source[start..].find("\n}\n").unwrap() + start];
     let placeholders: Vec<&str> = body.match_indices('{').map(|(i, _)| &body[i..body[i..].find('}').unwrap() + i + 1]).skip(1).collect();
