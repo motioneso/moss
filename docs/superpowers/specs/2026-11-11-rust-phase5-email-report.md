@@ -447,3 +447,47 @@ None added.
 - A real Gmail account and a real model were not used.
 - `refused_attempts_answer_like_the_old_server` (Google limiter) failed in both Connectors gate
   runs here. It sits in code this part did not change and depends on timing under load.
+
+# Part 11: Writes
+
+## What was built
+
+- Assistant tools `email.draftReply` and `email.sendReply`. The model gives only a saved message
+  id and the reply text. The recipient, subject and thread come from the person's own saved
+  message, never from the model.
+- Sending needs approval. The approval is tied to a fingerprint of the exact recipient, subject,
+  thread and text, so changed text after approval sends nothing. Drafting needs no approval.
+- Gmail: drafts are saved on the thread, and a sent reply goes out once on that thread. Mail
+  server (IMAP) accounts: drafts are filed in Drafts, and a sent reply goes out by SMTP with a
+  copy filed in Sent. A write is never retried.
+- Calendar writes on a connected Google calendar: create, delete and reschedule. Each updates the
+  saved Calendar copy so the change shows at once. Calendar got one small public call for this.
+- Email gained one read-only call that returns a message's reply details for the person only.
+- App map entries in the Connectors, Email and Calendar manifests.
+
+## Proof
+
+- Write tests (7, against stand-in Google, IMAP and SMTP servers): draft saved and nothing sent;
+  reply sent once on its thread; IMAP draft filed and not sent; IMAP reply sent and copied to
+  Sent; calendar create, delete and reschedule land at Google and appear in Calendar and skip
+  busy time.
+- A second person cannot send, draft or write a calendar event through the first person's
+  account, and nothing reaches Google. The test then switches row-level security off and the
+  foreign send goes through, so it notices a missing guard.
+- Reply text never reaches Email, Calendar or queue calls (sentinel text check in the tests).
+- Guest package tests: 14 for replies and calendar, run natively; the WebAssembly build is part
+  of the gate.
+
+## Differences from the old app
+
+- The recipient, subject and thread are taken from the saved message, not from the model.
+- Outlook calendar writes are not built. Outlook stays read-only.
+
+## Not proven
+
+- No real Gmail, IMAP or Google Calendar account was used. A stand-in checks that the thread id
+  is sent, not that Gmail threads it.
+- The host's approval check and the package's fingerprint check were each tested, but not
+  together in one run, because the server has no route that runs assistant tools yet.
+- The Google token lookup relies on row-level security to pick the person's own account.
+- The old Google rate-limit test still fails sometimes in code this part did not change.
