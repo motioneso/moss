@@ -90,3 +90,7 @@ path = "../tests/capture_devices.rs"
 [[test]]
 name = "capture_flow"
 path = "../tests/capture_flow.rs"
+
+[[test]]
+name = "capture_audio"
+path = "../tests/capture_audio.rs"

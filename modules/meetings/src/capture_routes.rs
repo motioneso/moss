@@ -11,9 +11,13 @@ fn meeting(request: &RouteRequest) -> Result<String, Failure> {
     input::uuid(&request.params.get("id").map_or(Value::Null, |id| json!(id)))
 }
 
-/// Every body but a clip is at most 128 KiB.
+/// Every body but a clip is at most 128 KiB. A clip is at most 5.2 MB.
 fn small(body: &Value) -> Result<(), Stop> {
-    if body.to_string().len() > 131_072 {
+    capped(body, 131_072)
+}
+
+fn capped(body: &Value, cap: usize) -> Result<(), Stop> {
+    if body.to_string().len() > cap {
         return Err(Failure::new(CaptureCode::Limit).into());
     }
     Ok(())
@@ -33,7 +37,7 @@ pub fn dispatch<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Option<Re
         }
         ("POST", "/capture/status") => small(body).and_then(|_| input::status(body).map_err(Stop::from)).and_then(|r| capture_status::native_status(host, &r)),
         ("POST", "/capture/control") => small(body).and_then(|_| input::control(body, true).map_err(Stop::from)).and_then(|c| capture_service::native_control(host, &c)),
-        ("POST", "/capture/audio") => input::audio(body).map_err(Stop::from).and_then(|_| capture_audio_service::audio(host, body)),
+        ("POST", "/capture/audio") => capped(body, 5_200_000).and_then(|_| input::audio(body).map_err(Stop::from)).and_then(|_| capture_audio_service::audio(host, body)),
         ("GET", "/records/:id/capture") => meeting(request).map_err(Stop::from).and_then(|id| capture_status::browser_status(host, &id)),
         ("POST", "/records/:id/capture/control") => meeting(request).map_err(Stop::from).and_then(|id| {
             small(body)?;

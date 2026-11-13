@@ -51,6 +51,9 @@ pub struct Fake {
     pub copies: RefCell<BTreeMap<String, String>>,
     pub notes_down: Cell<bool>,
     pub lose_write_answer: Cell<bool>,
+    /// What the transcribe port answers to `create`, and every audio clip it was given.
+    pub speech: RefCell<Value>,
+    pub heard: RefCell<Vec<Value>>,
     /// What the host's account export read returns, per signed-in account.
     pub section: RefCell<BTreeMap<String, Value>>,
     clock: Cell<u32>,
@@ -61,6 +64,8 @@ impl Fake {
     pub fn new() -> Self {
         Self {
             capture: RefCell::new(CaptureCfg::default()),
+            speech: RefCell::new(json!({"ok": true, "route": "route-1", "segments": [{"startMs": 0, "endMs": 1000, "text": "hello there"}]})),
+            heard: RefCell::new(vec![]),
             jobs: RefCell::new(vec![]),
             actor: Cell::new(A),
             tables: RefCell::new(BTreeMap::new()),
@@ -259,6 +264,14 @@ impl Host for Fake {
         match (port, operation) {
             ("context", "read") => Ok(json!({"now":self.stamp().replace("+00:00", "Z"), "actorUserId": self.actor.get()})),
             ("kv", _) if resource == "meetings.capture" => Ok(self.capture_call(operation, &parameters)),
+            ("transcribe", "availability") => {
+                let route = self.capture.borrow().route.clone();
+                Ok(json!({"available": route.is_some(), "route": route}))
+            }
+            ("transcribe", "create") => {
+                self.heard.borrow_mut().push(parameters);
+                Ok(self.speech.borrow().clone())
+            }
             ("jobs", _) if resource == "meetings.capture-maintenance" => {
                 self.jobs.borrow_mut().push((resource.into(), parameters));
                 Ok(json!({}))
@@ -348,6 +361,9 @@ impl Fake {
                         row.insert("updated_at".into(), json!(now));
                         row.insert("creation_title".into(), query.values["title"].clone());
                     }
+                    "app.meeting_capture_receipts" => {
+                        row.insert("created_at".into(), json!(now));
+                    }
                     "app.meeting_capture_grants" => {
                         let n = self.ids.get();
                         self.ids.set(n + 1);
@@ -372,6 +388,7 @@ impl Fake {
                     "app.meeting_records" => &["request_key"],
                     "app.meeting_note_writes" => &["meeting_id", "request_key"],
                     "app.meeting_recording_metadata" | "app.meeting_manual_entries" => &["meeting_id"],
+                    "app.meeting_capture_receipts" => &["grant_id", "request_key"],
                     _ => &[],
                 };
                 let clash = tables.get(table).into_iter().flatten().any(|r| {
