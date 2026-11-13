@@ -24,42 +24,28 @@
         "status",
         "export"
       ],
-      "resources": [
-        "backtrack.store"
-      ]
+      "resources": ["backtrack.store"]
     },
     {
       "port": "context",
-      "operations": [
-        "read"
-      ],
-      "resources": [
-        "call"
-      ]
+      "operations": ["read"],
+      "resources": ["call"]
     },
     {
       "port": "jobs",
-      "operations": [
-        "schedule"
-      ],
-      "resources": [
-        "backtrack.upkeep"
-      ]
+      "operations": ["schedule"],
+      "resources": ["backtrack.upkeep"]
     }
   ],
   "database": {
-    "migrations": [
-      "sql/0282_backtrack_segments.sql"
-    ],
+    "migrations": ["sql/0282_backtrack_segments.sql"],
     "ownedTables": [
       "app.backtrack_segments",
       "app.backtrack_preferences",
       "app.backtrack_deletions"
     ],
     "ledger": "core-legacy",
-    "ownerDelete": [
-      "app.backtrack_deletions"
-    ]
+    "ownerDelete": ["app.backtrack_deletions"]
   },
   "routes": [
     {
@@ -88,9 +74,7 @@
     "prepareBacktrackRoute": "1.0.0",
     "collectBacktrackSegmentsExportSection": "1.0.0"
   },
-  "icons": [
-    "icons/backtrack.svg"
-  ],
+  "icons": ["icons/backtrack.svg"],
   "accounts": {
     "supportsUserDisable": false,
     "defaultEnabled": true
