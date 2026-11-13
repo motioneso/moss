@@ -286,7 +286,8 @@ fn the_mac_sends_status_control_and_audio_with_its_credential_against_the_real_d
     assert!(matches!(after["status"].as_i64(), Some(200 | 409)), "{after}");
     assert_eq!(w.count(&format!("SELECT count(*) FROM moss_queue.jobs x WHERE x::text LIKE '%{}%'", "pcmBase64")), 0);
     // Another person with their own credential for this grant is refused.
-    *w.auth.credential.lock().unwrap() = Some((w.f.b, format!("mm1_{}.{grant}.{SECRET}", w.f.b)));
+    // The owner's own credential, presented by someone else. The hash matches, so only ownership refuses it.
+    *w.auth.credential.lock().unwrap() = Some((w.f.b, format!("mm1_{a}.{grant}.{SECRET}")));
     let theirs = w.call(w.f.b, "POST", "/capture/status", json!({"meetingId": meeting, "grantId": grant, "inventory": inventory, "observed": {"generation": generation, "phase": "recording"}}));
     assert_eq!(theirs["status"], 401, "{theirs}");
 }

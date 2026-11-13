@@ -40,4 +40,4 @@ Link, grants, start, cancel-start, maintenance job, the two 410 routes, the reco
 - Real paired-device credential check (part 7 parked).
 - A real model pass on real audio.
 - A real Mac app talking to the server.
-- Whether the host keeps a revoke when the call that triggered it answers with an error.
+- Revoke on lost recording permission is rolled back by the host (a 401 undoes the call). See the report.

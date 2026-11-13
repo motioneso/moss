@@ -69,12 +69,16 @@ fn replay(prior: &Value, result: &Value, at: DateTime<Utc>) -> Response {
 /// `POST /capture/audio`.
 pub fn audio<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Response, Stop> {
     let clip = decode(body)?;
-    let grant = native::prove(host, &clip.meeting_id, &clip.grant_id)?;
+    // Same order as a start (budget, then device, then meeting), so the two cannot deadlock.
+    host.call("kv", "lock", store::CAPTURE, json!({"kind": "limit", "key": "audio"}))?;
+    let mut grant = native::prove(host, &clip.meeting_id, &clip.grant_id)?;
     let grant_id = grant["id"].as_str().unwrap_or_default().to_owned();
     let at = now(host)?;
     let mut state = store::state(&grant);
     if receipts::reconcile_expired(host, &grant_id, &mut state, at)? {
         store::save(host, &grant, &state)?;
+        // Later steps start from the saved state, so the gaps just recorded are kept.
+        grant = store::grant(host, &grant_id)?.ok_or_else(native::denied_stop)?;
     }
     let route = match receipts::receipt(host, &grant_id, &clip.request_key, &clip.fingerprint)? {
         Some(prior) => match receipts::result(&prior) {

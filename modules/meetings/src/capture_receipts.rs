@@ -164,10 +164,7 @@ fn open(receipt: &Value) -> bool {
 /// Clips that stayed open for over a minute become lost audio. Returns true when any did.
 pub fn reconcile_expired<H: Host + ?Sized>(host: &H, grant: &str, state: &mut Value, at: DateTime<Utc>) -> Result<bool, Stop> {
     let filter = Filter::And { filters: vec![Filter::eq("grant_id", grant), Filter::eq("kind", "audio"), compare("created_at", Compare::Le, json!(stamp(at - Duration::milliseconds(PENDING_WINDOW_MS))))] };
-    let mut query = Query::select(filter);
-    query.order = vec![Order { column: "created_at".into(), descending: false }];
-    query.limit = Some(32);
-    let expired: Vec<Value> = Client(host).query(RECEIPTS, &query)?.into_iter().filter(open).collect();
+    let expired: Vec<Value> = rows(host, filter, MAX_RECEIPTS as u32)?.into_iter().filter(open).collect();
     for receipt in &expired {
         let meta = metadata(receipt);
         let key = receipt["request_key"].as_str().unwrap_or_default();

@@ -524,4 +524,16 @@ Every code the capture routes return. A test fails if this table and the code di
 - The device credential check. Device pairing (part 7) is parked, so a fake stands in for it. The live run feeds the module a credential built from the same format, so the module's own check is proven, but not the host's issue of it.
 - A real model pass on real audio. The tests use scripted text.
 - A real Mac app talking to the server.
-- Whether the host keeps the revoke when the call that triggered it answers with an error.
+- Revoke on lost recording permission. The host rolls back a route call that answers 401 or any status of 400 or more (runtime.rs, the success flag). So the revoke saved before the 401 is undone. Every call is still refused while permission is missing, but once permission returns the old grant and credential work again until the grant expires. Fixing this needs a host change that keeps a write on a refused call. It is not fixed here.
+
+### Review
+
+Round 1 (Codex gpt-6.1-sol, read only) found five items. Three were fixed and checked, one was fixed in the test, one is recorded above.
+
+- Fixed: audio took its locks in the opposite order to a start and could deadlock with it. Audio now takes the budget lock first.
+- Fixed: expiry read only the oldest 32 receipts before dropping finished ones, so later failures never expired. It now reads all receipts for the grant.
+- Fixed: gaps saved by the first expiry pass were overwritten by the stale grant. The grant is reread after the save.
+- Fixed: the second-person test used a credential with another hash, so it could not test ownership. It now presents the owner's credential from another account.
+- Recorded: the revoke rollback above.
+
+No second round was run.
