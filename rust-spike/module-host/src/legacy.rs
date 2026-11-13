@@ -48,6 +48,7 @@ pub fn sharing(module: &str, table: &str, resource: &str, key: &str) -> bool {
         (module, table, resource, key),
         ("calendar", "app.calendar_events", "calendar_event", "id")
             | ("email", "app.email_messages", "email_message", "id")
+            | ("briefings", "app.briefing_definitions", "briefing_definition", "id")
     )
 }
 pub fn entry(module: &str, path: &str) -> Option<&'static File> {
