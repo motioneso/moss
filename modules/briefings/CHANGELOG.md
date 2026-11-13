@@ -10,3 +10,4 @@
 - An evening run writes the end-of-day review through the configured model. Tasks are sorted into done today, slipped today and carried forward. Tomorrow's calendar and today's mail are included, and a plain list with the same headings is kept when no model answers.
 - A succeeded run asks Calendar to reserve day plan blocks when the person's planning switch is on, and a calendar left out of briefings is not read. Briefings and Calendar now work together through Calendar's public API only.
 - Morning and evening runs read the saved day plan and name overnight changes for review.
+- Chat can re-run your own briefing after you approve it, and can check whether a run is ready, still going or failed. It never touches anyone else's briefing, and a second re-run while one is going is refused. The briefing text it reads back is treated as outside text.

@@ -5,10 +5,12 @@ pub mod auto_plan;
 pub mod evening;
 pub mod evening_prompt;
 pub mod body;
+pub mod chat_card;
 pub mod compose;
 pub mod definitions;
 pub mod email_evidence;
 pub mod external;
+pub mod feedback;
 pub mod gather;
 pub mod gather_types;
 pub mod jobs;
@@ -29,6 +31,7 @@ pub mod signals;
 pub mod sources;
 pub mod status;
 pub mod text;
+pub mod tools;
 pub mod trust;
 pub mod util;
 
@@ -66,6 +69,12 @@ pub fn handle<H: Host + ?Sized>(
             let request: RouteRequest = serde_json::from_str(payload)?;
             Ok(serde_json::to_string(&route(host, request))?)
         }
+        "tool" => {
+            let request = serde_json::from_str(payload)?;
+            let result = tools::handle(host, request)
+                .map_err(|_| moss_module_sdk::Error::new("Briefings tool failed"))?;
+            Ok(serde_json::to_string(&result)?)
+        }
         "job" => jobs::handle(host, payload),
         "api" => api(host, payload),
         _ => Err(moss_module_sdk::Error::new("Unsupported Briefings invocation")),
@@ -79,9 +88,22 @@ fn api<H: Host + ?Sized>(host: &H, payload: &str) -> moss_module_sdk::Result<Str
     enum Api {
         #[serde(rename = "collectBriefingsExportSection")]
         Export(#[allow(dead_code)] Value),
+        #[serde(rename = "prepareBriefingAction")]
+        Prepare(Prepare),
+        #[serde(rename = "verifyBriefingFeedbackTarget")]
+        Verify(feedback::Verify),
+    }
+    // A JSON string keeps the field order the card shows.
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase", deny_unknown_fields)]
+    struct Prepare {
+        tool: String,
+        input_json: String,
     }
     Ok(match serde_json::from_str(payload)? {
         Api::Export(_) => json!({"ok":lifecycle::collect(host)?}),
+        Api::Prepare(p) => chat_card::prepare(host, &p.tool, &p.input_json),
+        Api::Verify(v) => feedback::verify(host, &v),
     }
     .to_string())
 }

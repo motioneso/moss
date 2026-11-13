@@ -52,6 +52,20 @@ pub fn find<H: Host + ?Sized>(host: &H, id: &str) -> Result<Option<Value>> {
     Ok(Client(host).query(TABLE, &query)?.into_iter().next())
 }
 
+/// The caller's own newest-updated definition of one type. A definition shared with them never
+/// counts, because the list also holds those.
+pub fn owned_of_type<H: Host + ?Sized>(host: &H, actor: &str, kind: &str) -> Result<Option<Value>> {
+    let mut query = Query::select(Filter::And {
+        filters: vec![Filter::eq("owner_user_id", actor), Filter::eq("briefing_type", kind)],
+    });
+    query.order = vec![
+        Order { column: "updated_at".into(), descending: true },
+        Order { column: "id".into(), descending: false },
+    ];
+    query.limit = Some(1);
+    Ok(Client(host).query(TABLE, &query)?.into_iter().next())
+}
+
 pub fn list<H: Host + ?Sized>(host: &H) -> Result<Response> {
     let mut query = Query::select(Filter::All);
     query.order = vec![
