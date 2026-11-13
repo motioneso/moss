@@ -12,6 +12,7 @@
     "test:rust-linux-desktop": "python3 rust-spike/shell/tools/proof_linux_desktop.py",
     "test:rust-click-live": "bash rust-spike/shell/tools/click-gate.sh",
     "test:rust-tasks": "bash modules/tasks/tools/gate.sh",
+    "test:rust-tasks-privacy": "tsx modules/tasks/tools/gate.ts",
     "test:rust-tasks-ui": "bash modules/tasks/tools/ui-gate.sh",
     "test:rust-tasks-jobs": "bash modules/tasks/tools/job-gate.sh",
     "test:rust-people-large": "bash modules/people/tools/large-data-gate.sh",

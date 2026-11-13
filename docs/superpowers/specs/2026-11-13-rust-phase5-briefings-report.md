@@ -145,3 +145,63 @@ model-based writing is a later part and all model calls will go through the rout
 - Reaching the server from another device was not checked.
 - Model-written text, tool sources and screens are later parts.
 - Review fixes for a switched-off schedule, twenty manual runs hiding the scheduled one, and the third reuse of a key are in the code and the gate stays green, but no new test targets each.
+
+## Briefings gathering (part 18)
+
+Card JS-266. Part of [issue 4027](https://github.com/motioneso/moss/issues/4027). Release note
+Category: N/A.
+
+### What it does
+
+When a run starts, Briefings now collects the owner's tasks, calendar and email before the stub
+writer runs. It reads only through other modules' public calls, never their tables. Each source
+that cannot be read shows up as a visible gap on the run, with a reason.
+
+| Source                            | How it is read                                                       |
+| --------------------------------- | -------------------------------------------------------------------- |
+| Tasks                             | New narrow Tasks call: id, title, status, due time and priority only |
+| Calendar                          | Connectors calendar call, times shown in the owner's own zone        |
+| Email                             | Connectors email call, keeps mail that needs action or a judgement   |
+| Chat, commitments, priority model | Not built in this app yet, shown as "unwired" gaps                   |
+
+Gap reasons are tool_failed, truncated, empty, unwired and source_auth (a connected account needs
+the person to sign in again). A source served from cache marks the run as using cached sources.
+
+### Rules carried over from the old app
+
+- A section keeps at most 8 lines and 1200 characters.
+- Tasks are the open ones plus those finished since the last good run (or the last 24 hours), with
+  at most 5 finished ones.
+- Email is kept when it has not been answered, is not a plain confirmation, and is actionable.
+  A request for action always wins over the confirmation rule.
+- Outside text is cleaned: whitespace collapsed, angle brackets and ampersands escaped, special
+  marker words removed.
+- Outside contributions: at most 20 items, headline 200 characters, title 200, detail 500, in-app
+  links only. A module the person did not select is never asked.
+
+### Privacy
+
+- Gathering reads only the run owner's data. The Tasks call returns each caller only their own
+  tasks, shown by a test with a second person and an admin, which was seen failing with row
+  security removed and passing with it back.
+- Only counts, gap reasons and source names are stored on the run. Briefing text is not in the
+  stored metadata, job payloads or activity rows. The installed test scans 13 tables and 7 job
+  payloads for a planted marker and finds nothing.
+
+### Changes outside Briefings
+
+- Tasks 0.1.3 adds the narrow briefing call and its changelog entry.
+- The app map in the Briefings manifest names the gathering feature and the fix path (Settings,
+  Connections).
+
+### Not proven
+
+- The installed test has no real Tasks or Connectors module installed, so a real cross-module
+  call through the host is not proven. It proves the missing-module path shows visible gaps.
+- Chat of the day, commitments and the priority model are gaps, not data.
+- Evening and weekly briefings use the morning gather.
+- No outside module offers contributions yet, so the caps are proven with a fake provider only.
+- The email "plain confirmation" filter is keyword based and simpler than the old one.
+- The awaiting-reply and worth-knowing email caps are not applied separately.
+- Reaching the server from another device was not checked from a phone or second computer.
+- The model-written briefing is part 19. The stub writer still produces the text.
