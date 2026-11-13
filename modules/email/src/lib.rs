@@ -81,6 +81,8 @@ fn api(host: &impl Host, name: &str, input: &Value) -> Result<Value> {
         "understandMessages" => {
             understand::pass::run(host, input["limit"].as_i64().unwrap_or(10).clamp(1, 50))
         }
+        "replyContext" => kv(host, "get", "email.thread", json!({
+            "mode":"reply","cacheMessageId":input["cacheMessageId"]})),
         "recordTriageFeedback" => kv(host, "set", "email.triage-feedback", input.clone()),
         "triageFeedbackCounts" => kv(host, "get", "email.triage-feedback", json!({})),
         "listActionSuppression" => kv(host, "get", "email.suppression", input.clone()),

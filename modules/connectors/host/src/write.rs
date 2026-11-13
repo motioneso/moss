@@ -276,6 +276,9 @@ async fn imap(
     let Some(login) = login(cx, cipher, config, id).await? else {
         return Ok(json!({"result":"inactive"}));
     };
+    // The package never learns the login name, so the host adds the sender header.
+    let text = format!("From: {}\r\n{text}", login.username.replace(['\r', '\n'], ""));
+    let text = text.as_str();
     let left = deadline.saturating_duration_since(Instant::now());
     let work = async {
         if request.resource == "connectors.write-imap-send" {

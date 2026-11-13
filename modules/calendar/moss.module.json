@@ -4,7 +4,7 @@
   "name": "Calendar",
   "description": "Calendar cached-event screens and draft tools; signed-in HTTPS Calendar pages; provider execution and full shell composition remain incomplete.",
   "publisher": "Moss",
-  "version": "0.28.0",
+  "version": "0.29.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -194,7 +194,8 @@
     "reserveAutoPlan": "1.0.0",
     "findUnfinishedBatch": "1.0.0",
     "upsertCachedEvent": "1.0.0",
-    "pruneCachedEvents": "1.0.0"
+    "pruneCachedEvents": "1.0.0",
+    "evictCachedEvent": "1.0.0"
   },
   "icons": ["icons/calendar.svg"],
   "accounts": {
@@ -212,7 +213,7 @@
     },
     {
       "id": "calendar.data",
-      "description": "Reads cached events and saves private day-plan drafts. Provider execution is not included in this package checkpoint.",
+      "description": "Reads cached events and saves private day-plan drafts. Writing events to the provider calendar is done by the three write tools below, which go through Connectors.",
       "errors": [
         {
           "code": "calendar-unavailable",
@@ -361,6 +362,18 @@
     },
     "calendar.dayPlanDraft": {
       "description": "Save evening intent and untimed task additions to the current day-plan draft for dialog review. Does not schedule events.",
+      "risk": "write"
+    },
+    "calendar.createEvent": {
+      "description": "Add a focus-time block to the person's own Google Calendar in the first free slot of the window, then show it in Calendar. Never double-books.",
+      "risk": "write"
+    },
+    "calendar.deleteEvent": {
+      "description": "Delete one event from the person's own Google Calendar and remove it from Calendar. Outlook events are read-only.",
+      "risk": "write"
+    },
+    "calendar.rescheduleEvent": {
+      "description": "Move one event without guests on the person's own Google Calendar and update it in Calendar.",
       "risk": "write"
     },
     "calendar.listVisibleEvents": {
