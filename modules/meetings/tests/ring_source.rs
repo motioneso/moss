@@ -187,3 +187,19 @@ fn capture_error_codes_match_the_report() {
     got.sort();
     assert_eq!(got, want, "report table and CaptureCode enum differ");
 }
+
+#[test]
+fn part_10_error_codes_match_the_report() {
+    use moss_meetings_module::capture_errors::CaptureCode;
+    let report = std::fs::read_to_string(
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../../../docs/superpowers/specs/2026-11-11-rust-phase5-meetings-part1-report.md"),
+    )
+    .expect("report");
+    let section = report.split("## Part 10").nth(1).expect("part 10 section").split("### Error codes").nth(1).unwrap().split("###").next().unwrap();
+    let mut got: Vec<&str> = section.lines().filter_map(|l| l.strip_prefix("| `")).filter_map(|l| l.split('`').next()).collect();
+    let mut want: Vec<&str> = CaptureCode::ALL.iter().map(|c| c.as_str()).filter(|c| c.starts_with("meeting_capture_")).collect();
+    want.push("meeting_capture_processing_failed");
+    want.sort();
+    got.sort();
+    assert_eq!(got, want, "part 10 table and CaptureCode enum differ");
+}

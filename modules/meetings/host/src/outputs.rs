@@ -40,6 +40,8 @@ struct Params {
     id: Option<String>,
     template_id: Option<String>,
     early_enqueued: Option<bool>,
+    grant_id: Option<String>,
+    due_at: Option<String>,
     candidate_id: Option<String>,
     review_state: Option<String>,
     accepted_task_id: Option<String>,
@@ -301,6 +303,20 @@ pub async fn run(cx: &DataContext, operation: &str, parameters: &Value) -> Resul
             db.execute(
                 "INSERT INTO app.meeting_stop_summaries(meeting_id,manual_entry,transcript_revision,request_key,template_id,status,due_at) VALUES($1::text::uuid,true,$2,$3::text::uuid,$4,'waiting',clock_timestamp())",
                 &[&meeting, &revision, &key, &template],
+            )
+            .await?;
+            Ok(json!({}))
+        }
+        "summary-insert-capture" => {
+            let key = key()?;
+            let template = p.template_id.as_deref().ok_or_else(|| anyhow::anyhow!("Template required"))?;
+            let grant = p.grant_id.as_deref().ok_or_else(|| anyhow::anyhow!("Grant required"))?;
+            let due = p.due_at.as_deref().ok_or_else(|| anyhow::anyhow!("Due time required"))?;
+            uuid(grant)?;
+            let status = if p.code.is_some() { "skipped" } else { "waiting" };
+            db.execute(
+                "INSERT INTO app.meeting_stop_summaries(meeting_id,grant_id,request_key,template_id,status,code,due_at) VALUES($1::text::uuid,$2::text::uuid,$3::text::uuid,$4,$5,$6,$7::text::timestamptz)",
+                &[&meeting, &grant, &key, &template, &status, &p.code, &due],
             )
             .await?;
             Ok(json!({}))

@@ -204,3 +204,38 @@ pub fn schedule_manual<H: Host + ?Sized>(host: &H, meeting: &str, revision: i64,
     let at = host.call("context", "read", "call", json!({}))?["now"].as_str().unwrap_or_default().to_owned();
     enqueue(host, meeting, &key, &at)
 }
+
+/// Called whenever a capture stops or its status changes after a stop. The first call after a
+/// stop records the intent and queues the job at the finalization deadline. A later call, once
+/// the Mac confirms it finished, queues one early run. Both keys make a repeat a no-op.
+pub fn schedule_capture<H: Host + ?Sized>(
+    host: &H,
+    meeting: &str,
+    grant: &str,
+    deadline: &str,
+    finalized: bool,
+    stopped_now: bool,
+) -> Result<()> {
+    let mut existing = row(host, meeting)?;
+    if existing.is_none() && stopped_now {
+        let prefs = preferences::current(host)?;
+        let key = host.call("context", "uuid", "new", json!({}))?["id"].as_str().unwrap_or_default().to_owned();
+        let on = prefs["summarizeOnStop"] == json!(true);
+        let mut params = json!({"requestKey": key, "templateId": prefs["summaryTemplateId"], "grantId": grant, "dueAt": deadline});
+        if !on {
+            params["code"] = json!("setting-off");
+        }
+        outputs::call(host, "summary-insert-capture", meeting, params)?;
+        if on {
+            enqueue(host, meeting, &format!("{key}:stop"), deadline)?;
+        }
+        existing = row(host, meeting)?;
+    }
+    if let Some(row) = existing.filter(|r| r["status"] == "waiting" && r["grant_id"] == json!(grant) && finalized && r["early_enqueued"] != json!(true)) {
+        let key = row["request_key"].as_str().unwrap_or_default();
+        let at = now(host)?.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        enqueue(host, meeting, &format!("{key}:finalized"), &at)?;
+        outputs::call(host, "summary-set", meeting, json!({"earlyEnqueued": true}))?;
+    }
+    Ok(())
+}

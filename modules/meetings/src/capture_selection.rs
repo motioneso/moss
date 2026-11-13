@@ -80,7 +80,7 @@ pub fn validate(selection: &Value, inventory: &Value) -> Result<(), Failure> {
     Ok(())
 }
 
-fn label(inventory: &Value, selection: &Value) -> (Value, Value) {
+pub(crate) fn label(inventory: &Value, selection: &Value) -> (Value, Value) {
     let mic = selection["microphone"].as_object().and_then(|mic| {
         list(inventory, "microphones")
             .iter()
