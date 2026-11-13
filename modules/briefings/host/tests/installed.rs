@@ -53,7 +53,7 @@ fn installed_briefings_keep_definitions_and_runs_private_and_schedule_in_the_own
     let reg = tempfile::tempdir().unwrap();
     let bytes = moss_briefings_host::package::pack(&root(), &component()).unwrap();
     let (key, publisher, artifact) = registry::publish(reg.path(), &bytes);
-    let app = Application::open(
+    let app = Application::open_extended(
         dir.path(),
         f.db.clone(),
         f.access(f.a),
@@ -75,7 +75,7 @@ fn installed_briefings_keep_definitions_and_runs_private_and_schedule_in_the_own
     app.installer.install(&f.access(f.a), &source, &artifact, true).unwrap();
     let call = |actor, method: &str, path: &str, body: Value| -> Value {
         serde_json::from_str(
-            &app.dispatch(f.access(actor), method, &format!("/api/m/briefings{path}"), &body.to_string())
+            &app.dispatch_extended(f.access(actor), method, &format!("/api/m/briefings{path}"), &body.to_string())
                 .unwrap(),
         )
         .unwrap()
