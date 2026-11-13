@@ -1,6 +1,7 @@
 //! One briefing run. A scheduled fire carries no run id, so the id is minted here, when the job
 //! fires. The whole run commits or rolls back together, so an overrun leaves no row and no
 //! notification. Private text is never logged and never leaves in an error.
+use crate::auto_plan;
 use crate::compose::{Composed, Composer, Subject};
 use crate::definitions;
 use crate::queue;
@@ -63,14 +64,20 @@ pub struct Outcome {
     pub kind: &'static str,
     pub run_id: Option<String>,
     pub notified: bool,
+    /// Ids and a batch key of the day plan reservation, when the run made or resumed one.
+    pub day_plan_auto: Option<Value>,
 }
 
 impl Outcome {
     fn of(kind: &'static str, run_id: Option<String>) -> Self {
-        Self { kind, run_id, notified: false }
+        Self { kind, run_id, notified: false, day_plan_auto: None }
     }
     pub fn to_json(&self) -> String {
-        json!({"status":self.kind,"runId":self.run_id,"notified":self.notified}).to_string()
+        let mut out = json!({"status":self.kind,"runId":self.run_id,"notified":self.notified});
+        if let Some(plan) = &self.day_plan_auto {
+            out["dayPlanAuto"] = plan.clone();
+        }
+        out.to_string()
     }
 }
 
@@ -187,7 +194,10 @@ pub fn run<H: Host + ?Sized, C: Composer>(host: &H, composer: &C, fire: &Fire) -
         }
         // The same local day never gets a second scheduled run, so no second notification.
         if let Some(existing) = todays_scheduled_run(host, &fire.definition_id, &now)? {
-            return Ok(Outcome::of("duplicate", Some(existing)));
+            // A repeated fire only picks up the reservation the first fire left unfinished.
+            let mut outcome = Outcome::of("duplicate", Some(existing.clone()));
+            outcome.day_plan_auto = auto_plan::resume(host, &existing);
+            return Ok(outcome);
         }
     }
     // The id is minted when the job fires.
@@ -226,11 +236,20 @@ pub fn run<H: Host + ?Sized, C: Composer>(host: &H, composer: &C, fire: &Fire) -
         selected_tools: &tools,
         deadline: &deadline,
     };
-    let composed = composer.compose(host, &subject)?;
+    let mut composed = composer.compose(host, &subject)?;
+    // A succeeded run hands its calendar signals to Calendar, which places the day plan blocks.
+    let mut day_plan_auto = None;
+    if composed.status == "succeeded" {
+        day_plan_auto = auto_plan::plan(host, &run_id, &fire.definition_id, &composed.source_metadata, &now)?;
+        if let (Some(record), Some(into)) = (&day_plan_auto, composed.source_metadata.as_object_mut()) {
+            into.insert("dayPlanAuto".into(), record.clone());
+        }
+    }
     // An overrun fails here, before anything is stored, so the run rolls back.
     deadline.check(host)?;
     persist(host, &definition, &run_id, kind, &composed, &now)?;
     let mut outcome = Outcome::of("created", Some(run_id.clone()));
+    outcome.day_plan_auto = day_plan_auto;
     if fire.scheduled && composed.status == "succeeded" {
         // Metadata only. The same key never makes a second notification.
         host.call(
