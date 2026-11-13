@@ -36,6 +36,12 @@ fn window(block: &Value) -> Option<(DateTime<Utc>, DateTime<Utc>)> {
         .or_else(|| span(&block["actualPlacement"]["startsAt"], &block["actualPlacement"]["durationMinutes"]))
 }
 
+/// When the block's placed event ends. A proposed move does not change where the event is.
+fn placed_end(block: &Value) -> Option<DateTime<Utc>> {
+    let start = instant(&block["actualPlacement"]["startsAt"])?;
+    Some(start + chrono::Duration::minutes(minutes(&block["actualPlacement"]["durationMinutes"])?))
+}
+
 fn overlaps(start: DateTime<Utc>, end: DateTime<Utc>, event: &Value) -> bool {
     if event["allDay"] == true {
         return false;
@@ -63,7 +69,7 @@ pub fn overnight_changes(plan: &Value, calendar: Option<&[Value]>, tasks: &[Valu
             let reference = text(&block["actualPlacement"]["calendarEventRef"]);
             if let Some(reference) = reference {
                 match events.iter().find(|e| is_ref(e, reference)) {
-                    None if window(block).is_none_or(|(_, end)| end <= now) => {}
+                    None if placed_end(block).is_none_or(|end| end <= now) => {}
                     None => {
                         lines.push(format!("Overnight change: \"{name}\" lost its calendar event; {RECOMMENDATION}."));
                         continue;

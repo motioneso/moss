@@ -174,6 +174,14 @@ fn a_block_that_already_ended_is_not_called_lost_because_calendar_hides_ended_ev
 }
 
 #[test]
+fn a_pending_move_does_not_hide_that_the_placed_event_ended() {
+    let mut moved = context();
+    moved["blocks"][0]["pendingStartsAt"] = json!(at("23:00:00"));
+    moved["blocks"][0]["pendingDurationMinutes"] = json!(60);
+    assert!(overnight_changes(&moved, Some(&[]), &tasks(), late()).is_empty());
+}
+
+#[test]
 fn an_unread_calendar_says_nothing_about_events() {
     assert!(overnight_changes(&context(), None, &tasks(), early()).is_empty());
 }
