@@ -121,6 +121,13 @@ fn enqueue(host: &impl Host, id: &str, run: Option<&str>) -> Result<Value> {
     )?)
 }
 
+/// Queues a run the person asked for. It has its own run id, so the stalled-run check that
+/// protects scheduled sweeps does not mistake it for a second run.
+fn start(host: &impl Host, id: &str) -> Result<Value> {
+    let run = host.call("context", "uuid", "new", json!({}))?;
+    enqueue(host, id, run["id"].as_str())
+}
+
 fn schedule(host: &impl Host, id: &str) {
     let _ = host.call(
         "jobs",
@@ -169,7 +176,7 @@ pub fn connect(host: &impl Host) -> Result<(u16, Value)> {
     kv(host, "set", "connectors.feature-grants", json!({"accountId":id,"value":{"calendar":true,"email":false},"audit":[]}))?;
     collecting(host, id, &binding)?;
     schedule(host, id);
-    enqueue(host, id, None)?;
+    start(host, id)?;
     status(host)
 }
 
@@ -181,7 +188,7 @@ pub fn refresh(host: &impl Host) -> Result<(u16, Value)> {
     };
     let id = found["id"].as_str().unwrap_or("");
     collecting(host, id, &binding)?;
-    enqueue(host, id, None)?;
+    start(host, id)?;
     status(host)
 }
 
