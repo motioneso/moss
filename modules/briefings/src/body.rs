@@ -171,3 +171,24 @@ pub fn parse(body: &Value, create: bool) -> Result<Definition, Failure> {
     }
     Ok(out)
 }
+
+/// The body of a run-now request. No body is allowed. Unknown keys are dropped. The key is
+/// checked by the schema step (length) and then by the handler (not blank after trimming).
+pub fn parse_run_key(body: &Value) -> Result<Option<String>, Failure> {
+    if body.is_null() {
+        return Ok(None);
+    }
+    let object = body.as_object().ok_or_else(|| "body must be object".to_owned())?;
+    let Some(value) = object.get("idempotencyKey") else { return Ok(None) };
+    let text = coerce_text("body/idempotencyKey", value)?;
+    match text.encode_utf16().count() {
+        0 => return Err("body/idempotencyKey must NOT have fewer than 1 characters".into()),
+        201.. => return Err("body/idempotencyKey must NOT have more than 200 characters".into()),
+        _ => {}
+    }
+    let trimmed = js_trim(&text);
+    if trimmed.is_empty() {
+        return Err("idempotencyKey must not be empty".into());
+    }
+    Ok(Some(trimmed.to_owned()))
+}

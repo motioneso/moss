@@ -1,12 +1,16 @@
-//! Briefings package: definitions and runs routes, schedule alignment and account export.
+//! Briefings package: definitions and runs routes, the run job, schedule alignment and account export.
 //! All effects cross the guest-safe SDK Host interface.
 pub mod body;
+pub mod compose;
 pub mod definitions;
 pub mod jobs;
 pub mod lifecycle;
+pub mod queue;
+pub mod run_job;
 pub mod runs;
 pub mod schedule;
 pub mod sources;
+pub mod status;
 pub mod text;
 pub mod util;
 
@@ -24,6 +28,7 @@ pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
         ("GET", "/definitions") => definitions::list(host),
         ("POST", "/definitions") => definitions::create(host, &request),
         ("PATCH", "/definitions/:id") => definitions::update(host, &request),
+        ("POST", "/definitions/:id/run") => runs::start(host, &request),
         ("GET", "/definitions/:id/runs") => runs::list(host, &request),
         ("GET", "/definitions/:id/runs/:run_id") => runs::get(host, &request),
         _ => return Response::new(404, json!({"message":"Route not found"})),
@@ -43,7 +48,7 @@ pub fn handle<H: Host + ?Sized>(
             let request: RouteRequest = serde_json::from_str(payload)?;
             Ok(serde_json::to_string(&route(host, request))?)
         }
-        "job" => jobs::handle(payload),
+        "job" => jobs::handle(host, payload),
         "api" => api(host, payload),
         _ => Err(moss_module_sdk::Error::new("Unsupported Briefings invocation")),
     }
