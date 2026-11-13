@@ -442,15 +442,7 @@
     },
     {
       "id": "connectors.monitors",
-      "description": "Each connected Google account gets an email check every 15 minutes and a calendar check every 30 minutes, scheduled when the account is connected and cancelled when it is revoked. Each check writes a health row of times and counts only. The checks do not yet create tasks from mail or apply suppression.",
-      "errors": [
-        {
-          "code": "connectors-unavailable",
-          "class": "transient",
-          "description": "Connection storage is unavailable",
-          "remediationRef": "connectors-check-package"
-        }
-      ]
+      "description": "Each connected Google account gets an email check every 15 minutes and a calendar check every 30 minutes, scheduled when the account is connected and cancelled when it is revoked. Each check writes a health row of times and counts only. The checks do not yet create tasks from mail or apply suppression."
     }
   ],
   "tools": {
