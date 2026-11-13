@@ -737,3 +737,22 @@ mod provider {
         }
     }
 }
+
+#[test]
+fn source_switches_read_the_saved_choices_and_default_to_on() {
+    struct Saved(Value);
+    impl Host for Saved {
+        fn call(&self, port: &str, operation: &str, resource: &str, _: Value) -> Result<Value> {
+            assert_eq!((port, operation, resource), ("kv", "get", "calendar.source-behaviors"));
+            Ok(self.0.clone())
+        }
+    }
+    let ask = |saved: Value, parameters: Value| {
+        handle(&Saved(saved), "api", &json!({"name":"getSourceSwitches","parameters":parameters}).to_string())
+    };
+    let read = |saved: Value| -> Value { serde_json::from_str(&ask(saved, json!({})).unwrap()).unwrap() };
+    assert_eq!(read(json!({})), json!({"briefings":true,"planning":true}));
+    assert_eq!(read(json!({"briefings":false})), json!({"briefings":false,"planning":true}));
+    assert_eq!(read(json!({"planning":false})), json!({"briefings":true,"planning":false}));
+    assert!(ask(json!({}), json!({"x":1})).is_err());
+}
