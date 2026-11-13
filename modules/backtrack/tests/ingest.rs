@@ -23,6 +23,10 @@ fn a_good_upload_is_stored_for_the_linked_mac_and_counted() {
     assert_eq!(inserted["deviceId"], DEVICE);
     assert_eq!(inserted["segments"][0]["bodyHash"].as_str().unwrap().len(), 64);
     assert!(host.ops().contains(&"jobs.schedule".to_string()));
+    // The per-person lock is taken before the pause check, the overlap check and the insert.
+    let ops = host.ops();
+    let at = |name: &str| ops.iter().position(|o| o == name).unwrap_or(usize::MAX);
+    assert!(at("kv.lock") < at("kv.paused") && at("kv.paused") < at("kv.overlaps") && at("kv.overlaps") < at("kv.insert"), "{ops:?}");
 }
 
 #[test]
