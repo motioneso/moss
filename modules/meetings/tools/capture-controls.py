@@ -24,7 +24,7 @@ CONTROLS = [
     ("replayed clip transcribed again", "capture_audio_service.rs", "if result[\"retryable\"] != json!(true) || !receipts::retry(host, &grant_id, &prior, at)? {", "if false {", AUDIO, "the_same_clip_again_answers_the_same_and_is_not_transcribed_twice"),
     ("silent clip sent to the model", "capture_audio_service.rs", "    if near_silent(&clip.pcm) {\n        return Ok(vec![]);", "    if false {\n        return Ok(vec![]);", AUDIO, "a_silent_clip_is_not_sent_to_the_model"),
     ("future clip admitted", "capture_audio.rs", "clip.end_ms > now_ms ||", "false ||", AUDIO, "a_clip_ending_in_the_future_conflicts"),
-    ("unreported recording admitted", "capture_audio.rs", "|| observed[\"phase\"] != \"recording\"", "|| false", AUDIO, "a_mac_that_reports_paused_is_interrupted"),
+    ("unreported recording admitted", "capture_audio.rs", "|| observed[\"phase\"] != \"recording\"", "|| false", AUDIO, "a_mac_that_reports_recovering_is_interrupted"),
     ("lost permission keeps the grant", "capture_native.rs", "pub fn settle<H: Host + ?Sized>(host: &H, grant: &Value) -> Result<(), Stop> {", "pub fn settle<H: Host + ?Sized>(host: &H, grant: &Value) -> Result<(), Stop> {\n    if true {\n        return Ok(());\n    }", AUDIO, "a_lost_recording_permission_revokes_the_grant"),
     ("row level security removed", "../tests/common/mod.rs", ".filter(|r| r[\"owner_user_id\"] == actor && matches(r, &query.filter, actor))", ".filter(|r| matches(r, &query.filter, actor))", AUDIO, "another_person_cannot_send_audio_into_the_meeting"),
 ]

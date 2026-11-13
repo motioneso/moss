@@ -195,9 +195,9 @@ fn a_clip_from_an_unknown_source_is_invalid() {
 }
 
 #[test]
-fn a_mac_that_reports_paused_is_interrupted() {
+fn a_mac_that_reports_recovering_is_interrupted() {
     let (f, meeting, grant) = recording();
-    assert_eq!(status(&f, &meeting, &grant, "paused").0, 200);
+    assert_eq!(status(&f, &meeting, &grant, "recovering").0, 200);
     let g = generation(&f);
     let (s, body) = send(&f, clip(&meeting, &grant, g, 0, 0, 1000));
     assert_eq!((s, code(&body)), (409, "meeting_capture_interrupted"), "{body}");
