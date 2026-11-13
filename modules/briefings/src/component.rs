@@ -22,7 +22,7 @@ impl Host for ComponentHost {
             "jobs" => moss::module::jobs::call(&request),
             _ => return Err(Error::new("Unsupported Briefings host port")),
         }
-        .map_err(|_| Error::new("Briefings host call failed"))?;
+        .map_err(|e| Error::new(format!("host call failed {port} {operation} {resource}: {e:?}")))?;
         Ok(serde_json::from_str(&response)?)
     }
 }
