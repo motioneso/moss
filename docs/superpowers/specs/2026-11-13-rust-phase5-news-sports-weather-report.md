@@ -302,3 +302,51 @@ The golden file is regenerated from the old code with `modules/news/reader/tools
 ### Review round 1
 
 Codex found no blocker and two major problems, both fixed: a feed tag with tens of thousands of attributes took 17 seconds (now linear, with a test), and look-alike host names (fullwidth letters) bypassed the Reddit-internal link rule. Four minor ones were fixed too: overflowing ports, malformed IPv6 hosts, mixed-case hex codes in Reddit titles, and gaps in the source scan.
+
+## Part 4: adding a news source (JS-279)
+
+Previewing and saving a source, finding a site's feed, the content-policy check, the short-lived preview store and subreddit sources now run inside the News package. Built on part 1 (public-web fetch), part 2 (reader) and part 3 (package skeleton). No screens.
+
+### What was built
+
+- Two routes: preview a typed address or subreddit, and save a previewed source by its confirmation id.
+- Feed finder: reads the page, follows its feed link, falls back to scraping the page, and accepts a feed address directly.
+- Policy check: an unseen publisher is judged by the person's configured model, with the page text sent as marked untrusted data. A verdict is remembered for 24 hours per person and publisher. A followed redirect to a publisher with no remembered verdict never calls the model.
+- Preview store: kept in the person's own key-value file, 10 minutes, at most 10 per person. Another person's confirmation id finds nothing.
+- Save rules follow the old routes: expired or taken preview answers 409, duplicate source 409, over the limit 400, replacing a source resets its failure count.
+- The availability answer now reports adding by address as on. Name search and free-form topics stay off.
+- App map: the manifest lists the two routes, the new capabilities, the new error and the updated "added sources" feature text.
+
+### Proof
+
+| Claim                                                     | Evidence                                                                                                                                                                                                                                                |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Each fetch failure reaches the preview                    | 18 package tests, including all 8 failure reasons                                                                                                                                                                                                       |
+| Sites with and without a feed link                        | Fixture sites: feed link, scrape fallback, direct feed                                                                                                                                                                                                  |
+| Same answers as the old routes                            | The installed test replays refusals, a preview, a save, a repeat save and the later reads against the old handlers and compares step by step                                                                                                            |
+| A second person cannot see or use the first person's data | Real Postgres test. Person B and an admin cannot save, see or reuse A's preview, source or verdict. The check was seen failing with row security removed (RED) and passing with it restored (GREEN) for the sources and verdicts tables                 |
+| Typed text stays out of logs, jobs and activity           | A planted marker is absent from 53 scanned tables after adding a source, and the package only uses the database, key-value, fetch, model and context ports                                                                                              |
+| Native and WebAssembly                                    | The gate builds the component and runs package tests in both                                                                                                                                                                                            |
+| Real server, real fetch                                   | The live test starts the real Rust server over HTTPS, previews and saves the real BBC news feed through the server's own public-web fetch, and confirms a second person cannot save the preview or see the source. Nothing was intercepted or rewritten |
+
+### How to run
+
+```
+scripts/run-gate.sh start --gate test:rust-news
+```
+
+```
+scripts/run-gate.sh start --gate test:rust-news-live
+```
+
+### Not proven
+
+- The live test server has no text model. The live run shows the honest "unavailable" answer first, then plants the person's own remembered verdict for the BBC domain so the real fetch, preview and save can finish. A real model verdict on a real site was not exercised.
+- The host cannot say whether a model is set up, so the model fingerprint is fixed and the availability flag is always on. A missing model shows up when a preview is tried.
+- Name search (typing a publisher name instead of an address) needs web search and is not built.
+- The old "no JSON model" prerequisite is not built.
+- Two previews started at the same moment can lose one write, because the preview file is read and written without a lock.
+- The publisher connection offer (part 6) and the refresh after saving (part 5b) are not built.
+- The page parser differs from the old one on odd markup. Only the fixture sites and one real feed were compared.
+- The preview label for the BBC feed shows the domain, not the feed's own title. Not checked against the old label for a real site.
+- Hermetic database tests stub the public web; only the live run uses the real fetch.
