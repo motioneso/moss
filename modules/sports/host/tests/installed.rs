@@ -156,6 +156,34 @@ impl World {
         assert!(answer.get("error").is_none(), "{answer}");
         answer["ok"].clone()
     }
+    /// A saved source with one target and one coverage row, put in by SQL because a real save
+    /// would reach the network.
+    fn plant_source(&self, who: uuid::Uuid, domain: &str, label: &str) -> uuid::Uuid {
+        self.f.rt.block_on(async {
+            let id: uuid::Uuid = self
+                .f
+                .root
+                .query_one(
+                    "INSERT INTO app.sports_custom_sources(owner_user_id,label,canonical_domain,homepage_url,feed_url,retrieval_method,\
+                     validation_fingerprint,validated_at,recipe_status,confirmed_fetch_hosts,authorization_confirmed_at) \
+                     VALUES($1,$2,$3,'https://'||$3||'/','https://'||$3||'/feed.xml','feed','f',now(),'feed',ARRAY[$3],now()) RETURNING id",
+                    &[&who, &label, &domain],
+                )
+                .await
+                .unwrap()
+                .get(0);
+            self.f
+                .root
+                .execute(
+                    "INSERT INTO app.sports_source_assignments(owner_user_id,source_id,sport_key,target_url,preview_status,health_state) \
+                     VALUES($1,$2,'soccer','https://'||$3||'/feed.xml','verified','healthy')",
+                    &[&who, &id, &domain],
+                )
+                .await
+                .unwrap();
+            id
+        })
+    }
     fn follow_rows(&self, who: uuid::Uuid) -> i64 {
         self.f.rt.block_on(self.f.root.query_one("SELECT count(*) FROM app.sports_follows WHERE owner_user_id=$1", &[&who])).unwrap().get(0)
     }
@@ -369,4 +397,121 @@ fn compare(steps: &[Value], old: &[Value], new: &[Value]) {
         replay::mask(&mut n);
         assert_eq!(o, n, "step {i} {} {} differs\nold: {o}\nnew: {n}", step["method"], step["url"]);
     }
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn another_person_cannot_see_change_or_remove_an_added_source_and_the_check_fails_without_row_security() {
+    let w = World::new();
+    let (a, b, admin) = (w.f.a, w.f.b, w.f.admin);
+    let id = w.plant_source(a, "news.example.com", "Example Daily").to_string();
+    let put = w.call(a, "PUT", "/sources/espn/coverage", json!({"assignments":[{"kind":"sport","sportKey":"soccer"}]}));
+    assert_eq!(put["status"], 200, "{put}");
+    let custom = |who| -> usize {
+        let out = w.call(who, "GET", "/sources", Value::Null);
+        assert_eq!(out["status"], 200, "{out}");
+        out["body"]["sources"].as_array().unwrap().iter().filter(|s| s["kind"] == "custom").count()
+    };
+    assert_eq!((custom(a), custom(b), custom(admin)), (1, 0, 0));
+    let theirs = w.call(b, "GET", "/sources", Value::Null);
+    assert_eq!(theirs["body"]["sources"][0]["usesDefaultCoverage"], true, "B sees the default coverage, not A's choice");
+    assert_eq!(w.call(b, "DELETE", &format!("/sources/{id}"), Value::Null)["body"], json!({"deleted":false}));
+    assert_eq!(w.call(b, "POST", &format!("/sources/{id}/assignments/preview"), json!({"assignments":[]}))["status"], 404);
+    let icon = w.call(b, "GET", &format!("/sources/{id}/icon"), Value::Null);
+    assert_eq!((icon["status"].as_u64(), icon["body"]["error"].as_str()), (Some(404), Some("Sports source not found")));
+    assert_eq!(custom(a), 1, "A's source survived B's delete");
+    let tables = [
+        "app.sports_custom_sources",
+        "app.sports_source_assignments",
+        "app.sports_espn_source_assignments",
+        "app.sports_headline_prefs",
+    ];
+    let count = |who, table: &str| -> i64 { rows_as(&w.f, who, &format!("SELECT count(*) FROM {table}"), &[])[0].get(0) };
+    for table in tables {
+        assert_eq!((count(a, table), count(b, table), count(admin, table)), (1, 0, 0), "{table}");
+    }
+    println!("GREEN: B and an admin see none of A's sources, targets or coverage and cannot delete or change them");
+
+    // With row security removed on each table, B reads A's row. Each table is restored after.
+    for table in tables {
+        w.f.rt.block_on(w.f.root.batch_execute(&format!("ALTER TABLE {table} DISABLE ROW LEVEL SECURITY"))).unwrap();
+        let open = count(b, table);
+        w.f.rt.block_on(w.f.root.batch_execute(&format!("ALTER TABLE {table} ENABLE ROW LEVEL SECURITY; ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))).unwrap();
+        assert_eq!(open, 1, "RED expected: B sees A's row in {table} with row security removed, got {open}");
+        assert_eq!(count(b, table), 0, "{table} restored");
+    }
+    println!("RED: with row security removed B reads A's row in each of the four tables, and it is restored after");
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn typed_source_text_reaches_no_other_table_and_the_export_holds_only_the_owner_sources() {
+    let w = World::new();
+    let (a, b) = (w.f.a, w.f.b);
+    let host = format!("{}.example.com", MARK.to_lowercase());
+    let body_marked = format!("{MARK}-body");
+    // None of these saves anything: the address cannot be reached, or the text is refused.
+    for body in [
+        json!({"url":host}),
+        json!({"url":format!("r/{MARK}")}),
+        json!({"url":MARK,"extra":body_marked}),
+        json!({"url":"news.example.com","assignments":[{"target":{"kind":"sport","sportKey":MARK}}]}),
+    ] {
+        let out = w.call(a, "POST", "/sources/preview", body);
+        assert!(out["status"].as_u64().unwrap() < 500, "{out}");
+        assert_ne!(out["body"]["status"], "ok", "{out}");
+    }
+    let confirm = json!({"confirmationId":MARK,"authorizationAcknowledgement":MARK,"canonicalDomain":MARK,"confirmedFetchHosts":[MARK],"targets":[]});
+    assert!(w.call(a, "POST", "/sources", confirm.clone())["status"].as_u64().unwrap() < 500);
+    let planted = w.plant_source(a, "news.example.com", "Example Daily").to_string();
+    w.call(b, "PATCH", &format!("/sources/{planted}/assignments"), confirm);
+    w.call(a, "PUT", "/sources/espn/coverage", json!({"assignments":[{"kind":"sport","sportKey":MARK}]}));
+
+    let tables: Vec<String> = w.f.rt.block_on(async {
+        w.f.root
+            .query(
+                "SELECT table_schema||'.'||table_name FROM information_schema.tables WHERE table_schema IN ('moss_queue','moss_modules') \
+                 OR table_name IN ('notifications','moss_activity_detail','moss_error_log','moss_action_audit_log','moss_model_activity_log') \
+                 OR table_name LIKE 'sports\\_%'",
+                &[],
+            )
+            .await
+            .unwrap()
+            .iter()
+            .map(|r| r.get(0))
+            .collect()
+    });
+    assert!(tables.iter().any(|t| t.starts_with("moss_queue.")) && tables.iter().any(|t| t == "app.sports_custom_sources"), "{tables:?}");
+    for table in &tables {
+        let hits: i64 = w
+            .f
+            .rt
+            .block_on(w.f.root.query_one(&format!("SELECT count(*) FROM {table} t WHERE lower(to_jsonb(t)::text) LIKE '%'||lower($1)||'%'"), &[&MARK]))
+            .unwrap()
+            .get(0);
+        assert_eq!(hits, 0, "{table} holds typed text");
+    }
+    println!("PASS privacy: scanned {} tables, the planted source text is in none", tables.len());
+
+    let export = w.export(a);
+    assert_eq!(export["sources"].as_array().unwrap().len(), 1, "{export}");
+    assert!(!w.export(b).to_string().contains("example.com"), "B's export holds none of A's sources");
+    println!("PASS export: A's export holds A's source only");
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn the_installed_source_routes_answer_like_the_old_routes_step_for_step() {
+    let w = World::new();
+    let steps = replay::steps_sources();
+    let old = replay::old_routes(w.f.b, &steps, json!({}));
+    let new: Vec<Value> = steps
+        .iter()
+        .map(|s| {
+            let url = s["url"].as_str().unwrap().replace("/api/sports", "");
+            w.call(w.f.a, s["method"].as_str().unwrap(), &url, s.get("body").cloned().unwrap_or(Value::Null))
+        })
+        .collect();
+    compare(&steps, &old, &new);
+    println!("PASS parity: {} source steps matched the old routes", steps.len());
 }

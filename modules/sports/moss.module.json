@@ -45,12 +45,7 @@
     {
       "port": "fetch",
       "operations": ["get"],
-      "resources": ["content.core.api.espn.com", "site.api.espn.com"]
-    },
-    {
-      "port": "fetch",
-      "operations": ["get"],
-      "resources": ["public-web"]
+      "resources": ["content.core.api.espn.com", "site.api.espn.com", "public-web"]
     }
   ],
   "installWideKv": [

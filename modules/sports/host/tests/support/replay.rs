@@ -103,3 +103,54 @@ pub fn steps_with_ids() -> Vec<Value> {
         get(follows),
     ]
 }
+
+/// Source routes that need no network and no saved source. Answers that depend on a follow use
+/// ids that cannot exist, so both sides refuse them the same way.
+pub fn steps_sources() -> Vec<Value> {
+    let sources = "/api/sports/sources";
+    let missing = "99999999-9999-4999-8999-999999999999";
+    let sport = |key: &str| json!({"kind":"sport","sportKey":key});
+    let follow = |id: &str| json!({"kind":"follow","followId":id});
+    let confirm = |id: &str| {
+        json!({"confirmationId":id,"authorizationAcknowledgement":"I confirm I am authorized to fetch this publisher's public, unauthenticated sports news.",
+            "canonicalDomain":"news.example.com","confirmedFetchHosts":["news.example.com"],"targets":[]})
+    };
+    let coverage = format!("{sources}/espn/coverage");
+    vec![
+        get(sources),
+        send("PUT", &coverage, json!({})),
+        send("PUT", &coverage, json!({"assignments":"x"})),
+        send("PUT", &coverage, json!({"assignments":[],"extra":1})),
+        send("PUT", &coverage, json!({"assignments":[sport("golf")]})),
+        send("PUT", &coverage, json!({"assignments":[sport("soccer"),sport("soccer")]})),
+        send("PUT", &coverage, json!({"assignments":[follow(missing)]})),
+        send("PUT", &coverage, json!({"assignments":[{"kind":"follow","followId":"nope"}]})),
+        send("PUT", &coverage, json!({"assignments":[sport("hockey"),sport("soccer")]})),
+        get(sources),
+        send("PUT", &coverage, json!({"assignments":[sport("baseball")]})),
+        get(sources),
+        send("PUT", &coverage, json!({"assignments":[]})),
+        get(sources),
+        send("POST", &format!("{sources}/preview"), json!({})),
+        send("POST", &format!("{sources}/preview"), json!({"url":""})),
+        send("POST", &format!("{sources}/preview"), json!({"url":"x","extra":1})),
+        send("POST", &format!("{sources}/preview"), json!({"url":"r/a"})),
+        send("POST", &format!("{sources}/preview"), json!({"url":"http://news.example.com"})),
+        send("POST", &format!("{sources}/preview"), json!({"url":"not a site"})),
+        send("POST", &format!("{sources}/preview"), json!({"url":"news.example.com","assignments":[{"target":follow(missing)}]})),
+        send("POST", &format!("{sources}/preview"), json!({"url":"news.example.com","assignments":[{"target":{"kind":"sport","sportKey":"golf"}}]})),
+        send("POST", &format!("{sources}/preview"), json!({"url":"news.example.com","assignments":[{"target":sport("soccer")},{"target":sport("soccer")}]})),
+        send("POST", sources, json!({})),
+        send("POST", sources, json!({"confirmationId":missing})),
+        send("POST", sources, confirm(missing)),
+        send("DELETE", &format!("{sources}/not-a-uuid"), Value::Null),
+        send("DELETE", &format!("{sources}/{missing}"), Value::Null),
+        send("POST", &format!("{sources}/not-a-uuid/assignments/preview"), json!({"assignments":[]})),
+        send("POST", &format!("{sources}/{missing}/assignments/preview"), json!({"assignments":[]})),
+        send("POST", &format!("{sources}/{missing}/assignments/preview"), json!({})),
+        send("PATCH", &format!("{sources}/{missing}/assignments"), confirm(missing)),
+        send("PATCH", &format!("{sources}/not-a-uuid/assignments"), confirm(missing)),
+        get(&format!("{sources}/not-a-uuid/icon")),
+        get(&format!("{sources}/{missing}/icon")),
+    ]
+}
