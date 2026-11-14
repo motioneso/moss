@@ -359,7 +359,8 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
     assert_eq!((status, json_of(&text)["code"].clone()), (409, json!("scratchpad_notes_folder_missing")), "{text}");
     assert_eq!(call(Method::PATCH, "/settings", Some(&cookie), Some(json!({"shortcut": "ctrl+k"}))).0, 400);
     assert_eq!(call(Method::PUT, "/note", Some(&cookie), Some(json!({"body": 3, "revision": 0}))).0, 400);
-    assert_eq!(call(Method::DELETE, "/note", Some(&cookie), None).0, 404);
+    // The server refuses a route the manifest does not declare before the module runs.
+    assert_eq!(call(Method::DELETE, "/note", Some(&cookie), None).0, 400);
     // A second device on the network reaches the same server and sees only its own account.
     if let (Some(remote), Ok(device)) = (&remote, std::env::var("MOSS_SCRATCHPAD_REMOTE_SSH")) {
         let ask = |cookie: &str| {
