@@ -367,6 +367,41 @@ fn installed_weather_package_serves_routes_from_the_real_server() {
     assert_eq!(json_of(&call(Method::GET, "/location", Some(&cookie), None).1)["location"]["label"], first["label"]);
     let text = log();
     assert!(!text.contains(MARK) && !text.contains("12.345678"), "private place reached the server log");
+    // The planted text is in no table other than the saved-setting row: not jobs, not activity,
+    // not the shared forecast cache. A planted leak in another table must make the scan fail.
+    let scan = || {
+        runtime.block_on(async {
+            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+            tokio::spawn(async move {
+                let _ = connection.await;
+            });
+            let tables = db.query("SELECT table_schema||'.'||table_name FROM information_schema.tables WHERE table_type='BASE TABLE' AND table_schema IN ('app','moss_queue','moss_modules') AND table_name<>'preferences'", &[]).await.unwrap();
+            for table in tables {
+                let name: String = table.get(0);
+                let count: i64 = db.query_one(&format!("SELECT count(*) FROM {name} t WHERE t::text LIKE '%'||$1||'%' OR t::text LIKE '%12.345678%'"), &[&MARK]).await.unwrap().get(0);
+                assert_eq!(count, 0, "the planted place reached {name}");
+            }
+        })
+    };
+    runtime.block_on(async {
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        db.execute("UPDATE app.users SET name=$1 WHERE email='weather-other@example.test'", &[&MARK]).await.unwrap();
+    });
+    let leak = std::panic::catch_unwind(std::panic::AssertUnwindSafe(&scan));
+    runtime.block_on(async {
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        db.execute("UPDATE app.users SET name='Weather other' WHERE email='weather-other@example.test'", &[]).await.unwrap();
+    });
+    assert!(leak.is_err(), "the scan must catch a planted leak");
+    println!("privacy scan FAILED with a leak planted");
+    scan();
+    println!("privacy scan PASSED with no leak");
     // The owner clears the place.
     assert_eq!(json_of(&call(Method::PUT, "/location", Some(&cookie), Some(Value::Null)).1), json!({"location":null}));
     println!("weather live: place, unit and real forecasts for two people worked over HTTPS");
