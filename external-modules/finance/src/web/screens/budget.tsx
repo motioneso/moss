@@ -19,7 +19,6 @@ import {
   RowIndex,
   RowIndexItem,
   SectionHead,
-  StatTile,
   useEffect,
   useRef,
   useState,
@@ -27,7 +26,20 @@ import {
   type ReactNodeLike
 } from "@moss/module-web-sdk";
 import { FLEX_POOL } from "../../domain/flex";
+import { AssignReadyDialog } from "../assign-ready-dialog";
+import { AttentionList } from "../attention-list";
+import {
+  billsDue,
+  billsWindow,
+  spendingLines,
+  stripFigures,
+  type PredictedTx
+} from "../attention-model";
 import { BudgetSetup } from "../budget-setup";
+import { MonthStrip } from "../month-strip";
+import { TargetFundingDialog } from "../target-funding-dialog";
+import type { BillsView } from "./upcoming";
+import type { Tx } from "../transaction-rows";
 import type { BudgetAccount, BudgetStatusResult } from "../budget-status";
 import {
   buildGroups,
@@ -53,6 +65,19 @@ import { useReadCooldown } from "../read-cooldown";
 import { navigate } from "../router";
 import { announce, outcomeGate } from "../states";
 import { invalidateQueries, useToolQuery } from "../store";
+
+interface TxList extends Record<string, unknown> {
+  transactions?: Tx[];
+  categories?: { id: string; name: string }[];
+  needsLookCount?: number;
+}
+
+/** Today in the browser's calendar, as YYYY-MM-DD. */
+function localToday(): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
 
 type Figures = Record<string, readonly [assigned: number, spent: number, available: number]>;
 
@@ -163,23 +188,6 @@ function showOverspent(): void {
   target.focus({ preventScroll: true });
 }
 
-function NeedsYou(props: { needsLook: number; overspent: number }): ReactNodeLike {
-  const total = props.needsLook + props.overspent;
-  if (total === 0) return null;
-  return (
-    <RailBlock eyebrow="Needs you" title={total === 1 ? "1 thing" : `${total} things`}>
-      <div className="fnm-stat-pair">
-        <StatTile
-          label="Needs a look"
-          value={String(props.needsLook)}
-          onClick={() => navigate("/transactions")}
-        />
-        <StatTile label="Overspent" value={String(props.overspent)} warn onClick={showOverspent} />
-      </div>
-    </RailBlock>
-  );
-}
-
 function CollapsedBalances(props: { accounts: BudgetAccount[]; currency: string }): ReactNodeLike {
   const [open, setOpen] = useState(false);
   const total = props.accounts.some((account) => account.balanceCents === null)
@@ -228,6 +236,8 @@ function Hero(props: {
   currency: string | null;
   unavailable: boolean;
   setupRequired: boolean;
+  assignDisabled: boolean;
+  onAssign: () => void;
   onMonth: (delta: number) => void;
 }): ReactNodeLike {
   return (
@@ -244,15 +254,31 @@ function Hero(props: {
                 : "$––.––"
               : money(props.readyCents, props.currency!)
         }
+        lede={
+          props.setupRequired ? undefined : (
+            <span className="fnm-desktop-only">Not in a category yet</span>
+          )
+        }
         aside={
           props.setupRequired ? undefined : (
-            <PeriodStepper
-              label={monthLabel(props.month)}
-              previousLabel={monthLabel(shiftMonth(props.month, -1))}
-              nextLabel={monthLabel(shiftMonth(props.month, 1))}
-              onPrevious={() => props.onMonth(-1)}
-              onNext={() => props.onMonth(1)}
-            />
+            <div className="fnm-hero-acts">
+              <Button
+                variant="field"
+                size="sm"
+                disabled={props.assignDisabled}
+                aria-label="Assign the ready money"
+                onClick={props.onAssign}
+              >
+                Assign
+              </Button>
+              <PeriodStepper
+                label={monthLabel(props.month)}
+                previousLabel={monthLabel(shiftMonth(props.month, -1))}
+                nextLabel={monthLabel(shiftMonth(props.month, 1))}
+                onPrevious={() => props.onMonth(-1)}
+                onNext={() => props.onMonth(1)}
+              />
+            </div>
           )
         }
       />
@@ -260,8 +286,10 @@ function Hero(props: {
   );
 }
 
-function BudgetBody(props: { result: BudgetStatusResult } & AssignProps): ReactNodeLike {
-  const { result } = props;
+function BudgetBody(
+  props: { result: BudgetStatusResult; top: ReactNodeLike } & AssignProps
+): ReactNodeLike {
+  const { result, top, ...assign } = props;
   // No bank: Getting started. A bank with no budget rows shows the categories at
   // zero, so the first amounts can be typed here.
   const sendToStart = result.hasBank === false;
@@ -272,61 +300,58 @@ function BudgetBody(props: { result: BudgetStatusResult } & AssignProps): ReactN
 
   const groups = buildGroups(result);
   const accounts = result.accounts ?? [];
-  const overspent = groups.flatMap((group) => group.lines).filter((l) => l.available < 0).length;
-  const needsLook = result.needsLookCount ?? 0;
   return (
-    <div className="fnm-page">
-      <section className="fnm-block" aria-label="Categories" data-fnm-lines>
-        {result.readyUnavailable === "missing_history" ? (
-          <Note variant="practical">
-            A budget account has no recorded balance for this month, so Ready to assign is
-            unavailable.
-          </Note>
-        ) : result.readyUnavailable === "future_month" ? (
-          <Note variant="practical">Ready to assign shows in the current month.</Note>
-        ) : null}
-        {(result.futureReservedCents ?? 0) > 0 ? (
-          <Note variant="practical">
-            {money(result.futureReservedCents!, result.isoCurrency!)} is reserved for future
-            assignments.
-          </Note>
-        ) : null}
-        {result.pendingCount || result.excludedAccountCount ? (
-          <p className="jds-hint">
-            {[
-              result.pendingCount ? `${result.pendingCount} pending not counted yet` : null,
-              result.excludedAccountCount
-                ? `${result.excludedAccountCount} tracking or other-currency accounts left out`
-                : null
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </p>
-        ) : null}
-        <div className="fnm-phone-only">
-          <NeedsYou needsLook={needsLook} overspent={overspent} />
-        </div>
-        {groups.map((group, index) => (
-          <div key={group.name}>
-            <div className="fnm-desktop-only">
-              <GroupTable group={group} head={index === 0} {...props} />
+    <>
+      {top}
+      <div className="fnm-page">
+        <section className="fnm-block" aria-label="Categories" data-fnm-lines>
+          {result.readyUnavailable === "missing_history" ? (
+            <Note variant="practical">
+              A budget account has no recorded balance for this month, so Ready to assign is
+              unavailable.
+            </Note>
+          ) : result.readyUnavailable === "future_month" ? (
+            <Note variant="practical">Ready to assign shows in the current month.</Note>
+          ) : null}
+          {(result.futureReservedCents ?? 0) > 0 ? (
+            <Note variant="practical">
+              {money(result.futureReservedCents!, result.isoCurrency!)} is reserved for future
+              assignments.
+            </Note>
+          ) : null}
+          {result.pendingCount || result.excludedAccountCount ? (
+            <p className="jds-hint">
+              {[
+                result.pendingCount ? `${result.pendingCount} pending not counted yet` : null,
+                result.excludedAccountCount
+                  ? `${result.excludedAccountCount} tracking or other-currency accounts left out`
+                  : null
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          ) : null}
+          {groups.map((group, index) => (
+            <div key={group.name}>
+              <div className="fnm-desktop-only">
+                <GroupTable group={group} head={index === 0} {...assign} />
+              </div>
+              <div className="fnm-phone-only">
+                <GroupRows group={group} head={index === 0} {...assign} />
+              </div>
             </div>
-            <div className="fnm-phone-only">
-              <GroupRows group={group} head={index === 0} {...props} />
-            </div>
+          ))}
+          <div className="fnm-phone-only">
+            <CollapsedBalances accounts={accounts} currency={result.isoCurrency!} />
           </div>
-        ))}
-        <div className="fnm-phone-only">
-          <CollapsedBalances accounts={accounts} currency={result.isoCurrency!} />
-        </div>
-      </section>
-      <aside className="fnm-rail fnm-desktop-only">
-        <NeedsYou needsLook={needsLook} overspent={overspent} />
-        <RailBlock eyebrow="Accounts" title="Balances">
-          <BalanceList accounts={accounts} />
-        </RailBlock>
-      </aside>
-    </div>
+        </section>
+        <aside className="fnm-rail fnm-desktop-only">
+          <RailBlock eyebrow="Accounts" title="Balances">
+            <BalanceList accounts={accounts} />
+          </RailBlock>
+        </aside>
+      </div>
+    </>
   );
 }
 
@@ -357,6 +382,26 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
   const result =
     status.status === "settled" && status.outcome.kind === "ok" ? status.outcome.result : null;
   const checkingFrom = useRef(status);
+  const today = localToday();
+  const billsQuery = useToolQuery<BillsView>("finance.bills.read", billsWindow(month, today));
+  const bills =
+    billsQuery.status === "settled" &&
+    billsQuery.outcome.kind === "ok" &&
+    !billsQuery.outcome.result.setupRequired
+      ? billsQuery.outcome.result
+      : null;
+  const billsFailed = billsQuery.status === "settled" && bills === null;
+  const lookQuery = useToolQuery<TxList>("finance.transactions.query", {
+    month,
+    limit: 200,
+    needsLookOnly: true
+  });
+  const incomeQuery = useToolQuery<TxList>("finance.transactions.query", {
+    month,
+    limit: 200,
+    categoryId: "income"
+  });
+  const [assigning, setAssigning] = useState(false);
   const review =
     result?.fingerprint && result.revision !== undefined
       ? JSON.stringify([month, result.revision, result.fingerprint])
@@ -582,6 +627,98 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
       />
     );
   };
+  const lookResult =
+    lookQuery.status === "settled" && lookQuery.outcome.kind === "ok"
+      ? lookQuery.outcome.result
+      : null;
+  const incomeResult =
+    incomeQuery.status === "settled" && incomeQuery.outcome.kind === "ok"
+      ? incomeQuery.outcome.result
+      : null;
+  const topBlocks = (body: BudgetStatusResult): ReactNodeLike => {
+    const lines = spendingLines(buildGroups(body));
+    const names = new Map((lookResult?.categories ?? []).map((c) => [c.id, c.name]));
+    const predicted: { total: number; rows: PredictedTx[] } | null = lookResult
+      ? {
+          total: body.needsLookCount ?? lookResult.transactions?.length ?? 0,
+          rows: (lookResult.transactions ?? []).map((tx) => ({
+            id: tx.id,
+            name: tx.name,
+            writeRevision: tx.writeRevision,
+            categoryName: tx.categoryId ? (names.get(tx.categoryId) ?? null) : null,
+            amountCents: tx.amountCents
+          }))
+        }
+      : null;
+    const currency = body.isoCurrency ?? "";
+    const deposits = incomeResult
+      ? (incomeResult.transactions ?? []).filter((tx) => tx.amountCents < 0 && !tx.pending).length
+      : null;
+    const incomeCents = Math.abs(body.state?.categories.income?.activityCents ?? 0);
+    const isCurrent = month === body.currentMonth;
+    return (
+      <>
+        {isCurrent ? (
+          <AttentionList
+            tools={props.tools}
+            month={month}
+            currentMonth={body.currentMonth ?? ""}
+            budget={body}
+            lines={lines}
+            bills={bills}
+            predicted={predicted}
+            failed={billsFailed}
+            locked={assignLocked || hasDrafts}
+            onUncertain={() => setUncertain(true)}
+            onRetry={() => invalidateQueries()}
+          />
+        ) : null}
+        <MonthStrip
+          month={month}
+          currency={currency}
+          income={{ cents: incomeCents, deposits }}
+          figures={stripFigures(lines)}
+          bills={bills ? billsDue(bills, month, today) : null}
+          pastMonth={body.currentMonth !== undefined && month < body.currentMonth}
+          onOverspent={showOverspent}
+          onBills={() => navigate("/upcoming")}
+        />
+      </>
+    );
+  };
+  const assignDialog = (body: BudgetStatusResult): ReactNodeLike => {
+    const lines = body.targetFunding ?? [];
+    const ready = body.readyToAssignCents ?? 0;
+    const usable = lines.some((line) => !line.unavailableReason) && !body.targetFundingOverspent;
+    if (body.revision === undefined || !body.fingerprint || !body.isoCurrency) return null;
+    return usable ? (
+      <TargetFundingDialog
+        data={{
+          month,
+          currency: body.isoCurrency,
+          revision: body.revision,
+          fingerprint: body.fingerprint,
+          readyCents: ready,
+          lines
+        }}
+        tools={props.tools}
+        onClose={() => setAssigning(false)}
+        onUncertain={() => setUncertain(true)}
+      />
+    ) : (
+      <AssignReadyDialog
+        month={month}
+        currency={body.isoCurrency}
+        readyCents={ready}
+        revision={body.revision}
+        fingerprint={body.fingerprint}
+        categories={spendingLines(buildGroups(body)).map((l) => ({ id: l.id, name: l.name }))}
+        tools={props.tools}
+        onUncertain={() => setUncertain(true)}
+        onClose={() => setAssigning(false)}
+      />
+    );
+  };
   return (
     <section aria-label="Budget">
       <Hero
@@ -590,6 +727,17 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
         unavailable={Boolean(result?.readyUnavailable)}
         setupRequired={result?.setupRequired === true}
         readyCents={result?.readyToAssignCents ?? null}
+        assignDisabled={
+          !props.tools ||
+          assignLocked ||
+          !result ||
+          result.readyToAssignCents === null ||
+          result.readyToAssignCents === undefined ||
+          result.readyToAssignCents <= 0 ||
+          Boolean(result.readyUnavailable) ||
+          month !== result.currentMonth
+        }
+        onAssign={() => setAssigning(true)}
         onMonth={(delta) => {
           if (busy || checking || uncertain || hasDrafts) {
             setMessage("Save or clear your typed amounts before changing months.");
@@ -667,6 +815,7 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
               <div className="fnm-block">
                 <BudgetBody
                   result={body}
+                  top={topBlocks(body)}
                   drafts={drafts}
                   disabled={assignLocked}
                   savingId={savingId}
@@ -733,6 +882,7 @@ export function BudgetScreen(props: { tools?: ExternalModuleToolsHandleV1 }): Re
                     }}
                   />
                 ) : null}
+                {assigning ? assignDialog(body) : null}
                 {categoryDetail(body)}
               </div>
             ),

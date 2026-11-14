@@ -1,17 +1,17 @@
-import type { TransactionBulkStore } from "./transaction-bulk.js";
+import type { ConfirmedTransaction, TransactionBulkStore } from "./transaction-bulk.js";
 import type { FinanceDb } from "./store-sql.js";
 import { TXN_COLUMNS, rowToTransaction, type TransactionRow } from "./store-transaction-rows.js";
 
 // A change detector, not an authorization token. RLS still owns every selected row.
 const revision = "md5(id || ':' || xmin::text)";
 export function transactionBulkSqlStore(db: FinanceDb): TransactionBulkStore {
-  return {
-    async confirm(rows) {
-      const result = await db.query<{ applied: boolean }>(
+  async function confirmWithUndo(rows: readonly { id: string; writeRevision: string }[]) {
+    {
+      const result = await db.query<{ applied: boolean; undo: ConfirmedTransaction[] }>(
         `WITH requested AS (
           SELECT * FROM jsonb_to_recordset($1::jsonb) AS r(id text, "writeRevision" text)
         ), reviewed AS MATERIALIZED (
-          SELECT t.id,t.account_id,t.date,t.category_id FROM app.finance_transactions t
+          SELECT t.id,t.account_id,t.date,t.category_id,t.categorized_by FROM app.finance_transactions t
           JOIN requested r ON r.id=t.id
           WHERE md5(t.id || ':' || t.xmin::text)=r."writeRevision"
             AND t.review_state='needs_look' AND t.transfer_id IS NULL AND NOT t.pending AND t.splits='[]'::jsonb
@@ -27,10 +27,51 @@ export function transactionBulkSqlStore(db: FinanceDb): TransactionBulkStore {
             AND (SELECT count(*) FROM reviewed WHERE category_id IN (SELECT id FROM categories))=(SELECT count(*) FROM requested)
         ), changed AS (
           UPDATE app.finance_transactions t SET review_state='confirmed',categorized_by='user'
-          FROM reviewed r WHERE t.id=r.id AND EXISTS(SELECT 1 FROM eligible) RETURNING t.id
+          FROM reviewed r WHERE t.id=r.id AND EXISTS(SELECT 1 FROM eligible)
+          RETURNING t.id, md5(t.id || ':' || t.xmin::text) AS rev
         ), logged AS (
           INSERT INTO app.finance_activity(owner_user_id,id,at,actor,kind,params)
           SELECT app.current_actor_user_id(),gen_random_uuid(),now(),'user','transaction.confirm',
+            jsonb_build_object('transactionId',r.id,'accountId',r.account_id,
+              'month',to_char(r.date,'YYYY-MM'),'categoryId',r.category_id)
+          FROM reviewed r JOIN changed c ON c.id=r.id RETURNING id
+        ) SELECT EXISTS(SELECT 1 FROM eligible) AS applied,
+          COALESCE((SELECT jsonb_agg(jsonb_build_object('id',c.id,'writeRevision',c.rev,
+            'categorizedBy',r.categorized_by) ORDER BY c.id)
+            FROM changed c JOIN reviewed r ON r.id=c.id),'[]'::jsonb) AS undo`,
+        [JSON.stringify(rows)]
+      );
+      const row = result.rows[0];
+      return row?.applied === true ? row.undo : null;
+    }
+  }
+  return {
+    async confirm(rows) {
+      return (await confirmWithUndo(rows)) !== null;
+    },
+    confirmWithUndo,
+    async unconfirm(rows) {
+      const result = await db.query<{ applied: boolean }>(
+        `WITH requested AS (
+          SELECT * FROM jsonb_to_recordset($1::jsonb)
+            AS r(id text, "writeRevision" text, "categorizedBy" text)
+        ), reviewed AS MATERIALIZED (
+          SELECT t.id,t.account_id,t.date,t.category_id,r."categorizedBy" AS prior
+          FROM app.finance_transactions t JOIN requested r ON r.id=t.id
+          WHERE md5(t.id || ':' || t.xmin::text)=r."writeRevision"
+            AND t.review_state='confirmed' AND t.categorized_by='user' AND t.category_id IS NOT NULL
+            AND t.transfer_id IS NULL AND NOT t.pending AND t.splits='[]'::jsonb
+          ORDER BY t.id FOR UPDATE OF t
+        ), eligible AS (
+          SELECT 1 WHERE (SELECT count(*) FROM requested) BETWEEN 1 AND 200
+            AND (SELECT count(DISTINCT id) FROM requested)=(SELECT count(*) FROM requested)
+            AND (SELECT count(*) FROM reviewed)=(SELECT count(*) FROM requested)
+        ), changed AS (
+          UPDATE app.finance_transactions t SET review_state='needs_look',categorized_by=r.prior
+          FROM reviewed r WHERE t.id=r.id AND EXISTS(SELECT 1 FROM eligible) RETURNING t.id
+        ), logged AS (
+          INSERT INTO app.finance_activity(owner_user_id,id,at,actor,kind,params)
+          SELECT app.current_actor_user_id(),gen_random_uuid(),now(),'user','transaction.unconfirm',
             jsonb_build_object('transactionId',r.id,'accountId',r.account_id,
               'month',to_char(r.date,'YYYY-MM'),'categoryId',r.category_id)
           FROM reviewed r JOIN changed c ON c.id=r.id RETURNING id
