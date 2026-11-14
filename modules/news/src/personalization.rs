@@ -68,8 +68,7 @@ fn list<H: Host + ?Sized>(host: &H, table: &str) -> Result<Vec<Value>> {
     Client(host).query(table, &query)
 }
 
-/// Removes saved-feed articles whose publisher is the domain or one of its sub-domains. An
-/// article with no publisher is dropped too, as the old statement did.
+/// The saved feed's dates and article count. The package never changes the saved feed.
 fn snapshot_meta(row: Option<&Value>) -> Result<Value> {
     let Some(row) = row else { return Ok(Value::Null) };
     let count = row["payload"]["articles"].as_array().map(Vec::len).unwrap_or(0);
@@ -220,7 +219,7 @@ pub fn remove_topic<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Resul
     Ok(Response::new(200, json!({"deleted":!removed.is_empty()})))
 }
 
-/// `DELETE /sources/:id`. Articles from the removed source leave the saved feed.
+/// `DELETE /sources/:id`. The saved feed is left as it is.
 pub fn remove_source<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Response> {
     let id = match id_param(request) {
         Ok(id) => id,

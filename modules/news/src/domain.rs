@@ -1,7 +1,6 @@
 //! Publisher domain rules. They follow the old normalizer, which read the input with the
-//! browser URL parser. This reads the same forms without that parser, and answers
-//! `invalid_label` for any host name with a non-ASCII character, where the old code turned it
-//! into punycode and accepted it.
+//! browser URL parser. This reads the same forms without that parser. Non-ASCII labels are
+//! lowercased and converted to `xn--` form; other case folding the URL parser does is not copied.
 
 const MAX_INPUT: usize = 2048;
 const MAX_HOST: usize = 253;
