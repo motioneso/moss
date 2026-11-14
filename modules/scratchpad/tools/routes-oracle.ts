@@ -37,6 +37,7 @@ export async function routesOracle(actor: string, steps: readonly Step[]) {
 
 if (process.argv[1]?.endsWith("routes-oracle.ts")) {
   let input = "";
+  process.stdin.setEncoding("utf8");
   for await (const chunk of process.stdin) input += String(chunk);
   const { actor, steps }: { actor: string; steps: Step[] } = JSON.parse(input);
   console.log(JSON.stringify(await routesOracle(actor, steps)));
