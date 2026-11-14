@@ -65,7 +65,7 @@ It found no way to reach a private address and no leak into the activity record.
 - `tokio-rustls` was not added. The fixture site is served with a self-signed certificate that the
   test adds to the trust list.
 
-Card JS-273. Part of [issue 4027](https://github.com/motioneso/moss/issues/4027). Release note
+Cards JS-273 and JS-274. Part of [issue 4027](https://github.com/motioneso/moss/issues/4027). Release note
 Category: N/A.
 
 ## Sports package skeleton (part 10)
@@ -232,3 +232,58 @@ The Sports package now reads ESPN's public sports data. It still shows no screen
 - Scoreboard, standings and news have no routes, so they are tested only through the code.
 - No Vikunja card was found for this task.
 - Any screen.
+
+## Part 2: shared feed reader
+
+### What was built
+
+A small library at `~/Jarv1s/modules/news/reader`. It reads news feeds from text it is handed. It opens no connection, reads no file and writes no log.
+
+- Reads RSS and Atom feeds into headlines, with date, picture and a short summary.
+- Cleans feed text: strips markup, decodes character codes, trims long text.
+- Reads a subreddit's public feed and keeps only the posts that link out to a publisher.
+- Works out which publisher a web address belongs to, using the public suffix list.
+
+It carries no screens, settings, routes, tables or errors a person can see. The plan puts app map entries with the screens (part 8), so this part adds none.
+
+### New libraries
+
+Only the three Ben approved, pinned in the lock file: `scraper` 0.29.0, `quick-xml` 0.42.0, `psl` 2.1.253. Each builds for WebAssembly. The reader depends on all three and builds for WebAssembly, and the test run inside the WebAssembly module uses all three.
+
+### What was proven
+
+| Claim                                                    | How                                                                                                                                                                 |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Same results as the old reader                           | The old TypeScript reader was run on 522 cases. The Rust reader matches every one.                                                                                  |
+| Old fixture feeds give the same items                    | BBC, Guardian, NPR and Verge captures, run through each source's picture rules.                                                                                     |
+| Edge cases match                                         | 69 invented feeds, 54 web addresses, 26 text cases, 19 dates, 31 subreddit inputs, 34 Reddit posts, 14 Reddit feeds.                                                |
+| Fixtures hold no personal data                           | A scan in the test run (emails, phone numbers, private addresses). Author names were removed from the fixtures.                                                     |
+| Native and WebAssembly                                   | The same 522 cases pass natively and inside a WebAssembly module under Node.                                                                                        |
+| A second person never sees the first person's text       | Test below.                                                                                                                                                         |
+| Private text cannot reach logs, job payloads or activity | The library takes text in and returns values. A source scan flags print, log, file, network and shared-state calls. It is a guard, not a proof for all future code. |
+| Real feeds                                               | The built reader parsed live BBC (30 items), NPR (10), Guardian (30), Verge (10) and the NFL subreddit (10 headlines).                                              |
+
+### Row-level security: honest answer
+
+The reader has no tables, so there is no row-level security to test here. The nearest real property is that it keeps nothing between calls. The test runs one person's feed and another person's feed across eight threads, 200 rounds each, and fails if any of the first person's marker text shows up in the second person's results. It was seen failing when a leaky shared cache was added to the library, and then reverted. The same mutation also trips the source scan. The real row-level security tests belong to part 3, where the News tables arrive.
+
+### How to run
+
+```
+scripts/run-gate.sh start --gate test:rust-news-reader
+```
+
+The golden file is regenerated from the old code with `modules/news/reader/tools/legacy-golden.ts`.
+
+### Not proven
+
+- Not run through the real Rust server. The reader is not wired into any package until parts 3 and 4, so no server route calls it yet.
+- Not run in a browser or on a phone. There is no screen.
+- Host names fold fullwidth letters, ideographic full stops and soft hyphens, but other Unicode compatibility folding is not applied, so a rare look-alike host could still differ from the old code.
+- Public suffix answers match `tldts` on a 34-host list, not on every host.
+- Dates without a zone are read as UTC. The old code read them in the server's zone. Feeds seen so far always carry a zone.
+- Live feed shapes can drift. Only part 22's live pass checks that over time.
+
+### Review round 1
+
+Codex found no blocker and two major problems, both fixed: a feed tag with tens of thousands of attributes took 17 seconds (now linear, with a test), and look-alike host names (fullwidth letters) bypassed the Reddit-internal link rule. Four minor ones were fixed too: overflowing ports, malformed IPv6 hosts, mixed-case hex codes in Reddit titles, and gaps in the source scan.
