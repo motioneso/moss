@@ -231,6 +231,44 @@ fn parsing_and_filtering_a_full_page_of_stories_stays_fast() {
     assert!(started.elapsed().as_millis() < 500, "parse and filter took {:?}", started.elapsed());
 }
 
+fn stale_snapshot(fake: &Fake) {
+    fake.seed(
+        "app.news_compilation_snapshots",
+        A,
+        json!({
+            "compiled_at": "2026-11-01T10:00:00.000Z", "expires_at": "2026-11-02T10:00:00.000Z",
+            "payload": {"articles": [{
+                "id": "story-a", "publisher": "Daily Example", "canonicalDomain": "daily.example.com",
+                "headline": "Stored story", "url": "https://daily.example.com/a",
+                "publishedAt": "2026-11-06T09:00:00.000Z", "excerpt": null, "imageUrl": null,
+                "topics": [], "preferred": true, "rank": 1,
+            }]},
+        }),
+    );
+}
+
+#[test]
+fn a_failed_compile_serves_the_stored_page_marked_degraded() {
+    let fake = Fake::new();
+    saved_source(&fake);
+    stale_snapshot(&fake);
+    // No feed page is served, so gathering fails and the stored page is the answer.
+    let (status, body) = fake.route("GET", "/overview", &[], json!(null));
+    assert_eq!(status, 200);
+    assert_eq!(body["degraded"], json!(true));
+    assert_eq!(titles(&body), vec!["Stored story"]);
+}
+
+#[test]
+fn a_failed_compile_with_no_stored_page_is_empty_and_degraded() {
+    let fake = Fake::new();
+    saved_source(&fake);
+    let (status, body) = fake.route("GET", "/overview", &[], json!(null));
+    assert_eq!(status, 200);
+    assert_eq!(body["degraded"], json!(true));
+    assert_eq!(titles(&body), Vec::<String>::new());
+}
+
 #[test]
 fn malformed_model_answers_fall_back() {
     let fake = Fake::new();

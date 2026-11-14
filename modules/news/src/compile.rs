@@ -34,6 +34,7 @@ const FUTURE_TOLERANCE_MS: i64 = 15 * 60 * 1000;
 const PREFERRED_AGE_MS: i64 = 48 * 60 * 60 * 1000;
 const MAX_AGE_MS: i64 = 7 * 24 * 60 * 60 * 1000;
 const MAX_PROMPT_CHARS: usize = 50_000;
+const GATHER_BUDGET_MS: i64 = 3_500;
 const TOP_STORIES_CAP: usize = 6;
 const GROUP_HEADLINES_CAP: usize = 12;
 
@@ -313,10 +314,19 @@ fn collect_custom<H: Host + ?Sized>(
     }
 }
 
-fn collect<H: Host + ?Sized>(host: &H, saved: &Saved, now_ms: i64) -> Collection {
+/// True once the gathering budget is spent. The host clock is read again, because fetches
+/// take real time the saved start time cannot see.
+fn past_deadline<H: Host + ?Sized>(host: &H, deadline_ms: i64) -> bool {
+    crate::util::now(host).map(|at| at.timestamp_millis() > deadline_ms).unwrap_or(false)
+}
+
+fn collect<H: Host + ?Sized>(host: &H, saved: &Saved, now_ms: i64, deadline_ms: i64) -> Collection {
     let mut collected: Vec<Candidate> = Vec::new();
     let mut failures = 0usize;
     for source in &saved.sources {
+        if past_deadline(host, deadline_ms) {
+            break;
+        }
         if text(source, "retrieval_method") == "reddit" || !active_custom(source, &saved.exclusions) {
             continue;
         }
@@ -335,6 +345,9 @@ fn collect<H: Host + ?Sized>(host: &H, saved: &Saved, now_ms: i64) -> Collection
         }
     }
     for name in &names {
+        if past_deadline(host, deadline_ms) {
+            break;
+        }
         let read = crate::resolve::read_subreddit_for_compile(host, name);
         match read {
             Some(headlines) => {
@@ -365,6 +378,9 @@ fn collect<H: Host + ?Sized>(host: &H, saved: &Saved, now_ms: i64) -> Collection
     }
     let effective = effective_prefs(&saved.prefs);
     for source in &effective.sources {
+        if past_deadline(host, deadline_ms) {
+            break;
+        }
         let Some(canonical) = article_domain(source.homepage_url) else { continue };
         if excluded(&saved.exclusions, &canonical) {
             continue;
@@ -384,7 +400,7 @@ fn collect<H: Host + ?Sized>(host: &H, saved: &Saved, now_ms: i64) -> Collection
         };
         let mut source_items: Vec<Candidate> = Vec::new();
         for (url, topics) in plans {
-            if source_items.len() >= PER_SOURCE_CAP {
+            if source_items.len() >= PER_SOURCE_CAP || past_deadline(host, deadline_ms) {
                 break;
             }
             let Ok(fetched) = web::get(host, url, None) else {
@@ -722,7 +738,8 @@ pub fn compile<H: Host + ?Sized>(host: &H) -> Result<Outcome> {
     let at = now(host)?;
     let now_ms = at.timestamp_millis();
     let saved = read_saved(host)?;
-    let collection = collect(host, &saved, now_ms);
+    // Gathering stops early so ranking and storing still fit the host's time limit.
+    let collection = collect(host, &saved, now_ms, now_ms + GATHER_BUDGET_MS);
     if collection.candidates.is_empty() && collection.fetch_failures > 0 {
         return Ok(Outcome::KeptLastGood);
     }
@@ -877,15 +894,18 @@ pub fn overview<H: Host + ?Sized>(host: &H) -> Result<Response> {
     let now_ms = at.timestamp_millis();
     let saved = read_saved(host)?;
     let rows = Client(host).query(SNAPSHOTS, &Query::select(Filter::All))?;
-    if let Some(row) = rows.first() {
+    // Kept in hand for the fallback below, so a failed compile needs no further read.
+    let stored = rows.into_iter().next();
+    if let Some(row) = &stored {
         let fresh = parse_ms(text(row, "expires_at")).unwrap_or_default() > now_ms;
         if fresh && snapshot_valid(&row["payload"]) {
             return Ok(Response::new(200, compose(row, &saved, now_ms, false)));
         }
     }
-    // A compile that runs out of time or hits a host failure must not fail the request. The
-    // person gets the last stored page, or an empty page marked degraded, and the next read
-    // tries again. Part 5b moves this work into a job, where it has room to finish.
+    // The compile stops gathering well before the host's time limit, leaving room to rank
+    // and store. If it still fails, the person gets the stored page already read above, or
+    // an empty page marked degraded, and the next read tries again. A hard halt by the host
+    // mid-compile cannot be caught here; part 5b moves this work into a job.
     let outcome = compile(host).unwrap_or(Outcome::KeptLastGood);
     match outcome {
         Outcome::Replaced => {
@@ -898,17 +918,12 @@ pub fn overview<H: Host + ?Sized>(host: &H) -> Result<Response> {
                 None => Ok(Response::new(200, compose(&json!({"payload":{"articles":[]}}), &saved, now_ms, true))),
             }
         }
-        Outcome::KeptLastGood => {
-            let Ok(rows) = Client(host).query(SNAPSHOTS, &Query::select(Filter::All)) else {
-                return Ok(degraded_empty());
-            };
-            match rows.first() {
-                Some(row) if snapshot_valid(&row["payload"]) => {
-                    Ok(Response::new(200, compose(row, &saved, now_ms, true)))
-                }
-                _ => Ok(Response::new(200, compose(&json!({"payload":{"articles":[]}}), &saved, now_ms, true))),
+        Outcome::KeptLastGood => match &stored {
+            Some(row) if snapshot_valid(&row["payload"]) => {
+                Ok(Response::new(200, compose(row, &saved, now_ms, true)))
             }
-        }
+            _ => Ok(Response::new(200, compose(&json!({"payload":{"articles":[]}}), &saved, now_ms, true))),
+        },
     }
 }
 

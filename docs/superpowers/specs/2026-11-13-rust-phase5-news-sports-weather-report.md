@@ -568,7 +568,7 @@ scripts/run-gate.sh start --gate test:rust-news-live
 
 ### Not proven or not built
 
-- Refresh jobs, the daily schedule, refresh state and source health writes are part 5b. Saving a source or changing a choice does not yet start a refresh; the overview compiles on read when the stored page is missing or out of date, and a stored page can be served for up to seven days until 5b lands. A compile that cannot finish (for example, the request runs out of time) now answers with the last stored page or an empty page marked degraded instead of an error.
+- Refresh jobs, the daily schedule, refresh state and source health writes are part 5b. Saving a source or changing a choice does not yet start a refresh; the overview compiles on read when the stored page is missing or out of date, and a stored page can be served for up to seven days until 5b lands. A compile that cannot finish stops gathering early, leaving room to rank and store, and otherwise answers with the last stored page or an empty page marked degraded instead of an error. A hard halt by the server mid-compile cannot be caught by the package; that case waits for the part 5b job.
 - Described topics need web search, which this package does not have, so topics add no stories yet. Their labels still show as active topics.
 - The keyed publisher (part 6) adds no stories yet, and story feedback has no host port here, so the relevance step the old compiler could apply is not present.
 - Saved sites with no feed are read page by page with a small tag scan for dates and pictures. Odd page markup can differ from the old parser.
