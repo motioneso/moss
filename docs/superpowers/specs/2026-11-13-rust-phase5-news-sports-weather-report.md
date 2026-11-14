@@ -157,7 +157,7 @@ All checks ran on a throwaway database through the verify gate, against the inst
 
 | Claim                                    | Check                                                                                       | Result                                           |
 | ---------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| Same answers as the old routes           | 173 steps replayed through the old routes and the installed package, ids and times masked   | Matched                                          |
+| Same answers as the old routes           | 176 steps replayed through the old routes and the installed package, ids and times masked   | Matched                                          |
 | Old SQL rules still hold                 | Direct SQL inserts of a repeat choice and a repeat exclusion                                | Refused                                          |
 | Another person sees nothing              | A second person and an admin list, delete and change A's rows                               | Nothing seen, nothing changed                    |
 | That check can fail                      | Row security removed from all eight tables, B reads A's rows; restored, B reads nothing     | Seen failing, then passing, on each of the eight |
