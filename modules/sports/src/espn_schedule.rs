@@ -96,10 +96,6 @@ fn result_side(competitor: &Value) -> Option<Value> {
     }))
 }
 
-fn instant_ms(text: &str) -> Option<i64> {
-    DateTime::parse_from_rfc3339(text).ok().map(|d| d.timestamp_millis())
-}
-
 fn is_full_time(name: &str) -> bool {
     ["STATUS_FINAL", "STATUS_FULL_TIME"].iter().any(|p| name.strip_prefix(p).is_some_and(|r| r.is_empty() || r.starts_with('_')))
 }
@@ -113,7 +109,7 @@ pub fn parse_completed_results(data: &Value, competition_key: &str, team_id: &st
         let (Some(id), Some(starts)) = (digits(short_text(&event["id"])), short_text(&event["date"])) else {
             continue;
         };
-        let Some(instant) = instant_ms(&starts) else { continue };
+        let Some(instant) = crate::followed::instant_ms(&starts) else { continue };
         let competition = &event["competitions"][0];
         let status = if competition["status"].is_null() { &event["status"]["type"] } else { &competition["status"]["type"] };
         let status_name = short_text(&status["name"]).unwrap_or_default();

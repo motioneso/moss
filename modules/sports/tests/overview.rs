@@ -239,3 +239,22 @@ fn routes_match_the_old_handlers_on_recorded_answers() {
     }
     assert_eq!(seen, 12);
 }
+
+#[test]
+fn a_finished_match_with_a_minute_only_start_time_is_a_result() {
+    let data = json!({"events": [{
+        "id": "401", "date": "2026-11-12T00:30Z",
+        "competitions": [{
+            "status": {"type": {"completed": true, "state": "post", "name": "STATUS_FINAL", "detail": "Final"}},
+            "competitors": [
+                {"homeAway": "home", "score": "3", "team": {"id": "1", "displayName": "Home"}},
+                {"homeAway": "away", "score": "2", "team": {"id": "2", "displayName": "Away"}}
+            ]
+        }]
+    }]});
+    let from = 1_794_000_000_000_i64;
+    let to = from + 86_400_000 * 30;
+    let found = moss_sports_module::espn_schedule::parse_completed_results(&data, "nhl", "1", from, to).unwrap();
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0]["startsAt"], "2026-11-12T00:30:00.000Z");
+}
