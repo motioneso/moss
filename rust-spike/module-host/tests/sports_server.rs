@@ -440,6 +440,52 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
     // The owner removes the follow.
     let (status, text) = call(Method::DELETE, &format!("/follows/{id}"), Some(&cookie), None);
     assert_eq!((status, json_of(&text)), (200, json!({"ok":true})));
+    // Adding a real subreddit. The feed is read from the real internet through the server's own
+    // public-web fetch, with nothing rewritten on the way. Two spellings that differ only by case
+    // are one source.
+    let (status, text) = call(Method::POST, "/sources/preview", Some(&cookie), Some(json!({"url":"r/nfl","assignments":[{"target":{"kind":"sport","sportKey":"football"}}]})));
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let shown = json_of(&text);
+    assert_eq!(shown["status"], "ok", "{text}");
+    let candidate = &shown["candidate"];
+    println!("sports live: real subreddit previewed: {} ({} sample headlines)", candidate["label"], candidate["samples"].as_array().map_or(0, Vec::len));
+    let confirm = json!({
+        "confirmationId": shown["confirmationId"],
+        "authorizationAcknowledgement": shown["authorizationAcknowledgement"],
+        "canonicalDomain": candidate["canonicalDomain"],
+        "confirmedFetchHosts": candidate["confirmedFetchHosts"],
+        "targets": candidate["targets"].as_array().unwrap().iter().map(|t| json!({"target":t["target"],"targetUrl":t["targetUrl"]})).collect::<Vec<_>>(),
+    });
+    let (status, text) = call(Method::POST, "/sources", Some(&other), Some(confirm.clone()));
+    assert_eq!(status, 409, "another person must not save this preview: {text}");
+    let (status, text) = call(Method::POST, "/sources", Some(&cookie), Some(confirm));
+    assert_eq!(status, 201, "{text}\n{}", log());
+    let saved = json_of(&text);
+    let source_id = saved["source"]["id"].as_str().unwrap().to_owned();
+    let (_, text) = call(Method::GET, "/sources", Some(&cookie), None);
+    assert_eq!(json_of(&text)["sources"].as_array().unwrap().len(), 2, "ESPN plus the subreddit: {text}");
+    let (_, text) = call(Method::GET, "/sources", Some(&other), None);
+    assert_eq!(json_of(&text)["sources"].as_array().unwrap().len(), 1, "the other person sees only ESPN: {text}");
+    let (status, text) = call(Method::POST, "/sources/preview", Some(&cookie), Some(json!({"url":"r/NFL"})));
+    assert_eq!(status, 200, "{text}");
+    let again = json_of(&text);
+    assert_eq!(again["duplicateOfSourceId"], json!(source_id), "r/NFL is the same source as r/nfl: {text}");
+    let (status, text) = call(Method::POST, "/sources", Some(&cookie), Some(json!({
+        "confirmationId": again["confirmationId"],
+        "authorizationAcknowledgement": again["authorizationAcknowledgement"],
+        "canonicalDomain": again["candidate"]["canonicalDomain"],
+        "confirmedFetchHosts": again["candidate"]["confirmedFetchHosts"],
+        "targets": [],
+    })));
+    assert_eq!((status, json_of(&text)["error"].clone()), (409, json!("Source already exists")), "{text}\n{}", log());
+    let (_, text) = call(Method::GET, "/sources", Some(&cookie), None);
+    assert_eq!(json_of(&text)["sources"].as_array().unwrap().len(), 2, "still one subreddit: {text}");
+    let (status, text) = call(Method::DELETE, &format!("/sources/{source_id}"), Some(&other), None);
+    assert_eq!((status, json_of(&text)), (200, json!({"deleted":false})), "the other person cannot delete it");
+    let (status, text) = call(Method::DELETE, &format!("/sources/{source_id}"), Some(&cookie), None);
+    assert_eq!((status, json_of(&text)), (200, json!({"deleted":true})), "{text}");
+    println!("sports live: the real subreddit was saved once, hidden from the other person and removed");
+
     // Nothing the test sent reached the server log.
     assert!(!log().contains(MARK));
     println!("sports live: follows and standings choices for two people worked over HTTPS");
