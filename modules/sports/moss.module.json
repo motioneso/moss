@@ -32,6 +32,8 @@
       "resources": [
         "espn-headlines",
         "espn-scoreboard",
+        "espn-results",
+        "espn-schedule",
         "espn-standings",
         "espn-teams",
         "standings-competitions",
@@ -44,7 +46,14 @@
       "resources": ["content.core.api.espn.com", "site.api.espn.com"]
     }
   ],
-  "installWideKv": ["espn-headlines", "espn-scoreboard", "espn-standings", "espn-teams"],
+  "installWideKv": [
+    "espn-headlines",
+    "espn-results",
+    "espn-schedule",
+    "espn-scoreboard",
+    "espn-standings",
+    "espn-teams"
+  ],
   "database": {
     "migrations": [
       "sql/0133_sports_follows.sql",
@@ -135,6 +144,21 @@
       "method": "PUT",
       "path": "/standings-preferences",
       "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/overview",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/standings",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/results/latest",
+      "signIn": true
     }
   ],
   "requires": {},
@@ -199,6 +223,32 @@
     {
       "id": "sports.remembered_standings",
       "description": "The standings picker keeps the leagues a person chose and the competition and view they last opened, on any device, until they pick another. A name that is not a known league is refused. The picker itself is not part of this package yet."
+    },
+    {
+      "id": "sports.overview",
+      "description": "The Sports overview lists a person's followed clubs as cards, one card per club even when the club is followed in several competitions, with live or finished game, last five results, next match and league standing. It also lists each followed competition's recent games and standings. Games on ESPN's evening slate land on the right day because days are counted in US Eastern time. With nothing followed it shows a default slate of major leagues. A follow saved without a permanent team id is listed for the person to resolve and never gets a score. Headlines, the gameday hero and the featured story are not part of this package yet.",
+      "errors": [
+        {
+          "code": "sports_provider_unavailable",
+          "class": "transient",
+          "description": "ESPN did not answer, so the overview carries what is cached and marks itself degraded."
+        }
+      ],
+      "remediations": [
+        {
+          "id": "sports.overview.retry",
+          "description": "Open the Sports overview again in a few minutes, when ESPN answers.",
+          "path": "/settings?section=modules&module=sports"
+        }
+      ]
+    },
+    {
+      "id": "sports.standings_view",
+      "description": "A competition's standings load on demand, with each conference and division as its own view. Once a tournament's group stage is complete, the answer also carries the games around today so the screen can show the bracket."
+    },
+    {
+      "id": "sports.latest_result",
+      "description": "The latest completed result for one club reads from ESPN over the last ninety days, using the person's follows to find the club and every competition they follow it in. A name that matches more than one club asks the person to choose, and a result the source could not provide is reported as unavailable, never guessed."
     }
   ],
   "optionalRequires": {}
