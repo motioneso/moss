@@ -211,7 +211,9 @@
   ],
   "requires": {
     "email": ">=0.4.0, <1.0.0",
-    "calendar": ">=0.30.0, <1.0.0",
+    "calendar": ">=0.30.0, <1.0.0"
+  },
+  "optionalRequires": {
     "notes": ">=0.1.23, <1.0.0"
   },
   "provides": {
