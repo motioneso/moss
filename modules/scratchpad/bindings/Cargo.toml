@@ -1,0 +1,19 @@
+[package]
+name = "moss-scratchpad-component-encoder"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+anyhow = "1"
+# Already pinned in the approved wit-bindgen build graph.
+wit-component = "=0.247.0"
+
+[[bin]]
+name = "scratchpad-component"
+path = "main.rs"
+
+[profile.dev]
+debug = 0
