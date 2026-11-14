@@ -188,3 +188,75 @@ checked in here, in its manifest in part 20b.
   the live run used Sports, which shares the same port and the same wiring.
 - A phone or another computer reaching the server. This part adds no listener or screen.
 - The 6-hour address guess, the forecast and the search routes. Those are part 20b.
+
+## Weather package (part 20b)
+
+Card JS-278. Part of [issue 4027](https://github.com/motioneso/moss/issues/4027). Release note
+Category: N/A. No screens (part 21).
+
+### What was built
+
+Weather is now an installable package. It shows today's weather and an hourly forecast for each
+person's saved place, or a guessed place when none is saved.
+
+- Routes: today, forecast, place (read and save), place search, place lookup by point, unit (read
+  and save). They moved from Settings and now sit under the Weather package's own path.
+- Tools for chat: forecast, search places, read and save the place, read and save the unit.
+- Outside services: Open-Meteo forecast and search, Nominatim place lookup, ipwho.is for the
+  address guess, and a table of cities for each saved time zone when the guess is not possible.
+- Forecasts are cached for 30 minutes in one shared store with no person or place name in the key.
+  The guess is cached per person for 6 hours, and the address itself is never stored.
+- A reading is stale when it was fetched over 30 minutes ago or observed over 2 hours ago.
+- Addresses that are loopback, private, link-local, broadcast, tailnet (100.64.0.0/10) or the IPv6
+  equivalents are skipped, including IPv4 addresses wrapped in IPv6.
+- Host plumbing: a package that declares it needs the connecting address gets the directly
+  connected peer address, and nothing from forwarding headers. A read-only entry for the saved
+  time zone. A default User-Agent on outside requests.
+- Briefings now includes a one-line weather section, using Weather's public api, with a visible
+  gap when Weather is missing or fails.
+
+### Proof
+
+| Claim                                           | Check                                                                                                                                          | Result                     |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| Real forecast through the real fetch path       | The installed package on the real server over HTTPS fetched live Open-Meteo for a saved place; today and a 12-hour window returned             | Passed                     |
+| Saved place survives the move                   | Place and unit saved through the new routes read back; stored in the same entries the old Settings routes used                                 | Passed                     |
+| Two people stay apart                           | Second person's place and unit unchanged after the owner saved; their today is empty                                                           | Passed                     |
+| Tailnet and other private addresses are skipped | Guest tests over each address range, with the skip removed the test fails                                                                      | Seen failing, then passing |
+| Stale after two hours                           | Guest test at the boundary; fails with the rule removed                                                                                        | Seen failing, then passing |
+| Cache keys carry no person data                 | Guest tests read every stored key                                                                                                              | Passed                     |
+| Briefings shows weather                         | Briefings gate, 3 new unit tests plus the installed run                                                                                        | Passed                     |
+| Private place never in the server log           | Planted name and coordinates saved over HTTPS, log searched                                                                                    | Not found                  |
+| Private place in no other table                 | Planted name and coordinates, every table in three schemas searched except the saved-setting row; a leak planted on purpose made the scan fail | Seen failing, then passing |
+| Native and WebAssembly builds                   | Guest tests natively, component built for WebAssembly, package tests against it                                                                | Passed                     |
+
+### Differences from the old app
+
+- Today returns an empty answer when a service fails. The old route returned an error in some
+  cases.
+- The address guess is cached per person in the shared store, not in server memory, because each
+  call runs in a fresh instance.
+- Behind a proxy the connecting address is the proxy, so the guess is skipped and the time zone
+  city applies.
+- Paths are under the package path. Error bodies keep the old shape (400 with a message, 502 with
+  an error).
+- The Briefings 10 second limit on its weather read is not enforced inside the package.
+- The visual forecast snapshot is not built.
+
+### App map
+
+The manifest declares the navigation, the settings (place and unit) and the features (chat
+actions, today, visual forecast). The Account screen wording stays true.
+
+### Not proven
+
+- A phone or another computer reaching Weather over HTTPS. Only this machine was used.
+- The tailnet skip end to end on the real server. It is proven in the guest, and the live test
+  connects from loopback, which is also skipped.
+- Route parity against the old handlers by running both. Bodies and statuses were copied by
+  reading the old code.
+- The live row-security failure for Weather. Weather has no tables. Row security on the saved
+  settings was proven in part 20a.
+- Job payloads and activity rows from a real chat run. Weather writes none, and the scan found no
+  planted text in any table.
+- The visual forecast and the screens (part 21).
