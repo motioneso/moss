@@ -138,6 +138,7 @@ impl World {
                 intelligence: Arc::new(Approves(Default::default())),
                 version: "0.1.0".parse().unwrap(),
                 compiled_cache: None,
+                browser_dir: None,
                 fuel_ceiling: Some(250_000_000),
             },
             |next| Ok(Arc::new(Web(next))),
