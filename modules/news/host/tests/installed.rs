@@ -15,6 +15,8 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 
 const MARK: &str = "PLANTED-MARKER-4f1c9b";
+/// Its own marker, so the saved source of the adding test does not show in the other scan.
+const ADD_MARK: &str = "PLANTED-ADD-MARKER-91c3d7";
 
 /// The person's model approves every publisher. The prompt is kept so tests can read it.
 struct Approves(std::sync::Mutex<Vec<String>>);
@@ -526,10 +528,10 @@ fn text_typed_into_adding_a_source_reaches_no_job_or_log_table() {
     let a = w.f.a;
     // A feed address carrying the marker is previewed and saved for real, so the policy check and
     // the save both run with the typed text in hand.
-    let typed = format!("news.example.com/rss?q={MARK}");
+    let typed = format!("news.example.com/rss?q={ADD_MARK}");
     let out = w.call(a, "POST", "/sources/preview", json!({"input": typed}));
     assert_eq!(out["body"]["status"], "ok", "{out}");
-    assert!(!out.to_string().contains(MARK), "the preview must not echo the typed address: {out}");
+    assert!(!out.to_string().contains(ADD_MARK), "the preview must not echo the typed address: {out}");
     let saved = w.call(a, "POST", "/sources", json!({"confirmationId": out["body"]["confirmationId"]}));
     assert_eq!(saved["status"], 201, "{saved}");
     let tables: Vec<String> = w.f.rt.block_on(async {
@@ -547,7 +549,7 @@ fn text_typed_into_adding_a_source_reaches_no_job_or_log_table() {
             .collect()
     });
     for table in &tables {
-        let hits: i64 = w.f.rt.block_on(w.f.root.query_one(&format!("SELECT count(*) FROM {table} t WHERE lower(to_jsonb(t)::text) LIKE '%'||lower($1)||'%'"), &[&MARK])).unwrap().get(0);
+        let hits: i64 = w.f.rt.block_on(w.f.root.query_one(&format!("SELECT count(*) FROM {table} t WHERE lower(to_jsonb(t)::text) LIKE '%'||lower($1)||'%'"), &[&ADD_MARK])).unwrap().get(0);
         // The saved source keeps the person's own feed address in their own row, and nowhere else.
         let allowed = i64::from(table == "app.news_custom_sources");
         assert!(hits <= allowed, "{table} holds typed text");
