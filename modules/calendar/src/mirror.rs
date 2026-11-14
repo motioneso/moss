@@ -123,11 +123,16 @@ pub fn import(host: &impl Host, input: &Value) -> Result<Value> {
     let rows: Vec<Value> = rows["rows"].as_array().cloned().unwrap_or_default();
     let mut observed = HashSet::new();
     let mut upserted = 0;
+    let mut kept_uncertain = 0;
     for e in batch["events"].as_array().into_iter().flatten() {
         let id = external_id(calendar, e["occurrenceKey"].as_str().unwrap_or(""));
         observed.insert(id.clone());
         let prior = rows.iter().find(|r| r["externalId"] == id.as_str());
         if prior.and_then(|r| latest(&r["metadata"])).is_some_and(|t| t >= observed_at) {
+            // A newer scan kept this row. Any uncertainty it recorded still counts.
+            if prior.is_some_and(|r| r["metadata"]["mirrorUnconfirmed"] == true) {
+                kept_uncertain += 1;
+            }
             continue;
         }
         host.call("kv", "set", "calendar.cache-write", json!({
@@ -141,7 +146,7 @@ pub fn import(host: &impl Host, input: &Value) -> Result<Value> {
         }))?;
         upserted += 1;
     }
-    let mut unconfirmed = 0;
+    let mut unconfirmed = kept_uncertain;
     // A partial view cannot turn absence into a conclusion.
     if complete {
         for row in rows.iter().filter(|r| in_window(r, &window)) {

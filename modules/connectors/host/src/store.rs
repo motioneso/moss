@@ -438,6 +438,20 @@ async fn set_outlook_health(cx: &DataContext, p: &Value) -> Result<Value> {
         return Ok(json!({"saved":false}));
     }
     let key = moss_connectors::health::outlook_key(account);
+    // A fenced write lands only while the stored health still names this run as current.
+    if let Some(run) = p["fenceRun"].as_str() {
+        let changed = cx
+            .db()
+            .execute(
+                "UPDATE app.preferences
+                    SET value_json = $2, revision = revision + 1, updated_at = now()
+                  WHERE owner_user_id = app.current_actor_user_id() AND key = $1
+                    AND value_json->>'currentRun' = $3::text",
+                &[&key, &p["value"], &run],
+            )
+            .await?;
+        return Ok(json!({"saved":changed > 0}));
+    }
     cx.db()
         .execute(
             "INSERT INTO app.preferences(owner_user_id, key, value_json, updated_at)

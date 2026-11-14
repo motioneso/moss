@@ -70,12 +70,22 @@ impl Host for Stub {
             }
             ("kv", "set", "connectors.feature-grants") => json!({"saved":true}),
             ("kv", "set", "connectors.outlook-health") => {
+                if let Some(run) = p["fenceRun"].as_str() {
+                    if self.health.borrow()["currentRun"].as_str() != Some(run) {
+                        return Ok(json!({"saved":false}));
+                    }
+                }
                 *self.health.borrow_mut() = p["value"].clone();
                 json!({"saved":true})
             }
             ("kv", "set", "connectors.outlook-scan") => {
                 let mut steps = self.steps.borrow_mut();
-                if steps.is_empty() { json!({"done":false}) } else { steps.remove(0) }
+                let step = if steps.is_empty() { json!({"done":false}) } else { steps.remove(0) };
+                // Lets a test start a newer run while this step is in flight.
+                if let Some(run) = step["replaceRun"].as_str() {
+                    self.health.borrow_mut()["currentRun"] = json!(run);
+                }
+                step
             }
             _ => return Err(Error::new("unexpected call")),
         })
@@ -257,5 +267,14 @@ fn a_run_that_a_newer_run_replaced_writes_nothing() {
     host.steps.borrow_mut().push(json!({"done":true,"scan":{"windowStart":"2026-10-20","windowEnd":"2026-11-22","timeZone":"America/Los_Angeles","events":[]}}));
     assert_eq!(job(&host, Some("run-1"))["outcome"], "superseded");
     assert!(host.calls("calendar").is_empty());
+    assert_eq!(host.health()["state"], "collecting");
+}
+
+#[test]
+fn a_run_replaced_while_its_last_step_ran_cannot_save_its_result() {
+    let host = Stub::mine().with_account("active", json!({"state":"collecting","currentRun":"run-1","bindingFingerprint":"fp-1"}));
+    host.steps.borrow_mut().push(json!({"done":true,"replaceRun":"run-2","scan":{"windowStart":"2026-10-20","windowEnd":"2026-11-22","timeZone":"America/Los_Angeles","events":[]}}));
+    assert_eq!(job(&host, Some("run-1"))["outcome"], "superseded");
+    assert_eq!(host.health()["currentRun"], "run-2");
     assert_eq!(host.health()["state"], "collecting");
 }

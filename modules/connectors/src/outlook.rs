@@ -52,6 +52,18 @@ fn save(host: &impl Host, id: &str, previous: &Value, update: Value) -> Result<(
     Ok(())
 }
 
+/// Saves only while the stored health still names this run as current. The check and the write
+/// are one database statement, so a newer run cannot be overwritten. False means superseded.
+fn save_fenced(host: &impl Host, id: &str, previous: &Value, update: Value, run: &str) -> Result<bool> {
+    let mut next: Map<String, Value> = previous.as_object().cloned().unwrap_or_default();
+    for (k, v) in update.as_object().into_iter().flatten() {
+        next.insert(k.clone(), v.clone());
+    }
+    next.insert("currentRun".into(), json!(run));
+    let done = kv(host, "set", "connectors.outlook-health", json!({"accountId":id,"value":next,"fenceRun":run}))?;
+    Ok(done["saved"] == true)
+}
+
 /// The state the screen and tools see. A reader that stopped answering, or a copy that is too
 /// old, reads as stale even when the saved state still says collecting or current.
 fn shown_state(health: &Value, at: DateTime<Utc>) -> &'static str {
@@ -267,7 +279,9 @@ fn run_step(host: &impl Host, id: &str, run: Option<&str>) -> Result<&'static st
         if let Some(stage) = step["stage"].as_str() {
             update["errorStage"] = json!(stage);
         }
-        save(host, id, &previous, update)?;
+        if !save_fenced(host, id, &previous, update, &run)? {
+            return Ok("superseded");
+        }
         return Ok("failed");
     }
     if step["done"] != true {
@@ -279,17 +293,17 @@ fn run_step(host: &impl Host, id: &str, run: Option<&str>) -> Result<&'static st
     let finished = now(host)?;
     match imported {
         Ok(done) => {
-            save(host, id, &previous, json!({
+            let saved = save_fenced(host, id, &previous, json!({
                 "state":"current","lastCompleteAt":scan["observedAt"].as_str().map_or_else(|| iso(finished), String::from),"failures":0,"attemptedAt":iso(at),
                 "windowStart":scan["windowStart"],"windowEnd":scan["windowEnd"],"timeZone":scan["timeZone"],
                 "unconfirmed":done["unconfirmed"].as_i64().unwrap_or(0),
-            }))?;
-            Ok("imported")
+            }), &run)?;
+            Ok(if saved { "imported" } else { "superseded" })
         }
         Err(_) => {
             let failures = previous["failures"].as_i64().unwrap_or(0) + 1;
-            save(host, id, &previous, json!({"state":"partial","failures":failures,"attemptedAt":iso(at)}))?;
-            Ok("failed")
+            let saved = save_fenced(host, id, &previous, json!({"state":"partial","failures":failures,"attemptedAt":iso(at)}), &run)?;
+            Ok(if saved { "failed" } else { "superseded" })
         }
     }
 }
