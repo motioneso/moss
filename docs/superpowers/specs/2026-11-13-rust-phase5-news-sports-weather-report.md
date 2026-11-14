@@ -325,7 +325,7 @@ Previewing and saving a source, finding a site's feed, the content-policy check,
 | Sites with and without a feed link                        | Fixture sites: feed link, scrape fallback, direct feed                                                                                                                                                                                                  |
 | Same answers as the old routes                            | The installed test replays refusals, a preview, a save, a repeat save and the later reads against the old handlers and compares step by step                                                                                                            |
 | A second person cannot see or use the first person's data | Real Postgres test. Person B and an admin cannot save, see or reuse A's preview, source or verdict. The check was seen failing with row security removed (RED) and passing with it restored (GREEN) for the sources and verdicts tables                 |
-| Typed text stays out of logs, jobs and activity           | A planted marker is absent from 53 scanned tables after adding a source, and the package only uses the database, key-value, fetch, model and context ports                                                                                              |
+| Typed text stays out of logs, jobs and activity           | A feed address carrying a planted marker is previewed and saved. The marker is then found only in the person's own saved source row across 53 scanned tables, and the package only uses the database, key-value, fetch, model and context ports         |
 | Native and WebAssembly                                    | The gate builds the component and runs package tests in both                                                                                                                                                                                            |
 | Real server, real fetch                                   | The live test starts the real Rust server over HTTPS, previews and saves the real BBC news feed through the server's own public-web fetch, and confirms a second person cannot save the preview or see the source. Nothing was intercepted or rewritten |
 
@@ -346,7 +346,15 @@ scripts/run-gate.sh start --gate test:rust-news-live
 - Name search (typing a publisher name instead of an address) needs web search and is not built.
 - The old "no JSON model" prerequisite is not built.
 - Two previews started at the same moment can lose one write, because the preview file is read and written without a lock.
+- A preview is not strictly single-use under concurrent saves. Two saves of one preview at the same instant can both succeed, and a concurrent new preview can bring back a used one. The host key-value port reads and writes a whole file with no compare-and-swap, so closing this needs a host change.
+- A remembered approval (24 hours) is not tied to the model in use, because the host gives no model identity. If the person changes or removes their model, an approved publisher stays approved until the memory expires. Closing this needs the host to report a model fingerprint.
+- Reddit redirects are refused after the redirected request was made, not before. The host still only fetches public addresses.
+- The row-security test shows the leak with protection removed for sources and verdicts, but does not re-run the admin query after protection is restored, and does not try an admin save of someone else's preview.
 - The publisher connection offer (part 6) and the refresh after saving (part 5b) are not built.
 - The page parser differs from the old one on odd markup. Only the fixture sites and one real feed were compared.
 - The preview label for the BBC feed shows the domain, not the feed's own title. Not checked against the old label for a real site.
 - Hermetic database tests stub the public web; only the live run uses the real fetch.
+
+### Review round 1
+
+Codex found no blocker, three major and two minor points. Fixed: the privacy test now completes a real preview and save with the marker in hand. Recorded above as not closed because they need a host change: single-use previews under concurrency, and verdicts tied to the model. The two minor points are listed in the not-proven list.

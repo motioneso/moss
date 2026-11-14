@@ -40,6 +40,12 @@ impl moss_module_host::runtime::Ports for Web {
         let found = |content_type: &str, body: &str| {
             json!({"ok":true,"status":200,"finalUrl":url,"contentType":content_type,"body":body,"truncated":false,"hopCount":0,"encoding":"utf-8"})
         };
+        if url.starts_with("https://news.example.com/rss?q=") {
+            return Ok(found(
+                "application/rss+xml",
+                "<rss><channel><title>x</title><item><title>First story here</title><link>https://news.example.com/1</link></item></channel></rss>",
+            ));
+        }
         Ok(match url {
             "https://daily.sample.test/" => found(
                 "text/html",
@@ -518,9 +524,14 @@ fn adding_a_source_is_private_to_the_person_who_previewed_it() {
 fn text_typed_into_adding_a_source_reaches_no_job_or_log_table() {
     let w = World::new();
     let a = w.f.a;
-    let typed = format!("news.example.com/?q={MARK}");
+    // A feed address carrying the marker is previewed and saved for real, so the policy check and
+    // the save both run with the typed text in hand.
+    let typed = format!("news.example.com/rss?q={MARK}");
     let out = w.call(a, "POST", "/sources/preview", json!({"input": typed}));
-    assert!(!out.to_string().contains(MARK) || out["body"]["status"] == "rejected", "{out}");
+    assert_eq!(out["body"]["status"], "ok", "{out}");
+    assert!(!out.to_string().contains(MARK), "the preview must not echo the typed address: {out}");
+    let saved = w.call(a, "POST", "/sources", json!({"confirmationId": out["body"]["confirmationId"]}));
+    assert_eq!(saved["status"], 201, "{saved}");
     let tables: Vec<String> = w.f.rt.block_on(async {
         w.f.root
             .query(
@@ -537,7 +548,12 @@ fn text_typed_into_adding_a_source_reaches_no_job_or_log_table() {
     });
     for table in &tables {
         let hits: i64 = w.f.rt.block_on(w.f.root.query_one(&format!("SELECT count(*) FROM {table} t WHERE lower(to_jsonb(t)::text) LIKE '%'||lower($1)||'%'"), &[&MARK])).unwrap().get(0);
-        assert_eq!(hits, 0, "{table} holds typed text");
+        // The saved source keeps the person's own feed address in their own row, and nowhere else.
+        let allowed = i64::from(table == "app.news_custom_sources");
+        assert!(hits <= allowed, "{table} holds typed text");
+        if table == "app.news_custom_sources" {
+            assert_eq!(hits, 1, "the saved source should hold the address it was given");
+        }
     }
-    println!("PASS privacy: scanned {} tables, the typed address is in none", tables.len());
+    println!("PASS privacy: scanned {} tables, the typed address is only in the saved source row", tables.len());
 }
