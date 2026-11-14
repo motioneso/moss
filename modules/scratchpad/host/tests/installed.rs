@@ -58,6 +58,8 @@ fn a_second_person_and_an_admin_cannot_read_or_change_the_note() {
     assert_eq!(appended["body"]["revision"], 1, "b's append starts b's own note");
     assert_eq!(w.stored(w.f.a), format!("alpha {MARK}"));
     assert_eq!(w.stored(w.f.b), "from b");
+    // B's note moves to revision 2, so only A's note is at revision 1 when row security comes off.
+    w.call(w.f.b, "POST", "/append", json!({"text": "again"}));
 
     // The same checks must fail with row security removed, then pass once restored.
     let off = "ALTER TABLE app.scratchpads DISABLE ROW LEVEL SECURITY";
