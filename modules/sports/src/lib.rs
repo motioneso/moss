@@ -20,6 +20,7 @@ pub mod public_routes;
 pub mod results;
 pub mod roster;
 pub mod source_discovery;
+pub mod source_icon;
 pub mod source_input;
 pub mod source_preview;
 pub mod source_routes;
@@ -60,6 +61,7 @@ pub fn route_with<H: Host + ?Sized>(host: &H, teams: &dyn TeamList, request: Rou
         ("POST", "/sources") => source_routes::confirm_new(host, &request),
         ("POST", "/sources/:id/assignments/preview") => source_routes::preview_assignments(host, teams, &request),
         ("PATCH", "/sources/:id/assignments") => source_routes::confirm_assignments(host, &request),
+        ("GET", "/sources/:sourceId/icon") => source_icon::icon(host, &request),
         ("DELETE", "/sources/:id") => source_routes::remove(host, &request),
         _ => return Response::new(404, json!({"message":"Route not found"})),
     };
