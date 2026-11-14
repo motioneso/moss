@@ -1,5 +1,45 @@
-//! Competition keys in catalog order. The full catalog (labels, feeds, standings shapes) arrives
-//! with the provider part. A parity test checks this list against the old catalog.
+//! The competition catalog in catalog order. The table in `catalog_table.rs` is generated from the
+//! old catalog, and parity tests check both it and the key list against that catalog.
+
+use serde_json::{json, Value};
+
+/// One competition the app knows, with the provider path it is read from.
+pub struct Entry {
+    pub key: &'static str,
+    pub label: &'static str,
+    pub sport_label: &'static str,
+    pub region_label: Option<&'static str>,
+    pub kind: &'static str,
+    pub marquee: bool,
+    pub standings_shape: &'static str,
+    pub espn_sport: &'static str,
+    pub espn_league: &'static str,
+    pub logo_url: Option<&'static str>,
+    pub confederation: &'static str,
+    pub news_feed_url: Option<&'static str>,
+    pub news_feed_publisher: Option<&'static str>,
+}
+
+pub use crate::catalog_table::ENTRIES;
+
+pub fn entry(key: &str) -> Option<&'static Entry> {
+    ENTRIES.iter().find(|e| e.key == key)
+}
+
+/// `GET /catalog` body. Field order matches the old response.
+pub fn response() -> Value {
+    let competitions: Vec<Value> = ENTRIES
+        .iter()
+        .map(|e| {
+            json!({
+                "competitionKey": e.key, "label": e.label, "sportLabel": e.sport_label,
+                "regionLabel": e.region_label, "kind": e.kind, "marquee": e.marquee,
+                "standingsShape": e.standings_shape, "confederation": e.confederation,
+            })
+        })
+        .collect();
+    json!({"competitions": competitions, "degraded": false})
+}
 
 /// Every competition a person can follow or pick standings for, in catalog order.
 pub const COMPETITION_KEYS: [&str; 64] = [

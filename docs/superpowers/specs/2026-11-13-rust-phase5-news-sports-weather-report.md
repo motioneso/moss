@@ -323,6 +323,50 @@ actions, today, visual forecast). The Account screen wording stays true.
   cache is read and written whole. The cost is one extra outside fetch, never wrong data.
 - The visual forecast and the screens (part 21).
 
+## Sports public data from ESPN (part 11)
+
+### What was built
+
+The Sports package now reads ESPN's public sports data. It still shows no screen.
+
+- League catalog: all 64 leagues and tournaments, grouped by confederation, in the old order.
+- League clubs: loaded only when a league is opened. Large leagues are read in pages of 100 clubs,
+  because one college football page is over the 1 MB size the host allows for a reply.
+- Club search across every league: needs two characters, fetches at most five leagues that are not
+  stored yet, stops sooner after about two seconds, and says `partial` when it left leagues out.
+- Scoreboard, standings and news lists are built and tested but not offered as routes yet.
+- A shared store keeps only public data (club lists one day, scoreboards three minutes, standings
+  and news ten minutes). A failed ESPN call returns an empty answer marked degraded and stores
+  nothing.
+- Routes: catalog, a league's clubs, and club search, with the same bodies and messages as the old
+  ones.
+- The package may fetch only the two ESPN hosts, and asks the host for a larger work allowance.
+- App map entries in the package manifest.
+
+### Proof
+
+| Claim                          | Check                                                                                 | Result                            |
+| ------------------------------ | ------------------------------------------------------------------------------------- | --------------------------------- |
+| Same answers as the old code   | Old code run on recorded ESPN pages gave the expected output; 31 route steps compared | Matched                           |
+| Search cap holds               | Test counts leagues fetched (exactly five); fails when the cap is six                 | Passed                            |
+| Search time limit              | A clock that moves forward on each fetch stops the search after one league            | Passed                            |
+| Nothing personal in the store  | Planted text and the person's id searched for in the store and in fetched addresses   | Not found                         |
+| Another person sees no follows | Second person against real Postgres, seen failing with row security removed           | Failed without it, passed with it |
+| Private text stays out of logs | Existing scan of tables and job payloads                                              | Passed                            |
+| Native and WebAssembly builds  | Guest tests native, package tests against the built component                         | Passed                            |
+| Works on the real server       | Real server, real ESPN over HTTPS, two people; all four college leagues loaded        | Passed                            |
+
+### Not proven
+
+- Fetch limits for ESPN image hosts. The manifest has no field for them, so they are not enforced.
+- College football standings. The page is 2.6 MB, over the reply limit, so it reads as degraded.
+- Two searches saving the store at the same moment can lose one update.
+- A cold search of the biggest leagues (college football takes about three seconds) could still
+  reach the five second call limit if the first league is slow. The time limit makes this unlikely.
+- Scoreboard, standings and news have no routes, so they are tested only through the code.
+- No Vikunja card was found for this task.
+- Any screen.
+
 ## Part 2: shared feed reader
 
 ### What was built

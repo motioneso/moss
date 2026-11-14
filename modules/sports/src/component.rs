@@ -20,6 +20,7 @@ impl Host for ComponentHost {
             "db" => moss::module::db::call(&request),
             "context" => moss::module::context::call(&request),
             "kv" => moss::module::kv::call(&request),
+            "fetch" => moss::module::fetch::call(&request),
             _ => return Err(Error::new("Unsupported Sports host port")),
         }
         .map_err(|_| Error::new("Sports host call failed"))?;

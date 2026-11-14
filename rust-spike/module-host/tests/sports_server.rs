@@ -31,6 +31,17 @@ impl Drop for Port {
         let _ = Command::new("devports").args(["release", &self.0]).output();
     }
 }
+fn walk(dir: &Path) -> Vec<std::path::PathBuf> {
+    let mut out = vec![];
+    if let Ok(read) = fs::read_dir(dir) {
+        for e in read.flatten() {
+            let p = e.path();
+            if p.is_dir() { out.extend(walk(&p)); } else { out.push(p); }
+        }
+    }
+    out
+}
+
 fn private(path: &Path, value: &Value) {
     use std::io::Write;
     use std::os::unix::fs::OpenOptionsExt;
@@ -363,6 +374,47 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
     assert_eq!(call(Method::POST, &format!("/follows/{id}/team"), Some(&other), Some(json!({"sourceTeamId":"lal"}))).0, 404);
     let (_, list) = call(Method::GET, "/follows", Some(&cookie), None);
     assert_eq!(json_of(&list)["follows"].as_array().unwrap().len(), 1, "B's delete must not remove A's follow");
+    // Public data comes from real ESPN through the real fetch path, for both people alike.
+    let (status, text) = call(Method::GET, "/catalog", Some(&cookie), None);
+    assert_eq!(status, 200, "{text}");
+    assert_eq!(json_of(&text)["competitions"].as_array().unwrap().len(), 64);
+    let started = std::time::Instant::now();
+    let (status, text) = call(Method::GET, "/leagues/nfl/teams", Some(&cookie), None);
+    println!("live ESPN nfl roster took {:?}", started.elapsed());
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let roster = json_of(&text);
+    assert_eq!(roster["degraded"], json!(false), "{text}");
+    assert!(roster["teams"].as_array().unwrap().len() >= 30, "{text}");
+    let (_, again) = call(Method::GET, "/leagues/nfl/teams", Some(&other), None);
+    assert_eq!(json_of(&again), roster, "the second person reads the same public roster");
+    let keys: Vec<String> = json_of(&call(Method::GET, "/catalog", Some(&cookie), None).1)["competitions"]
+        .as_array().unwrap().iter().map(|c| c["competitionKey"].as_str().unwrap().to_owned()).collect();
+    for key in &keys {
+        let t = std::time::Instant::now();
+        let (status, text) = call(Method::GET, &format!("/leagues/{key}/teams"), Some(&cookie), None);
+        let v = json_of(&text);
+        println!("ROSTER {key} status={status} degraded={} teams={} in {:?}", v["degraded"], v["teams"].as_array().map_or(0, Vec::len), t.elapsed());
+    }
+    let started = std::time::Instant::now();
+    let (status, text) = call(Method::GET, "/teams/search?q=dallas", Some(&other), None);
+    println!("live ESPN search took {:?}", started.elapsed());
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let found = json_of(&text);
+    assert!(found["teams"].as_array().unwrap().iter().any(|t| t["name"] == "Dallas Cowboys"), "{text}");
+    let (status, text) = call(Method::GET, &format!("/teams/search?q={MARK}"), Some(&cookie), None);
+    assert_eq!(status, 200, "{text}");
+    assert_eq!(json_of(&text)["teams"], json!([]));
+    // A team follow checks the live roster.
+    let (status, text) = call(Method::POST, "/follows", Some(&other), Some(json!({"competitionKey":"nfl","teamKey":"dal"})));
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let (_, mine) = call(Method::GET, "/follows", Some(&cookie), None);
+    assert_eq!(json_of(&mine)["follows"].as_array().unwrap().len(), 1, "A sees none of B's team follow");
+    for entry in walk(&root.join("data")) {
+        if entry.file_name().is_some_and(|n| n == "kv.json") {
+            let kv = fs::read_to_string(&entry).unwrap_or_default();
+            assert!(!kv.contains(MARK) && !kv.contains(&owner.to_string()), "cache file {entry:?} holds a query or a person");
+        }
+    }
     // The owner removes the follow.
     let (status, text) = call(Method::DELETE, &format!("/follows/{id}"), Some(&cookie), None);
     assert_eq!((status, json_of(&text)), (200, json!({"ok":true})));

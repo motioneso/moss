@@ -4,9 +4,9 @@
   "name": "Sports",
   "publisher": "Moss",
   "version": "0.1.0",
-  "description": "Keeps each person's followed leagues and teams, private to the owner. A whole league can be followed once, and following it again returns the saved follow. A followed team is tied to the provider's permanent team number. The standings picker remembers the leagues a person chose and the standings view they last opened, under the same saved settings as before. Account export and deletion cover all six Sports tables. Following a team needs the provider's team list, which is not part of this package yet, so team follows are refused with the same fail-closed messages the old app gave when the provider was down. Scores, standings data, news sources, source setup, chat tools and the screens are not part of this package yet.",
+  "description": "Keeps each person's followed leagues and teams, private to the owner. A whole league can be followed once, and following it again returns the saved follow. A followed team is tied to the provider's permanent team number. The standings picker remembers the leagues a person chose and the standings view they last opened, under the same saved settings as before. Account export and deletion cover all six Sports tables. The package reads ESPN's public data for the league catalog, each league's team list and club search, and keeps a shared copy so one person's lookup serves everyone. The copy holds only public sports data, never a person's follows or searches. Following a team checks the live team list and is refused, with the same fail-closed messages the old app gave, when ESPN is down. Scoreboard, standings and news reading are built but not yet offered as routes. News sources, source setup, chat tools and the screens are not part of this package yet.",
   "requiresMoss": ">=0.1.0, <1.0.0",
-  "fuelLimit": 200000000,
+  "fuelLimit": 250000000,
   "abi": "moss:module@1",
   "capabilities": [
     {
@@ -28,10 +28,23 @@
     },
     {
       "port": "kv",
-      "operations": ["preference.read", "preference.write"],
-      "resources": ["standings-competitions", "standings-last-viewed"]
+      "operations": ["preference.read", "preference.write", "get", "set"],
+      "resources": [
+        "espn-headlines",
+        "espn-scoreboard",
+        "espn-standings",
+        "espn-teams",
+        "standings-competitions",
+        "standings-last-viewed"
+      ]
+    },
+    {
+      "port": "fetch",
+      "operations": ["get"],
+      "resources": ["content.core.api.espn.com", "site.api.espn.com"]
     }
   ],
+  "installWideKv": ["espn-headlines", "espn-scoreboard", "espn-standings", "espn-teams"],
   "database": {
     "migrations": [
       "sql/0133_sports_follows.sql",
@@ -100,6 +113,21 @@
     },
     {
       "method": "GET",
+      "path": "/catalog",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/leagues/:competition_key/teams",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/teams/search",
+      "signIn": true
+    },
+    {
+      "method": "GET",
       "path": "/standings-preferences",
       "signIn": true
     },
@@ -137,25 +165,36 @@
   "features": [
     {
       "id": "sports.follows",
-      "description": "Each person keeps private follows of whole leagues and of single teams. Following a whole league twice returns the first follow, so a league never appears twice. Removing a follow deletes only the person's own row. Following a team, or changing which team a saved follow means, needs the provider's team list, which is not part of this package yet, so it is refused until then.",
+      "description": "Each person keeps private follows of whole leagues and of single teams. Following a whole league twice returns the first follow, so a league never appears twice. Removing a follow deletes only the person's own row. Following a team, or changing which team a saved follow means, is checked against ESPN's team list for that league, and is refused while ESPN cannot be reached.",
       "errors": [
         {
           "code": "sports_team_list_unavailable",
           "class": "validation",
-          "description": "The provider's team list is not available, so a team cannot be checked or followed yet."
+          "description": "ESPN's team list is not available right now, so a team cannot be checked or followed."
         }
       ],
       "remediations": [
         {
           "id": "sports.follows.whole-league",
-          "description": "Follow the whole league for now, then pick the team once team lists are available.",
+          "description": "Follow the whole league for now, then pick the team once ESPN answers again.",
           "path": "/settings?section=modules&module=sports"
         }
       ]
     },
     {
       "id": "sports.team_identity",
-      "description": "Follows are tied to the provider's permanent team number, so two teams sharing a short name never swap scores. A team saved before that is put on hold and Sports asks once which team was meant; picking one brings it back. Checking the pick against the provider's team list is not part of this package yet."
+      "description": "Follows are tied to the provider's permanent team number, so two teams sharing a short name never swap scores. A team saved before that is put on hold and Sports asks once which team was meant; picking one brings it back. The pick is checked against ESPN's team list for that league."
+    },
+    {
+      "id": "sports.catalog_and_search",
+      "description": "Sports lists every league and tournament it covers, grouped by confederation. A league's clubs load only when that league is opened, and club search looks across every league. Search fetches at most five leagues that are not stored yet, and stops sooner if it has spent about two seconds, and reports that coverage is partial until the rest fill in. A search needs at least two characters. The screens for these are not part of this package yet.",
+      "errors": [
+        {
+          "code": "sports_unknown_competition",
+          "class": "validation",
+          "description": "The league is not in the catalog, so its clubs are not looked up."
+        }
+      ]
     },
     {
       "id": "sports.remembered_standings",

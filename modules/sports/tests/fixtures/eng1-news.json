@@ -1,0 +1,551 @@
+{
+  "header": "Premier League News",
+  "link": {
+    "language": "en",
+    "rel": ["index", "desktop", "league"],
+    "href": "https://www.espn.com/football/league/_/name/eng.1",
+    "text": "All Premier League News",
+    "shortText": "All News",
+    "isExternal": false,
+    "isPremium": false
+  },
+  "articles": [
+    {
+      "id": 50475329,
+      "nowId": "1-50475329",
+      "contentKey": "50475329-1-293-1",
+      "dataSourceIdentifier": "534917067609b",
+      "type": "Media",
+      "headline": "Onuoha: Man United's two-year deal for Pochettino makes sense",
+      "description": "Onuoha: Man United's two-year deal for Pochettino makes sense",
+      "lastModified": "2026-11-13T23:58:31Z",
+      "published": "2026-11-13T23:58:31Z",
+      "images": [
+        {
+          "name": "Onuoha: Man United's two-year deal for Pochettino makes sense",
+          "caption": "Onuoha: Man United's two-year deal for Pochettino makes sense",
+          "alt": "",
+          "height": 324,
+          "width": 576,
+          "url": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1113/dm_261113_Onuoha_Man_Uniteds_twoyear_deal_for_Pochettino_makes_sense/dm_261113_Onuoha_Man_Uniteds_twoyear_deal_for_Pochettino_makes_sense.jpg"
+        }
+      ],
+      "categories": [
+        {
+          "id": 137781,
+          "type": "league",
+          "uid": "s:600~l:700",
+          "guid": "6949f3af-300c-35f1-beab-b95669eedd38",
+          "description": "English Premier League",
+          "sportId": 600,
+          "leagueId": 23,
+          "league": {
+            "id": 700,
+            "description": "English Premier League",
+            "abbreviation": "Premier League",
+            "links": {
+              "mobile": {
+                "leagues": { "href": "https://www.espn.com/soccer/league/_/name/eng.1" }
+              },
+              "web": { "leagues": { "href": "https://www.espn.com/soccer/league/_/name/eng.1" } }
+            }
+          }
+        },
+        {
+          "id": 142295,
+          "type": "team",
+          "uid": "s:600~t:364",
+          "guid": "a47fbcec-c948-cf4c-9e41-3dfa37588c9c",
+          "description": "Liverpool",
+          "sportId": 600,
+          "teamId": 364,
+          "team": {
+            "id": 364,
+            "description": "Liverpool",
+            "abbreviation": "LIV",
+            "shortDisplayName": "Liverpool",
+            "links": {
+              "mobile": {
+                "teams": { "href": "https://www.espn.com/soccer/club/_/id/364/liverpool" }
+              },
+              "web": { "teams": { "href": "https://www.espn.com/soccer/club/_/id/364/liverpool" } }
+            }
+          }
+        },
+        {
+          "id": 142292,
+          "type": "team",
+          "uid": "s:600~t:360",
+          "guid": "6ebc2fd0-35d3-733b-5666-b75035a3bce9",
+          "description": "Manchester United",
+          "sportId": 600,
+          "teamId": 360,
+          "team": {
+            "id": 360,
+            "description": "Manchester United",
+            "abbreviation": "MAN",
+            "shortDisplayName": "Man Utd",
+            "links": {
+              "mobile": {
+                "teams": { "href": "https://www.espn.com/soccer/club/_/id/360/manchester-united" }
+              },
+              "web": {
+                "teams": { "href": "https://www.espn.com/soccer/club/_/id/360/manchester-united" }
+              }
+            }
+          }
+        },
+        {
+          "id": 81497,
+          "type": "league",
+          "uid": "s:600",
+          "guid": "119cfa41-71d4-39bf-a790-6273a52b0259",
+          "description": "Soccer",
+          "sportId": 600,
+          "leagueId": 600,
+          "league": {
+            "id": 600,
+            "description": "Soccer",
+            "links": {
+              "mobile": { "leagues": { "href": "https://www.espn.com/soccer/" } },
+              "web": { "leagues": { "href": "https://www.espn.com/soccer/" } }
+            }
+          }
+        },
+        {
+          "type": "event",
+          "uid": "s:600~l:700~e:401878755",
+          "guid": "9bb36b3c-90b9-3c46-97e8-068975d5a41f",
+          "description": "Manchester United @ Liverpool",
+          "eventId": 401878755,
+          "event": {
+            "id": 401878755,
+            "sport": "soccer",
+            "league": "eng.1",
+            "description": "Manchester United @ Liverpool"
+          }
+        }
+      ],
+      "links": {
+        "api": {
+          "artwork": {
+            "href": "https://artwork.api.espn.com/artwork/collections/media/d2d5b17a-e16a-436d-80c7-f2e7b84416f1"
+          },
+          "self": { "href": "https://content.core.api.espn.com/v1/video/clips/50475329" }
+        },
+        "sportscenter": {
+          "href": "sportscenter://x-callback-url/showVideo?videoID=50475329&videoDSI=534917067609b"
+        },
+        "web": {
+          "href": "https://www.espn.com/video/clip/_/id/50475329/man-united-two-year-deal-pochettino-makes-sense",
+          "self": {
+            "href": "https://www.espn.com/video/clip/_/id/50475329/man-united-two-year-deal-pochettino-makes-sense",
+            "dsi": { "href": "https://www.espn.com/video/clip?id=534917067609b" }
+          }
+        }
+      },
+      "premium": false
+    },
+    {
+      "id": 50475260,
+      "nowId": "1-50475260",
+      "contentKey": "50475260-1-293-1",
+      "dataSourceIdentifier": "b6c267d9ec616",
+      "type": "Media",
+      "headline": "Moreno: Pochettino had 'one foot out the door' before World Cup",
+      "description": "Moreno: Pochettino had 'one foot out the door' before World Cup",
+      "lastModified": "2026-11-13T23:58:35Z",
+      "published": "2026-11-13T23:58:35Z",
+      "images": [
+        {
+          "name": "Moreno: Pochettino had 'one foot out the door' before World Cup",
+          "caption": "Moreno: Pochettino had 'one foot out the door' before World Cup",
+          "alt": "",
+          "height": 324,
+          "width": 576,
+          "url": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1113/dm_261113_Moreno_Pochettino_had_one_foot_out_the_door_before_World_Cup/dm_261113_Moreno_Pochettino_had_one_foot_out_the_door_before_World_Cup.jpg"
+        }
+      ],
+      "categories": [
+        {
+          "id": 137781,
+          "type": "league",
+          "uid": "s:600~l:700",
+          "guid": "6949f3af-300c-35f1-beab-b95669eedd38",
+          "description": "English Premier League",
+          "sportId": 600,
+          "leagueId": 23,
+          "league": {
+            "id": 700,
+            "description": "English Premier League",
+            "abbreviation": "Premier League",
+            "links": {
+              "mobile": {
+                "leagues": { "href": "https://www.espn.com/soccer/league/_/name/eng.1" }
+              },
+              "web": { "leagues": { "href": "https://www.espn.com/soccer/league/_/name/eng.1" } }
+            }
+          }
+        },
+        {
+          "id": 142295,
+          "type": "team",
+          "uid": "s:600~t:364",
+          "guid": "a47fbcec-c948-cf4c-9e41-3dfa37588c9c",
+          "description": "Liverpool",
+          "sportId": 600,
+          "teamId": 364,
+          "team": {
+            "id": 364,
+            "description": "Liverpool",
+            "abbreviation": "LIV",
+            "shortDisplayName": "Liverpool",
+            "links": {
+              "mobile": {
+                "teams": { "href": "https://www.espn.com/soccer/club/_/id/364/liverpool" }
+              },
+              "web": { "teams": { "href": "https://www.espn.com/soccer/club/_/id/364/liverpool" } }
+            }
+          }
+        },
+        {
+          "id": 142292,
+          "type": "team",
+          "uid": "s:600~t:360",
+          "guid": "6ebc2fd0-35d3-733b-5666-b75035a3bce9",
+          "description": "Manchester United",
+          "sportId": 600,
+          "teamId": 360,
+          "team": {
+            "id": 360,
+            "description": "Manchester United",
+            "abbreviation": "MAN",
+            "shortDisplayName": "Man Utd",
+            "links": {
+              "mobile": {
+                "teams": { "href": "https://www.espn.com/soccer/club/_/id/360/manchester-united" }
+              },
+              "web": {
+                "teams": { "href": "https://www.espn.com/soccer/club/_/id/360/manchester-united" }
+              }
+            }
+          }
+        },
+        {
+          "type": "event",
+          "uid": "s:600~l:700~e:401878755",
+          "guid": "9bb36b3c-90b9-3c46-97e8-068975d5a41f",
+          "description": "Manchester United @ Liverpool",
+          "eventId": 401878755,
+          "event": {
+            "id": 401878755,
+            "sport": "soccer",
+            "league": "eng.1",
+            "description": "Manchester United @ Liverpool"
+          }
+        }
+      ],
+      "links": {
+        "api": {
+          "artwork": {
+            "href": "https://artwork.api.espn.com/artwork/collections/media/c5ff9b76-fbb5-46c2-b0ff-060ca64c3db9"
+          },
+          "self": { "href": "https://content.core.api.espn.com/v1/video/clips/50475260" }
+        },
+        "sportscenter": {
+          "href": "sportscenter://x-callback-url/showVideo?videoID=50475260&videoDSI=b6c267d9ec616"
+        },
+        "web": {
+          "href": "https://www.espn.com/video/clip/_/id/50475260/pochettino-had-one-foot-door-world-cup",
+          "self": {
+            "href": "https://www.espn.com/video/clip/_/id/50475260/pochettino-had-one-foot-door-world-cup",
+            "dsi": { "href": "https://www.espn.com/video/clip?id=b6c267d9ec616" }
+          }
+        }
+      },
+      "premium": false
+    },
+    {
+      "id": 50470402,
+      "nowId": "1-50470402",
+      "contentKey": "50470402-1-6-1",
+      "dataSourceIdentifier": "f27bac8f89078",
+      "type": "Story",
+      "headline": "Recap: USMNT's Pochettino in tears as he agrees to join Man United",
+      "description": "USMNT head coach Mauricio Pochettino is leaving to join Manchester United. Read all the news, analysis and reaction from ESPN.",
+      "lastModified": "2026-11-13T17:16:59Z",
+      "published": "2026-11-13T17:16:59Z",
+      "images": [
+        {
+          "dataSourceIdentifier": "e5dc63d576fdd",
+          "id": 50471977,
+          "type": "header",
+          "name": "Mauricio Pochettino [1296x729]",
+          "credit": "Kevin C. Cox/Getty Images",
+          "height": 729,
+          "width": 1296,
+          "url": "https://a.espncdn.com/photo/2026/1113/r1745277_1296x729_16-9.jpg"
+        },
+        {
+          "dataSourceIdentifier": "e33d845a26c40",
+          "id": 50436277,
+          "type": "header",
+          "name": "United States head coach Mauricio Pochettino waves to fans after playing Peru at Inter&Co Stadium\n [1296x729]",
+          "alt": "United States head coach Mauricio Pochettino waves to fans after playing Peru at Inter&Co Stadium",
+          "credit": "Mark Thorstenson/ISI Photos/ISI Photos via Getty Images",
+          "height": 729,
+          "width": 1296,
+          "url": "https://a.espncdn.com/photo/2026/1109/r1743756_1296x729_16-9.jpg"
+        },
+        {
+          "type": "Media",
+          "name": "Hislop: Pochettino's late arrival 'on brand' for Manchester United",
+          "caption": "Hislop: Pochettino's late arrival 'on brand' for Manchester United",
+          "height": 324,
+          "width": 576,
+          "url": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1112/dm_261112_COM_SOC_Analysis_Hislop_Pochettinos_late_arrival_on_brand_for_Manchester_United_20261112_GLO/dm_261112_COM_SOC_Analysis_Hislop_Pochettinos_late_arrival_on_brand_for_Manchester_United_20261112_GLO.jpg"
+        }
+      ],
+      "categories": [
+        {
+          "id": 81497,
+          "type": "league",
+          "uid": "s:600",
+          "guid": "119cfa41-71d4-39bf-a790-6273a52b0259",
+          "description": "Soccer",
+          "sportId": 600,
+          "leagueId": 600,
+          "league": {
+            "id": 600,
+            "description": "Soccer",
+            "links": {
+              "mobile": { "leagues": { "href": "https://www.espn.com/soccer/" } },
+              "web": { "leagues": { "href": "https://www.espn.com/soccer/" } }
+            }
+          }
+        },
+        {
+          "id": 142292,
+          "type": "team",
+          "uid": "s:600~t:360",
+          "guid": "6ebc2fd0-35d3-733b-5666-b75035a3bce9",
+          "description": "Manchester United",
+          "sportId": 600,
+          "teamId": 360,
+          "team": {
+            "id": 360,
+            "description": "Manchester United",
+            "abbreviation": "MAN",
+            "shortDisplayName": "Man Utd",
+            "links": {
+              "mobile": {
+                "teams": { "href": "https://www.espn.com/soccer/club/_/id/360/manchester-united" }
+              },
+              "web": {
+                "teams": { "href": "https://www.espn.com/soccer/club/_/id/360/manchester-united" }
+              }
+            }
+          }
+        },
+        {
+          "id": 137781,
+          "type": "league",
+          "uid": "s:600~l:700",
+          "guid": "6949f3af-300c-35f1-beab-b95669eedd38",
+          "description": "English Premier League",
+          "sportId": 600,
+          "leagueId": 23,
+          "league": {
+            "id": 700,
+            "description": "English Premier League",
+            "abbreviation": "Premier League",
+            "links": {
+              "mobile": {
+                "leagues": { "href": "https://www.espn.com/soccer/league/_/name/eng.1" }
+              },
+              "web": { "leagues": { "href": "https://www.espn.com/soccer/league/_/name/eng.1" } }
+            }
+          }
+        },
+        {
+          "id": 72593,
+          "type": "team",
+          "uid": "s:600~t:660",
+          "guid": "e6b65d49-258c-b730-b7db-df75c6b1f714",
+          "description": "United States",
+          "sportId": 600,
+          "teamId": 660,
+          "team": {
+            "id": 660,
+            "description": "United States",
+            "abbreviation": "USA",
+            "shortDisplayName": "USA",
+            "links": {
+              "mobile": {
+                "teams": { "href": "https://www.espn.com/soccer/team/_/id/660/united-states" }
+              },
+              "web": {
+                "teams": { "href": "https://www.espn.com/soccer/team/_/id/660/united-states" }
+              }
+            }
+          }
+        },
+        {
+          "id": 33303,
+          "type": "league",
+          "uid": "s:600~l:606",
+          "guid": "34f478c4-cf9a-35da-abd5-33db021e09d2",
+          "description": "FIFA World Cup",
+          "sportId": 600,
+          "leagueId": 4,
+          "league": {
+            "id": 606,
+            "description": "FIFA World Cup",
+            "abbreviation": "FIFA World Cup",
+            "links": {
+              "mobile": { "leagues": { "href": "https://www.espn.com/soccer/worldcup/" } },
+              "web": { "leagues": { "href": "https://www.espn.com/soccer/worldcup/" } }
+            }
+          }
+        }
+      ],
+      "byline": "ESPN",
+      "links": {
+        "api": { "self": { "href": "https://content.core.api.espn.com/v1/sports/news/50470402" } },
+        "app": {
+          "sportscenter": { "href": "sportscenter://x-callback-url/showStory?uid=50470402" }
+        },
+        "mobile": { "href": "http://m.espn.go.com/soccer/story?storyId=50470402" },
+        "web": {
+          "href": "https://www.espn.com/soccer/story/_/id/50470402/live-updates-mauricio-pochettino-usmnt-man-united"
+        }
+      },
+      "premium": false
+    },
+    {
+      "id": 50472256,
+      "nowId": "1-50472256",
+      "contentKey": "50472256-1-293-1",
+      "dataSourceIdentifier": "2dd62544156c9",
+      "type": "Media",
+      "headline": "Pochettino explains why he decided to join Man United and leave USMNT",
+      "description": "Pochettino explains why he decided to join Man United and leave USMNT",
+      "lastModified": "2026-11-13T15:46:02Z",
+      "published": "2026-11-13T15:46:02Z",
+      "images": [
+        {
+          "name": "Pochettino explains why he decided to join Man United and leave USMNT",
+          "caption": "Pochettino explains why he decided to join Man United and leave USMNT",
+          "alt": "",
+          "height": 324,
+          "width": 576,
+          "url": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1113/dm_261113_COM_SOC_Analysis_Pochettino_explains_why_he_decided_to_join_Man_United_and_leave_USMNT_GLOBAL_2026/dm_261113_COM_SOC_Analysis_Pochettino_explains_why_he_decided_to_join_Man_United_and_leave_USMNT_GLOBAL_2026.jpg"
+        }
+      ],
+      "categories": [
+        {
+          "id": 137781,
+          "type": "league",
+          "uid": "s:600~l:700",
+          "guid": "6949f3af-300c-35f1-beab-b95669eedd38",
+          "description": "English Premier League",
+          "sportId": 600,
+          "leagueId": 23,
+          "league": {
+            "id": 700,
+            "description": "English Premier League",
+            "abbreviation": "Premier League",
+            "links": {
+              "mobile": {
+                "leagues": { "href": "https://www.espn.com/soccer/league/_/name/eng.1" }
+              },
+              "web": { "leagues": { "href": "https://www.espn.com/soccer/league/_/name/eng.1" } }
+            }
+          }
+        },
+        {
+          "id": 142292,
+          "type": "team",
+          "uid": "s:600~t:360",
+          "guid": "6ebc2fd0-35d3-733b-5666-b75035a3bce9",
+          "description": "Manchester United",
+          "sportId": 600,
+          "teamId": 360,
+          "team": {
+            "id": 360,
+            "description": "Manchester United",
+            "abbreviation": "MAN",
+            "shortDisplayName": "Man Utd",
+            "links": {
+              "mobile": {
+                "teams": { "href": "https://www.espn.com/soccer/club/_/id/360/manchester-united" }
+              },
+              "web": {
+                "teams": { "href": "https://www.espn.com/soccer/club/_/id/360/manchester-united" }
+              }
+            }
+          }
+        },
+        {
+          "id": 81497,
+          "type": "league",
+          "uid": "s:600",
+          "guid": "119cfa41-71d4-39bf-a790-6273a52b0259",
+          "description": "Soccer",
+          "sportId": 600,
+          "leagueId": 600,
+          "league": {
+            "id": 600,
+            "description": "Soccer",
+            "links": {
+              "mobile": { "leagues": { "href": "https://www.espn.com/soccer/" } },
+              "web": { "leagues": { "href": "https://www.espn.com/soccer/" } }
+            }
+          }
+        },
+        {
+          "id": 72593,
+          "type": "team",
+          "uid": "s:600~t:660",
+          "guid": "e6b65d49-258c-b730-b7db-df75c6b1f714",
+          "description": "United States",
+          "sportId": 600,
+          "teamId": 660,
+          "team": {
+            "id": 660,
+            "description": "United States",
+            "abbreviation": "USA",
+            "shortDisplayName": "USA",
+            "links": {
+              "mobile": {
+                "teams": { "href": "https://www.espn.com/soccer/team/_/id/660/united-states" }
+              },
+              "web": {
+                "teams": { "href": "https://www.espn.com/soccer/team/_/id/660/united-states" }
+              }
+            }
+          }
+        }
+      ],
+      "links": {
+        "api": {
+          "artwork": {
+            "href": "https://artwork.api.espn.com/artwork/collections/media/40f741f1-4534-4845-a469-ceb3d3d6a21e"
+          },
+          "self": { "href": "https://content.core.api.espn.com/v1/video/clips/50472256" }
+        },
+        "sportscenter": {
+          "href": "sportscenter://x-callback-url/showVideo?videoID=50472256&videoDSI=2dd62544156c9"
+        },
+        "web": {
+          "href": "https://www.espn.com/video/clip/_/id/50472256/pochettino-explains-why-decided-join-man-united-leave-usmnt",
+          "self": {
+            "href": "https://www.espn.com/video/clip/_/id/50472256/pochettino-explains-why-decided-join-man-united-leave-usmnt",
+            "dsi": { "href": "https://www.espn.com/video/clip?id=2dd62544156c9" }
+          }
+        }
+      },
+      "premium": false
+    }
+  ]
+}

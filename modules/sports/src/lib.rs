@@ -1,10 +1,18 @@
 //! Sports package: followed leagues and teams, the standings picker's saved choices, and
 //! account export. All effects cross the guest-safe SDK Host interface.
 pub mod catalog;
+mod catalog_table;
+pub mod datasets;
+pub mod espn;
+pub mod espn_games;
+pub mod espn_standings;
 pub mod follows;
 pub mod identity;
 pub mod input;
 pub mod lifecycle;
+pub mod public_cache;
+pub mod public_routes;
+pub mod roster;
 pub mod standings;
 pub mod teams;
 pub mod util;
@@ -24,6 +32,9 @@ pub fn route_with<H: Host + ?Sized>(host: &H, teams: &dyn TeamList, request: Rou
         ("POST", "/follows") => follows::create(host, teams, &request),
         ("POST", "/follows/:id/team") => follows::choose_team(host, teams, &request),
         ("DELETE", "/follows/:id") => follows::remove(host, &request),
+        ("GET", "/catalog") => Ok(Response::new(200, catalog::response())),
+        ("GET", "/leagues/:competition_key/teams") => public_routes::league_teams(host, &request),
+        ("GET", "/teams/search") => public_routes::search(host, &request),
         ("GET", "/standings-preferences") => standings::get(host),
         ("PUT", "/standings-preferences") => standings::put(host, &request),
         _ => return Response::new(404, json!({"message":"Route not found"})),
@@ -31,9 +42,9 @@ pub fn route_with<H: Host + ?Sized>(host: &H, teams: &dyn TeamList, request: Rou
     result.unwrap_or_else(|_| Response::new(500, json!({"message":"Internal server error"})))
 }
 
-/// The packaged routes, with no provider connected.
+/// The packaged routes, reading team lists from ESPN.
 pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
-    route_with(host, &teams::Unavailable, request)
+    route_with(host, &roster::EspnTeams(host), request)
 }
 
 /// The same entry point runs natively in tests and inside the packaged component.

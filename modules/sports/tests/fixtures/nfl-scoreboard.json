@@ -1,0 +1,41 @@
+{
+  "events": [
+    {
+      "id": "401671800",
+      "date": "2026-01-04T18:00Z",
+      "competitions": [
+        {
+          "competitors": [
+            {
+              "homeAway": "home",
+              "winner": true,
+              "score": "27",
+              "team": {
+                "id": "6",
+                "abbreviation": "DAL",
+                "displayName": "Dallas Cowboys",
+                "shortDisplayName": "Cowboys",
+                "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/dal.png"
+              },
+              "records": [{ "summary": "12-5" }]
+            },
+            {
+              "homeAway": "away",
+              "winner": false,
+              "score": "20",
+              "team": {
+                "id": "17",
+                "abbreviation": "NE",
+                "displayName": "New England Patriots",
+                "shortDisplayName": "Patriots",
+                "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/ne.png"
+              },
+              "records": [{ "summary": "9-8" }]
+            }
+          ],
+          "status": { "type": { "state": "post", "detail": "Final" } }
+        }
+      ]
+    }
+  ]
+}
