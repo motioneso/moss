@@ -204,6 +204,7 @@ fn installed_package_reads_the_real_public_web_and_refuses_private_addresses() {
         version: "0.1.0".parse().unwrap(),
         compiled_cache: None,
             fuel_ceiling: None,
+            browser_dir: None,
     };
     let application =
         Application::open_extended(&root.join("data"), app.clone(), access.clone(), config)

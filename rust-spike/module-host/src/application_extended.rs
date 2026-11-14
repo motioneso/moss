@@ -42,12 +42,11 @@ impl Application {
         let local = Arc::new(LocalPorts::new(data)?);
         let sql = Arc::new(DatabasePorts::new(database.clone(), local)?);
         let jobs = Arc::new(JobPorts::new(config.producer, database.clone(), sql)?);
-        let services = Arc::new(ServicePorts::new(
-            data,
-            config.cipher,
-            config.intelligence,
-            jobs,
-        )?);
+        let mut services = ServicePorts::new(data, config.cipher, config.intelligence, jobs)?;
+        if let Some(dir) = config.browser_dir {
+            services = services.with_browser(dir);
+        }
+        let services = Arc::new(services);
         let deferred = Arc::new(crate::after_commit_jobs::AfterCommitJobs::new(adapter(
             services.clone(),
         )?));

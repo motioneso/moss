@@ -65,6 +65,10 @@ pub struct Settings {
     pub(crate) ai_key: Option<String>,
     #[serde(default)]
     pub(crate) fuel_ceiling: Option<u64>,
+    /// Folder holding the pinned browser (see module-host/tools/fetch-chrome.sh). Absent means
+    /// the browser port answers `unsupported`.
+    #[serde(default)]
+    pub(crate) browser_dir: Option<PathBuf>,
     /// Base folder for per-account notes roots (`<base>/<account id>`). Needed by People.
     #[serde(default)]
     pub(crate) notes_base: Option<PathBuf>,
@@ -423,6 +427,7 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
             version: "0.1.0".parse()?,
             compiled_cache: None,
             fuel_ceiling: Some(settings.fuel_ceiling.unwrap_or(DEFAULT_FUEL_CEILING)),
+            browser_dir: settings.browser_dir.clone(),
         },
         |services| {
             let services = match notes_base {
