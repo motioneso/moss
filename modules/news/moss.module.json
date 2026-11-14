@@ -4,14 +4,16 @@
   "name": "News",
   "publisher": "Moss",
   "version": "0.1.0",
-  "description": "Keeps each person's own News choices, private to the owner. People can pick catalog sources and topics, exclude publishers by domain, and remove sources they added. A person's added sources, topics and exclusions can be exported, and account deletion covers all eight News tables. A person can add a source by typing a site address or a subreddit. Moss reads the public site, finds its feed, asks the person's own AI model whether the source is acceptable, and shows a preview to confirm. Adding a topic or changing one needs web search, which is not part of this package, so those requests are refused. Building the feed, refresh scheduling, chat tools and the screens are not part of this package yet.",
+  "description": "Keeps each person's own News choices, private to the owner. People can pick catalog sources and topics, exclude publishers by domain, and remove sources they added. A person's added sources, topics and exclusions can be exported, and account deletion covers all eight News tables. A person can add a source by typing a site address or a subreddit. Moss reads the public site, finds its feed, asks the person's own AI model whether the source is acceptable, and shows a preview to confirm. Adding a topic or changing one needs web search, which is not part of this package, so those requests are refused. The News page is compiled from the active sources: stories are filtered, ranked by the person's own AI model with a fixed-order fallback, stored as a snapshot and served by the overview route. Refresh scheduling, chat tools and the screens are not part of this package yet.",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
   "capabilities": [
     {
       "port": "db",
-      "operations": ["query"],
+      "operations": [
+        "query"
+      ],
       "resources": [
         "app.news_compilation_snapshots",
         "app.news_custom_sources",
@@ -25,23 +27,42 @@
     },
     {
       "port": "context",
-      "operations": ["read", "uuid"],
-      "resources": ["call", "new"]
+      "operations": [
+        "read",
+        "uuid"
+      ],
+      "resources": [
+        "call",
+        "new"
+      ]
     },
     {
       "port": "kv",
-      "operations": ["get", "set"],
-      "resources": ["news.source-previews"]
+      "operations": [
+        "get",
+        "set"
+      ],
+      "resources": [
+        "news.source-previews"
+      ]
     },
     {
       "port": "fetch",
-      "operations": ["get"],
-      "resources": ["public-web"]
+      "operations": [
+        "get"
+      ],
+      "resources": [
+        "public-web"
+      ]
     },
     {
       "port": "ai",
-      "operations": ["generate"],
-      "resources": ["structured"]
+      "operations": [
+        "generate"
+      ],
+      "resources": [
+        "structured"
+      ]
     }
   ],
   "database": {
@@ -95,6 +116,11 @@
     }
   },
   "routes": [
+    {
+      "method": "GET",
+      "path": "/overview",
+      "signIn": true
+    },
     {
       "method": "POST",
       "path": "/sources/preview",
@@ -165,7 +191,9 @@
   "provides": {
     "collectNewsPersonalizationExportSection": "1.0.0"
   },
-  "icons": ["icons/news.svg"],
+  "icons": [
+    "icons/news.svg"
+  ],
   "accounts": {
     "supportsUserDisable": true,
     "defaultEnabled": true
@@ -233,6 +261,11 @@
           "path": "/settings?section=modules&module=news"
         }
       ]
+    },
+    {
+      "id": "news.compiled_page",
+      "description": "The News page is built from the catalog sources the person has on and the sources they added. Stories from excluded publishers, stories that are too old or repeats are left out. The person's own AI model ranks what is left, and when the model cannot answer the stories keep a fixed order by source and time. The built page is stored for seven days and the overview route serves it, compiling a new one when the stored page is missing or out of date.",
+      "errors": []
     }
   ],
   "optionalRequires": {}

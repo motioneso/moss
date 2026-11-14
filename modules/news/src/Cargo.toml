@@ -44,5 +44,9 @@ name = "sources"
 path = "../tests/sources.rs"
 
 [[test]]
+name = "compile"
+path = "../tests/compile.rs"
+
+[[test]]
 name = "privacy"
 path = "../tests/privacy.rs"
