@@ -37,6 +37,7 @@ pub mod ports {
     port!(AI, ai, "ai", "moss:module/ai@1.0.0");
     port!(KV, kv, "kv", "moss:module/kv@1.0.0");
     port!(FETCH, fetch, "fetch", "moss:module/fetch@1.0.0");
+    port!(BROWSER, browser, "browser", "moss:module/browser@1.0.0");
     port!(
         CREDENTIALS,
         credentials,
