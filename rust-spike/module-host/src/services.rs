@@ -24,6 +24,7 @@ pub struct ServicePorts {
     pub(crate) ai: Arc<dyn crate::ai::Intelligence>,
     pub(crate) network: Arc<dyn crate::network::Transport>,
     public_web: Arc<crate::public_web::PublicWeb>,
+    browser: Option<crate::browser::BrowserPort>,
 }
 impl ServicePorts {
     pub fn new(
@@ -41,6 +42,7 @@ impl ServicePorts {
             ai,
             network: Arc::new(crate::network::Network),
             public_web: Arc::default(),
+            browser: None,
         })
     }
     /// One account's recent port activity for a module: port, operation, resource name and
@@ -54,6 +56,20 @@ impl ServicePorts {
     }
     pub fn with_public_web(mut self, public_web: crate::public_web::PublicWeb) -> Self {
         self.public_web = Arc::new(public_web);
+        self
+    }
+    /// Turns on the browser port. It reads pages through this service's safe fetch, so call it
+    /// after `with_public_web`.
+    pub fn with_browser(mut self, chrome_dir: impl Into<std::path::PathBuf>) -> Self {
+        self.browser = Some(crate::browser::BrowserPort::new(
+            chrome_dir,
+            self.public_web.clone(),
+        ));
+        self
+    }
+    #[cfg(feature = "browser-proof")]
+    pub fn with_browser_port(mut self, port: crate::browser::BrowserPort) -> Self {
+        self.browser = Some(port);
         self
     }
     pub fn with_network(mut self, transport: Arc<dyn crate::network::Transport>) -> Self {
@@ -263,6 +279,10 @@ impl ServicePorts {
                     .public_web
                     .fetch(&r.operation, &r.parameters, scope.remaining()))
             }
+            "browser" => match &self.browser {
+                Some(browser) => Ok(browser.render(scope, r)),
+                None => Ok(crate::browser::Reason::Unsupported.to_json()),
+            },
             "ai" => self.ai.generate(scope, r),
             "embed" => self.ai.embed(scope, r),
             "transcribe" => self.ai.transcribe(scope, r),

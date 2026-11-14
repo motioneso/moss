@@ -22,6 +22,7 @@ pub mod jobs;
 pub mod ai;
 pub mod credentials;
 pub mod network;
+pub mod browser;
 pub mod public_web;
 pub mod robots;
 pub mod services;

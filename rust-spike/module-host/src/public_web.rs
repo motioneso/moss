@@ -105,6 +105,8 @@ struct Options {
     reject_oversized: bool,
     skip_robots: bool,
     base64: bool,
+    /// Set only by the host's own browser path. A package cannot ask for it.
+    unpaced: bool,
 }
 struct Raw {
     status: u16,
@@ -145,17 +147,34 @@ impl PublicWeb {
     /// Reads one address for a package. Always returns a JSON answer with `ok` set, so a refused
     /// read reaches the package as a reason it can show, not as a crashed call.
     pub fn fetch(&self, operation: &str, parameters: &Value, remaining: Duration) -> Value {
-        match self.read(operation, parameters, remaining) {
+        match self.read(operation, parameters, remaining, false) {
             Ok(done) => done,
             Err(failure) => failure.to_json(),
         }
     }
 
-    fn read(&self, operation: &str, parameters: &Value, remaining: Duration) -> Fail<Value> {
+    /// The rendering browser's page requests. Same guards as `fetch`, without the pause between
+    /// calls to one host, because one page load makes many requests to the same site. The
+    /// browser port's own caps bound how many.
+    pub(crate) fn fetch_for_browser(&self, parameters: &Value, remaining: Duration) -> Value {
+        match self.read("get", parameters, remaining, true) {
+            Ok(done) => done,
+            Err(failure) => failure.to_json(),
+        }
+    }
+
+    fn read(
+        &self,
+        operation: &str,
+        parameters: &Value,
+        remaining: Duration,
+        unpaced: bool,
+    ) -> Fail<Value> {
         if !operation.eq_ignore_ascii_case("get") {
             return Err(Failure::new("blocked"));
         }
-        let options = options(parameters, remaining)?;
+        let mut options = options(parameters, remaining)?;
+        options.unpaced = unpaced;
         let url = Url::parse(parameters["url"].as_str().unwrap_or_default())
             .map_err(|_| Failure::new("blocked"))?;
         let deadline = Instant::now() + options.timeout;
@@ -223,7 +242,9 @@ impl PublicWeb {
             if !robots_off && !self.robots_allow(&current, options, deadline)? {
                 return Err(Failure::new("robots"));
             }
-            self.pace(&host, deadline)?;
+            if !options.unpaced {
+                self.pace(&host, deadline)?;
+            }
             let addresses = self.resolve(&host, deadline)?;
             let remaining = left(deadline)?;
             let response = self
@@ -403,6 +424,7 @@ impl PublicWeb {
                     user_agent: options.user_agent.clone(),
                     allowed_hosts: options.allowed_hosts.clone(),
                     timeout: options.timeout,
+                    unpaced: options.unpaced,
                 };
                 let rules = match self.hops(fetched, &probe, deadline, false) {
                     Err(failure) => return Err(failure),
@@ -598,6 +620,7 @@ fn options(parameters: &Value, remaining: Duration) -> Fail<Options> {
         reject_oversized: flag("rejectOversizedResponses")?,
         skip_robots: flag("skipRobots")?,
         base64,
+        unpaced: false,
     })
 }
 

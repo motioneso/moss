@@ -44,8 +44,13 @@ pub struct CallScope {
     access: AccessContext,
     module: Arc<Manifest>,
     deadline: Instant,
+    kind: String,
 }
 impl CallScope {
+    /// The handler kind that started this call: route, api, job, tool, event, install or health.
+    pub fn kind(&self) -> &str {
+        &self.kind
+    }
     /// Unique to this guest invocation, including nested calls sharing a request ID.
     pub fn call_id(&self) -> uuid::Uuid {
         self.call_id
@@ -271,6 +276,7 @@ impl Host {
             access,
             module: manifest,
             deadline: Instant::now() + self.limits.deadline,
+            kind: kind.to_owned(),
         };
         let mut completion = Completion {
             scope: scope.clone(),
@@ -371,6 +377,11 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
         "fetch" if request.resource == crate::public_web::PUBLIC_WEB => ensure!(
             request.parameters.get("url").is_some_and(Value::is_string),
             "The request needs a URL"
+        ),
+        "browser" => ensure!(
+            request.resource == crate::public_web::PUBLIC_WEB
+                && request.parameters.get("url").is_some_and(Value::is_string),
+            "The browser opens public pages only"
         ),
         "fetch" | "credentials" => {
             let url = request
