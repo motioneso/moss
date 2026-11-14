@@ -12,6 +12,7 @@ mod draft_tool;
 pub mod events;
 pub mod heartbeat;
 mod jobs;
+pub mod mirror;
 pub mod model;
 mod operations;
 pub mod plans;
@@ -136,6 +137,7 @@ fn api(host: &impl Host, name: &str, input: Value) -> Result<Value> {
         "getSourceSwitches" => source_switches(host, &input),
         "upsertCachedEvent" => cache::upsert(host, &input),
         "pruneCachedEvents" => cache::prune(host, &input),
+        "importCalendarMirror" => mirror::import(host, &input),
         "evictCachedEvent" => jobs::evict(host, input["id"].as_str().unwrap_or("")),
         _ => Err(Error::new(404, "Calendar data operation not found")),
     }

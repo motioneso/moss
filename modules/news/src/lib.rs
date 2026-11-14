@@ -1,12 +1,18 @@
 //! News package: saved source and topic choices, added sources, excluded publishers and account
-//! export. All effects cross the guest-safe SDK Host interface. It makes no network calls.
+//! export, and adding a source. All effects cross the guest-safe SDK Host interface, including
+//! public-web reads and model calls.
 pub mod catalog;
 pub mod domain;
 pub mod input;
 pub mod lifecycle;
 pub mod personalization;
+pub mod policy;
 pub mod prefs;
+pub mod previews;
+pub mod resolve;
+pub mod sources;
 pub mod util;
+pub mod web;
 
 #[cfg(target_arch = "wasm32")]
 mod component;
@@ -28,6 +34,8 @@ pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
         ("POST", "/topics") => personalization::add_topic(host, &request),
         ("PATCH", "/topics/:id") => personalization::change_topic(host, &request),
         ("DELETE", "/topics/:id") => personalization::remove_topic(host, &request),
+        ("POST", "/sources/preview") => sources::preview(host, &request),
+        ("POST", "/sources") => sources::confirm(host, &request),
         ("DELETE", "/sources/:id") => personalization::remove_source(host, &request),
         _ => return Response::new(404, json!({"message":"Route not found"})),
     };

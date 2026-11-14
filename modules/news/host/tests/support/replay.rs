@@ -158,3 +158,33 @@ pub fn steps_with_ids() -> Vec<Value> {
         get(PERSONALIZATION),
     ]
 }
+
+/// Adding a source, up to and including the preview that succeeds. The last step must be that preview.
+pub fn steps_adding_before_save() -> Vec<Value> {
+    let long = "x".repeat(513);
+    vec![
+        send("POST", &format!("{SOURCES}/preview"), json!({})),
+        send("POST", &format!("{SOURCES}/preview"), json!({"input":long})),
+        send("POST", &format!("{SOURCES}/preview"), json!({"input":"daily.sample.test","replaceSourceId":"nope"})),
+        send("POST", &format!("{SOURCES}/preview"), json!({"input":"daily.sample.test","extra":1})),
+        send("POST", &format!("{SOURCES}/preview"), json!({"input":"r/a"})),
+        send("POST", &format!("{SOURCES}/preview"), json!({"input":"http://daily.sample.test"})),
+        send("POST", &format!("{SOURCES}/preview"), json!({"input":"https://10.0.0.1"})),
+        send("POST", &format!("{SOURCES}/preview"), json!({"input":"a newspaper with a name"})),
+        send("POST", &format!("{SOURCES}/preview"), json!({"input":"https://down.sample.test/"})),
+        send("POST", &format!("{SOURCES}/preview"), json!({"input":"https://example.com/"})),
+        send("POST", SOURCES, json!({})),
+        send("POST", SOURCES, json!({"confirmationId":MISSING})),
+        send("POST", &format!("{SOURCES}/preview"), json!({"input":"https://daily.sample.test/"})),
+    ]
+}
+
+/// Saving what the last preview showed. `{conf}` is that preview's confirmation id.
+pub fn steps_adding_save() -> Vec<Value> {
+    vec![
+        send("POST", SOURCES, json!({"confirmationId":"{conf}"})),
+        send("POST", SOURCES, json!({"confirmationId":"{conf}"})),
+        send("POST", &format!("{SOURCES}/preview"), json!({"input":"daily.sample.test"})),
+        get(PERSONALIZATION),
+    ]
+}

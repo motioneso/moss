@@ -377,9 +377,42 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
             }
         }
     }
+    // The stand-in Outlook page also runs as its own process. The server reaches it only
+    // through the outlook_browser setting, which names this person and one invented account.
+    let mut fake_outlook = Server(
+        Command::new(std::env::var("JS270_FAKE_OUTLOOK").expect("the gate must supply the fake Outlook page"))
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap(),
+    );
+    let mut outlook_commands = fake_outlook.0.stdin.take().unwrap();
+    let outlook_endpoint = {
+        use std::io::BufRead;
+        let mut out = std::io::BufReader::new(fake_outlook.0.stdout.take().unwrap());
+        let (lines, received) = std::sync::mpsc::channel::<String>();
+        std::thread::spawn(move || {
+            let mut line = String::new();
+            while out.read_line(&mut line).is_ok_and(|n| n > 0) {
+                if lines.send(line.trim().to_owned()).is_err() {
+                    break;
+                }
+                line.clear();
+            }
+        });
+        let deadline = Instant::now() + Duration::from_secs(15);
+        loop {
+            let left = deadline.saturating_duration_since(Instant::now());
+            let line = received.recv_timeout(left).expect("the fake Outlook page did not print its endpoint in 15s");
+            if let Some(endpoint) = line.strip_prefix("endpoint ") {
+                break endpoint.to_owned();
+            }
+        }
+    };
     private(
         &root.join("modules.json"),
-        &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"test_only_google_token_url":token_url,
+        &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"test_only_google_token_url":token_url,"outlook_browser":{"endpoint":outlook_endpoint,"owner":owner.to_string(),"account":"person@example.invalid"},
             "test_only_mail":{"imap_port":mail_lines["imap-port"].parse::<u16>().unwrap(),"imap_tls":true,"smtp_port":mail_lines["smtp-port"].parse::<u16>().unwrap(),"smtp_security":"implicit_tls","trusted_certificate":mail_certificate}}),
     );
     let _server = start(true);
@@ -862,7 +895,54 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
             }
         });
         println!("PASS mail sync on the real server: three messages cached through Email, a rewritten one replaced, a removed one gone, only the changed one fetched again, sync recorded as success; mail text and password absent from the log and every row outside Email's own cache, including job payloads and activity");
+        // Outlook calendar: the stand-in page is read through the helper binding and its
+        // events reach Calendar. Signing the page out stops the reader.
+        let outlook = |method: reqwest::Method, path: &str| json_of(&call(method, &format!("/outlook-calendar{path}"), Some(&cookie), None).1);
+        let wait_state = |want: &str| {
+            let started = Instant::now();
+            loop {
+                let shown = outlook(Method::GET, "");
+                if shown["state"] == want {
+                    return shown;
+                }
+                assert!(started.elapsed() < Duration::from_secs(120), "Outlook never reached {want}: {shown}\n{}", log());
+                std::thread::sleep(Duration::from_millis(500));
+            }
+        };
+        assert_eq!(outlook(Method::GET, "")["available"], true);
+        outlook(Method::POST, "/connect");
+        let current = wait_state("current");
+        let titles: Vec<String> = saved_events().iter().filter_map(|e| e["title"].as_str().map(String::from)).collect();
+        assert!(titles.iter().any(|t| t == "Invented standup") && titles.iter().any(|t| t == "Invented review"), "{titles:?}");
+        for word in ["Invented standup", "Invented review"] {
+            assert!(!log().contains(word), "Outlook page text {word} in the server log");
+        }
+        runtime.block_on(async {
+            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+            tokio::spawn(async move {
+                let _ = connection.await;
+            });
+            for table in ["moss_queue.jobs", "moss_queue.schedules"] {
+                let hits: i64 = db
+                    .query_one(&format!("SELECT count(*) FROM {table} t WHERE to_jsonb(t)::text LIKE '%Invented%' OR to_jsonb(t)::text LIKE '%person@example.invalid%'"), &[])
+                    .await
+                    .unwrap()
+                    .get(0);
+                assert_eq!(hits, 0, "Outlook page text found in {table}");
+            }
+        });
+        {
+            use std::io::Write;
+            writeln!(outlook_commands, "sign-out").unwrap();
+            outlook_commands.flush().unwrap();
+        }
+        outlook(Method::POST, "/refresh");
+        wait_state("sign-in-needed");
+        let gone = outlook(Method::POST, "/disconnect");
+        assert_eq!(gone["state"], "disconnected", "{gone}");
+        println!("PASS Outlook calendar on the real server: stand-in page read week by week, events in Calendar, state {}, page text absent from the log and every job and schedule row, sign-out stops the reader, disconnect works", current["state"]);
     }
+    drop(fake_outlook);
     drop(fake_mail);
     drop(fake_google);
     if let Ok(seconds) = std::env::var("MOSS_CONNECTORS_HOLD_SECONDS") {

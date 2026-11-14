@@ -9,9 +9,9 @@ const checks = spawnSync("modules/connectors/tools/check.sh", {
 if (checks.status !== 0) process.exit(checks.status ?? 1);
 const target = process.env.CARGO_TARGET_DIR ?? "/tmp/moss-connectors-host";
 const wasm = `${target}/connectors-guest/wasm32-unknown-unknown/release/moss_connectors.wasm`;
-const suites = (process.env.CONNECTORS_TESTS ?? "db,google_sync,google,imap,refresh,writes").split(
-  ","
-);
+const suites = (
+  process.env.CONNECTORS_TESTS ?? "db,google_sync,google,imap,refresh,outlook,writes"
+).split(",");
 const run = spawnSync(
   "cargo",
   [

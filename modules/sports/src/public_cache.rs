@@ -9,8 +9,10 @@ pub const TEAMS: &str = "espn-teams";
 pub const SCOREBOARD: &str = "espn-scoreboard";
 pub const STANDINGS: &str = "espn-standings";
 pub const HEADLINES: &str = "espn-headlines";
+pub const SCHEDULE: &str = "espn-schedule";
+pub const RESULTS: &str = "espn-results";
 /// Every namespace the manifest lists as install-wide.
-pub const NAMESPACES: [&str; 4] = [TEAMS, SCOREBOARD, STANDINGS, HEADLINES];
+pub const NAMESPACES: [&str; 6] = [TEAMS, SCOREBOARD, STANDINGS, HEADLINES, SCHEDULE, RESULTS];
 
 pub const TEAMS_TTL_MS: i64 = 24 * 60 * 60 * 1000;
 pub const SCOREBOARD_TTL_MS: i64 = 3 * 60 * 1000;

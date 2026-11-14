@@ -16,6 +16,7 @@ moss-module-sdk = { path = "../../../rust-spike/module-sdk" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 chrono = { version = "0.4", default-features = false, features = ["std"] }
+moss-news-reader = { path = "../reader" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wit-bindgen = { version = "=0.57.1", default-features = false, features = ["macros", "realloc"] }
@@ -37,6 +38,10 @@ path = "../tests/prefs.rs"
 [[test]]
 name = "personalization"
 path = "../tests/personalization.rs"
+
+[[test]]
+name = "sources"
+path = "../tests/sources.rs"
 
 [[test]]
 name = "privacy"

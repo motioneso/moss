@@ -12,6 +12,10 @@ pub mod email_context;
 pub mod email_writes;
 pub mod live_tools;
 pub mod monitors;
+pub mod outlook;
+pub mod outlook_availability;
+pub mod outlook_scan;
+pub mod outlook_source;
 pub mod fastify;
 pub mod google;
 pub mod google_sync;
@@ -75,6 +79,7 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
                 }
                 Some(monitors::EMAIL_QUEUE | monitors::CALENDAR_QUEUE) => monitors::handle(host, payload),
                 Some(refresh::SWEEP) => refresh::handle(host, payload),
+                Some(outlook::QUEUE) => outlook::handle(host, payload),
                 _ => mail_sync::handle(host, payload),
             }
         }
@@ -146,6 +151,10 @@ fn route(host: &impl Host, request: RouteRequest) -> Result<(u16, Value)> {
             let id = request.params.get("refresh_id").cloned().unwrap_or_default();
             refresh::status(host, &id)
         }
+        ("GET", "/outlook-calendar") => outlook::status(host),
+        ("POST", "/outlook-calendar/connect") => outlook::connect(host),
+        ("POST", "/outlook-calendar/refresh") => outlook::refresh(host),
+        ("POST", "/outlook-calendar/disconnect") => outlook::disconnect(host),
         ("GET", "/admin/accounts") => accounts::admin_list(host).map(|b| (200, b)),
         _ => Err(Error::new(404, "Connectors route not found")),
     }

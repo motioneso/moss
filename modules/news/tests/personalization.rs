@@ -17,7 +17,9 @@ fn an_empty_account_reads_as_idle_with_every_ability_off() {
     let f = Fake::new();
     let (s, b) = f.route("GET", "/personalization", &[], json!(null));
     assert_eq!(s, 200);
-    assert_eq!(b["availability"]["aiConfigured"], false);
+    assert_eq!(b["availability"]["aiConfigured"], true);
+    assert_eq!(b["availability"]["customSourceByUrlEnabled"], true);
+    assert_eq!(b["availability"]["customSourceByNameEnabled"], false);
     assert_eq!(b["availability"]["webSearchReason"], "no-key-no-native-model");
     assert_eq!(b["snapshot"], json!(null));
     assert_eq!(b["refresh"]["state"], "idle");

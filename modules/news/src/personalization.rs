@@ -13,6 +13,7 @@ pub const TOPICS: &str = "app.news_custom_topics";
 pub const EXCLUSIONS: &str = "app.news_source_exclusions";
 pub const SNAPSHOTS: &str = "app.news_compilation_snapshots";
 pub const REFRESH: &str = "app.news_refresh_state";
+pub const POLICY: &str = "app.news_policy_verdicts";
 const EXCLUSION_LIMIT: usize = 100;
 
 fn text<'a>(row: &'a Value, key: &str) -> Result<&'a str> {
@@ -26,7 +27,7 @@ fn newest_first() -> Vec<Order> {
     ]
 }
 
-fn source_dto(row: &Value) -> Result<Value> {
+pub(crate) fn source_dto(row: &Value) -> Result<Value> {
     let method = text(row, "retrieval_method")?;
     let feed = row["feed_url"].as_str();
     let canonical = text(row, "canonical_domain")?;
@@ -101,7 +102,9 @@ fn refresh_dto(row: Option<&Value>) -> Result<Value> {
     Ok(out)
 }
 
-/// `GET /personalization`. Nothing here can reach a model or the web, so every ability is off.
+/// `GET /personalization`. Adding by address is on. The host cannot say whether a model is set up,
+/// so that flag is always on and a missing model shows when a preview is tried. Name search and
+/// free-form topics need web search and stay off.
 pub fn get<H: Host + ?Sized>(host: &H) -> Result<Response> {
     let client = Client(host);
     let sources = list(host, SOURCES)?.iter().map(source_dto).collect::<Result<Vec<_>>>()?;
@@ -113,10 +116,10 @@ pub fn get<H: Host + ?Sized>(host: &H) -> Result<Response> {
         200,
         json!({
             "availability": {
-                "aiConfigured": false,
+                "aiConfigured": true,
                 "webSearchConfigured": false,
                 "webSearchReason": "no-key-no-native-model",
-                "customSourceByUrlEnabled": false,
+                "customSourceByUrlEnabled": true,
                 "customSourceByNameEnabled": false,
                 "freeformTopicsEnabled": false,
             },

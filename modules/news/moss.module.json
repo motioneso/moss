@@ -4,7 +4,7 @@
   "name": "News",
   "publisher": "Moss",
   "version": "0.1.0",
-  "description": "Keeps each person's own News choices, private to the owner. People can pick catalog sources and topics, exclude publishers by domain, and remove sources they added. A person's added sources, topics and exclusions can be exported, and account deletion covers all eight News tables. Adding a topic or changing one needs web search, which is not part of this package, so those requests are refused. Reading sites, building the feed, adding sources, refresh scheduling, chat tools and the screens are not part of this package yet.",
+  "description": "Keeps each person's own News choices, private to the owner. People can pick catalog sources and topics, exclude publishers by domain, and remove sources they added. A person's added sources, topics and exclusions can be exported, and account deletion covers all eight News tables. A person can add a source by typing a site address or a subreddit. Moss reads the public site, finds its feed, asks the person's own AI model whether the source is acceptable, and shows a preview to confirm. Adding a topic or changing one needs web search, which is not part of this package, so those requests are refused. Building the feed, refresh scheduling, chat tools and the screens are not part of this package yet.",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
@@ -27,6 +27,21 @@
       "port": "context",
       "operations": ["read", "uuid"],
       "resources": ["call", "new"]
+    },
+    {
+      "port": "kv",
+      "operations": ["get", "set"],
+      "resources": ["news.source-previews"]
+    },
+    {
+      "port": "fetch",
+      "operations": ["get"],
+      "resources": ["public-web"]
+    },
+    {
+      "port": "ai",
+      "operations": ["generate"],
+      "resources": ["structured"]
     }
   ],
   "database": {
@@ -80,6 +95,16 @@
     }
   },
   "routes": [
+    {
+      "method": "POST",
+      "path": "/sources/preview",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/sources",
+      "signIn": true
+    },
     {
       "method": "GET",
       "path": "/catalog",
@@ -182,7 +207,14 @@
     },
     {
       "id": "news.added_sources",
-      "description": "A person can remove a source they added. Adding a source, checking it and reading its site are not part of this package yet."
+      "description": "A person can add a source by typing a site address or a subreddit name, and remove a source they added. Moss reads the public page over https, looks for its feed, and shows the result for the person to confirm. A site that is redirected to another publisher is refused, a source the person's AI model does not approve is refused, and a person can keep ten added sources. A source name with no address needs web search, which is not part of this package. Saving a source does not refresh the feed yet.",
+      "errors": [
+        {
+          "code": "news.add_source.discovery_unavailable",
+          "class": "transient",
+          "description": "The site could not be checked right now, or the AI model gave no usable answer."
+        }
+      ]
     },
     {
       "id": "news.topics",

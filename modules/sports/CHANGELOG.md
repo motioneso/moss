@@ -7,4 +7,5 @@
 - Following a team, and choosing which team a saved follow means, wait for the provider's team list and are refused until then.
 - The standings picker keeps the chosen leagues and the last view under the same saved settings as before.
 - Account export and deletion cover all six tables.
-- Scores, standings data, news sources, source setup, chat tools and the Sports screens are not part of this package yet.
+- The overview, standings and latest-result routes read ESPN. Followed clubs appear as one card each across competitions, and ESPN days follow US Eastern time.
+- Headlines, the gameday hero, news sources, source setup, chat tools and the Sports screens are not part of this package yet.

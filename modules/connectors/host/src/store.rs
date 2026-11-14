@@ -127,6 +127,7 @@ pub async fn run(cx: &DataContext, cipher: &JsonSecretCipher, request: &Request)
             Ok(preference(cx, &key).await?)
         }
         ("set", "connectors.feature-grants") => set_grants(cx, p).await,
+        ("set", "connectors.outlook-health") => set_outlook_health(cx, p).await,
         ("set", "connectors.monitor-status") => monitor_status(cx, p).await,
         ("get", "connectors.admin-accounts") => admin(cx).await,
         ("get", "connectors.diagnostics") => diagnostics(cx, p["limit"].as_i64().unwrap_or(11)).await,
@@ -418,6 +419,48 @@ async fn monitor_status(cx: &DataContext, p: &Value) -> Result<Value> {
                    revision = app.preferences.revision + 1,
                    updated_at = EXCLUDED.updated_at",
             &[&key, &p["record"]],
+        )
+        .await?;
+    Ok(json!({"saved":true}))
+}
+
+/// Saves the Outlook reader's health for one of the person's Outlook accounts.
+async fn set_outlook_health(cx: &DataContext, p: &Value) -> Result<Value> {
+    let account = text(p, "accountId")?;
+    let found = cx
+        .db()
+        .query_opt(
+            "SELECT 1 FROM app.connector_accounts WHERE id::text = $1::text AND provider_id = $2",
+            &[&account, &moss_connectors::health::OUTLOOK_PROVIDER],
+        )
+        .await?;
+    if found.is_none() {
+        return Ok(json!({"saved":false}));
+    }
+    let key = moss_connectors::health::outlook_key(account);
+    // A fenced write lands only while the stored health still names this run as current.
+    if let Some(run) = p["fenceRun"].as_str() {
+        let changed = cx
+            .db()
+            .execute(
+                "UPDATE app.preferences
+                    SET value_json = $2, revision = revision + 1, updated_at = now()
+                  WHERE owner_user_id = app.current_actor_user_id() AND key = $1
+                    AND value_json->>'currentRun' = $3::text",
+                &[&key, &p["value"], &run],
+            )
+            .await?;
+        return Ok(json!({"saved":changed > 0}));
+    }
+    cx.db()
+        .execute(
+            "INSERT INTO app.preferences(owner_user_id, key, value_json, updated_at)
+             VALUES (app.current_actor_user_id(), $1, $2, now())
+             ON CONFLICT (owner_user_id, key) DO UPDATE
+               SET value_json = EXCLUDED.value_json,
+                   revision = app.preferences.revision + 1,
+                   updated_at = EXCLUDED.updated_at",
+            &[&key, &p["value"]],
         )
         .await?;
     Ok(json!({"saved":true}))

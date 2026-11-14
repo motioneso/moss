@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "connectors",
   "name": "Connectors",
-  "description": "Keeps the mail and calendar connections of each account, their sign-in secrets and the Email and Calendar permissions. Connecting Google works by pasting your own Google client details. Yahoo, Proton Bridge, iCloud and Fastmail mail connect with an app password. Google mail and calendar sync into the Email and Calendar caches. Outlook sign-in and calendar syncing are not part of this package yet.",
+  "description": "Keeps the mail and calendar connections of each account, their sign-in secrets and the Email and Calendar permissions. Connecting Google works by pasting your own Google client details. Yahoo, Proton Bridge, iCloud and Fastmail mail connect with an app password. Google mail and calendar sync into the Email and Calendar caches. Outlook calendar syncing reads the Outlook web page through a dedicated browser, calendar only and read-only. Outlook mail and sign-in are not part of this package yet.",
   "publisher": "Moss",
   "version": "0.6.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
@@ -51,7 +51,10 @@
         "connectors.write-calendar-delete",
         "connectors.write-imap-send",
         "connectors.write-imap-draft",
-        "connectors.monitor-status"
+        "connectors.monitor-status",
+        "connectors.outlook-binding",
+        "connectors.outlook-scan",
+        "connectors.outlook-health"
       ]
     },
     {
@@ -65,7 +68,8 @@
         "email-refresh-imap",
         "email-refresh-sweep",
         "email-monitor",
-        "calendar-monitor"
+        "calendar-monitor",
+        "outlook-calendar"
       ]
     },
     {
@@ -189,6 +193,10 @@
       "path": "/email-refresh/:refresh_id",
       "signIn": true
     },
+    { "method": "GET", "path": "/outlook-calendar", "signIn": true },
+    { "method": "POST", "path": "/outlook-calendar/connect", "signIn": true },
+    { "method": "POST", "path": "/outlook-calendar/refresh", "signIn": true },
+    { "method": "POST", "path": "/outlook-calendar/disconnect", "signIn": true },
     {
       "method": "GET",
       "path": "/admin/accounts",
@@ -197,7 +205,7 @@
   ],
   "requires": {
     "email": ">=0.4.0, <1.0.0",
-    "calendar": ">=0.29.0, <1.0.0"
+    "calendar": ">=0.30.0, <1.0.0"
   },
   "provides": {
     "listCalendarContext": "1.0.0",
@@ -216,7 +224,7 @@
   "features": [
     {
       "id": "connectors.accounts",
-      "description": "Lists, creates, updates and revokes the signed-in person's connection accounts. Secrets are sealed on save and never returned; only a safe summary is shown. Google connects through its own guided flow, and mail providers connect with an app password. Outlook cannot be connected from this package yet.",
+      "description": "Lists, creates, updates and revokes the signed-in person's connection accounts. Secrets are sealed on save and never returned; only a safe summary is shown. Google connects through its own guided flow, and mail providers connect with an app password. Outlook calendar connects through its own dedicated-browser requests, not through this list.",
       "errors": [
         {
           "code": "connector-account-not-found",
@@ -461,6 +469,31 @@
       "description": "The assistant can save a reply as a draft, and send one only after the person approves the exact text. A reply goes to the original sender on the same thread, from the person's own Gmail or mail account, and is sent once and never retried. A reply that cannot be sent says why in plain words, such as reconnecting Google to grant send permission."
     },
     {
+      "id": "connectors.outlook-calendar",
+      "description": "Moss can copy a person's own Outlook calendar into Calendar by reading the Outlook web page in a browser on the same machine. It only reads, it keeps the events read-only, and it covers about a month around today. Connecting needs a dedicated browser set up for that person's account, and without one the connect and refresh requests say that no dedicated Outlook browser is configured. The copy refreshes every five minutes. When the page asks for sign-in, changes layout or shows a different account, Moss stops and says so instead of guessing. Placing a new event is refused until the Outlook copy is fresh and covers the requested dates.",
+      "errors": [
+        {
+          "code": "outlook-browser-not-configured",
+          "class": "validation",
+          "description": "No dedicated Outlook browser is set up for this person",
+          "remediationRef": "connectors-check-package"
+        },
+        {
+          "code": "outlook-browser-changed",
+          "class": "validation",
+          "description": "The dedicated browser no longer matches the one that was connected",
+          "remediationRef": "connectors-check-package"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "connectors-check-package",
+          "description": "Check that Connectors is enabled",
+          "path": "/settings/modules"
+        }
+      ]
+    },
+    {
       "id": "connectors.calendar-writes",
       "description": "Calendar can add a focus-time block to the person's own Google Calendar in the first free slot, move an event that has no guests, and delete an event. Each change shows up in Calendar at once. Outlook events are read-only. A change that needs calendar permission says to reconnect Google in Settings."
     }
@@ -573,6 +606,17 @@
         "kind": "id"
       }
     },
+    "outlook-calendar": {
+      "account-id": {
+        "kind": "id"
+      },
+      "run-id": {
+        "kind": "id"
+      },
+      "begun": {
+        "kind": "flag"
+      }
+    },
     "email-refresh-google": {
       "account-id": {
         "kind": "id"
@@ -656,7 +700,7 @@
       "label": "Connections",
       "path": "/settings/connections",
       "scope": "user",
-      "description": "Mail and calendar connections for this account, their health and the Email and Calendar switches for each. Connect Google is offered here. Mail connects by app password through the connection service, but this screen does not offer it yet, and Outlook is not available in this version."
+      "description": "Mail and calendar connections for this account, their health and the Email and Calendar switches for each. Connect Google is offered here. Mail connects by app password through the connection service, but this screen does not offer it yet, and it does not offer Outlook calendar yet either."
     }
   ]
 }

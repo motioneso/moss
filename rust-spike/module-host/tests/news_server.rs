@@ -319,9 +319,19 @@ fn installed_news_package_serves_routes_from_the_real_server() {
     use reqwest::Method;
     const MARK: &str = "PLANTED-LIVE-MARKER-7d2e";
     assert_eq!(call(Method::GET, "/prefs", None, None).0, 401);
-    // The server answers 503 until its module host has finished starting.
+    // The server answers 503, or holds the request, until its module host has finished starting.
     let started = std::time::Instant::now();
-    while call(Method::GET, "/prefs", Some(&cookie), None).0 == 503 && started.elapsed() < std::time::Duration::from_secs(60) {
+    loop {
+        let ready = client
+            .get(format!("{origin}/api/m/news/prefs"))
+            .header("origin", &origin)
+            .header("cookie", &cookie)
+            .send()
+            .is_ok_and(|r| r.status().as_u16() != 503);
+        if ready {
+            break;
+        }
+        assert!(started.elapsed() < std::time::Duration::from_secs(240), "module host start deadline\n{}", log());
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
     for who in [&cookie, &other] {
@@ -365,6 +375,44 @@ fn installed_news_package_serves_routes_from_the_real_server() {
     assert_eq!(json_of(&text), json!({"ok":true}));
     let (_, text) = call(Method::DELETE, &format!("/prefs/{pref}"), Some(&cookie), None);
     assert_eq!(json_of(&text), json!({"ok":true}));
+    // Adding a real public feed. The page and the feed are read from the real internet through the
+    // server's own public-web fetch, with nothing rewritten on the way.
+    const FEED: &str = "https://feeds.bbci.co.uk/news/rss.xml";
+    let (status, text) = call(Method::POST, "/sources/preview", Some(&cookie), Some(json!({"input":FEED})));
+    let first = json_of(&text);
+    println!("news live: first preview with no model set up -> {status} {}", first["status"]);
+    // This server has no text model, so a new site cannot get its policy verdict from one.
+    assert_eq!((status, &first["status"]), (200, &json!("unavailable")), "{text}\n{}", log());
+    // The person's own remembered verdict stands in for the model. The feed itself is still fetched live.
+    runtime.block_on(async {
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        db.execute(
+            "INSERT INTO app.news_policy_verdicts (owner_user_id, canonical_domain, fingerprint, verdict, expires_at) VALUES ($1, 'feeds.bbci.co.uk', 'host-ai-v1', 'approved', now() + interval '1 hour')",
+            &[&owner],
+        )
+        .await
+        .unwrap();
+    });
+    let (status, text) = call(Method::POST, "/sources/preview", Some(&cookie), Some(json!({"input":FEED})));
+    let shown = json_of(&text);
+    assert_eq!((status, &shown["status"]), (200, &json!("ok")), "{text}\n{}", log());
+    assert_eq!(shown["candidates"][0]["retrievalMethod"], "feed", "{text}");
+    println!("news live: real feed previewed: {}", shown["candidates"][0]["label"]);
+    let confirmation = shown["confirmationId"].clone();
+    let (status, text) = call(Method::POST, "/sources", Some(&other), Some(json!({"confirmationId":confirmation})));
+    assert_eq!(status, 409, "another person must not save this preview: {text}");
+    let (status, text) = call(Method::POST, "/sources", Some(&cookie), Some(json!({"confirmationId":confirmation})));
+    assert_eq!(status, 201, "{text}\n{}", log());
+    assert_eq!(json_of(&text)["source"]["canonicalDomain"], "feeds.bbci.co.uk");
+    let (_, text) = call(Method::GET, "/personalization", Some(&cookie), None);
+    assert_eq!(json_of(&text)["customSources"].as_array().unwrap().len(), 1, "{text}");
+    let (_, text) = call(Method::GET, "/personalization", Some(&other), None);
+    assert_eq!(json_of(&text)["customSources"], json!([]), "{text}");
+    println!("news live: the real feed was saved for the owner and is invisible to the other person");
+
     // Nothing the test sent reached the server log.
     assert!(!log().to_lowercase().contains(&MARK.to_lowercase()));
     println!("news live: choices, exclusions and topics for two people worked over HTTPS");
