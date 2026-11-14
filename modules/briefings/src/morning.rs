@@ -178,12 +178,14 @@ impl Composer for MorningComposer {
         let mut with_signals = signal_lines(&calendar_signals);
         with_signals.extend(std::mem::take(&mut calendar_today.lines));
         calendar_today.lines = cap_lines(with_signals).0;
+        let weather_section = crate::weather::section(host, &mut gaps);
+        subject.deadline.check(host)?;
         let mut prompt_sections: Vec<Section> = vec![
             Section::empty("commitments", "COMMITMENTS"),
             tasks,
             find(&gathered.sections, "calendar").cloned().unwrap_or_else(|| Section::empty("calendar", "CALENDAR")),
             calendar_today,
-            Section::empty("weather", "WEATHER"),
+            weather_section,
             Section { key: "email", label: "EMAIL SUMMARIES + SIGNALS", count: email_raw.len(), lines: mail_lines, raw: vec![] },
             Section::empty("vault", "VAULT"),
             Section::empty("chats", "CHATS"),

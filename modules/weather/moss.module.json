@@ -11,35 +11,17 @@
   "capabilities": [
     {
       "port": "context",
-      "operations": [
-        "read"
-      ],
-      "resources": [
-        "call",
-        "client-address"
-      ]
+      "operations": ["read"],
+      "resources": ["call", "client-address"]
     },
     {
       "port": "kv",
-      "operations": [
-        "get",
-        "set",
-        "preference.read",
-        "preference.write"
-      ],
-      "resources": [
-        "location",
-        "unit",
-        "saved-timezone",
-        "forecasts",
-        "ip-guess"
-      ]
+      "operations": ["get", "set", "preference.read", "preference.write"],
+      "resources": ["location", "unit", "saved-timezone", "forecasts", "ip-guess"]
     },
     {
       "port": "fetch",
-      "operations": [
-        "get"
-      ],
+      "operations": ["get"],
       "resources": [
         "api.open-meteo.com",
         "geocoding-api.open-meteo.com",
@@ -48,9 +30,7 @@
       ]
     }
   ],
-  "installWideKv": [
-    "forecasts"
-  ],
+  "installWideKv": ["forecasts"],
   "routes": [
     {
       "method": "GET",
@@ -123,9 +103,7 @@
       "risk": "write"
     }
   },
-  "icons": [
-    "icons/weather.svg"
-  ],
+  "icons": ["icons/weather.svg"],
   "accounts": {
     "supportsUserDisable": false,
     "defaultEnabled": true

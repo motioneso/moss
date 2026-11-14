@@ -3,6 +3,7 @@
 pub mod action_rows;
 pub mod auto_plan;
 pub mod evening;
+pub mod weather;
 pub mod evening_prompt;
 pub mod body;
 pub mod chat_card;
