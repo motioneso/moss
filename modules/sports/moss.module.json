@@ -187,7 +187,7 @@
     },
     {
       "id": "sports.catalog_and_search",
-      "description": "Sports lists every league and tournament it covers, grouped by confederation. A league's clubs load only when that league is opened, and club search looks across every league. Search fetches at most five leagues that are not stored yet and reports that coverage is partial until the rest fill in. A search needs at least two characters. The screens for these are not part of this package yet.",
+      "description": "Sports lists every league and tournament it covers, grouped by confederation. A league's clubs load only when that league is opened, and club search looks across every league. Search fetches at most five leagues that are not stored yet, and stops sooner if it has spent about two seconds, and reports that coverage is partial until the rest fill in. A search needs at least two characters. The screens for these are not part of this package yet.",
       "errors": [
         {
           "code": "sports_unknown_competition",
