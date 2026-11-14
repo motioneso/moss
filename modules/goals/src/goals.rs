@@ -92,7 +92,7 @@ pub fn create<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Resp
         Ok(parsed) => parsed,
         Err(message) => return Ok(bad_request(message)),
     };
-    Client(host).query(
+    let row = Client(host).query(
         GOALS,
         &Query::insert(values(vec![
             ("title", json!(data.title)),
@@ -101,11 +101,10 @@ pub fn create<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Resp
             ("review_cadence", json!(data.review_cadence.as_deref().unwrap_or("weekly"))),
             ("target_at", data.target_at.map(Value::String).unwrap_or(Value::Null)),
         ])),
-    )?;
-    let mut query = Query::select(Filter::All);
-    query.order = vec![Order { column: "created_at".into(), descending: true }];
-    query.limit = Some(1);
-    let row = Client(host).query(GOALS, &query)?.into_iter().next().ok_or_else(|| Error::new("Goal could not be saved"))?;
+    )?
+    .into_iter()
+    .next()
+    .ok_or_else(|| Error::new("Goal could not be saved"))?;
     Ok(Response::new(201, goal_dto(&row)?))
 }
 
@@ -149,7 +148,7 @@ pub fn add_evidence<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Resul
     if matches!(goal["status"].as_str(), Some("completed") | Some("archived")) {
         return Ok(error(409, "Goal is closed"));
     }
-    Client(host).query(
+    let row = Client(host).query(
         EVIDENCE,
         &Query::insert(values(vec![
             ("goal_id", json!(id)),
@@ -160,11 +159,10 @@ pub fn add_evidence<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Resul
             ("summary", json!(data.summary)),
             ("occurred_at", data.occurred_at.map(Value::String).unwrap_or(Value::Null)),
         ])),
-    )?;
-    let mut query = Query::select(Filter::eq("goal_id", id.as_str()));
-    query.order = vec![Order { column: "created_at".into(), descending: true }];
-    query.limit = Some(1);
-    let row = Client(host).query(EVIDENCE, &query)?.into_iter().next().ok_or_else(|| Error::new("Evidence could not be saved"))?;
+    )?
+    .into_iter()
+    .next()
+    .ok_or_else(|| Error::new("Evidence could not be saved"))?;
     // The old handler bumped the goal's updated time after adding evidence.
     Client(host).query(GOALS, &Query::update(Filter::eq("id", id.as_str()), values(vec![("updated_at", json!(now(host)?))])))?;
     Ok(Response::new(201, evidence_dto(&row)?))
