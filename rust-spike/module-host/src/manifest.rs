@@ -301,6 +301,10 @@ impl Manifest {
             }
             if matches!(cap.port.as_str(), "fetch" | "credentials" | "browser") {
                 for host in &cap.resources {
+                    ensure!(
+                        cap.port != "browser" || host == crate::public_web::PUBLIC_WEB,
+                        "The browser opens public pages only"
+                    );
                     if matches!(cap.port.as_str(), "fetch" | "browser")
                         && host == crate::public_web::PUBLIC_WEB
                     {
