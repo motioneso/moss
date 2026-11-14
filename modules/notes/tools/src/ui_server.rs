@@ -85,6 +85,7 @@ impl Server {
                         version: "0.1.0".parse()?,
                         compiled_cache: None,
                         fuel_ceiling: None,
+                        browser_dir: None,
                     },
                     |next| {
                         let roots = self
