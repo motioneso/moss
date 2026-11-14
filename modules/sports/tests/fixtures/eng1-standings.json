@@ -1,0 +1,41 @@
+{
+  "children": [
+    {
+      "standings": {
+        "entries": [
+          {
+            "team": {
+              "id": "359",
+              "abbreviation": "ARS",
+              "displayName": "Arsenal",
+              "shortDisplayName": "Arsenal"
+            },
+            "note": { "description": "UEFA Champions League", "color": "#2a66d1" },
+            "stats": [
+              { "name": "rank", "value": 1 },
+              { "name": "points", "value": 46 },
+              { "name": "wins", "value": 14 },
+              { "name": "losses", "value": 2 },
+              { "name": "ties", "value": 4 }
+            ]
+          },
+          {
+            "team": {
+              "id": "364",
+              "abbreviation": "LIV",
+              "displayName": "Liverpool",
+              "shortDisplayName": "Liverpool"
+            },
+            "stats": [
+              { "name": "rank", "value": 2 },
+              { "name": "points", "value": 43 },
+              { "name": "wins", "value": 13 },
+              { "name": "losses", "value": 3 },
+              { "name": "ties", "value": 4 }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
