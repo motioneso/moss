@@ -19,9 +19,13 @@ fn text_a_person_types_never_reaches_a_response_log_job_or_activity_row() {
         let message = response["error"].as_str().unwrap_or_default();
         assert!(message.starts_with("Unknown "), "{response}");
     }
-    // No other port, no job, no activity row.
+    // No other port than the database and the job queue, and the jobs carry no typed text.
     let calls = f.calls.borrow();
-    assert!(calls.iter().all(|(p, _, _, _)| p == "db"));
+    assert!(calls.iter().all(|(p, _, _, _)| p == "db" || p == "jobs" || p == "context"));
+    for (port, _, _, parameters) in calls.iter().filter(|(p, _, _, _)| p == "jobs") {
+        assert!(!parameters.to_string().contains(MARK), "{port} {parameters}");
+    }
+    assert!(f.jobs.borrow().iter().all(|(_, _, _, params)| !params.to_string().contains(MARK)));
     for (_, _, resource, parameters) in calls.iter() {
         assert!(!resource.contains("activity") && !resource.contains("job"), "{resource}");
         // Typed text may only be written to the owner's own news tables.
@@ -54,7 +58,11 @@ fn adding_a_source_uses_only_the_expected_ports_and_leaks_no_typed_text() {
     let (_, saved) = f.route("POST", "/sources", &[], json!({"confirmationId": shown["confirmationId"]}));
     let calls = f.calls.borrow();
     for (port, _, resource, parameters) in calls.iter() {
-        assert!(["db", "kv", "fetch", "ai", "context"].contains(&port.as_str()), "{port}");
+        assert!(["db", "kv", "fetch", "ai", "context", "jobs"].contains(&port.as_str()), "{port}");
+        // Job calls and notifications are metadata only.
+        if port == "jobs" {
+            assert!(!parameters.to_string().contains(MARK), "{parameters}");
+        }
         assert!(!resource.contains("activity") && !resource.contains("job"), "{resource}");
         // Only the owner's tables, the preview file and the public read may carry typed text.
         if parameters.to_string().contains(MARK) {

@@ -27,6 +27,14 @@ pub struct Fake {
     pub files: RefCell<BTreeMap<(String, String), Value>>,
     /// The host clock in milliseconds since the epoch.
     pub clock: Cell<i64>,
+    /// Open jobs as (person, queue, key, parameters). Running one removes it.
+    pub jobs: RefCell<Vec<(String, String, String, Value)>>,
+    /// Daily schedules as (person, queue, key) with the cron and zone.
+    pub schedules: RefCell<BTreeMap<(String, String, String), Value>>,
+    /// Notifications posted, as (person, parameters).
+    pub notices: RefCell<Vec<(String, Value)>>,
+    /// Runs once, just before the next model reply. Lets a test change things mid-run.
+    pub before_model: RefCell<Option<Box<dyn Fn(&Fake)>>>,
     ids: Cell<u32>,
 }
 
@@ -41,6 +49,10 @@ impl Fake {
             model: RefCell::new(vec![]),
             files: RefCell::new(BTreeMap::new()),
             clock: Cell::new(1_794_000_000_000),
+            jobs: RefCell::new(vec![]),
+            schedules: RefCell::new(BTreeMap::new()),
+            notices: RefCell::new(vec![]),
+            before_model: RefCell::new(None),
             ids: Cell::new(0),
         }
     }
@@ -103,6 +115,22 @@ impl Fake {
             .map(|(_, _, _, v)| v["url"].as_str().unwrap_or("").to_owned())
             .collect()
     }
+    /// Delivers the person's open job on a queue the way the host does, and returns the answer.
+    pub fn run_job(&self, queue: &str) -> Option<String> {
+        let actor = self.actor.get();
+        let at = self.jobs.borrow().iter().position(|(who, q, _, _)| who == actor && q == queue)?;
+        let (_, q, _, params) = self.jobs.borrow_mut().remove(at);
+        let payload = json!({"queue": q, "parameters": params}).to_string();
+        Some(moss_news_module::handle(self, "job", &payload).expect("the job ran"))
+    }
+    pub fn open_jobs(&self, queue: &str) -> usize {
+        let actor = self.actor.get();
+        self.jobs.borrow().iter().filter(|(who, q, _, _)| who == actor && q == queue).count()
+    }
+    /// Runs the refresh queue until it is empty.
+    pub fn refresh(&self) {
+        while self.run_job("news-refresh").is_some() {}
+    }
     pub fn rows(&self, table: &str) -> Vec<Value> {
         self.tables.borrow().get(table).cloned().unwrap_or_default()
     }
@@ -164,11 +192,53 @@ impl Host for Fake {
                 return Ok(self.pages.borrow().get(url).cloned().unwrap_or_else(|| json!({"ok":false,"reason":"network"})));
             }
             ("ai", "generate") => {
+                let hook = self.before_model.borrow_mut().take();
+                if let Some(hook) = hook {
+                    hook(self);
+                }
                 let mut queue = self.model.borrow_mut();
                 if queue.is_empty() {
                     return Err(Error::new("No model"));
                 }
                 return queue.remove(0).map(|text| json!({"text": text}));
+            }
+            ("jobs", "list-open") => {
+                let open: Vec<Value> = self
+                    .jobs
+                    .borrow()
+                    .iter()
+                    .filter(|(who, q, _, _)| who == actor && q == resource)
+                    .map(|(_, _, key, params)| json!({"id": key, "state": "pending", "params": params}))
+                    .collect();
+                return Ok(json!({"jobs": open}));
+            }
+            ("jobs", "enqueue-options") => {
+                let key = parameters["idempotencyKey"].as_str().unwrap_or("").to_owned();
+                let mut jobs = self.jobs.borrow_mut();
+                if jobs.iter().any(|(who, q, k, _)| who == actor && q == resource && *k == key) {
+                    return Ok(json!({}));
+                }
+                jobs.push((actor.into(), resource.into(), key.clone(), parameters["params"].clone()));
+                return Ok(json!({"id": key}));
+            }
+            ("jobs", "schedule") => {
+                let key = parameters["key"].as_str().unwrap_or("").to_owned();
+                let id = format!("{actor}/{resource}/{key}");
+                let mut all = self.schedules.borrow_mut();
+                let at = (actor.to_owned(), resource.to_owned(), key);
+                if !(parameters["keepExisting"] == json!(true) && all.contains_key(&at)) {
+                    all.insert(at, json!({"cron": parameters["cron"], "timezone": parameters["timezone"], "params": parameters["params"]}));
+                }
+                return Ok(json!({"id": id}));
+            }
+            ("jobs", "unschedule") => {
+                let id = parameters["id"].as_str().unwrap_or("");
+                self.schedules.borrow_mut().retain(|(who, q, k), _| format!("{who}/{q}/{k}") != id);
+                return Ok(json!({"cancelled": true}));
+            }
+            ("notify", "post") => {
+                self.notices.borrow_mut().push((actor.into(), parameters));
+                return Ok(json!({}));
             }
             _ => return Err(Error::new("Unexpected host call")),
         }
