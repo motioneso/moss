@@ -185,6 +185,19 @@ impl World {
             )
             .await
             .unwrap();
+            c.execute("INSERT INTO app.news_refresh_state(owner_user_id,state) VALUES($1,'idle')", &[&who]).await.unwrap();
+            c.execute(
+                "INSERT INTO app.news_policy_verdicts(owner_user_id,canonical_domain,fingerprint,verdict,expires_at) VALUES($1,'example.com','fp-secret','approved',now()+interval '1 day')",
+                &[&who],
+            )
+            .await
+            .unwrap();
+            c.execute(
+                "INSERT INTO app.news_source_credentials(owner_user_id,source_id,connection_id,encrypted_secret,status) VALUES($1,$2::text::uuid,'conn','{\"c\":\"sealed\"}'::jsonb,'configured')",
+                &[&who, &ids[0]],
+            )
+            .await
+            .unwrap();
             (ids[0].clone(), ids[1].clone(), topic)
         })
     }
@@ -267,7 +280,7 @@ fn another_person_cannot_see_change_or_remove_news_data_and_the_check_fails_with
     println!("GREEN: B and an admin see, change and remove none of A's News rows");
 
     // With row security removed the same direct read leaks A's rows to the admin.
-    for table in NEWS_TABLES.iter().take(5) {
+    for table in NEWS_TABLES.iter() {
         w.f.rt.block_on(w.f.root.batch_execute(&format!("ALTER TABLE {table} DISABLE ROW LEVEL SECURITY"))).unwrap();
         let open: i64 = rows_as(&w.f, admin, &format!("SELECT count(*) FROM {table}"), &[])[0].get(0);
         w.f.rt.block_on(w.f.root.batch_execute(&format!("ALTER TABLE {table} ENABLE ROW LEVEL SECURITY; ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))).unwrap();
@@ -314,7 +327,7 @@ fn typed_text_reaches_no_other_table_and_the_export_holds_only_the_owner_rows() 
     });
     assert!(tables.iter().any(|t| t.starts_with("moss_queue.")), "{tables:?}");
     for table in &tables {
-        let hits: i64 = w.f.rt.block_on(w.f.root.query_one(&format!("SELECT count(*) FROM {table} t WHERE to_jsonb(t)::text LIKE '%'||$1||'%'"), &[&MARK])).unwrap().get(0);
+        let hits: i64 = w.f.rt.block_on(w.f.root.query_one(&format!("SELECT count(*) FROM {table} t WHERE lower(to_jsonb(t)::text) LIKE '%'||lower($1)||'%'"), &[&MARK])).unwrap().get(0);
         let allowed = table == "news_source_exclusions" || table == "app.news_source_exclusions";
         assert!(hits == 0 || allowed, "{table} holds typed text");
     }

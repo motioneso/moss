@@ -9,6 +9,9 @@ fn accepts_the_forms_people_paste() {
         ("https://example.com:443/", "example.com"),
         ("example.com.", "example.com"),
         ("//example.co.uk/path", "example.co.uk"),
+        ("bücher.de", "xn--bcher-kva.de"),
+        ("https://MÜNCHEN.de/", "xn--mnchen-3ya.de"),
+        ("日本語.jp", "xn--wgv71a119e.jp"),
     ] {
         assert_eq!(normalize(input), Ok(want.to_owned()), "{input}");
     }

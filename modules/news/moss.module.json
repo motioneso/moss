@@ -4,7 +4,7 @@
   "name": "News",
   "publisher": "Moss",
   "version": "0.1.0",
-  "description": "Keeps each person's own News choices, private to the owner. People can pick catalog sources and topics, exclude publishers by domain, and remove sources they added. Excluding a publisher or removing a source also takes its articles out of the saved feed. A person's added sources, topics and exclusions can be exported, and account deletion covers all eight News tables. Adding a topic or changing one needs web search, which is not part of this package, so those requests are refused. Reading sites, building the feed, adding sources, refresh scheduling, chat tools and the screens are not part of this package yet.",
+  "description": "Keeps each person's own News choices, private to the owner. People can pick catalog sources and topics, exclude publishers by domain, and remove sources they added. A person's added sources, topics and exclusions can be exported, and account deletion covers all eight News tables. Adding a topic or changing one needs web search, which is not part of this package, so those requests are refused. Reading sites, building the feed, adding sources, refresh scheduling, chat tools and the screens are not part of this package yet.",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
@@ -164,7 +164,7 @@
   "features": [
     {
       "id": "news.preferences",
-      "description": "Each person keeps a private list of chosen catalog sources and topics, and of publishers to leave out. Saving the same choice twice returns the first one. Excluding a publisher removes its articles from the saved feed straight away. At most 100 publishers can be excluded.",
+      "description": "Each person keeps a private list of chosen catalog sources and topics, and of publishers to leave out. Saving the same choice twice returns the first one. At most 100 publishers can be excluded.",
       "errors": [
         {
           "code": "news_personalization_limit",
@@ -182,7 +182,7 @@
     },
     {
       "id": "news.added_sources",
-      "description": "A person can remove a source they added, and its articles leave the saved feed. Adding a source, checking it and reading its site are not part of this package yet."
+      "description": "A person can remove a source they added. Adding a source, checking it and reading its site are not part of this package yet."
     },
     {
       "id": "news.topics",

@@ -353,7 +353,7 @@ fn installed_news_package_serves_routes_from_the_real_server() {
     // The other person sees none of it and cannot remove it.
     let (_, text) = call(Method::GET, "/personalization", Some(&other), None);
     assert_eq!(json_of(&text)["sourceExclusions"], json!([]), "{text}");
-    assert!(!text.contains(MARK));
+    assert!(!text.to_lowercase().contains(&MARK.to_lowercase()));
     let (status, text) = call(Method::DELETE, &format!("/source-exclusions/{excl}"), Some(&other), None);
     assert_eq!((status, json_of(&text)), (200, json!({"ok":false})));
     let (status, text) = call(Method::DELETE, &format!("/prefs/{pref}"), Some(&other), None);
@@ -366,6 +366,6 @@ fn installed_news_package_serves_routes_from_the_real_server() {
     let (_, text) = call(Method::DELETE, &format!("/prefs/{pref}"), Some(&cookie), None);
     assert_eq!(json_of(&text), json!({"ok":true}));
     // Nothing the test sent reached the server log.
-    assert!(!log().contains(MARK));
+    assert!(!log().to_lowercase().contains(&MARK.to_lowercase()));
     println!("news live: choices, exclusions and topics for two people worked over HTTPS");
 }

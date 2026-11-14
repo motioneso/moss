@@ -62,10 +62,11 @@ pub fn normalize(input: &str) -> Result<String, &'static str> {
     let host = if address {
         host.to_owned()
     } else {
-        let decoded = percent_decode(host).ok_or("unparseable")?.to_ascii_lowercase();
+        let decoded = percent_decode(host).ok_or("unparseable")?.to_lowercase();
         if decoded.chars().any(|c| " #%/:<>?@[\\]^|".contains(c) || c.is_control()) {
             return Err("unparseable");
         }
+        let decoded = to_ascii(&decoded);
         if ends_in_number(&decoded) && !ipv4(&decoded) {
             return Err("unparseable");
         }
@@ -223,4 +224,68 @@ pub fn is_workaround(canonical_domain: &str, feed_url: Option<&str>) -> bool {
     };
     let publisher = canonical_domain.to_ascii_lowercase();
     !(matches(&publisher, &feed_host) || matches(&feed_host, &publisher))
+}
+
+/// Converts each non-ASCII label to its `xn--` form (RFC 3492). Case folding is lowercase only.
+fn to_ascii(host: &str) -> String {
+    host.split('.')
+        .map(|label| match label.is_ascii() {
+            true => label.to_owned(),
+            false => punycode(label).map_or_else(|| label.to_owned(), |code| format!("xn--{code}")),
+        })
+        .collect::<Vec<_>>()
+        .join(".")
+}
+
+fn punycode(label: &str) -> Option<String> {
+    const BASE: u32 = 36;
+    let digit = |d: u32| char::from_u32(if d < 26 { d + 97 } else { d + 22 }).unwrap_or('a');
+    let adapt = |mut delta: u32, points: u32, first: bool| {
+        delta = if first { delta / 700 } else { delta / 2 };
+        delta += delta / points;
+        let mut k = 0;
+        while delta > 455 {
+            delta /= 35;
+            k += BASE;
+        }
+        k + 36 * delta / (delta + 38)
+    };
+    let points: Vec<u32> = label.chars().map(u32::from).collect();
+    let mut out: String = label.chars().filter(char::is_ascii).collect();
+    let basic = out.len() as u32;
+    let mut handled = basic;
+    if basic > 0 {
+        out.push('-');
+    }
+    let (mut n, mut delta, mut bias) = (128u32, 0u32, 72u32);
+    while (handled as usize) < points.len() {
+        let next = points.iter().copied().filter(|&c| c >= n).min()?;
+        delta = delta.checked_add((next - n).checked_mul(handled + 1)?)?;
+        n = next;
+        for &c in &points {
+            if c < n {
+                delta = delta.checked_add(1)?;
+            }
+            if c == n {
+                let mut q = delta;
+                let mut k = BASE;
+                loop {
+                    let t = if k <= bias { 1 } else if k >= bias + 26 { 26 } else { k - bias };
+                    if q < t {
+                        break;
+                    }
+                    out.push(digit(t + (q - t) % (BASE - t)));
+                    q = (q - t) / (BASE - t);
+                    k += BASE;
+                }
+                out.push(digit(q));
+                bias = adapt(delta, handled + 1, handled == basic);
+                delta = 0;
+                handled += 1;
+            }
+        }
+        delta += 1;
+        n += 1;
+    }
+    Some(out)
 }

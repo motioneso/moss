@@ -155,16 +155,16 @@ network calls and shows no screen.
 
 All checks ran on a throwaway database through the verify gate, against the installed package.
 
-| Claim                                    | Check                                                                                       | Result                                      |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| Same answers as the old routes           | 173 steps replayed through the old routes and the installed package, ids and times masked   | Matched                                     |
-| Old SQL rules still hold                 | Direct SQL inserts of a repeat choice and a repeat exclusion                                | Refused                                     |
-| Another person sees nothing              | A second person and an admin list, delete and change A's rows                               | Nothing seen, nothing changed               |
-| That check can fail                      | Row security removed from five tables, B reads A's rows; restored, B reads nothing          | Seen failing, then passing, on each table   |
-| Typed text stays out of everything else  | Planted marker typed into every field, 53 tables and job payloads scanned                   | Found only in the owner's own exclusion row |
-| Export is the owner's only               | A's export holds A's rows and not B's                                                       | Passed                                      |
-| Package builds native and as WebAssembly | Guest tests native (18), package tests against the built component (6 package, 4 installed) | Passed                                      |
-| Works on the real server over HTTPS      | Real server, real login, two people save choices, exclude a publisher, ask for a topic      | Passed; each person saw only their own      |
+| Claim                                    | Check                                                                                       | Result                                           |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| Same answers as the old routes           | 173 steps replayed through the old routes and the installed package, ids and times masked   | Matched                                          |
+| Old SQL rules still hold                 | Direct SQL inserts of a repeat choice and a repeat exclusion                                | Refused                                          |
+| Another person sees nothing              | A second person and an admin list, delete and change A's rows                               | Nothing seen, nothing changed                    |
+| That check can fail                      | Row security removed from all eight tables, B reads A's rows; restored, B reads nothing     | Seen failing, then passing, on each of the eight |
+| Typed text stays out of everything else  | Planted marker typed into every field, 53 tables and job payloads scanned                   | Found only in the owner's own exclusion row      |
+| Export is the owner's only               | A's export holds A's rows and not B's                                                       | Passed                                           |
+| Package builds native and as WebAssembly | Guest tests native (18), package tests against the built component (6 package, 4 installed) | Passed                                           |
+| Works on the real server over HTTPS      | Real server, real login, two people save choices, exclude a publisher, ask for a topic      | Passed; each person saw only their own           |
 
 ### Not proven or not built
 
@@ -180,8 +180,9 @@ All checks ran on a throwaway database through the verify gate, against the inst
   with web search.
 - The limit checks (100 exclusions and the other caps) count and then insert, so two requests at the
   same moment could pass the limit by one.
-- Domains with non-ASCII letters answer "invalid" where the old code converted them. All tests use
-  plain ASCII names.
+- Domains with non-ASCII letters are converted to their `xn--` form by a hand-written converter
+  that only lowercases. Exotic case folding the old URL parser does (for example full-width
+  letters) is not copied.
 - Fetching, reading articles, source setup, credentials, chat tools and every News screen.
 - Reaching the server from a phone or another computer. The package adds no listener. The live run
   used the local secure address only.
