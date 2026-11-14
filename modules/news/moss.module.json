@@ -11,9 +11,7 @@
   "capabilities": [
     {
       "port": "db",
-      "operations": [
-        "query"
-      ],
+      "operations": ["query"],
       "resources": [
         "app.news_compilation_snapshots",
         "app.news_custom_sources",
@@ -27,42 +25,23 @@
     },
     {
       "port": "context",
-      "operations": [
-        "read",
-        "uuid"
-      ],
-      "resources": [
-        "call",
-        "new"
-      ]
+      "operations": ["read", "uuid"],
+      "resources": ["call", "new"]
     },
     {
       "port": "kv",
-      "operations": [
-        "get",
-        "set"
-      ],
-      "resources": [
-        "news.source-previews"
-      ]
+      "operations": ["get", "set"],
+      "resources": ["news.source-previews"]
     },
     {
       "port": "fetch",
-      "operations": [
-        "get"
-      ],
-      "resources": [
-        "public-web"
-      ]
+      "operations": ["get"],
+      "resources": ["public-web"]
     },
     {
       "port": "ai",
-      "operations": [
-        "generate"
-      ],
-      "resources": [
-        "structured"
-      ]
+      "operations": ["generate"],
+      "resources": ["structured"]
     }
   ],
   "database": {
@@ -191,9 +170,7 @@
   "provides": {
     "collectNewsPersonalizationExportSection": "1.0.0"
   },
-  "icons": [
-    "icons/news.svg"
-  ],
+  "icons": ["icons/news.svg"],
   "accounts": {
     "supportsUserDisable": true,
     "defaultEnabled": true
