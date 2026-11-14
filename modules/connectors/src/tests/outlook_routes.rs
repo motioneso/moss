@@ -242,3 +242,20 @@ fn nothing_the_guest_sends_to_the_queue_or_health_carries_page_text() {
     }
     assert!(seen.contains("run-1"));
 }
+
+#[test]
+fn a_finished_scan_is_as_fresh_as_when_it_was_observed() {
+    let host = Stub::mine().with_account("active", json!({"state":"collecting","currentRun":"run-1","bindingFingerprint":"fp-1"}));
+    host.steps.borrow_mut().push(json!({"done":true,"scan":{"observedAt":"2026-10-21T17:40:00.000Z","windowStart":"2026-10-20","windowEnd":"2026-11-22","timeZone":"America/Los_Angeles","events":[]}}));
+    assert_eq!(job(&host, Some("run-1"))["outcome"], "imported");
+    assert_eq!(host.health()["lastCompleteAt"], "2026-10-21T17:40:00.000Z");
+}
+
+#[test]
+fn a_run_that_a_newer_run_replaced_writes_nothing() {
+    let host = Stub::mine().with_account("active", json!({"state":"collecting","currentRun":"run-2","bindingFingerprint":"fp-1"}));
+    host.steps.borrow_mut().push(json!({"done":true,"scan":{"windowStart":"2026-10-20","windowEnd":"2026-11-22","timeZone":"America/Los_Angeles","events":[]}}));
+    assert_eq!(job(&host, Some("run-1"))["outcome"], "superseded");
+    assert!(host.calls("calendar").is_empty());
+    assert_eq!(host.health()["state"], "collecting");
+}

@@ -112,3 +112,13 @@ fn a_different_window_restarts_the_miss_count() {
     assert_eq!(import(&cache, &shifted).unwrap()["unconfirmed"], 0);
     assert_eq!(cache.rows.borrow()[0]["metadata"]["mirrorMissingCount"], 1);
 }
+
+#[test]
+fn an_older_scan_still_counts_rows_a_newer_scan_made_uncertain() {
+    let cache = Cache::default();
+    import(&cache, &batch("2026-10-21T18:00:00.000Z", true, vec![event("a", "2026-10-21")])).unwrap();
+    import(&cache, &batch("2026-10-21T18:10:00.000Z", true, vec![])).unwrap();
+    import(&cache, &batch("2026-10-21T18:20:00.000Z", true, vec![])).unwrap();
+    let late = import(&cache, &batch("2026-10-21T18:05:00.000Z", true, vec![])).unwrap();
+    assert_eq!(late["unconfirmed"], 1);
+}

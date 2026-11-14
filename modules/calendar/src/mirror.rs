@@ -150,6 +150,10 @@ pub fn import(host: &impl Host, input: &Value) -> Result<Value> {
             if observed.contains(id) || md["observedAt"].as_str().is_some_and(|t| t >= observed_at)
                 || md["mirrorMissingObservedAt"].as_str().is_some_and(|t| t >= observed_at)
             {
+                // A newer scan already judged this row. Its uncertainty still counts.
+                if !observed.contains(id) && md["mirrorUnconfirmed"] == true {
+                    unconfirmed += 1;
+                }
                 continue;
             }
             let misses = match (md["mirrorMissingRange"].as_str(), md["mirrorMissingCount"].as_i64()) {

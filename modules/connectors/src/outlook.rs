@@ -125,7 +125,9 @@ fn enqueue(host: &impl Host, id: &str, run: Option<&str>) -> Result<Value> {
 /// protects scheduled sweeps does not mistake it for a second run.
 fn start(host: &impl Host, id: &str) -> Result<Value> {
     let run = host.call("context", "uuid", "new", json!({}))?;
-    enqueue(host, id, run["id"].as_str())
+    let run = run["id"].as_str().unwrap_or("");
+    save(host, id, &health(host, id)?, json!({"currentRun":run}))?;
+    enqueue(host, id, Some(run))
 }
 
 fn schedule(host: &impl Host, id: &str) {
@@ -228,6 +230,8 @@ fn run_step(host: &impl Host, id: &str, run: Option<&str>) -> Result<&'static st
     let binding = kv(host, "get", "connectors.outlook-binding", json!({}))?;
     let at = now(host)?;
     let run = match run {
+        // A newer run began after this one, so this one must not write over its result.
+        Some(run) if previous["currentRun"].as_str().is_some_and(|c| c != run) => return Ok("superseded"),
         Some(run) => run.to_string(),
         None => {
             let state = previous["state"].as_str().unwrap_or("collecting");
@@ -247,8 +251,9 @@ fn run_step(host: &impl Host, id: &str, run: Option<&str>) -> Result<&'static st
             if busy {
                 return Ok("busy");
             }
-            save(host, id, &previous, json!({"state":"collecting","attemptedAt":iso(at),"bindingFingerprint":binding["fingerprint"]}))?;
-            host.call("context", "uuid", "new", json!({}))?["id"].as_str().unwrap_or("").to_string()
+            let run = host.call("context", "uuid", "new", json!({}))?["id"].as_str().unwrap_or("").to_string();
+            save(host, id, &previous, json!({"state":"collecting","attemptedAt":iso(at),"bindingFingerprint":binding["fingerprint"],"currentRun":run}))?;
+            run
         }
     };
     let step = kv(host, "set", "connectors.outlook-scan", json!({"runId":run}))?;
@@ -275,7 +280,7 @@ fn run_step(host: &impl Host, id: &str, run: Option<&str>) -> Result<&'static st
     match imported {
         Ok(done) => {
             save(host, id, &previous, json!({
-                "state":"current","lastCompleteAt":iso(finished),"failures":0,"attemptedAt":iso(at),
+                "state":"current","lastCompleteAt":scan["observedAt"].as_str().map_or_else(|| iso(finished), String::from),"failures":0,"attemptedAt":iso(at),
                 "windowStart":scan["windowStart"],"windowEnd":scan["windowEnd"],"timeZone":scan["timeZone"],
                 "unconfirmed":done["unconfirmed"].as_i64().unwrap_or(0),
             }))?;
