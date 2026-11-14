@@ -65,7 +65,7 @@ It found no way to reach a private address and no leak into the activity record.
 - `tokio-rustls` was not added. The fixture site is served with a self-signed certificate that the
   test adds to the trust list.
 
-Cards JS-273, JS-274 and JS-275. Part of [issue 4027](https://github.com/motioneso/moss/issues/4027). Release note
+Cards JS-273 and JS-274. Part of [issue 4027](https://github.com/motioneso/moss/issues/4027). Release note
 Category: N/A.
 
 ## Sports package skeleton (part 10)
