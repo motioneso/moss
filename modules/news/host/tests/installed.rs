@@ -138,6 +138,7 @@ impl World {
                 intelligence: Arc::new(Approves(Default::default())),
                 version: "0.1.0".parse().unwrap(),
                 compiled_cache: None,
+                browser_dir: None,
                 fuel_ceiling: Some(250_000_000),
             },
             |next| Ok(Arc::new(Web(next))),
@@ -477,6 +478,35 @@ fn compare(steps: &[Value], old: &[Value], new: &[Value]) {
         replay::mask(&mut n);
         assert_eq!(o, n, "step {i} {} {} differs\nold: {o}\nnew: {n}", step["method"], step["url"]);
     }
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn overview_serves_the_stored_page_like_the_old_route_and_only_to_its_owner() {
+    let w = World::new();
+    let (a, b) = (w.f.a, w.f.b);
+    // A valid stored page, fresh for a week, with two stories from one added source.
+    let payload = json!({"articles":[
+        {"id":"story-a","publisher":"Daily Example","canonicalDomain":"daily.example.com","headline":"First stored story","url":"https://daily.example.com/a","publishedAt":"2026-11-11T09:00:00.000Z","excerpt":"One","imageUrl":null,"topics":[],"preferred":true,"rank":1},
+        {"id":"story-b","publisher":"Daily Example","canonicalDomain":"daily.example.com","headline":"Second stored story","url":"https://daily.example.com/b","publishedAt":"2026-11-11T08:00:00.000Z","excerpt":null,"imageUrl":null,"topics":["World"],"preferred":true,"rank":2}
+    ]});
+    for who in [a, b] {
+        w.f.rt.block_on(w.f.root.execute(
+            "INSERT INTO app.news_compilation_snapshots(owner_user_id,compiled_at,expires_at,payload) VALUES($1,now(),now()+interval '7 days',$2)",
+            &[&who, &payload],
+        )).unwrap();
+    }
+    // The old route answers for b (its own rows), the package for a. The stored pages are equal.
+    let steps = vec![json!({"method":"GET","url":"/api/news/overview"})];
+    let old = replay::old_routes(b, &steps, json!({}));
+    let new = vec![w.call(a, "GET", "/overview", Value::Null)];
+    compare(&steps, &old, &new);
+    assert_eq!(new[0]["body"]["topStories"][0]["title"], json!("First stored story"), "{new:?}");
+    // Removing the stored page for b leaves b with none of a's stories.
+    w.f.rt.block_on(w.f.root.execute("DELETE FROM app.news_compilation_snapshots WHERE owner_user_id=$1", &[&b])).unwrap();
+    let other = w.call(b, "GET", "/overview", Value::Null);
+    assert!(!other.to_string().contains("First stored story"), "{other}");
+    println!("PASS overview: stored page matches the old route and stays with its owner");
 }
 
 #[test]
