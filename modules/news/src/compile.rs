@@ -207,7 +207,8 @@ fn active_custom(source: &Value, exclusions: &[String]) -> bool {
 
 /// The meta and time tags of one article page, read the way the old page scan read them.
 fn article_meta(html: &str) -> (Option<String>, Option<String>, Option<String>) {
-    let lower = html.to_lowercase();
+    // ASCII-only folding keeps every position valid in the original text.
+    let lower = html.to_ascii_lowercase();
     let mut published = None;
     let mut excerpt = None;
     let mut image = None;
@@ -573,17 +574,20 @@ fn rank<H: Host + ?Sized>(host: &H, candidates: &[Candidate], topics: &[Value]) 
     });
     let mut rows: Vec<Value> = Vec::new();
     let mut included: Vec<&Candidate> = Vec::new();
+    // Two brackets for the array itself, then one comma between rows.
+    let mut prompt_chars = 2usize;
     for candidate in ordered {
         let row = json!({
             "id": candidate.id, "publisher": candidate.publisher, "headline": candidate.headline,
             "excerpt": candidate.excerpt, "publishedAt": candidate.published_at,
         });
-        let mut trial = rows.clone();
-        trial.push(row);
-        if serde_json::to_string(&trial).map(|text| text.chars().count()).unwrap_or(usize::MAX) > MAX_PROMPT_CHARS {
+        let row_chars = serde_json::to_string(&row).map(|text| text.chars().count()).unwrap_or(usize::MAX);
+        let added = row_chars + usize::from(!rows.is_empty());
+        if prompt_chars + added > MAX_PROMPT_CHARS {
             break;
         }
-        rows.push(trial.pop().unwrap());
+        prompt_chars += added;
+        rows.push(row);
         included.push(candidate);
     }
     let topic_data: Vec<Value> = topics
@@ -879,35 +883,43 @@ pub fn overview<H: Host + ?Sized>(host: &H) -> Result<Response> {
             return Ok(Response::new(200, compose(row, &saved, now_ms, false)));
         }
     }
-    match compile(host)? {
+    // A compile that runs out of time or hits a host failure must not fail the request. The
+    // person gets the last stored page, or an empty page marked degraded, and the next read
+    // tries again. Part 5b moves this work into a job, where it has room to finish.
+    let outcome = compile(host).unwrap_or(Outcome::KeptLastGood);
+    match outcome {
         Outcome::Replaced => {
-            let saved = read_saved(host)?;
-            let rows = Client(host).query(SNAPSHOTS, &Query::select(Filter::All))?;
+            let Ok(saved) = read_saved(host) else { return Ok(degraded_empty()) };
+            let Ok(rows) = Client(host).query(SNAPSHOTS, &Query::select(Filter::All)) else {
+                return Ok(degraded_empty());
+            };
             match rows.first() {
                 Some(row) => Ok(Response::new(200, compose(row, &saved, now_ms, false))),
-                None => Ok(Response::new(200, empty_overview(&saved, true))),
+                None => Ok(Response::new(200, compose(&json!({"payload":{"articles":[]}}), &saved, now_ms, true))),
             }
         }
         Outcome::KeptLastGood => {
-            let rows = Client(host).query(SNAPSHOTS, &Query::select(Filter::All))?;
+            let Ok(rows) = Client(host).query(SNAPSHOTS, &Query::select(Filter::All)) else {
+                return Ok(degraded_empty());
+            };
             match rows.first() {
                 Some(row) if snapshot_valid(&row["payload"]) => {
                     Ok(Response::new(200, compose(row, &saved, now_ms, true)))
                 }
-                _ => Ok(Response::new(200, empty_overview(&saved, true))),
+                _ => Ok(Response::new(200, compose(&json!({"payload":{"articles":[]}}), &saved, now_ms, true))),
             }
         }
     }
 }
 
-fn empty_overview(saved: &Saved, degraded: bool) -> Value {
-    let effective = effective_prefs(&saved.prefs);
-    json!({
-        "topStories": [],
-        "rankedStories": [],
-        "sourceGroups": [],
-        "activeTopics": effective.topics,
-        "enabledSources": effective.sources.iter().map(|source| json!({"sourceKey": source.key, "label": source.label})).collect::<Vec<_>>(),
-        "degraded": degraded,
-    })
+/// The answer when even the saved rows cannot be read. It names no sources, because none
+/// could be checked.
+fn degraded_empty() -> Response {
+    Response::new(
+        200,
+        json!({
+            "topStories": [], "rankedStories": [], "sourceGroups": [],
+            "activeTopics": [], "enabledSources": [], "degraded": true,
+        }),
+    )
 }

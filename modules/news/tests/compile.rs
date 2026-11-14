@@ -165,6 +165,73 @@ fn compile_of_three_hundred_candidates_stays_fast() {
 }
 
 #[test]
+fn a_saved_site_page_with_growing_lowercase_letters_does_not_crash() {
+    let fake = Fake::new();
+    fake.seed(
+        "app.news_custom_sources",
+        A,
+        json!({
+            "label": "Daily Example", "canonical_domain": "daily.example.com",
+            "homepage_url": "https://daily.example.com/", "feed_url": null,
+            "retrieval_method": "scrape", "validation_status": "approved", "health_status": "healthy",
+        }),
+    );
+    // The dotted capital I grows when lowercased in full Unicode. The page scan must survive it.
+    fake.page(
+        "https://daily.example.com/",
+        200,
+        "text/html",
+        "<html><head><title>İstanbul Daily</title></head><body><a href=\"https://daily.example.com/a\">A story from İstanbul</a></body></html>",
+    );
+    fake.page(
+        "https://daily.example.com/a",
+        200,
+        "text/html",
+        "<html><head><meta property=\"article:published_time\" content=\"2026-11-06T09:00:00Z\"></head><body>İstanbul</body></html>",
+    );
+    let (status, body) = fake.route("GET", "/overview", &[], json!(null));
+    assert_eq!(status, 200);
+    assert_eq!(titles(&body), vec!["A story from İstanbul"]);
+}
+
+#[test]
+fn parsing_and_filtering_a_full_page_of_stories_stays_fast() {
+    let items: Vec<(String, String, String)> = (0..300)
+        .map(|index| {
+            (
+                format!("Story number {index}"),
+                format!("https://daily.example.com/{index}"),
+                "Fri, 06 Nov 2026 09:00:00 GMT".to_owned(),
+            )
+        })
+        .collect();
+    let refs: Vec<(&str, &str, &str)> = items.iter().map(|(a, b, c)| (a.as_str(), b.as_str(), c.as_str())).collect();
+    let body = feed(&refs);
+    let started = std::time::Instant::now();
+    let parsed = moss_news_reader::parse_feed_xml(&body);
+    assert_eq!(parsed.len(), 300);
+    let candidates: Vec<Candidate> = parsed
+        .into_iter()
+        .enumerate()
+        .map(|(index, raw)| Candidate {
+            id: format!("c{}", index + 1),
+            publisher: "Daily".into(),
+            canonical_domain: "daily.example.com".into(),
+            headline: raw.title,
+            url: raw.link,
+            published_at: "2026-11-06T09:00:00.000Z".into(),
+            excerpt: None,
+            image_url: None,
+            origin: "curated",
+            matched_topics: vec![],
+        })
+        .collect();
+    let filtered = apply_filters(candidates, &[], 1_794_000_000_000);
+    assert_eq!(filtered.len(), 300);
+    assert!(started.elapsed().as_millis() < 500, "parse and filter took {:?}", started.elapsed());
+}
+
+#[test]
 fn malformed_model_answers_fall_back() {
     let fake = Fake::new();
     saved_source(&fake);
