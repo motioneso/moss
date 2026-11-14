@@ -83,3 +83,107 @@ fn the_package_asks_only_for_its_own_resources() {
     assert!(ask("db", "query", "app.users", json!({"kind":"select"})).is_err());
     assert!(ask("jobs", "schedule", "web-x", json!({})).is_err());
 }
+
+/// A stand-in for the host's services. It records every call the real component makes and
+/// answers like the host would for a saved key and a canned search reply.
+struct Recorder {
+    key_saved: bool,
+    reply: Value,
+    seen: std::sync::Mutex<Vec<(String, String, String, Value)>>,
+}
+impl moss_module_host::runtime::Ports for Recorder {
+    fn invoke(
+        &self,
+        _: &moss_module_host::runtime::CallScope,
+        port: &str,
+        request: &Request,
+    ) -> anyhow::Result<Value> {
+        self.seen.lock().unwrap().push((
+            port.into(),
+            request.operation.clone(),
+            request.resource.clone(),
+            request.parameters.clone(),
+        ));
+        match (port, request.operation.as_str()) {
+            ("credentials", "status") => Ok(json!({"configured": self.key_saved})),
+            ("credentials", "request") => Ok(json!({"status": 200, "body": self.reply})),
+            ("kv", "get") => Ok(Value::Null),
+            ("ai", "capabilities") => Ok(json!({"model": null})),
+            _ => anyhow::bail!("unexpected call"),
+        }
+    }
+}
+fn call_with(ports: Arc<Recorder>, kind: &str, payload: &str) -> anyhow::Result<Value> {
+    let out = Host::new(Limits::default()).unwrap().call(
+        &component(),
+        Arc::new(moss_web_research_host::package::manifest().unwrap()),
+        AccessContext::new(uuid::Uuid::new_v4(), "web-research-package"),
+        ports,
+        kind,
+        payload,
+    )?;
+    Ok(serde_json::from_str(&out)?)
+}
+fn recorder(key_saved: bool) -> Arc<Recorder> {
+    Arc::new(Recorder {
+        key_saved,
+        reply: json!({"web":{"results":[
+            {"title":"One","url":"https://News.Example.com/a?x=1","description":"First","age":"1 day ago"},
+            {"title":"Two","url":"https://example.org/b","description":"Second"}
+        ]}}),
+        seen: Default::default(),
+    })
+}
+
+#[test]
+fn the_real_component_searches_through_the_credential_broker_and_leaks_nothing() {
+    const MARK: &str = "zq7-live-marker-5521";
+    let ports = recorder(true);
+    let out = call_with(
+        ports.clone(),
+        "tool",
+        &json!({"tool":"web.search","parameters":{"query":MARK,"limit":2}}).to_string(),
+    )
+    .unwrap();
+    let data = &out["data"];
+    assert_eq!(data["results"][0]["resultId"], "web-1");
+    assert_eq!(data["results"][0]["domain"], "news.example.com");
+    assert_eq!(data["results"][1]["title"], "Two");
+    assert_eq!(data["trace"]["provider"], "brave");
+    for (port, op, resource, params) in ports.seen.lock().unwrap().iter() {
+        let text = format!("{resource}{params}");
+        if (port.as_str(), op.as_str()) == ("credentials", "request") {
+            assert!(params["url"].as_str().unwrap().contains(MARK));
+            assert!(params.get("headers").is_none(), "the key is attached by the host");
+        } else {
+            assert!(!text.contains(MARK), "{port}.{op} carried the query");
+        }
+    }
+}
+
+#[test]
+fn another_package_gets_results_and_the_gate_through_the_api() {
+    let ports = recorder(true);
+    let found = call_with(
+        ports.clone(),
+        "api",
+        &json!({"name":"webSearch","parameters":{"query":"topic"}}).to_string(),
+    )
+    .unwrap();
+    let row = &found["data"]["results"][0];
+    assert_eq!((row["title"].as_str(), row["snippet"].as_str(), row["publishedAt"].as_str()), (Some("One"), Some("First"), Some("1 day ago")));
+    assert!(row["url"].as_str().unwrap().starts_with("https://News.Example.com"));
+    let gate = call_with(ports, "api", &json!({"name":"webSearchStatus","parameters":{}}).to_string()).unwrap();
+    assert_eq!(gate["data"]["engine"], "brave");
+}
+
+#[test]
+fn with_no_key_the_status_route_gives_the_reason_and_search_makes_no_request() {
+    let ports = recorder(false);
+    let out = call_with(ports.clone(), "route", r#"{"method":"GET","path":"/status","params":{},"query":{},"body":null}"#).unwrap();
+    assert_eq!(out["status"], 200);
+    assert_eq!(out["body"]["webSearchReason"], "no-key-no-native-model");
+    let search = call_with(ports.clone(), "tool", &json!({"tool":"web.search","parameters":{"query":"q"}}).to_string()).unwrap();
+    assert_eq!(search["data"]["trace"]["reason"], "no-key-no-native-model");
+    assert!(ports.seen.lock().unwrap().iter().all(|c| !(c.0 == "credentials" && c.1 == "request")));
+}
