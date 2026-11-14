@@ -19,6 +19,9 @@ pub fn section<H: Host + ?Sized>(host: &H, gaps: &mut Vec<Gap>) -> Section {
     };
     let w = &reply["data"];
     if !w.is_object() {
+        if reply["unavailable"] == true {
+            gaps.push(Gap { source: "weather", reason: Reason::ToolFailed });
+        }
         return empty;
     }
     let unit = &w["unit"];
@@ -80,6 +83,9 @@ mod tests {
         assert!(section(&Reply(Err(Error::new("x"))), &mut gaps).lines.is_empty());
         assert_eq!(gaps.len(), 1);
         assert_eq!(gaps[0].reason, Reason::ToolFailed);
+        let mut gaps = vec![];
+        assert!(section(&Reply(Ok(json!({"data": null, "unavailable": true}))), &mut gaps).lines.is_empty());
+        assert_eq!(gaps.len(), 1, "a known place with no reading is a visible gap");
     }
 
     #[test]

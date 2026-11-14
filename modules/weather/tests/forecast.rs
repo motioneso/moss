@@ -67,6 +67,13 @@ fn no_place_and_no_zone_means_null() {
 }
 
 #[test]
+fn a_known_place_with_the_service_down_is_marked_unavailable() {
+    let host = Fake::new(NOW);
+    host.prefs.borrow_mut().insert("location".into(), place("Seattle, Washington, United States"));
+    assert_eq!(host.route("GET", "/today", json!({}), json!(null), None).1, json!({"data": null, "unavailable": true}));
+}
+
+#[test]
 fn a_tailnet_address_is_skipped_and_the_saved_zone_city_applies() {
     let host = Fake::new(NOW);
     host.prefs.borrow_mut().insert("saved-timezone".into(), json!("America/New_York"));

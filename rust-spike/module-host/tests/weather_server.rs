@@ -331,6 +331,14 @@ fn installed_weather_package_serves_routes_from_the_real_server() {
         assert_eq!((status, json_of(&text)), (200, json!({"unit":"imperial"})), "{text}\n{}", log());
         assert_eq!(json_of(&call(Method::GET, "/location", Some(who), None).1), json!({"location":null}));
     }
+    // The old Settings paths reach the same package.
+    for (path, key) in [("/api/me/weather-unit", "unit"), ("/api/me/weather-location", "location")] {
+        let old = client.get(format!("{origin}{path}")).header("origin", &origin).header("cookie", &other).send().unwrap();
+        assert_eq!(old.status().as_u16(), 200, "{path}");
+        assert!(json_of(&old.text().unwrap()).get(key).is_some(), "{path}");
+    }
+    let old = client.get(format!("{origin}/api/me/weather-location/search?query=Seattle")).header("origin", &origin).header("cookie", &cookie).send().unwrap();
+    assert_eq!(old.status().as_u16(), 200);
     // Real place search through the real fetch path.
     let (status, text) = call(Method::GET, "/location/search?query=Seattle", Some(&cookie), None);
     assert_eq!(status, 200, "{text}\n{}", log());

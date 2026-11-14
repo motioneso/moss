@@ -65,10 +65,14 @@ pub fn reading<H: Host + ?Sized>(host: &H, place: &Place, unit: &str, now: DateT
     Some(data)
 }
 
-/// `{data}` with the reading, or null when no place is known or the service is down.
+/// `{data}` with the reading. Null data means no place is known, or the service is down, which
+/// also sets `unavailable` so callers can tell the two apart.
 pub fn today<H: Host + ?Sized>(host: &H, client: Option<&str>) -> Result<Value> {
     let now = now(host)?;
     let Some(found) = resolve(host, client, now)? else { return Ok(json!({"data": null})) };
     let unit = unit(host)?;
-    Ok(json!({"data": reading(host, &found.place, unit, now, false)}))
+    Ok(match reading(host, &found.place, unit, now, false) {
+        Some(data) => json!({"data": data}),
+        None => json!({"data": null, "unavailable": true}),
+    })
 }

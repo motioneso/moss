@@ -232,13 +232,14 @@ person's saved place, or a guessed place when none is saved.
 
 ### Differences from the old app
 
-- Today returns an empty answer when a service fails. The old route returned an error in some
-  cases.
+- Today returns an empty answer when a service fails, marked unavailable so Briefings can show a
+  gap. The old route returned an error in some cases.
 - The address guess is cached per person in the shared store, not in server memory, because each
   call runs in a fresh instance.
 - Behind a proxy the connecting address is the proxy, so the guess is skipped and the time zone
   city applies.
-- Paths are under the package path. Error bodies keep the old shape (400 with a message, 502 with
+- The package serves its routes under its own path, and the server keeps the four old Settings
+  paths (place, search, reverse, unit) as aliases to them for the support window. Error bodies keep the old shape (400 with a message, 502 with
   an error).
 - The Briefings 10 second limit on its weather read is not enforced inside the package.
 - The visual forecast snapshot is not built.
@@ -259,4 +260,6 @@ actions, today, visual forecast). The Account screen wording stays true.
   settings was proven in part 20a.
 - Job payloads and activity rows from a real chat run. Weather writes none, and the scan found no
   planted text in any table.
+- Two requests at once can overwrite each other's freshly cached forecast, because the shared
+  cache is read and written whole. The cost is one extra outside fetch, never wrong data.
 - The visual forecast and the screens (part 21).
