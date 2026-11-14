@@ -20,7 +20,14 @@ export async function authorizeTasksHeartbeatRead(
   return parseHeartbeatSourceReadInput(input) !== null;
 }
 
-/** Open tasks that are overdue or due inside the horizon. Never advances recurring series. */
+/** Tasks overdue by more than this many days stop surfacing, so an old backlog cannot fill the cap. */
+const OVERDUE_LOOKBACK_DAYS = 7;
+
+/**
+ * Open tasks that are overdue or due inside the horizon. What is still due comes first, so a
+ * deep overdue backlog can never hide an item due soon, and only recently overdue tasks appear.
+ * Never advances recurring series.
+ */
 export const tasksHeartbeatWindowExecute: ToolExecute = async (
   scopedDb,
   input
@@ -31,6 +38,7 @@ export const tasksHeartbeatWindowExecute: ToolExecute = async (
 
   const now = new Date();
   const until = new Date(now.getTime() + parsed.horizonHours * 3_600_000);
+  const overdueFrom = new Date(now.getTime() - OVERDUE_LOOKBACK_DAYS * 86_400_000);
   const owned = sql<string>`app.current_actor_user_id()`;
 
   const rows = await scopedDb.db
@@ -40,7 +48,10 @@ export const tasksHeartbeatWindowExecute: ToolExecute = async (
     .where("status", "=", "todo")
     .where("due_at", "is not", null)
     .where("due_at", "<=", until)
-    .orderBy("due_at", "asc")
+    .where("due_at", ">=", overdueFrom)
+    .orderBy(sql<boolean>`due_at >= ${now}`, "desc")
+    .orderBy(sql<Date>`case when due_at >= ${now} then due_at end`, "asc")
+    .orderBy(sql<Date>`case when due_at < ${now} then due_at end`, "desc")
     .orderBy("id")
     .limit(parsed.limit + 1)
     .execute();
