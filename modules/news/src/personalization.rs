@@ -102,7 +102,9 @@ fn refresh_dto(row: Option<&Value>) -> Result<Value> {
     Ok(out)
 }
 
-/// `GET /personalization`. Nothing here can reach a model or the web, so every ability is off.
+/// `GET /personalization`. Adding by address is on. The host cannot say whether a model is set up,
+/// so that flag is always on and a missing model shows when a preview is tried. Name search and
+/// free-form topics need web search and stay off.
 pub fn get<H: Host + ?Sized>(host: &H) -> Result<Response> {
     let client = Client(host);
     let sources = list(host, SOURCES)?.iter().map(source_dto).collect::<Result<Vec<_>>>()?;
@@ -114,10 +116,10 @@ pub fn get<H: Host + ?Sized>(host: &H) -> Result<Response> {
         200,
         json!({
             "availability": {
-                "aiConfigured": false,
+                "aiConfigured": true,
                 "webSearchConfigured": false,
                 "webSearchReason": "no-key-no-native-model",
-                "customSourceByUrlEnabled": false,
+                "customSourceByUrlEnabled": true,
                 "customSourceByNameEnabled": false,
                 "freeformTopicsEnabled": false,
             },
