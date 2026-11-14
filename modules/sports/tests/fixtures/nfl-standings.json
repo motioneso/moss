@@ -1,0 +1,38 @@
+{
+  "children": [
+    {
+      "name": "American Football Conference",
+      "standings": {
+        "entries": [
+          {
+            "team": { "id": "17", "abbreviation": "NE", "displayName": "New England Patriots" },
+            "stats": [
+              { "name": "rank", "value": 1 },
+              { "name": "wins", "value": 11 },
+              { "name": "losses", "value": 1 },
+              { "name": "winPercent", "value": 0.917 },
+              { "name": "playoffSeed", "value": 1 }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "National Football Conference",
+      "standings": {
+        "entries": [
+          {
+            "team": { "id": "6", "abbreviation": "DAL", "displayName": "Dallas Cowboys" },
+            "stats": [
+              { "name": "rank", "value": 1 },
+              { "name": "wins", "value": 10 },
+              { "name": "losses", "value": 2 },
+              { "name": "winPercent", "value": 0.833 },
+              { "name": "playoffSeed", "value": 1 }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

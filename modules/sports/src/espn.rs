@@ -55,9 +55,45 @@ fn entry(key: &str) -> Result<&'static Entry> {
     catalog::entry(key).ok_or_else(|| Error::new("Unknown competition"))
 }
 
-pub fn teams_url(competition_key: &str) -> Result<String> {
+/// Teams come in pages of this size, because one page of the college leagues is larger than the
+/// host's response cap. Leagues with fewer teams than this arrive in the first page.
+pub const TEAMS_PAGE_SIZE: usize = 200;
+const TEAMS_MAX_PAGES: usize = 12;
+
+pub fn teams_url(competition_key: &str, page: usize) -> Result<String> {
     let e = entry(competition_key)?;
-    Ok(format!("{SITE_BASE}/{}/{}/teams?limit=1000", e.espn_sport, e.espn_league))
+    Ok(format!(
+        "{SITE_BASE}/{}/{}/teams?limit={TEAMS_PAGE_SIZE}&page={page}",
+        e.espn_sport, e.espn_league
+    ))
+}
+
+/// Fetches every page of a competition's teams and returns them in the one-page payload shape.
+/// A page shorter than the page size is the last. A page that adds no new team stops the walk,
+/// because some leagues ignore the page number and repeat the first page.
+pub fn fetch_teams<H: Host + ?Sized>(host: &H, competition_key: &str) -> Result<Value> {
+    let mut teams: Vec<Value> = vec![];
+    let mut seen = std::collections::HashSet::<String>::new();
+    for page in 1..=TEAMS_MAX_PAGES {
+        let data = fetch_json(host, &teams_url(competition_key, page)?)?;
+        let batch = at(&data, &["sports"])[0]["leagues"][0]["teams"].as_array().cloned().unwrap_or_default();
+        let size = batch.len();
+        let mut added = 0;
+        for team in batch {
+            let fresh = match id_text(&team["team"]["id"]) {
+                Some(id) => seen.insert(id),
+                None => true,
+            };
+            if fresh {
+                teams.push(team);
+                added += 1;
+            }
+        }
+        if size < TEAMS_PAGE_SIZE || added == 0 {
+            break;
+        }
+    }
+    Ok(json!({"sports": [{"leagues": [{"teams": teams}]}]}))
 }
 
 pub fn scoreboard_url(competition_key: &str, day: &str) -> Result<String> {

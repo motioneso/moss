@@ -23,9 +23,7 @@ fn parse_cached(value: &Value) -> Option<Vec<TeamRef>> {
 /// Reads one league from a loaded store, fetching and caching on a miss. A provider failure
 /// returns an empty, degraded list and caches nothing.
 fn fetch_into<H: Host + ?Sized>(host: &H, store: &mut Store, key: &str, now: i64) -> Roster {
-    let fetched = espn::teams_url(key)
-        .and_then(|url| espn::fetch_json(host, &url))
-        .map(|data| espn::parse_teams(&data, key));
+    let fetched = espn::fetch_teams(host, key).map(|data| espn::parse_teams(&data, key));
     match fetched {
         Ok(teams) => {
             if let Ok(value) = serde_json::to_value(&teams) {

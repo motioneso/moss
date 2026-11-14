@@ -1,0 +1,1379 @@
+[
+  {
+    "url": "/api/sports/catalog",
+    "status": 200,
+    "body": {
+      "competitions": [
+        {
+          "competitionKey": "nfl",
+          "label": "NFL",
+          "sportLabel": "Football",
+          "regionLabel": null,
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "record",
+          "confederation": "INTL"
+        },
+        {
+          "competitionKey": "nba",
+          "label": "NBA",
+          "sportLabel": "Basketball",
+          "regionLabel": null,
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "record",
+          "confederation": "INTL"
+        },
+        {
+          "competitionKey": "nhl",
+          "label": "NHL",
+          "sportLabel": "Hockey",
+          "regionLabel": null,
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "record",
+          "confederation": "INTL"
+        },
+        {
+          "competitionKey": "mlb",
+          "label": "MLB",
+          "sportLabel": "Baseball",
+          "regionLabel": null,
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "record",
+          "confederation": "INTL"
+        },
+        {
+          "competitionKey": "wnba",
+          "label": "WNBA",
+          "sportLabel": "Basketball",
+          "regionLabel": null,
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "record",
+          "confederation": "INTL"
+        },
+        {
+          "competitionKey": "ncaaf",
+          "label": "NCAA Football (FBS)",
+          "sportLabel": "Football",
+          "regionLabel": null,
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "record",
+          "confederation": "INTL"
+        },
+        {
+          "competitionKey": "ncaam",
+          "label": "NCAA Men's Basketball",
+          "sportLabel": "Basketball",
+          "regionLabel": null,
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "record",
+          "confederation": "INTL"
+        },
+        {
+          "competitionKey": "ncaaw",
+          "label": "NCAA Women's Basketball",
+          "sportLabel": "Basketball",
+          "regionLabel": null,
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "record",
+          "confederation": "INTL"
+        },
+        {
+          "competitionKey": "ncaa-baseball",
+          "label": "NCAA Baseball",
+          "sportLabel": "Baseball",
+          "regionLabel": null,
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "record",
+          "confederation": "INTL"
+        },
+        {
+          "competitionKey": "ncaa-hockey",
+          "label": "NCAA Men's Hockey",
+          "sportLabel": "Hockey",
+          "regionLabel": null,
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "record",
+          "confederation": "INTL"
+        },
+        {
+          "competitionKey": "eng.1",
+          "label": "Premier League",
+          "sportLabel": "Soccer",
+          "regionLabel": "England",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "UEFA"
+        },
+        {
+          "competitionKey": "eng.2",
+          "label": "EFL Championship",
+          "sportLabel": "Soccer",
+          "regionLabel": "England",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "UEFA"
+        },
+        {
+          "competitionKey": "eng.3",
+          "label": "EFL League One",
+          "sportLabel": "Soccer",
+          "regionLabel": "England",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "UEFA"
+        },
+        {
+          "competitionKey": "eng.4",
+          "label": "EFL League Two",
+          "sportLabel": "Soccer",
+          "regionLabel": "England",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "UEFA"
+        },
+        {
+          "competitionKey": "eng.5",
+          "label": "National League",
+          "sportLabel": "Soccer",
+          "regionLabel": "England",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "UEFA"
+        },
+        {
+          "competitionKey": "usa.1",
+          "label": "MLS",
+          "sportLabel": "Soccer",
+          "regionLabel": "United States",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "CONCACAF"
+        },
+        {
+          "competitionKey": "usa.nwsl",
+          "label": "NWSL",
+          "sportLabel": "Soccer",
+          "regionLabel": "United States",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "CONCACAF"
+        },
+        {
+          "competitionKey": "esp.1",
+          "label": "LaLiga",
+          "sportLabel": "Soccer",
+          "regionLabel": "Spain",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "UEFA"
+        },
+        {
+          "competitionKey": "ger.1",
+          "label": "Bundesliga",
+          "sportLabel": "Soccer",
+          "regionLabel": "Germany",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "UEFA"
+        },
+        {
+          "competitionKey": "ita.1",
+          "label": "Serie A",
+          "sportLabel": "Soccer",
+          "regionLabel": "Italy",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "UEFA"
+        },
+        {
+          "competitionKey": "fra.1",
+          "label": "Ligue 1",
+          "sportLabel": "Soccer",
+          "regionLabel": "France",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "UEFA"
+        },
+        {
+          "competitionKey": "ned.1",
+          "label": "Eredivisie",
+          "sportLabel": "Soccer",
+          "regionLabel": "Netherlands",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "UEFA"
+        },
+        {
+          "competitionKey": "por.1",
+          "label": "Primeira Liga",
+          "sportLabel": "Soccer",
+          "regionLabel": "Portugal",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "UEFA"
+        },
+        {
+          "competitionKey": "sco.1",
+          "label": "Scottish Premiership",
+          "sportLabel": "Soccer",
+          "regionLabel": "Scotland",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "UEFA"
+        },
+        {
+          "competitionKey": "tur.1",
+          "label": "Süper Lig",
+          "sportLabel": "Soccer",
+          "regionLabel": "Turkey",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "UEFA"
+        },
+        {
+          "competitionKey": "bel.1",
+          "label": "Belgian Pro League",
+          "sportLabel": "Soccer",
+          "regionLabel": "Belgium",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "UEFA"
+        },
+        {
+          "competitionKey": "gre.1",
+          "label": "Super League Greece",
+          "sportLabel": "Soccer",
+          "regionLabel": "Greece",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "UEFA"
+        },
+        {
+          "competitionKey": "sui.1",
+          "label": "Swiss Super League",
+          "sportLabel": "Soccer",
+          "regionLabel": "Switzerland",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "UEFA"
+        },
+        {
+          "competitionKey": "aut.1",
+          "label": "Austrian Bundesliga",
+          "sportLabel": "Soccer",
+          "regionLabel": "Austria",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "UEFA"
+        },
+        {
+          "competitionKey": "den.1",
+          "label": "Danish Superliga",
+          "sportLabel": "Soccer",
+          "regionLabel": "Denmark",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "UEFA"
+        },
+        {
+          "competitionKey": "mex.1",
+          "label": "Liga MX",
+          "sportLabel": "Soccer",
+          "regionLabel": "Mexico",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "CONCACAF"
+        },
+        {
+          "competitionKey": "crc.1",
+          "label": "Primera División de Costa Rica",
+          "sportLabel": "Soccer",
+          "regionLabel": "Costa Rica",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "CONCACAF"
+        },
+        {
+          "competitionKey": "bra.1",
+          "label": "Brasileirão",
+          "sportLabel": "Soccer",
+          "regionLabel": "Brazil",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "CONMEBOL"
+        },
+        {
+          "competitionKey": "arg.1",
+          "label": "Liga Profesional de Fútbol",
+          "sportLabel": "Soccer",
+          "regionLabel": "Argentina",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "CONMEBOL"
+        },
+        {
+          "competitionKey": "col.1",
+          "label": "Primera A",
+          "sportLabel": "Soccer",
+          "regionLabel": "Colombia",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "CONMEBOL"
+        },
+        {
+          "competitionKey": "chi.1",
+          "label": "Primera División de Chile",
+          "sportLabel": "Soccer",
+          "regionLabel": "Chile",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "CONMEBOL"
+        },
+        {
+          "competitionKey": "uru.1",
+          "label": "Liga AUF Uruguaya",
+          "sportLabel": "Soccer",
+          "regionLabel": "Uruguay",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "CONMEBOL"
+        },
+        {
+          "competitionKey": "uefa.champions",
+          "label": "Champions League",
+          "sportLabel": "Soccer",
+          "regionLabel": "Europe",
+          "kind": "tournament",
+          "marquee": false,
+          "standingsShape": "groups",
+          "confederation": "UEFA"
+        },
+        {
+          "competitionKey": "fifa.world",
+          "label": "FIFA World Cup",
+          "sportLabel": "Soccer",
+          "regionLabel": "International",
+          "kind": "tournament",
+          "marquee": true,
+          "standingsShape": "groups",
+          "confederation": "INTL"
+        },
+        {
+          "competitionKey": "fifa.wwc",
+          "label": "FIFA Women's World Cup",
+          "sportLabel": "Soccer",
+          "regionLabel": "International",
+          "kind": "tournament",
+          "marquee": false,
+          "standingsShape": "groups",
+          "confederation": "INTL"
+        },
+        {
+          "competitionKey": "eng.w.1",
+          "label": "Women's Super League",
+          "sportLabel": "Soccer",
+          "regionLabel": "England",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "UEFA"
+        },
+        {
+          "competitionKey": "esp.w.1",
+          "label": "Liga F",
+          "sportLabel": "Soccer",
+          "regionLabel": "Spain",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "UEFA"
+        },
+        {
+          "competitionKey": "fra.w.1",
+          "label": "Première Ligue",
+          "sportLabel": "Soccer",
+          "regionLabel": "France",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "UEFA"
+        },
+        {
+          "competitionKey": "ned.w.1",
+          "label": "Vrouwen Eredivisie",
+          "sportLabel": "Soccer",
+          "regionLabel": "Netherlands",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "UEFA"
+        },
+        {
+          "competitionKey": "aus.w.1",
+          "label": "A-League Women",
+          "sportLabel": "Soccer",
+          "regionLabel": "Australia",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "AFC"
+        },
+        {
+          "competitionKey": "uefa.wchampions",
+          "label": "UEFA Women's Champions League",
+          "sportLabel": "Soccer",
+          "regionLabel": "Europe",
+          "kind": "tournament",
+          "marquee": false,
+          "standingsShape": "groups",
+          "confederation": "UEFA"
+        },
+        {
+          "competitionKey": "uefa.weuro",
+          "label": "UEFA Women's European Championship",
+          "sportLabel": "Soccer",
+          "regionLabel": "Europe",
+          "kind": "tournament",
+          "marquee": false,
+          "standingsShape": "groups",
+          "confederation": "UEFA"
+        },
+        {
+          "competitionKey": "concacaf.w.gold",
+          "label": "Concacaf W Gold Cup",
+          "sportLabel": "Soccer",
+          "regionLabel": "North America",
+          "kind": "tournament",
+          "marquee": false,
+          "standingsShape": "groups",
+          "confederation": "CONCACAF"
+        },
+        {
+          "competitionKey": "fifa.w.olympics",
+          "label": "Women's Olympic Soccer Tournament",
+          "sportLabel": "Soccer",
+          "regionLabel": "International",
+          "kind": "tournament",
+          "marquee": false,
+          "standingsShape": "groups",
+          "confederation": "INTL"
+        },
+        {
+          "competitionKey": "wpbl",
+          "label": "Women's Pro Baseball League",
+          "sportLabel": "Baseball",
+          "regionLabel": "United States",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "record",
+          "confederation": "INTL"
+        },
+        {
+          "competitionKey": "jpn.1",
+          "label": "J.League",
+          "sportLabel": "Soccer",
+          "regionLabel": "Japan",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "AFC"
+        },
+        {
+          "competitionKey": "ksa.1",
+          "label": "Saudi Pro League",
+          "sportLabel": "Soccer",
+          "regionLabel": "Saudi Arabia",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "AFC"
+        },
+        {
+          "competitionKey": "chn.1",
+          "label": "Chinese Super League",
+          "sportLabel": "Soccer",
+          "regionLabel": "China",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "AFC"
+        },
+        {
+          "competitionKey": "aus.1",
+          "label": "A-League Men",
+          "sportLabel": "Soccer",
+          "regionLabel": "Australia",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "AFC"
+        },
+        {
+          "competitionKey": "tha.1",
+          "label": "Thai League 1",
+          "sportLabel": "Soccer",
+          "regionLabel": "Thailand",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "AFC"
+        },
+        {
+          "competitionKey": "rsa.1",
+          "label": "South African Premiership",
+          "sportLabel": "Soccer",
+          "regionLabel": "South Africa",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "CAF"
+        },
+        {
+          "competitionKey": "ecu.1",
+          "label": "LigaPro Ecuador",
+          "sportLabel": "Soccer",
+          "regionLabel": "Ecuador",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "CONMEBOL"
+        },
+        {
+          "competitionKey": "par.1",
+          "label": "Paraguayan Primera División",
+          "sportLabel": "Soccer",
+          "regionLabel": "Paraguay",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "CONMEBOL"
+        },
+        {
+          "competitionKey": "per.1",
+          "label": "Peruvian Liga 1",
+          "sportLabel": "Soccer",
+          "regionLabel": "Peru",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "CONMEBOL"
+        },
+        {
+          "competitionKey": "bol.1",
+          "label": "Bolivian Liga Profesional",
+          "sportLabel": "Soccer",
+          "regionLabel": "Bolivia",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "CONMEBOL"
+        },
+        {
+          "competitionKey": "ven.1",
+          "label": "Venezuelan Primera División",
+          "sportLabel": "Soccer",
+          "regionLabel": "Venezuela",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "CONMEBOL"
+        },
+        {
+          "competitionKey": "hon.1",
+          "label": "Honduran Liga Nacional",
+          "sportLabel": "Soccer",
+          "regionLabel": "Honduras",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "CONCACAF"
+        },
+        {
+          "competitionKey": "gua.1",
+          "label": "Guatemalan Liga Nacional",
+          "sportLabel": "Soccer",
+          "regionLabel": "Guatemala",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "CONCACAF"
+        },
+        {
+          "competitionKey": "slv.1",
+          "label": "Salvadoran Primera División",
+          "sportLabel": "Soccer",
+          "regionLabel": "El Salvador",
+          "kind": "league",
+          "marquee": false,
+          "standingsShape": "table",
+          "confederation": "CONCACAF"
+        }
+      ],
+      "degraded": false
+    }
+  },
+  {
+    "url": "/api/sports/leagues/nfl/teams",
+    "status": 200,
+    "body": {
+      "teams": [
+        {
+          "teamKey": "dal",
+          "competitionKey": "nfl",
+          "name": "Dallas Cowboys",
+          "shortName": "Cowboys",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/nfl/500/dal.png",
+          "sourceTeamId": "6"
+        },
+        {
+          "teamKey": "ne",
+          "competitionKey": "nfl",
+          "name": "New England Patriots",
+          "shortName": "Patriots",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/nfl/500/ne.png",
+          "sourceTeamId": "17"
+        }
+      ],
+      "degraded": false
+    }
+  },
+  {
+    "url": "/api/sports/leagues/eng.1/teams",
+    "status": 200,
+    "body": {
+      "teams": [
+        {
+          "teamKey": "bou",
+          "competitionKey": "eng.1",
+          "name": "AFC Bournemouth",
+          "shortName": "Bournemouth",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/349.png",
+          "sourceTeamId": "349"
+        },
+        {
+          "teamKey": "ars",
+          "competitionKey": "eng.1",
+          "name": "Arsenal",
+          "shortName": "Arsenal",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png",
+          "sourceTeamId": "359"
+        },
+        {
+          "teamKey": "avl",
+          "competitionKey": "eng.1",
+          "name": "Aston Villa",
+          "shortName": "Aston Villa",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/362.png",
+          "sourceTeamId": "362"
+        },
+        {
+          "teamKey": "bre",
+          "competitionKey": "eng.1",
+          "name": "Brentford",
+          "shortName": "Brentford",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/337.png",
+          "sourceTeamId": "337"
+        },
+        {
+          "teamKey": "bha",
+          "competitionKey": "eng.1",
+          "name": "Brighton & Hove Albion",
+          "shortName": "Brighton",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/331.png",
+          "sourceTeamId": "331"
+        },
+        {
+          "teamKey": "che",
+          "competitionKey": "eng.1",
+          "name": "Chelsea",
+          "shortName": "Chelsea",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/363.png",
+          "sourceTeamId": "363"
+        },
+        {
+          "teamKey": "cov",
+          "competitionKey": "eng.1",
+          "name": "Coventry City",
+          "shortName": "Coventry",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/388.png",
+          "sourceTeamId": "388"
+        },
+        {
+          "teamKey": "cry",
+          "competitionKey": "eng.1",
+          "name": "Crystal Palace",
+          "shortName": "C Palace",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/384.png",
+          "sourceTeamId": "384"
+        },
+        {
+          "teamKey": "eve",
+          "competitionKey": "eng.1",
+          "name": "Everton",
+          "shortName": "Everton",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/368.png",
+          "sourceTeamId": "368"
+        },
+        {
+          "teamKey": "ful",
+          "competitionKey": "eng.1",
+          "name": "Fulham",
+          "shortName": "Fulham",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/370.png",
+          "sourceTeamId": "370"
+        },
+        {
+          "teamKey": "hul",
+          "competitionKey": "eng.1",
+          "name": "Hull City",
+          "shortName": "Hull",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/306.png",
+          "sourceTeamId": "306"
+        },
+        {
+          "teamKey": "ips",
+          "competitionKey": "eng.1",
+          "name": "Ipswich Town",
+          "shortName": "Ipswich",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/373.png",
+          "sourceTeamId": "373"
+        },
+        {
+          "teamKey": "lee",
+          "competitionKey": "eng.1",
+          "name": "Leeds United",
+          "shortName": "Leeds",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/357.png",
+          "sourceTeamId": "357"
+        },
+        {
+          "teamKey": "liv",
+          "competitionKey": "eng.1",
+          "name": "Liverpool",
+          "shortName": "Liverpool",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/364.png",
+          "sourceTeamId": "364"
+        },
+        {
+          "teamKey": "mnc",
+          "competitionKey": "eng.1",
+          "name": "Manchester City",
+          "shortName": "Man City",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/382.png",
+          "sourceTeamId": "382"
+        },
+        {
+          "teamKey": "man",
+          "competitionKey": "eng.1",
+          "name": "Manchester United",
+          "shortName": "Man Utd",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/360.png",
+          "sourceTeamId": "360"
+        },
+        {
+          "teamKey": "new",
+          "competitionKey": "eng.1",
+          "name": "Newcastle United",
+          "shortName": "Newcastle",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/361.png",
+          "sourceTeamId": "361"
+        },
+        {
+          "teamKey": "nfo",
+          "competitionKey": "eng.1",
+          "name": "Nottingham Forest",
+          "shortName": "Nottm Forest",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/393.png",
+          "sourceTeamId": "393"
+        },
+        {
+          "teamKey": "sun",
+          "competitionKey": "eng.1",
+          "name": "Sunderland",
+          "shortName": "Sunderland",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/366.png",
+          "sourceTeamId": "366"
+        },
+        {
+          "teamKey": "tot",
+          "competitionKey": "eng.1",
+          "name": "Tottenham Hotspur",
+          "shortName": "Spurs",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/367.png",
+          "sourceTeamId": "367"
+        }
+      ],
+      "degraded": false
+    }
+  },
+  {
+    "url": "/api/sports/leagues/ncaa-baseball/teams",
+    "status": 200,
+    "body": {
+      "teams": [
+        {
+          "teamKey": "ksu.264",
+          "competitionKey": "ncaa-baseball",
+          "name": "Kansas State Wildcats",
+          "shortName": "Kansas St",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/ncaa/500/2306.png",
+          "sourceTeamId": "264"
+        },
+        {
+          "teamKey": "ksu.307",
+          "competitionKey": "ncaa-baseball",
+          "name": "Kennesaw State Owls",
+          "shortName": "Kennesaw St",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/ncaa/500/338.png",
+          "sourceTeamId": "307"
+        },
+        {
+          "teamKey": "afa",
+          "competitionKey": "ncaa-baseball",
+          "name": "Air Force Falcons",
+          "shortName": "Air Force",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/ncaa/500/2005.png",
+          "sourceTeamId": "155"
+        },
+        {
+          "teamKey": "ala",
+          "competitionKey": "ncaa-baseball",
+          "name": "Alabama Crimson Tide",
+          "shortName": "Alabama",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/ncaa/500/333.png",
+          "sourceTeamId": "148"
+        },
+        {
+          "teamKey": "alcn",
+          "competitionKey": "ncaa-baseball",
+          "name": "Alcorn State Braves",
+          "shortName": "Alcorn St",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/ncaa/500/2016.png",
+          "sourceTeamId": "260"
+        },
+        {
+          "teamKey": "apst",
+          "competitionKey": "ncaa-baseball",
+          "name": "App State Mountaineers",
+          "shortName": "App State",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/ncaa/500/2026.png",
+          "sourceTeamId": "271"
+        }
+      ],
+      "degraded": false
+    }
+  },
+  {
+    "url": "/api/sports/leagues/nope/teams",
+    "status": 400,
+    "body": {
+      "error": "Unknown competition: nope"
+    }
+  },
+  {
+    "url": "/api/sports/leagues/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/teams",
+    "status": 404,
+    "body": {
+      "message": "Route GET:/api/sports/leagues/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/teams not found",
+      "error": "Not Found",
+      "statusCode": 404
+    }
+  },
+  {
+    "url": "/api/sports/leagues/wpbl/teams",
+    "status": 200,
+    "body": {
+      "teams": [],
+      "degraded": false
+    }
+  },
+  {
+    "url": "/api/sports/teams/search?q=ar",
+    "status": 200,
+    "body": {
+      "teams": [
+        {
+          "teamKey": "ars",
+          "competitionKey": "eng.1",
+          "name": "Arsenal",
+          "shortName": "Arsenal",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png",
+          "sourceTeamId": "359"
+        }
+      ],
+      "partial": true,
+      "degraded": false
+    }
+  },
+  {
+    "url": "/api/sports/teams/search?q=ar",
+    "status": 200,
+    "body": {
+      "teams": [
+        {
+          "teamKey": "ars",
+          "competitionKey": "eng.1",
+          "name": "Arsenal",
+          "shortName": "Arsenal",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png",
+          "sourceTeamId": "359"
+        }
+      ],
+      "partial": true,
+      "degraded": false
+    }
+  },
+  {
+    "url": "/api/sports/teams/search?q=ar",
+    "status": 200,
+    "body": {
+      "teams": [
+        {
+          "teamKey": "ars",
+          "competitionKey": "eng.1",
+          "name": "Arsenal",
+          "shortName": "Arsenal",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png",
+          "sourceTeamId": "359"
+        }
+      ],
+      "partial": true,
+      "degraded": false
+    }
+  },
+  {
+    "url": "/api/sports/teams/search?q=ar",
+    "status": 200,
+    "body": {
+      "teams": [
+        {
+          "teamKey": "ars",
+          "competitionKey": "eng.1",
+          "name": "Arsenal",
+          "shortName": "Arsenal",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png",
+          "sourceTeamId": "359"
+        }
+      ],
+      "partial": true,
+      "degraded": false
+    }
+  },
+  {
+    "url": "/api/sports/teams/search?q=ar",
+    "status": 200,
+    "body": {
+      "teams": [
+        {
+          "teamKey": "ars",
+          "competitionKey": "eng.1",
+          "name": "Arsenal",
+          "shortName": "Arsenal",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png",
+          "sourceTeamId": "359"
+        }
+      ],
+      "partial": true,
+      "degraded": false
+    }
+  },
+  {
+    "url": "/api/sports/teams/search?q=ar",
+    "status": 200,
+    "body": {
+      "teams": [
+        {
+          "teamKey": "ars",
+          "competitionKey": "eng.1",
+          "name": "Arsenal",
+          "shortName": "Arsenal",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png",
+          "sourceTeamId": "359"
+        }
+      ],
+      "partial": true,
+      "degraded": false
+    }
+  },
+  {
+    "url": "/api/sports/teams/search?q=ar",
+    "status": 200,
+    "body": {
+      "teams": [
+        {
+          "teamKey": "ars",
+          "competitionKey": "eng.1",
+          "name": "Arsenal",
+          "shortName": "Arsenal",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png",
+          "sourceTeamId": "359"
+        }
+      ],
+      "partial": true,
+      "degraded": false
+    }
+  },
+  {
+    "url": "/api/sports/teams/search?q=ar",
+    "status": 200,
+    "body": {
+      "teams": [
+        {
+          "teamKey": "ars",
+          "competitionKey": "eng.1",
+          "name": "Arsenal",
+          "shortName": "Arsenal",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png",
+          "sourceTeamId": "359"
+        }
+      ],
+      "partial": true,
+      "degraded": false
+    }
+  },
+  {
+    "url": "/api/sports/teams/search?q=ar",
+    "status": 200,
+    "body": {
+      "teams": [
+        {
+          "teamKey": "ars",
+          "competitionKey": "eng.1",
+          "name": "Arsenal",
+          "shortName": "Arsenal",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png",
+          "sourceTeamId": "359"
+        }
+      ],
+      "partial": true,
+      "degraded": false
+    }
+  },
+  {
+    "url": "/api/sports/teams/search?q=ar",
+    "status": 200,
+    "body": {
+      "teams": [
+        {
+          "teamKey": "ars",
+          "competitionKey": "eng.1",
+          "name": "Arsenal",
+          "shortName": "Arsenal",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png",
+          "sourceTeamId": "359"
+        }
+      ],
+      "partial": true,
+      "degraded": false
+    }
+  },
+  {
+    "url": "/api/sports/teams/search?q=ar",
+    "status": 200,
+    "body": {
+      "teams": [
+        {
+          "teamKey": "ars",
+          "competitionKey": "eng.1",
+          "name": "Arsenal",
+          "shortName": "Arsenal",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png",
+          "sourceTeamId": "359"
+        }
+      ],
+      "partial": true,
+      "degraded": false
+    }
+  },
+  {
+    "url": "/api/sports/teams/search?q=ar",
+    "status": 200,
+    "body": {
+      "teams": [
+        {
+          "teamKey": "ars",
+          "competitionKey": "eng.1",
+          "name": "Arsenal",
+          "shortName": "Arsenal",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png",
+          "sourceTeamId": "359"
+        }
+      ],
+      "partial": false,
+      "degraded": false
+    }
+  },
+  {
+    "url": "/api/sports/teams/search?q=ar",
+    "status": 200,
+    "body": {
+      "teams": [
+        {
+          "teamKey": "ars",
+          "competitionKey": "eng.1",
+          "name": "Arsenal",
+          "shortName": "Arsenal",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png",
+          "sourceTeamId": "359"
+        }
+      ],
+      "partial": false,
+      "degraded": false
+    }
+  },
+  {
+    "url": "/api/sports/teams/search?q=ar",
+    "status": 200,
+    "body": {
+      "teams": [
+        {
+          "teamKey": "ars",
+          "competitionKey": "eng.1",
+          "name": "Arsenal",
+          "shortName": "Arsenal",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png",
+          "sourceTeamId": "359"
+        }
+      ],
+      "partial": false,
+      "degraded": false
+    }
+  },
+  {
+    "url": "/api/sports/teams/search?q=ar",
+    "status": 200,
+    "body": {
+      "teams": [
+        {
+          "teamKey": "ars",
+          "competitionKey": "eng.1",
+          "name": "Arsenal",
+          "shortName": "Arsenal",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png",
+          "sourceTeamId": "359"
+        }
+      ],
+      "partial": false,
+      "degraded": false
+    }
+  },
+  {
+    "url": "/api/sports/teams/search?q=zzzz-no-match",
+    "status": 200,
+    "body": {
+      "teams": [],
+      "partial": false,
+      "degraded": false
+    }
+  },
+  {
+    "url": "/api/sports/teams/search?q=everton",
+    "status": 200,
+    "body": {
+      "teams": [
+        {
+          "teamKey": "eve",
+          "competitionKey": "eng.1",
+          "name": "Everton",
+          "shortName": "Everton",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/368.png",
+          "sourceTeamId": "368"
+        }
+      ],
+      "partial": false,
+      "degraded": false
+    }
+  },
+  {
+    "url": "/api/sports/teams/search?q=%20ar%20",
+    "status": 200,
+    "body": {
+      "teams": [
+        {
+          "teamKey": "ars",
+          "competitionKey": "eng.1",
+          "name": "Arsenal",
+          "shortName": "Arsenal",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png",
+          "sourceTeamId": "359"
+        }
+      ],
+      "partial": false,
+      "degraded": false
+    }
+  },
+  {
+    "url": "/api/sports/teams/search?q=st",
+    "status": 200,
+    "body": {
+      "teams": [
+        {
+          "teamKey": "ksu.264",
+          "competitionKey": "ncaa-baseball",
+          "name": "Kansas State Wildcats",
+          "shortName": "Kansas St",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/ncaa/500/2306.png",
+          "sourceTeamId": "264"
+        },
+        {
+          "teamKey": "ksu.307",
+          "competitionKey": "ncaa-baseball",
+          "name": "Kennesaw State Owls",
+          "shortName": "Kennesaw St",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/ncaa/500/338.png",
+          "sourceTeamId": "307"
+        },
+        {
+          "teamKey": "alcn",
+          "competitionKey": "ncaa-baseball",
+          "name": "Alcorn State Braves",
+          "shortName": "Alcorn St",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/ncaa/500/2016.png",
+          "sourceTeamId": "260"
+        },
+        {
+          "teamKey": "apst",
+          "competitionKey": "ncaa-baseball",
+          "name": "App State Mountaineers",
+          "shortName": "App State",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/ncaa/500/2026.png",
+          "sourceTeamId": "271"
+        },
+        {
+          "teamKey": "avl",
+          "competitionKey": "eng.1",
+          "name": "Aston Villa",
+          "shortName": "Aston Villa",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/362.png",
+          "sourceTeamId": "362"
+        },
+        {
+          "teamKey": "cry",
+          "competitionKey": "eng.1",
+          "name": "Crystal Palace",
+          "shortName": "C Palace",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/384.png",
+          "sourceTeamId": "384"
+        },
+        {
+          "teamKey": "mnc",
+          "competitionKey": "eng.1",
+          "name": "Manchester City",
+          "shortName": "Man City",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/382.png",
+          "sourceTeamId": "382"
+        },
+        {
+          "teamKey": "man",
+          "competitionKey": "eng.1",
+          "name": "Manchester United",
+          "shortName": "Man Utd",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/360.png",
+          "sourceTeamId": "360"
+        },
+        {
+          "teamKey": "new",
+          "competitionKey": "eng.1",
+          "name": "Newcastle United",
+          "shortName": "Newcastle",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/361.png",
+          "sourceTeamId": "361"
+        },
+        {
+          "teamKey": "nfo",
+          "competitionKey": "eng.1",
+          "name": "Nottingham Forest",
+          "shortName": "Nottm Forest",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/393.png",
+          "sourceTeamId": "393"
+        }
+      ],
+      "partial": false,
+      "degraded": false
+    }
+  },
+  {
+    "url": "/api/sports/teams/search?q=a",
+    "status": 400,
+    "body": {
+      "error": "querystring/q must NOT have fewer than 2 characters"
+    }
+  },
+  {
+    "url": "/api/sports/teams/search",
+    "status": 400,
+    "body": {
+      "error": "querystring must have required property 'q'"
+    }
+  },
+  {
+    "url": "/api/sports/teams/search?q=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "status": 400,
+    "body": {
+      "error": "querystring/q must NOT have more than 80 characters"
+    }
+  },
+  {
+    "url": "/api/sports/teams/search?q=ab&extra=1",
+    "status": 200,
+    "body": {
+      "teams": [
+        {
+          "teamKey": "ala",
+          "competitionKey": "ncaa-baseball",
+          "name": "Alabama Crimson Tide",
+          "shortName": "Alabama",
+          "crestUrl": "https://a.espncdn.com/i/teamlogos/ncaa/500/333.png",
+          "sourceTeamId": "148"
+        }
+      ],
+      "partial": false,
+      "degraded": false
+    }
+  },
+  {
+    "url": "/api/sports/teams/search?q=%20%20",
+    "status": 200,
+    "body": {
+      "teams": [],
+      "partial": false,
+      "degraded": false
+    }
+  }
+]
