@@ -68,8 +68,11 @@ impl ServicePorts {
         self
     }
     #[cfg(feature = "browser-proof")]
-    pub fn with_browser_port(mut self, port: crate::browser::BrowserPort) -> Self {
-        self.browser = Some(port);
+    pub fn with_browser_launcher(mut self, launcher: crate::browser::launch::Launcher) -> Self {
+        self.browser = Some(crate::browser::BrowserPort::with_launcher(
+            launcher,
+            self.public_web.clone(),
+        ));
         self
     }
     pub fn with_network(mut self, transport: Arc<dyn crate::network::Transport>) -> Self {

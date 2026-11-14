@@ -29,6 +29,17 @@ const QUIET: Duration = Duration::from_millis(400);
 const READ_TIME: Duration = Duration::from_secs(2);
 const STARTUP: Duration = Duration::from_secs(10);
 
+/// Proof builds print the order of events when MOSS_BROWSER_TRACE is set. Never compiled into
+/// the product.
+macro_rules! trace {
+    ($($arg:tt)*) => {
+        #[cfg(feature = "browser-proof")]
+        if std::env::var_os("MOSS_BROWSER_TRACE").is_some() {
+            eprintln!("[browser] {}", format!($($arg)*));
+        }
+    };
+}
+
 pub struct Page {
     pub url: Url,
     pub allowed_hosts: Vec<String>,
@@ -88,6 +99,7 @@ impl Shared {
             params["accept"] = json!(accept);
         }
         let answer = self.web.fetch_for_browser(&params, remaining);
+        trace!("served {} ok={} reason={}", job.url, answer["ok"], answer["reason"]);
         let body = answer.get("body").and_then(Value::as_str).unwrap_or("");
         let size = body.len() / 4 * 3;
         let fits = self.bytes.fetch_add(size, Ordering::SeqCst) + size <= MAX_AGGREGATE_BYTES;
@@ -160,6 +172,7 @@ pub fn render(
         last_activity_ms: AtomicU64::new(0),
         document: Mutex::new(None),
     });
+    trace!("handshake ok");
     let (jobs, queue) = mpsc::channel::<Job>();
     let queue = Arc::new(Mutex::new(queue));
     for _ in 0..MAX_CONCURRENT {
@@ -255,6 +268,7 @@ fn drive(
         let Some(event) = conn.next_event(Duration::from_millis(50)).map_err(failed)? else {
             continue;
         };
+        trace!("event {} {}", event["method"], event["params"].to_string().chars().take(300).collect::<String>());
         let event_session = event["sessionId"].as_str().map(str::to_owned);
         let params = &event["params"];
         match event["method"].as_str().unwrap_or("") {
@@ -289,7 +303,9 @@ fn drive(
             "Target.attachedToTarget" => {
                 let child = params["sessionId"].as_str().unwrap_or("");
                 match params["targetInfo"]["type"].as_str().unwrap_or("") {
-                    // A second page, such as a popup, is closed at once.
+                    // Our own page reports itself here. Any other page, such as a popup, is
+                    // closed at once.
+                    "page" if params["targetInfo"]["targetId"] == target_id.as_str() => {}
                     "page" => {
                         let _ = conn.writer.send(
                             "Target.closeTarget",
