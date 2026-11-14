@@ -17,7 +17,7 @@
     {
       "port": "api",
       "operations": ["call"],
-      "resources": ["calendar", "connectors", "tasks"]
+      "resources": ["calendar", "connectors", "tasks", "weather"]
     },
     {
       "port": "context",
@@ -274,6 +274,7 @@
   "optionalRequires": {
     "calendar": ">=0.29.0, <1.0.0",
     "connectors": ">=0.5.0, <1.0.0",
-    "tasks": ">=0.1.4, <1.0.0"
+    "tasks": ">=0.1.4, <1.0.0",
+    "weather": ">=0.1.0, <1.0.0"
   }
 }

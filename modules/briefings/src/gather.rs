@@ -330,7 +330,7 @@ pub fn gather<H: Host + ?Sized, C: Contributors + ?Sized>(
     let offered: Vec<String> = contributors.offers().into_iter().map(|o| o.tool_name).collect();
     for tool in subject.selected_tools {
         let source = tool.split('.').next().unwrap_or(tool);
-        let handled = matches!(source, "tasks" | "calendar" | "email" | "commitments" | "chat" | "chats");
+        let handled = matches!(source, "tasks" | "calendar" | "email" | "commitments" | "chat" | "chats" | "weather");
         if handled || offered.contains(tool) || out.gaps.iter().any(|g| g.source == source) {
             continue;
         }

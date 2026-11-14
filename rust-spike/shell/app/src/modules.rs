@@ -508,6 +508,9 @@ pub type Slot = Arc<std::sync::Mutex<Option<ServerModules>>>;
 pub fn routes(slot: Slot, web: PathBuf) -> Router {
     Router::new()
         .route("/api/m/{module}/{*path}", any(dispatch))
+        .route("/api/me/weather-location", any(dispatch))
+        .route("/api/me/weather-location/{leaf}", any(dispatch))
+        .route("/api/me/weather-unit", any(dispatch))
         .route("/api/modules/navigation", get(navigation))
         .route("/api/modules/{module}/screen", get(screen))
         .route("/module-ui/{module}/{digest}/{*path}", get(ui_asset))
@@ -713,11 +716,14 @@ struct Api {
 async fn dispatch(
     State(api): State<Arc<Api>>,
     Extension(access): Extension<AccessContext>,
+    peer: Option<Extension<axum::extract::ConnectInfo<std::net::SocketAddr>>>,
     method: Method,
     uri: Uri,
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
+    // The directly connected address only. Forwarding headers are never trusted.
+    let client = peer.map(|Extension(axum::extract::ConnectInfo(addr))| addr.ip());
     let Some(application) = api
         .slot
         .lock()
@@ -746,21 +752,37 @@ async fn dispatch(
         };
         (access, None, if text.is_empty() { "null" } else { text }.to_owned())
     };
-    let target = uri
-        .path_and_query()
-        .map(|p| p.as_str())
-        .unwrap_or("/")
-        .to_owned();
+    let target = alias(
+        uri.path_and_query()
+            .map(|p| p.as_str())
+            .unwrap_or("/"),
+    );
     match tokio::task::spawn_blocking(move || {
         let _slot = slot;
         let _staged = staged;
-        application.dispatch_extended(access, method.as_str(), &target, &body)
+        application.dispatch_extended_from(access, method.as_str(), &target, &body, client)
     })
     .await
     {
         Ok(Ok(output)) => module_response(&output),
         _ => StatusCode::BAD_REQUEST.into_response(),
     }
+}
+
+/// Old Settings paths for the weather place and unit, served by the Weather package for the
+/// support window. Every other path passes through unchanged.
+fn alias(target: &str) -> String {
+    for (old, new) in [
+        ("/api/me/weather-location", "/api/m/weather/location"),
+        ("/api/me/weather-unit", "/api/m/weather/unit"),
+    ] {
+        if let Some(rest) = target.strip_prefix(old) {
+            if rest.is_empty() || rest.starts_with(['/', '?']) {
+                return format!("{new}{rest}");
+            }
+        }
+    }
+    target.to_owned()
 }
 
 fn module_response(output: &str) -> Response {
@@ -785,6 +807,19 @@ fn module_response(output: &str) -> Response {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn old_weather_paths_reach_the_weather_package() {
+        for (old, new) in [
+            ("/api/me/weather-location", "/api/m/weather/location"),
+            ("/api/me/weather-location/search?query=a", "/api/m/weather/location/search?query=a"),
+            ("/api/me/weather-location/reverse?lat=1&lon=2", "/api/m/weather/location/reverse?lat=1&lon=2"),
+            ("/api/me/weather-unit", "/api/m/weather/unit"),
+            ("/api/me/weather-unitx", "/api/me/weather-unitx"),
+            ("/api/m/news/feed", "/api/m/news/feed"),
+        ] {
+            assert_eq!(super::alias(old), new);
+        }
+    }
     use super::*;
 
     #[test]
