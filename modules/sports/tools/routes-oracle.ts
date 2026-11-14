@@ -5,7 +5,7 @@ import { createDatabase, DataContextRunner, getMossDatabaseUrls } from "@moss/db
 import { setMossErrorHandler } from "../../../apps/api/src/error-handling.js";
 import { registerSportsRoutes } from "../../../packages/sports/src/routes.js";
 
-type Step = { method: "GET" | "POST" | "PUT" | "DELETE"; url: string; body?: unknown };
+type Step = { method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"; url: string; body?: unknown };
 
 /** The provider is down: every dataset answers with its fallback and the degraded flag. */
 const outage = {

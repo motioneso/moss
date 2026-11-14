@@ -399,6 +399,25 @@ fn compare(steps: &[Value], old: &[Value], new: &[Value]) {
     }
 }
 
+/// Like `compare`, but a 400 whose old words come from the schema checker's choice between target
+/// shapes only has to match on status, because that checker lists every shape it tried.
+fn compare_sources(steps: &[Value], old: &[Value], new: &[Value]) -> usize {
+    assert_eq!(old.len(), new.len());
+    let mut loose = 0;
+    for (i, ((step, o), n)) in steps.iter().zip(old).zip(new).enumerate() {
+        let (mut o, mut n) = (o.clone(), n.clone());
+        replay::mask(&mut o);
+        replay::mask(&mut n);
+        let choice = o["status"] == 400 && o["body"]["error"].as_str().is_some_and(|t| t.contains("oneOf"));
+        if choice && n["status"] == 400 {
+            loose += 1;
+            continue;
+        }
+        assert_eq!(o, n, "step {i} {} {} differs\nold: {o}\nnew: {n}", step["method"], step["url"]);
+    }
+    loose
+}
+
 #[test]
 #[ignore = "Only through verify-gate"]
 fn another_person_cannot_see_change_or_remove_an_added_source_and_the_check_fails_without_row_security() {
@@ -512,6 +531,6 @@ fn the_installed_source_routes_answer_like_the_old_routes_step_for_step() {
             w.call(w.f.a, s["method"].as_str().unwrap(), &url, s.get("body").cloned().unwrap_or(Value::Null))
         })
         .collect();
-    compare(&steps, &old, &new);
-    println!("PASS parity: {} source steps matched the old routes", steps.len());
+    let loose = compare_sources(&steps, &old, &new);
+    println!("PASS parity: {} source steps matched the old routes ({loose} matched on status only)", steps.len());
 }
