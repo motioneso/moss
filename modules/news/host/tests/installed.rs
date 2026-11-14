@@ -41,6 +41,14 @@ impl moss_module_host::runtime::Ports for Web {
             json!({"ok":true,"status":200,"finalUrl":url,"contentType":content_type,"body":body,"truncated":false,"hopCount":0,"encoding":"utf-8"})
         };
         Ok(match url {
+            "https://daily.sample.test/" => found(
+                "text/html",
+                "<html><head><title>Sample Daily</title><link rel=\"alternate\" type=\"application/rss+xml\" href=\"/feed.xml\"></head></html>",
+            ),
+            "https://daily.sample.test/feed.xml" => found(
+                "application/rss+xml",
+                "<rss><channel><title>x</title><item><title>First story here</title><link>https://daily.sample.test/1</link></item></channel></rss>",
+            ),
             "https://news.example.com/" => found(
                 "text/html",
                 "<html><head><title>Example Daily</title><link rel=\"alternate\" type=\"application/rss+xml\" href=\"/feed.xml\"></head></html>",
@@ -412,6 +420,29 @@ fn the_installed_routes_answer_like_the_old_routes_step_for_step() {
         .collect();
     compare(&steps, &old2, &new2);
     println!("PASS parity: {} steps matched the old routes", old.len() + old2.len());
+
+    // Adding a source: refusals, a preview, a save and the answers after it. The old side runs for
+    // the same person that planted the rows above, so the fresh site avoids their exclusions.
+    let adding = replay::steps_adding_before_save();
+    let old3 = replay::old_routes(old_actor, &adding, json!({}));
+    let new3: Vec<Value> = adding
+        .iter()
+        .map(|s| w.call(w.f.a, s["method"].as_str().unwrap(), &s["url"].as_str().unwrap().replace("/api/news", ""), s.get("body").cloned().unwrap_or(Value::Null)))
+        .collect();
+    compare(&adding, &old3, &new3);
+    let conf_of = |answers: &[Value]| answers.last().unwrap()["body"]["confirmationId"].as_str().unwrap().to_owned();
+    let saving = replay::steps_adding_save();
+    let old4 = replay::old_routes(old_actor, &saving, json!({"conf":conf_of(&old3)}));
+    let vars = json!({"conf":conf_of(&new3)});
+    let new4: Vec<Value> = saving
+        .iter()
+        .map(|s| {
+            let body = s.get("body").map(|b| serde_json::from_str(&replay::fill(&b.to_string(), &vars)).unwrap()).unwrap_or(Value::Null);
+            w.call(w.f.a, s["method"].as_str().unwrap(), &s["url"].as_str().unwrap().replace("/api/news", ""), body)
+        })
+        .collect();
+    compare(&saving, &old4, &new4);
+    println!("PASS parity: {} adding-a-source steps matched the old routes", old3.len() + old4.len());
 
     // The old server queues a refresh after a write, so only the Rust shape is checked here.
     let read = w.call(w.f.a, "GET", "/personalization", Value::Null);

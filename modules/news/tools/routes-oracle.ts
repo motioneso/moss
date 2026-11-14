@@ -16,11 +16,53 @@ const outage = {
   })
 };
 
-/** The Rust package has no model and no web search, so the old routes run with both off. */
+/** The Rust package has no web search, so the old routes run with it off. A model is present. */
 const unavailable = {
-  hasJsonModel: async () => false,
+  hasJsonModel: async () => true,
   hasWebSearch: async () => false,
   webSearchReason: async () => "no-key-no-native-model" as const
+};
+
+/** The one fixture site the Rust side serves too. Any other address fails as a network error. */
+const site: Record<string, { type: string; body: string }> = {
+  "https://daily.sample.test/": {
+    type: "text/html",
+    body: '<html><head><title>Sample Daily</title><link rel="alternate" type="application/rss+xml" href="/feed.xml"></head></html>'
+  },
+  "https://daily.sample.test/feed.xml": {
+    type: "application/rss+xml",
+    body: "<rss><channel><title>x</title><item><title>First story here</title><link>https://daily.sample.test/1</link></item></channel></rss>"
+  }
+};
+const read = async (url: string) => {
+  const page = site[url];
+  return page
+    ? {
+        ok: true as const,
+        status: 200,
+        finalUrl: url,
+        hopCount: 0,
+        contentType: page.type,
+        body: page.body,
+        truncated: false
+      }
+    : { ok: false as const, reason: "network" as const };
+};
+const discovery = {
+  fetch: read,
+  fetchWithOptions: read,
+  search: {
+    search: async () => {
+      throw new Error("The Rust package has no web search, so the oracle must never use it");
+    }
+  },
+  ai: {
+    fingerprint: async () => "host-ai-v1",
+    generateJson: async () => ({
+      ok: true as const,
+      object: { allowed: true, category: "news_publisher" }
+    })
+  }
 };
 
 export async function routesOracle(
@@ -37,7 +79,7 @@ export async function routesOracle(
     dataContext: new DataContextRunner(db),
     datasetClient: outage as never,
     availability: unavailable,
-    discovery: {} as never,
+    discovery: discovery as never,
     boss: null,
     resolveCredentialCipher: async () => null
   });
