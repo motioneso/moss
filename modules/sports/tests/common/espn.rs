@@ -52,8 +52,8 @@ impl EspnHost {
                 "nfl-teams.json"
             });
         }
-        if has("/scoreboard?") {
-            return Some(if has("/soccer/eng.1/") {
+        if has("/schedule") || has("/scoreboard?") {
+            return Some(if has("/soccer/") {
                 "eng1-scoreboard-20260104-everton-brentford.json"
             } else if has("/hockey/nhl/") {
                 "nhl-scoreboard-20261112.json"
