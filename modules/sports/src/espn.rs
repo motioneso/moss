@@ -228,7 +228,11 @@ pub fn parse_teams(data: &Value, competition_key: &str) -> Vec<TeamRef> {
     let teams = at(data, &["sports"])[0]["leagues"][0]["teams"].as_array().unwrap_or(&empty);
     let abbreviations: Vec<Option<String>> =
         teams.iter().map(|t| text(&t["team"], &["abbreviation"]).map(|a| a.to_lowercase())).collect();
-    let count = |a: &str| abbreviations.iter().flatten().filter(|x| !x.is_empty() && *x == a).count();
+    let mut counts = std::collections::HashMap::<&str, usize>::new();
+    for a in abbreviations.iter().flatten().filter(|a| !a.is_empty()) {
+        *counts.entry(a.as_str()).or_default() += 1;
+    }
+    let count = |a: &str| counts.get(a).copied().unwrap_or(0);
     let mut refs: Vec<TeamRef> = teams
         .iter()
         .zip(&abbreviations)
