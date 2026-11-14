@@ -114,3 +114,9 @@ modules/meetings/tools/recording-cases.json
 
 # Generated golden cases (one case per line, written by modules/news/reader/tools).
 modules/news/reader/tests/golden/
+
+# Recorded ESPN pages and generated golden output, kept on one line so each file stays under the size limit.
+modules/sports/tests/fixtures/eng1-teams.json
+modules/sports/tests/fixtures/ncaaf-standings.json
+modules/sports/tests/fixtures/nhl-scoreboard-20261112.json
+modules/sports/tests/fixtures/public-routes.golden.json
