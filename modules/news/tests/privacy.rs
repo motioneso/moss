@@ -61,5 +61,7 @@ fn adding_a_source_uses_only_the_expected_ports_and_leaks_no_typed_text() {
             assert!(resource.starts_with("app.news_") || ["news.source-previews", "public-web"].contains(&resource.as_str()), "{port} {resource}");
         }
     }
-    assert!(!shown.to_string().contains(MARK) && !saved.to_string().contains(MARK));
+    // The saved source returns the person's own feed address to them, so only the preview is held clean.
+    assert!(!shown.to_string().contains(MARK), "{shown}");
+    assert_eq!(saved["source"]["feedUrl"], format!("https://news.example.com/rss?q={MARK}"));
 }
