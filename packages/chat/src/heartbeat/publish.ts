@@ -39,6 +39,20 @@ export function heartbeatBody(origin: ChatHeartbeatOriginV1, timeZone = "UTC"): 
 }
 
 /**
+ * #3832: the Notifications list cannot show a row whose push is held, so the check-in message
+ * itself says the alert is waiting. Server-written, and number-free like every check-in intro
+ * (an intro has no evidence record behind it, so it never states a time).
+ */
+export const HEARTBEAT_QUIET_HOURS_HOLD_LINE =
+  "Quiet hours are on, so the alert for this check-in waits until quiet hours end.";
+
+/** Adds the quiet-hours line to the check-in intro when the alert is held, and never twice. */
+export function heartbeatIntroWithHold(intro: string, pushHeld: boolean): string {
+  if (!pushHeld || intro.includes(HEARTBEAT_QUIET_HOURS_HOLD_LINE)) return intro;
+  return intro ? `${intro} ${HEARTBEAT_QUIET_HOURS_HOLD_LINE}` : HEARTBEAT_QUIET_HOURS_HOLD_LINE;
+}
+
+/**
  * Writes the check-in into the owner's Main chat, records the findings as published and queues
  * the notification, all in the caller's transaction. Titles, times and sources come from the
  * evidence; the model only supplied the notes and intro.
@@ -55,6 +69,8 @@ export async function publishHeartbeat(
     readonly now: Date;
     /** The owner's timezone, used to write times in the plain-text body. */
     readonly timeZone?: string;
+    /** True when quiet hours hold the alert, so the message says it is waiting (#3832). */
+    readonly pushHeld?: boolean;
   }
 ): Promise<{ readonly messageId: string; readonly itemCount: number }> {
   const byId = new Map(input.candidates.map((candidate) => [candidate.findingId, candidate]));
@@ -66,7 +82,7 @@ export async function publishHeartbeat(
     version: 1,
     kind: "heartbeat",
     occurrenceId: input.occurrenceId,
-    intro: input.result.intro ?? "",
+    intro: heartbeatIntroWithHold(input.result.intro ?? "", input.pushHeld === true),
     items: chosen.map(({ candidate, note }) => ({
       findingId: candidate.findingId,
       source: candidate.source,

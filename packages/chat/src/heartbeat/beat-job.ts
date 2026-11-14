@@ -1,6 +1,7 @@
 import type { PgBoss } from "pg-boss";
 
 import type { DataContextDb, DataContextRunner, PreferencesPort } from "@moss/db";
+import type { NotificationsRepository } from "@moss/notifications";
 import {
   registerDataContextWorker,
   type ActorScopedJobPayload,
@@ -57,6 +58,11 @@ export interface HeartbeatBeatDeps {
   readonly generate?: HeartbeatGenerator;
   readonly boss?: Pick<PgBoss, "send">;
   readonly chat?: ChatRepository;
+  /**
+   * Notifications, to tell the owner when quiet hours hold the alert (#3832). Without it the
+   * check-in is written as if the alert goes out at once.
+   */
+  readonly notifications?: Pick<NotificationsRepository, "quietHoursHoldUntil">;
   readonly now?: () => Date;
 }
 
@@ -224,6 +230,13 @@ export async function handleHeartbeatBeat(
     return "checked";
   }
 
+  const pushHeld =
+    (await deps.notifications?.quietHoursHoldUntil(scopedDb, {
+      moduleId: "chat",
+      urgency: "normal",
+      now
+    })) != null;
+
   const published = await publishHeartbeat(
     scopedDb,
     { chat: deps.chat ?? new ChatRepository(), boss: deps.boss },
@@ -234,7 +247,8 @@ export async function handleHeartbeatBeat(
       candidates,
       result: { selected, intro: validated.result.intro },
       now,
-      timeZone
+      timeZone,
+      pushHeld
     }
   );
   await advanceCheckpoints();

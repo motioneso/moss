@@ -677,7 +677,9 @@ export async function registerChatJobWorkers(
       preferences: preferencesPort,
       gateway: options.scheduledReadGateway,
       generate: options.heartbeatGenerator,
-      boss
+      boss,
+      // #3832: so a check-in written during quiet hours says its alert is waiting.
+      notifications: options.reminderNotifications
     },
     options.workOptions
   );

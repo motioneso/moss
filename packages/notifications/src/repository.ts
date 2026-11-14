@@ -8,7 +8,11 @@ import { DEFAULT_LOCALE_SETTINGS } from "@moss/shared";
 
 import { isSameOriginAppPath } from "./app-path.js";
 import { projectNotificationMetadata } from "./metadata.js";
-import { shouldPushImmediately, type NotificationSensitivity } from "./sensitivity.js";
+import {
+  shouldPushImmediately,
+  type NotificationSensitivity,
+  type NotificationUrgency
+} from "./sensitivity.js";
 
 export const DIGEST_BATCH_SIZE = 50;
 
@@ -287,6 +291,42 @@ export class NotificationsRepository {
     return this.visibleRowsQuery(scopedDb)
       .where("notifications.id", "=", notificationId)
       .executeTakeFirst();
+  }
+
+  /**
+   * When a notification from `moduleId` would be released if it were created now, or null when it
+   * would push straight away. It follows the same rules as `create()`: a muted module or a saved
+   * sensitivity that sends no immediate push means no hold, and quiet hours off means no hold.
+   *
+   * #3832: a caller that writes text about the hold (the heartbeat check-in line) asks this instead
+   * of recomputing quiet hours, so the sentence and the row it describes cannot drift apart.
+   */
+  async quietHoursHoldUntil(
+    scopedDb: DataContextDb,
+    input: {
+      readonly moduleId: string;
+      readonly urgency: NotificationUrgency;
+      readonly now: Date;
+    }
+  ): Promise<Date | null> {
+    assertDataContextDb(scopedDb);
+    if (
+      this.notificationPreferencePort &&
+      !(await this.notificationPreferencePort.isModuleEnabled(scopedDb, input.moduleId))
+    ) {
+      return null;
+    }
+    const sensitivity =
+      (await this.notificationPreferencePort?.getSensitivity?.(scopedDb)) ?? "balanced";
+    if (!shouldPushImmediately(sensitivity, input.urgency)) return null;
+    if (!this.quietHoursPort) return null;
+    const settings = parseQuietHoursSettings(await this.quietHoursPort.getSettings(scopedDb));
+    if (!settings?.enabled) return null;
+    return computeDeferredUntil(
+      input.now,
+      settings,
+      await resolveTimezone(this.quietHoursPort, scopedDb, settings.timezone)
+    );
   }
 
   /**
