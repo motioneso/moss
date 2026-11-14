@@ -71,10 +71,21 @@ pub fn teams_url(competition_key: &str, page: usize) -> Result<String> {
 /// Fetches every page of a competition's teams and returns them in the one-page payload shape.
 /// A page shorter than the page size is the last. A page that adds no new team stops the walk,
 /// because some leagues ignore the page number and repeat the first page.
-pub fn fetch_teams<H: Host + ?Sized>(host: &H, competition_key: &str) -> Result<Value> {
+/// Reads every page of a league. With `stop_at` (host clock, milliseconds) the walk gives up between
+/// pages once that time passes, so a slow league cannot use up the host's call deadline.
+pub fn fetch_teams<H: Host + ?Sized>(
+    host: &H,
+    competition_key: &str,
+    stop_at: Option<i64>,
+) -> Result<Value> {
     let mut teams: Vec<Value> = vec![];
     let mut seen = std::collections::HashSet::<String>::new();
     for page in 1..=TEAMS_MAX_PAGES {
+        if let Some(limit) = stop_at {
+            if page > 1 && crate::public_cache::now_ms(host)? > limit {
+                return Err(Error::new("The league took too long to read"));
+            }
+        }
         let batch = fetch_team_page(host, &teams_url(competition_key, page)?)?;
         let size = batch.len();
         let mut added = 0;

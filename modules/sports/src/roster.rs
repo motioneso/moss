@@ -13,6 +13,9 @@ pub const SEARCH_RESULT_CAP: usize = 30;
 /// Time one search spends on live fetches before it stops and reports `partial`. The host ends a
 /// call at five seconds, and one college league can take three.
 pub const SEARCH_WARM_BUDGET_MS: i64 = 2_000;
+/// Time after which a league already being read stops fetching more pages, leaving the rest of the
+/// host deadline for parsing, saving and answering.
+pub const SEARCH_PAGE_WALK_BUDGET_MS: i64 = 3_000;
 
 pub struct Roster {
     pub teams: Vec<TeamRef>,
@@ -25,8 +28,14 @@ fn parse_cached(value: &Value) -> Option<Vec<TeamRef>> {
 
 /// Reads one league from a loaded store, fetching and caching on a miss. A provider failure
 /// returns an empty, degraded list and caches nothing.
-fn fetch_into<H: Host + ?Sized>(host: &H, store: &mut Store, key: &str, now: i64) -> Roster {
-    let fetched = espn::fetch_teams(host, key).map(|data| espn::parse_teams(&data, key));
+fn fetch_into<H: Host + ?Sized>(
+    host: &H,
+    store: &mut Store,
+    key: &str,
+    now: i64,
+    stop_at: Option<i64>,
+) -> Roster {
+    let fetched = espn::fetch_teams(host, key, stop_at).map(|data| espn::parse_teams(&data, key));
     match fetched {
         Ok(teams) => {
             if let Ok(value) = serde_json::to_value(&teams) {
@@ -48,7 +57,7 @@ pub fn league_teams<H: Host + ?Sized>(host: &H, key: &str) -> Result<Roster> {
     if let Some(teams) = store.get(key, now).and_then(parse_cached) {
         return Ok(Roster { teams, degraded: false });
     }
-    let roster = fetch_into(host, &mut store, key, now);
+    let roster = fetch_into(host, &mut store, key, now, None);
     store.save(host);
     Ok(roster)
 }
@@ -80,7 +89,7 @@ pub fn search<H: Host + ?Sized>(host: &H, query: &str) -> Result<Search> {
             }
             None => {
                 warmed += 1;
-                let roster = fetch_into(host, &mut store, entry.key, now);
+                let roster = fetch_into(host, &mut store, entry.key, now, Some(now + SEARCH_PAGE_WALK_BUDGET_MS));
                 degraded |= roster.degraded;
                 roster.teams
             }

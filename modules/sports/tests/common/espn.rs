@@ -24,6 +24,8 @@ pub struct EspnHost {
     pub now_ms: Cell<i64>,
     /// Milliseconds the clock advances on every fetch.
     pub fetch_ms: Cell<i64>,
+    /// Serves endless full pages of generated teams instead of the fixtures.
+    pub endless_pages: Cell<bool>,
     pub down: Cell<bool>,
 }
 
@@ -35,6 +37,7 @@ impl EspnHost {
             calls: RefCell::new(vec![]),
             now_ms: Cell::new(1_794_000_000_000),
             fetch_ms: Cell::new(0),
+            endless_pages: Cell::new(false),
             down: Cell::new(false),
         }
     }
@@ -96,6 +99,23 @@ impl Host for EspnHost {
                 let url = parameters["url"].as_str().unwrap().to_owned();
                 self.fetched.borrow_mut().push(url.clone());
                 self.now_ms.set(self.now_ms.get() + self.fetch_ms.get());
+                if self.endless_pages.get() && url.contains("/teams?") {
+                    let page: usize = url
+                        .split("page=")
+                        .nth(1)
+                        .and_then(|p| p.split('&').next())
+                        .and_then(|p| p.parse().ok())
+                        .unwrap_or(1);
+                    let teams: Vec<Value> = (0..100)
+                        .map(|i| {
+                            let id = (page * 1000 + i).to_string();
+                            json!({"team": {"id": id, "abbreviation": format!("T{id}"),
+                                "displayName": format!("Team {id}"), "shortDisplayName": format!("T{id}")}})
+                        })
+                        .collect();
+                    let body = json!({"sports": [{"leagues": [{"teams": teams}]}]});
+                    return Ok(json!({"status": 200, "body": body.to_string()}));
+                }
                 if self.down.get() {
                     return Ok(json!({"status": 503, "body": "down"}));
                 }

@@ -128,6 +128,18 @@ fn a_slow_search_stops_warming_once_its_time_budget_is_spent() {
 }
 
 #[test]
+fn a_league_still_being_read_gives_up_between_pages_once_the_time_is_spent() {
+    let host = EspnHost::new();
+    host.endless_pages.set(true);
+    host.fetch_ms.set(1_500);
+    let found = roster::search(&host, "team").unwrap();
+    let pages = host.fetched.borrow().iter().filter(|u| u.contains("/teams?")).count();
+    assert_eq!(pages, 3, "the walk stops after the third page passes three seconds");
+    assert!(found.degraded && found.partial);
+    assert!(host.kv.borrow().is_empty(), "an abandoned league caches nothing");
+}
+
+#[test]
 fn search_makes_at_most_five_live_fetches_and_reports_partial() {
     let host = EspnHost::new();
     let found = roster::search(&host, "ar").unwrap();
