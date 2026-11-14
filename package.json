@@ -22,6 +22,7 @@
     "test:rust-notes-server": "tsx modules/notes/tools/server-gate.ts",
     "test:rust-notes-ingest": "tsx modules/notes/tools/ingest-gate.ts",
     "test:rust-briefings": "tsx modules/briefings/tools/gate.ts",
+    "test:rust-news-reader": "bash modules/news/reader/tools/check.sh",
     "test:rust-briefings-live": "bash modules/briefings/tools/live.sh",
     "test:rust-sports": "tsx modules/sports/tools/gate.ts",
     "test:rust-sports-live": "bash modules/sports/tools/live.sh",
