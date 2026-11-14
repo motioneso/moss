@@ -4,7 +4,7 @@
   "name": "Notes",
   "description": "Choose your notes folder, search your indexed notes, and create, edit or delete notes with your approval.",
   "publisher": "Moss",
-  "version": "0.1.22",
+  "version": "0.1.23",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -73,7 +73,9 @@
     "prepareNoteAction": "1.0.0",
     "exportPrivateNote": "1.0.0",
     "inspectPrivateNote": "1.0.0",
-    "writeDailyChatArchive": "1.0.0"
+    "writeDailyChatArchive": "1.0.0",
+    "listWorkMailCandidates": "1.0.0",
+    "appendWorkMailNote": "1.0.0"
   },
   "navigation": [],
   "settings": [
@@ -113,6 +115,10 @@
     {
       "id": "notes.daily-chat-archive",
       "description": "The chat module can save a day's conversations as one Markdown file in a folder inside the linked notes folder, through the writeDailyChatArchive API. Each file starts with a Moss marker, so a later run replaces only its own file. A file of your own with the same name is never touched; the archive goes beside it as a file ending in (moss). With no linked folder, no conversations or an unusable folder name, nothing is written. A write requests a sync. The caller supplies each conversation's time label already formatted for the person. The chat settings screen and the daily trigger are not joined yet."
+    },
+    {
+      "id": "notes.work-mail",
+      "description": "Connectors can ask Notes for note candidates and append one work mail entry through listWorkMailCandidates and appendWorkMailNote. A note marked private in its front matter is never written, an entry already present is not repeated, and a note changed in the meantime is reported as changed instead of being overwritten. The default note is Work mail notes.md."
     },
     {
       "id": "notes.folder-settings",

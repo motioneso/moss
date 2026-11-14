@@ -4,7 +4,7 @@
   "name": "Connectors",
   "description": "Keeps the mail and calendar connections of each account, their sign-in secrets and the Email and Calendar permissions. Connecting Google works by pasting your own Google client details. Yahoo, Proton Bridge, iCloud and Fastmail mail connect with an app password. Google mail and calendar sync into the Email and Calendar caches. Outlook calendar syncing reads the Outlook web page through a dedicated browser, calendar only and read-only. Outlook mail and sign-in are not part of this package yet.",
   "publisher": "Moss",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
@@ -51,6 +51,7 @@
         "connectors.write-calendar-delete",
         "connectors.write-imap-send",
         "connectors.write-imap-draft",
+        "connectors.work-mail-cursor",
         "connectors.monitor-status",
         "connectors.outlook-binding",
         "connectors.outlook-scan",
@@ -75,7 +76,12 @@
     {
       "port": "api",
       "operations": ["call"],
-      "resources": ["email", "calendar"]
+      "resources": ["email", "calendar", "notes"]
+    },
+    {
+      "port": "ai",
+      "operations": ["generate"],
+      "resources": ["structured"]
     },
     {
       "port": "context",
@@ -205,12 +211,14 @@
   ],
   "requires": {
     "email": ">=0.4.0, <1.0.0",
-    "calendar": ">=0.30.0, <1.0.0"
+    "calendar": ">=0.30.0, <1.0.0",
+    "notes": ">=0.1.23, <1.0.0"
   },
   "provides": {
     "listCalendarContext": "1.0.0",
     "listEmailContext": "1.0.0",
     "listSavedEmailContext": "1.0.0",
+    "captureWorkMail": "1.0.0",
     "prepareEmailAction": "1.0.0",
     "createCalendarEvent": "1.0.0",
     "deleteCalendarEvent": "1.0.0",
@@ -492,6 +500,29 @@
           "path": "/settings/modules"
         }
       ]
+    },
+    {
+      "id": "connectors.work-mail",
+      "description": "Work mail capture reads mail the host has already collected, asks the person's model through the router whether it earns a short note, and appends that note through the Notes package. Notes marked private are never written, plain mail is skipped, and the place it stopped is kept as hashed markers only, so a later run does not repeat mail. Mail text goes only to the model prompt and the note itself. No mailbox is read by this package, and memory preferences and sender context are not used yet.",
+      "errors": [
+        {
+          "code": "connectors.work_mail.processing_unavailable",
+          "class": "prerequisite",
+          "description": "Processing stops without advancing past a model or notes failure",
+          "remediationRef": "connectors-work-mail-check"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "connectors-work-mail-check",
+          "description": "Check the model binding and that Notes is installed, then try again",
+          "path": "/settings/connections"
+        }
+      ]
+    },
+    {
+      "id": "structured.connectors.work-mail",
+      "description": "Checked work mail for note context"
     },
     {
       "id": "connectors.calendar-writes",

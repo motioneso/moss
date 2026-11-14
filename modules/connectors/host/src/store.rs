@@ -131,6 +131,21 @@ pub async fn run(cx: &DataContext, cipher: &JsonSecretCipher, request: &Request)
         ("set", "connectors.monitor-status") => monitor_status(cx, p).await,
         ("get", "connectors.admin-accounts") => admin(cx).await,
         ("get", "connectors.diagnostics") => diagnostics(cx, p["limit"].as_i64().unwrap_or(11)).await,
+        ("get", "connectors.work-mail-cursor") => preference(cx, "outlook_mail.cursor").await,
+        ("set", "connectors.work-mail-cursor") => {
+            cx.db()
+                .execute(
+                    "INSERT INTO app.preferences(owner_user_id, key, value_json, updated_at)
+                     VALUES (app.current_actor_user_id(), 'outlook_mail.cursor', $1, now())
+                     ON CONFLICT (owner_user_id, key) DO UPDATE
+                       SET value_json = EXCLUDED.value_json,
+                           revision = app.preferences.revision + 1,
+                           updated_at = EXCLUDED.updated_at",
+                    &[&p],
+                )
+                .await?;
+            Ok(json!({"saved":true}))
+        }
         _ => bail!("Unknown connectors resource"),
     }
 }
