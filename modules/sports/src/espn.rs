@@ -57,7 +57,7 @@ fn entry(key: &str) -> Result<&'static Entry> {
 
 /// Teams come in pages of this size, because one page of the college leagues is larger than the
 /// host's response cap. Leagues with fewer teams than this arrive in the first page.
-pub const TEAMS_PAGE_SIZE: usize = 200;
+pub const TEAMS_PAGE_SIZE: usize = 100;
 const TEAMS_MAX_PAGES: usize = 12;
 
 pub fn teams_url(competition_key: &str, page: usize) -> Result<String> {
@@ -75,8 +75,7 @@ pub fn fetch_teams<H: Host + ?Sized>(host: &H, competition_key: &str) -> Result<
     let mut teams: Vec<Value> = vec![];
     let mut seen = std::collections::HashSet::<String>::new();
     for page in 1..=TEAMS_MAX_PAGES {
-        let data = fetch_json(host, &teams_url(competition_key, page)?)?;
-        let batch = at(&data, &["sports"])[0]["leagues"][0]["teams"].as_array().cloned().unwrap_or_default();
+        let batch = fetch_team_page(host, &teams_url(competition_key, page)?)?;
         let size = batch.len();
         let mut added = 0;
         for team in batch {
@@ -94,6 +93,66 @@ pub fn fetch_teams<H: Host + ?Sized>(host: &H, competition_key: &str) -> Result<
         }
     }
     Ok(json!({"sports": [{"leagues": [{"teams": teams}]}]}))
+}
+
+/// The few fields of one ESPN team page the module reads. Reading into this shape instead of a
+/// loose tree keeps a multi-page college league inside the per-call instruction budget.
+#[derive(serde::Deserialize, Default)]
+struct PageShape {
+    #[serde(default)]
+    sports: Vec<SportShape>,
+}
+#[derive(serde::Deserialize, Default)]
+struct SportShape {
+    #[serde(default)]
+    leagues: Vec<LeagueShape>,
+}
+#[derive(serde::Deserialize, Default)]
+struct LeagueShape {
+    #[serde(default)]
+    teams: Vec<TeamEntryShape>,
+}
+#[derive(serde::Deserialize, Default)]
+struct TeamEntryShape {
+    #[serde(default)]
+    team: TeamShape,
+}
+#[derive(serde::Deserialize, Default)]
+struct TeamShape {
+    id: Option<Value>,
+    abbreviation: Option<Value>,
+    #[serde(rename = "displayName")]
+    display_name: Option<Value>,
+    #[serde(rename = "shortDisplayName")]
+    short_display_name: Option<Value>,
+    #[serde(default)]
+    logos: Vec<LogoShape>,
+}
+#[derive(serde::Deserialize, Default)]
+struct LogoShape {
+    href: Option<Value>,
+}
+
+/// One page of teams, cut down to the fields `parse_teams` reads.
+fn fetch_team_page<H: Host + ?Sized>(host: &H, url: &str) -> Result<Vec<Value>> {
+    let name = url.strip_prefix("https://").and_then(|r| r.split('/').next()).unwrap_or_default();
+    let response = host.call("fetch", "get", name, json!({"url": url}))?;
+    if !(200..300).contains(&response["status"].as_u64().unwrap_or(0)) {
+        return Err(Error::new("ESPN answered with an error status"));
+    }
+    let body = response["body"].as_str().ok_or_else(|| Error::new("ESPN sent no body"))?;
+    let page: PageShape = serde_json::from_str(body)?;
+    let teams = page.sports.into_iter().next().and_then(|s| s.leagues.into_iter().next()).map(|l| l.teams);
+    Ok(teams
+        .unwrap_or_default()
+        .into_iter()
+        .map(|e| {
+            let t = e.team;
+            let logos: Vec<Value> = t.logos.into_iter().take(1).map(|l| json!({"href": l.href})).collect();
+            json!({"team": {"id": t.id, "abbreviation": t.abbreviation, "displayName": t.display_name,
+                "shortDisplayName": t.short_display_name, "logos": logos}})
+        })
+        .collect())
 }
 
 pub fn scoreboard_url(competition_key: &str, day: &str) -> Result<String> {

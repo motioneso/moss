@@ -387,6 +387,14 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
     assert!(roster["teams"].as_array().unwrap().len() >= 30, "{text}");
     let (_, again) = call(Method::GET, "/leagues/nfl/teams", Some(&other), None);
     assert_eq!(json_of(&again), roster, "the second person reads the same public roster");
+    let keys: Vec<String> = json_of(&call(Method::GET, "/catalog", Some(&cookie), None).1)["competitions"]
+        .as_array().unwrap().iter().map(|c| c["competitionKey"].as_str().unwrap().to_owned()).collect();
+    for key in &keys {
+        let t = std::time::Instant::now();
+        let (status, text) = call(Method::GET, &format!("/leagues/{key}/teams"), Some(&cookie), None);
+        let v = json_of(&text);
+        println!("ROSTER {key} status={status} degraded={} teams={} in {:?}", v["degraded"], v["teams"].as_array().map_or(0, Vec::len), t.elapsed());
+    }
     let started = std::time::Instant::now();
     let (status, text) = call(Method::GET, "/teams/search?q=dallas", Some(&other), None);
     println!("live ESPN search took {:?}", started.elapsed());
