@@ -62,7 +62,16 @@ impl Reason {
     }
 }
 
+/// Proof only. Each switch removes one guard so a test can see the guard stop something.
+#[cfg(feature = "browser-proof")]
+#[derive(Clone, Copy, Default)]
+pub struct Weakened {
+    pub host_list: bool,
+}
+
 pub struct BrowserPort {
+    #[cfg(feature = "browser-proof")]
+    pub weakened: Weakened,
     launcher: launch::Launcher,
     web: Arc<PublicWeb>,
     /// Holds the slot for the one render that may run at a time.
@@ -76,6 +85,8 @@ impl BrowserPort {
 
     pub fn with_launcher(launcher: launch::Launcher, web: Arc<PublicWeb>) -> Self {
         Self {
+            #[cfg(feature = "browser-proof")]
+            weakened: Weakened::default(),
             launcher,
             web,
             busy: Mutex::new(()),
@@ -116,7 +127,11 @@ impl BrowserPort {
             .map(|h| h.as_str().map(str::to_ascii_lowercase))
             .collect::<Option<_>>()
             .ok_or(Reason::Blocked)?;
-        if !render::approved(url.as_str(), &allowed) {
+        #[cfg(feature = "browser-proof")]
+        let listed = self.weakened.host_list || render::approved(url.as_str(), &allowed);
+        #[cfg(not(feature = "browser-proof"))]
+        let listed = render::approved(url.as_str(), &allowed);
+        if !listed {
             return Err(Reason::Blocked);
         }
         let _slot = self.busy.try_lock().map_err(|_| Reason::Busy)?;
@@ -127,6 +142,8 @@ impl BrowserPort {
             url,
             allowed_hosts: allowed,
             deadline,
+            #[cfg(feature = "browser-proof")]
+            skip_host_list: self.weakened.host_list,
         };
         let rendered = render::render(&self.launcher, &self.web, &page)?;
         Ok(rendered

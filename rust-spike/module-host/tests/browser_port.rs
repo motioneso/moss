@@ -10,7 +10,10 @@ use access_context::AccessContext;
 use anyhow::Result;
 use moss_module_host::{
     ai::Intelligence,
-    browser::launch::{Isolation, Launcher},
+    browser::{
+        launch::{Isolation, Launcher},
+        Weakened,
+    },
     local::LocalPorts,
     manifest::{Capability, Manifest},
     public_web::{PublicWeb, Resolve, Resolved},
@@ -25,11 +28,14 @@ use std::{
     path::PathBuf,
     process::{Child, Command, Stdio},
     sync::{
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicU64, AtomicUsize, Ordering},
         Arc,
     },
     time::Duration,
 };
+
+/// How long the host lets one call run. Tests run one at a time.
+static CALL_SECONDS: AtomicU64 = AtomicU64::new(30);
 
 struct NoAi;
 impl Intelligence for NoAi {
@@ -193,11 +199,17 @@ impl World {
         Self::with(Launcher::new(chrome_dir()))
     }
     fn with(launcher: Launcher) -> Self {
+        Self::build(launcher, Weakened::default(), false, false)
+    }
+    fn build(launcher: Launcher, weakened: Weakened, private_ok: bool, pooled: bool) -> Self {
         let listener = Listener::start();
         let site = Site::start(listener.port);
         let data = tempfile::tempdir().unwrap();
-        let web = PublicWeb::new(site.resolver(), Some(site.pem.clone()), Duration::ZERO);
-        let services = Arc::new(
+        let mut web = PublicWeb::new(site.resolver(), Some(site.pem.clone()), Duration::ZERO);
+        if private_ok {
+            web = web.with_private_destinations_allowed();
+        }
+        let mut services =
             ServicePorts::new(
                 data.path(),
                 Arc::new(SecretCipher::connectors(&Default::default()).unwrap()),
@@ -206,8 +218,11 @@ impl World {
             )
             .unwrap()
             .with_public_web(web)
-            .with_browser_launcher(launcher),
-        );
+            .with_weakened_browser(launcher, weakened);
+        if pooled {
+            services = services.with_pooled_people();
+        }
+        let services = Arc::new(services);
         let mut manifest = common::manifest("1.0.0");
         manifest.capabilities.push(Capability {
             port: "browser".into(),
@@ -219,7 +234,7 @@ impl World {
             site,
             listener,
             host: Host::new(Limits {
-                deadline: Duration::from_secs(30),
+                deadline: Duration::from_secs(CALL_SECONDS.load(Ordering::SeqCst)),
                 ..Limits::default()
             })
             .unwrap(),
@@ -310,4 +325,148 @@ fn control_without_the_namespace_the_probes_reach_the_listener() {
     for needed in ["ws", "rtc"] {
         assert!(reached.contains(&needed), "{needed} was not seen reaching the listener");
     }
+}
+
+
+#[test]
+#[ignore = "Needs the pinned browser (MOSS_BROWSER_DIR) and bubblewrap"]
+fn a_scheduled_job_is_refused_and_no_browser_starts() {
+    let w = World::new();
+    let v = w
+        .call(
+            uuid::Uuid::new_v4(),
+            "job",
+            json!({"url":"https://ok.test/news","allowedHosts":["ok.test"]}),
+        )
+        .unwrap();
+    assert_eq!(v, json!({"ok":false,"reason":"blocked"}));
+    assert_eq!(w.site.log(), "", "a job caused a request");
+}
+
+#[test]
+#[ignore = "Needs the pinned browser (MOSS_BROWSER_DIR) and bubblewrap"]
+fn off_list_and_private_requests_are_refused_and_each_guard_is_seen_failing_without_it() {
+    let hosts = ["ok.test", "private.test"];
+    let w = World::new();
+    assert_eq!(w.render("/guards", &hosts)["ok"], true);
+    let log = w.site.log();
+    assert!(!log.contains("other.test"), "off-list host reached the site: {log}");
+    assert!(!log.contains("private.test"), "private address reached the site: {log}");
+    drop(w);
+
+    // Without the host list the off-list script is fetched.
+    let w = World::build(
+        Launcher::new(chrome_dir()),
+        Weakened { host_list: true },
+        false,
+        false,
+    );
+    assert_eq!(w.render("/guards", &hosts)["ok"], true);
+    assert!(w.site.log().contains("other.test /off-list.js"), "{}", w.site.log());
+    drop(w);
+
+    // Without the private-address check the private name is fetched.
+    let w = World::build(Launcher::new(chrome_dir()), Weakened::default(), true, false);
+    assert_eq!(w.render("/guards", &hosts)["ok"], true);
+    assert!(w.site.log().contains("private.test /private.js"), "{}", w.site.log());
+}
+
+#[test]
+#[ignore = "Needs the pinned browser (MOSS_BROWSER_DIR) and bubblewrap"]
+fn a_document_off_the_list_or_off_https_is_refused_before_a_browser_starts() {
+    let w = World::new();
+    for url in ["https://other.test/news", "http://ok.test/news", "https://ok.test:8443/news", "ftp://ok.test/"] {
+        let v = w
+            .call(uuid::Uuid::new_v4(), "route", json!({"url":url,"allowedHosts":["ok.test"]}))
+            .unwrap();
+        assert_eq!(v, json!({"ok":false,"reason":"blocked"}), "{url}");
+    }
+    assert_eq!(w.site.log(), "");
+}
+
+#[test]
+#[ignore = "Needs the pinned browser (MOSS_BROWSER_DIR) and bubblewrap"]
+fn the_browser_will_not_start_without_its_sandbox_and_namespace() {
+    // Chromium's sandbox cannot start when nested namespaces are blocked, so the port reports
+    // unsupported instead of running unsandboxed.
+    let blocked = Launcher::new(chrome_dir()).blocking_nested_namespaces();
+    let w = World::with(blocked.clone());
+    let v = w.render("/news", &["ok.test"]);
+    assert_eq!(v, json!({"ok":false,"reason":"unsupported"}), "{v}");
+    drop(w);
+    // Control: with the sandbox guard off, the same machine state renders, so the guard is what
+    // stopped it.
+    let w = World::with(blocked.without_chromium_sandbox());
+    let v = w.render("/news", &["ok.test"]);
+    println!("sandbox off and namespaces blocked: {v}");
+    assert_eq!(v["ok"], true, "{v}");
+}
+
+#[test]
+#[ignore = "Needs the pinned browser (MOSS_BROWSER_DIR) and bubblewrap"]
+fn a_missing_browser_reports_unsupported_and_opens_nothing() {
+    let w = World::with(Launcher::new("/nonexistent-browser-folder"));
+    let v = w.render("/news", &["ok.test"]);
+    assert_eq!(v, json!({"ok":false,"reason":"unsupported"}));
+    assert_eq!(w.site.log(), "");
+}
+
+#[test]
+#[ignore = "Needs the pinned browser (MOSS_BROWSER_DIR) and bubblewrap"]
+fn caps_on_requests_response_size_total_bytes_and_time_hold() {
+    let w = World::new();
+    // More than 40 requests: the rest are refused.
+    let v = w.render("/many", &["ok.test"]);
+    assert_eq!(v["ok"], true, "{v}");
+    let served = w.site.log().lines().filter(|l| l.contains("/s/")).count();
+    assert!(served <= 40, "{served} page requests were served");
+    assert!(v["requests"].as_u64().unwrap() > 40, "{v}");
+    drop(w);
+    // One response over 2 MB is refused.
+    let w = World::new();
+    let v = w.render("/huge", &["ok.test"]);
+    assert_eq!(v["ok"], true, "{v}");
+    assert!(v["text"].as_str().unwrap().contains("REFUSED"), "{v}");
+    // Eight 1.8 MB responses: the 10 MB total ends the page's loading.
+    let w = World::new();
+    let v = w.render("/agg", &["ok.test"]);
+    assert_eq!(v["ok"], true, "{v}");
+    let text = v["text"].as_str().unwrap();
+    assert_eq!(text.matches('L').count(), 5, "{text}");
+    assert_eq!(text.matches('R').count(), 3, "{text}");
+    // A page whose script never answers ends at the call's deadline.
+    CALL_SECONDS.store(4, Ordering::SeqCst);
+    let w = World::new();
+    let started = std::time::Instant::now();
+    let v = w.render("/hangpage", &["ok.test"]);
+    CALL_SECONDS.store(30, Ordering::SeqCst);
+    assert_eq!(v, json!({"ok":false,"reason":"timeout"}), "{v}");
+    assert!(started.elapsed() < Duration::from_secs(8), "{:?}", started.elapsed());
+}
+
+#[test]
+#[ignore = "Needs the pinned browser (MOSS_BROWSER_DIR) and bubblewrap"]
+fn private_text_stays_out_of_activity_and_one_person_never_sees_anothers() {
+    let w = World::new();
+    let (a, b) = (uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
+    let v = w
+        .call(a, "route", json!({"url":"https://ok.test/news","allowedHosts":["ok.test"]}))
+        .unwrap();
+    assert_eq!(v["ok"], true);
+    assert!(v["text"].as_str().unwrap().contains("Zebra-marker"));
+    let mine = w.services.activity(&w.manifest.id, &AccessContext::new(a, "read")).unwrap();
+    let theirs = w.services.activity(&w.manifest.id, &AccessContext::new(b, "read")).unwrap();
+    let text = json!(mine).to_string();
+    assert!(text.contains("\"browser\""), "{text}");
+    for planted in ["Zebra-marker", "ok.test", "headlines", "Fixture Sports"] {
+        assert!(!text.contains(planted), "activity recorded {planted}: {text}");
+    }
+    assert!(theirs.is_empty(), "A second person saw activity: {theirs:?}");
+    drop(w);
+
+    // Control: with every person's data pooled, the second person sees the first's row.
+    let w = World::build(Launcher::new(chrome_dir()), Weakened::default(), false, true);
+    w.call(a, "route", json!({"url":"https://ok.test/news","allowedHosts":["ok.test"]})).unwrap();
+    let theirs = w.services.activity(&w.manifest.id, &AccessContext::new(b, "read")).unwrap();
+    assert!(!theirs.is_empty(), "the control did not expose the row");
 }

@@ -25,6 +25,9 @@ pub struct ServicePorts {
     pub(crate) network: Arc<dyn crate::network::Transport>,
     public_web: Arc<crate::public_web::PublicWeb>,
     browser: Option<crate::browser::BrowserPort>,
+    /// Proof only. Files every person's service data under one shared folder.
+    #[cfg(feature = "browser-proof")]
+    pooled: bool,
 }
 impl ServicePorts {
     pub fn new(
@@ -43,6 +46,8 @@ impl ServicePorts {
             network: Arc::new(crate::network::Network),
             public_web: Arc::default(),
             browser: None,
+            #[cfg(feature = "browser-proof")]
+            pooled: false,
         })
     }
     /// One account's recent port activity for a module: port, operation, resource name and
@@ -65,6 +70,22 @@ impl ServicePorts {
             chrome_dir,
             self.public_web.clone(),
         ));
+        self
+    }
+    #[cfg(feature = "browser-proof")]
+    pub fn with_weakened_browser(
+        mut self,
+        launcher: crate::browser::launch::Launcher,
+        weakened: crate::browser::Weakened,
+    ) -> Self {
+        let mut port = crate::browser::BrowserPort::with_launcher(launcher, self.public_web.clone());
+        port.weakened = weakened;
+        self.browser = Some(port);
+        self
+    }
+    #[cfg(feature = "browser-proof")]
+    pub fn with_pooled_people(mut self) -> Self {
+        self.pooled = true;
         self
     }
     #[cfg(feature = "browser-proof")]
@@ -125,6 +146,10 @@ impl ServicePorts {
     pub(crate) fn account(&self, id: &str, access: &AccessContext) -> Result<VaultContext> {
         ensure!(crate::manifest::identifier(id), "Invalid module id");
         let module = self.files.create_subdir(id)?;
+        #[cfg(feature = "browser-proof")]
+        let pooled = AccessContext::new(uuid::Uuid::nil(), "pooled");
+        #[cfg(feature = "browser-proof")]
+        let access = if self.pooled { &pooled } else { access };
         let cx = VaultContext::for_module_files(&module, access)?;
         cx.create_dir("host")?;
         Ok(cx)

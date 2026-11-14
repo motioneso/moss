@@ -124,6 +124,9 @@ pub struct PublicWeb {
     pace: Duration,
     robots: Mutex<HashMap<String, (Instant, Arc<Robots>)>>,
     next_free: Mutex<HashMap<String, Instant>>,
+    /// Proof only. Skips the private-address check so a test can see it fail.
+    #[cfg(feature = "browser-proof")]
+    private_allowed: bool,
 }
 impl Default for PublicWeb {
     fn default() -> Self {
@@ -141,7 +144,15 @@ impl PublicWeb {
             pace,
             robots: Mutex::default(),
             next_free: Mutex::default(),
+            #[cfg(feature = "browser-proof")]
+            private_allowed: false,
         }
+    }
+
+    #[cfg(feature = "browser-proof")]
+    pub fn with_private_destinations_allowed(mut self) -> Self {
+        self.private_allowed = true;
+        self
     }
 
     /// Reads one address for a package. Always returns a JSON answer with `ok` set, so a refused
@@ -352,6 +363,10 @@ impl PublicWeb {
             .map_err(|_| Failure::new("blocked"))?;
         if resolved.checked.is_empty() || resolved.dial.is_empty() {
             return Err(Failure::new("blocked"));
+        }
+        #[cfg(feature = "browser-proof")]
+        if self.private_allowed {
+            return Ok(resolved.dial);
         }
         for ip in &resolved.checked {
             ensure_public(*ip)?;

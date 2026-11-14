@@ -44,6 +44,19 @@ pub struct Page {
     pub url: Url,
     pub allowed_hosts: Vec<String>,
     pub deadline: Instant,
+    /// Proof only. Lets any HTTPS host through so a test can see the host list fail.
+    #[cfg(feature = "browser-proof")]
+    pub skip_host_list: bool,
+}
+
+impl Page {
+    fn host_ok(&self, url: &str) -> bool {
+        #[cfg(feature = "browser-proof")]
+        if self.skip_host_list {
+            return https_host(url).is_some();
+        }
+        approved(url, &self.allowed_hosts)
+    }
 }
 
 pub struct Rendered {
@@ -64,6 +77,8 @@ struct Shared {
     web: Arc<PublicWeb>,
     writer: Writer,
     allowed: Vec<String>,
+    #[cfg(feature = "browser-proof")]
+    skip_host_list: bool,
     deadline: Instant,
     started: Instant,
     bytes: AtomicUsize,
@@ -89,12 +104,18 @@ impl Shared {
         let remaining = self.deadline.saturating_duration_since(Instant::now());
         let mut params = json!({
             "url": job.url,
-            "allowedHosts": self.allowed,
             "maxBytes": MAX_RESPONSE_BYTES,
             "timeoutMs": remaining.as_millis().min(8000) as u64,
             "encoding": "base64",
             "rejectOversizedResponses": true,
         });
+        #[cfg(feature = "browser-proof")]
+        let list = !self.skip_host_list;
+        #[cfg(not(feature = "browser-proof"))]
+        let list = true;
+        if list {
+            params["allowedHosts"] = json!(self.allowed);
+        }
         if let Some(accept) = job.accept.as_ref().filter(|a| a.len() <= 200 && a.is_ascii()) {
             params["accept"] = json!(accept);
         }
@@ -150,11 +171,10 @@ pub fn render(
     let started = Instant::now();
     // A browser that cannot get its namespace or sandbox exits without answering.
     let startup = (started + STARTUP).min(page.deadline);
-    if conn
-        .call("Browser.getVersion", json!({}), None, startup)
-        .is_err()
-    {
-        return Err(if process.exited() {
+    if let Err(error) = conn.call("Browser.getVersion", json!({}), None, startup) {
+        // A browser that cannot get its namespace or sandbox exits, which closes the pipe.
+        let closed = error.to_string().contains("closed") || process.exited();
+        return Err(if closed {
             Reason::Unsupported
         } else {
             Reason::Timeout
@@ -165,6 +185,8 @@ pub fn render(
         web: web.clone(),
         writer: writer.clone(),
         allowed: page.allowed_hosts.clone(),
+        #[cfg(feature = "browser-proof")]
+        skip_host_list: page.skip_host_list,
         deadline: page.deadline,
         started,
         bytes: AtomicUsize::new(0),
@@ -290,7 +312,7 @@ fn drive(
                 if count > MAX_REQUESTS
                     || !ALLOWED_TYPES.contains(&job.kind.as_str())
                     || method != "GET"
-                    || !approved(&job.url, &page.allowed_hosts)
+                    || !page.host_ok(&job.url)
                 {
                     shared.refuse(&job, "BlockedByClient");
                 } else {
@@ -367,14 +389,17 @@ fn drive(
 
 /// HTTPS, the standard port, no password, and a host the caller named.
 pub(super) fn approved(url: &str, allowed: &[String]) -> bool {
-    let Ok(url) = Url::parse(url) else { return false };
-    url.scheme() == "https"
+    https_host(url).is_some_and(|h| allowed.iter().any(|a| a.eq_ignore_ascii_case(&h)))
+}
+
+fn https_host(url: &str) -> Option<String> {
+    let url = Url::parse(url).ok()?;
+    (url.scheme() == "https"
         && url.username().is_empty()
         && url.password().is_none()
-        && url.port_or_known_default() == Some(443)
-        && url
-            .host_str()
-            .is_some_and(|h| allowed.iter().any(|a| a.eq_ignore_ascii_case(h)))
+        && url.port_or_known_default() == Some(443))
+    .then(|| url.host_str().map(str::to_owned))
+    .flatten()
 }
 
 #[cfg(test)]

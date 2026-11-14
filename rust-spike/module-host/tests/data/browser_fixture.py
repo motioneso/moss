@@ -78,6 +78,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send(200, page.encode())
         if path == "/probe.js":
             return self.send(200, (PROBE % listener).encode(), "text/javascript")
+        if path == "/guards":
+            page = ('<html><body>guards<script src="https://other.test/off-list.js"></script>'
+                    '<script src="https://private.test/private.js"></script></body></html>')
+            return self.send(200, page.encode())
+        if path == "/agg":
+            page = "<html><body>" + "".join(f'<script src="/chunk/{n}.js" onload="document.body.append(\'L\')" onerror="document.body.append(\'R\')"></script>' for n in range(8)) + "</body></html>"
+            return self.send(200, page.encode())
+        if path.startswith("/chunk/"):
+            return self.send(200, b"1;" + b"a" * (1800 * 1024), "text/javascript")
         if path == "/many":
             page = "<html><body>" + "".join(f'<script src="/s/{n}.js"></script>' for n in range(60)) + "</body></html>"
             return self.send(200, page.encode())
@@ -86,7 +95,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/huge.js":
             return self.send(200, b"a" * (3 * 1024 * 1024), "text/javascript")
         if path == "/huge":
-            return self.send(200, b'<html><body>x<script src="/huge.js"></script></body></html>')
+            return self.send(200, b'<html><body>x<script src="/huge.js" onload="document.body.append(\'LOADED\')" onerror="document.body.append(\'REFUSED\')"></script></body></html>')
+        if path == "/hangpage":
+            return self.send(200, b'<html><body><script src="/hang"></script></body></html>')
         if path == "/hang":
             import time
             time.sleep(60)
