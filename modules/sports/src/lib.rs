@@ -18,6 +18,7 @@ pub mod public_cache;
 pub mod public_routes;
 pub mod results;
 pub mod roster;
+pub mod source_web;
 pub mod standings;
 pub mod standings_views;
 pub mod teams;
