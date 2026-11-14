@@ -325,7 +325,8 @@ fn installed_web_research_package_serves_status_from_the_real_server() {
         let (status, text) = call("/status", Some(who));
         assert_eq!((status, json_of(&text)), (200, expected.clone()), "{text}\n{}", log());
     }
-    assert_eq!(call("/nope", Some(&cookie)).0, 404);
+    // The server refuses a path the manifest does not declare before the package sees it.
+    assert_eq!(call("/nope", Some(&cookie)).0, 400);
     // A private search is never stored. The package has no route that takes one, so a marker in
     // the person's own name stands in for private text the scan must be able to catch.
     const MARK: &str = "PLANTED-LIVE-MARKER-web-7d2e";
@@ -361,5 +362,5 @@ fn installed_web_research_package_serves_status_from_the_real_server() {
     println!("privacy scan FAILED with a leak planted");
     scan();
     println!("privacy scan PASSED with no leak");
-    println!("web research live: status for two people over HTTPS, 401 signed out, 404 unknown route");
+    println!("web research live: status for two people over HTTPS, 401 signed out, 400 undeclared route");
 }
