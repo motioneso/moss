@@ -51,3 +51,7 @@ path = "../tests/espn_public.rs"
 [[test]]
 name = "overview"
 path = "../tests/overview.rs"
+
+[[test]]
+name = "sources"
+path = "../tests/sources.rs"
