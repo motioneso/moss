@@ -104,7 +104,8 @@ pub fn steps_with_ids() -> Vec<Value> {
     ]
 }
 
-/// Source routes that need no network and no saved source. Answers that depend on a follow use
+/// Source routes that need no network and no saved source. The icon route for an id that is not a
+/// UUID is left out because the old route answers 500 for it; the test checks the new answer apart. Answers that depend on a follow use
 /// ids that cannot exist, so both sides refuse them the same way.
 pub fn steps_sources() -> Vec<Value> {
     let sources = "/api/sports/sources";
@@ -150,7 +151,6 @@ pub fn steps_sources() -> Vec<Value> {
         send("POST", &format!("{sources}/{missing}/assignments/preview"), json!({})),
         send("PATCH", &format!("{sources}/{missing}/assignments"), confirm(missing)),
         send("PATCH", &format!("{sources}/not-a-uuid/assignments"), confirm(missing)),
-        get(&format!("{sources}/not-a-uuid/icon")),
         get(&format!("{sources}/{missing}/icon")),
     ]
 }

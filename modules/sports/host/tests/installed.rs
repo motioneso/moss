@@ -552,4 +552,9 @@ fn the_installed_source_routes_answer_like_the_old_routes_step_for_step() {
         .collect();
     let loose = compare_sources(&steps, &old, &new);
     println!("PASS parity: {} source steps matched the old routes ({loose} matched on status only)", steps.len());
+
+    // The old route answers 500 when the id is not a UUID. The new route says the source is not found.
+    let icon = w.call(w.f.a, "GET", "/sources/not-a-uuid/icon", Value::Null);
+    assert_eq!((icon["status"].as_u64(), icon["body"]["error"].as_str()), (Some(404), Some("Sports source not found")), "{icon}");
+    println!("PASS deliberate fix: an icon request with a bad id answers 404, not 500");
 }
