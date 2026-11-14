@@ -491,3 +491,44 @@ None added.
   together in one run, because the server has no route that runs assistant tools yet.
 - The Google token lookup relies on row-level security to pick the person's own account.
 - The old Google rate-limit test still fails sometimes in code this part did not change.
+
+# Part 12: Outlook web calendar
+
+## What it does
+
+- Reads a person's own Outlook calendar page through a helper browser and copies the events into
+  Calendar. It is read-only and calendar-only. There is no screen yet, because the status screen
+  waits for mockup approval.
+- Four routes under `/api/connectors/outlook-calendar`: status, connect, refresh, disconnect.
+  Health values are the same ones the old app showed.
+- The reader belongs to one person and one Outlook account, set in a server setting that names
+  the helper's local address. Only that person may connect, refresh or disconnect (403 for
+  anyone else). If the account or address changes, the reader stops with a conflict (409). Only
+  a hash of the owner, account and address is stored.
+- A scan reads one week per background step, so no step passes the call time limit. The last step
+  hands the events to Calendar through Calendar's public import. Calendar marks events that
+  vanished as missing, and unconfirmed after two misses.
+- Page text never leaves the scan code. Only cleaned events and a short error code move on.
+- Creating a calendar event is refused when the Outlook copy is stale, partial, uncertain or
+  short of the requested dates. People with no Outlook account are not blocked.
+- App map entries added in the Connectors and Calendar manifests. Calendar went to 0.30.0.
+
+## Proof
+
+- Package tests ported from the old Outlook tests (page reading, availability, write refusal,
+  Calendar import), plus route and job tests, run natively and in the WebAssembly build.
+- A stand-in Outlook page with invented data (no real addresses or titles) drives host tests.
+- A second person is refused, and a row-level security test fails when the protection is removed.
+- Sentinel text in the page never shows in logs, job payloads or health rows.
+- Live run on the real Rust server over HTTPS (`pnpm test:rust-connectors-live`, passed): the
+  stand-in page was read week by week, both invented events appeared in Calendar, the state
+  reached current, and the page text was absent from the server log and every job and schedule
+  row. Signing the page out moved the state to sign-in-needed, and disconnect worked.
+
+## Not proven
+
+- Real Microsoft 365 sign-in. The helper is stopped and no real account was available.
+- A real browser bridge. The helper is reached by a small local HTTP protocol. Driving a real
+  browser needs a websocket library the project does not have, which needs Ben's approval.
+- Very large calendars. Calendar import makes one call per changed event, so a scan near 1000
+  events might pass the 5 second call limit.

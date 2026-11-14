@@ -53,3 +53,23 @@ path = "tests/monitors.rs"
 [[test]]
 name = "email_writes"
 path = "tests/email_writes.rs"
+
+[[test]]
+name = "outlook_source"
+path = "tests/outlook_source.rs"
+
+[[test]]
+name = "outlook_scan"
+path = "tests/outlook_scan.rs"
+
+[[test]]
+name = "outlook_availability"
+path = "tests/outlook_availability.rs"
+
+[[test]]
+name = "outlook_routes"
+path = "tests/outlook_routes.rs"
+
+[[test]]
+name = "outlook_write_refusal"
+path = "tests/outlook_write_refusal.rs"

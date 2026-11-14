@@ -83,6 +83,20 @@ pub struct Settings {
     /// Never set in a real install.
     #[serde(default)]
     pub(crate) test_only_mail: Option<TestOnlyMail>,
+    /// The helper browser for one person's Outlook calendar. Absent means no Outlook calendar
+    /// reader. The address must be plain http on this machine.
+    #[serde(default)]
+    pub(crate) outlook_browser: Option<OutlookBrowser>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OutlookBrowser {
+    endpoint: String,
+    /// The one person this helper belongs to.
+    owner: uuid::Uuid,
+    /// The Outlook account address the helper must show.
+    account: String,
 }
 
 #[derive(Deserialize)]
@@ -338,6 +352,14 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
     let connectors_worker_url = settings.worker_url.clone();
     let google_test_url = settings.test_only_google_token_url.clone();
     let mail_test = settings.test_only_mail;
+    let outlook = settings
+        .outlook_browser
+        .as_ref()
+        .map(|o| {
+            moss_connectors_host::outlook_scan::OutlookBinding::new(&o.endpoint, o.owner, &o.account)
+                .ok_or_else(|| anyhow::anyhow!("outlook_browser needs a plain http address on this machine and an account"))
+        })
+        .transpose()?;
     let cipher = SecretCipher::connectors(
         &[("JARVIS_CONNECTOR_SECRET_KEY".into(), settings.connector_key)].into(),
     )
@@ -487,6 +509,7 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
                     pem.as_deref(),
                 )?);
             }
+            connectors = connectors.with_outlook(outlook.clone());
             let services = Arc::new(connectors) as Arc<dyn Ports>;
             // Email answers only its own cached-message and preference calls.
             let services = Arc::new(EmailPorts::new(email_database, services)?) as Arc<dyn Ports>;

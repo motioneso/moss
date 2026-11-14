@@ -67,6 +67,15 @@ cargo([
   "--bin",
   "fake-mail"
 ]);
+cargo([
+  "build",
+  "--offline",
+  "--locked",
+  "--manifest-path",
+  "rust-spike/standins/Cargo.toml",
+  "--bin",
+  "fake-outlook"
+]);
 cargo(
   [
     "test",
@@ -94,6 +103,7 @@ cargo(
     JS170_AUTH_URL: urls.auth,
     JS230_FAKE_GOOGLE: join(target, "debug/fake-google"),
     JS237_FAKE_MAIL: join(target, "debug/fake-mail"),
+    JS270_FAKE_OUTLOOK: join(target, "debug/fake-outlook"),
     JS170_SERVER: join(target, "debug/moss-shell"),
     JS170_CERTIFICATE: join(target, "debug/moss-network")
   }
