@@ -424,16 +424,18 @@ fn the_installed_routes_answer_like_the_old_routes_step_for_step() {
     // Adding a source: refusals, a preview, a save and the answers after it. The old side runs for
     // the same person that planted the rows above, so the fresh site avoids their exclusions.
     let adding = replay::steps_adding_before_save();
-    let old3 = replay::old_routes(old_actor, &adding, json!({}));
+    let saving = replay::steps_adding_save();
+    // The old preview store lives in its process, so the old side runs preview and save together.
+    let all: Vec<Value> = adding.iter().chain(saving.iter()).cloned().collect();
+    let old_all = replay::old_routes(old_actor, &all, json!({}));
+    let (old3, old4) = old_all.split_at(adding.len());
     let new3: Vec<Value> = adding
         .iter()
         .map(|s| w.call(w.f.a, s["method"].as_str().unwrap(), &s["url"].as_str().unwrap().replace("/api/news", ""), s.get("body").cloned().unwrap_or(Value::Null)))
         .collect();
-    compare(&adding, &old3, &new3);
-    let conf_of = |answers: &[Value]| answers.last().unwrap()["body"]["confirmationId"].as_str().unwrap().to_owned();
-    let saving = replay::steps_adding_save();
-    let old4 = replay::old_routes(old_actor, &saving, json!({"conf":conf_of(&old3)}));
-    let vars = json!({"conf":conf_of(&new3)});
+    compare(&adding, old3, &new3);
+    let conf = new3.last().unwrap()["body"]["confirmationId"].as_str().unwrap().to_owned();
+    let vars = json!({"conf":conf});
     let new4: Vec<Value> = saving
         .iter()
         .map(|s| {
@@ -441,7 +443,7 @@ fn the_installed_routes_answer_like_the_old_routes_step_for_step() {
             w.call(w.f.a, s["method"].as_str().unwrap(), &s["url"].as_str().unwrap().replace("/api/news", ""), body)
         })
         .collect();
-    compare(&saving, &old4, &new4);
+    compare(&saving, old4, &new4);
     println!("PASS parity: {} adding-a-source steps matched the old routes", old3.len() + old4.len());
 
     // The old server queues a refresh after a write, so only the Rust shape is checked here.

@@ -85,17 +85,24 @@ export async function routesOracle(
   });
   try {
     const responses = [];
+    // A preview's confirmation id fills `{conf}` in later steps of the same run.
+    const known: Record<string, string> = { ...vars };
     const fill = (text: string) =>
-      text.replace(/\{(\w+)\}/g, (_m, name: string) => vars[name] ?? _m);
+      text.replace(/\{(\w+)\}/g, (_m, name: string) => known[name] ?? _m);
     for (const { method, url: template, body } of steps) {
       const result = await server.inject({
         method,
         url: fill(template),
         ...(body === undefined
           ? {}
-          : { payload: JSON.stringify(body), headers: { "content-type": "application/json" } })
+          : {
+              payload: fill(JSON.stringify(body)),
+              headers: { "content-type": "application/json" }
+            })
       });
-      responses.push({ status: result.statusCode, body: result.json() as unknown });
+      const answer = result.json() as { confirmationId?: unknown };
+      if (typeof answer.confirmationId === "string") known.conf = answer.confirmationId;
+      responses.push({ status: result.statusCode, body: answer as unknown });
     }
     return { responses };
   } finally {
