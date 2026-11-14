@@ -7,3 +7,4 @@
 - Topic discovery and source checks wait for web search and are refused until then.
 - Account export and deletion cover all eight tables.
 - Fetching articles, refreshing, setup of new sources, chat tools and the News screens are not part of this package yet.
+- The News page now compiles from the active sources. Stories are filtered, ranked by the person's model with a fixed-order fallback, stored as a snapshot for seven days, and served by the overview route. Refresh jobs and source health updates are not part of this package yet.

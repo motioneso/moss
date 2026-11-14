@@ -251,6 +251,38 @@ fn verify_publisher<H: Host + ?Sized>(host: &H, raw_url: &str, exclusions: &[Str
     }))
 }
 
+/// Reads one subreddit's linked headlines for the page compiler. None means the read failed.
+pub fn read_subreddit_for_compile<H: Host + ?Sized>(
+    host: &H,
+    name: &str,
+) -> Option<Vec<moss_news_reader::RedditLinkedHeadline>> {
+    match read_subreddit(
+        |url, options| {
+            let extra = json!({
+                "allowedHosts": options.allowed_hosts, "accept": options.accept,
+                "userAgent": options.user_agent, "allowedContentTypes": options.allowed_content_types,
+                "maxBytes": options.max_bytes, "rejectOversizedResponses": options.reject_oversized_responses,
+                "skipRobots": options.skip_robots,
+            });
+            let refused = |f: Failed| RedditFetchFailure { reason: f.reason, status: f.status, detail: f.detail };
+            let fetched = web::get(host, url, Some(extra)).map_err(refused)?;
+            let hop = Url::parse(&fetched.final_url).map(|url| RedditHop { url, redirect_count: fetched.hop_count });
+            if !hop.is_some_and(|hop| options.hop_allowed(&hop)) {
+                return Err(RedditFetchFailure { reason: "blocked".into(), status: None, detail: None });
+            }
+            Ok(RedditFetched {
+                status: fetched.status, final_url: fetched.final_url, content_type: fetched.content_type,
+                body: fetched.body, truncated: false,
+            })
+        },
+        name,
+        &RedditReaderOptions::default(),
+    ) {
+        ReadSubredditResult::Ok { headlines, .. } => Some(headlines),
+        ReadSubredditResult::Failed(_) => None,
+    }
+}
+
 fn resolve_subreddit<H: Host + ?Sized>(host: &H, name: &str, exclusions: &[String]) -> Result<Resolution> {
     if excluded(exclusions, REDDIT_CANONICAL_DOMAIN) {
         return Ok(Resolution::Rejected("policy"));

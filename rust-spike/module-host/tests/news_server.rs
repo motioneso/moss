@@ -412,6 +412,15 @@ fn installed_news_package_serves_routes_from_the_real_server() {
     let (_, text) = call(Method::GET, "/personalization", Some(&other), None);
     assert_eq!(json_of(&text)["customSources"], json!([]), "{text}");
     println!("news live: the real feed was saved for the owner and is invisible to the other person");
+    // The overview compiles the page from the real sources on the real server. Nothing is
+    // intercepted: the catalog and saved feeds are read live through the public-web fetch.
+    let (status, text) = call(Method::GET, "/overview", Some(&cookie), None);
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let overview = json_of(&text);
+    let stories = overview["rankedStories"].as_array().expect("ranked stories");
+    assert!(!stories.is_empty(), "the live compile found no stories: {text}");
+    assert!(!overview["topStories"].as_array().unwrap().is_empty(), "{text}");
+    println!("news live: overview compiled {} real stories, first: {}", stories.len(), stories[0]["title"]);
 
     // Nothing the test sent reached the server log.
     assert!(!log().to_lowercase().contains(&MARK.to_lowercase()));
