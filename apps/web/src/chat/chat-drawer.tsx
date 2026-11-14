@@ -47,6 +47,7 @@ import { trapFocus } from "../shell/command-palette";
 import { RecordRow } from "./message-row";
 import { isNoActiveChatModelError } from "../onboarding/chat-availability";
 import {
+  countUserText,
   mergeFallbacks,
   reconcileFallbacks,
   recordsFromMessages,
@@ -141,6 +142,8 @@ export function ChatDrawer(props: ChatDrawerProps) {
   const [pendingUser, setPendingUser] = useState<{
     readonly text: string;
     readonly attachments?: readonly ChatAttachmentDto[];
+    // Saved messages with the same words when the send began; only a newer one is this send.
+    readonly priorMatches: number;
   } | null>(null);
   const [fallbackRecords, setFallbackRecords] = useState<readonly TranscriptRecord[]>([]);
   useEffect(() => {
@@ -153,7 +156,7 @@ export function ChatDrawer(props: ChatDrawerProps) {
     if (
       !props.meetingContext &&
       pendingUser !== null &&
-      props.records.some((r) => r.kind === "user" && r.text === pendingUser.text)
+      countUserText(props.records, pendingUser.text) > pendingUser.priorMatches
     ) {
       setPendingUser(null);
     }
@@ -290,10 +293,13 @@ export function ChatDrawer(props: ChatDrawerProps) {
       setSendError(null);
       setNeedsProvider(false);
       setIsSending(true);
-      setPendingUser({ text: trimmed, attachments });
+      // Binding a different live thread empties the live log, so nothing earlier can match.
+      const clearsLiveLog = initiatingThreadId !== null && liveThreadId !== initiatingThreadId;
+      const priorMatches = clearsLiveLog ? 0 : countUserText(props.records, trimmed);
+      setPendingUser({ text: trimmed, attachments, priorMatches });
       const initiatingSurface = props.surface;
       const generation = generationRef.current;
-      if (initiatingThreadId !== null && liveThreadId !== initiatingThreadId) {
+      if (clearsLiveLog) {
         props.clearRecords(initiatingThreadId);
         setLiveThreadId(initiatingThreadId);
       }

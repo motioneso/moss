@@ -65,6 +65,7 @@ import {
 } from "../../apps/web/src/api/client.js";
 import { useChatStream } from "../../apps/web/src/chat/use-chat-stream.js";
 import { ChatDrawer } from "../../apps/web/src/chat/chat-drawer.js";
+import { VoiceInputThread } from "../../apps/web/src/chat/voice-requests.js";
 
 function drawer(
   client: QueryClient,
@@ -558,6 +559,75 @@ it("shows only the reopened side chat's background arrivals and excludes the pre
     expect(JSON.stringify(renderer.toJSON())).toContain("Side reminder arrived");
     await act(async () => retry.reject(new Error("Provider failed again")));
   } finally {
+    await act(async () => renderer?.unmount());
+    client.clear();
+    vi.mocked(getChatPrivacyState).mockResolvedValue({ incognito: false });
+    vi.mocked(listChatThreads).mockResolvedValue({ threads: [] });
+    vi.mocked(listChatThreadMessages).mockReset();
+  }
+});
+
+it("shows a repeated message once after sending it in a reopened conversation (#3778)", async () => {
+  vi.mocked(getChatPrivacyState).mockResolvedValue({ incognito: false, threadId: "a" });
+  vi.mocked(listChatThreadMessages).mockResolvedValue({ messages: [] });
+  vi.mocked(listChatThreads).mockResolvedValue({
+    threads: [chatThread("a", "Main", true), chatThread("b", "Porch planning")]
+  });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const view = (records: readonly TranscriptRecord[]) =>
+    createElement(
+      QueryClientProvider,
+      { client },
+      createElement(
+        MemoryRouter,
+        null,
+        createElement(ChatDrawer, {
+          open: true,
+          onClose: () => undefined,
+          records,
+          clearRecords: () => undefined,
+          streamErrorCount: 0,
+          isFounder: false,
+          ownerId: "owner",
+          surface: DEFAULT_CHAT_SURFACE
+        }) as ReactElement
+      )
+    );
+  const mainTurns: readonly TranscriptRecord[] = [
+    { kind: "user", text: "ok", messageId: "main-ok-1" },
+    { kind: "user", text: "ok", messageId: "main-ok-2" }
+  ];
+  const turn = deferred<Awaited<ReturnType<typeof sendChatTurn>>>();
+  let renderer!: ReactTestRenderer;
+  try {
+    await act(async () => {
+      renderer = create(view(mainTurns));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await act(async () => findByAriaLabel(renderer, "Open conversations")!.props.onClick());
+    await act(async () => {
+      findByAriaLabel(renderer, "Porch planning")!.props.onClick();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    vi.mocked(sendChatTurn).mockImplementationOnce(() => turn.promise);
+    await act(async () => {
+      renderer.root.findByType("textarea").props.onChange({ target: { value: "ok" } });
+    });
+    await act(async () => findByAriaLabel(renderer, "Send")!.props.onClick());
+
+    // Sending clears the live log; the saved copy then arrives on the stream.
+    await act(async () => {
+      renderer.update(view([{ kind: "user", text: "ok", messageId: "side-ok" }]));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const shown: readonly TranscriptRecord[] =
+      renderer.root.findByType(VoiceInputThread).props.records;
+    expect(shown.filter((r) => r.kind === "user" && r.text === "ok")).toHaveLength(1);
+  } finally {
+    await act(async () => turn.reject(new Error("done")));
     await act(async () => renderer?.unmount());
     client.clear();
     vi.mocked(getChatPrivacyState).mockResolvedValue({ incognito: false });
