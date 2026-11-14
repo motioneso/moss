@@ -203,7 +203,7 @@ fn a_run_walks_one_view_per_step_then_imports_and_marks_current() {
 #[test]
 fn reader_errors_set_the_matching_state_and_three_failures_stop_the_job() {
     for (code, state) in [("sign-in-needed", "sign-in-needed"), ("source-changed", "source-changed"), ("partial", "partial"), ("unreachable", "partial")] {
-        let host = Stub::mine().with_account("active", json!({"state":"collecting","bindingFingerprint":"fp-1"}));
+        let host = Stub::mine().with_account("active", json!({"state":"collecting","currentRun":"run-1","bindingFingerprint":"fp-1"}));
         host.steps.borrow_mut().push(json!({"error":code,"stage":"read"}));
         assert_eq!(job(&host, Some("run-1"))["outcome"], "failed", "{code}");
         assert_eq!(host.health()["state"], state, "{code}");
@@ -217,7 +217,7 @@ fn reader_errors_set_the_matching_state_and_three_failures_stop_the_job() {
 
 #[test]
 fn a_failed_import_keeps_the_copy_partial() {
-    let host = Stub::mine().with_account("active", json!({"state":"collecting","bindingFingerprint":"fp-1"}));
+    let host = Stub::mine().with_account("active", json!({"state":"collecting","currentRun":"run-1","bindingFingerprint":"fp-1"}));
     *host.import.borrow_mut() = None;
     host.steps.borrow_mut().push(json!({"done":true,"scan":{"events":[]}}));
     assert_eq!(job(&host, Some("run-1"))["outcome"], "failed");
