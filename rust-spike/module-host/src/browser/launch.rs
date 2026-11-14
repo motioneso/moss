@@ -231,20 +231,41 @@ impl Launcher {
     }
 }
 
-/// Kills process `pid` at `at` unless the returned sender is dropped first. Ending a browser this
-/// way needs no pipe write, so a browser that stops reading cannot outlive its render.
-pub fn watchdog(pid: u32, at: std::time::Instant) -> std::sync::mpsc::Sender<()> {
-    let (stop, wait) = std::sync::mpsc::channel::<()>();
+/// Kills one process at a deadline unless cancelled first. Ending a browser this way needs no
+/// pipe write, so a browser that stops reading cannot outlive its render.
+pub struct Watchdog(std::sync::Arc<(std::sync::Mutex<bool>, std::sync::Condvar)>);
+
+impl Watchdog {
+    /// After this returns the process is never signalled, even if the deadline just passed.
+    pub fn cancel(&self) {
+        let (done, wake) = &*self.0;
+        *done.lock().expect("watchdog") = true;
+        wake.notify_all();
+    }
+}
+
+impl Drop for Watchdog {
+    fn drop(&mut self) {
+        self.cancel();
+    }
+}
+
+pub fn watchdog(pid: u32, at: std::time::Instant) -> Watchdog {
+    let shared = std::sync::Arc::new((std::sync::Mutex::new(false), std::sync::Condvar::new()));
+    let thread_side = shared.clone();
     std::thread::spawn(move || {
+        let (done, wake) = &*thread_side;
         let wait_for = at.saturating_duration_since(std::time::Instant::now());
-        if matches!(
-            wait.recv_timeout(wait_for),
-            Err(std::sync::mpsc::RecvTimeoutError::Timeout)
-        ) {
+        let guard = done.lock().expect("watchdog");
+        let (guard, result) = wake
+            .wait_timeout_while(guard, wait_for, |done| !*done)
+            .expect("watchdog");
+        // The lock is held while signalling, so a cancel waits for it to finish.
+        if result.timed_out() && !*guard {
             let _ = Command::new("/bin/kill").args(["-9", &pid.to_string()]).status();
         }
     });
-    stop
+    Watchdog(shared)
 }
 
 impl Process {
@@ -296,7 +317,8 @@ mod tests {
         assert!(!late.wait().unwrap().success());
         assert!(started.elapsed() < Duration::from_secs(10));
         let mut early = Command::new("sleep").arg("1").spawn().unwrap();
-        drop(watchdog(early.id(), Instant::now() + Duration::from_millis(300)));
+        let cancelled = watchdog(early.id(), Instant::now() + Duration::from_millis(300));
+        cancelled.cancel();
         assert!(early.wait().unwrap().success());
     }
 

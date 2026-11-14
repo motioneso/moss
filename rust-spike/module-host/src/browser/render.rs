@@ -71,6 +71,8 @@ struct Job {
     url: String,
     kind: String,
     accept: Option<String>,
+    /// Order in which the page asked, so a later navigation outranks an earlier one.
+    seq: usize,
     /// True for a document loading in the page's top frame.
     main: bool,
 }
@@ -87,7 +89,7 @@ struct Shared {
     inflight: AtomicUsize,
     last_activity_ms: AtomicU64,
     /// The top-level document: its final address, or `Err` if it could not be fetched.
-    document: Mutex<Option<Result<String, ()>>>,
+    document: Mutex<Option<(usize, Result<String, ()>)>>,
 }
 
 impl Shared {
@@ -132,11 +134,15 @@ impl Shared {
         let answer = self.web.fetch_for_browser(&params, remaining);
         trace!("served {} ok={} reason={}", job.url, answer["ok"], answer["reason"]);
         let good = answer["ok"] == true;
-        // A refused answer that came with a status means a response was downloaded and thrown
-        // away, so it still counts at full size.
+        // A download that was thrown away or cut short counts at full size, because how much
+        // arrived is unknown. Refusals made before any download and HTTP error answers count zero.
+        let dropped = matches!(
+            answer["detail"].as_str(),
+            Some("response_too_large" | "invalid_response" | "unsupported_content_type")
+        ) || matches!(answer["reason"].as_str(), Some("network" | "timeout"));
         let used = if good {
             answer.get("body").and_then(Value::as_str).map_or(0, |b| b.len() / 4 * 3)
-        } else if answer.get("status").is_some() {
+        } else if dropped {
             MAX_RESPONSE_BYTES
         } else {
             0
@@ -148,11 +154,18 @@ impl Shared {
     fn finish(&self, job: &Job, answer: &Value, good: bool) {
         // The newest top-frame document wins, so the address returned matches the page read.
         if job.kind == "Document" && job.main {
-            *self.document.lock().expect("document slot") = Some(if good {
-                Ok(answer["finalUrl"].as_str().unwrap_or(&job.url).to_owned())
-            } else {
-                Err(())
-            });
+            let mut slot = self.document.lock().expect("document slot");
+            // A request the page started earlier cannot replace the answer for a later one.
+            if slot.as_ref().is_none_or(|(seq, _)| *seq <= job.seq) {
+                *slot = Some((
+                    job.seq,
+                    if good {
+                        Ok(answer["finalUrl"].as_str().unwrap_or(&job.url).to_owned())
+                    } else {
+                        Err(())
+                    },
+                ));
+            }
         }
         if good {
             let body = answer.get("body").and_then(Value::as_str).unwrap_or("");
@@ -203,7 +216,7 @@ pub fn render(
     let writer = conn.writer.clone();
     // Ends the browser if the render has not finished shortly after its deadline, even when a
     // pipe write is stuck.
-    let stop = launch::watchdog(process.pid(), page.deadline + Duration::from_secs(2));
+    let watchdog = launch::watchdog(process.pid(), page.deadline + Duration::from_secs(2));
     let shared = Arc::new(Shared {
         web: web.clone(),
         writer: writer.clone(),
@@ -236,8 +249,9 @@ pub fn render(
     // Closing the queue ends the workers. Killing the browser comes first and needs no pipe
     // write, so a browser that stopped reading cannot hold the render open.
     drop(jobs);
+    // Cancelled before the browser is reaped, so the watchdog can never aim at a reused id.
+    watchdog.cancel();
     drop(process);
-    drop(stop);
     drop(writer);
     result
 }
@@ -301,7 +315,7 @@ fn drive(
         if now >= deadline {
             return Err(Reason::Timeout);
         }
-        if matches!(*shared.document.lock().expect("document slot"), Some(Err(()))) {
+        if matches!(*shared.document.lock().expect("document slot"), Some((_, Err(())))) {
             return Err(Reason::RenderFailed);
         }
         let quiet_for = now
@@ -333,6 +347,7 @@ fn drive(
                     accept: params["request"]["headers"]["Accept"]
                         .as_str()
                         .map(str::to_owned),
+                    seq: count,
                     main: params["frameId"] == target_id.as_str(),
                 };
                 let method = params["request"]["method"].as_str().unwrap_or("");
@@ -404,7 +419,7 @@ fn drive(
     let raw = read["result"]["value"].as_str().ok_or(Reason::RenderFailed)?;
     let evidence = evidence::parse(raw, &page.allowed_hosts).ok_or(Reason::RenderFailed)?;
     let final_url = match shared.document.lock().expect("document slot").clone() {
-        Some(Ok(url)) if approved(&url, &page.allowed_hosts) => url,
+        Some((_, Ok(url))) if approved(&url, &page.allowed_hosts) => url,
         _ => return Err(Reason::RenderFailed),
     };
     Ok(Rendered {

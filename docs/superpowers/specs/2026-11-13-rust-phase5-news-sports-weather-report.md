@@ -472,6 +472,15 @@ MOSS_BROWSER_DIR=<folder> scripts/run-gate.sh start --gate test:rust-browser-liv
 
 The ignored sandbox tests run with `module-host/tools/browser-gate.sh` after `tools/fetch-chrome.sh`.
 
+### Review
+
+Round 1 (Codex) found two major and one minor issue (download cap checked after downloading, a
+stuck browser could hold the render slot, returned address could differ from the page read). Round 2
+found three major and one minor issue in the fixes (a failed download refunded in full, the watchdog
+could signal a reused process id, a slow earlier navigation could overwrite a later one, HTTP error
+answers charged in full). All are fixed. No private-network escape, cross-person leak or unisolated
+fallback was found in either round.
+
 ### Not proven
 
 - DNS, prefetch and service worker reaching the listener without the namespace were not seen.
@@ -483,8 +492,13 @@ The ignored sandbox tests run with `module-host/tools/browser-gate.sh` after `to
   zmij). The browser client is native-host only by design, and the SDK tests run natively.
 - The host's default route deadline is about 5 s. A render needs up to 20 s, so the Sports package
   needs a raised budget.
-- Total bytes are counted after a response is fetched, so one render can briefly pass 10 MB by one
-  response.
+- The watchdog that kills a stuck browser is tested on its own (a sleeping process). No test makes
+  a real browser stop reading its pipe, so its use inside a render is reviewed but not run.
+- Two page navigations racing each other are ordered by when the page asked, not tested with a
+  real slow-then-fast pair. Only a plain script navigation is tested.
+- The 10 MB total reserves 2 MB per request before downloading. Near the limit, a request can be
+  refused while others are still in flight, even if its real size would have fit. A download that
+  fails part way counts as a full 2 MB, so the total is never under-counted.
 - Reaching the browser port from a phone or another computer was not tested. The port adds no
   listener. The live run reached the server on this machine only.
 - The live run reached the guest through the install path, not an HTTP route, as in part 14.
