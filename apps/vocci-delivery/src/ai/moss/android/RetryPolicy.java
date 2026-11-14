@@ -8,6 +8,8 @@ final class RetryPolicy {
     }
     static int connectionFailure(int failures) { return Math.min(failures + 1, MAX_ATTEMPTS); }
     static long connectionDelayMs(int failures) { return failures == 0 ? 30000 : delayMs(failures); }
+    /** Hold-to-talk waits for a press, so the first failed cycle retries soon; repeated failures back off as usual. */
+    static long holdFailureDelayMs(int failures) { return failures == 1 ? 2000 : connectionDelayMs(failures); }
     static boolean due(int attempts, long nextAt, long now) {
         return attempts < MAX_ATTEMPTS && now >= nextAt;
     }
