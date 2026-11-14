@@ -31,6 +31,7 @@
     "test:rust-news": "tsx modules/news/tools/gate.ts",
     "test:rust-news-live": "bash modules/news/tools/live.sh",
     "test:rust-backtrack": "tsx modules/backtrack/tools/gate.ts",
+    "test:rust-scratchpad": "tsx modules/scratchpad/tools/gate.ts",
     "test:rust-backtrack-live": "bash modules/backtrack/tools/live.sh",
     "test:rust-meetings": "tsx modules/meetings/tools/gate.ts",
     "test:rust-memory": "tsx modules/memory/tools/gate.ts",
