@@ -11,9 +11,7 @@
   "capabilities": [
     {
       "port": "db",
-      "operations": [
-        "query"
-      ],
+      "operations": ["query"],
       "resources": [
         "app.news_compilation_snapshots",
         "app.news_custom_sources",
@@ -27,14 +25,8 @@
     },
     {
       "port": "context",
-      "operations": [
-        "read",
-        "uuid"
-      ],
-      "resources": [
-        "call",
-        "new"
-      ]
+      "operations": ["read", "uuid"],
+      "resources": ["call", "new"]
     }
   ],
   "database": {
@@ -148,9 +140,7 @@
   "provides": {
     "collectNewsPersonalizationExportSection": "1.0.0"
   },
-  "icons": [
-    "icons/news.svg"
-  ],
+  "icons": ["icons/news.svg"],
   "accounts": {
     "supportsUserDisable": true,
     "defaultEnabled": true
@@ -200,7 +190,7 @@
       "errors": [
         {
           "code": "news_topic_discovery_unavailable",
-          "class": "unavailable",
+          "class": "prerequisite",
           "description": "Topic discovery needs web search, which is not available in this package."
         }
       ],
