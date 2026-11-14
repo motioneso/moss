@@ -63,7 +63,7 @@ impl Host for Fake {
                 self.kv.borrow_mut().insert(resource.into(), parameters);
                 Ok(json!({}))
             }
-            ("fetch", "GET") => match self.web.borrow().get(resource) {
+            ("fetch", "get") => match self.web.borrow().get(resource) {
                 Some((status, body)) => Ok(json!({"status": status, "body": body})),
                 None => Err(Error::new("no route")),
             },

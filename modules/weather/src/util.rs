@@ -15,7 +15,7 @@ pub const IPWHO: &str = "ipwho.is";
 
 /// One GET to an approved host. Any failure, non-200 status or non-JSON body is `Down`.
 pub fn get_json<H: Host + ?Sized>(host: &H, domain: &str, url: &str) -> Result<Value, Down> {
-    let reply = host.call("fetch", "GET", domain, json!({"url": url})).map_err(|_| Down)?;
+    let reply = host.call("fetch", "get", domain, json!({"url": url})).map_err(|_| Down)?;
     if reply["status"].as_u64() != Some(200) {
         return Err(Down);
     }
