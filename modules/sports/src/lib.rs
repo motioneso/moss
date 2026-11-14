@@ -33,7 +33,7 @@ pub fn route_with<H: Host + ?Sized>(host: &H, teams: &dyn TeamList, request: Rou
         ("POST", "/follows/:id/team") => follows::choose_team(host, teams, &request),
         ("DELETE", "/follows/:id") => follows::remove(host, &request),
         ("GET", "/catalog") => Ok(Response::new(200, catalog::response())),
-        ("GET", "/leagues/:competitionKey/teams") => public_routes::league_teams(host, &request),
+        ("GET", "/leagues/:competition_key/teams") => public_routes::league_teams(host, &request),
         ("GET", "/teams/search") => public_routes::search(host, &request),
         ("GET", "/standings-preferences") => standings::get(host),
         ("PUT", "/standings-preferences") => standings::put(host, &request),

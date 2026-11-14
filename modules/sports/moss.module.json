@@ -118,7 +118,7 @@
     },
     {
       "method": "GET",
-      "path": "/leagues/:competitionKey/teams",
+      "path": "/leagues/:competition_key/teams",
       "signIn": true
     },
     {

@@ -9,8 +9,8 @@ fn request(url: &str) -> RouteRequest {
     let (path, query) = rest.split_once('?').unwrap_or((rest, ""));
     let mut params = std::collections::BTreeMap::new();
     let template = if let Some(key) = path.strip_prefix("/leagues/").and_then(|p| p.strip_suffix("/teams")) {
-        params.insert("competitionKey".to_owned(), key.to_owned());
-        "/leagues/:competitionKey/teams".to_owned()
+        params.insert("competition_key".to_owned(), key.to_owned());
+        "/leagues/:competition_key/teams".to_owned()
     } else {
         path.to_owned()
     };

@@ -6,7 +6,7 @@ use serde_json::Value;
 
 /// `GET /leagues/:competitionKey/teams`.
 pub fn league_teams<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Response> {
-    let key = request.params.get("competitionKey").map(String::as_str).unwrap_or_default();
+    let key = request.params.get("competition_key").map(String::as_str).unwrap_or_default();
     if key.chars().count() > 100 {
         return Ok(bad_request("params/competitionKey must NOT have more than 100 characters"));
     }
