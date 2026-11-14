@@ -10,6 +10,7 @@ pub const PORTS: &[&str] = &[
     "kv",
     "vault",
     "fetch",
+    "browser",
     "credentials",
     "ai",
     "embed",
@@ -298,9 +299,15 @@ impl Manifest {
             for op in &cap.operations {
                 ensure!(identifier(op), "Invalid permission operation");
             }
-            if matches!(cap.port.as_str(), "fetch" | "credentials") {
+            if matches!(cap.port.as_str(), "fetch" | "credentials" | "browser") {
                 for host in &cap.resources {
-                    if cap.port == "fetch" && host == crate::public_web::PUBLIC_WEB {
+                    ensure!(
+                        cap.port != "browser" || host == crate::public_web::PUBLIC_WEB,
+                        "The browser opens public pages only"
+                    );
+                    if matches!(cap.port.as_str(), "fetch" | "browser")
+                        && host == crate::public_web::PUBLIC_WEB
+                    {
                         ensure!(
                             !cap.allow_private,
                             "Reading public websites cannot be combined with private network access"
@@ -547,9 +554,10 @@ impl Manifest {
         self.capabilities
             .iter()
             .map(|cap| {
-                let public_web = cap.port == "fetch"
+                let public_web = matches!(cap.port.as_str(), "fetch" | "browser")
                     && cap.resources.contains(crate::public_web::PUBLIC_WEB);
                 let (group, headline) = match cap.port.as_str() {
+                    "browser" => ("network", "Open pages you confirm in a sandboxed browser"),
                     _ if public_web => ("network", "Read public websites you add"),
                     "db" | "kv" => ("data", "Store and read this module's data"),
                     "vault" | "attachments" => ("files", "Read the files you give this module"),
