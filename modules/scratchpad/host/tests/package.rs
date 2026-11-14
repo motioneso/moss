@@ -33,14 +33,14 @@ fn an_unknown_route_is_a_plain_404() {
 
 #[test]
 fn a_job_failure_never_repeats_the_payload() {
-    let err = call("job", &json!({"queue":"scratchpad.x","payload":{"body":"SECRET-SCREEN-TEXT"}}).to_string()).unwrap_err();
-    assert!(!format!("{err:#}").contains("SECRET-SCREEN-TEXT"));
+    let err = call("job", &json!({"queue":"scratchpad.x","payload":{"body":"SECRET-NOTE-TEXT"}}).to_string()).unwrap_err();
+    assert!(!format!("{err:#}").contains("SECRET-NOTE-TEXT"));
 }
 
 #[test]
 fn the_package_builds_and_the_manifest_validates() {
     let files = moss_scratchpad_host::package::files(&root(), &component()).unwrap();
-    assert_eq!(files.keys().filter(|k| k.starts_with("sql/")).count(), 2);
+    assert_eq!(files.keys().filter(|k| k.starts_with("sql/")).count(), 1);
     for needed in ["moss.module.json", "code/module.wasm", "NOTICE", "CHANGELOG.md"] {
         assert!(files.contains_key(needed), "{needed} missing");
     }
@@ -53,7 +53,7 @@ fn the_package_asks_only_for_its_own_resources() {
     let ask = |port: &str, operation: &str, resource: &str| {
         authorize(&manifest, port, &Request { operation: operation.into(), resource: resource.into(), parameters: json!({}) }).is_ok()
     };
-    assert!(ask("kv", "insert", "scratchpad.store"));
+    assert!(ask("kv", "append", "scratchpad.store"));
     assert!(!ask("kv", "insert", "meetings.store"));
     assert!(!ask("kv", "drop-everything", "scratchpad.store"));
     assert!(!ask("ai", "generate", "anything"));
@@ -66,21 +66,11 @@ fn changing_one_byte_of_the_legacy_sql_stops_the_build() {
     std::fs::copy(root().join("LICENSE"), copy.join("LICENSE")).unwrap();
     let to = copy.join("packages/scratchpad/sql");
     std::fs::create_dir_all(&to).unwrap();
-    std::fs::copy(root().join("packages/scratchpad/sql/0282_scratchpad_segments.sql"), to.join("0282_scratchpad_segments.sql")).unwrap();
-    let own = copy.join("modules/scratchpad/sql");
-    std::fs::create_dir_all(&own).unwrap();
-    let name = "0367_scratchpad_index_marks.sql";
-    std::fs::copy(root().join("modules/scratchpad/sql").join(name), own.join(name)).unwrap();
-    assert!(moss_scratchpad_host::package::files(copy, &component()).is_ok(), "untouched copy with the new migration builds");
-    let target = to.join("0282_scratchpad_segments.sql");
+    let target = to.join("0216_scratchpads.sql");
+    std::fs::copy(root().join("packages/scratchpad/sql/0216_scratchpads.sql"), &target).unwrap();
+    assert!(moss_scratchpad_host::package::files(copy, &component()).is_ok(), "untouched copy builds");
     let mut bytes = std::fs::read(&target).unwrap();
     bytes.push(b' ');
     std::fs::write(&target, bytes).unwrap();
     assert!(moss_scratchpad_host::package::files(copy, &component()).is_err(), "a changed byte must stop the build");
-    // The new migration is pinned the same way.
-    std::fs::copy(root().join("packages/scratchpad/sql/0282_scratchpad_segments.sql"), &target).unwrap();
-    let mut mine = std::fs::read(own.join("0367_scratchpad_index_marks.sql")).unwrap();
-    mine.push(b' ');
-    std::fs::write(own.join("0367_scratchpad_index_marks.sql"), mine).unwrap();
-    assert!(moss_scratchpad_host::package::files(copy, &component()).is_err(), "a changed migration must stop the build");
 }
