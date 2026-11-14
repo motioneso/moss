@@ -104,3 +104,12 @@ fn unknown_routes_are_not_found_and_only_the_store_is_used() {
     let calls = host.calls.borrow();
     assert!(calls.iter().all(|c| c.0 == "kv" && c.2 == "scratchpad.store"));
 }
+
+#[test]
+fn settings_refuse_null_values_like_the_old_handler() {
+    let host = Fake::default();
+    let r = route(&host, request("PATCH", "/settings", json!({"syncToNotes": null})));
+    assert_eq!((r.status, r.body["error"].clone()), (400, json!("syncToNotes must be a boolean")));
+    let r = route(&host, request("PATCH", "/settings", json!({"shortcut": null})));
+    assert_eq!((r.status, r.body["code"].clone()), (400, json!("scratchpad_shortcut_invalid")));
+}

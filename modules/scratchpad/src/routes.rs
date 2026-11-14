@@ -112,12 +112,12 @@ fn settings<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Respon
         Err(response) => return Ok(response),
     };
     let sync = match map.get("syncToNotes") {
-        None | Some(Value::Null) => None,
+        None => None,
         Some(Value::Bool(flag)) => Some(*flag),
         Some(_) => return Ok(error(400, "syncToNotes must be a boolean")),
     };
     let shortcut_text = match map.get("shortcut") {
-        None | Some(Value::Null) => None,
+        None => None,
         Some(Value::String(text)) if shortcut::is_valid(text) => Some(text.as_str()),
         Some(_) => return Ok(Response::new(400, json!({"code": "scratchpad_shortcut_invalid"}))),
     };
