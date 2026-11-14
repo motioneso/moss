@@ -271,3 +271,43 @@ fn a_page_built_by_scripts_gives_bounded_evidence() {
     assert!(log.contains("ok.test /api/headlines"), "{log}");
     assert!(!log.contains("other.test"), "{log}");
 }
+
+/// Every way a page can try to reach the network without a plain request.
+const PROBES: &[&str] = &["ws", "rtc", "sw", "prefetch", "preconnect", "dns", "fetch", "img"];
+
+/// Renders one probe and waits for any late connection to arrive. Returns what the listener saw.
+fn probe(w: &World, which: &str) -> (usize, usize) {
+    let v = w.render(&format!("/probe?only={which}"), &["ok.test"]);
+    assert_eq!(v["ok"], true, "{v}");
+    std::thread::sleep(Duration::from_millis(700));
+    println!("probe {which}: page said {} listener saw {:?}", v["text"], w.listener.hits());
+    w.listener.hits()
+}
+
+#[test]
+#[ignore = "Needs the pinned browser (MOSS_BROWSER_DIR) and bubblewrap"]
+fn websocket_webrtc_service_worker_dns_and_prefetch_reach_nothing() {
+    for which in PROBES {
+        let w = World::new();
+        assert_eq!(probe(&w, which), (0, 0), "{which} reached the listener");
+        let log = w.site.log();
+        assert!(!log.contains("127.0.0.1"), "{log}");
+    }
+}
+
+#[test]
+#[ignore = "Needs the pinned browser (MOSS_BROWSER_DIR) and bubblewrap"]
+fn control_without_the_namespace_the_probes_reach_the_listener() {
+    let mut reached = vec![];
+    for which in PROBES {
+        let w = World::with(Launcher::new(chrome_dir()).with_isolation(Isolation::None));
+        let (tcp, udp) = probe(&w, which);
+        if tcp + udp > 0 {
+            reached.push(*which);
+        }
+    }
+    println!("reached the listener without the namespace: {reached:?}");
+    for needed in ["ws", "rtc"] {
+        assert!(reached.contains(&needed), "{needed} was not seen reaching the listener");
+    }
+}

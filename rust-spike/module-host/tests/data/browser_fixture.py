@@ -6,24 +6,26 @@ import http.server, json, pathlib, ssl, sys, urllib.parse
 cert, key, port, log, ready, listener = sys.argv[1:]
 
 PROBE = """
+const only = new URLSearchParams(location.search).get('only') || (document.currentScript && new URL(document.currentScript.src).searchParams.get('only')) || 'all';
+const want = k => only === 'all' || only === k;
 const out = [];
 const note = (k, v) => { out.push(k + ':' + v); document.title = out.join(' '); document.body.textContent = out.join(' | '); };
 const L = %s;
-try { const ws = new WebSocket('wss://127.0.0.1:' + L + '/'); ws.onerror = () => note('ws', 'error'); ws.onopen = () => note('ws', 'open'); } catch (e) { note('ws', 'throw'); }
-try {
+if (want('ws')) try { const ws = new WebSocket('wss://127.0.0.1:' + L + '/'); ws.onerror = () => note('ws', 'error'); ws.onopen = () => note('ws', 'open'); } catch (e) { note('ws', 'throw'); }
+if (want('rtc')) try {
   const pc = new RTCPeerConnection({iceServers: [{urls: 'stun:127.0.0.1:' + L}]});
   pc.createDataChannel('x');
   pc.createOffer().then(o => pc.setLocalDescription(o)).then(() => note('rtc', 'offered'), () => note('rtc', 'error'));
 } catch (e) { note('rtc', 'throw'); }
-try {
+if (want('sw')) try {
   navigator.serviceWorker.register('/sw.js').then(() => note('sw', 'registered'), () => note('sw', 'refused'));
 } catch (e) { note('sw', 'throw'); }
-for (const rel of ['prefetch', 'preconnect', 'dns-prefetch']) {
+for (const rel of ['prefetch', 'preconnect']) if (want(rel)) {
   const l = document.createElement('link'); l.rel = rel; l.href = 'https://127.0.0.1:' + L + '/' + rel; document.head.appendChild(l);
 }
-fetch('https://127.0.0.1:' + L + '/fetch').then(() => note('fetch', 'ok'), () => note('fetch', 'refused'));
-const img = new Image(); img.src = 'https://127.0.0.1:' + L + '/img';
-const d = document.createElement('link'); d.rel = 'dns-prefetch'; d.href = '//probe-dns.invalid-name.test'; document.head.appendChild(d);
+if (want('fetch')) fetch('https://127.0.0.1:' + L + '/fetch').then(() => note('fetch', 'ok'), () => note('fetch', 'refused'));
+if (want('img')) { const img = new Image(); img.src = 'https://127.0.0.1:' + L + '/img'; }
+if (want('dns')) { const d = document.createElement('link'); d.rel = 'dns-prefetch'; d.href = '//probe-dns.invalid-name.test'; document.head.appendChild(d); }
 """
 
 NEWS_JS = """
@@ -71,7 +73,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/api/headlines":
             return self.send(200, json.dumps(ITEMS).encode(), "application/json")
         if path == "/probe":
-            page = "<html><head><title>probe</title></head><body>probing</body><script src=\"/probe.js\"></script></html>"
+            q = urllib.parse.urlparse(self.path).query
+            page = f"<html><head><title>probe</title></head><body>probing</body><script src=\"/probe.js?{q}\"></script></html>"
             return self.send(200, page.encode())
         if path == "/probe.js":
             return self.send(200, (PROBE % listener).encode(), "text/javascript")
