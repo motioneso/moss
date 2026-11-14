@@ -421,3 +421,70 @@ The golden file is regenerated from the old code with `modules/news/reader/tools
 ### Review round 1
 
 Codex found no blocker and two major problems, both fixed: a feed tag with tens of thousands of attributes took 17 seconds (now linear, with a test), and look-alike host names (fullwidth letters) bypassed the Reddit-internal link rule. Four minor ones were fixed too: overflowing ports, malformed IPv6 hosts, mixed-case hex codes in Reddit titles, and gaps in the source scan.
+
+## Part 15: host browser port
+
+Adds a host "browser" port. A route call hands it a page address the person confirmed and a list of
+allowed hosts. The host renders the page in a pinned, sandboxed Chromium and returns the title, up
+to 20,000 characters of text and up to five link candidates. The Sports package will use it to find
+headlines on script-heavy publisher pages.
+
+### What was built
+
+- Chromium runs under `bwrap` in its own network namespace, so it has no route out. Chromium's own
+  sandbox stays on. If either layer cannot start, the port answers `unsupported`. There is no
+  fallback to a browser with network access.
+- The host talks to the browser over its debugging pipe with a small hand-written client. No new
+  crate was added.
+- Every page request is paused and answered by the host's safe public-web fetch. Only GET over
+  HTTPS on port 443 to an allowed host is answered. Everything else is refused.
+- Caps: 20 s per render (also bounded by the call's own time), 40 requests, 4 at once, 10 MB in
+  total, 2 MB per response, five candidates.
+- Only a route call may use the port. A job call is refused and no browser starts. Only one render
+  runs at a time (`busy`).
+- One pinned Chrome for Testing build (157.0.8103.78) with a checksum, kept outside the repo and
+  never installed system-wide. `tools/fetch-chrome.sh` downloads and verifies it.
+- The manifest accepts a `browser` capability only with the `public-web` resource, and shows the
+  line "Open pages you confirm in a sandboxed browser". The package SDK has `render_page`.
+- The server reads an optional `browser_dir` setting. Absent means the port answers `unsupported`.
+- No screens. No core app-map entry exists for a permission line (same as part 1), so none was added.
+
+### Proof
+
+| Claim                                                                                   | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| WebSocket, WebRTC and preconnect reach nothing                                          | probe test against a loopback listener                                                                                                                                                                                                                                                                                                                                                                                       |
+| The same probes reach the listener when the namespace is removed                        | control test (`Isolation::None`, proof feature only)                                                                                                                                                                                                                                                                                                                                                                         |
+| Off-list, private, non-HTTPS and direct requests are refused, each guard seen failing   | guard test with the host list, the private check and the sandbox each removed in turn                                                                                                                                                                                                                                                                                                                                        |
+| Job calls refused, nothing started                                                      | job test                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Caps on requests, response size, total bytes and time hold                              | cap test, including a page that hangs                                                                                                                                                                                                                                                                                                                                                                                        |
+| Missing browser or missing sandbox gives `unsupported`                                  | two tests                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Private text stays out of activity, and a second person never sees the first's activity | per-person activity test, seen failing when the two people share one store                                                                                                                                                                                                                                                                                                                                                   |
+| Manifest and SDK                                                                        | 3 manifest tests, 1 SDK contract test, 8 unit tests in the browser module                                                                                                                                                                                                                                                                                                                                                    |
+| Native tests                                                                            | full module-host suite green                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Live run                                                                                | `test:rust-browser-live` through verify-gate: real moss-shell, real application, installed package, real internet. example.com rendered (title "Example Domain", 2 requests, 911 characters). 10.0.0.5, 127.0.0.1 and localhost listed by the package were refused at fetch time. [::1], http, port 8443 and an unlisted host were refused up front. The server started with `browser_dir` set and answered `/api/hello` 200 |
+
+### How to run
+
+```
+MOSS_BROWSER_DIR=<folder> scripts/run-gate.sh start --gate test:rust-browser-live
+```
+
+The ignored sandbox tests run with `module-host/tools/browser-gate.sh` after `tools/fetch-chrome.sh`.
+
+### Not proven
+
+- DNS, prefetch and service worker reaching the listener without the namespace were not seen.
+  Interception already stops prefetch and the worker script, and the system resolver cannot be
+  watched from the test. The namespace removal control shows WebSocket, WebRTC and preconnect only.
+- Server log output was not captured by the tests, so "no private text in logs" rests on the
+  browser's output being discarded and the code never logging page text.
+- The WebAssembly build of the whole module host fails on dependencies (wasm32-wasip2 for memchr and
+  zmij). The browser client is native-host only by design, and the SDK tests run natively.
+- The host's default route deadline is about 5 s. A render needs up to 20 s, so the Sports package
+  needs a raised budget.
+- Total bytes are counted after a response is fetched, so one render can briefly pass 10 MB by one
+  response.
+- Reaching the browser port from a phone or another computer was not tested. The port adds no
+  listener. The live run reached the server on this machine only.
+- The live run reached the guest through the install path, not an HTTP route, as in part 14.
