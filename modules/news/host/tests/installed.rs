@@ -185,9 +185,9 @@ impl World {
             )
             .await
             .unwrap();
-            c.execute("INSERT INTO app.news_refresh_state(owner_user_id,state) VALUES($1,'idle')", &[&who]).await.unwrap();
+            c.execute("INSERT INTO app.news_refresh_state(owner_user_id,state) VALUES($1,'idle') ON CONFLICT DO NOTHING", &[&who]).await.unwrap();
             c.execute(
-                "INSERT INTO app.news_policy_verdicts(owner_user_id,canonical_domain,fingerprint,verdict,expires_at) VALUES($1,'example.com','fp-secret','approved',now()+interval '1 day')",
+                "INSERT INTO app.news_policy_verdicts(owner_user_id,canonical_domain,fingerprint,verdict,expires_at) VALUES($1,'example.com','fp-secret','approved',now()+interval '1 day') ON CONFLICT DO NOTHING",
                 &[&who],
             )
             .await
