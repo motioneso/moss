@@ -29,10 +29,14 @@ This report covers part 1 only. Chat tools, delete and export, and screens belon
   out gets 401. Read, save, conflict, add and settings all work. The second person sees an empty note and
   cannot overwrite the first person's note.
 
+- Route parity: 52 requests were sent to the old routes (run on the same database) and to the package,
+  and every status and body matched, apart from times. The cases cover version conflicts, whole-number
+  versions like 2.0, wrong types, missing and null values, the 64000 limit counted in UTF-16 units (emoji),
+  trimming of unusual spaces, adding past the limit, every shortcut rule, and the notes-folder setting both
+  missing and set. The replay found one real difference (null settings were accepted), now fixed.
+
 ## Not proven
 
-- Route parity against the old handlers was not run. The old and new routes were not replayed side by
-  side. Behaviour was copied from the old code and checked by the tests above.
 - No tests run inside the WebAssembly build itself. The same code is tested natively.
 - The check from a second device on the network is built but only runs when a device is named, and it was
   not run.
