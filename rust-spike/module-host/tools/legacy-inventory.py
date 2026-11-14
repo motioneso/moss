@@ -19,6 +19,9 @@ for parent,ledger in [('packages','core-legacy'),('external-modules','module-leg
             if match: tables+=re.findall(r'["\'](app\.[a-z0-9_]+)["\']',match[1])
         # The original manifest predates the Calendar-owned day-plan aggregate.
         # Freeze these reviewed identities explicitly; do not infer arbitrary SQL ownership.
+        # The Goals manifest predates the database field. Its two tables are frozen here.
+        if module.name == 'goals':
+            tables += ['app.moss_goals', 'app.moss_goal_evidence']
         if module.name == 'calendar':
             tables += ['app.day_plans', 'app.day_plan_blocks',
                        'app.day_plan_operations', 'app.day_plan_operation_items']

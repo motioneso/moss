@@ -30,6 +30,8 @@
     "test:rust-weather-live": "bash modules/weather/tools/live.sh",
     "test:rust-news": "tsx modules/news/tools/gate.ts",
     "test:rust-news-live": "bash modules/news/tools/live.sh",
+    "test:rust-goals": "tsx modules/goals/tools/gate.ts",
+    "test:rust-goals-live": "bash modules/goals/tools/live.sh",
     "test:rust-backtrack": "tsx modules/backtrack/tools/gate.ts",
     "test:rust-backtrack-live": "bash modules/backtrack/tools/live.sh",
     "test:rust-meetings": "tsx modules/meetings/tools/gate.ts",
