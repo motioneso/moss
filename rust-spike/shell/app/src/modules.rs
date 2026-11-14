@@ -17,7 +17,7 @@ use axum::{
     Extension, Json, Router,
 };
 use moss_module_host::{
-    account_preferences::{AccountPreferencesPorts, Binding, JsonShape},
+    account_preferences::{weather_bindings, AccountPreferencesPorts, Binding, JsonShape},
     ai::{
         EmbeddingsOnly, FixedEmbeddings, Intelligence, IntelligenceEmbeddings,
         DEFAULT_EMBEDDING_MODEL,
@@ -199,11 +199,11 @@ impl Intelligence for SplitIntelligence {
     }
 }
 
-/// Sports keeps its standings choices in two fixed account preference keys.
-fn sports_preferences(database: Database, next: Arc<dyn Ports>) -> Result<Arc<dyn Ports>> {
-    Ok(Arc::new(AccountPreferencesPorts::new(
-        database,
-        BTreeMap::from([
+/// Sports keeps its standings choices, and Weather its place and unit, in fixed account
+/// preference keys. Weather's keys are the ones the old Settings routes wrote.
+fn module_preferences(database: Database, next: Arc<dyn Ports>) -> Result<Arc<dyn Ports>> {
+    let mut bindings = weather_bindings();
+    bindings.extend([
             (
                 ("sports".into(), "standings-competitions".into()),
                 Binding::Json {
@@ -218,9 +218,8 @@ fn sports_preferences(database: Database, next: Arc<dyn Ports>) -> Result<Arc<dy
                     shape: JsonShape::LastViewed,
                 },
             ),
-        ]),
-        next,
-    )?))
+        ]);
+    Ok(Arc::new(AccountPreferencesPorts::new(database, bindings, next)?))
 }
 
 /// Account preference and linked-notes ports for People. Keys, resources and roots are
@@ -451,7 +450,7 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
                 Ok(Arc::new(LinkedNotesPorts::new(Arc::new(folders), services)) as Arc<dyn Ports>)
             }
             }?;
-            let services = sports_preferences(preferences_database_sports, services)?;
+            let services = module_preferences(preferences_database_sports, services)?;
             // Meetings answers only its own capture-preference calls, as the signed-in person.
             let authority_database = meetings_database.clone();
             let services = Arc::new(
