@@ -10,7 +10,9 @@ pub mod personalization;
 pub mod policy;
 pub mod prefs;
 pub mod previews;
+pub mod refresh;
 pub mod resolve;
+pub mod revalidate;
 pub mod sources;
 pub mod util;
 pub mod web;
@@ -36,6 +38,8 @@ pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
         ("POST", "/topics") => personalization::add_topic(host, &request),
         ("PATCH", "/topics/:id") => personalization::change_topic(host, &request),
         ("DELETE", "/topics/:id") => personalization::remove_topic(host, &request),
+        ("POST", "/refresh") => refresh::route_refresh(host),
+        ("POST", "/revalidation") => refresh::route_revalidation(host),
         ("POST", "/sources/preview") => sources::preview(host, &request),
         ("POST", "/sources") => sources::confirm(host, &request),
         ("DELETE", "/sources/:id") => personalization::remove_source(host, &request),
@@ -53,6 +57,7 @@ pub fn handle<H: Host + ?Sized>(host: &H, kind: &str, payload: &str) -> moss_mod
             Ok(serde_json::to_string(&route(host, request))?)
         }
         "api" => api(host, payload),
+        "job" => refresh::handle_job(host, payload),
         _ => Err(moss_module_sdk::Error::new("Unsupported News invocation")),
     }
 }

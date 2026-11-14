@@ -92,7 +92,7 @@ fn row_values(candidate: &Candidate, at: &str) -> std::collections::BTreeMap<Str
     ])
 }
 
-/// `POST /sources`. Saving does not start a refresh. The refresh job owns that.
+/// `POST /sources`. A saved source queues a refresh.
 pub fn confirm<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Response> {
     let (confirmation, candidate_id) = match input::source_confirm(&request.body) {
         Ok(parsed) => parsed,
@@ -116,7 +116,10 @@ pub fn confirm<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Res
         set.insert("consecutive_failures".into(), json!(0));
         let changed = client.query(SOURCES, &Query::update(Filter::eq("id", replace.as_str()), set))?;
         return Ok(match changed.first() {
-            Some(row) => Response::new(201, json!({"source": source_dto(row)?})),
+            Some(row) => {
+                crate::refresh::request(host);
+                Response::new(201, json!({"source": source_dto(row)?}))
+            }
             None => error(409, "Source to replace was not found"),
         });
     }
@@ -132,7 +135,10 @@ pub fn confirm<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Res
     let mut insert = Query::insert(row_values(candidate, &at));
     insert.conflict = Conflict::Ignore;
     match client.query(SOURCES, &insert)?.first() {
-        Some(row) => Ok(Response::new(201, json!({"source": source_dto(row)?}))),
+        Some(row) => {
+            crate::refresh::request(host);
+            Ok(Response::new(201, json!({"source": source_dto(row)?})))
+        }
         // A parallel save won the unique rule between the read and the insert.
         None => Ok(error(409, "news custom source already exists for this publisher")),
     }

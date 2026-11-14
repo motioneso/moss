@@ -4,14 +4,16 @@
   "name": "News",
   "publisher": "Moss",
   "version": "0.1.0",
-  "description": "Keeps each person's own News choices, private to the owner. People can pick catalog sources and topics, exclude publishers by domain, and remove sources they added. A person's added sources, topics and exclusions can be exported, and account deletion covers all eight News tables. A person can add a source by typing a site address or a subreddit. Moss reads the public site, finds its feed, asks the person's own AI model whether the source is acceptable, and shows a preview to confirm. Adding a topic or changing one needs web search, which is not part of this package, so those requests are refused. The News page is compiled from the active sources: stories are filtered, ranked by the person's own AI model with a fixed-order fallback, stored as a snapshot and served by the overview route. Refresh scheduling, chat tools and the screens are not part of this package yet.",
+  "description": "Keeps each person's own News choices, private to the owner. People can pick catalog sources and topics, exclude publishers by domain, and remove sources they added. A person's added sources, topics and exclusions can be exported, and account deletion covers all eight News tables. A person can add a source by typing a site address or a subreddit. Moss reads the public site, finds its feed, asks the person's own AI model whether the source is acceptable, and shows a preview to confirm. Adding a topic or changing one needs web search, which is not part of this package, so those requests are refused. The News page is compiled from the active sources: stories are filtered, ranked by the person's own AI model with a fixed-order fallback, stored as a snapshot and served by the overview route. Changes to a person's choices queue a refresh job that rebuilds the page, and a daily check at 04:43 UTC re-reads every added source and topic and records its health. Chat tools and the screens are not part of this package yet.",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
   "capabilities": [
     {
       "port": "db",
-      "operations": ["query"],
+      "operations": [
+        "query"
+      ],
       "resources": [
         "app.news_compilation_snapshots",
         "app.news_custom_sources",
@@ -25,23 +27,64 @@
     },
     {
       "port": "context",
-      "operations": ["read", "uuid"],
-      "resources": ["call", "new"]
+      "operations": [
+        "read",
+        "uuid"
+      ],
+      "resources": [
+        "call",
+        "new"
+      ]
     },
     {
       "port": "kv",
-      "operations": ["get", "set"],
-      "resources": ["news.source-previews"]
+      "operations": [
+        "get",
+        "set"
+      ],
+      "resources": [
+        "news.source-previews"
+      ]
     },
     {
       "port": "fetch",
-      "operations": ["get"],
-      "resources": ["public-web"]
+      "operations": [
+        "get"
+      ],
+      "resources": [
+        "public-web"
+      ]
+    },
+    {
+      "port": "jobs",
+      "operations": [
+        "schedule",
+        "unschedule",
+        "enqueue-options",
+        "list-open"
+      ],
+      "resources": [
+        "news-refresh",
+        "news-revalidate"
+      ]
+    },
+    {
+      "port": "notify",
+      "operations": [
+        "post"
+      ],
+      "resources": [
+        "news"
+      ]
     },
     {
       "port": "ai",
-      "operations": ["generate"],
-      "resources": ["structured"]
+      "operations": [
+        "generate"
+      ],
+      "resources": [
+        "structured"
+      ]
     }
   ],
   "database": {
@@ -98,6 +141,16 @@
     {
       "method": "GET",
       "path": "/overview",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/refresh",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/revalidation",
       "signIn": true
     },
     {
@@ -170,7 +223,9 @@
   "provides": {
     "collectNewsPersonalizationExportSection": "1.0.0"
   },
-  "icons": ["icons/news.svg"],
+  "icons": [
+    "icons/news.svg"
+  ],
   "accounts": {
     "supportsUserDisable": true,
     "defaultEnabled": true
@@ -179,6 +234,24 @@
     "required": false,
     "bundled": true,
     "removable": true
+  },
+  "jobs": {
+    "news-refresh": {
+      "kind": {
+        "kind": "choice",
+        "choices": [
+          "user_refresh"
+        ]
+      }
+    },
+    "news-revalidate": {
+      "kind": {
+        "kind": "choice",
+        "choices": [
+          "revalidate"
+        ]
+      }
+    }
   },
   "screens": {},
   "navigation": [],
@@ -212,7 +285,7 @@
     },
     {
       "id": "news.added_sources",
-      "description": "A person can add a source by typing a site address or a subreddit name, and remove a source they added. Moss reads the public page over https, looks for its feed, and shows the result for the person to confirm. A site that is redirected to another publisher is refused, a source the person's AI model does not approve is refused, and a person can keep ten added sources. A source name with no address needs web search, which is not part of this package. Saving a source does not refresh the feed yet.",
+      "description": "A person can add a source by typing a site address or a subreddit name, and remove a source they added. Moss reads the public page over https, looks for its feed, and shows the result for the person to confirm. A site that is redirected to another publisher is refused, a source the person's AI model does not approve is refused, and a person can keep ten added sources. A source name with no address needs web search, which is not part of this package. Saving a source queues a refresh of the page.",
       "errors": [
         {
           "code": "news.add_source.discovery_unavailable",
@@ -241,8 +314,20 @@
     },
     {
       "id": "news.compiled_page",
-      "description": "The News page is built from the catalog sources the person has on and the sources they added. Stories from excluded publishers, stories that are too old or repeats are left out. The person's own AI model ranks what is left, and when the model cannot answer the stories keep a fixed order by source and time. The built page is stored for seven days and the overview route serves it, compiling a new one when the stored page is missing or out of date.",
+      "description": "The News page is built from the catalog sources the person has on and the sources they added. Stories from excluded publishers, stories that are too old or repeats are left out. The person's own AI model ranks what is left, and when the model cannot answer the stories keep a fixed order by source and time. The built page is stored for seven days and the overview route serves it, queueing a background refresh when the stored page is missing or out of date. The refresh job rebuilds the page and keeps the last good page if every source fails. Any change to the person's sources, topics, chosen sources or excluded publishers queues a refresh too, and a person can ask for one directly.",
       "errors": []
+    },
+    {
+      "id": "news.source_health",
+      "description": "Once a day at 04:43 UTC, for each person who has added a source or topic, Moss re-reads every added source, asks the person's AI model again when the earlier approval is old, and records whether each source is healthy, unreachable or signed out. A source that could not be read is marked temporarily unavailable and is read again on the next check so it can recover. When a source or topic newly needs attention, one notification says so, with no names in it. A person can also start the check directly.",
+      "errors": [],
+      "remediations": [
+        {
+          "id": "news.source_health.retry",
+          "description": "Open News settings to retry or remove the sources that need attention.",
+          "path": "/settings?section=modules&module=news"
+        }
+      ]
     }
   ],
   "optionalRequires": {}
