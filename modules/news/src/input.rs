@@ -82,3 +82,25 @@ pub fn topic_change(body: &Value) -> Result<(Option<String>, Option<String>), St
     }
     Ok((text(map, "label", 1, 80)?, text(map, "guidance", 0, 1000)?))
 }
+
+/// `{input, replaceSourceId?}` for a source preview.
+pub fn source_preview(body: &Value) -> Result<(String, Option<String>), String> {
+    let map = object(body)?;
+    required(map, &["input"])?;
+    let input = text(map, "input", 1, 512)?.unwrap_or_default();
+    let replace = text(map, "replaceSourceId", 0, usize::MAX)?;
+    if let Some(id) = &replace {
+        if !crate::util::is_uuid(id) {
+            return Err("body/replaceSourceId must match format \"uuid\"".into());
+        }
+    }
+    Ok((input, replace))
+}
+
+/// `{confirmationId, candidateId?}` for saving a previewed source.
+pub fn source_confirm(body: &Value) -> Result<(String, Option<String>), String> {
+    let map = object(body)?;
+    required(map, &["confirmationId"])?;
+    let confirmation = text(map, "confirmationId", 1, 256)?.unwrap_or_default();
+    Ok((confirmation, text(map, "candidateId", 1, 256)?))
+}

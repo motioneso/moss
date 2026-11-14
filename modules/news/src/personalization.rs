@@ -13,6 +13,7 @@ pub const TOPICS: &str = "app.news_custom_topics";
 pub const EXCLUSIONS: &str = "app.news_source_exclusions";
 pub const SNAPSHOTS: &str = "app.news_compilation_snapshots";
 pub const REFRESH: &str = "app.news_refresh_state";
+pub const POLICY: &str = "app.news_policy_verdicts";
 const EXCLUSION_LIMIT: usize = 100;
 
 fn text<'a>(row: &'a Value, key: &str) -> Result<&'a str> {
@@ -26,7 +27,7 @@ fn newest_first() -> Vec<Order> {
     ]
 }
 
-fn source_dto(row: &Value) -> Result<Value> {
+pub(crate) fn source_dto(row: &Value) -> Result<Value> {
     let method = text(row, "retrieval_method")?;
     let feed = row["feed_url"].as_str();
     let canonical = text(row, "canonical_domain")?;

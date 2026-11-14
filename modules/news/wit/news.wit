@@ -2,9 +2,15 @@ package moss:module@1.0.0;
 
 interface db { call: func(request: string) -> result<string, string>; }
 interface context { call: func(request: string) -> result<string, string>; }
+interface kv { call: func(request: string) -> result<string, string>; }
+interface fetch { call: func(request: string) -> result<string, string>; }
+interface ai { call: func(request: string) -> result<string, string>; }
 
 world news {
   import db;
   import context;
+  import kv;
+  import fetch;
+  import ai;
   export handle: func(kind: string, payload: string) -> result<string, string>;
 }
