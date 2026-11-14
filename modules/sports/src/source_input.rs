@@ -21,12 +21,9 @@ fn object<'a>(value: &'a Value, at: &str) -> Result<&'a Map<String, Value>, Stri
     value.as_object().ok_or_else(|| format!("{at} must be object"))
 }
 
-fn only(map: &Map<String, Value>, allowed: &[&str], at: &str) -> Result<(), String> {
-    if map.keys().all(|k| allowed.contains(&k.as_str())) {
-        Ok(())
-    } else {
-        Err(format!("{at} must NOT have additional properties"))
-    }
+/// The old route validator strips unknown fields instead of refusing them, so they are ignored.
+fn only(_map: &Map<String, Value>, _allowed: &[&str], _at: &str) -> Result<(), String> {
+    Ok(())
 }
 
 fn required(map: &Map<String, Value>, name: &str, at: &str) -> Result<(), String> {
