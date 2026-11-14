@@ -520,6 +520,10 @@ None added.
 - A stand-in Outlook page with invented data (no real addresses or titles) drives host tests.
 - A second person is refused, and a row-level security test fails when the protection is removed.
 - Sentinel text in the page never shows in logs, job payloads or health rows.
+- Live run on the real Rust server over HTTPS (`pnpm test:rust-connectors-live`, passed): the
+  stand-in page was read week by week, both invented events appeared in Calendar, the state
+  reached current, and the page text was absent from the server log and every job and schedule
+  row. Signing the page out moved the state to sign-in-needed, and disconnect worked.
 
 ## Not proven
 
