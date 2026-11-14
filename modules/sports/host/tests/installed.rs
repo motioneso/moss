@@ -399,6 +399,23 @@ fn compare(steps: &[Value], old: &[Value], new: &[Value]) {
     }
 }
 
+/// The old route saves all ESPN coverage rows in one statement, so their order is by chance. Both
+/// sides are put in the same order before comparing.
+fn sort_builtin_targets(value: &mut Value) {
+    match value {
+        Value::Object(map) => {
+            if map.get("kind").and_then(Value::as_str) == Some("builtin") {
+                if let Some(Value::Array(items)) = map.get_mut("assignments") {
+                    items.sort_by_key(|item| item.to_string());
+                }
+            }
+            map.values_mut().for_each(sort_builtin_targets);
+        }
+        Value::Array(items) => items.iter_mut().for_each(sort_builtin_targets),
+        _ => {}
+    }
+}
+
 /// Like `compare`, but a 400 whose old words come from the schema checker's choice between target
 /// shapes only has to match on status, because that checker lists every shape it tried.
 fn compare_sources(steps: &[Value], old: &[Value], new: &[Value]) -> usize {
@@ -408,6 +425,8 @@ fn compare_sources(steps: &[Value], old: &[Value], new: &[Value]) -> usize {
         let (mut o, mut n) = (o.clone(), n.clone());
         replay::mask(&mut o);
         replay::mask(&mut n);
+        sort_builtin_targets(&mut o);
+        sort_builtin_targets(&mut n);
         let choice = o["status"] == 400 && o["body"]["error"].as_str().is_some_and(|t| t.contains("oneOf"));
         if choice && n["status"] == 400 {
             loose += 1;
