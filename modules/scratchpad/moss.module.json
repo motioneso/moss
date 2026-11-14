@@ -1,1 +1,92 @@
-{"schemaVersion":2,"id":"scratchpad","name":"Scratchpad","description":"One private note for each person, for quick jot-downs. Read it, save over it, add a line to the end, and change its shortcut and notes copying.","publisher":"Moss","version":"0.1.0","requiresMoss":">=0.1.0, <1.0.0","fuelLimit":200000000,"abi":"moss:module@1","capabilities":[{"port":"kv","operations":["get","put","append","settings"],"resources":["scratchpad.store"]},{"port":"context","operations":["read"],"resources":["call"]}],"database":{"migrations":["sql/0216_scratchpads.sql"],"ownedTables":["app.scratchpads"],"ledger":"core-legacy"},"routes":[{"method":"GET","path":"/note","signIn":true},{"method":"PUT","path":"/note","signIn":true},{"method":"POST","path":"/append","signIn":true},{"method":"PATCH","path":"/settings","signIn":true}],"icons":["icons/scratchpad.svg"],"accounts":{"supportsUserDisable":false,"defaultEnabled":true},"lifecycle":{"required":true,"bundled":true,"removable":false},"jobs":{},"screens":{},"navigation":[],"settings":[{"id":"scratchpad.module-settings","label":"Scratchpad","path":"/settings?section=modules&module=scratchpad","scope":"user","description":"The shortcut and notes copying can be changed through the Scratchpad settings route. The Settings page for them is not part of this package yet."}],"features":[{"id":"scratchpad.where-to-find","description":"The web app has no Scratchpad screen yet. The note can be read, saved over, added to and its settings changed through the Scratchpad routes. Each person sees only their own note.","errors":[]},{"id":"scratchpad.save","description":"Saving keeps a version number with the text, so a save made against an out-of-date copy is refused instead of quietly overwriting the newer one.","errors":[{"code":"scratchpad_conflict","class":"transient","description":"The note changed somewhere else since this copy was opened, so the save was refused. The refusal carries the current text. Reload it, reapply the edit and save again."},{"code":"scratchpad_too_large","class":"validation","description":"The note is at its 64,000 character limit, so nothing was saved or added. Delete text you no longer need and try again."}]},{"id":"scratchpad.settings","description":"Scratchpad settings are the keyboard shortcut that opens the note and whether the note is copied into the notes folder. The web app has no settings page for these yet.","remediations":[{"id":"scratchpad.settings.connect_notes_folder","description":"Connect a notes folder under Connections in Settings, then turn on copying the note to notes again.","path":"/settings?section=connections"}],"errors":[{"code":"scratchpad_shortcut_invalid","class":"validation","description":"The shortcut was rejected and was not saved. It needs a real modifier key (control, command, alt) plus one key, Shift alone is not enough, and it cannot be control or command plus K."},{"code":"scratchpad_notes_folder_missing","class":"prerequisite","remediationRef":"scratchpad.settings.connect_notes_folder","description":"Copying the note to notes was refused because no notes folder is connected yet, so the setting stayed off."}]}]}
+{
+  "schemaVersion": 2,
+  "id": "scratchpad",
+  "name": "Scratchpad",
+  "description": "One private note for each person, for quick jot-downs. Read it, save over it, add a line to the end, and change its shortcut and notes copying.",
+  "publisher": "Moss",
+  "version": "0.1.0",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "fuelLimit": 200000000,
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "kv",
+      "operations": ["get", "put", "append", "settings"],
+      "resources": ["scratchpad.store"]
+    },
+    { "port": "context", "operations": ["read"], "resources": ["call"] }
+  ],
+  "database": {
+    "migrations": ["sql/0216_scratchpads.sql"],
+    "ownedTables": ["app.scratchpads"],
+    "ledger": "core-legacy"
+  },
+  "routes": [
+    { "method": "GET", "path": "/note", "signIn": true },
+    { "method": "PUT", "path": "/note", "signIn": true },
+    { "method": "POST", "path": "/append", "signIn": true },
+    { "method": "PATCH", "path": "/settings", "signIn": true }
+  ],
+  "icons": ["icons/scratchpad.svg"],
+  "accounts": { "supportsUserDisable": false, "defaultEnabled": true },
+  "lifecycle": { "required": true, "bundled": true, "removable": false },
+  "jobs": {},
+  "screens": {},
+  "navigation": [],
+  "settings": [
+    {
+      "id": "scratchpad.module-settings",
+      "label": "Scratchpad",
+      "path": "/settings?section=modules&module=scratchpad",
+      "scope": "user",
+      "description": "The shortcut and notes copying can be changed through the Scratchpad settings route. The Settings page for them is not part of this package yet."
+    }
+  ],
+  "features": [
+    {
+      "id": "scratchpad.where-to-find",
+      "description": "The web app has no Scratchpad screen yet. The note can be read, saved over, added to and its settings changed through the Scratchpad routes. Each person sees only their own note.",
+      "errors": []
+    },
+    {
+      "id": "scratchpad.save",
+      "description": "Saving keeps a version number with the text, so a save made against an out-of-date copy is refused instead of quietly overwriting the newer one.",
+      "errors": [
+        {
+          "code": "scratchpad_conflict",
+          "class": "transient",
+          "description": "The note changed somewhere else since this copy was opened, so the save was refused. The refusal carries the current text. Reload it, reapply the edit and save again."
+        },
+        {
+          "code": "scratchpad_too_large",
+          "class": "validation",
+          "description": "The note is at its 64,000 character limit, so nothing was saved or added. Delete text you no longer need and try again."
+        }
+      ]
+    },
+    {
+      "id": "scratchpad.settings",
+      "description": "Scratchpad settings are the keyboard shortcut that opens the note and whether the note is copied into the notes folder. The web app has no settings page for these yet.",
+      "remediations": [
+        {
+          "id": "scratchpad.settings.connect_notes_folder",
+          "description": "Connect a notes folder under Connections in Settings, then turn on copying the note to notes again.",
+          "path": "/settings?section=connections"
+        }
+      ],
+      "errors": [
+        {
+          "code": "scratchpad_shortcut_invalid",
+          "class": "validation",
+          "description": "The shortcut was rejected and was not saved. It needs a real modifier key (control, command, alt) plus one key, Shift alone is not enough, and it cannot be control or command plus K."
+        },
+        {
+          "code": "scratchpad_notes_folder_missing",
+          "class": "prerequisite",
+          "remediationRef": "scratchpad.settings.connect_notes_folder",
+          "description": "Copying the note to notes was refused because no notes folder is connected yet, so the setting stayed off."
+        }
+      ]
+    }
+  ]
+}
