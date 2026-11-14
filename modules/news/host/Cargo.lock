@@ -1289,26 +1289,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "moss-news-host"
-version = "0.1.0"
-dependencies = [
- "access-context",
- "anyhow",
- "base64 0.22.1",
- "chrono",
- "moss-module-host",
- "moss-platform-jobs",
- "ring",
- "safety-core",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "tokio",
- "tokio-postgres",
- "uuid",
-]
-
-[[package]]
 name = "moss-module-host"
 version = "0.1.0"
 dependencies = [
@@ -1347,6 +1327,26 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "moss-news-host"
+version = "0.1.0"
+dependencies = [
+ "access-context",
+ "anyhow",
+ "base64 0.22.1",
+ "chrono",
+ "moss-module-host",
+ "moss-platform-jobs",
+ "ring",
+ "safety-core",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "tokio",
+ "tokio-postgres",
+ "uuid",
 ]
 
 [[package]]
