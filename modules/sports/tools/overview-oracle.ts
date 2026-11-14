@@ -2,7 +2,7 @@
  * The old Sports overview, standings and latest-result routes, run through the old Fastify
  * handlers with the real dataset client and ESPN reader. Only the network and the follows table
  * are replaced: ESPN answers from recorded fixtures and follows come from a fixed list.
- * Run: tsx tools/overview-oracle.ts > tests/fixtures/overview-routes.golden.json
+ * Run: tsx tools/overview-oracle.ts, then minify the output into tests/fixtures/overview-routes.golden.json
  */
 import { readFileSync } from "node:fs";
 import Fastify from "fastify";
