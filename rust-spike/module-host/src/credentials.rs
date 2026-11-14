@@ -31,6 +31,11 @@ impl ServicePorts {
             scope.access()
         };
         let _lock = self.credential_lock(&scope.module().id, access.actor_user_id(), name)?;
+        if r.operation == "status" {
+            // Only whether a value is saved. The value, its length and its fields stay here.
+            let configured = self.credential(access, &scope.module().id, name).is_ok();
+            return Ok(json!({"configured":configured}));
+        }
         let mut fields = self.credential(access, &scope.module().id, name)?;
         let url = url::Url::parse(r.parameters["url"].as_str().context("URL required")?)?;
         ensure!(

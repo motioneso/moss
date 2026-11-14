@@ -22,6 +22,12 @@ pub trait Intelligence: Send + Sync {
     fn embedding_model(&self, _scope: &CallScope) -> Result<(String, String)> {
         anyhow::bail!(NOT_SET_UP)
     }
+    /// What the person's chat model can do, for a package that must say why a feature is off.
+    /// Returns `{"model":null}` with no chat model, else `{"model":{"webSearch":bool}}`. It names
+    /// no provider, model or credential.
+    fn chat_capabilities(&self, _scope: &CallScope) -> Result<Value> {
+        Ok(json!({"model":null}))
+    }
 }
 pub struct EmbeddingEndpoint {
     pub url: url::Url,
@@ -142,6 +148,20 @@ impl<S: ConfigurationStore, T: CapabilityTransport, E: EmbeddingStore> Intellige
         );
         self.runtime
             .block_on(provenance_for(&self.embeddings, actor))
+    }
+    fn chat_capabilities(&self, scope: &CallScope) -> Result<Value> {
+        let actor =
+            Actor::from_authenticated_session(scope.access().actor_user_id(), uuid::Uuid::new_v4());
+        let config = self
+            .runtime
+            .block_on(self.router.store.for_actor(actor))
+            .map_err(|_| anyhow::anyhow!("The AI settings could not be read"))?;
+        Ok(match moss_platform_routing::chat_model(&config) {
+            Some(model) => {
+                json!({"model":{"webSearch":model.capabilities.contains(&Capability::WebSearch)}})
+            }
+            None => json!({"model":null}),
+        })
     }
 }
 

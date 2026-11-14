@@ -215,6 +215,9 @@ impl Intelligence for SplitIntelligence {
             None => self.generator.embedding_model(scope),
         }
     }
+    fn chat_capabilities(&self, scope: &CallScope) -> Result<Value> {
+        self.generator.chat_capabilities(scope)
+    }
 }
 
 /// Sports keeps its standings choices, and Weather its place and unit, in fixed account
