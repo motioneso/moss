@@ -53,6 +53,7 @@ fn main() -> Result<()> {
             version: "0.1.0".parse()?,
             compiled_cache: None,
             fuel_ceiling: None,
+            browser_dir: None,
         },
         move |next| Ok(Arc::new(moss_calendar_host::CalendarPorts::new(db, next)?)),
     )?;

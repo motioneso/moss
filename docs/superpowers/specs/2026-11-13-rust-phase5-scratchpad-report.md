@@ -37,7 +37,9 @@ This report covers part 1 only. Chat tools, delete and export, and screens belon
 
 ## Not proven
 
-- No tests run inside the WebAssembly build itself. The same code is tested natively.
+- The guest's own unit tests run natively. A test runner that executes WebAssembly directly is not in the
+  approved crate list, so none was added. The installed tests, the 52-step replay and the live run all call
+  the built WebAssembly component, so the shipped build is exercised end to end.
 - The check from a second device on the network is built but only runs when a device is named, and it was
   not run.
 - The notes-folder setting is read from the platform preferences table by the host wrapper. A later
