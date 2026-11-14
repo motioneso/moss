@@ -113,6 +113,21 @@ fn a_provider_failure_degrades_and_caches_nothing() {
 }
 
 #[test]
+fn a_slow_search_stops_warming_once_its_time_budget_is_spent() {
+    let host = EspnHost::new();
+    host.fetch_ms.set(roster::SEARCH_WARM_BUDGET_MS + 1);
+    let found = roster::search(&host, "ar").unwrap();
+    assert!(found.partial);
+    let leagues: std::collections::HashSet<String> = host
+        .fetched
+        .borrow()
+        .iter()
+        .map(|u| u.split("/teams?").next().unwrap().to_owned())
+        .collect();
+    assert_eq!(leagues.len(), 1, "one slow league spends the whole budget");
+}
+
+#[test]
 fn search_makes_at_most_five_live_fetches_and_reports_partial() {
     let host = EspnHost::new();
     let found = roster::search(&host, "ar").unwrap();

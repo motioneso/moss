@@ -22,6 +22,8 @@ pub struct EspnHost {
     pub fetched: RefCell<Vec<String>>,
     pub calls: RefCell<Vec<(String, String, String, Value)>>,
     pub now_ms: Cell<i64>,
+    /// Milliseconds the clock advances on every fetch.
+    pub fetch_ms: Cell<i64>,
     pub down: Cell<bool>,
 }
 
@@ -32,6 +34,7 @@ impl EspnHost {
             fetched: RefCell::new(vec![]),
             calls: RefCell::new(vec![]),
             now_ms: Cell::new(1_794_000_000_000),
+            fetch_ms: Cell::new(0),
             down: Cell::new(false),
         }
     }
@@ -92,6 +95,7 @@ impl Host for EspnHost {
             ("fetch", "get") => {
                 let url = parameters["url"].as_str().unwrap().to_owned();
                 self.fetched.borrow_mut().push(url.clone());
+                self.now_ms.set(self.now_ms.get() + self.fetch_ms.get());
                 if self.down.get() {
                     return Ok(json!({"status": 503, "body": "down"}));
                 }

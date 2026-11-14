@@ -10,6 +10,9 @@ use serde_json::{json, Value};
 /// Live roster fetches one search may make. Further uncached leagues are skipped.
 pub const SEARCH_WARM_FILL_CAP: usize = 5;
 pub const SEARCH_RESULT_CAP: usize = 30;
+/// Time one search spends on live fetches before it stops and reports `partial`. The host ends a
+/// call at five seconds, and one college league can take three.
+pub const SEARCH_WARM_BUDGET_MS: i64 = 2_000;
 
 pub struct Roster {
     pub teams: Vec<TeamRef>,
@@ -69,7 +72,9 @@ pub fn search<H: Host + ?Sized>(host: &H, query: &str) -> Result<Search> {
     for entry in ENTRIES.iter().filter(|e| e.news_feed_url.is_none()) {
         let roster = match store.get(entry.key, now).and_then(parse_cached) {
             Some(teams) => teams,
-            None if warmed >= SEARCH_WARM_FILL_CAP => {
+            None if warmed >= SEARCH_WARM_FILL_CAP
+                || (warmed > 0 && cache::now_ms(host)? - now > SEARCH_WARM_BUDGET_MS) =>
+            {
                 partial = true;
                 continue;
             }
