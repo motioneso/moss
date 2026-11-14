@@ -1,0 +1,207 @@
+{
+  "schemaVersion": 2,
+  "id": "news",
+  "name": "News",
+  "publisher": "Moss",
+  "version": "0.1.0",
+  "description": "Keeps each person's own News choices, private to the owner. People can pick catalog sources and topics, exclude publishers by domain, and remove sources they added. A person's added sources, topics and exclusions can be exported, and account deletion covers all eight News tables. Adding a topic or changing one needs web search, which is not part of this package, so those requests are refused. Reading sites, building the feed, adding sources, refresh scheduling, chat tools and the screens are not part of this package yet.",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "fuelLimit": 200000000,
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "db",
+      "operations": ["query"],
+      "resources": [
+        "app.news_compilation_snapshots",
+        "app.news_custom_sources",
+        "app.news_custom_topics",
+        "app.news_policy_verdicts",
+        "app.news_prefs",
+        "app.news_refresh_state",
+        "app.news_source_credentials",
+        "app.news_source_exclusions"
+      ]
+    },
+    {
+      "port": "context",
+      "operations": ["read", "uuid"],
+      "resources": ["call", "new"]
+    }
+  ],
+  "database": {
+    "migrations": [
+      "sql/0151_news_prefs.sql",
+      "sql/0159_news_personalization.sql",
+      "sql/0160_news_discovery.sql",
+      "sql/0161_news_revalidation.sql",
+      "sql/0200_news_source_credentials.sql",
+      "sql/0203_news_refresh_history.sql",
+      "sql/0204_news_source_health_states.sql",
+      "sql/0205_news_credential_status_worker_grant.sql",
+      "sql/0218_news_source_kinds.sql"
+    ],
+    "ownedTables": [
+      "app.news_compilation_snapshots",
+      "app.news_custom_sources",
+      "app.news_custom_topics",
+      "app.news_policy_verdicts",
+      "app.news_prefs",
+      "app.news_refresh_state",
+      "app.news_source_credentials",
+      "app.news_source_exclusions"
+    ],
+    "ledger": "core-legacy",
+    "access": {
+      "app.news_compilation_snapshots": {
+        "access": "owner-only"
+      },
+      "app.news_custom_sources": {
+        "access": "owner-only"
+      },
+      "app.news_custom_topics": {
+        "access": "owner-only"
+      },
+      "app.news_policy_verdicts": {
+        "access": "owner-only"
+      },
+      "app.news_prefs": {
+        "access": "owner-only"
+      },
+      "app.news_refresh_state": {
+        "access": "owner-only"
+      },
+      "app.news_source_credentials": {
+        "access": "owner-only"
+      },
+      "app.news_source_exclusions": {
+        "access": "owner-only"
+      }
+    }
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/catalog",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/prefs",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/prefs",
+      "signIn": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/prefs/:id",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/personalization",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/source-exclusions",
+      "signIn": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/source-exclusions/:id",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/topics",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/topics/:id",
+      "signIn": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/topics/:id",
+      "signIn": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/sources/:id",
+      "signIn": true
+    }
+  ],
+  "requires": {},
+  "provides": {
+    "collectNewsPersonalizationExportSection": "1.0.0"
+  },
+  "icons": ["icons/news.svg"],
+  "accounts": {
+    "supportsUserDisable": true,
+    "defaultEnabled": true
+  },
+  "lifecycle": {
+    "required": false,
+    "bundled": true,
+    "removable": true
+  },
+  "screens": {},
+  "navigation": [],
+  "settings": [
+    {
+      "id": "news.prefs",
+      "label": "News",
+      "path": "/settings?section=modules&module=news",
+      "scope": "user",
+      "description": "Chosen sources and topics, excluded publishers and added sources can be changed through the News routes. The Settings page for them is not part of this package yet."
+    }
+  ],
+  "features": [
+    {
+      "id": "news.preferences",
+      "description": "Each person keeps a private list of chosen catalog sources and topics, and of publishers to leave out. Saving the same choice twice returns the first one. At most 100 publishers can be excluded.",
+      "errors": [
+        {
+          "code": "news_personalization_limit",
+          "class": "validation",
+          "description": "The person already excludes 100 publishers, so another cannot be added."
+        }
+      ],
+      "remediations": [
+        {
+          "id": "news.preferences.remove-exclusion",
+          "description": "Remove a publisher from the excluded list, then add the new one.",
+          "path": "/settings?section=modules&module=news"
+        }
+      ]
+    },
+    {
+      "id": "news.added_sources",
+      "description": "A person can remove a source they added. Adding a source, checking it and reading its site are not part of this package yet."
+    },
+    {
+      "id": "news.topics",
+      "description": "A person can remove a topic they added. Adding a topic or changing one needs web search, which is not part of this package, so those requests answer that discovery is unavailable.",
+      "errors": [
+        {
+          "code": "news_topic_discovery_unavailable",
+          "class": "prerequisite",
+          "description": "Topic discovery needs web search, which is not available in this package."
+        }
+      ],
+      "remediations": [
+        {
+          "id": "news.topics.remove",
+          "description": "Remove the topic you no longer want. Adding topics returns with web search.",
+          "path": "/settings?section=modules&module=news"
+        }
+      ]
+    }
+  ],
+  "optionalRequires": {}
+}

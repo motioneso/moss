@@ -26,6 +26,8 @@
     "test:rust-briefings-live": "bash modules/briefings/tools/live.sh",
     "test:rust-sports": "tsx modules/sports/tools/gate.ts",
     "test:rust-sports-live": "bash modules/sports/tools/live.sh",
+    "test:rust-news": "tsx modules/news/tools/gate.ts",
+    "test:rust-news-live": "bash modules/news/tools/live.sh",
     "test:rust-backtrack": "tsx modules/backtrack/tools/gate.ts",
     "test:rust-backtrack-live": "bash modules/backtrack/tools/live.sh",
     "test:rust-meetings": "tsx modules/meetings/tools/gate.ts",
