@@ -1,0 +1,43 @@
+[package]
+name = "moss-news-module"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Guest-safe News choices, added sources, excluded publishers and account export"
+
+[workspace]
+
+[lib]
+path = "lib.rs"
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+moss-module-sdk = { path = "../../../rust-spike/module-sdk" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wit-bindgen = { version = "=0.57.1", default-features = false, features = ["macros", "realloc"] }
+
+[profile.release]
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
+
+[[test]]
+name = "domain"
+path = "../tests/domain.rs"
+
+[[test]]
+name = "prefs"
+path = "../tests/prefs.rs"
+
+[[test]]
+name = "personalization"
+path = "../tests/personalization.rs"
+
+[[test]]
+name = "privacy"
+path = "../tests/privacy.rs"
