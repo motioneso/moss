@@ -1,4 +1,4 @@
-//! `GET /sources/:sourceId/icon`. The icon is fetched by the server, accepted on its first bytes
+//! `GET /sources/:id/icon`. The icon is fetched by the server, accepted on its first bytes
 //! alone, and answered as JSON with the image in base64, because a package reply has no raw image
 //! channel. A source whose icon cannot be found is remembered for an hour.
 use crate::public_cache::now_ms;
@@ -120,7 +120,7 @@ fn remember_miss<H: Host + ?Sized>(host: &H, id: &str, now: i64, mut entries: Ma
 }
 
 pub fn icon<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Response> {
-    let id = request.params.get("sourceId").map(String::as_str).unwrap_or_default();
+    let id = request.params.get("id").map(String::as_str).unwrap_or_default();
     if id.is_empty() || id.chars().count() > 128 {
         return Ok(bad_request(if id.is_empty() {
             "params/sourceId must NOT have fewer than 1 characters"

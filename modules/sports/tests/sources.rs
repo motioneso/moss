@@ -347,7 +347,7 @@ fn an_icon_is_found_sniffed_and_a_miss_is_remembered() {
     let (_, shown) = f.route("POST", "/sources/preview", &[], json!({"url":"news.example.com"}));
     let (_, saved) = save(&f, &shown);
     let id = saved["source"]["id"].as_str().unwrap().to_owned();
-    let icon = |f: &Src| f.route("GET", "/sources/:sourceId/icon", &[("sourceId", &id)], Value::Null);
+    let icon = |f: &Src| f.route("GET", "/sources/:id/icon", &[("id", &id)], Value::Null);
     assert_eq!(icon(&f).0, 404);
     f.image("https://news.example.com/favicon.ico", PNG);
     // The miss is remembered for an hour, so the new icon is not asked for yet.
@@ -362,12 +362,12 @@ fn an_icon_is_found_sniffed_and_a_miss_is_remembered() {
     let (_, saved) = save(&g, &shown);
     g.page("https://news.example.com/favicon.ico", "text/html", "PGh0bWw+");
     let sid = saved["source"]["id"].as_str().unwrap();
-    assert_eq!(g.route("GET", "/sources/:sourceId/icon", &[("sourceId", sid)], Value::Null).0, 404);
-    let (status, body) = g.route("GET", "/sources/:sourceId/icon", &[("sourceId", "nope")], Value::Null);
+    assert_eq!(g.route("GET", "/sources/:id/icon", &[("id", sid)], Value::Null).0, 404);
+    let (status, body) = g.route("GET", "/sources/:id/icon", &[("id", "nope")], Value::Null);
     assert_eq!((status, body["error"].as_str()), (404, Some("Sports source not found")));
     // Another person's source answers like a missing one.
     g.as_actor(B);
-    assert_eq!(g.route("GET", "/sources/:sourceId/icon", &[("sourceId", sid)], Value::Null).1["error"], "Sports source not found");
+    assert_eq!(g.route("GET", "/sources/:id/icon", &[("id", sid)], Value::Null).1["error"], "Sports source not found");
 }
 
 #[test]

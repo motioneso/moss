@@ -199,7 +199,7 @@
     },
     {
       "method": "GET",
-      "path": "/sources/:sourceId/icon",
+      "path": "/sources/:id/icon",
       "signIn": true
     }
   ],
