@@ -70,35 +70,6 @@ fn list<H: Host + ?Sized>(host: &H, table: &str) -> Result<Vec<Value>> {
 
 /// Removes saved-feed articles whose publisher is the domain or one of its sub-domains. An
 /// article with no publisher is dropped too, as the old statement did.
-pub fn prune_snapshot<H: Host + ?Sized>(host: &H, canonical_domain: &str) -> Result<()> {
-    let client = Client(host);
-    let Some(row) = client.query(SNAPSHOTS, &Query::select(Filter::All))?.into_iter().next() else {
-        return Ok(());
-    };
-    let mut payload = row["payload"].clone();
-    let kept: Vec<Value> = payload["articles"]
-        .as_array()
-        .map(|articles| {
-            articles
-                .iter()
-                .filter(|a| a["canonicalDomain"].as_str().is_some_and(|d| !domain::matches(canonical_domain, d)))
-                .cloned()
-                .collect()
-        })
-        .unwrap_or_default();
-    match payload.as_object_mut() {
-        Some(map) => {
-            map.insert("articles".into(), Value::Array(kept));
-        }
-        None => return Ok(()),
-    }
-    client.query(
-        SNAPSHOTS,
-        &Query::update(Filter::All, values(vec![("payload", payload)])),
-    )?;
-    Ok(())
-}
-
 fn snapshot_meta(row: Option<&Value>) -> Result<Value> {
     let Some(row) = row else { return Ok(Value::Null) };
     let count = row["payload"]["articles"].as_array().map(Vec::len).unwrap_or(0);
@@ -189,7 +160,6 @@ pub fn add_exclusion<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Resu
             exclusion_by_domain(host, &canonical)?.ok_or_else(|| Error::new("Exclusion could not be saved"))?
         }
     };
-    prune_snapshot(host, &canonical)?;
     Ok(Response::new(200, json!({"exclusion":exclusion_dto(&row)?})))
 }
 
@@ -258,8 +228,5 @@ pub fn remove_source<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Resu
     };
     let client = Client(host);
     let removed = client.query(SOURCES, &Query::delete(Filter::eq("id", id)))?;
-    if let Some(row) = removed.first() {
-        prune_snapshot(host, text(row, "canonical_domain")?)?;
-    }
     Ok(Response::new(200, json!({"deleted":!removed.is_empty()})))
 }

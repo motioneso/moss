@@ -47,25 +47,6 @@ fn another_person_sees_and_removes_nothing() {
 }
 
 #[test]
-fn excluding_a_catalog_source_removes_its_articles_from_the_saved_feed() {
-    let f = Fake::new();
-    let homepage = moss_news_module::catalog::SOURCES[0].homepage_url;
-    let host = moss_news_module::domain::host_of(homepage).unwrap();
-    f.seed(
-        "app.news_compilation_snapshots",
-        A,
-        json!({"payload":{"articles":[
-            {"canonicalDomain":host,"title":"a"},
-            {"canonicalDomain":format!("x.{host}"),"title":"b"},
-            {"canonicalDomain":"other.example","title":"c"}]}}),
-    );
-    let key = moss_news_module::catalog::SOURCES[0].key;
-    f.route("POST", "/prefs", &[], json!({"kind":"source_exclude","key":key}));
-    let snapshot = f.rows("app.news_compilation_snapshots");
-    assert_eq!(snapshot[0]["payload"]["articles"].as_array().unwrap().len(), 1);
-}
-
-#[test]
 fn catalog_lists_sources_and_topics() {
     let f = Fake::new();
     let (s, b) = f.route("GET", "/catalog", &[], json!(null));

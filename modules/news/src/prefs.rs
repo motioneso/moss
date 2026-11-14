@@ -1,6 +1,6 @@
 //! Saved source and topic choices (`news_prefs`).
 use crate::util::{bad_request, id_param, iso, values};
-use crate::{catalog, domain, input, personalization};
+use crate::{catalog, input};
 use moss_module_sdk::{
     query::{Conflict, Filter, Order, Query},
     Client, Error, Host, Response, Result, RouteRequest,
@@ -62,12 +62,6 @@ pub fn create<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Resp
             find(host, &kind, &key)?.ok_or_else(|| Error::new("Pref could not be saved"))?
         }
     };
-    if kind == "source_exclude" {
-        let homepage = catalog::source(&key).map(|s| s.homepage_url).unwrap_or_default();
-        if let Some(host_name) = domain::host_of(homepage) {
-            personalization::prune_snapshot(host, &host_name)?;
-        }
-    }
     Ok(Response::new(200, json!({"pref":dto(&row)?})))
 }
 

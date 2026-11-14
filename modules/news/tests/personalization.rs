@@ -65,25 +65,10 @@ fn exclusions_normalize_repeat_and_stop_at_the_limit() {
 }
 
 #[test]
-fn excluding_a_publisher_prunes_the_saved_feed() {
-    let f = Fake::new();
-    f.seed(
-        SNAPSHOTS,
-        A,
-        json!({"payload":{"articles":[{"canonicalDomain":"example.com"},{"canonicalDomain":"a.example.com"},{"canonicalDomain":"keep.test"},{}]}}),
-    );
-    f.route("POST", "/source-exclusions", &[], json!({"source":"example.com"}));
-    let kept = f.rows(SNAPSHOTS)[0]["payload"]["articles"].clone();
-    assert_eq!(kept, json!([{"canonicalDomain":"keep.test"}]));
-}
-
-#[test]
-fn removing_a_source_prunes_its_articles_and_reports_the_delete() {
+fn removing_a_source_reports_the_delete() {
     let f = Fake::new();
     let id = f.seed(SOURCES, A, source("example.com", None));
-    f.seed(SNAPSHOTS, A, json!({"payload":{"articles":[{"canonicalDomain":"example.com"},{"canonicalDomain":"keep.test"}]}}));
     assert_eq!(f.route("DELETE", "/sources/:id", &[("id", &id)], json!(null)).1, json!({"deleted":true}));
-    assert_eq!(f.rows(SNAPSHOTS)[0]["payload"]["articles"], json!([{"canonicalDomain":"keep.test"}]));
     assert_eq!(f.route("DELETE", "/sources/:id", &[("id", &id)], json!(null)).1, json!({"deleted":false}));
 }
 
