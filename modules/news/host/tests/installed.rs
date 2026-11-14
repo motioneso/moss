@@ -255,7 +255,7 @@ fn another_person_cannot_see_change_or_remove_news_data_and_the_check_fails_with
     }
     // B excluding the same publisher must not prune A's saved feed.
     w.call(b, "POST", "/source-exclusions", json!({"source":"example.com"}));
-    let articles: i64 = rows_as(&w.f, a, "SELECT jsonb_array_length(payload->'articles') FROM app.news_compilation_snapshots", &[])[0].get(0);
+    let articles: i32 = rows_as(&w.f, a, "SELECT jsonb_array_length(payload->'articles') FROM app.news_compilation_snapshots", &[])[0].get(0);
     assert_eq!(articles, 5, "B's actions left A's saved feed whole");
     for table in ["app.news_prefs", "app.news_custom_sources", "app.news_custom_topics", "app.news_source_exclusions", "app.news_compilation_snapshots"] {
         let count_for = |who| -> i64 { rows_as(&w.f, who, &format!("SELECT count(*) FROM {table}"), &[])[0].get(0) };
@@ -375,7 +375,7 @@ fn the_installed_routes_answer_like_the_old_routes_step_for_step() {
     assert_eq!(read["body"]["refresh"]["state"], "idle", "{read}");
 }
 
-/// Compares two answer lists with ids and times masked. The refresh block differs on purpose.
+/// Compares two answer lists with ids and times masked. The refresh block and the saved feed article count differ on purpose.
 fn compare(steps: &[Value], old: &[Value], new: &[Value]) {
     assert_eq!(old.len(), new.len());
     for (i, ((step, o), n)) in steps.iter().zip(old).zip(new).enumerate() {
@@ -383,6 +383,10 @@ fn compare(steps: &[Value], old: &[Value], new: &[Value]) {
         for side in [&mut o, &mut n] {
             if let Some(body) = side["body"].as_object_mut() {
                 body.remove("refresh");
+            }
+            // The old routes prune the saved feed on exclusion. The package leaves it for part 5b.
+            if let Some(snapshot) = side["body"]["snapshot"].as_object_mut() {
+                snapshot.remove("articleCount");
             }
         }
         replay::mask(&mut o);
