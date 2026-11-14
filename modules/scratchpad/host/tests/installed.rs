@@ -164,6 +164,9 @@ fn every_route_answers_exactly_as_the_old_route_did() {
     };
     let compare = |label: &str, steps: &[Value], old: Vec<Value>, new: Vec<Value>| {
         assert_eq!(old.len(), new.len());
+        for (i, (o, n)) in old.iter().zip(&new).enumerate() {
+            println!("{label} {i}: old {} new {}", o["status"], n["status"]);
+        }
         for (i, (old, new)) in old.into_iter().zip(new).enumerate() {
             let mut old = json!({"status": old["status"], "body": old["body"]});
             let mut new = json!({"status": new["status"], "body": new["body"]});
