@@ -1,5 +1,7 @@
 //! Real installed-package proofs. Run only through scripts/run-gate.sh.
 mod support;
+#[path = "support/replay.rs"]
+mod replay;
 use safety_core::db::DataContext;
 use serde_json::{json, Value};
 use support::{install::Installed, Fixture};
@@ -144,4 +146,44 @@ fn note_text_never_reaches_job_payloads_activity_rows_or_the_log() {
     // The planted text is in the note table, so the scan can see it.
     let stored: i64 = w.f.rt.block_on(w.f.root.query_one("SELECT count(*) FROM app.scratchpads t WHERE to_jsonb(t)::text LIKE '%'||$1||'%'", &[&LEAK])).unwrap().get(0);
     assert_eq!(stored, 1);
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn every_route_answers_exactly_as_the_old_route_did() {
+    let w = World::new();
+    // Person A goes through the old Fastify routes, person B through the package, on one database.
+    let run_new = |steps: &[Value]| -> Vec<Value> {
+        steps
+            .iter()
+            .map(|step| {
+                let path = replay::new_path(step["url"].as_str().unwrap());
+                w.call(w.f.b, step["method"].as_str().unwrap(), path, step.get("body").cloned().unwrap_or(Value::Null))
+            })
+            .collect()
+    };
+    let compare = |label: &str, steps: &[Value], old: Vec<Value>, new: Vec<Value>| {
+        assert_eq!(old.len(), new.len());
+        for (i, (old, new)) in old.into_iter().zip(new).enumerate() {
+            let mut old = json!({"status": old["status"], "body": old["body"]});
+            let mut new = json!({"status": new["status"], "body": new["body"]});
+            replay::mask(&mut old);
+            replay::mask(&mut new);
+            assert_eq!(old, new, "{label} step {i} ({}) differs from the old route", steps.get(i).map(|s| s.to_string().chars().take(160).collect::<String>()).unwrap_or_default());
+        }
+    };
+    let first = replay::steps_without_a_notes_folder();
+    compare("no notes folder", &first, replay::old_routes(w.f.a, &first), run_new(&first));
+    assert_eq!(w.stored(w.f.a), w.stored(w.f.b), "the stored notes differ");
+    for person in [w.f.a, w.f.b] {
+        w.f.rt
+            .block_on(w.f.root.execute(
+                "INSERT INTO app.preferences (owner_user_id, key, value_json) VALUES ($1, 'notes-source-path', '\"/notes\"'::jsonb)",
+                &[&person],
+            ))
+            .unwrap();
+    }
+    let second = replay::steps_with_a_notes_folder();
+    compare("notes folder set", &second, replay::old_routes(w.f.a, &second), run_new(&second));
+    println!("PASS replay: {} old-route steps match", first.len() + second.len());
 }
