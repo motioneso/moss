@@ -27,7 +27,7 @@ import {
   type TranscribeAudioResult
 } from "./http-api-transcription.js";
 import type { ProviderKind } from "./transcript-reader.js";
-import { providerBaseUrl } from "../provider-base-url.js";
+import { openAiCompatibleApiRoot, providerBaseUrl } from "../provider-base-url.js";
 import { transcriptionHttpFailure } from "../transcription-errors.js";
 
 const AUDIO_EXTENSIONS: Readonly<Record<string, string>> = {
@@ -185,7 +185,7 @@ export class HttpApiAdapter implements ChatProviderAdapter {
         }
 
         input.signal?.throwIfAborted();
-        const base = providerBaseUrl("openai-compatible", this._baseUrl);
+        const base = openAiCompatibleApiRoot(this._baseUrl);
         const form = new FormData();
         form.set("model", input.model.provider_model_id);
         const extension = AUDIO_EXTENSIONS[input.audio.type.split(";")[0] ?? ""];
@@ -197,7 +197,7 @@ export class HttpApiAdapter implements ChatProviderAdapter {
           form.append("timestamp_granularities[]", "segment");
         }
 
-        const response = await this._fetch(`${base}/v1/audio/transcriptions`, {
+        const response = await this._fetch(`${base}/audio/transcriptions`, {
           method: "POST",
           headers: { authorization: `Bearer ${this.apiKey}` },
           body: form,
@@ -253,12 +253,12 @@ export class HttpApiAdapter implements ChatProviderAdapter {
         };
 
       case "openai-compatible": {
-        const base = providerBaseUrl("openai-compatible", this._baseUrl);
+        const base = openAiCompatibleApiRoot(this._baseUrl);
         if (input.nativeSearch) {
           // #2228: built-in web search is only exposed through the Responses API, not
           // Chat Completions, so this path switches endpoints and body shape.
           return {
-            url: `${base}/v1/responses`,
+            url: `${base}/responses`,
             headers: {
               "content-type": "application/json",
               authorization: `Bearer ${this.apiKey}`
@@ -274,7 +274,7 @@ export class HttpApiAdapter implements ChatProviderAdapter {
           };
         }
         return {
-          url: `${base}/v1/chat/completions`,
+          url: `${base}/chat/completions`,
           headers: {
             "content-type": "application/json",
             authorization: `Bearer ${this.apiKey}`
