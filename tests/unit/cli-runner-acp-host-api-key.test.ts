@@ -128,7 +128,7 @@ describe("AcpHost API-key launches", () => {
     });
   });
 
-  it("writes an OpenCode entry with one /v1 and an env reference, never the key", async () => {
+  it("writes its provider entry into the launch's own settings file, never the key", async () => {
     await inTempDir(async (dir) => {
       const { host, spawns, requests, agentHome } = makeHost(dir);
       await host.spawn(
@@ -141,21 +141,30 @@ describe("AcpHost API-key launches", () => {
         undefined,
         CREDENTIAL
       );
-      expect(requests[0]!.opencodeProvider).toEqual({
-        path: join(agentHome, ".config", "opencode", "opencode.json"),
-        id: "moss",
-        entry: { baseUrl: "http://proxy.test/v1", model: MODEL, apiKeyEnv: "MOSS_OPENCODE_API_KEY" }
+      // #3558: the settings a launch writes belong to that launch, not to the person.
+      expect(spawns[0]!.env.XDG_CONFIG_HOME).toBeTruthy();
+      expect(requests[0]!.opencodeProvider?.path).toBe(
+        join(spawns[0]!.env.XDG_CONFIG_HOME!, "opencode", "opencode.json")
+      );
+      expect(requests[0]!.opencodeProvider?.path).not.toBe(
+        join(agentHome, ".config", "opencode", "opencode.json")
+      );
+      expect(requests[0]!.opencodeProvider?.entry).toEqual({
+        baseUrl: "http://proxy.test/v1",
+        model: MODEL,
+        apiKeyEnv: "MOSS_OPENCODE_API_KEY"
       });
-      expect(requests[0]!.denyFile).not.toBeNull();
+      // The deny settings for chat land in the same per-launch file.
+      expect(requests[0]!.denyFile?.path).toBe(requests[0]!.opencodeProvider?.path);
       expect(JSON.stringify(requests)).not.toContain(KEY);
       expect(spawns[0]!.env.MOSS_OPENCODE_API_KEY).toBe(KEY);
       expect(JSON.stringify(spawns[0]!.args)).not.toContain(KEY);
     });
   });
 
-  it("removes the OpenCode entry on every CLI-login OpenCode spawn, chat or workshop", async () => {
+  it("gives each OpenCode launch its own settings, so none can touch another's provider (#3558)", async () => {
     await inTempDir(async (dir) => {
-      const { host, spawns, requests, agentHome } = makeHost(dir);
+      const { host, spawns, requests } = makeHost(dir);
       await host.spawn(
         "chat:user-1:a",
         "proj",
@@ -168,15 +177,22 @@ describe("AcpHost API-key launches", () => {
       );
       await host.spawn("chat:user-1:b", "proj", "opencode", "user-1", "chat");
       await host.spawn("workshop:user-1:proj", "proj", "opencode", "user-1", "workshop");
-      const configDir = join(agentHome, ".config", "opencode");
+
+      const apiKeyConfig = requests[0]!.opencodeProvider!.path;
+      const configDirs = spawns.map((spawn) => spawn.env.XDG_CONFIG_HOME);
+      expect(new Set(configDirs).size).toBe(3);
       for (const request of requests.slice(1)) {
-        expect(request.opencodeProvider).toEqual({
-          path: join(configDir, "opencode.json"),
-          id: "moss",
-          entry: null
-        });
-        expect(request.dirs).toContain(configDir);
+        // Nothing a later launch writes names the file the API-key launch depends on.
+        expect(request.opencodeProvider?.path).not.toBe(apiKeyConfig);
+        expect(request.denyFile?.path).not.toBe(apiKeyConfig);
       }
+      // Whatever each launch does write is inside its own settings directory.
+      requests.forEach((request, index) => {
+        if (!request.opencodeProvider) return;
+        expect(request.opencodeProvider.path).toBe(
+          join(spawns[index]!.env.XDG_CONFIG_HOME!, "opencode", "opencode.json")
+        );
+      });
       expect(spawns[1]!.env.MOSS_OPENCODE_API_KEY).toBeUndefined();
       expect(spawns[2]!.env.MOSS_OPENCODE_API_KEY).toBeUndefined();
     });
