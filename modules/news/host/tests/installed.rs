@@ -15,15 +15,61 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 
 const MARK: &str = "PLANTED-MARKER-4f1c9b";
+/// Its own marker, so the saved source of the adding test does not show in the other scan.
+const ADD_MARK: &str = "PLANTED-ADD-MARKER-91c3d7";
 
-/// News never asks the router, so any request fails loudly.
-struct NoAi;
-impl moss_module_host::ai::Intelligence for NoAi {
-    fn generate(&self, _: &CallScope, _: &Request) -> anyhow::Result<Value> {
-        anyhow::bail!("News does not use the AI service")
+/// The person's model approves every publisher. The prompt is kept so tests can read it.
+struct Approves(std::sync::Mutex<Vec<String>>);
+impl moss_module_host::ai::Intelligence for Approves {
+    fn generate(&self, _: &CallScope, request: &Request) -> anyhow::Result<Value> {
+        self.0.lock().unwrap().push(request.parameters.to_string());
+        Ok(json!({"text": "{\"allowed\":true,\"category\":\"news_publisher\"}"}))
     }
     fn embed(&self, _: &CallScope, _: &Request) -> anyhow::Result<Value> {
-        anyhow::bail!("News does not use the AI service")
+        anyhow::bail!("News does not embed")
+    }
+}
+
+/// Answers public-web reads from a fixed site, so the database tests need no network. The live
+/// run uses the real fetch path instead. Every other call goes to the real host services.
+struct Web(Arc<dyn moss_module_host::runtime::Ports>);
+impl moss_module_host::runtime::Ports for Web {
+    fn invoke(&self, scope: &CallScope, port: &str, request: &Request) -> anyhow::Result<Value> {
+        if port != "fetch" {
+            return self.0.invoke(scope, port, request);
+        }
+        let url = request.parameters["url"].as_str().unwrap_or_default();
+        let found = |content_type: &str, body: &str| {
+            json!({"ok":true,"status":200,"finalUrl":url,"contentType":content_type,"body":body,"truncated":false,"hopCount":0,"encoding":"utf-8"})
+        };
+        if url.starts_with("https://news.example.com/rss?q=") {
+            return Ok(found(
+                "application/rss+xml",
+                "<rss><channel><title>x</title><item><title>First story here</title><link>https://news.example.com/1</link></item></channel></rss>",
+            ));
+        }
+        Ok(match url {
+            "https://daily.sample.test/" => found(
+                "text/html",
+                "<html><head><title>Sample Daily</title><link rel=\"alternate\" type=\"application/rss+xml\" href=\"/feed.xml\"></head></html>",
+            ),
+            "https://daily.sample.test/feed.xml" => found(
+                "application/rss+xml",
+                "<rss><channel><title>x</title><item><title>First story here</title><link>https://daily.sample.test/1</link></item></channel></rss>",
+            ),
+            "https://news.example.com/" => found(
+                "text/html",
+                "<html><head><title>Example Daily</title><link rel=\"alternate\" type=\"application/rss+xml\" href=\"/feed.xml\"></head></html>",
+            ),
+            "https://news.example.com/feed.xml" => found(
+                "application/rss+xml",
+                "<rss><channel><title>x</title><item><title>First story here</title><link>https://news.example.com/1</link></item></channel></rss>",
+            ),
+            _ => json!({"ok":false,"reason":"network"}),
+        })
+    }
+    fn finish_call(&self, scope: &CallScope, success: bool) -> anyhow::Result<()> {
+        self.0.finish_call(scope, success)
     }
 }
 
@@ -89,12 +135,12 @@ impl World {
                 migrations: Secret::new(std::env::var("JS48_BOOTSTRAP_URL").unwrap()),
                 producer: Secret::new(std::env::var("JS48_APP_URL").unwrap()),
                 cipher: Arc::new(SecretCipher::connectors(&Default::default()).unwrap()),
-                intelligence: Arc::new(NoAi),
+                intelligence: Arc::new(Approves(Default::default())),
                 version: "0.1.0".parse().unwrap(),
                 compiled_cache: None,
                 fuel_ceiling: Some(250_000_000),
             },
-            |next| Ok(next),
+            |next| Ok(Arc::new(Web(next))),
         )
         .unwrap();
         let source = app
@@ -383,6 +429,31 @@ fn the_installed_routes_answer_like_the_old_routes_step_for_step() {
     compare(&steps, &old2, &new2);
     println!("PASS parity: {} steps matched the old routes", old.len() + old2.len());
 
+    // Adding a source: refusals, a preview, a save and the answers after it. The old side runs for
+    // the same person that planted the rows above, so the fresh site avoids their exclusions.
+    let adding = replay::steps_adding_before_save();
+    let saving = replay::steps_adding_save();
+    // The old preview store lives in its process, so the old side runs preview and save together.
+    let all: Vec<Value> = adding.iter().chain(saving.iter()).cloned().collect();
+    let old_all = replay::old_routes(old_actor, &all, json!({}));
+    let (old3, old4) = old_all.split_at(adding.len());
+    let new3: Vec<Value> = adding
+        .iter()
+        .map(|s| w.call(w.f.a, s["method"].as_str().unwrap(), &s["url"].as_str().unwrap().replace("/api/news", ""), s.get("body").cloned().unwrap_or(Value::Null)))
+        .collect();
+    compare(&adding, old3, &new3);
+    let conf = new3.last().unwrap()["body"]["confirmationId"].as_str().unwrap().to_owned();
+    let vars = json!({"conf":conf});
+    let new4: Vec<Value> = saving
+        .iter()
+        .map(|s| {
+            let body = s.get("body").map(|b| serde_json::from_str(&replay::fill(&b.to_string(), &vars)).unwrap()).unwrap_or(Value::Null);
+            w.call(w.f.a, s["method"].as_str().unwrap(), &s["url"].as_str().unwrap().replace("/api/news", ""), body)
+        })
+        .collect();
+    compare(&saving, old4, &new4);
+    println!("PASS parity: {} adding-a-source steps matched the old routes", old3.len() + old4.len());
+
     // The old server queues a refresh after a write, so only the Rust shape is checked here.
     let read = w.call(w.f.a, "GET", "/personalization", Value::Null);
     assert_eq!(read["body"]["refresh"]["state"], "idle", "{read}");
@@ -406,4 +477,85 @@ fn compare(steps: &[Value], old: &[Value], new: &[Value]) {
         replay::mask(&mut n);
         assert_eq!(o, n, "step {i} {} {} differs\nold: {o}\nnew: {n}", step["method"], step["url"]);
     }
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn adding_a_source_is_private_to_the_person_who_previewed_it() {
+    let w = World::new();
+    let (a, b, admin) = (w.f.a, w.f.b, w.f.admin);
+    let shown = w.call(a, "POST", "/sources/preview", json!({"input":"news.example.com"}));
+    assert_eq!(shown["body"]["status"], "ok", "{shown}");
+    let id = shown["body"]["confirmationId"].clone();
+
+    // B cannot save A's preview, and A's preview survives the attempt.
+    let stolen = w.call(b, "POST", "/sources", json!({"confirmationId": id}));
+    assert_eq!(stolen["status"], 409, "{stolen}");
+    assert_eq!(w.count("app.news_custom_sources", b), 0);
+    let saved = w.call(a, "POST", "/sources", json!({"confirmationId": id}));
+    assert_eq!(saved["status"], 201, "{saved}");
+    assert_eq!(w.count("app.news_custom_sources", a), 1);
+    assert_eq!(saved["body"]["source"]["feedUrl"], "https://news.example.com/feed.xml");
+
+    // B previews the same publisher with no duplicate and a verdict of their own.
+    let theirs = w.call(b, "POST", "/sources/preview", json!({"input":"news.example.com"}));
+    assert!(theirs["body"].get("duplicateOfSourceId").is_none(), "{theirs}");
+    assert_eq!((w.count("app.news_policy_verdicts", a), w.count("app.news_policy_verdicts", b)), (1, 1));
+
+    // Nobody else sees A's source or verdict, as the app role with row security on.
+    for who in [b, admin] {
+        let read = w.call(who, "GET", "/personalization", Value::Null)["body"]["customSources"].clone();
+        assert_eq!(read, json!([]), "{read}");
+    }
+    let seen: i64 = rows_as(&w.f, admin, "SELECT count(*) FROM app.news_custom_sources", &[])[0].get(0);
+    assert_eq!(seen, 0, "an admin sees none of A's sources");
+    println!("GREEN: B and an admin cannot save, see or reuse A's preview, source or verdict");
+
+    // With row security removed, the same read leaks A's rows to the admin.
+    for table in ["app.news_custom_sources", "app.news_policy_verdicts"] {
+        w.f.rt.block_on(w.f.root.batch_execute(&format!("ALTER TABLE {table} DISABLE ROW LEVEL SECURITY"))).unwrap();
+        let open: i64 = rows_as(&w.f, admin, &format!("SELECT count(*) FROM {table}"), &[])[0].get(0);
+        w.f.rt.block_on(w.f.root.batch_execute(&format!("ALTER TABLE {table} ENABLE ROW LEVEL SECURITY; ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))).unwrap();
+        assert!(open >= 1, "RED expected: {table} leaks with row security removed, got {open}");
+        println!("RED then GREEN: {table} leaks with row security removed and is closed again after");
+    }
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn text_typed_into_adding_a_source_reaches_no_job_or_log_table() {
+    let w = World::new();
+    let a = w.f.a;
+    // A feed address carrying the marker is previewed and saved for real, so the policy check and
+    // the save both run with the typed text in hand.
+    let typed = format!("news.example.com/rss?q={ADD_MARK}");
+    let out = w.call(a, "POST", "/sources/preview", json!({"input": typed}));
+    assert_eq!(out["body"]["status"], "ok", "{out}");
+    assert!(!out.to_string().contains(ADD_MARK), "the preview must not echo the typed address: {out}");
+    let saved = w.call(a, "POST", "/sources", json!({"confirmationId": out["body"]["confirmationId"]}));
+    assert_eq!(saved["status"], 201, "{saved}");
+    let tables: Vec<String> = w.f.rt.block_on(async {
+        w.f.root
+            .query(
+                "SELECT table_schema||'.'||table_name FROM information_schema.tables WHERE table_schema IN ('moss_queue','moss_modules') \
+                 OR table_name IN ('notifications','moss_activity_detail','moss_error_log','moss_action_audit_log','moss_model_activity_log') \
+                 OR table_name LIKE 'news\\_%'",
+                &[],
+            )
+            .await
+            .unwrap()
+            .iter()
+            .map(|r| r.get(0))
+            .collect()
+    });
+    for table in &tables {
+        let hits: i64 = w.f.rt.block_on(w.f.root.query_one(&format!("SELECT count(*) FROM {table} t WHERE lower(to_jsonb(t)::text) LIKE '%'||lower($1)||'%'"), &[&ADD_MARK])).unwrap().get(0);
+        // The saved source keeps the person's own feed address in their own row, and nowhere else.
+        let allowed = i64::from(table == "app.news_custom_sources");
+        assert!(hits <= allowed, "{table} holds typed text");
+        if table == "app.news_custom_sources" {
+            assert_eq!(hits, 1, "the saved source should hold the address it was given");
+        }
+    }
+    println!("PASS privacy: scanned {} tables, the typed address is only in the saved source row", tables.len());
 }

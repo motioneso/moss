@@ -52,3 +52,24 @@ pub fn id_param(request: &moss_module_sdk::RouteRequest) -> std::result::Result<
         Err(bad_request("params/id must match format \"uuid\""))
     }
 }
+
+/// The host clock as milliseconds since the epoch.
+pub fn now_ms<H: moss_module_sdk::Host + ?Sized>(host: &H) -> Result<i64> {
+    Ok(now(host)?.timestamp_millis())
+}
+
+/// The host clock for this call.
+pub fn now<H: moss_module_sdk::Host + ?Sized>(host: &H) -> Result<DateTime<Utc>> {
+    let context = host.call("context", "read", "call", json!({}))?;
+    context["now"]
+        .as_str()
+        .and_then(|text| DateTime::parse_from_rfc3339(text).ok())
+        .map(|at| at.with_timezone(&Utc))
+        .ok_or_else(|| Error::new("Host clock unavailable"))
+}
+
+/// A new random id from the host.
+pub fn new_id<H: moss_module_sdk::Host + ?Sized>(host: &H) -> Result<String> {
+    let made = host.call("context", "uuid", "new", json!({}))?;
+    made["id"].as_str().map(str::to_owned).ok_or_else(|| Error::new("Invalid host id"))
+}

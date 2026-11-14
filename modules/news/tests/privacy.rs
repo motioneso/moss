@@ -39,3 +39,29 @@ fn a_database_failure_leaves_as_fixed_text() {
     assert_eq!(status, 500);
     assert!(!body.to_string().contains(MARK));
 }
+
+#[test]
+fn adding_a_source_uses_only_the_expected_ports_and_leaks_no_typed_text() {
+    let f = Fake::new();
+    let secret = format!("https://user:{MARK}@news.example.com/");
+    let (_, refused) = f.route("POST", "/sources/preview", &[], json!({"input": secret}));
+    assert!(!refused.to_string().contains(MARK), "{refused}");
+    let rss = "<?xml version=\"1.0\"?><rss><channel><title>T</title><item><title>A headline here</title><link>https://news.example.com/a</link></item></channel></rss>";
+    f.page(&format!("https://news.example.com/rss?q={MARK}"), 200, "application/rss+xml", rss);
+    f.model_says(r#"{"allowed":true,"category":"news_publisher"}"#);
+    let (_, shown) = f.route("POST", "/sources/preview", &[], json!({"input": format!("news.example.com/rss?q={MARK}")}));
+    assert_eq!(shown["status"], "ok", "{shown}");
+    let (_, saved) = f.route("POST", "/sources", &[], json!({"confirmationId": shown["confirmationId"]}));
+    let calls = f.calls.borrow();
+    for (port, _, resource, parameters) in calls.iter() {
+        assert!(["db", "kv", "fetch", "ai", "context"].contains(&port.as_str()), "{port}");
+        assert!(!resource.contains("activity") && !resource.contains("job"), "{resource}");
+        // Only the owner's tables, the preview file and the public read may carry typed text.
+        if parameters.to_string().contains(MARK) {
+            assert!(resource.starts_with("app.news_") || ["news.source-previews", "public-web"].contains(&resource.as_str()), "{port} {resource}");
+        }
+    }
+    // The saved source returns the person's own feed address to them, so only the preview is held clean.
+    assert!(!shown.to_string().contains(MARK), "{shown}");
+    assert_eq!(saved["source"]["feedUrl"], format!("https://news.example.com/rss?q={MARK}"));
+}

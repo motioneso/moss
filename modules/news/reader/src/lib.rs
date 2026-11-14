@@ -5,6 +5,7 @@
 
 pub mod body_image;
 pub mod feed;
+pub mod html;
 pub mod publisher;
 pub mod reddit;
 pub mod sanitize;
