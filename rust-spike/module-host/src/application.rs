@@ -28,6 +28,9 @@ pub struct Configuration {
     pub compiled_cache: Option<(std::path::PathBuf, Secret)>,
     /// Host-wide cap on manifest fuel requests. `None` keeps the default budget.
     pub fuel_ceiling: Option<u64>,
+    /// Folder holding the pinned browser. `None` leaves the browser port off, so it answers
+    /// `unsupported`.
+    pub browser_dir: Option<std::path::PathBuf>,
 }
 pub struct Application {
     pub installer: Arc<Installer>,
@@ -45,12 +48,11 @@ impl Application {
         let local = Arc::new(LocalPorts::new(data)?);
         let sql = Arc::new(DatabasePorts::new(database.clone(), local)?);
         let jobs = Arc::new(JobPorts::new(config.producer, database.clone(), sql)?);
-        let services = Arc::new(ServicePorts::new(
-            data,
-            config.cipher,
-            config.intelligence,
-            jobs,
-        )?);
+        let mut services = ServicePorts::new(data, config.cipher, config.intelligence, jobs)?;
+        if let Some(dir) = config.browser_dir {
+            services = services.with_browser(dir);
+        }
+        let services = Arc::new(services);
         let lifecycle = Arc::new(PostgresLifecycle::new(
             config.migrations,
             database.clone(),

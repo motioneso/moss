@@ -55,6 +55,7 @@
     "test:rust-connectors-live": "bash modules/connectors/tools/live.sh",
     "test:rust-module-assembly": "tsx rust-spike/module-host/tools/assembly-gate.ts",
     "test:rust-public-web": "tsx rust-spike/module-host/tools/public-web-gate.ts",
+    "test:rust-browser-live": "tsx rust-spike/module-host/tools/browser-live-gate.ts",
     "test:module-enqueue-options": "tsx rust-spike/module-host/tools/enqueue-options-gate.ts",
     "lint": "eslint . --max-warnings=0",
     "format": "prettier --write .",
