@@ -349,7 +349,7 @@ fn installed_weather_package_serves_routes_from_the_real_server() {
     let today = json_of(&text);
     assert!(today["data"]["temp"].is_number() && today["data"]["unit"] == "metric", "{text}");
     assert_eq!(today["data"]["location"], first["label"]);
-    let (status, text) = call(Method::GET, "/forecast?startHour=0&endHour=24", Some(&cookie), None);
+    let (status, text) = call(Method::GET, "/forecast?startHour=8&endHour=20", Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
     let forecast = json_of(&text);
     assert_eq!(forecast["status"], "forecast", "{text}");
