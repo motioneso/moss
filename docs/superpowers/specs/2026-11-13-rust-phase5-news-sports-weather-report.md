@@ -127,3 +127,61 @@ differently from the old routes.
   parts.
 - The old routes reply to a missing follow on the team route with 404, but only once the team is
   accepted. Tested in the guest, not against a live team list.
+
+Card JS-276. Part of [issue 4027](https://github.com/motioneso/moss/issues/4027). Release note
+Category: N/A.
+
+## News package skeleton (part 3)
+
+### What was built
+
+The News package keeps each person's News choices, excluded publishers, added sources and topics.
+It reads and writes the same eight tables as the old app, so existing rows carry over. It makes no
+network calls and shows no screen.
+
+- Choices: list, save (a repeat returns the same row) and remove, with the old answers.
+- Excluded publishers: add (up to 100), remove, with the old rules for what counts as a valid domain.
+- Added sources and topics: the personalization read, removing a source, removing a topic.
+- Adding or changing a topic checks the input like the old app, then answers 503 "Topic discovery
+  requires web search", because the package has no web search yet.
+- Catalog of the nine built-in sources and eight topics.
+- Refresh state is only read. The package answers "idle" and never writes it.
+- Data export for the owner's added sources, topics and exclusions, and delete-account counts for
+  all eight tables.
+- App map entries in the package manifest (settings entry, three features, two error codes).
+- The nine old SQL files stay byte for byte where they were. A test checks them.
+
+### Proof
+
+All checks ran on a throwaway database through the verify gate, against the installed package.
+
+| Claim                                    | Check                                                                                       | Result                                      |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| Same answers as the old routes           | 173 steps replayed through the old routes and the installed package, ids and times masked   | Matched                                     |
+| Old SQL rules still hold                 | Direct SQL inserts of a repeat choice and a repeat exclusion                                | Refused                                     |
+| Another person sees nothing              | A second person and an admin list, delete and change A's rows                               | Nothing seen, nothing changed               |
+| That check can fail                      | Row security removed from five tables, B reads A's rows; restored, B reads nothing          | Seen failing, then passing, on each table   |
+| Typed text stays out of everything else  | Planted marker typed into every field, 53 tables and job payloads scanned                   | Found only in the owner's own exclusion row |
+| Export is the owner's only               | A's export holds A's rows and not B's                                                       | Passed                                      |
+| Package builds native and as WebAssembly | Guest tests native (18), package tests against the built component (6 package, 4 installed) | Passed                                      |
+| Works on the real server over HTTPS      | Real server, real login, two people save choices, exclude a publisher, ask for a topic      | Passed; each person saw only their own      |
+
+### Not proven or not built
+
+- Refresh state is never written. Part 5b owns it, so the refresh block in the old routes' answers
+  is left out of the comparison.
+- Excluding a publisher or removing a source does not trim the saved feed. The saved feed table has
+  no row id, and the host's typed database port can only change a row by id. The old routes trim it.
+  Nothing in this package shows the saved feed articles, and the count in the personalization read is
+  left out of the comparison.
+- Availability is a fixed answer (no model, no web search). Real availability comes with the parts
+  that have a model and search.
+- Adding or changing a topic always answers 503 after its checks. The old app can discover topics
+  with web search.
+- The limit checks (100 exclusions and the other caps) count and then insert, so two requests at the
+  same moment could pass the limit by one.
+- Domains with non-ASCII letters answer "invalid" where the old code converted them. All tests use
+  plain ASCII names.
+- Fetching, reading articles, source setup, credentials, chat tools and every News screen.
+- Reaching the server from a phone or another computer. The package adds no listener. The live run
+  used the local secure address only.
