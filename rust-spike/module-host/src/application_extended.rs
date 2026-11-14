@@ -93,4 +93,14 @@ impl Application {
     ) -> Result<String> {
         self.installer.dispatch_extended(access, method, path, body)
     }
+    pub fn dispatch_extended_from(
+        &self,
+        access: AccessContext,
+        method: &str,
+        path: &str,
+        body: &str,
+        client: Option<std::net::IpAddr>,
+    ) -> Result<String> {
+        self.installer.dispatch_extended_from(access, method, path, body, client)
+    }
 }

@@ -713,11 +713,14 @@ struct Api {
 async fn dispatch(
     State(api): State<Arc<Api>>,
     Extension(access): Extension<AccessContext>,
+    peer: Option<Extension<axum::extract::ConnectInfo<std::net::SocketAddr>>>,
     method: Method,
     uri: Uri,
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
+    // The directly connected address only. Forwarding headers are never trusted.
+    let client = peer.map(|Extension(axum::extract::ConnectInfo(addr))| addr.ip());
     let Some(application) = api
         .slot
         .lock()
@@ -754,7 +757,7 @@ async fn dispatch(
     match tokio::task::spawn_blocking(move || {
         let _slot = slot;
         let _staged = staged;
-        application.dispatch_extended(access, method.as_str(), &target, &body)
+        application.dispatch_extended_from(access, method.as_str(), &target, &body, client)
     })
     .await
     {

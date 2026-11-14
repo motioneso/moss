@@ -36,12 +36,21 @@ pub enum JsonShape {
     Place,
     /// One string from a fixed list.
     Choice(&'static [&'static str]),
+    /// The `timezone` text inside a larger saved object. Read only: a read returns just that
+    /// text, or null when none is saved, and every write is refused.
+    SavedTimezone,
 }
 /// The two values Weather may save as its unit.
 pub const WEATHER_UNITS: &[&str] = &["metric", "imperial"];
 impl JsonShape {
     /// Place and Choice values are checked again on read, so a package never receives a malformed one.
     fn on_read(self, value: Value) -> Value {
+        if matches!(self, JsonShape::SavedTimezone) {
+            return match value.get("timezone").and_then(Value::as_str) {
+                Some(zone) if !zone.trim().is_empty() && zone.len() <= 64 => json!(zone),
+                _ => Value::Null,
+            };
+        }
         if matches!(self, JsonShape::Place | JsonShape::Choice(_)) && !self.accepts(&value) {
             Value::Null
         } else {
@@ -49,10 +58,14 @@ impl JsonShape {
         }
     }
     fn accepts(self, value: &Value) -> bool {
+        if matches!(self, JsonShape::SavedTimezone) {
+            return false;
+        }
         if value.is_null() {
             return true;
         }
         match self {
+            JsonShape::SavedTimezone => false,
             JsonShape::Place => value.as_object().is_some_and(|o| {
                 let degrees = |k: &str, max: f64| o.get(k).and_then(Value::as_f64).is_some_and(|n| n.is_finite() && n.abs() <= max);
                 let label = o.get("label").and_then(Value::as_str).is_some_and(|t| !t.trim().is_empty() && t.encode_utf16().count() <= 200);
@@ -82,6 +95,10 @@ pub fn weather_bindings() -> BTreeMap<(String, String), Binding> {
         (
             ("weather".into(), "unit".into()),
             Binding::Json { key: "weather-unit".into(), shape: JsonShape::Choice(WEATHER_UNITS) },
+        ),
+        (
+            ("weather".into(), "saved-timezone".into()),
+            Binding::Json { key: "locale".into(), shape: JsonShape::SavedTimezone },
         ),
     ])
 }
@@ -366,5 +383,17 @@ mod shape_tests {
         // Older shapes keep returning what is stored.
         let list = json!(["x".repeat(500)]);
         assert_eq!(JsonShape::TextList { max_items: 1, max_len: 5 }.on_read(list.clone()), list);
+    }
+    #[test]
+    fn the_saved_timezone_is_read_only_and_shows_nothing_else() {
+        let zone = JsonShape::SavedTimezone;
+        for value in [json!(null), json!("UTC"), json!({"timezone":"UTC"}), json!({})] {
+            assert!(!zone.accepts(&value), "{value}");
+        }
+        let saved = json!({"timezone":"Europe/Paris","language":"fr","extra":1});
+        assert_eq!(zone.on_read(saved), json!("Europe/Paris"));
+        for value in [json!(null), json!({}), json!({"timezone":""}), json!({"timezone":5}), json!({"timezone":"x".repeat(65)})] {
+            assert_eq!(zone.on_read(value), Value::Null);
+        }
     }
 }

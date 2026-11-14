@@ -56,6 +56,8 @@ fn decode(segment: &str) -> Result<String> {
     );
     Ok(s)
 }
+/// The context resource that asks the host to pass the caller's address on a route request.
+pub const CLIENT_ADDRESS: &str = "client-address";
 pub fn resolve(routes: &[Route], method: &str, target: &str) -> Result<RouteRequest> {
     ensure!(
         target.len() <= 16_384 && !target.contains('#'),
@@ -124,6 +126,19 @@ impl crate::store::Installer {
         target: &str,
         body: &str,
     ) -> Result<String> {
+        self.dispatch_extended_from(access, method, target, body, None)
+    }
+    /// As `dispatch_extended`, also telling a package that asks for it where the call came from.
+    /// A package declares the `client-address` resource on its context capability to get a
+    /// `client` member on the route request. Every other package's request is unchanged.
+    pub fn dispatch_extended_from(
+        &self,
+        access: access_context::AccessContext,
+        method: &str,
+        target: &str,
+        body: &str,
+        client: Option<std::net::IpAddr>,
+    ) -> Result<String> {
         let _fence = self
             .fence
             .read()
@@ -137,6 +152,13 @@ impl crate::store::Installer {
         let module = state.installed.get(id).context("Module is not installed")?;
         let mut request = resolve(&module.manifest.routes, method, &format!("/{target}"))?;
         request.body = serde_json::from_str(body)?;
-        self.call_unfenced(id, access, "route", &serde_json::to_string(&request)?)
+        let mut envelope = serde_json::to_value(&request)?;
+        let wants_client = module.manifest.capabilities.iter().any(|c| {
+            c.port == "context" && c.resources.contains(CLIENT_ADDRESS)
+        });
+        if let (true, Some(address)) = (wants_client, client) {
+            envelope["client"] = json!(address.to_string());
+        }
+        self.call_unfenced(id, access, "route", &envelope.to_string())
     }
 }

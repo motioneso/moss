@@ -80,6 +80,9 @@ pub fn request(
         ensure!(!remaining.is_zero(), "HTTP deadline exceeded");
         let client = Client::builder()
             .no_proxy()
+            // A generic name for services that refuse anonymous clients. A header set by the
+            // caller replaces it.
+            .user_agent("Moss/0.1 (self-hosted assistant)")
             .redirect(reqwest::redirect::Policy::none())
             .timeout(remaining)
             .resolve_to_addrs(host, &addresses)
