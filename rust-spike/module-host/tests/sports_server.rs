@@ -409,6 +409,28 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
     assert_eq!(status, 200, "{text}\n{}", log());
     let (_, mine) = call(Method::GET, "/follows", Some(&cookie), None);
     assert_eq!(json_of(&mine)["follows"].as_array().unwrap().len(), 1, "A sees none of B's team follow");
+    // The overview reads real ESPN through the real fetch path, one person at a time.
+    let started = std::time::Instant::now();
+    let (status, text) = call(Method::GET, "/overview", Some(&other), None);
+    println!("live ESPN overview took {:?}", started.elapsed());
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let theirs = json_of(&text);
+    let cards = theirs["followed"].as_array().unwrap();
+    assert_eq!(cards.len(), 1, "{text}");
+    assert_eq!(cards[0]["name"], "Dallas Cowboys", "{text}");
+    assert_eq!(theirs["degraded"], json!(false), "{text}");
+    assert!(theirs["standings"].as_array().is_some_and(|s| !s.is_empty()), "{text}");
+    let (status, text) = call(Method::GET, "/overview", Some(&cookie), None);
+    assert_eq!(status, 200, "{text}");
+    let mine = json_of(&text);
+    assert_eq!(mine["followed"], json!([]), "A follows no club, so A has no card");
+    assert_eq!(mine["followedLeagues"][0]["competitionKey"], "nfl", "{text}");
+    let (status, text) = call(Method::GET, "/standings?competitionKey=nfl", Some(&cookie), None);
+    assert_eq!(status, 200, "{text}");
+    assert!(json_of(&text)["group"]["sections"].as_array().is_some_and(|s| !s.is_empty()), "{text}");
+    let (status, text) = call(Method::GET, "/results/latest?competitionKey=nfl&teamName=dallas", Some(&other), None);
+    assert_eq!(status, 200, "{text}");
+    println!("live results status {}", json_of(&text)["status"]);
     for entry in walk(&root.join("data")) {
         if entry.file_name().is_some_and(|n| n == "kv.json") {
             let kv = fs::read_to_string(&entry).unwrap_or_default();

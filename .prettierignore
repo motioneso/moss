@@ -120,3 +120,4 @@ modules/sports/tests/fixtures/eng1-teams.json
 modules/sports/tests/fixtures/ncaaf-standings.json
 modules/sports/tests/fixtures/nhl-scoreboard-20261112.json
 modules/sports/tests/fixtures/public-routes.golden.json
+modules/sports/tests/fixtures/overview-routes.golden.json

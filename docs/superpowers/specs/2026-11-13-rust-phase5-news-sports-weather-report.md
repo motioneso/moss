@@ -367,6 +367,57 @@ The Sports package now reads ESPN's public sports data. It still shows no screen
 - No Vikunja card was found for this task.
 - Any screen.
 
+## Sports overview core (part 12a)
+
+### What was built
+
+The Sports package now answers the overview, the standings view and the latest result, with the
+same bodies as the old routes. It still shows no screen.
+
+- Followed clubs appear as cards. A club followed in two competitions (for example a league and a
+  cup) shows one card. The league follow names the card, and the newest follow breaks a tie.
+- A card carries the live or finished game, the last five results, the next match and the league
+  standing line. A follow saved without a permanent club id is listed for the person to resolve
+  and never gets a score.
+- With nothing followed, the overview shows a default slate of five major leagues.
+- ESPN days follow US Eastern time, with the daylight saving rule written out because the package
+  has no time zone database. The overview reads yesterday and today in that zone.
+- The standings route answers a competition's standings, split into conference and division
+  views, and adds the games around today once a tournament's group stage is complete.
+- The latest result reads one club's last ninety days from ESPN, across every competition the
+  person follows it in.
+- The shared store gained two public datasets (club schedule ten minutes, club results three
+  minutes). It holds only public ESPN data, keyed by competition, club and day.
+- The manifest lists the three routes, the two store names and four app map entries.
+
+### Proof
+
+| Claim                                  | Check                                                                                                                                             | Result                                                                                                                          |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Same answers as the old code           | The old overview, standings and result routes were run on recorded ESPN pages for four scenarios and 12 requests, then compared field by field    | Matched                                                                                                                         |
+| A club in two competitions is one card | One club followed in a league and a cup, plus a second club in the same league                                                                    | One card, then two cards                                                                                                        |
+| Evening games land on the right day    | Winter and summer instants, both daylight saving edges, month and year edges, and the dates the overview sent to ESPN for a 22:00 Eastern evening | Eastern day used, not the UTC day                                                                                               |
+| Speed                                  | A warm overview with two followed clubs, 30 runs, native build                                                                                    | Native p95 9.9 ms, budget 50 ms                                                                                                 |
+| Another person sees nothing            | Second person against real Postgres through the installed package, seen failing with row security removed                                         | Failed without it, passed with it                                                                                               |
+| Private text stays out                 | Planted text in a follow searched for in the shared store, outgoing addresses and every host call that is not the person's own table              | Not found                                                                                                                       |
+| Native and WebAssembly builds          | Guest tests native, package tests against the built component                                                                                     | Passed                                                                                                                          |
+| Works on the real server               | Real server, real ESPN over HTTPS, two people: one card with standings, the other person sees none                                                | Overview answered 200 in 1.67 s cold; second person got 200; standings 200; results answered "needs_team" for an ambiguous name |
+
+### Not proven
+
+- Headlines, top stories, league news, the gameday hero slides, the featured story body and the
+  tonight band are part 12b. The overview returns them empty and the hero in story mode with no
+  headline, so the old screen would show less than it does today.
+- The old overview also loads headlines. Parity compares everything except those fields.
+- The old result route stamps its own clock. The new one uses the host clock, so that one field
+  is compared for shape only.
+- Daylight saving is a written rule for years from 2007. A future change of the US rule would need
+  an edit.
+- The speed budget is set in the module registry design as p95 route time against the native
+  build. Only the native number is measured here.
+- A club schedule read has no host-side cap beyond the general fetch limits.
+- Any screen.
+
 ## Part 2: shared feed reader
 
 ### What was built

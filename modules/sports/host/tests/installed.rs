@@ -238,6 +238,40 @@ fn another_person_cannot_see_change_or_remove_a_follow_and_the_check_fails_witho
 
 #[test]
 #[ignore = "Only through verify-gate"]
+fn the_overview_shows_each_person_only_their_own_clubs_and_leaks_without_row_security() {
+    let w = World::new();
+    let (a, b) = (w.f.a, w.f.b);
+    let add = |who: uuid::Uuid, competition: &str, key: &str, id: &str| {
+        w.f.rt
+            .block_on(w.f.root.execute(
+                "INSERT INTO app.sports_follows (owner_user_id, competition_key, team_key, source_team_id) VALUES ($1,$2,$3,$4)",
+                &[&who, &competition, &key, &id],
+            ))
+            .unwrap();
+    };
+    add(a, "eng.1", "EVE", "368");
+    add(b, "nhl", "BOS", "1");
+    let names = |who: uuid::Uuid| -> Vec<String> {
+        let out = w.call(who, "GET", "/overview", Value::Null);
+        assert_eq!(out["status"], 200, "{out}");
+        out["body"]["followed"].as_array().unwrap().iter().map(|c| c["competitionKey"].as_str().unwrap().to_owned()).collect()
+    };
+    assert_eq!(names(a), vec!["eng.1"]);
+    assert_eq!(names(b), vec!["nhl"]);
+    println!("GREEN: each person's overview holds only their own club");
+
+    // With row security removed the same read hands B both clubs.
+    w.f.rt.block_on(w.f.root.batch_execute("ALTER TABLE app.sports_follows DISABLE ROW LEVEL SECURITY")).unwrap();
+    let open = names(b);
+    w.f.rt.block_on(w.f.root.batch_execute("ALTER TABLE app.sports_follows ENABLE ROW LEVEL SECURITY; ALTER TABLE app.sports_follows FORCE ROW LEVEL SECURITY")).unwrap();
+    assert_eq!(open.len(), 2, "RED expected: B sees A's club with row security removed, got {open:?}");
+    println!("RED: with row security removed B's overview shows A's club");
+    assert_eq!(names(b), vec!["nhl"], "restored");
+    println!("GREEN: row security restored, B sees only their own club again");
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
 fn typed_text_reaches_no_other_table_and_the_export_holds_only_the_owner_rows() {
     let w = World::new();
     let (a, b) = (w.f.a, w.f.b);

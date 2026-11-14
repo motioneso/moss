@@ -3,17 +3,23 @@
 pub mod catalog;
 mod catalog_table;
 pub mod datasets;
+pub mod eastern;
 pub mod espn;
 pub mod espn_games;
+pub mod espn_schedule;
 pub mod espn_standings;
+pub mod followed;
 pub mod follows;
 pub mod identity;
 pub mod input;
 pub mod lifecycle;
+pub mod overview;
 pub mod public_cache;
 pub mod public_routes;
+pub mod results;
 pub mod roster;
 pub mod standings;
+pub mod standings_views;
 pub mod teams;
 pub mod util;
 
@@ -37,6 +43,9 @@ pub fn route_with<H: Host + ?Sized>(host: &H, teams: &dyn TeamList, request: Rou
         ("GET", "/teams/search") => public_routes::search(host, &request),
         ("GET", "/standings-preferences") => standings::get(host),
         ("PUT", "/standings-preferences") => standings::put(host, &request),
+        ("GET", "/overview") => overview::overview(host),
+        ("GET", "/standings") => overview::standings(host, &request),
+        ("GET", "/results/latest") => results::latest(host, &request),
         _ => return Response::new(404, json!({"message":"Route not found"})),
     };
     result.unwrap_or_else(|_| Response::new(500, json!({"message":"Internal server error"})))

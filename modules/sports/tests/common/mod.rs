@@ -2,6 +2,7 @@
 //! An in-memory host that mimics the row rules the guest relies on. Follows belong to one
 //! person, the two unique rules of the real table apply, and saved settings are one value per
 //! person and key. The real-database tests in the host crate prove the same rules in Postgres.
+pub mod both;
 pub mod espn;
 use moss_module_sdk::{
     query::{Compare, Conflict, Filter, Kind, Query},
