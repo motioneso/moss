@@ -319,7 +319,7 @@ fn an_existing_install_survives_the_upgrade() {
     let account_uuid: Uuid = id.parse().unwrap();
     f.rt.block_on(f.root.execute(
         "INSERT INTO app.email_messages(id,connector_account_id,owner_user_id,sender,recipients,subject,snippet,body_excerpt,received_at,external_id)
-         VALUES($1,$2,$3,'boss@example.test','[\"me@example.test\"]','Kept subject','snip','body',now(),'upgrade-1')",
+         VALUES($1,$2,$3,'boss@example.test',ARRAY['me@example.test'],'Kept subject','snip','body',now(),'upgrade-1')",
         &[&Uuid::new_v4(), &account_uuid, &f.a],
     )).unwrap();
 
