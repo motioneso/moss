@@ -82,6 +82,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             page = ('<html><body>guards<script src="https://other.test/off-list.js"></script>'
                     '<script src="https://private.test/private.js"></script></body></html>')
             return self.send(200, page.encode())
+        if path == "/nav1":
+            return self.send(200, b'<html><title>First page</title><body>one<script>setTimeout(() => location.href = "/nav2", 200)</script></body></html>')
+        if path == "/nav2":
+            return self.send(200, b'<html><title>Second page</title><body>two</body></html>')
         if path == "/agg":
             page = "<html><body>" + "".join(f'<script src="/chunk/{n}.js" onload="document.body.append(\'L\')" onerror="document.body.append(\'R\')"></script>' for n in range(8)) + "</body></html>"
             return self.send(200, page.encode())

@@ -432,8 +432,11 @@ fn caps_on_requests_response_size_total_bytes_and_time_hold() {
     let v = w.render("/agg", &["ok.test"]);
     assert_eq!(v["ok"], true, "{v}");
     let text = v["text"].as_str().unwrap();
-    assert_eq!(text.matches('L').count(), 5, "{text}");
-    assert_eq!(text.matches('R').count(), 3, "{text}");
+    assert!(text.matches('L').count() <= 5, "{text}");
+    assert_eq!(text.matches('L').count() + text.matches('R').count(), 8, "{text}");
+    // The host stops downloading once the total is spent, not only once the page stops loading.
+    let downloaded = w.site.log().lines().filter(|l| l.contains("/chunk/")).count();
+    assert!(downloaded <= 6, "{downloaded} of 8 large responses were downloaded");
     // A page whose script never answers ends at the call's deadline.
     CALL_SECONDS.store(4, Ordering::SeqCst);
     let w = World::new();
@@ -469,4 +472,14 @@ fn private_text_stays_out_of_activity_and_one_person_never_sees_anothers() {
     w.call(a, "route", json!({"url":"https://ok.test/news","allowedHosts":["ok.test"]})).unwrap();
     let theirs = w.services.activity(&w.manifest.id, &AccessContext::new(b, "read")).unwrap();
     assert!(!theirs.is_empty(), "the control did not expose the row");
+}
+
+#[test]
+#[ignore = "Needs the pinned browser (MOSS_BROWSER_DIR) and bubblewrap"]
+fn the_returned_address_is_the_page_that_was_read_after_a_script_navigates() {
+    let w = World::new();
+    let v = w.render("/nav1", &["ok.test"]);
+    assert_eq!(v["ok"], true, "{v}");
+    assert_eq!(v["title"], "Second page", "{v}");
+    assert_eq!(v["finalUrl"], "https://ok.test/nav2", "{v}");
 }

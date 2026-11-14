@@ -231,7 +231,26 @@ impl Launcher {
     }
 }
 
+/// Kills process `pid` at `at` unless the returned sender is dropped first. Ending a browser this
+/// way needs no pipe write, so a browser that stops reading cannot outlive its render.
+pub fn watchdog(pid: u32, at: std::time::Instant) -> std::sync::mpsc::Sender<()> {
+    let (stop, wait) = std::sync::mpsc::channel::<()>();
+    std::thread::spawn(move || {
+        let wait_for = at.saturating_duration_since(std::time::Instant::now());
+        if matches!(
+            wait.recv_timeout(wait_for),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+        ) {
+            let _ = Command::new("/bin/kill").args(["-9", &pid.to_string()]).status();
+        }
+    });
+    stop
+}
+
 impl Process {
+    pub fn pid(&self) -> u32 {
+        self.child.id()
+    }
     /// True once the browser process has exited.
     pub fn exited(&mut self) -> bool {
         !matches!(self.child.try_wait(), Ok(None))
@@ -266,6 +285,19 @@ mod tests {
         // No port-based debugging, and the page cannot see the host's folders.
         assert!(!args.iter().any(|a| a.starts_with("--remote-debugging-port")));
         assert!(!args.iter().any(|a| a == "/home" || a == "/root"));
+    }
+
+    #[test]
+    fn the_watchdog_kills_a_process_at_its_deadline_and_spares_one_that_finished() {
+        use std::time::{Duration, Instant};
+        let mut late = Command::new("sleep").arg("30").spawn().unwrap();
+        let _held = watchdog(late.id(), Instant::now() + Duration::from_millis(300));
+        let started = Instant::now();
+        assert!(!late.wait().unwrap().success());
+        assert!(started.elapsed() < Duration::from_secs(10));
+        let mut early = Command::new("sleep").arg("1").spawn().unwrap();
+        drop(watchdog(early.id(), Instant::now() + Duration::from_millis(300)));
+        assert!(early.wait().unwrap().success());
     }
 
     #[test]

@@ -7,7 +7,7 @@
 use super::{
     cdp::{Connection, Writer},
     evidence::{self, Evidence},
-    launch::Launcher,
+    launch::{self, Launcher},
     Reason, MAX_AGGREGATE_BYTES, MAX_CONCURRENT, MAX_REQUESTS, MAX_RESPONSE_BYTES,
 };
 use crate::public_web::PublicWeb;
@@ -71,6 +71,8 @@ struct Job {
     url: String,
     kind: String,
     accept: Option<String>,
+    /// True for a document loading in the page's top frame.
+    main: bool,
 }
 
 struct Shared {
@@ -101,6 +103,14 @@ impl Shared {
         );
     }
     fn serve(&self, job: &Job) {
+        // Room for a full response is taken before the download, so the total cannot pass the cap
+        // however many requests are in flight.
+        let before = self.bytes.fetch_add(MAX_RESPONSE_BYTES, Ordering::SeqCst);
+        if before + MAX_RESPONSE_BYTES > MAX_AGGREGATE_BYTES {
+            self.bytes.fetch_sub(MAX_RESPONSE_BYTES, Ordering::SeqCst);
+            self.finish(job, &json!({"ok":false}), false);
+            return;
+        }
         let remaining = self.deadline.saturating_duration_since(Instant::now());
         let mut params = json!({
             "url": job.url,
@@ -121,21 +131,31 @@ impl Shared {
         }
         let answer = self.web.fetch_for_browser(&params, remaining);
         trace!("served {} ok={} reason={}", job.url, answer["ok"], answer["reason"]);
-        let body = answer.get("body").and_then(Value::as_str).unwrap_or("");
-        let size = body.len() / 4 * 3;
-        let fits = self.bytes.fetch_add(size, Ordering::SeqCst) + size <= MAX_AGGREGATE_BYTES;
-        let good = answer["ok"] == true && fits;
-        if job.kind == "Document" {
-            let mut slot = self.document.lock().expect("document slot");
-            if slot.is_none() {
-                *slot = Some(if good {
-                    Ok(answer["finalUrl"].as_str().unwrap_or(&job.url).to_owned())
-                } else {
-                    Err(())
-                });
-            }
+        let good = answer["ok"] == true;
+        // A refused answer that came with a status means a response was downloaded and thrown
+        // away, so it still counts at full size.
+        let used = if good {
+            answer.get("body").and_then(Value::as_str).map_or(0, |b| b.len() / 4 * 3)
+        } else if answer.get("status").is_some() {
+            MAX_RESPONSE_BYTES
+        } else {
+            0
+        };
+        self.bytes.fetch_sub(MAX_RESPONSE_BYTES - used.min(MAX_RESPONSE_BYTES), Ordering::SeqCst);
+        self.finish(job, &answer, good);
+    }
+
+    fn finish(&self, job: &Job, answer: &Value, good: bool) {
+        // The newest top-frame document wins, so the address returned matches the page read.
+        if job.kind == "Document" && job.main {
+            *self.document.lock().expect("document slot") = Some(if good {
+                Ok(answer["finalUrl"].as_str().unwrap_or(&job.url).to_owned())
+            } else {
+                Err(())
+            });
         }
         if good {
+            let body = answer.get("body").and_then(Value::as_str).unwrap_or("");
             let content_type = answer["contentType"].as_str().unwrap_or(if job.kind == "Document" {
                 "text/html"
             } else {
@@ -181,6 +201,9 @@ pub fn render(
         });
     }
     let writer = conn.writer.clone();
+    // Ends the browser if the render has not finished shortly after its deadline, even when a
+    // pipe write is stuck.
+    let stop = launch::watchdog(process.pid(), page.deadline + Duration::from_secs(2));
     let shared = Arc::new(Shared {
         web: web.clone(),
         writer: writer.clone(),
@@ -210,9 +233,12 @@ pub fn render(
         });
     }
     let result = drive(&mut conn, &shared, &jobs, page);
-    // Closing the queue ends the workers. Dropping the process kills the browser.
+    // Closing the queue ends the workers. Killing the browser comes first and needs no pipe
+    // write, so a browser that stopped reading cannot hold the render open.
     drop(jobs);
-    let _ = writer.send("Browser.close", json!({}), None);
+    drop(process);
+    drop(stop);
+    drop(writer);
     result
 }
 
@@ -307,6 +333,7 @@ fn drive(
                     accept: params["request"]["headers"]["Accept"]
                         .as_str()
                         .map(str::to_owned),
+                    main: params["frameId"] == target_id.as_str(),
                 };
                 let method = params["request"]["method"].as_str().unwrap_or("");
                 if count > MAX_REQUESTS
