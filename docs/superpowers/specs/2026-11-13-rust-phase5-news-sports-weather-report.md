@@ -528,3 +528,49 @@ scripts/run-gate.sh start --gate test:rust-news-live
 ### Review round 1
 
 Codex found no blocker, three major and two minor points. Fixed: the privacy test now completes a real preview and save with the marker in hand. Recorded above as not closed because they need a host change: single-use previews under concurrency, and verdicts tied to the model. The two minor points are listed in the not-proven list.
+
+## Part 5a: compiling the News page (JS-284)
+
+The News page now builds itself inside the package and the overview route serves it. No screens.
+
+### What was built
+
+- One new route, `GET /overview`. A stored page that is still fresh is served as it stands. A missing or out-of-date stored page is compiled on the spot, because the refresh job that will do this later is part 5b.
+- Gathering: stories come from the catalog sources the person has on (or the catalog defaults when they have picked none), from saved feed sources, from saved sites read page by page, and from saved subreddits through the shared reader. At most 15 stories per source and 300 in all, as before.
+- Filtering: excluded publishers, stories older than a week, stories dated too far ahead, repeat addresses and repeat headlines all drop out, in the old order and with the old rules.
+- Ranking: the person's own model scores what is left through the structured call, with the story text marked as untrusted data. When the model cannot answer, or its answer cannot be read, the stories keep the old fixed order (preferred sources first, then newest, then address).
+- The built page is stored for seven days in the person's own snapshot row, with the same size limits the old code enforced before anything was written.
+- The package listing now names the overview route and describes the compiled page. The changelog says the same.
+
+### Proof
+
+| Claim                                                          | Evidence                                                                                                                                                                                                                   |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A canned model ranking orders the page as the old compiler did | Guest test: the model puts the third story first and drops one; the page and the stored snapshot follow that order                                                                                                         |
+| The fixed-order fallback matches the old order                 | Guest test with no model answer: newest first, ties broken by address, exactly the old sort                                                                                                                                |
+| Filters and exclusions hold                                    | Guest test: an excluded, an old, a future-dated and a duplicate story all drop; one story remains                                                                                                                          |
+| Speed stays within budget                                      | Filtering and ordering 300 stories takes well under the 500 ms budget in the guest test (the whole six-test file finishes in about a tenth of a second)                                                                    |
+| Same answer as the old overview route                          | Real-database gate: a stored page served by the package matches the old route step for step, and a second person sees none of it                                                                                           |
+| Row security can fail                                          | The part 3 gate test removes row security from all eight News tables, including the snapshot table, and the second person then reads the first person's rows; restored, they read nothing                                  |
+| Private text stays out of logs, jobs and activity              | The part 3 and 4 gate tests plant a marker in typed text and scan every table, job payload and the server log; the marker is found only in the owner's own rows. This part adds no log lines and no job payloads           |
+| Native and WebAssembly builds                                  | The gate builds the component for WebAssembly and runs the guest tests natively (24) and the package tests against the built component                                                                                     |
+| Live compile on the real server                                | The live gate starts the real Rust server over HTTPS, saves the real BBC feed through the real public-web fetch (nothing intercepted), then reads the overview: 40 real stories compiled, the first a current BBC headline |
+
+### How to run
+
+```
+scripts/run-gate.sh start --gate test:rust-news
+```
+
+```
+scripts/run-gate.sh start --gate test:rust-news-live
+```
+
+### Not proven or not built
+
+- Refresh jobs, the daily schedule, refresh state and source health writes are part 5b. Saving a source or changing a choice does not yet start a refresh; the overview compiles on read instead.
+- Described topics need web search, which this package does not have, so topics add no stories yet. Their labels still show as active topics.
+- The keyed publisher (part 6) adds no stories yet, and story feedback has no host port here, so the relevance step the old compiler could apply is not present.
+- Saved sites with no feed are read page by page with a small tag scan for dates and pictures. Odd page markup can differ from the old parser.
+- A phone or second computer reaching the server was not re-checked in this part. The package adds no screen or listener; the live run used the local secure address.
+- The model ranking quality itself was not judged. Only its ordering effect and the fallback were checked.
