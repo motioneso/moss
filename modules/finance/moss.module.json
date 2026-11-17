@@ -23,7 +23,10 @@
         "app.finance_imports",
         "app.finance_bank_links",
         "app.finance_link_sessions",
-        "app.finance_balance_snapshots"
+        "app.finance_balance_snapshots",
+        "app.finance_budget_assignments",
+        "app.finance_budget_drafts",
+        "app.finance_budget_draft_lines"
       ]
     },
     {
@@ -48,7 +51,14 @@
         "finance.import.apply",
         "finance.connect.start",
         "finance.connect.poll",
-        "finance.sync.run-now"
+        "finance.sync.run-now",
+        "finance.budget.configure",
+        "finance.budget.assign",
+        "finance.budget.move",
+        "finance.budget.apply",
+        "finance.budget.draft.build",
+        "finance.budget.draft.update",
+        "finance.budget.draft.start"
       ]
     },
     {
@@ -65,48 +75,6 @@
       "port": "action-policy",
       "operations": ["route-read"],
       "resources": ["sorting", "sorting_new"]
-    },
-    {
-      "port": "db",
-      "operations": ["query"],
-      "resources": [
-        "app.finance_accounts",
-        "app.finance_transactions",
-        "app.finance_activity",
-        "app.finance_items",
-        "app.finance_categories",
-        "app.finance_budget_policy",
-        "app.finance_merchant_rules",
-        "app.finance_imports",
-        "app.finance_budget_assignments",
-        "app.finance_budget_drafts",
-        "app.finance_budget_draft_lines",
-        "app.finance_balance_snapshots"
-      ]
-    },
-    {
-      "port": "tools",
-      "operations": ["run"],
-      "resources": [
-        "finance.manual.account-create",
-        "finance.manual.entry-create",
-        "finance.transactions.categorize",
-        "finance.transactions.categorize-new",
-        "finance.transactions.review-apply",
-        "finance.transactions.bulk-categorize",
-        "finance.transactions.bulk-confirm",
-        "finance.transactions.notes.save",
-        "finance.transactions.splits",
-        "finance.rule.set",
-        "finance.import.apply",
-        "finance.budget.configure",
-        "finance.budget.assign",
-        "finance.budget.move",
-        "finance.budget.apply",
-        "finance.budget.draft.build",
-        "finance.budget.draft.update",
-        "finance.budget.draft.start"
-      ]
     }
   ],
   "database": {
