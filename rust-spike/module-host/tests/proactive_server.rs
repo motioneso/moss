@@ -102,22 +102,18 @@ fn two_people_use_cards_and_feedback_on_the_real_server() {
         std::thread::sleep(Duration::from_millis(100));
     }
 
-    let sign_up = |name: &str| -> (String, Uuid) {
-        let response = client
-            .post(format!("{origin}/api/auth/sign-up/email"))
-            .header("origin", &origin)
-            .json(&json!({"name":name,"email":format!("{}@example.test", name.to_lowercase()),"password":"temporary-proactive-password-316-not-a-real-secret"}))
-            .send()
-            .unwrap();
-        assert_eq!(response.status(), 200);
-        let cookie = response.headers()["set-cookie"].to_str().unwrap().split(';').next().unwrap().to_owned();
-        let body: Value = response.json().unwrap();
-        (cookie, body["user"]["id"].as_str().unwrap().parse().unwrap())
-    };
-    let (ada_cookie, ada) = sign_up("Ada");
-    let (bob_cookie, _bob) = sign_up("Bob");
-
-    // Cards come from the real placement code, as a scanner would place them.
+    // Setup allows one owner over HTTP, so the second person is made in the database with the
+    // first person's password hash and then signs in through the real route.
+    let password = "temporary-proactive-password-316-not-a-real-secret";
+    let response = client
+        .post(format!("{origin}/api/auth/sign-up/email"))
+        .header("origin", &origin)
+        .json(&json!({"name":"Ada","email":"ada@example.test","password":password}))
+        .send()
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    let ada_cookie = response.headers()["set-cookie"].to_str().unwrap().split(';').next().unwrap().to_owned();
+    let ada: Uuid = response.json::<Value>().unwrap()["user"]["id"].as_str().unwrap().parse().unwrap();
     let bootstrap = rt.block_on(async {
         let (db, conn) = tokio_postgres::connect(&std::env::var("JS43_BOOTSTRAP_URL").unwrap(), tokio_postgres::NoTls)
             .await
@@ -127,6 +123,27 @@ fn two_people_use_cards_and_feedback_on_the_real_server() {
         });
         db
     });
+    let bob = Uuid::new_v4();
+    rt.block_on(async {
+        bootstrap
+            .execute("INSERT INTO app.users (id, name, email, email_verified, created_at, updated_at, is_instance_admin, status) VALUES ($1, 'Bob', 'bob@example.test', false, now(), now(), false, 'active')", &[&bob])
+            .await
+            .unwrap();
+        bootstrap
+            .execute("INSERT INTO app.auth_accounts (id, account_id, provider_id, user_id, password, created_at, updated_at) SELECT gen_random_uuid(), $1::uuid::text, 'credential', $1::uuid, password, now(), now() FROM app.auth_accounts WHERE user_id = $2::uuid AND provider_id = 'credential'", &[&bob, &ada])
+            .await
+            .unwrap();
+    });
+    let signed = client
+        .post(format!("{origin}/api/auth/sign-in/email"))
+        .header("origin", &origin)
+        .json(&json!({"email":"bob@example.test","password":password}))
+        .send()
+        .unwrap();
+    assert_eq!(signed.status(), 200, "second person sign-in");
+    let bob_cookie = signed.headers()["set-cookie"].to_str().unwrap().split(';').next().unwrap().to_owned();
+
+    // Cards come from the real placement code, as a scanner would place them.
     rt.block_on(bootstrap.execute(
         "INSERT INTO app.preferences(owner_user_id,key,value_json)
          SELECT id,'quiet-hours','{\"enabled\":false,\"start\":\"22:00\",\"end\":\"08:00\",\"authority\":\"canonical\"}'::jsonb FROM app.users",
