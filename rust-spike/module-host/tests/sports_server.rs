@@ -687,9 +687,9 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
         services.approve_tool(&access, "sports", "sports.followTeam", &league).unwrap();
         let (status, text) = tool(&cookie, "sports.followTeam", league.clone());
         assert_eq!(status, 200, "{text}\n{}", log());
-        assert!(json_of(&text)["data"]["follow"]["id"].is_string(), "{text}");
+        let new_id = json_of(&text)["data"]["follow"]["id"].as_str().expect(&text).to_owned();
         let (_, text) = call(Method::GET, "/follows", Some(&other), None);
-        assert!(!text.contains("\"nfl\""), "the other person must not see it: {text}");
+        assert!(!text.contains(&new_id), "the other person must not see it: {text}");
         let (status, text) = tool(&cookie, "sports.followedFactsToday", json!({"timeZone":"America/New_York"}));
         assert_eq!(status, 200, "{text}\n{}", log());
         println!("sports live: followedFactsToday answered state {}", json_of(&text)["data"]["evidence"]["state"]);
