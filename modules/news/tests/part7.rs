@@ -182,3 +182,88 @@ fn private_text_stays_out_of_reads_logs_jobs_and_activity_rows() {
     assert!(f.jobs.borrow().iter().all(|(_, _, _, p)| !p.to_string().contains(MARK)));
     assert!(f.notices.borrow().iter().all(|(_, p)| !p.to_string().contains(MARK)));
 }
+
+fn mark(f: &Fake, story: &str, kind: &str, reason: Option<&str>) -> (u16, Value) {
+    f.route("POST", "/story-feedback", &[], json!({"storyRef": story, "kind": kind, "reason": reason}))
+}
+
+fn heads(f: &Fake) -> Vec<String> {
+    let out = tool(f, "news.topHeadlinesToday", json!({})).unwrap();
+    out["data"]["evidence"]["stories"].as_array().unwrap().iter().map(|s| s["id"].as_str().unwrap().to_owned()).collect()
+}
+
+#[test]
+fn story_feedback_marks_lists_changes_and_undoes() {
+    let f = Fake::new();
+    store_page(&f, A, vec![article(1, None), article(2, None)], FUTURE);
+    let (status, body) = mark(&f, "a1", "less_like_this", Some("  too much  "));
+    assert_eq!(status, 200);
+    assert_eq!(body["feedback"]["reason"], json!("too much"));
+    let id = body["feedback"]["id"].as_str().unwrap().to_owned();
+    // A repeat replaces the earlier choice.
+    let (_, again) = mark(&f, "a1", "more_like_this", None);
+    assert_eq!(again["feedback"]["id"], json!(id));
+    assert_eq!(again["feedback"]["kind"], json!("more_like_this"));
+    assert_eq!(f.rows("app.news_story_feedback").len(), 1);
+    assert_eq!(f.route("GET", "/story-feedback", &[], Value::Null).1["feedback"].as_array().unwrap().len(), 1);
+    let (status, changed) = f.route("PATCH", "/story-feedback/:id", &[("id", &id)], json!({"reason": "later"}));
+    assert_eq!((status, changed["feedback"]["reason"].clone()), (200, json!("later")));
+    assert_eq!(f.route("POST", "/story-feedback/:id/undo", &[("id", &id)], Value::Null).0, 200);
+    assert_eq!(f.route("POST", "/story-feedback/:id/undo", &[("id", &id)], Value::Null).0, 404);
+    assert!(f.rows("app.news_story_feedback").is_empty());
+}
+
+#[test]
+fn story_feedback_refuses_bad_input() {
+    let f = Fake::new();
+    store_page(&f, A, vec![article(1, None)], FUTURE);
+    assert_eq!(mark(&f, "nope", "less_like_this", None).0, 404);
+    assert_eq!(mark(&f, "a1", "sideways", None).0, 400);
+    assert_eq!(mark(&f, "", "less_like_this", None).0, 400);
+    assert_eq!(mark(&f, "a1", "less_like_this", Some(&"x".repeat(501))).0, 400);
+    assert!(f.rows("app.news_story_feedback").is_empty());
+}
+
+#[test]
+fn a_story_marked_less_is_hidden_from_every_read_until_undone() {
+    let f = Fake::new();
+    store_page(&f, A, vec![article(1, None), article(2, None)], FUTURE);
+    assert_eq!(heads(&f), vec!["a1", "a2"]);
+    let id = mark(&f, "a1", "less_like_this", None).1["feedback"]["id"].as_str().unwrap().to_owned();
+    assert_eq!(heads(&f), vec!["a2"]);
+    let beat = tool(&f, "news.heartbeatHeadlines", json!({})).unwrap();
+    assert_eq!(beat["data"]["items"].as_array().unwrap().len(), 1);
+    f.route("POST", "/story-feedback/:id/undo", &[("id", &id)], Value::Null);
+    assert_eq!(heads(&f), vec!["a1", "a2"]);
+}
+
+#[test]
+fn another_person_gets_none_of_my_story_feedback() {
+    let f = Fake::new();
+    store_page(&f, A, vec![article(1, None)], FUTURE);
+    store_page(&f, B, vec![article(1, None)], FUTURE);
+    let id = mark(&f, "a1", "less_like_this", Some(MARK)).1["feedback"]["id"].as_str().unwrap().to_owned();
+    f.as_actor(B);
+    assert_eq!(f.route("GET", "/story-feedback", &[], Value::Null).1["feedback"], json!([]));
+    assert_eq!(heads(&f), vec!["a1"]);
+    assert_eq!(f.route("PATCH", "/story-feedback/:id", &[("id", &id)], json!({"reason": "x"})).0, 404);
+    assert_eq!(f.route("POST", "/story-feedback/:id/undo", &[("id", &id)], Value::Null).0, 404);
+    f.as_actor(A);
+    assert_eq!(f.rows("app.news_story_feedback").len(), 1);
+    assert_eq!(heads(&f), Vec::<String>::new());
+}
+
+#[test]
+fn story_feedback_reason_stays_out_of_jobs_and_notices() {
+    let f = Fake::new();
+    store_page(&f, A, vec![article(1, None)], FUTURE);
+    mark(&f, "a1", "less_like_this", Some(MARK));
+    tool(&f, "news.refreshNews", json!({})).unwrap();
+    for (port, _, resource, parameters) in f.calls.borrow().iter() {
+        if port == "jobs" || port == "notify" || resource.contains("log") {
+            assert!(!parameters.to_string().contains(MARK), "{port} {resource}");
+        }
+    }
+    assert!(f.jobs.borrow().iter().all(|(_, _, _, p)| !p.to_string().contains(MARK)));
+    assert!(f.notices.borrow().iter().all(|(_, p)| !p.to_string().contains(MARK)));
+}

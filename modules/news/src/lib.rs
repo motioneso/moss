@@ -11,6 +11,7 @@ pub mod lifecycle;
 pub mod media;
 pub mod personalization;
 pub mod policy;
+pub mod feedback;
 pub mod prefs;
 pub mod previews;
 pub mod refresh;
@@ -35,6 +36,10 @@ pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
         ("GET", "/overview") => compile::overview(host),
         ("GET", "/images/:article_id") => media::image(host, &request),
         ("GET", "/favicon/:domain") => media::favicon(host, &request),
+        ("GET", "/story-feedback") => feedback::list(host),
+        ("POST", "/story-feedback") => feedback::create(host, &request),
+        ("PATCH", "/story-feedback/:id") => feedback::change_reason(host, &request),
+        ("POST", "/story-feedback/:id/undo") => feedback::undo(host, &request),
         ("GET", "/prefs") => prefs::list(host),
         ("POST", "/prefs") => prefs::create(host, &request),
         ("DELETE", "/prefs/:id") => prefs::remove(host, &request),

@@ -468,7 +468,14 @@ fn installed_news_package_serves_routes_from_the_real_server() {
     assert_eq!(raw("/api/m/news/images/not-a-story", &cookie).0, 404);
     let (icon_status, icon_kind, _, icon_bytes) = raw("/api/m/news/favicon/feeds.bbci.co.uk", &cookie);
     println!("news live: icon for the saved publisher -> {icon_status} {icon_kind} {} bytes", icon_bytes.len());
-    assert!(matches!(icon_status, 200 | 404), "icon status {icon_status}");
+    // The feed host itself publishes no icon (the real site answers 404), so the saved feed has
+    // none. The catalog publisher's own site has one and it must arrive as a real icon.
+    assert_eq!(icon_status, 404, "the feed host has no icon, so none is served");
+    let (status, kind, _, bytes) = raw("/api/m/news/favicon/www.bbc.com", &cookie);
+    println!("news live: icon for the catalog publisher -> {status} {kind} {} bytes", bytes.len());
+    assert_eq!(status, 200, "the catalog publisher's icon is served");
+    assert!(kind.starts_with("image/") && bytes.len() > 100, "{kind}");
+    assert_eq!(raw("/api/m/news/favicon/www.bbc.com", &other).0, 200, "a catalog publisher is not private data");
     assert_eq!(raw("/api/m/news/favicon/unsaved.example.org", &cookie).0, 404, "an unseen publisher is refused");
     assert_eq!(raw("/api/m/news/favicon/feeds.bbci.co.uk", &other).0, 404, "another person has no such publisher");
     // The refresh left a success time and the other person has no refresh record of their own work.

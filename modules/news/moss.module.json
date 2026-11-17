@@ -4,7 +4,7 @@
   "name": "News",
   "publisher": "Moss",
   "version": "0.1.0",
-  "description": "Keeps each person's own News choices, private to the owner. People can pick catalog sources and topics, exclude publishers by domain, and remove sources they added. A person's added sources, topics and exclusions can be exported, and account deletion covers all eight News tables. A person can add a source by typing a site address or a subreddit. Moss reads the public site, finds its feed, asks the person's own AI model whether the source is acceptable, and shows a preview to confirm. Adding a topic or changing one needs web search, which is not part of this package, so those requests are refused. The News page is compiled from the active sources: stories are filtered, ranked by the person's own AI model with a fixed-order fallback, stored as a snapshot and served by the overview route. Changes to a person's choices queue a refresh job that rebuilds the page, and a daily check at 04:43 UTC re-reads every added source and topic and records its health. Story pictures and publisher icons are served only for stories and publishers the person already sees. Five chat tools read the stored headlines, check a source before it is added, report added-source status and ask for a refresh, and the Briefings module can read the top headlines. Story feedback and the screens are not part of this package yet.",
+  "description": "Keeps each person's own News choices, private to the owner. People can pick catalog sources and topics, exclude publishers by domain, and remove sources they added. A person's added sources, topics and exclusions can be exported, and account deletion covers all nine News tables. A person can add a source by typing a site address or a subreddit. Moss reads the public site, finds its feed, asks the person's own AI model whether the source is acceptable, and shows a preview to confirm. Adding a topic or changing one needs web search, which is not part of this package, so those requests are refused. The News page is compiled from the active sources: stories are filtered, ranked by the person's own AI model with a fixed-order fallback, stored as a snapshot and served by the overview route. Changes to a person's choices queue a refresh job that rebuilds the page, and a daily check at 04:43 UTC re-reads every added source and topic and records its health. Story pictures and publisher icons are served only for stories and publishers the person already sees. Five chat tools read the stored headlines, check a source before it is added, report added-source status and ask for a refresh, and the Briefings module can read the top headlines. A person can mark a story as more or less like this; a story marked less is left out of every read of the page. The screens are not part of this package yet.",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
@@ -20,7 +20,8 @@
         "app.news_prefs",
         "app.news_refresh_state",
         "app.news_source_credentials",
-        "app.news_source_exclusions"
+        "app.news_source_exclusions",
+        "app.news_story_feedback"
       ]
     },
     {
@@ -64,7 +65,8 @@
       "sql/0203_news_refresh_history.sql",
       "sql/0204_news_source_health_states.sql",
       "sql/0205_news_credential_status_worker_grant.sql",
-      "sql/0218_news_source_kinds.sql"
+      "sql/0218_news_source_kinds.sql",
+      "sql/0368_news_story_feedback.sql"
     ],
     "ownedTables": [
       "app.news_compilation_snapshots",
@@ -74,7 +76,8 @@
       "app.news_prefs",
       "app.news_refresh_state",
       "app.news_source_credentials",
-      "app.news_source_exclusions"
+      "app.news_source_exclusions",
+      "app.news_story_feedback"
     ],
     "ledger": "core-legacy",
     "access": {
@@ -100,6 +103,9 @@
         "access": "owner-only"
       },
       "app.news_source_exclusions": {
+        "access": "owner-only"
+      },
+      "app.news_story_feedback": {
         "access": "owner-only"
       }
     }
@@ -143,6 +149,26 @@
     {
       "method": "GET",
       "path": "/catalog",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/story-feedback",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/story-feedback",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/story-feedback/:id",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/story-feedback/:id/undo",
       "signIn": true
     },
     {
@@ -313,6 +339,17 @@
       "id": "news.compiled_page",
       "description": "The News page is built from the catalog sources the person has on and the sources they added. Stories from excluded publishers, stories that are too old or repeats are left out. The person's own AI model ranks what is left, and when the model cannot answer the stories keep a fixed order by source and time. The built page is stored for seven days and the overview route serves it, queueing a background refresh when the stored page is missing or out of date. The refresh job rebuilds the page and keeps the last good page if every source fails. Any change to the person's sources, topics, chosen sources or excluded publishers queues a refresh too, and a person can ask for one directly.",
       "errors": []
+    },
+    {
+      "id": "news.story_feedback",
+      "description": "A person can mark a story on their own page as more or less like this, with an optional reason of up to 500 characters, change the reason, and undo the choice. A story marked less is left out of the page, the chat tools and the briefing on every read, until the choice is undone. Choices are private to the person and hold only a story reference, never the headline or link. Story choices do not yet change how stories are ranked, and they are not shared with Briefings, Chat or Settings.",
+      "errors": [
+        {
+          "code": "news.feedback.story_not_found",
+          "class": "validation",
+          "description": "The story is not on the person's page and has no earlier choice."
+        }
+      ]
     },
     {
       "id": "news.story_pictures",

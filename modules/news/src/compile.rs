@@ -183,6 +183,7 @@ struct Saved {
     sources: Vec<Value>,
     topics: Vec<Value>,
     exclusions: Vec<String>,
+    hidden: Vec<String>,
 }
 
 fn read_saved<H: Host + ?Sized>(host: &H) -> Result<Saved> {
@@ -196,7 +197,8 @@ fn read_saved<H: Host + ?Sized>(host: &H) -> Result<Saved> {
         .iter()
         .map(|row| text(row, "canonical_domain").to_owned())
         .collect();
-    Ok(Saved { prefs, sources, topics, exclusions })
+    let hidden = crate::feedback::dismissed(host)?;
+    Ok(Saved { prefs, sources, topics, exclusions, hidden })
 }
 
 fn active_custom(source: &Value, exclusions: &[String]) -> bool {
@@ -848,7 +850,10 @@ fn compose(snapshot: &Value, saved: &Saved, now_ms: i64, degraded: bool) -> Valu
             rows.iter()
                 .filter(|article| {
                     let published = parse_ms(text(article, "publishedAt")).unwrap_or_default();
-                    if published < cutoff || excluded(&saved.exclusions, text(article, "canonicalDomain")) {
+                    if published < cutoff
+                        || excluded(&saved.exclusions, text(article, "canonicalDomain"))
+                        || saved.hidden.iter().any(|hidden| hidden == text(article, "id"))
+                    {
                         return false;
                     }
                     if seen.contains(&text(article, "url").to_owned()) {

@@ -18,13 +18,25 @@ pub fn files(root: &Path, component: &[u8]) -> Result<BTreeMap<String, Vec<u8>>>
         ("CHANGELOG.md".into(), include_bytes!("../../CHANGELOG.md").to_vec()),
     ]);
     for path in &manifest.database.migrations {
-        let frozen = moss_module_host::legacy::entry("news", path)
-            .ok_or_else(|| anyhow::anyhow!("News SQL is not in the legacy inventory"))?;
-        let bytes = std::fs::read(root.join("packages/news").join(path))?;
-        anyhow::ensure!(
-            frozen.raw == moss_module_host::trust::digest(&bytes),
-            "Legacy News SQL changed"
-        );
+        let bytes = if let Some(frozen) = moss_module_host::legacy::entry("news", path) {
+            let bytes = std::fs::read(root.join("packages/news").join(path))?;
+            anyhow::ensure!(
+                frozen.raw == moss_module_host::trust::digest(&bytes),
+                "Legacy News SQL changed"
+            );
+            bytes
+        } else {
+            let bytes = std::fs::read(root.join("modules/news").join(path))?;
+            let pinned = match path.as_str() {
+                "sql/0368_news_story_feedback.sql" => "e02522e4628762b106a14c17b0ae8567497d2016d0f7a09af375115dc931d34e",
+                _ => "",
+            };
+            anyhow::ensure!(
+                moss_module_host::trust::digest(&bytes) == pinned,
+                "News migration bytes changed: {path}"
+            );
+            bytes
+        };
         files.insert(path.clone(), bytes);
     }
     Ok(files)
