@@ -75,6 +75,22 @@ fn current_url() -> String {
     )
 }
 
+/// The `focus` preset in the address, if it is a short lowercase word. The module decides
+/// whether it knows the preset.
+fn focus_of(search: &str) -> String {
+    let query = search.trim_start_matches('?');
+    query
+        .split('&')
+        .find_map(|pair| pair.strip_prefix("focus="))
+        .filter(|v| !v.is_empty() && v.len() <= 20 && v.bytes().all(|b| b.is_ascii_lowercase()))
+        .unwrap_or_default()
+        .to_string()
+}
+
+fn current_focus() -> String {
+    focus_of(&window().location().search().unwrap_or_default())
+}
+
 fn current_path() -> String {
     let path = window()
         .location()
@@ -183,6 +199,7 @@ fn Frame(shell: ShellView, modules: Vec<api::ModuleNav>) -> impl IntoView {
     let wide = media_signal(WIDE_QUERY);
     let phone = media_signal(PHONE_QUERY);
     let path = RwSignal::new(current_path());
+    let focus = RwSignal::new(current_focus());
     let rail = RwSignal::new(load_nav_rail());
     let mobile_nav_open = RwSignal::new(false);
     let chat_open = RwSignal::new(false);
@@ -194,7 +211,10 @@ fn Frame(shell: ShellView, modules: Vec<api::ModuleNav>) -> impl IntoView {
         chat_expanded_wish.get() && dock_chat.get() && chat_open.get() && !phone.get()
     });
 
-    let on_pop = Closure::<dyn Fn()>::new(move || path.set(current_path()));
+    let on_pop = Closure::<dyn Fn()>::new(move || {
+        path.set(current_path());
+        focus.set(current_focus());
+    });
     window().set_onpopstate(Some(on_pop.as_ref().unchecked_ref()));
     on_pop.forget();
 
@@ -208,6 +228,7 @@ fn Frame(shell: ShellView, modules: Vec<api::ModuleNav>) -> impl IntoView {
                 .history()
                 .and_then(|h| h.push_state_with_url(&wasm_bindgen::JsValue::NULL, "", Some(&to)));
         }
+        focus.set(focus_of(to.split_once('?').map_or("", |(_, q)| q)));
         path.set(route);
         if mobile_nav_open.get_untracked() {
             if let Some(button) = open_nav_button.get_untracked() {
@@ -518,11 +539,16 @@ fn Frame(shell: ShellView, modules: Vec<api::ModuleNav>) -> impl IntoView {
                         } else if path.get() == "/modules" {
                             view! { <crate::modules_page::ModulesPage /> }.into_any()
                         } else if let Some(m) = modules.iter().find(|m| m.path == path.get()) {
-                            let src = format!(
+                            let mut src = format!(
                                 "/module-frame?module={}&path={}",
                                 js_sys::encode_uri_component(&m.module),
                                 js_sys::encode_uri_component(&m.path)
                             );
+                            let wanted = focus.get();
+                            if !wanted.is_empty() {
+                                src.push_str("&focus=");
+                                src.push_str(&wanted);
+                            }
                             view! {
                                 <iframe class="module-screen" title=m.label.clone() src=src></iframe>
                             }.into_any()
@@ -558,5 +584,20 @@ fn NotPortedYet() -> impl IntoView {
             <div class="jds-empty__title">"Not built in the Rust app yet"</div>
             <div class="jds-empty__sub">"Today and the chat are the first screens. This one comes in a later phase."</div>
         </div>
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::focus_of;
+
+    #[test]
+    fn focus_is_a_short_lowercase_word_or_nothing() {
+        assert_eq!(focus_of("?focus=atrisk"), "atrisk");
+        assert_eq!(focus_of("?a=1&focus=donetoday"), "donetoday");
+        assert_eq!(focus_of("?focus=At-Risk"), "");
+        assert_eq!(focus_of("?focus="), "");
+        assert_eq!(focus_of("?focus=aaaaaaaaaaaaaaaaaaaaaaaaa"), "");
+        assert_eq!(focus_of(""), "");
     }
 }

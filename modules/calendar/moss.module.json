@@ -4,7 +4,7 @@
   "name": "Calendar",
   "description": "Calendar cached-event screens and draft tools; signed-in HTTPS Calendar pages; provider execution and full shell composition remain incomplete.",
   "publisher": "Moss",
-  "version": "0.25.0",
+  "version": "0.30.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -25,6 +25,11 @@
       "resources": ["call", "new"]
     },
     {
+      "port": "api",
+      "operations": ["call"],
+      "resources": ["tasks", "connectors"]
+    },
+    {
       "port": "jobs",
       "operations": ["enqueue"],
       "resources": ["calendar-cache-evict-event"]
@@ -38,7 +43,8 @@
         "calendar.task-reference",
         "calendar.briefing-reference",
         "calendar.ui-view",
-        "calendar.source-behaviors"
+        "calendar.source-behaviors",
+        "calendar.cache-write"
       ]
     }
   ],
@@ -68,6 +74,7 @@
       "sql/0236_day_plan_worker_apply_grants.sql"
     ],
     "ledger": "core-legacy",
+    "ownerDelete": ["app.calendar_events"],
     "access": {
       "app.calendar_events": {
         "access": "owner-or-share",
@@ -175,6 +182,9 @@
       "signIn": true
     }
   ],
+  "requires": {
+    "tasks": ">=0.1.1, <1.0.0"
+  },
   "provides": {
     "listEvents": "1.0.0",
     "getEvent": "1.0.0",
@@ -182,7 +192,12 @@
     "createPlan": "1.0.0",
     "saveDraft": "1.0.0",
     "reserveAutoPlan": "1.0.0",
-    "findUnfinishedBatch": "1.0.0"
+    "findUnfinishedBatch": "1.0.0",
+    "getSourceSwitches": "1.0.0",
+    "upsertCachedEvent": "1.0.0",
+    "pruneCachedEvents": "1.0.0",
+    "evictCachedEvent": "1.0.0",
+    "importCalendarMirror": "1.0.0"
   },
   "icons": ["icons/calendar.svg"],
   "accounts": {
@@ -192,11 +207,15 @@
   "features": [
     {
       "id": "calendar.source-switches",
-      "description": "The Calendar settings screen has two switches, Include in briefings and Use for planning, both on by default. They save to the account's source-behavior preferences and change nothing for other modules. The Briefings module does not read them in this Rust version yet."
+      "description": "The Calendar settings screen has two switches, Include in briefings and Use for planning, both on by default. They save to the account's source-behavior preferences and change nothing for other modules. The Briefings module reads them: it leaves tomorrow's calendar out of the evening briefing when the first is off, and plans no day blocks when the second is off."
+    },
+    {
+      "id": "calendar.cache-api",
+      "description": "Connectors adds and updates cached events through a public interface, and removes the ones a sync no longer sees. Only the signed-in person's own events are touched."
     },
     {
       "id": "calendar.data",
-      "description": "Reads cached events and saves private day-plan drafts. Provider execution is not included in this package checkpoint.",
+      "description": "Reads cached events and saves private day-plan drafts. Writing events to the provider calendar is done by the three write tools below, which go through Connectors.",
       "errors": [
         {
           "code": "calendar-unavailable",
@@ -332,6 +351,10 @@
     {
       "id": "calendar.saved_day_plan_operation_status",
       "description": "Read saved apply progress through the installed API and original Calendar URL. Preserves selected item order, pending or completed status and access-denied guidance. Owner-only stored operations remain private. Reading never runs a provider action; apply, retry, recovery and confirmation execution remain unavailable. Invalid ids are rejected, missing operations return not found, and unreadable stored batches return an error. Read the current account’s plan and operation ids before retrying."
+    },
+    {
+      "id": "calendar.preview-busy-check",
+      "description": "When Connectors is installed, the day-plan preview checks proposed times against the person's connected calendar events and marks busy times. Without Connectors the preview works as before and skips the check."
     }
   ],
   "tools": {
@@ -342,6 +365,22 @@
     "calendar.dayPlanDraft": {
       "description": "Save evening intent and untimed task additions to the current day-plan draft for dialog review. Does not schedule events.",
       "risk": "write"
+    },
+    "calendar.createEvent": {
+      "description": "Add a focus-time block to the person's own Google Calendar in the first free slot of the window, then show it in Calendar. Never double-books.",
+      "risk": "write"
+    },
+    "calendar.deleteEvent": {
+      "description": "Delete one event from the person's own Google Calendar and remove it from Calendar. Outlook events are read-only.",
+      "risk": "write"
+    },
+    "calendar.rescheduleEvent": {
+      "description": "Move one event without guests on the person's own Google Calendar and update it in Calendar.",
+      "risk": "write"
+    },
+    "calendar.listVisibleEvents": {
+      "description": "Read the actor's upcoming events from every connected calendar, live first with a cached fallback, with conflict and travel flags.",
+      "risk": "read"
     }
   },
   "jobs": {
@@ -371,5 +410,8 @@
       "description": "Saved account lookahead, prep-task and time-block choices. Time-block mode also saves the matching writeback permission. Auto grants standing permission also honored by the existing app; Rust action execution and source-behavior controls remain open.",
       "scope": "user"
     }
-  ]
+  ],
+  "optionalRequires": {
+    "connectors": ">=0.5.0, <1.0.0"
+  }
 }

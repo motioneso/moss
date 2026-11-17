@@ -2,7 +2,7 @@ use crate::manifest::{Manifest, PORTS};
 use access_context::AccessContext;
 use anyhow::{bail, ensure, Context, Result};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant},
@@ -53,8 +53,13 @@ pub struct CallScope {
     access: AccessContext,
     module: Arc<Manifest>,
     deadline: Instant,
+    kind: String,
 }
 impl CallScope {
+    /// The handler kind that started this call: route, api, job, tool, event, install or health.
+    pub fn kind(&self) -> &str {
+        &self.kind
+    }
     /// Unique to this guest invocation, including nested calls sharing a request ID.
     pub fn call_id(&self) -> uuid::Uuid {
         self.call_id
@@ -282,6 +287,7 @@ impl Host {
             access,
             module: manifest,
             deadline: Instant::now() + deadline,
+            kind: kind.to_owned(),
         };
         let mut completion = Completion {
             scope: scope.clone(),
@@ -340,7 +346,11 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
             || (port == "attachments" && cap.resources.contains("handed")),
         "This resource was not approved"
     );
-    reject_context(&request.parameters)?;
+    if port == "db" && request.operation == "query" {
+        reject_context_outside_columns(&request.parameters)?;
+    } else {
+        reject_context(&request.parameters)?;
+    }
     match port {
         "attachments" => ensure!(
             request.operation == "read" && uuid::Uuid::parse_str(&request.resource).is_ok(),
@@ -379,6 +389,28 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
             crate::manifest::relative_path(&request.resource),
             "The file name is unsafe"
         ),
+        "fetch" if request.resource == crate::public_web::PUBLIC_WEB => ensure!(
+            request.parameters.get("url").is_some_and(Value::is_string),
+            "The request needs a URL"
+        ),
+        "browser" => ensure!(
+            request.resource == crate::public_web::PUBLIC_WEB
+                && request.parameters.get("url").is_some_and(Value::is_string),
+            "The browser opens public pages only"
+        ),
+        // Only whether a credential is saved. The value is never a port result.
+        "credentials" if matches!(request.operation.as_str(), "status" | "forget") => {
+            let name = request.parameters["credential"]
+                .as_str()
+                .context("A credential name is required")?;
+            ensure!(
+                manifest
+                    .credentials
+                    .get(name)
+                    .is_some_and(|c| c.hosts.contains(&request.resource)),
+                "The credential is bound to another service"
+            );
+        }
         "fetch" | "credentials" => {
             let url = request
                 .parameters
@@ -424,6 +456,42 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
                 "Unknown module queue"
             );
         }
+        "jobs"
+            if matches!(
+                request.operation.as_str(),
+                "read" | "list-open" | "read-schedule"
+            ) =>
+        {
+            // Read-only views of the caller's own queue rows. Each takes a fixed parameter shape.
+            let params = request
+                .parameters
+                .as_object()
+                .context("Job read parameters required")?;
+            let valid = match request.operation.as_str() {
+                "read" => {
+                    params.len() == 1
+                        && ["id", "idempotencyKey"].iter().any(|k| {
+                            params
+                                .get(*k)
+                                .and_then(Value::as_str)
+                                .is_some_and(|s| uuid::Uuid::parse_str(s).is_ok())
+                        })
+                }
+                "list-open" => params.is_empty(),
+                _ => {
+                    params.len() == 1
+                        && params
+                            .get("key")
+                            .and_then(Value::as_str)
+                            .is_some_and(|s| !s.is_empty() && s.len() <= 128)
+                }
+            };
+            ensure!(valid, "The job read parameters are not valid");
+            ensure!(
+                manifest.jobs.contains_key(&request.resource),
+                "Unknown module queue"
+            );
+        }
         "jobs" => {
             ensure!(
                 matches!(
@@ -445,7 +513,8 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
                     .as_object()
                     .context("Schedule parameters required")?;
                 ensure!(
-                    p.len() == 3 + usize::from(p.contains_key("key"))
+                    p.len() == 3 + usize::from(p.contains_key("key")) + usize::from(p.contains_key("keepExisting"))
+                        && p.get("keepExisting").is_none_or(Value::is_boolean)
                         && p.get("key").is_none_or(|k| {
                             k.as_str().is_some_and(|s| !s.is_empty() && s.len() <= 128)
                         })
@@ -455,7 +524,7 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
                         && p.get("timezone")
                             .and_then(Value::as_str)
                             .is_some_and(|s| s.len() <= 128),
-                    "Schedule requires only cron, timezone, params and an optional key"
+                    "Schedule requires only cron, timezone, params, an optional key and an optional keepExisting flag"
                 );
                 &request.parameters["params"]
             } else {
@@ -464,7 +533,8 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
             validate_job_parameters(manifest, &request.resource, parameters)?;
         }
         "api" => ensure!(
-            manifest.requires.contains_key(&request.resource),
+            manifest.requires.contains_key(&request.resource)
+                || manifest.optional_requires.contains_key(&request.resource),
             "The module did not declare this public API dependency"
         ),
         "events" if request.operation == "publish" => ensure!(
@@ -484,12 +554,29 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
                 "Tool risk cannot change at call time"
             );
         }
-        "ai" | "embed" => ensure!(
+        "ai" | "embed" | "transcribe" => ensure!(
             request.parameters.get("model").is_none()
                 && request.parameters.get("provider").is_none(),
             "The host chooses the AI model"
         ),
         _ => (),
+    }
+    Ok(())
+}
+/// A typed query may write a column named like an identity field (the old Finance activity log
+/// has an `actor` column). Column names in `values` are data, so only what they hold is checked.
+fn reject_context_outside_columns(parameters: &Value) -> Result<()> {
+    let Value::Object(fields) = parameters else {
+        return reject_context(parameters);
+    };
+    for (name, v) in fields {
+        if name == "values" {
+            if let Value::Object(columns) = v {
+                columns.values().try_for_each(reject_context)?;
+                continue;
+            }
+        }
+        reject_context(&json!({ name.as_str(): v }))?;
     }
     Ok(())
 }
@@ -562,4 +649,21 @@ fn validate_job_parameters(manifest: &Manifest, resource: &str, parameters: &Val
         );
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod column_name_tests {
+    use super::*;
+
+    #[test]
+    fn a_typed_insert_may_name_an_actor_column_but_not_carry_identity() {
+        let ok = json!({"values":{"actor":"user","kind":"x"}});
+        assert!(reject_context_outside_columns(&ok).is_ok());
+        let nested = json!({"values":{"params":{"actorUserId":"u"}}});
+        assert!(reject_context_outside_columns(&nested).is_err());
+        let top = json!({"actor":"user","values":{}});
+        assert!(reject_context_outside_columns(&top).is_err());
+        let sql = json!({"values":{"a":1},"sql":"select 1"});
+        assert!(reject_context_outside_columns(&sql).is_err());
+    }
 }

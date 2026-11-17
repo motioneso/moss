@@ -149,3 +149,70 @@ pub async fn install_module(module: &str, version: &str) -> Result<(), String> {
         .await
         .map(|_| ())
 }
+
+#[derive(serde::Deserialize, Clone, PartialEq)]
+pub struct RefreshAccount {
+    pub status: String,
+}
+
+#[derive(serde::Deserialize, Clone, PartialEq)]
+pub struct RefreshState {
+    #[serde(rename = "refreshId")]
+    pub refresh_id: String,
+    pub status: String,
+    #[serde(default)]
+    pub accounts: Vec<RefreshAccount>,
+}
+
+#[derive(serde::Deserialize)]
+struct RefreshStarted {
+    #[serde(rename = "refreshId")]
+    refresh_id: String,
+}
+
+#[derive(serde::Deserialize)]
+struct ConnectorAccount {
+    #[serde(rename = "providerId")]
+    provider_id: String,
+    status: String,
+}
+
+#[derive(serde::Deserialize)]
+struct ConnectorAccountList {
+    accounts: Vec<ConnectorAccount>,
+}
+
+/// True when the signed-in person has a live Google or IMAP mail account.
+/// A failure reads as false, so the control stays hidden.
+pub async fn has_mail_account() -> bool {
+    get::<ConnectorAccountList>("/api/connectors/accounts")
+        .await
+        .map(|list| {
+            list.accounts.iter().any(|a| {
+                a.status == "active" && (a.provider_id == "google" || a.provider_id.starts_with("imap-"))
+            })
+        })
+        .unwrap_or(false)
+}
+
+/// Starts a refresh. The same key returns the same refresh, so a second click joins it.
+pub async fn start_email_refresh(key: &str) -> Result<String, String> {
+    let response = Request::post("/api/connectors/email-refresh")
+        .json(&serde_json::json!({ "idempotencyKey": key }))
+        .map_err(|e| e.to_string())?
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !response.ok() {
+        return Err(failure(response).await);
+    }
+    response
+        .json::<RefreshStarted>()
+        .await
+        .map(|s| s.refresh_id)
+        .map_err(|e| e.to_string())
+}
+
+pub async fn email_refresh_state(id: &str) -> Result<RefreshState, String> {
+    get(&format!("/api/connectors/email-refresh/{id}")).await
+}

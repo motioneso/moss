@@ -30,6 +30,7 @@ tempfile = "3"
 
 [dev-dependencies]
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+moss-memory-host = { path = "../../memory/host" }
 
 [profile.dev]
 debug = 0

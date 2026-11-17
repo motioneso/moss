@@ -10,6 +10,11 @@ use std::{collections::BTreeMap, sync::Arc};
 
 pub trait QueryEmbeddings: Send + Sync {
     fn embed_query(&self, scope: &CallScope, query: &str) -> Result<Vec<f64>>;
+    /// Name of the model that made the query vector. Search then reads only passages made by
+    /// the same model, so vectors from two models are never compared. `None` reads every row.
+    fn query_model(&self, _scope: &CallScope) -> Result<Option<String>> {
+        Ok(None)
+    }
 }
 
 pub struct MemorySearchPorts {
@@ -60,6 +65,7 @@ impl MemorySearchPorts {
             !vector.is_empty() && vector.len() <= 65536 && vector.iter().all(|n| n.is_finite()),
             "Invalid query embedding"
         );
+        let model = self.embeddings.query_model(scope)?;
         let vector = format!(
             "[{}]",
             vector
@@ -73,7 +79,7 @@ impl MemorySearchPorts {
                 let cx = DataContext::open_bounded(&self.database, scope.access(), scope.remaining()).await.map_err(|_| anyhow::anyhow!("Memory data unavailable"))?;
                 // The explicit owner predicate matches the legacy repository as
                 // well as FORCE RLS. No table, source or actor comes from the guest.
-                let rows = cx.db().query("SELECT source_path,line_start,line_end,text FROM app.memory_chunks WHERE embedding IS NOT NULL AND owner_user_id = app.current_actor_user_id() AND source_kind=$1 ORDER BY embedding <=> $2::text::vector LIMIT $3", &[source, &vector, &input.limit]).await?;
+                let rows = cx.db().query("SELECT source_path,line_start,line_end,text FROM app.memory_chunks WHERE embedding IS NOT NULL AND owner_user_id = app.current_actor_user_id() AND source_kind=$1 AND ($4::text IS NULL OR embed_model_name = $4) ORDER BY embedding <=> $2::text::vector LIMIT $3", &[source, &vector, &input.limit, &model]).await?;
                 let chunks: Vec<_> = rows.iter().map(|row| json!({"sourcePath":row.get::<_,String>(0),"lineStart":row.get::<_,i32>(1),"lineEnd":row.get::<_,i32>(2),"text":row.get::<_,String>(3)})).collect();
                 cx.commit_bounded(scope.remaining()).await.map_err(|_| anyhow::anyhow!("Memory read commit failed"))?;
                 Ok::<_, anyhow::Error>(json!({"chunks":chunks}))

@@ -1,0 +1,295 @@
+{
+  "schemaVersion": 2,
+  "id": "news",
+  "name": "News",
+  "publisher": "Moss",
+  "version": "0.1.0",
+  "description": "Keeps each person's own News choices, private to the owner. People can pick catalog sources and topics, exclude publishers by domain, and remove sources they added. A person's added sources, topics and exclusions can be exported, and account deletion covers all eight News tables. A person can add a source by typing a site address or a subreddit. Moss reads the public site, finds its feed, asks the person's own AI model whether the source is acceptable, and shows a preview to confirm. Adding a topic or changing one needs web search, which is not part of this package, so those requests are refused. The News page is compiled from the active sources: stories are filtered, ranked by the person's own AI model with a fixed-order fallback, stored as a snapshot and served by the overview route. Changes to a person's choices queue a refresh job that rebuilds the page, and a daily check at 04:43 UTC re-reads every added source and topic and records its health. Chat tools and the screens are not part of this package yet.",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "fuelLimit": 200000000,
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "db",
+      "operations": ["query"],
+      "resources": [
+        "app.news_compilation_snapshots",
+        "app.news_custom_sources",
+        "app.news_custom_topics",
+        "app.news_policy_verdicts",
+        "app.news_prefs",
+        "app.news_refresh_state",
+        "app.news_source_credentials",
+        "app.news_source_exclusions"
+      ]
+    },
+    {
+      "port": "context",
+      "operations": ["read", "uuid"],
+      "resources": ["call", "new"]
+    },
+    {
+      "port": "kv",
+      "operations": ["get", "set"],
+      "resources": ["news.source-previews"]
+    },
+    {
+      "port": "fetch",
+      "operations": ["get"],
+      "resources": ["public-web"]
+    },
+    {
+      "port": "jobs",
+      "operations": ["schedule", "unschedule", "enqueue-options", "list-open"],
+      "resources": ["news-refresh", "news-revalidate"]
+    },
+    {
+      "port": "notify",
+      "operations": ["post"],
+      "resources": ["news"]
+    },
+    {
+      "port": "ai",
+      "operations": ["generate"],
+      "resources": ["structured"]
+    }
+  ],
+  "database": {
+    "migrations": [
+      "sql/0151_news_prefs.sql",
+      "sql/0159_news_personalization.sql",
+      "sql/0160_news_discovery.sql",
+      "sql/0161_news_revalidation.sql",
+      "sql/0200_news_source_credentials.sql",
+      "sql/0203_news_refresh_history.sql",
+      "sql/0204_news_source_health_states.sql",
+      "sql/0205_news_credential_status_worker_grant.sql",
+      "sql/0218_news_source_kinds.sql"
+    ],
+    "ownedTables": [
+      "app.news_compilation_snapshots",
+      "app.news_custom_sources",
+      "app.news_custom_topics",
+      "app.news_policy_verdicts",
+      "app.news_prefs",
+      "app.news_refresh_state",
+      "app.news_source_credentials",
+      "app.news_source_exclusions"
+    ],
+    "ledger": "core-legacy",
+    "access": {
+      "app.news_compilation_snapshots": {
+        "access": "owner-only"
+      },
+      "app.news_custom_sources": {
+        "access": "owner-only"
+      },
+      "app.news_custom_topics": {
+        "access": "owner-only"
+      },
+      "app.news_policy_verdicts": {
+        "access": "owner-only"
+      },
+      "app.news_prefs": {
+        "access": "owner-only"
+      },
+      "app.news_refresh_state": {
+        "access": "owner-only"
+      },
+      "app.news_source_credentials": {
+        "access": "owner-only"
+      },
+      "app.news_source_exclusions": {
+        "access": "owner-only"
+      }
+    }
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/overview",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/refresh",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/revalidation",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/sources/preview",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/sources",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/catalog",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/prefs",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/prefs",
+      "signIn": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/prefs/:id",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/personalization",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/source-exclusions",
+      "signIn": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/source-exclusions/:id",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/topics",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/topics/:id",
+      "signIn": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/topics/:id",
+      "signIn": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/sources/:id",
+      "signIn": true
+    }
+  ],
+  "requires": {},
+  "provides": {
+    "collectNewsPersonalizationExportSection": "1.0.0"
+  },
+  "icons": ["icons/news.svg"],
+  "accounts": {
+    "supportsUserDisable": true,
+    "defaultEnabled": true
+  },
+  "lifecycle": {
+    "required": false,
+    "bundled": true,
+    "removable": true
+  },
+  "jobs": {
+    "news-refresh": {
+      "kind": {
+        "kind": "choice",
+        "choices": ["user_refresh"]
+      }
+    },
+    "news-revalidate": {
+      "kind": {
+        "kind": "choice",
+        "choices": ["revalidate"]
+      }
+    }
+  },
+  "screens": {},
+  "navigation": [],
+  "settings": [
+    {
+      "id": "news.prefs",
+      "label": "News",
+      "path": "/settings?section=modules&module=news",
+      "scope": "user",
+      "description": "Chosen sources and topics, excluded publishers and added sources can be changed through the News routes. The Settings page for them is not part of this package yet."
+    }
+  ],
+  "features": [
+    {
+      "id": "news.preferences",
+      "description": "Each person keeps a private list of chosen catalog sources and topics, and of publishers to leave out. Saving the same choice twice returns the first one. At most 100 publishers can be excluded.",
+      "errors": [
+        {
+          "code": "news_personalization_limit",
+          "class": "validation",
+          "description": "The person already excludes 100 publishers, so another cannot be added."
+        }
+      ],
+      "remediations": [
+        {
+          "id": "news.preferences.remove-exclusion",
+          "description": "Remove a publisher from the excluded list, then add the new one.",
+          "path": "/settings?section=modules&module=news"
+        }
+      ]
+    },
+    {
+      "id": "news.added_sources",
+      "description": "A person can add a source by typing a site address or a subreddit name, and remove a source they added. Moss reads the public page over https, looks for its feed, and shows the result for the person to confirm. A site that is redirected to another publisher is refused, a source the person's AI model does not approve is refused, and a person can keep ten added sources. A source name with no address needs web search, which is not part of this package. Saving a source queues a refresh of the page.",
+      "errors": [
+        {
+          "code": "news.add_source.discovery_unavailable",
+          "class": "transient",
+          "description": "The site could not be checked right now, or the AI model gave no usable answer."
+        }
+      ]
+    },
+    {
+      "id": "news.topics",
+      "description": "A person can remove a topic they added. Adding a topic or changing one needs web search, which is not part of this package, so those requests answer that discovery is unavailable.",
+      "errors": [
+        {
+          "code": "news_topic_discovery_unavailable",
+          "class": "prerequisite",
+          "description": "Topic discovery needs web search, which is not available in this package."
+        }
+      ],
+      "remediations": [
+        {
+          "id": "news.topics.remove",
+          "description": "Remove the topic you no longer want. Adding topics returns with web search.",
+          "path": "/settings?section=modules&module=news"
+        }
+      ]
+    },
+    {
+      "id": "news.compiled_page",
+      "description": "The News page is built from the catalog sources the person has on and the sources they added. Stories from excluded publishers, stories that are too old or repeats are left out. The person's own AI model ranks what is left, and when the model cannot answer the stories keep a fixed order by source and time. The built page is stored for seven days and the overview route serves it, queueing a background refresh when the stored page is missing or out of date. The refresh job rebuilds the page and keeps the last good page if every source fails. Any change to the person's sources, topics, chosen sources or excluded publishers queues a refresh too, and a person can ask for one directly.",
+      "errors": []
+    },
+    {
+      "id": "news.source_health",
+      "description": "Once a day at 04:43 UTC, for each person who has added a source or topic, Moss re-reads every added source, asks the person's AI model again when the earlier approval is old, and records whether each source is healthy, unreachable or signed out. A source that could not be read is marked temporarily unavailable and is read again on the next check so it can recover. When a source or topic newly needs attention, one notification says so, with no names in it. A person can also start the check directly.",
+      "errors": [],
+      "remediations": [
+        {
+          "id": "news.source_health.retry",
+          "description": "Open News settings to retry or remove the sources that need attention.",
+          "path": "/settings?section=modules&module=news"
+        }
+      ]
+    }
+  ],
+  "optionalRequires": {}
+}

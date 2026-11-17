@@ -714,6 +714,10 @@ impl Installer {
             .cloned()
             .context("This module has no installed code or retained data")?;
         ensure!(
+            module.manifest.removable(),
+            "This module is part of Moss and cannot be removed"
+        );
+        ensure!(
             !state
                 .installed
                 .values()

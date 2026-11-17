@@ -223,6 +223,7 @@ fn module_worker_and_https_feed_assemble_without_a_desktop() {
         version: "0.1.0".parse().unwrap(),
         compiled_cache: None,
             fuel_ceiling: None,
+            browser_dir: None,
     };
     let application =
         Application::open_extended(&root.join("data"), app.clone(), access.clone(), config)

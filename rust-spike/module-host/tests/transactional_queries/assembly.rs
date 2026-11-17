@@ -70,6 +70,7 @@ fn extended_assembly_installs_and_dispatches_through_the_adapter() {
             version: "0.1.0".parse().unwrap(),
             compiled_cache: None,
             fuel_ceiling: None,
+            browser_dir: None,
         },
         move |next| {
             Ok(Arc::new(Adapter {

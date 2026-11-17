@@ -10,9 +10,11 @@ pub const PORTS: &[&str] = &[
     "kv",
     "vault",
     "fetch",
+    "browser",
     "credentials",
     "ai",
     "embed",
+    "transcribe",
     "jobs",
     "events",
     "api",
@@ -56,6 +58,10 @@ pub struct Manifest {
     pub provides: BTreeMap<String, Version>,
     #[serde(default)]
     pub requires: BTreeMap<String, VersionReq>,
+    /// Modules this one may call when present. They need not be installed first, which lets
+    /// two modules reach each other. A call fails closed while the other module is absent.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub optional_requires: BTreeMap<String, VersionReq>,
     #[serde(default)]
     pub navigation: Vec<Value>,
     #[serde(default)]
@@ -66,6 +72,9 @@ pub struct Manifest {
     pub screens: BTreeMap<String, String>,
     pub icons: Vec<String>,
     pub accounts: Accounts,
+    /// Core modules ship with the host and cannot be removed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lifecycle: Option<Lifecycle>,
     #[serde(default)]
     pub credentials: BTreeMap<String, Credential>,
     #[serde(default)]
@@ -97,6 +106,10 @@ pub struct Database {
     pub ledger: Ledger,
     #[serde(default)]
     pub access: BTreeMap<String, TableAccess>,
+    /// Legacy tables whose rows the owner may delete. The host adds the grant and the
+    /// owner-only policy at install, because module SQL cannot contain either.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub owner_delete: Vec<String>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "access", rename_all = "kebab-case", deny_unknown_fields)]
@@ -127,6 +140,20 @@ pub struct Route {
     pub path: String,
     pub sign_in: bool,
 }
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Lifecycle {
+    pub required: bool,
+    pub bundled: bool,
+    pub removable: bool,
+}
+impl Manifest {
+    pub fn removable(&self) -> bool {
+        self.lifecycle
+            .as_ref()
+            .is_none_or(|l| l.removable && !l.required)
+    }
+}
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Accounts {
@@ -141,12 +168,26 @@ pub struct Credential {
     pub scope: CredentialScope,
     pub hosts: BTreeSet<String>,
     pub attachment: Attachment,
+    /// Other declared credentials the host attaches together with this one, so a request can
+    /// carry an instance key and a per-account token without the module holding either.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub with: Vec<String>,
+    /// Reply field names handed to the module although the name looks secret. The value is
+    /// still redacted if it equals a stored secret.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub expose_fields: BTreeSet<String>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Exchange {
     pub endpoint: String,
     pub grant_type: String,
+    /// Body encoding sent to the token endpoint. Form unless the declaration says json.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub format: Option<String>,
+    /// Name of the one body field the module may supply to a `token_swap` exchange.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input: Option<String>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -184,6 +225,8 @@ pub enum Attachment {
     Header(String),
     Basic,
     Body(String),
+    /// Several named body fields, wire name to stored field name.
+    Fields(BTreeMap<String, String>),
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(
@@ -209,6 +252,13 @@ pub fn identifier(s: &str) -> bool {
                     .bytes()
                     .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
         })
+}
+/// A JSON field or stored-secret field name chosen by a manifest or a caller.
+pub fn wire_name(s: &str) -> bool {
+    !s.is_empty()
+        && s.len() <= 64
+        && s.bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
 }
 pub fn relative_path(path: &str) -> bool {
     !path.is_empty()
@@ -284,8 +334,21 @@ impl Manifest {
             for op in &cap.operations {
                 ensure!(identifier(op), "Invalid permission operation");
             }
-            if matches!(cap.port.as_str(), "fetch" | "credentials") {
+            if matches!(cap.port.as_str(), "fetch" | "credentials" | "browser") {
                 for host in &cap.resources {
+                    ensure!(
+                        cap.port != "browser" || host == crate::public_web::PUBLIC_WEB,
+                        "The browser opens public pages only"
+                    );
+                    if matches!(cap.port.as_str(), "fetch" | "browser")
+                        && host == crate::public_web::PUBLIC_WEB
+                    {
+                        ensure!(
+                            !cap.allow_private,
+                            "Reading public websites cannot be combined with private network access"
+                        );
+                        continue;
+                    }
                     validate_host(host)?;
                 }
             }
@@ -362,6 +425,13 @@ impl Manifest {
                 == self.database.owned_tables.len(),
             "Repeated owned table"
         );
+        for table in &self.database.owner_delete {
+            ensure!(
+                self.database.owned_tables.contains(table)
+                    && self.database.ledger == Ledger::CoreLegacy,
+                "Owner delete may name only an owned legacy table"
+            );
+        }
         for (table, access) in &self.database.access {
             ensure!(
                 self.database.owned_tables.contains(table),
@@ -426,7 +496,7 @@ impl Manifest {
                 "Invalid tool declaration"
             );
         }
-        for cred in self.credentials.values() {
+        for (name, cred) in &self.credentials {
             if let Some(exchange) = &cred.exchange {
                 let url = url::Url::parse(&exchange.endpoint)?;
                 ensure!(
@@ -435,15 +505,51 @@ impl Manifest {
                         && cred.hosts.contains(url.host_str().unwrap_or(""))
                         && matches!(
                             exchange.grant_type.as_str(),
-                            "client_credentials" | "refresh_token"
-                        ),
+                            "client_credentials" | "refresh_token" | "token_swap"
+                        )
+                        && matches!(exchange.format.as_deref(), None | Some("form" | "json"))
+                        && (exchange.grant_type == "token_swap") == exchange.input.is_some()
+                        && exchange.input.as_deref().is_none_or(wire_name),
                     "Invalid token exchange declaration"
                 );
+                // One person's bank link must never land in a record everyone shares.
+                ensure!(
+                    exchange.grant_type != "token_swap" || cred.scope == CredentialScope::Account,
+                    "A token swap credential must be per person"
+                );
             }
+            ensure!(
+                cred.with.iter().all(|w| w != name
+                    && self.credentials.get(w).is_some_and(|c| c.with.is_empty()
+                        && matches!(c.attachment, Attachment::Fields(_))
+                        && cred.hosts.is_subset(&c.hosts)))
+                    && cred.expose_fields.iter().all(|f| wire_name(f)),
+                "Invalid credential companion declaration"
+            );
+            // Exposing a field skips name-based stripping, so only link and public tokens may be
+            // exposed. Anything that can name a secret stays hidden.
+            ensure!(
+                cred.expose_fields
+                    .iter()
+                    .all(|f| matches!(f.as_str(), "link_token" | "public_token")
+                        || !["token", "secret", "password", "authorization", "cookie"]
+                            .iter()
+                            .any(|w| f.to_ascii_lowercase().contains(w))),
+                "A secret-looking field cannot be exposed"
+            );
             ensure!(
                 !cred.hosts.is_empty(),
                 "A credential needs an exact destination"
             );
+            if let Attachment::Fields(map) = &cred.attachment {
+                ensure!(
+                    !map.is_empty()
+                        && map
+                            .iter()
+                            .all(|(wire, stored)| wire_name(wire) && wire_name(stored)),
+                    "Invalid credential field attachment"
+                );
+            }
             for host in &cred.hosts {
                 validate_host(host)?;
             }
@@ -519,11 +625,15 @@ impl Manifest {
         self.capabilities
             .iter()
             .map(|cap| {
+                let public_web = matches!(cap.port.as_str(), "fetch" | "browser")
+                    && cap.resources.contains(crate::public_web::PUBLIC_WEB);
                 let (group, headline) = match cap.port.as_str() {
+                    "browser" => ("network", "Open pages you confirm in a sandboxed browser"),
+                    _ if public_web => ("network", "Read public websites you add"),
                     "db" | "kv" => ("data", "Store and read this module's data"),
                     "vault" | "attachments" => ("files", "Read the files you give this module"),
                     "fetch" | "credentials" => ("network", "Contact approved services"),
-                    "ai" | "embed" => ("AI", "Use your chosen AI service"),
+                    "ai" | "embed" | "transcribe" => ("AI", "Use your chosen AI service"),
                     "tools" | "action-policy" => {
                         ("chat tools", "Offer tools under your approval rules")
                     }
@@ -536,7 +646,20 @@ impl Manifest {
                     details: self
                         .permission_metadata(&cap.port)
                         .into_iter()
-                        .chain(cap.resources.iter().cloned())
+                        .chain(
+                            public_web
+                                .then(|| {
+                                    "Any public HTTPS website you add, never private or home-network addresses"
+                                        .to_string()
+                                })
+                                .into_iter(),
+                        )
+                        .chain(
+                            cap.resources
+                                .iter()
+                                .filter(|r| r.as_str() != crate::public_web::PUBLIC_WEB)
+                                .cloned(),
+                        )
                         .chain(std::iter::once(format!(
                             "Operations: {}",
                             cap.operations
@@ -568,6 +691,10 @@ pub struct Permission {
     pub allow_private: bool,
 }
 pub fn validate_host(host: &str) -> Result<()> {
+    ensure!(
+        host != crate::public_web::PUBLIC_WEB,
+        "The public-web name is reserved"
+    );
     let parsed = url::Url::parse(&format!("https://{host}"))?;
     ensure!(
         parsed.host_str() == Some(host)

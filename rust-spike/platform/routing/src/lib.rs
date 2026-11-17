@@ -304,6 +304,10 @@ pub fn lookup(config: &Configuration, cap: Capability, tier: Tier) -> Resolution
     resolved
 }
 
+/// The chat model this person's chat uses: their own override when allowed, else the chat route.
+pub fn chat_model(config: &Configuration) -> Option<Model> {
+    user_override(config).or_else(|| resolve(config, Capability::Chat, Tier::Interactive).model)
+}
 fn user_override(config: &Configuration) -> Option<Model> {
     if !config.override_enabled || config.pinned_model.is_some() || config.pinned_provider.is_some()
     {

@@ -17,6 +17,29 @@ function cargo(args: string[], extra: Record<string, string> = {}) {
   });
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
+const memoryGuestTarget = join(process.env.CARGO_TARGET_DIR!, "memory-guest");
+cargo(
+  [
+    "build",
+    "--offline",
+    "--locked",
+    "--release",
+    "--lib",
+    "--target",
+    "wasm32-unknown-unknown",
+    "--manifest-path",
+    "modules/memory/src/Cargo.toml"
+  ],
+  {
+    CARGO_TARGET_DIR: memoryGuestTarget,
+    RUSTFLAGS:
+      "-C link-arg=--import-memory -C link-arg=--initial-memory=2097152 -C link-arg=--max-memory=67108864"
+  }
+);
+process.env.MEMORY_CORE_WASM = join(
+  memoryGuestTarget,
+  "wasm32-unknown-unknown/release/moss_memory.wasm"
+);
 cargo([
   "build",
   "--offline",

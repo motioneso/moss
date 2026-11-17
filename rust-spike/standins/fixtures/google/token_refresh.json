@@ -1,0 +1,6 @@
+{
+  "access_token": "{{ACCESS_TOKEN}}",
+  "expires_in": 3599,
+  "scope": "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/calendar.events",
+  "token_type": "Bearer"
+}

@@ -19,6 +19,98 @@ pub enum Binding {
         entry: String,
         default: bool,
     },
+    /// A whole JSON value under one key, replaced on write after the host checks its shape.
+    Json {
+        key: String,
+        shape: JsonShape,
+    },
+}
+/// Shapes the host accepts for a `Binding::Json` value. `null` clears the value.
+#[derive(Clone, Copy)]
+pub enum JsonShape {
+    /// An array of strings, each 1..=`max_len` bytes, at most `max_items` entries.
+    TextList { max_items: usize, max_len: usize },
+    /// An object with a `competitionKey` string and `viewKey` and `viewLabel` strings or nulls, within bounds.
+    LastViewed,
+    /// A saved place: exactly `lat` within 90, `lon` within 180 and a `label` of 1..=200 UTF-16 units that is not blank.
+    Place,
+    /// One string from a fixed list.
+    Choice(&'static [&'static str]),
+    /// The `timezone` text inside a larger saved object. Read only: a read returns just that
+    /// text, or null when none is saved, and every write is refused.
+    SavedTimezone,
+    /// A true or false choice.
+    Boolean,
+}
+/// The two values Weather may save as its unit.
+pub const WEATHER_UNITS: &[&str] = &["metric", "imperial"];
+impl JsonShape {
+    /// Place and Choice values are checked again on read, so a package never receives a malformed one.
+    fn on_read(self, value: Value) -> Value {
+        if matches!(self, JsonShape::SavedTimezone) {
+            return match value.get("timezone").and_then(Value::as_str) {
+                Some(zone) if !zone.trim().is_empty() && zone.len() <= 64 => json!(zone),
+                _ => Value::Null,
+            };
+        }
+        if matches!(self, JsonShape::Place | JsonShape::Choice(_) | JsonShape::Boolean) && !self.accepts(&value) {
+            Value::Null
+        } else {
+            value
+        }
+    }
+    fn accepts(self, value: &Value) -> bool {
+        if matches!(self, JsonShape::SavedTimezone) {
+            return false;
+        }
+        if value.is_null() {
+            return true;
+        }
+        match self {
+            JsonShape::SavedTimezone => false,
+            JsonShape::Boolean => value.is_boolean(),
+            JsonShape::Place => value.as_object().is_some_and(|o| {
+                let degrees = |k: &str, max: f64| o.get(k).and_then(Value::as_f64).is_some_and(|n| n.is_finite() && n.abs() <= max);
+                let label = o.get("label").and_then(Value::as_str).is_some_and(|t| !t.trim().is_empty() && t.encode_utf16().count() <= 200);
+                o.len() == 3 && degrees("lat", 90.0) && degrees("lon", 180.0) && label
+            }),
+            JsonShape::Choice(allowed) => value.as_str().is_some_and(|t| allowed.contains(&t)),
+            JsonShape::TextList { max_items, max_len } => value.as_array().is_some_and(|items| {
+                items.len() <= max_items
+                    && items.iter().all(|i| i.as_str().is_some_and(|t| !t.is_empty() && t.len() <= max_len))
+            }),
+            JsonShape::LastViewed => value.as_object().is_some_and(|o| {
+                let text = |k: &str, max: usize| o.get(k).and_then(Value::as_str).is_some_and(|t| !t.is_empty() && t.len() <= max);
+                let maybe = |k: &str, max: usize| o.get(k).is_some_and(|v| v.is_null() || v.as_str().is_some_and(|t| t.chars().count() <= max));
+                o.len() == 3 && text("competitionKey", 200) && maybe("viewKey", 100) && maybe("viewLabel", 200)
+            }),
+        }
+    }
+}
+/// Weather's two bindings, as the shell grants them. The `weather` module reads and writes
+/// the preference keys the old Settings routes used.
+pub fn weather_bindings() -> BTreeMap<(String, String), Binding> {
+    BTreeMap::from([
+        (
+            ("weather".into(), "location".into()),
+            Binding::Json { key: "weather-location".into(), shape: JsonShape::Place },
+        ),
+        (
+            ("weather".into(), "unit".into()),
+            Binding::Json { key: "weather-unit".into(), shape: JsonShape::Choice(WEATHER_UNITS) },
+        ),
+        (
+            ("weather".into(), "saved-timezone".into()),
+            Binding::Json { key: "locale".into(), shape: JsonShape::SavedTimezone },
+        ),
+    ])
+}
+/// Wellness keeps its assistant-access choice in the account preference the old routes used.
+pub fn wellness_bindings() -> BTreeMap<(String, String), Binding> {
+    BTreeMap::from([(
+        ("wellness".into(), "ai-consent".into()),
+        Binding::Json { key: "wellness.ai_consent_granted".into(), shape: JsonShape::Boolean },
+    )])
 }
 pub struct AccountPreferencesPorts {
     database: Database,
@@ -119,7 +211,9 @@ impl AccountPreferencesPorts {
             return Ok(json!({"directories":directories}));
         }
         let key = match binding {
-            Binding::Folder { key, .. } | Binding::BooleanOverride { key, .. } => key,
+            Binding::Folder { key, .. }
+            | Binding::BooleanOverride { key, .. }
+            | Binding::Json { key, .. } => key,
         };
         let update = if write {
             ensure!(
@@ -148,6 +242,11 @@ impl AccountPreferencesPorts {
                         .context("Invalid preference boolean")?;
                     Some(json!({entry:enabled}))
                 }
+                Binding::Json { shape, .. } => {
+                    let value = request.parameters.get("value").context("Missing preference value")?;
+                    ensure!(shape.accepts(value), "Invalid preference value");
+                    Some(value.clone())
+                }
             }
         } else {
             ensure!(
@@ -174,11 +273,17 @@ impl AccountPreferencesPorts {
                 Ok::<_, anyhow::Error>(value)
             }).await.context("Preference request timed out")?
         })?;
+        // A stored value that no longer fits its shape reads as unset.
+        let value = match binding {
+            Binding::Json { shape, .. } => shape.on_read(value),
+            _ => value,
+        };
         Ok(match binding {
             Binding::Folder { .. } => json!({"folder":value.as_str().filter(|s|!s.is_empty())}),
             Binding::BooleanOverride { entry, default, .. } => {
                 json!({"enabled":value.get(entry).and_then(Value::as_bool).unwrap_or(*default)})
             }
+            Binding::Json { .. } => json!({"value":value}),
         })
     }
 }
@@ -212,4 +317,101 @@ mod root_tests {
         assert!(account_base_root(&base, actor).is_err());
         assert!(account_base_root(&base, Uuid::new_v4()).is_ok());
     }
+}
+
+#[cfg(test)]
+mod shape_tests {
+    use super::{JsonShape, WEATHER_UNITS};
+    use serde_json::{json, Value};
+
+    const UNIT: JsonShape = JsonShape::Choice(WEATHER_UNITS);
+    fn place(lat: Value, lon: Value, label: Value) -> Value {
+        json!({"lat":lat,"lon":lon,"label":label})
+    }
+
+    #[test]
+    fn a_place_within_range_is_accepted() {
+        for (lat, lon) in [(51.5, -0.12), (90.0, 180.0), (-90.0, -180.0), (0.0, 0.0)] {
+            assert!(JsonShape::Place.accepts(&place(json!(lat), json!(lon), json!("London"))), "{lat},{lon}");
+        }
+        assert!(JsonShape::Place.accepts(&place(json!(40), json!(-74), json!("New York"))));
+        assert!(JsonShape::Place.accepts(&Value::Null), "null clears the place");
+    }
+    #[test]
+    fn latitude_range() {
+        for lat in [json!(90.0001), json!(-90.5), json!(1e9), json!("51"), Value::Null, json!([51])] {
+            assert!(!JsonShape::Place.accepts(&place(lat.clone(), json!(0), json!("X"))), "{lat}");
+        }
+    }
+    #[test]
+    fn longitude_range() {
+        for lon in [json!(180.0001), json!(-181), json!(1e9), json!("0"), Value::Null, json!({})] {
+            assert!(!JsonShape::Place.accepts(&place(json!(0), lon.clone(), json!("X"))), "{lon}");
+        }
+    }
+    #[test]
+    fn label_length_counts_utf16_units() {
+        let ok = "a".repeat(200);
+        let long = "a".repeat(201);
+        assert!(JsonShape::Place.accepts(&place(json!(0), json!(0), json!(ok))));
+        assert!(!JsonShape::Place.accepts(&place(json!(0), json!(0), json!(long))));
+        // Each rocket is two UTF-16 units, so 100 fit and 101 do not.
+        assert!(JsonShape::Place.accepts(&place(json!(0), json!(0), json!("\u{1F680}".repeat(100)))));
+        assert!(!JsonShape::Place.accepts(&place(json!(0), json!(0), json!("\u{1F680}".repeat(101)))));
+    }
+    #[test]
+    fn a_blank_label_is_refused() {
+        for label in [json!(""), json!("   "), json!("\n\t"), json!(5), Value::Null] {
+            assert!(!JsonShape::Place.accepts(&place(json!(0), json!(0), label.clone())), "{label}");
+        }
+    }
+    #[test]
+    fn a_place_has_exactly_three_members() {
+        assert!(!JsonShape::Place.accepts(&json!({"lat":0,"lon":0,"label":"X","note":"extra"})));
+        assert!(!JsonShape::Place.accepts(&json!({"lat":0,"lon":0})));
+        assert!(!JsonShape::Place.accepts(&json!("London")));
+        assert!(!JsonShape::Place.accepts(&json!([0, 0, "X"])));
+    }
+    #[test]
+    fn a_unit_must_come_from_the_fixed_list() {
+        for unit in ["metric", "imperial"] {
+            assert!(UNIT.accepts(&json!(unit)));
+        }
+        for unit in [json!("kelvin"), json!("Metric"), json!(""), json!(5), json!({}), json!(["metric"])] {
+            assert!(!UNIT.accepts(&unit), "{unit}");
+        }
+        assert!(UNIT.accepts(&Value::Null));
+    }
+    #[test]
+    fn a_stored_value_that_no_longer_fits_reads_as_unset() {
+        assert_eq!(UNIT.on_read(json!("kelvin")), Value::Null);
+        assert_eq!(UNIT.on_read(json!("metric")), json!("metric"));
+        let bad = place(json!(95), json!(0), json!("X"));
+        assert_eq!(JsonShape::Place.on_read(bad), Value::Null);
+        let good = place(json!(10), json!(20), json!("Y"));
+        assert_eq!(JsonShape::Place.on_read(good.clone()), good);
+        // Older shapes keep returning what is stored.
+        let list = json!(["x".repeat(500)]);
+        assert_eq!(JsonShape::TextList { max_items: 1, max_len: 5 }.on_read(list.clone()), list);
+    }
+    #[test]
+    fn the_saved_timezone_is_read_only_and_shows_nothing_else() {
+        let zone = JsonShape::SavedTimezone;
+        for value in [json!(null), json!("UTC"), json!({"timezone":"UTC"}), json!({})] {
+            assert!(!zone.accepts(&value), "{value}");
+        }
+        let saved = json!({"timezone":"Europe/Paris","language":"fr","extra":1});
+        assert_eq!(zone.on_read(saved), json!("Europe/Paris"));
+        for value in [json!(null), json!({}), json!({"timezone":""}), json!({"timezone":5}), json!({"timezone":"x".repeat(65)})] {
+            assert_eq!(zone.on_read(value), Value::Null);
+        }
+    }
+}
+
+/// Public host projection for modules that only need to know whether Notes is linked.
+/// Preserves the legacy non-empty-string preference rule without exposing the path.
+pub async fn notes_folder_configured(cx: &DataContext) -> Result<bool> {
+    Ok(cx.db().query_one(
+        "SELECT COALESCE((SELECT jsonb_typeof(value_json)='string' AND value_json #>> '{}' <> '' FROM app.preferences WHERE owner_user_id=app.current_actor_user_id() AND key='notes-source-path'),false)", &[]
+    ).await?.get(0))
 }

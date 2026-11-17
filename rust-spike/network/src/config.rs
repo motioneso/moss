@@ -148,7 +148,8 @@ pub fn private_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
         .parent()
         .ok_or("A private file needs a parent folder")?;
     let tmp = parent.join(format!(".moss-{}.tmp", uuid::Uuid::new_v4()));
-    let result = (|| {
+    let mut keep_tmp = false;
+    let result: Result<(), String> = (|| {
         let mut options = OpenOptions::new();
         options.write(true).create_new(true);
         #[cfg(unix)]
@@ -158,14 +159,37 @@ pub fn private_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
         }
         let mut file = options
             .open(&tmp)
-            .map_err(|_| "Cannot create private configuration")?;
+            .map_err(|_| "Cannot create private configuration".to_owned())?;
         file.write_all(bytes)
             .and_then(|_| file.sync_all())
-            .map_err(|_| "Cannot save private configuration")?;
-        fs::rename(&tmp, path).map_err(|_| "Cannot replace private configuration")
+            .map_err(|_| "Cannot save private configuration".to_owned())?;
+        // Windows refuses to rename a file that is still open.
+        drop(file);
+        // A scanner or indexer can hold the new file for a moment on Windows.
+        let mut tries = 0;
+        loop {
+            match fs::rename(&tmp, path) {
+                Ok(()) => break Ok(()),
+                Err(e) if cfg!(windows) && tries < 20 => {
+                    tries += 1;
+                    let _ = e;
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
+                // Windows can keep refusing to replace a file a scanner holds. Write in place,
+                // and keep the complete temporary copy if that write fails.
+                Err(e) if cfg!(windows) => {
+                    break fs::write(path, bytes).map_err(|w| {
+                        keep_tmp = true;
+                        format!("Cannot replace private configuration ({e}; {w})")
+                    });
+                }
+                Err(e) => break Err(format!("Cannot replace private configuration ({e})")),
+            }
+        }
     })();
-    if result.is_err() {
+    // Also covers the in-place fallback, which leaves the temporary copy behind.
+    if !keep_tmp {
         let _ = fs::remove_file(tmp);
     }
-    result.map_err(str::to_owned)
+    result
 }

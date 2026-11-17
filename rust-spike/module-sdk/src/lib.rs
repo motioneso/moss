@@ -53,6 +53,16 @@ impl<H: Host + ?Sized> Client<'_, H> {
             .call("db", "query", table, serde_json::to_value(query)?)?;
         Ok(serde_json::from_value(value)?)
     }
+    /// Renders one confirmed page in the host's sandboxed browser. Route handlers only. The
+    /// answer holds `ok` plus either evidence (`title`, `text`, `candidates`) or a `reason`.
+    pub fn render_page(&self, url: &str, allowed_hosts: &[&str]) -> Result<Value> {
+        self.0.call(
+            "browser",
+            "render",
+            "public-web",
+            json!({"url":url,"allowedHosts":allowed_hosts}),
+        )
+    }
     /// Opt-in NULLS FIRST columns without adding required fields to legacy Order literals.
     pub fn query_with_nulls_first(
         &self,

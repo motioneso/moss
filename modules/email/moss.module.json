@@ -1,0 +1,227 @@
+{
+  "schemaVersion": 2,
+  "id": "email",
+  "name": "Email",
+  "description": "Keeps the cached mail messages that Connectors fills in, and the Email settings for briefings, task capture and drafted replies. It never contacts a mail service.",
+  "publisher": "Moss",
+  "version": "0.4.0",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "kv",
+      "operations": ["get", "set"],
+      "resources": [
+        "email.messages",
+        "email.preferences",
+        "email.source-behaviors",
+        "email.draft-policy",
+        "email.cache-write",
+        "email.cache-keys",
+        "email.understand",
+        "email.suppression",
+        "email.triage-feedback",
+        "email.thread",
+        "email.recent"
+      ]
+    },
+    {
+      "port": "ai",
+      "operations": ["generate"],
+      "resources": ["chat", "structured"]
+    }
+  ],
+  "database": {
+    "ownedTables": ["app.email_messages"],
+    "migrations": [
+      "sql/0012_email_module.sql",
+      "sql/0021_email_owner_or_share.sql",
+      "sql/0067_email_summary_signals_columns.sql",
+      "sql/0068_email_worker_grants_and_google_insert.sql",
+      "sql/0132_email_imap_insert.sql",
+      "sql/0219_email_thread_lookup.sql",
+      "sql/0247_email_analysis_attempts.sql",
+      "sql/0249_email_judgement_requested_at.sql"
+    ],
+    "ledger": "core-legacy",
+    "ownerDelete": ["app.email_messages"],
+    "access": {
+      "app.email_messages": {
+        "access": "owner-or-share",
+        "resourceType": "email_message",
+        "shareKey": "id"
+      }
+    }
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/messages",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/messages/:id",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/briefing-settings",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/briefing-settings",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/task-creation-mode",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/task-creation-mode",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/briefing-source",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/briefing-source",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/draft-policy",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/draft-policy",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/understand",
+      "signIn": true
+    }
+  ],
+  "provides": {
+    "insertCachedMessage": "1.0.0",
+    "updateCachedMessage": "1.0.0",
+    "listCachedMessageKeys": "1.0.0",
+    "pruneCachedMessages": "1.0.0",
+    "understandMessages": "1.0.0",
+    "recordTriageFeedback": "1.0.0",
+    "triageFeedbackCounts": "1.0.0",
+    "listActionSuppression": "1.0.0",
+    "updateActionSuppression": "1.0.0",
+    "listThreadMessages": "1.0.0",
+    "listThreadsWithNewerMessages": "1.0.0",
+    "collectMonitorSignals": "1.0.0",
+    "triageMessage": "1.0.0",
+    "emailTriageContext": "1.0.0",
+    "listSavedMessages": "1.0.0",
+    "replyContext": "1.0.0"
+  },
+  "icons": ["icons/email.svg"],
+  "accounts": {
+    "supportsUserDisable": false,
+    "defaultEnabled": true
+  },
+  "features": [
+    {
+      "id": "email.messages",
+      "description": "Lists the signed-in person's cached mail messages, newest first, and opens one. A message shared with the person can be read too. Nothing is fetched from a mail service by this package.",
+      "errors": [
+        {
+          "code": "email-message-not-found",
+          "class": "validation",
+          "description": "The message does not exist or is not visible to the person"
+        },
+        {
+          "code": "email-unavailable",
+          "class": "transient",
+          "description": "Cached mail is unavailable",
+          "remediationRef": "email-check-connections"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "email-check-connections",
+          "description": "Check that a mail account is connected and allowed to share Email",
+          "path": "/settings/connections"
+        }
+      ]
+    },
+    {
+      "id": "email.settings",
+      "description": "Settings, Email chooses whether important mail appears in briefings, how tasks are captured from mail (off, suggest, auto for safe items, auto), whether replies are suggested or drafted, and whether the assistant may draft replies without asking. Missing choices use the defaults."
+    },
+    {
+      "id": "email.cache-api",
+      "description": "Connectors adds and updates cached messages through a public interface. The body excerpt is kept to 500 characters."
+    },
+    {
+      "id": "email.understanding",
+      "description": "Reads cached mail with the person's configured AI model and stores a short summary and signals for each message. Only the cached subject, sender and preview text are sent. Sign-in codes are skipped without a model call, and a message that keeps failing is left alone after five tries.",
+      "errors": [
+        {
+          "code": "email-ai-not-configured",
+          "class": "prerequisite",
+          "description": "No AI service is chosen, so mail cannot be read yet",
+          "remediationRef": "email-choose-ai"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "email-choose-ai",
+          "description": "Choose an AI service in settings, or try again if it is down",
+          "path": "/settings/connections"
+        }
+      ]
+    },
+    {
+      "id": "email.triage-feedback",
+      "description": "Records whether the person accepted or rejected a sorted message, and counts dismissals of repeated suggestions so they stop coming back. Needs Connectors installed.",
+      "errors": [
+        {
+          "code": "email-connectors-missing",
+          "class": "prerequisite",
+          "description": "Install Connectors to keep triage feedback and suppression",
+          "remediationRef": "email-install-connectors"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "email-install-connectors",
+          "description": "Install Connectors",
+          "path": "/settings/modules"
+        }
+      ]
+    },
+    {
+      "id": "email.thread-reads",
+      "description": "Connectors reads saved threads, newer replies, recent messages and saved triage for the signed-in person only, asks Email to triage one message, and reads one message's reply details for drafting. Another person's mail is never reachable, even through a share."
+    }
+  ],
+  "tools": {},
+  "jobs": {},
+  "screens": {
+    "/settings/email": "ui/settings.html"
+  },
+  "navigation": [],
+  "settings": [
+    {
+      "id": "email.module-settings",
+      "label": "Email",
+      "path": "/settings/email",
+      "scope": "user",
+      "description": "Briefings, task capture and drafted replies for your mail."
+    }
+  ]
+}

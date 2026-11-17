@@ -1,0 +1,5 @@
+{
+  "port": "kv",
+  "operations": ["preference.read", "preference.write"],
+  "resources": ["location", "unit"]
+}

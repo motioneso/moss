@@ -1,0 +1,22 @@
+{
+  "kind": "calendar#calendarList",
+  "etag": "\"p32c9hbrhkd2k4o0g\"",
+  "nextSyncToken": "CPDAlvWDx70DEhRib2JAZXhhbXBsZS5jb20=",
+  "items": [
+    {
+      "kind": "calendar#calendarListEntry",
+      "etag": "\"1700000000000000\"",
+      "id": "bob@example.com",
+      "summary": "bob@example.com",
+      "timeZone": "UTC",
+      "colorId": "14",
+      "backgroundColor": "#9fe1e7",
+      "foregroundColor": "#000000",
+      "selected": true,
+      "accessRole": "owner",
+      "defaultReminders": [{ "method": "popup", "minutes": 10 }],
+      "conferenceProperties": { "allowedConferenceSolutionTypes": ["hangoutsMeet"] },
+      "primary": true
+    }
+  ]
+}

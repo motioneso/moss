@@ -1,0 +1,26 @@
+{
+  "articles": [
+    {
+      "id": 4567,
+      "headline": "Cowboys clinch the NFC East with a Week 18 win",
+      "description": "Dallas held off a late Washington rally to seal the division on the final Sunday.",
+      "published": "2026-01-04T22:15:00Z",
+      "links": { "web": { "href": "https://www.espn.com/nfl/story/_/id/4567" } },
+      "images": [
+        { "type": "header", "url": "https://a.espncdn.com/photo/2026/0104/cowboys-header.jpg" },
+        { "type": "inline", "url": "https://a.espncdn.com/photo/2026/0104/cowboys-inline.jpg" }
+      ],
+      "categories": [
+        { "type": "team", "teamId": 6 },
+        { "type": "league", "leagueId": 28 }
+      ]
+    },
+    {
+      "id": 4568,
+      "headline": "Patriots fall short in the season finale",
+      "description": "New England's playoff hopes ended with a fourth-quarter collapse in Buffalo.",
+      "published": "2026-01-04T22:40:00Z",
+      "links": { "web": { "href": "https://www.espn.com/nfl/story/_/id/4568" } }
+    }
+  ]
+}

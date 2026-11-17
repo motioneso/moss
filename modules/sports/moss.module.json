@@ -1,0 +1,336 @@
+{
+  "schemaVersion": 2,
+  "id": "sports",
+  "name": "Sports",
+  "publisher": "Moss",
+  "version": "0.1.0",
+  "description": "Keeps each person's followed leagues and teams, private to the owner. A whole league can be followed once, and following it again returns the saved follow. A followed team is tied to the provider's permanent team number. The standings picker remembers the leagues a person chose and the standings view they last opened, under the same saved settings as before. Account export and deletion cover all six Sports tables. The package reads ESPN's public data for the league catalog, each league's team list and club search, and keeps a shared copy so one person's lookup serves everyone. The copy holds only public sports data, never a person's follows or searches. Following a team checks the live team list and is refused, with the same fail-closed messages the old app gave, when ESPN is down. Scoreboard, standings and news reading are built but not yet offered as routes. A person can add news sources of their own, up to ten, each a website with a news feed or a subreddit, and choose which sports and followed teams each one covers, up to twenty choices in all. Adding a source shows a preview first, which names the reason when a site cannot be used, and a source saves only after the person confirms it. Two subreddits that differ only by letter case are one source. The package reads those public sites itself, and keeps unconfirmed previews for ten minutes under the person's own saved settings. Source retry, rebuild, headline photos, sites that need an AI-built recipe or a browser, chat tools and the screens are not part of this package yet.",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "fuelLimit": 250000000,
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "db",
+      "operations": ["query"],
+      "resources": [
+        "app.sports_custom_sources",
+        "app.sports_espn_source_assignments",
+        "app.sports_follows",
+        "app.sports_headline_prefs",
+        "app.sports_policy_verdicts",
+        "app.sports_source_assignments"
+      ]
+    },
+    {
+      "port": "context",
+      "operations": ["read", "uuid"],
+      "resources": ["call", "new"]
+    },
+    {
+      "port": "kv",
+      "operations": ["preference.read", "preference.write", "get", "set"],
+      "resources": [
+        "espn-headlines",
+        "espn-scoreboard",
+        "espn-results",
+        "espn-schedule",
+        "espn-standings",
+        "espn-teams",
+        "standings-competitions",
+        "standings-last-viewed",
+        "source-previews",
+        "source-icon-misses"
+      ]
+    },
+    {
+      "port": "fetch",
+      "operations": ["get"],
+      "resources": ["content.core.api.espn.com", "site.api.espn.com", "public-web"]
+    }
+  ],
+  "installWideKv": [
+    "espn-headlines",
+    "espn-results",
+    "espn-schedule",
+    "espn-scoreboard",
+    "espn-standings",
+    "espn-teams"
+  ],
+  "database": {
+    "migrations": [
+      "sql/0133_sports_follows.sql",
+      "sql/0185_sports_whole_league_dedupe.sql",
+      "sql/0186_sports_whole_league_unique.sql",
+      "sql/0190_sports_custom_sources.sql",
+      "sql/0191_sports_public_source_runtime.sql",
+      "sql/0192_sports_legacy_feed_assignments_verified.sql",
+      "sql/0193_sports_legacy_feed_assignment_repair.sql",
+      "sql/0196_sports_news_source_scopes.sql",
+      "sql/0213_sports_reddit_sources.sql",
+      "sql/0217_sports_follows_source_team_id.sql",
+      "sql/0222_sports_source_photos.sql",
+      "sql/0242_sports_follows_worker_select.sql"
+    ],
+    "ownedTables": [
+      "app.sports_custom_sources",
+      "app.sports_espn_source_assignments",
+      "app.sports_follows",
+      "app.sports_headline_prefs",
+      "app.sports_policy_verdicts",
+      "app.sports_source_assignments"
+    ],
+    "ledger": "core-legacy",
+    "access": {
+      "app.sports_custom_sources": {
+        "access": "owner-only"
+      },
+      "app.sports_espn_source_assignments": {
+        "access": "owner-only"
+      },
+      "app.sports_follows": {
+        "access": "owner-only"
+      },
+      "app.sports_headline_prefs": {
+        "access": "owner-only"
+      },
+      "app.sports_policy_verdicts": {
+        "access": "owner-only"
+      },
+      "app.sports_source_assignments": {
+        "access": "owner-only"
+      }
+    }
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/follows",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/follows",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/follows/:id/team",
+      "signIn": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/follows/:id",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/catalog",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/leagues/:competition_key/teams",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/teams/search",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/standings-preferences",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/standings-preferences",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/overview",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/standings",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/results/latest",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/sources",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/sources/espn/coverage",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/sources/preview",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/sources",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/sources/:id/assignments/preview",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/sources/:id/assignments",
+      "signIn": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/sources/:id",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/sources/:id/icon",
+      "signIn": true
+    }
+  ],
+  "requires": {},
+  "provides": {
+    "collectSportsSourcesExportSection": "1.0.0"
+  },
+  "icons": ["icons/sports.svg"],
+  "accounts": {
+    "supportsUserDisable": true,
+    "defaultEnabled": true
+  },
+  "lifecycle": {
+    "required": false,
+    "bundled": true,
+    "removable": true
+  },
+  "screens": {},
+  "navigation": [],
+  "settings": [
+    {
+      "id": "sports.follows",
+      "label": "Sports",
+      "path": "/settings?section=modules&module=sports",
+      "scope": "user",
+      "description": "Followed leagues and the standings choices can be changed through the Sports routes. The Settings page for them is not part of this package yet."
+    },
+    {
+      "id": "sports.sources",
+      "label": "News sources",
+      "path": "/settings?section=modules&module=sports",
+      "scope": "user",
+      "description": "Added news sources and the sports each one covers can be managed through the Sports routes. The Settings page for them is not part of this package yet."
+    }
+  ],
+  "features": [
+    {
+      "id": "sports.follows",
+      "description": "Each person keeps private follows of whole leagues and of single teams. Following a whole league twice returns the first follow, so a league never appears twice. Removing a follow deletes only the person's own row. Following a team, or changing which team a saved follow means, is checked against ESPN's team list for that league, and is refused while ESPN cannot be reached.",
+      "errors": [
+        {
+          "code": "sports_team_list_unavailable",
+          "class": "validation",
+          "description": "ESPN's team list is not available right now, so a team cannot be checked or followed."
+        }
+      ],
+      "remediations": [
+        {
+          "id": "sports.follows.whole-league",
+          "description": "Follow the whole league for now, then pick the team once ESPN answers again.",
+          "path": "/settings?section=modules&module=sports"
+        }
+      ]
+    },
+    {
+      "id": "sports.team_identity",
+      "description": "Follows are tied to the provider's permanent team number, so two teams sharing a short name never swap scores. A team saved before that is put on hold and Sports asks once which team was meant; picking one brings it back. The pick is checked against ESPN's team list for that league."
+    },
+    {
+      "id": "sports.catalog_and_search",
+      "description": "Sports lists every league and tournament it covers, grouped by confederation. A league's clubs load only when that league is opened, and club search looks across every league. Search fetches at most five leagues that are not stored yet, and stops sooner if it has spent about two seconds, and reports that coverage is partial until the rest fill in. A search needs at least two characters. The screens for these are not part of this package yet.",
+      "errors": [
+        {
+          "code": "sports_unknown_competition",
+          "class": "validation",
+          "description": "The league is not in the catalog, so its clubs are not looked up."
+        }
+      ]
+    },
+    {
+      "id": "sports.remembered_standings",
+      "description": "The standings picker keeps the leagues a person chose and the competition and view they last opened, on any device, until they pick another. A name that is not a known league is refused. The picker itself is not part of this package yet."
+    },
+    {
+      "id": "sports.overview",
+      "description": "The Sports overview lists a person's followed clubs as cards, one card per club even when the club is followed in several competitions, with live or finished game, last five results, next match and league standing. It also lists each followed competition's recent games and standings. Games on ESPN's evening slate land on the right day because days are counted in US Eastern time. With nothing followed it shows a default slate of major leagues. A follow saved without a permanent team id is listed for the person to resolve and never gets a score. Headlines, the gameday hero and the featured story are not part of this package yet.",
+      "errors": [
+        {
+          "code": "sports_provider_unavailable",
+          "class": "transient",
+          "description": "ESPN did not answer, so the overview carries what is cached and marks itself degraded."
+        }
+      ],
+      "remediations": [
+        {
+          "id": "sports.overview.retry",
+          "description": "Open the Sports overview again in a few minutes, when ESPN answers.",
+          "path": "/settings?section=modules&module=sports"
+        }
+      ]
+    },
+    {
+      "id": "sports.standings_view",
+      "description": "A competition's standings load on demand, with each conference and division as its own view. Once a tournament's group stage is complete, the answer also carries the games around today so the screen can show the bracket."
+    },
+    {
+      "id": "sports.latest_result",
+      "description": "The latest completed result for one club reads from ESPN over the last ninety days, using the person's follows to find the club and every competition they follow it in. A name that matches more than one club asks the person to choose, and a result the source could not provide is reported as unavailable, never guessed."
+    },
+    {
+      "id": "sports.added_sources",
+      "description": "A person adds a news source of their own by typing a website address or a subreddit. The preview reads the public site and shows the sources it found with sample headlines, or names why it cannot be used. Saving needs the person's confirmation that they may read the site, and a preview expires after ten minutes. A person keeps at most ten added sources and twenty source choices in all, and a source that is already saved, including a subreddit differing only by letter case, is not added twice. Changing which sports and teams a source covers uses the same preview and confirm steps, and is refused if the source changed in between. Removing a source deletes it and its choices. A source icon is looked up on the site and shown only when it is a real image.",
+      "errors": [
+        {
+          "code": "sports_source_unreachable",
+          "class": "validation",
+          "description": "The site could not be read, was blocked, asked for a login or sign-in, or limited how often it can be read."
+        },
+        {
+          "code": "sports_source_unsupported",
+          "class": "validation",
+          "description": "The site has no news feed Moss can read yet, so it cannot be added. Sites that need a browser or an AI-built recipe are not built."
+        },
+        {
+          "code": "sports_source_limit",
+          "class": "validation",
+          "description": "The person already has ten added sources or twenty source choices."
+        }
+      ],
+      "remediations": [
+        {
+          "id": "sports.added_sources.other-address",
+          "description": "Try the site's feed address, or a subreddit such as r/nfl, instead of the home page.",
+          "path": "/settings?section=modules&module=sports"
+        }
+      ]
+    },
+    {
+      "id": "sports.espn_coverage",
+      "description": "ESPN headlines can cover chosen sports and followed teams. With no choice made the default coverage applies, and saving an empty choice turns ESPN headlines off. A followed team the person does not have is refused."
+    }
+  ],
+  "optionalRequires": {}
+}

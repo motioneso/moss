@@ -1,0 +1,780 @@
+{
+  "teams-nfl": [
+    {
+      "teamKey": "dal",
+      "competitionKey": "nfl",
+      "name": "Dallas Cowboys",
+      "shortName": "Cowboys",
+      "crestUrl": "https://a.espncdn.com/i/teamlogos/nfl/500/dal.png",
+      "sourceTeamId": "6",
+      "abbreviation": "dal"
+    },
+    {
+      "teamKey": "ne",
+      "competitionKey": "nfl",
+      "name": "New England Patriots",
+      "shortName": "Patriots",
+      "crestUrl": "https://a.espncdn.com/i/teamlogos/nfl/500/ne.png",
+      "sourceTeamId": "17",
+      "abbreviation": "ne"
+    }
+  ],
+  "teams-eng.1": [
+    {
+      "teamKey": "bou",
+      "competitionKey": "eng.1",
+      "name": "AFC Bournemouth",
+      "shortName": "Bournemouth",
+      "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/349.png",
+      "sourceTeamId": "349",
+      "abbreviation": "bou"
+    },
+    {
+      "teamKey": "ars",
+      "competitionKey": "eng.1",
+      "name": "Arsenal",
+      "shortName": "Arsenal",
+      "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png",
+      "sourceTeamId": "359",
+      "abbreviation": "ars"
+    },
+    {
+      "teamKey": "avl",
+      "competitionKey": "eng.1",
+      "name": "Aston Villa",
+      "shortName": "Aston Villa",
+      "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/362.png",
+      "sourceTeamId": "362",
+      "abbreviation": "avl"
+    },
+    {
+      "teamKey": "bre",
+      "competitionKey": "eng.1",
+      "name": "Brentford",
+      "shortName": "Brentford",
+      "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/337.png",
+      "sourceTeamId": "337",
+      "abbreviation": "bre"
+    },
+    {
+      "teamKey": "bha",
+      "competitionKey": "eng.1",
+      "name": "Brighton & Hove Albion",
+      "shortName": "Brighton",
+      "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/331.png",
+      "sourceTeamId": "331",
+      "abbreviation": "bha"
+    },
+    {
+      "teamKey": "che",
+      "competitionKey": "eng.1",
+      "name": "Chelsea",
+      "shortName": "Chelsea",
+      "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/363.png",
+      "sourceTeamId": "363",
+      "abbreviation": "che"
+    },
+    {
+      "teamKey": "cov",
+      "competitionKey": "eng.1",
+      "name": "Coventry City",
+      "shortName": "Coventry",
+      "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/388.png",
+      "sourceTeamId": "388",
+      "abbreviation": "cov"
+    },
+    {
+      "teamKey": "cry",
+      "competitionKey": "eng.1",
+      "name": "Crystal Palace",
+      "shortName": "C Palace",
+      "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/384.png",
+      "sourceTeamId": "384",
+      "abbreviation": "cry"
+    },
+    {
+      "teamKey": "eve",
+      "competitionKey": "eng.1",
+      "name": "Everton",
+      "shortName": "Everton",
+      "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/368.png",
+      "sourceTeamId": "368",
+      "abbreviation": "eve"
+    },
+    {
+      "teamKey": "ful",
+      "competitionKey": "eng.1",
+      "name": "Fulham",
+      "shortName": "Fulham",
+      "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/370.png",
+      "sourceTeamId": "370",
+      "abbreviation": "ful"
+    },
+    {
+      "teamKey": "hul",
+      "competitionKey": "eng.1",
+      "name": "Hull City",
+      "shortName": "Hull",
+      "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/306.png",
+      "sourceTeamId": "306",
+      "abbreviation": "hul"
+    },
+    {
+      "teamKey": "ips",
+      "competitionKey": "eng.1",
+      "name": "Ipswich Town",
+      "shortName": "Ipswich",
+      "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/373.png",
+      "sourceTeamId": "373",
+      "abbreviation": "ips"
+    },
+    {
+      "teamKey": "lee",
+      "competitionKey": "eng.1",
+      "name": "Leeds United",
+      "shortName": "Leeds",
+      "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/357.png",
+      "sourceTeamId": "357",
+      "abbreviation": "lee"
+    },
+    {
+      "teamKey": "liv",
+      "competitionKey": "eng.1",
+      "name": "Liverpool",
+      "shortName": "Liverpool",
+      "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/364.png",
+      "sourceTeamId": "364",
+      "abbreviation": "liv"
+    },
+    {
+      "teamKey": "mnc",
+      "competitionKey": "eng.1",
+      "name": "Manchester City",
+      "shortName": "Man City",
+      "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/382.png",
+      "sourceTeamId": "382",
+      "abbreviation": "mnc"
+    },
+    {
+      "teamKey": "man",
+      "competitionKey": "eng.1",
+      "name": "Manchester United",
+      "shortName": "Man Utd",
+      "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/360.png",
+      "sourceTeamId": "360",
+      "abbreviation": "man"
+    },
+    {
+      "teamKey": "new",
+      "competitionKey": "eng.1",
+      "name": "Newcastle United",
+      "shortName": "Newcastle",
+      "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/361.png",
+      "sourceTeamId": "361",
+      "abbreviation": "new"
+    },
+    {
+      "teamKey": "nfo",
+      "competitionKey": "eng.1",
+      "name": "Nottingham Forest",
+      "shortName": "Nottm Forest",
+      "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/393.png",
+      "sourceTeamId": "393",
+      "abbreviation": "nfo"
+    },
+    {
+      "teamKey": "sun",
+      "competitionKey": "eng.1",
+      "name": "Sunderland",
+      "shortName": "Sunderland",
+      "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/366.png",
+      "sourceTeamId": "366",
+      "abbreviation": "sun"
+    },
+    {
+      "teamKey": "tot",
+      "competitionKey": "eng.1",
+      "name": "Tottenham Hotspur",
+      "shortName": "Spurs",
+      "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/367.png",
+      "sourceTeamId": "367",
+      "abbreviation": "tot"
+    }
+  ],
+  "teams-ncaa-baseball": [
+    {
+      "teamKey": "ksu.264",
+      "competitionKey": "ncaa-baseball",
+      "name": "Kansas State Wildcats",
+      "shortName": "Kansas St",
+      "crestUrl": "https://a.espncdn.com/i/teamlogos/ncaa/500/2306.png",
+      "sourceTeamId": "264",
+      "abbreviation": "ksu"
+    },
+    {
+      "teamKey": "ksu.307",
+      "competitionKey": "ncaa-baseball",
+      "name": "Kennesaw State Owls",
+      "shortName": "Kennesaw St",
+      "crestUrl": "https://a.espncdn.com/i/teamlogos/ncaa/500/338.png",
+      "sourceTeamId": "307",
+      "abbreviation": "ksu"
+    },
+    {
+      "teamKey": "afa",
+      "competitionKey": "ncaa-baseball",
+      "name": "Air Force Falcons",
+      "shortName": "Air Force",
+      "crestUrl": "https://a.espncdn.com/i/teamlogos/ncaa/500/2005.png",
+      "sourceTeamId": "155",
+      "abbreviation": "afa"
+    },
+    {
+      "teamKey": "ala",
+      "competitionKey": "ncaa-baseball",
+      "name": "Alabama Crimson Tide",
+      "shortName": "Alabama",
+      "crestUrl": "https://a.espncdn.com/i/teamlogos/ncaa/500/333.png",
+      "sourceTeamId": "148",
+      "abbreviation": "ala"
+    },
+    {
+      "teamKey": "alcn",
+      "competitionKey": "ncaa-baseball",
+      "name": "Alcorn State Braves",
+      "shortName": "Alcorn St",
+      "crestUrl": "https://a.espncdn.com/i/teamlogos/ncaa/500/2016.png",
+      "sourceTeamId": "260",
+      "abbreviation": "alcn"
+    },
+    {
+      "teamKey": "apst",
+      "competitionKey": "ncaa-baseball",
+      "name": "App State Mountaineers",
+      "shortName": "App State",
+      "crestUrl": "https://a.espncdn.com/i/teamlogos/ncaa/500/2026.png",
+      "sourceTeamId": "271",
+      "abbreviation": "apst"
+    }
+  ],
+  "scoreboard-nfl": [
+    {
+      "id": "401671800",
+      "competitionKey": "nfl",
+      "startsAt": "2026-01-04T18:00Z",
+      "state": "final",
+      "statusDetail": "Final",
+      "recap": null,
+      "home": {
+        "teamKey": "dal",
+        "sourceTeamId": "6",
+        "name": "Dallas Cowboys",
+        "shortName": "Cowboys",
+        "crestUrl": "https://a.espncdn.com/i/teamlogos/nfl/500/dal.png",
+        "score": 27,
+        "record": "12-5",
+        "winner": true,
+        "scorers": null
+      },
+      "away": {
+        "teamKey": "ne",
+        "sourceTeamId": "17",
+        "name": "New England Patriots",
+        "shortName": "Patriots",
+        "crestUrl": "https://a.espncdn.com/i/teamlogos/nfl/500/ne.png",
+        "score": 20,
+        "record": "9-8",
+        "winner": false,
+        "scorers": null
+      }
+    }
+  ],
+  "scoreboard-eng.1": [
+    {
+      "id": "740794",
+      "competitionKey": "eng.1",
+      "startsAt": "2026-01-04T15:00Z",
+      "state": "final",
+      "statusDetail": "FT",
+      "recap": "Thiago hat trick downs Everton, Brentford go 7th",
+      "home": {
+        "teamKey": "eve",
+        "sourceTeamId": "368",
+        "name": "Everton",
+        "shortName": "Everton",
+        "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/368.png",
+        "score": 2,
+        "record": "8-4-8",
+        "winner": false,
+        "scorers": ["Beto 66", "T. Barry 90+1"]
+      },
+      "away": {
+        "teamKey": "bre",
+        "sourceTeamId": "337",
+        "name": "Brentford",
+        "shortName": "Brentford",
+        "crestUrl": "https://a.espncdn.com/i/teamlogos/soccer/500/337.png",
+        "score": 4,
+        "record": "9-3-8",
+        "winner": true,
+        "scorers": ["I. Thiago 11, 51, 88", "N. Collins 50"]
+      }
+    }
+  ],
+  "scoreboard-nhl": [
+    {
+      "id": "401891808",
+      "competitionKey": "nhl",
+      "startsAt": "2026-11-12T17:00Z",
+      "state": "final",
+      "statusDetail": "Final",
+      "recap": "Finnish native Aho scores twice as first-place Hurricanes top Kraken 4-1 in Helsinki",
+      "home": {
+        "teamKey": "sea",
+        "sourceTeamId": "124292",
+        "name": "Seattle Kraken",
+        "shortName": "Kraken",
+        "crestUrl": "https://a.espncdn.com/i/teamlogos/nhl/500/scoreboard/sea.png",
+        "score": 1,
+        "record": "9-7-1",
+        "winner": false,
+        "scorers": ["F. Gaudreau"]
+      },
+      "away": {
+        "teamKey": "car",
+        "sourceTeamId": "7",
+        "name": "Carolina Hurricanes",
+        "shortName": "Hurricanes",
+        "crestUrl": "https://a.espncdn.com/i/teamlogos/nhl/500/scoreboard/car.png",
+        "score": 4,
+        "record": "15-3-2",
+        "winner": true,
+        "scorers": ["S. Aho (2)", "N. Ehlers", "J. Valimaki"]
+      }
+    },
+    {
+      "id": "401892696",
+      "competitionKey": "nhl",
+      "startsAt": "2026-11-13T00:00Z",
+      "state": "final",
+      "statusDetail": "Final",
+      "recap": "Canadiens snap Bruins' seven-game winning streak on home ice with 5-2 win",
+      "home": {
+        "teamKey": "bos",
+        "sourceTeamId": "1",
+        "name": "Boston Bruins",
+        "shortName": "Bruins",
+        "crestUrl": "https://a.espncdn.com/i/teamlogos/nhl/500/scoreboard/bos.png",
+        "score": 2,
+        "record": "13-5-1",
+        "winner": false,
+        "scorers": ["C. Mittelstadt (2)"]
+      },
+      "away": {
+        "teamKey": "mtl",
+        "sourceTeamId": "10",
+        "name": "Montreal Canadiens",
+        "shortName": "Canadiens",
+        "crestUrl": "https://a.espncdn.com/i/teamlogos/nhl/500/scoreboard/mtl.png",
+        "score": 5,
+        "record": "12-3-4",
+        "winner": true,
+        "scorers": ["J. Anderson", "J. Evans", "K. Dach", "P. Danault", "C. Caufield"]
+      }
+    },
+    {
+      "id": "401892697",
+      "competitionKey": "nhl",
+      "startsAt": "2026-11-13T00:00Z",
+      "state": "final",
+      "statusDetail": "Final",
+      "recap": "Matt Boldy has 2nd hat trick of season to help Wild beat Maple Leafs, 5-2",
+      "home": {
+        "teamKey": "tor",
+        "sourceTeamId": "21",
+        "name": "Toronto Maple Leafs",
+        "shortName": "Maple Leafs",
+        "crestUrl": "https://a.espncdn.com/i/teamlogos/nhl/500/scoreboard/tor.png",
+        "score": 2,
+        "record": "8-11-2",
+        "winner": false,
+        "scorers": ["Z. MacEwen", "A. Matthews"]
+      },
+      "away": {
+        "teamKey": "min",
+        "sourceTeamId": "30",
+        "name": "Minnesota Wild",
+        "shortName": "Wild",
+        "crestUrl": "https://a.espncdn.com/i/teamlogos/nhl/500/scoreboard/min.png",
+        "score": 5,
+        "record": "14-3-4",
+        "winner": true,
+        "scorers": ["M. Boldy (3)", "D. Yurov", "M. McCarron"]
+      }
+    }
+  ],
+  "standings-nfl": {
+    "sections": [
+      {
+        "label": "American Football Conference",
+        "conference": null,
+        "rows": [
+          {
+            "teamKey": "ne",
+            "sourceTeamId": "17",
+            "name": "New England Patriots",
+            "rank": 1,
+            "points": null,
+            "wins": 11,
+            "losses": 1,
+            "draws": null,
+            "winPercent": 0.917,
+            "qualifies": false,
+            "qualificationNote": null,
+            "qualificationColor": null
+          }
+        ]
+      },
+      {
+        "label": "National Football Conference",
+        "conference": null,
+        "rows": [
+          {
+            "teamKey": "dal",
+            "sourceTeamId": "6",
+            "name": "Dallas Cowboys",
+            "rank": 1,
+            "points": null,
+            "wins": 10,
+            "losses": 2,
+            "draws": null,
+            "winPercent": 0.833,
+            "qualifies": false,
+            "qualificationNote": null,
+            "qualificationColor": null
+          }
+        ]
+      }
+    ],
+    "season": null
+  },
+  "standings-eng.1": {
+    "sections": [
+      {
+        "label": null,
+        "conference": null,
+        "rows": [
+          {
+            "teamKey": "ars",
+            "sourceTeamId": "359",
+            "name": "Arsenal",
+            "rank": 1,
+            "points": 46,
+            "wins": 14,
+            "losses": 2,
+            "draws": 4,
+            "winPercent": null,
+            "qualifies": true,
+            "qualificationNote": "UEFA Champions League",
+            "qualificationColor": "#2a66d1"
+          },
+          {
+            "teamKey": "liv",
+            "sourceTeamId": "364",
+            "name": "Liverpool",
+            "rank": 2,
+            "points": 43,
+            "wins": 13,
+            "losses": 3,
+            "draws": 4,
+            "winPercent": null,
+            "qualifies": false,
+            "qualificationNote": null,
+            "qualificationColor": null
+          }
+        ]
+      }
+    ],
+    "season": null
+  },
+  "standings-fifa.world": {
+    "sections": [
+      {
+        "label": "Group A",
+        "conference": null,
+        "rows": [
+          {
+            "teamKey": "mex",
+            "sourceTeamId": "202",
+            "name": "Mexico",
+            "rank": 1,
+            "points": 7,
+            "wins": 2,
+            "losses": 0,
+            "draws": 1,
+            "winPercent": null,
+            "qualifies": true,
+            "qualificationNote": "Advances to knockout stage",
+            "qualificationColor": "#2a66d1"
+          }
+        ]
+      },
+      {
+        "label": "Group B",
+        "conference": null,
+        "rows": [
+          {
+            "teamKey": "eng",
+            "sourceTeamId": "660",
+            "name": "England",
+            "rank": 2,
+            "points": 4,
+            "wins": 1,
+            "losses": 0,
+            "draws": 1,
+            "winPercent": null,
+            "qualifies": false,
+            "qualificationNote": null,
+            "qualificationColor": null
+          }
+        ]
+      }
+    ],
+    "season": {
+      "start": "2026-06-11T04:00Z",
+      "end": "2026-08-01T03:59Z"
+    }
+  },
+  "standings-ncaaf": {
+    "sections": [
+      {
+        "label": "American Conference",
+        "conference": null,
+        "rows": [
+          {
+            "teamKey": "mem",
+            "sourceTeamId": "235",
+            "name": "Memphis Tigers",
+            "rank": 1,
+            "points": null,
+            "wins": 8,
+            "losses": 2,
+            "draws": null,
+            "winPercent": 0.8,
+            "qualifies": false,
+            "qualificationNote": null,
+            "qualificationColor": null
+          },
+          {
+            "teamKey": "unt",
+            "sourceTeamId": "249",
+            "name": "North Texas Mean Green",
+            "rank": 2,
+            "points": null,
+            "wins": 7,
+            "losses": 2,
+            "draws": null,
+            "winPercent": 0.7777777777777778,
+            "qualifies": false,
+            "qualificationNote": null,
+            "qualificationColor": null
+          },
+          {
+            "teamKey": "utsa",
+            "sourceTeamId": "2636",
+            "name": "UTSA Roadrunners",
+            "rank": 3,
+            "points": null,
+            "wins": 7,
+            "losses": 2,
+            "draws": null,
+            "winPercent": 0.7777777777777778,
+            "qualifies": false,
+            "qualificationNote": null,
+            "qualificationColor": null
+          },
+          {
+            "teamKey": "fau",
+            "sourceTeamId": "2226",
+            "name": "Florida Atlantic Owls",
+            "rank": 4,
+            "points": null,
+            "wins": 6,
+            "losses": 3,
+            "draws": null,
+            "winPercent": 0.6666666666666666,
+            "qualifies": false,
+            "qualificationNote": null,
+            "qualificationColor": null
+          }
+        ]
+      },
+      {
+        "label": "Atlantic Coast Conference",
+        "conference": null,
+        "rows": [
+          {
+            "teamKey": "mia",
+            "sourceTeamId": "2390",
+            "name": "Miami Hurricanes",
+            "rank": 1,
+            "points": null,
+            "wins": 8,
+            "losses": 1,
+            "draws": null,
+            "winPercent": 0.8888888888888888,
+            "qualifies": false,
+            "qualificationNote": null,
+            "qualificationColor": null
+          },
+          {
+            "teamKey": "wake",
+            "sourceTeamId": "154",
+            "name": "Wake Forest Demon Deacons",
+            "rank": 2,
+            "points": null,
+            "wins": 8,
+            "losses": 1,
+            "draws": null,
+            "winPercent": 0.8888888888888888,
+            "qualifies": false,
+            "qualificationNote": null,
+            "qualificationColor": null
+          },
+          {
+            "teamKey": "smu",
+            "sourceTeamId": "2567",
+            "name": "SMU Mustangs",
+            "rank": 3,
+            "points": null,
+            "wins": 7,
+            "losses": 2,
+            "draws": null,
+            "winPercent": 0.7777777777777778,
+            "qualifies": false,
+            "qualificationNote": null,
+            "qualificationColor": null
+          },
+          {
+            "teamKey": "duke",
+            "sourceTeamId": "150",
+            "name": "Duke Blue Devils",
+            "rank": 4,
+            "points": null,
+            "wins": 7,
+            "losses": 2,
+            "draws": null,
+            "winPercent": 0.7777777777777778,
+            "qualifies": false,
+            "qualificationNote": null,
+            "qualificationColor": null
+          }
+        ]
+      }
+    ],
+    "season": {
+      "start": "2026-02-01T08:00Z",
+      "end": "2027-02-01T07:59Z"
+    }
+  },
+  "headlines-nfl": [
+    {
+      "origin": "espn",
+      "id": "4567",
+      "sportKey": "football",
+      "competitionKey": "nfl",
+      "competitionLabel": "NFL",
+      "title": "Cowboys clinch the NFC East with a Week 18 win",
+      "url": "https://www.espn.com/nfl/story/_/id/4567",
+      "publishedAt": "2026-01-04T22:15:00Z",
+      "imageUrl": "https://a.espncdn.com/photo/2026/0104/cowboys-header.jpg",
+      "summary": "Dallas held off a late Washington rally to seal the division on the final Sunday.",
+      "teamKeys": [],
+      "publisherLabel": "ESPN",
+      "publisherDomain": "espn.com",
+      "sourceTeamIds": ["6"]
+    },
+    {
+      "origin": "espn",
+      "id": "4568",
+      "sportKey": "football",
+      "competitionKey": "nfl",
+      "competitionLabel": "NFL",
+      "title": "Patriots fall short in the season finale",
+      "url": "https://www.espn.com/nfl/story/_/id/4568",
+      "publishedAt": "2026-01-04T22:40:00Z",
+      "imageUrl": null,
+      "summary": "New England's playoff hopes ended with a fourth-quarter collapse in Buffalo.",
+      "teamKeys": [],
+      "publisherLabel": "ESPN",
+      "publisherDomain": "espn.com",
+      "sourceTeamIds": []
+    }
+  ],
+  "headlines-eng.1": [
+    {
+      "origin": "espn",
+      "id": "50475329",
+      "sportKey": "soccer",
+      "competitionKey": "eng.1",
+      "competitionLabel": "Premier League",
+      "title": "Onuoha: Man United's two-year deal for Pochettino makes sense",
+      "url": "https://www.espn.com/video/clip/_/id/50475329/man-united-two-year-deal-pochettino-makes-sense",
+      "publishedAt": "2026-11-13T23:58:31Z",
+      "imageUrl": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1113/dm_261113_Onuoha_Man_Uniteds_twoyear_deal_for_Pochettino_makes_sense/dm_261113_Onuoha_Man_Uniteds_twoyear_deal_for_Pochettino_makes_sense.jpg",
+      "summary": "Onuoha: Man United's two-year deal for Pochettino makes sense",
+      "teamKeys": [],
+      "publisherLabel": "ESPN",
+      "publisherDomain": "espn.com",
+      "sourceTeamIds": ["364", "360"]
+    },
+    {
+      "origin": "espn",
+      "id": "50475260",
+      "sportKey": "soccer",
+      "competitionKey": "eng.1",
+      "competitionLabel": "Premier League",
+      "title": "Moreno: Pochettino had 'one foot out the door' before World Cup",
+      "url": "https://www.espn.com/video/clip/_/id/50475260/pochettino-had-one-foot-door-world-cup",
+      "publishedAt": "2026-11-13T23:58:35Z",
+      "imageUrl": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1113/dm_261113_Moreno_Pochettino_had_one_foot_out_the_door_before_World_Cup/dm_261113_Moreno_Pochettino_had_one_foot_out_the_door_before_World_Cup.jpg",
+      "summary": "Moreno: Pochettino had 'one foot out the door' before World Cup",
+      "teamKeys": [],
+      "publisherLabel": "ESPN",
+      "publisherDomain": "espn.com",
+      "sourceTeamIds": ["364", "360"]
+    },
+    {
+      "origin": "espn",
+      "id": "50470402",
+      "sportKey": "soccer",
+      "competitionKey": "eng.1",
+      "competitionLabel": "Premier League",
+      "title": "Recap: USMNT's Pochettino in tears as he agrees to join Man United",
+      "url": "https://www.espn.com/soccer/story/_/id/50470402/live-updates-mauricio-pochettino-usmnt-man-united",
+      "publishedAt": "2026-11-13T17:16:59Z",
+      "imageUrl": "https://a.espncdn.com/photo/2026/1113/r1745277_1296x729_16-9.jpg",
+      "summary": "USMNT head coach Mauricio Pochettino is leaving to join Manchester United. Read all the news, analysis and reaction from ESPN.",
+      "teamKeys": [],
+      "publisherLabel": "ESPN",
+      "publisherDomain": "espn.com",
+      "sourceTeamIds": ["360", "660"]
+    },
+    {
+      "origin": "espn",
+      "id": "50472256",
+      "sportKey": "soccer",
+      "competitionKey": "eng.1",
+      "competitionLabel": "Premier League",
+      "title": "Pochettino explains why he decided to join Man United and leave USMNT",
+      "url": "https://www.espn.com/video/clip/_/id/50472256/pochettino-explains-why-decided-join-man-united-leave-usmnt",
+      "publishedAt": "2026-11-13T15:46:02Z",
+      "imageUrl": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1113/dm_261113_COM_SOC_Analysis_Pochettino_explains_why_he_decided_to_join_Man_United_and_leave_USMNT_GLOBAL_2026/dm_261113_COM_SOC_Analysis_Pochettino_explains_why_he_decided_to_join_Man_United_and_leave_USMNT_GLOBAL_2026.jpg",
+      "summary": "Pochettino explains why he decided to join Man United and leave USMNT",
+      "teamKeys": [],
+      "publisherLabel": "ESPN",
+      "publisherDomain": "espn.com",
+      "sourceTeamIds": ["360", "660"]
+    }
+  ]
+}

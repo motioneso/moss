@@ -11,6 +11,7 @@ import {
   assigneeLabel
 } from "./row-marks.mjs";
 import { taskFilters } from "./filters.mjs";
+import { launchFocus } from "./focus.mjs";
 import { tagManager } from "./tags.mjs";
 import { listDeletion } from "./delete-list.mjs";
 import { captureDraft } from "./capture.mjs";
@@ -214,6 +215,14 @@ async function load() {
     state.lists = lists.lists;
     options("task-list", state.lists);
     $("view").value = viewMode(preferences.preferences.defaultView);
+    if (!state.launchApplied) {
+      state.launchApplied = true;
+      const focus = launchFocus(window.location.search);
+      if (focus) {
+        $("focus-filter").value = focus;
+        $("status-filter").value = "";
+      }
+    }
     show("overview", $("editor").hidden && $("lists-editor").hidden && $("tags-editor").hidden);
     render();
     $("notice").textContent = "Tasks are up to date.";

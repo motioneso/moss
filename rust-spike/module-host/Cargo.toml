@@ -36,6 +36,10 @@ moss-platform-routing = { path = "bridges/routing" }
 moss-platform-adapters = { path = "bridges/adapters" }
 async-trait = "0.1"
 
+[features]
+# Proof only. Adds controls that weaken the browser's isolation so tests can see each guard fail.
+browser-proof = []
+
 [dev-dependencies]
 tempfile = "3"
 moss-people = { path = "../../modules/people/src" }

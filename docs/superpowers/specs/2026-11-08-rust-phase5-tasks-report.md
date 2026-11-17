@@ -2198,3 +2198,55 @@ card was proven against the compiled component and a real database only. Still o
 per-queue retention in the host; email triage feedback; Today/chat focus links; installed chat
 and summary presentation; performance budgets; physical second-device HTTPS proof. Workshop
 and Food remain excluded. Part of #4027; release note Category N/A.
+
+## Tasks part 38 checkpoint (JS-216, Card 526)
+
+The Rust shell now opens the Tasks screen with a focus preset when the address carries
+`?focus=` (Do First `priorities`, `atrisk`, `donetoday`). The shell keeps the value when it
+navigates inside the app or on back/forward, passes it to the module page, and the page hands
+it to the screen, which selects the preset and drops the status filter, as the legacy page
+did. Any other value is ignored and the screen opens as usual. Only a short lowercase word is
+passed on, and the screen accepts only the three presets.
+
+Checked: new unit tests (shell address parsing, screen preset parsing); the full Tasks gate
+(`test:rust-tasks`) and the live HTTPS gate (`test:rust-tasks-server`). Live, in a real
+browser on the real HTTPS server, signed in, with two tasks created through the server (one
+due tomorrow, one with no date): `/tasks` shows both; `/tasks?focus=atrisk` shows only the due
+one with the "At risk" chip and the Focus box set to At risk; `/tasks?focus=bogus` shows both;
+moving to the address inside the open app (back/forward style) applies the preset without a
+reload.
+
+Not proven or not built: the Rust Today page has no task numbers yet and the Rust chat drawer
+renders no links, so nothing in the app points at these addresses yet; only the address
+works. A second physical device was not used. Still open: per-queue retention in the host;
+email triage feedback; installed chat and summary presentation; approval cards in the chat
+drawer; performance budgets; physical second-device HTTPS proof. Workshop and Food remain
+excluded. Part of #4027; release note Category N/A.
+
+## Tasks part 39 checkpoint (JS-219, Card 526)
+
+No product change. This part built the focus-preset hand-off from the address into the Tasks
+screen, proved it live, and then found that part 38 (PR 4219) had merged the same feature
+first; the duplicate was dropped. Part 38 stands as the record for that item.
+
+Finding on per-queue retention of finished jobs (the largest open Tasks item that does not
+depend on another module): it cannot be built as a Tasks-only or host-only change today.
+
+- The queue table has no finished-time column, and the worker role has no delete right on it,
+  so a cleanup needs a schema change.
+- The server's database setup only creates a table when its marker table is missing
+  (`bootstrap_steps` in `rust-spike/shell/app/src/module_install.rs`). An instance that already
+  has the queue would never receive a changed queue migration, and editing the applied one
+  would break that rule for every existing install.
+- Every test that prepares a database lists the queue migrations by hand (about ten files), so
+  a new step has to be added to each.
+
+Recommended next step (a platform task, not a Tasks one): add a numbered migration step with a
+marker that checks for a column, so setup can evolve an existing queue; then add a `finished_at`
+column, a worker delete right, a per-queue `jobRetentionSeconds` manifest field next to
+`jobRetries`, and a sweep in the worker loop. Tasks would declare 60 seconds, the legacy value.
+
+Still open: per-queue retention (above); email triage feedback (needs the connectors module);
+Today and chat producing focus links; approval cards in the chat drawer; installed chat and
+summary presentation; performance budgets; physical second-device HTTPS proof. Workshop and
+Food remain excluded. Part of #4027; release note Category N/A.

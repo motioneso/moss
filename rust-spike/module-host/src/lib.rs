@@ -4,6 +4,7 @@ pub mod manifest;
 pub mod registry;
 pub mod runtime;
 pub mod sql;
+pub mod staged;
 pub mod store;
 pub mod trust;
 
@@ -21,6 +22,9 @@ pub mod jobs;
 pub mod ai;
 pub mod credentials;
 pub mod network;
+pub mod browser;
+pub mod public_web;
+pub mod robots;
 pub mod services;
 
 pub mod legacy;
@@ -47,6 +51,7 @@ mod enqueue_options;
 pub mod typed_query;
 
 pub mod transactional_database;
+pub mod transcribe;
 
 pub mod dispatch;
 
@@ -63,8 +68,10 @@ pub mod folder_sync_status;
 pub mod memory_cleanup;
 pub mod memory_ingest;
 pub mod memory_search;
+pub mod memory_snapshot;
+pub mod memory_vault;
 
 mod notifications;
-mod quiet_hours;
 mod producer_queue;
+mod quiet_hours;
 pub mod worker;

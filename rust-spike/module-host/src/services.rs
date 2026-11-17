@@ -23,6 +23,11 @@ pub struct ServicePorts {
     next: Arc<dyn Ports>,
     pub(crate) ai: Arc<dyn crate::ai::Intelligence>,
     pub(crate) network: Arc<dyn crate::network::Transport>,
+    public_web: Arc<crate::public_web::PublicWeb>,
+    browser: Option<crate::browser::BrowserPort>,
+    /// Proof only. Files every person's service data under one shared folder.
+    #[cfg(feature = "browser-proof")]
+    pooled: bool,
 }
 impl ServicePorts {
     pub fn new(
@@ -39,7 +44,57 @@ impl ServicePorts {
             next,
             ai,
             network: Arc::new(crate::network::Network),
+            public_web: Arc::default(),
+            browser: None,
+            #[cfg(feature = "browser-proof")]
+            pooled: false,
         })
+    }
+    /// One account's recent port activity for a module: port, operation, resource name and
+    /// success only. Never request or response data.
+    pub fn activity(&self, id: &str, access: &AccessContext) -> Result<Vec<Value>> {
+        Ok(self
+            .read(id, access, "activity")?
+            .as_array()
+            .cloned()
+            .unwrap_or_default())
+    }
+    pub fn with_public_web(mut self, public_web: crate::public_web::PublicWeb) -> Self {
+        self.public_web = Arc::new(public_web);
+        self
+    }
+    /// Turns on the browser port. It reads pages through this service's safe fetch, so call it
+    /// after `with_public_web`.
+    pub fn with_browser(mut self, chrome_dir: impl Into<std::path::PathBuf>) -> Self {
+        self.browser = Some(crate::browser::BrowserPort::new(
+            chrome_dir,
+            self.public_web.clone(),
+        ));
+        self
+    }
+    #[cfg(feature = "browser-proof")]
+    pub fn with_weakened_browser(
+        mut self,
+        launcher: crate::browser::launch::Launcher,
+        weakened: crate::browser::Weakened,
+    ) -> Self {
+        let mut port = crate::browser::BrowserPort::with_launcher(launcher, self.public_web.clone());
+        port.weakened = weakened;
+        self.browser = Some(port);
+        self
+    }
+    #[cfg(feature = "browser-proof")]
+    pub fn with_pooled_people(mut self) -> Self {
+        self.pooled = true;
+        self
+    }
+    #[cfg(feature = "browser-proof")]
+    pub fn with_browser_launcher(mut self, launcher: crate::browser::launch::Launcher) -> Self {
+        self.browser = Some(crate::browser::BrowserPort::with_launcher(
+            launcher,
+            self.public_web.clone(),
+        ));
+        self
     }
     pub fn with_network(mut self, transport: Arc<dyn crate::network::Transport>) -> Self {
         self.network = transport;
@@ -91,6 +146,10 @@ impl ServicePorts {
     pub(crate) fn account(&self, id: &str, access: &AccessContext) -> Result<VaultContext> {
         ensure!(crate::manifest::identifier(id), "Invalid module id");
         let module = self.files.create_subdir(id)?;
+        #[cfg(feature = "browser-proof")]
+        let pooled = AccessContext::new(uuid::Uuid::nil(), "pooled");
+        #[cfg(feature = "browser-proof")]
+        let access = if self.pooled { &pooled } else { access };
         let cx = VaultContext::for_module_files(&module, access)?;
         cx.create_dir("host")?;
         Ok(cx)
@@ -243,8 +302,22 @@ impl ServicePorts {
         let access = scope.access();
         match port {
             "credentials" => self.broker(scope, r),
+            "fetch" if r.resource == crate::public_web::PUBLIC_WEB => {
+                Ok(self
+                    .public_web
+                    .fetch(&r.operation, &r.parameters, scope.remaining()))
+            }
+            "browser" => match &self.browser {
+                Some(browser) => Ok(browser.render(scope, r)),
+                None => Ok(crate::browser::Reason::Unsupported.to_json()),
+            },
+            "ai" if r.operation == "capabilities" => {
+                ensure!(r.resource == "chat", "Unknown AI capability query");
+                self.ai.chat_capabilities(scope)
+            }
             "ai" => self.ai.generate(scope, r),
             "embed" => self.ai.embed(scope, r),
+            "transcribe" => self.ai.transcribe(scope, r),
             "notify" => {
                 ensure!(r.operation == "post", "Unknown notification operation");
                 let text = r.parameters["text"]
@@ -338,6 +411,7 @@ impl ServicePorts {
                         .module()
                         .requires
                         .get(&r.resource)
+                        .or_else(|| scope.module().optional_requires.get(&r.resource))
                         .is_some_and(|v| v.matches(&target.manifest.version)),
                     "The public API dependency is incompatible"
                 );

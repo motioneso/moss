@@ -11,7 +11,7 @@ use std::{
 use url::Url;
 const LIMIT: usize = 1024 * 1024;
 type Lookup = (String, u16, mpsc::Sender<std::io::Result<Vec<SocketAddr>>>);
-fn resolve(host: &str, port: u16, remaining: Duration) -> Result<Vec<SocketAddr>> {
+pub(crate) fn resolve(host: &str, port: u16, remaining: Duration) -> Result<Vec<SocketAddr>> {
     static WORKER: OnceLock<mpsc::SyncSender<Lookup>> = OnceLock::new();
     let worker = WORKER.get_or_init(|| {
         let (send, receive) = mpsc::sync_channel::<Lookup>(8);
@@ -80,6 +80,9 @@ pub fn request(
         ensure!(!remaining.is_zero(), "HTTP deadline exceeded");
         let client = Client::builder()
             .no_proxy()
+            // A generic name for services that refuse anonymous clients. A header set by the
+            // caller replaces it.
+            .user_agent("Moss/0.1 (self-hosted assistant)")
             .redirect(reqwest::redirect::Policy::none())
             .timeout(remaining)
             .resolve_to_addrs(host, &addresses)

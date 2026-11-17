@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 2,
+  "id": "goals",
+  "name": "Goals",
+  "description": "Private long-running goals and evidence, with five chat tools under the host's approval rules and an active-goals data call for Today. No screen or memory sync jobs yet.",
+  "publisher": "Moss",
+  "version": "0.1.1",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "fuelLimit": 200000000,
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "db",
+      "operations": ["query"],
+      "resources": ["app.moss_goals", "app.moss_goal_evidence"]
+    },
+    {
+      "port": "context",
+      "operations": ["read"],
+      "resources": ["call"]
+    },
+    {
+      "port": "tools",
+      "operations": ["offer", "run"],
+      "resources": ["goals.list", "goals.get", "goals.create", "goals.update", "goals.addEvidence"]
+    }
+  ],
+  "database": {
+    "migrations": [
+      "sql/0123_long_running_goals.sql",
+      "sql/0182_moss_rename_goals.sql",
+      "sql/0300_goals_id_defaults.sql"
+    ],
+    "ownedTables": ["app.moss_goals", "app.moss_goal_evidence"],
+    "ledger": "core-legacy",
+    "access": {
+      "app.moss_goals": {
+        "access": "owner-only"
+      },
+      "app.moss_goal_evidence": {
+        "access": "owner-only"
+      }
+    }
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/goals",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/goals",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/goals/:id",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/goals/:id",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/goals/:id/evidence",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/goals/today",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/goals/tools/run",
+      "signIn": true
+    }
+  ],
+  "requires": {},
+  "provides": {},
+  "icons": ["icons/goals.svg"],
+  "accounts": {
+    "supportsUserDisable": false,
+    "defaultEnabled": true
+  },
+  "lifecycle": {
+    "required": true,
+    "bundled": true,
+    "removable": false
+  },
+  "screens": {},
+  "navigation": [],
+  "settings": [
+    {
+      "id": "goals.module-settings",
+      "label": "Goals",
+      "path": "/settings?section=modules&module=goals",
+      "scope": "user",
+      "description": "Goals can be reached through the Goals routes. Goals has no settings page, as before."
+    }
+  ],
+  "features": [
+    {
+      "id": "goals.list-create-change-close",
+      "description": "A person can list their goals in priority order, create a goal, change it, and close it by marking it completed or archived. Each person sees only their own goals.",
+      "errors": [
+        {
+          "code": "goal_not_found",
+          "class": "validation",
+          "description": "The goal does not exist or belongs to another person. Check the goal and try again."
+        },
+        {
+          "code": "goal_closed",
+          "class": "validation",
+          "description": "The goal is completed or archived, so new evidence is refused. Reopen the goal to add evidence."
+        }
+      ]
+    },
+    {
+      "id": "goals.evidence",
+      "description": "A person can add evidence to a goal that is still open, with its kind, source and summary. Adding evidence updates the goal's updated time.",
+      "errors": []
+    },
+    {
+      "id": "goals.chat-tools",
+      "description": "Chat can list goals, read one with its ten newest evidence summaries, create, change and add evidence. Writes need the host\u2019s one-use approval for the same person and exact inputs. A missing or another person\u2019s goal is absent. No memory sync or approval screen is included yet.",
+      "errors": [
+        {
+          "code": "approval_required",
+          "class": "validation",
+          "description": "The tool cannot run without approval. Ask for approval for these exact inputs and try again."
+        }
+      ]
+    },
+    {
+      "id": "goals.today-data",
+      "description": "The Today data call returns only the signed-in person\u2019s active goals in priority order, newest first at equal priority. An empty list stays empty. The Today screen is not built yet.",
+      "errors": []
+    }
+  ],
+  "tools": {
+    "goals.list": {
+      "description": "List all goals in priority order.",
+      "risk": "read"
+    },
+    "goals.get": {
+      "description": "Read a goal and its ten newest evidence summaries.",
+      "risk": "read"
+    },
+    "goals.create": {
+      "description": "Create a long-running goal.",
+      "risk": "write"
+    },
+    "goals.update": {
+      "description": "Change or close a goal.",
+      "risk": "write"
+    },
+    "goals.addEvidence": {
+      "description": "Add evidence to an open goal.",
+      "risk": "write"
+    }
+  }
+}

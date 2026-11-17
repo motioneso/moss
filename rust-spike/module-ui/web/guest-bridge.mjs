@@ -47,7 +47,12 @@ export function moduleClient({ guestWindow = globalThis.window, timeoutMs = 3000
         if (!reply || reply.channel !== "moss.module.v1" || reply.id !== id) return;
         done();
         if (reply.ok === true) resolve(reply.result);
-        else reject(new Error("Moss could not finish this request"));
+        else {
+          const failure = new Error("Moss could not finish this request");
+          if (Number.isInteger(reply.status)) failure.status = reply.status;
+          if ("body" in reply) failure.body = reply.body;
+          reject(failure);
+        }
       };
       transport.port1.postMessage({ ...data, channel: "moss.module.v1", id, type }, [
         channel.port2

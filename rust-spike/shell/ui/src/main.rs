@@ -1,5 +1,6 @@
 mod api;
 mod chat;
+mod email_refresh;
 mod focus;
 mod frame;
 mod icons;

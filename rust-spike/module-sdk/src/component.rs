@@ -37,6 +37,7 @@ pub mod ports {
     port!(AI, ai, "ai", "moss:module/ai@1.0.0");
     port!(KV, kv, "kv", "moss:module/kv@1.0.0");
     port!(FETCH, fetch, "fetch", "moss:module/fetch@1.0.0");
+    port!(BROWSER, browser, "browser", "moss:module/browser@1.0.0");
     port!(
         CREDENTIALS,
         credentials,
@@ -44,6 +45,12 @@ pub mod ports {
         "moss:module/credentials@1.0.0"
     );
     port!(EMBED, embed, "embed", "moss:module/embed@1.0.0");
+    port!(
+        TRANSCRIBE,
+        transcribe,
+        "transcribe",
+        "moss:module/transcribe@1.0.0"
+    );
     port!(NOTIFY, notify, "notify", "moss:module/notify@1.0.0");
     port!(
         ATTACHMENTS,

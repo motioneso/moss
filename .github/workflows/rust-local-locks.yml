@@ -5,6 +5,7 @@ on:
       - "rust-spike/portability/**"
       - "rust-spike/bundled-db/**"
       - "rust-spike/shell/connect/**"
+      - "rust-spike/network/**"
       - "rust-spike/shell/tools/test-notices.mjs"
       - "rust-spike/Cargo.lock"
       - "rust-spike/shell/Cargo.lock"
@@ -18,7 +19,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    timeout-minutes: 40
     env:
       CARGO_HOME: ${{ github.workspace }}/.rust-locks/cargo
       RUSTUP_HOME: ${{ github.workspace }}/.rust-locks/rustup
@@ -90,3 +91,23 @@ jobs:
       - name: Check canonical Unix layout regressions
         if: runner.os != 'Windows'
         run: cargo +1.95.0 test --locked --manifest-path rust-spike/Cargo.toml -p bundled-db --lib
+      - name: Check the page-link hand-off between alert, notifier and window
+        if: runner.os != 'Linux'
+        run: |
+          cargo +1.95.0 test --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-app link:: -- --nocapture
+      - name: Check that a clicked Windows balloon asks the window app for its page
+        if: runner.os == 'Windows'
+        run: cargo +1.95.0 test --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-app balloon_click_opens_the_page_the_alert_carries -- --nocapture
+      - name: Check that a clicked macOS alert asks the window app for its page
+        if: runner.os == 'macOS'
+        run: |
+          cargo +1.95.0 test --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-app desktop::macos::tests -- --nocapture
+      - name: Check the Windows stop request file against a real HTTPS server
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # Git for Windows ships the OpenSSL command the local certificate step uses.
+          $env:PATH = "C:\Program Files\Git\usr\bin;$env:PATH"
+          openssl version
+          cargo +1.95.0 test --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-app stop_request_file_ends_only_the_server_it_names -- --nocapture
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

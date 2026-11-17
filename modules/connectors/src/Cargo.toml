@@ -1,0 +1,75 @@
+[package]
+name = "moss-connectors"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[lib]
+path = "lib.rs"
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+moss-module-sdk = { path = "../../../rust-spike/module-sdk" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+chrono-tz = "0.10"
+sha2 = "0.10"
+
+[[test]]
+name = "routes"
+path = "tests/routes.rs"
+
+[[test]]
+name = "grants"
+path = "tests/grants.rs"
+
+[[test]]
+name = "health"
+path = "tests/health.rs"
+
+[[test]]
+name = "calendar_context"
+path = "tests/calendar_context.rs"
+
+[[bin]]
+name = "connectors-oracle"
+path = "bin/oracle.rs"
+
+[[test]]
+name = "live_tools"
+path = "tests/live_tools.rs"
+
+[[test]]
+name = "email_context"
+path = "tests/email_context.rs"
+
+[[test]]
+name = "monitors"
+path = "tests/monitors.rs"
+
+[[test]]
+name = "email_writes"
+path = "tests/email_writes.rs"
+
+[[test]]
+name = "outlook_source"
+path = "tests/outlook_source.rs"
+
+[[test]]
+name = "outlook_scan"
+path = "tests/outlook_scan.rs"
+
+[[test]]
+name = "outlook_availability"
+path = "tests/outlook_availability.rs"
+
+[[test]]
+name = "outlook_routes"
+path = "tests/outlook_routes.rs"
+
+[[test]]
+name = "outlook_write_refusal"
+path = "tests/outlook_write_refusal.rs"

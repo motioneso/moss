@@ -1,0 +1,36 @@
+[package]
+name = "moss-goals-module"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Guest-safe Goals: long-running goals and their evidence"
+
+[workspace]
+
+[lib]
+path = "lib.rs"
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+moss-module-sdk = { path = "../../../rust-spike/module-sdk" }
+serde = { version = "1", features = ["derive"] }
+# Keep approval input bytes stable across the host and Wasm boundary.
+serde_json = { version = "1", features = ["preserve_order"] }
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wit-bindgen = { version = "=0.57.1", default-features = false, features = ["macros", "realloc"] }
+
+[profile.release]
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
+
+[[test]]
+name = "goals"
+path = "../tests/goals.rs"
+
+[[test]]
+name = "privacy"
+path = "../tests/privacy.rs"

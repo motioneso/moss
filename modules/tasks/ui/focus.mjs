@@ -24,3 +24,12 @@ export function matchesFocus(task, focus, timeZone, now = Date.now()) {
     localDay(task.completedAt, timeZone) === localDay(new Date(now), timeZone)
   );
 }
+
+const FOCUS_VALUES = ["priorities", "atrisk", "donetoday"];
+
+// The shell opens the screen with ?focus=<preset> for Today and chat links.
+// Anything else is ignored.
+export function launchFocus(search) {
+  const value = new URLSearchParams(search).get("focus");
+  return FOCUS_VALUES.includes(value) ? value : null;
+}

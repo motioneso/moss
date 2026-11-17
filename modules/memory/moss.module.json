@@ -1,0 +1,660 @@
+{
+  "schemaVersion": 2,
+  "id": "memory",
+  "name": "Memory",
+  "description": "Keeps what Moss remembers for each account, recalls it for a question, remembers new facts, and sets up the model that turns text into searchable vectors. Facts Moss derives from meeting recordings are kept with receipts, proposals and removal. Suggestions and the Memory screen are not part of this package yet.",
+  "publisher": "Moss",
+  "version": "0.1.0",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "kv",
+      "operations": ["get", "set"],
+      "resources": [
+        "memory.recall",
+        "memory.public",
+        "memory.core",
+        "memory.entity",
+        "memory.fact",
+        "memory.index",
+        "memory.lifecycle",
+        "memory.target",
+        "memory.forget",
+        "memory.facts",
+        "memory.candidates",
+        "memory.candidate",
+        "memory.fact-patch",
+        "memory.entity-patch",
+        "memory.entity-delete",
+        "memory.subject",
+        "memory.recording",
+        "memory.reembed",
+        "memory.account"
+      ]
+    },
+    {
+      "port": "db",
+      "operations": ["query"],
+      "resources": ["app.memory_ingest_nudges"]
+    },
+    {
+      "port": "vault",
+      "operations": [
+        "index.vault-list",
+        "index.vault-file",
+        "index.vault-remove",
+        "index.vault-purge"
+      ],
+      "resources": ["vault-index"]
+    },
+    {
+      "port": "jobs",
+      "operations": ["enqueue-after-commit", "enqueue-options", "schedule"],
+      "resources": [
+        "memory.vault-ingest-tick",
+        "memory.vault-ingest-sweep",
+        "memory.vault-ingest-nudge",
+        "memory.reembed-step"
+      ]
+    },
+    {
+      "port": "context",
+      "operations": ["uuid", "read"],
+      "resources": ["new", "call"]
+    }
+  ],
+  "database": {
+    "migrations": [
+      "sql/0030_memory_index.sql",
+      "sql/0032_memory_embedding_768.sql",
+      "sql/0040_memory_chat_source.sql",
+      "sql/0041_memory_facts.sql",
+      "sql/0054_worker_memory_rls.sql",
+      "sql/0061_memory_facts_to_role.sql",
+      "sql/0064_chat_memory_facts_source_thread_idx.sql",
+      "sql/0090_chat_memory_facts_provenance.sql",
+      "sql/0092_inferred_patterns_suppression.sql",
+      "sql/0094_chat_memory_facts_rls_roles.sql",
+      "sql/0096_chat_memory_corrections_log.sql",
+      "sql/0097_chat_memory_corrections_update_grant.sql",
+      "sql/0106_memory_notes_source_kind.sql",
+      "sql/0110_memory_links_worker_write.sql",
+      "sql/0118_memory_graph_substrate.sql",
+      "sql/0119_memory_candidates.sql",
+      "sql/0121_confidence_aware_memory_records.sql",
+      "sql/0281_memory_screen_source_kind.sql",
+      "sql/0301_superseded_by_set_null_on_delete.sql",
+      "sql/0338_memory_managed_note_snapshots.sql",
+      "sql/0339_memory_recording_lineage.sql",
+      "sql/0341_memory_recording_cleanup.sql",
+      "sql/0363_memory_ingest_nudges.sql",
+      "sql/0364_memory_reembed_runs.sql",
+      "sql/0365_memory_reembed_one_running.sql",
+      "sql/0366_memory_reembed_staged.sql"
+    ],
+    "ownedTables": [
+      "app.memory_chunks",
+      "app.memory_links",
+      "app.memory_file_index",
+      "app.chat_memory_facts",
+      "app.memory_entities",
+      "app.memory_facts",
+      "app.memory_episodes",
+      "app.memory_fact_sources",
+      "app.memory_aliases",
+      "app.memory_search_documents",
+      "app.memory_legacy_fact_migrations",
+      "app.memory_conflict_groups",
+      "app.memory_candidates",
+      "app.memory_recording_fact_versions",
+      "app.memory_recording_receipts",
+      "app.memory_recording_proposals",
+      "app.memory_ingest_nudges",
+      "app.memory_reembed_runs",
+      "app.memory_reembed_staged"
+    ],
+    "ledger": "core-legacy",
+    "ownerDelete": ["app.memory_recording_fact_versions"],
+    "access": {
+      "app.memory_chunks": {
+        "access": "owner-only"
+      },
+      "app.memory_links": {
+        "access": "owner-only"
+      },
+      "app.memory_file_index": {
+        "access": "owner-only"
+      },
+      "app.chat_memory_facts": {
+        "access": "owner-only"
+      },
+      "app.memory_entities": {
+        "access": "owner-only"
+      },
+      "app.memory_facts": {
+        "access": "owner-only"
+      },
+      "app.memory_episodes": {
+        "access": "owner-only"
+      },
+      "app.memory_fact_sources": {
+        "access": "owner-only"
+      },
+      "app.memory_aliases": {
+        "access": "owner-only"
+      },
+      "app.memory_search_documents": {
+        "access": "owner-only"
+      },
+      "app.memory_legacy_fact_migrations": {
+        "access": "owner-only"
+      },
+      "app.memory_conflict_groups": {
+        "access": "owner-only"
+      },
+      "app.memory_candidates": {
+        "access": "owner-only"
+      },
+      "app.memory_recording_fact_versions": {
+        "access": "owner-only"
+      },
+      "app.memory_recording_receipts": {
+        "access": "owner-only"
+      },
+      "app.memory_recording_proposals": {
+        "access": "owner-only"
+      },
+      "app.memory_ingest_nudges": {
+        "access": "owner-only"
+      },
+      "app.memory_reembed_runs": {
+        "access": "owner-only"
+      },
+      "app.memory_reembed_staged": {
+        "access": "owner-only"
+      }
+    }
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/graph/recall",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/graph/core",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/graph/entities",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/graph/facts",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/graph/facts/:id/pin",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/graph/facts/:id/confirm",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/graph/facts/:id/correct",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/graph/facts/:id/status",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/graph/facts/:id/mark-stale",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/graph/facts/:id/supersede",
+      "signIn": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/graph/facts/:id",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/vault-index/start",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/memories",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/dashboard",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/candidates",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/candidates/:id/accept",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/candidates/:id/reject",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/candidates/:id/suppress",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/graph/facts/:id",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/graph/entities/:id",
+      "signIn": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/graph/entities/:id",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/reembed",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/reembed/start",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/reembed/cancel",
+      "signIn": true
+    }
+  ],
+  "requires": {},
+  "provides": {
+    "addAlias": "1.0.0",
+    "confirmFact": "1.0.0",
+    "createEntity": "1.0.0",
+    "collectMemoryExportSection": "1.0.0",
+    "createEpisode": "1.0.0",
+    "deleteChunksForSources": "1.0.0",
+    "deleteFact": "1.0.0",
+    "deleteMemoryData": "1.0.0",
+    "embedTurn": "1.0.0",
+    "findEntityByAlias": "1.0.0",
+    "forgetEntity": "1.0.0",
+    "getActiveFact": "1.0.0",
+    "insertCandidate": "1.0.0",
+    "insertFact": "1.0.0",
+    "insertSuppression": "1.0.0",
+    "isSuppressed": "1.0.0",
+    "listActiveFacts": "1.0.0",
+    "listCoreFacts": "1.0.0",
+    "listCorrections": "1.0.0",
+    "listRecentChunks": "1.0.0",
+    "prepareMemoryAction": "1.0.0",
+    "recallMemory": "1.0.0",
+    "recordingMemory": "1.0.0",
+    "rejectFact": "1.0.0",
+    "requestVaultIndex": "1.0.0",
+    "searchChunks": "1.0.0",
+    "supersedeFact": "1.0.0",
+    "updateEntity": "1.0.0",
+    "updateFactImportance": "1.0.0",
+    "upsertChunks": "1.0.0"
+  },
+  "icons": ["icons/memory.svg"],
+  "accounts": {
+    "supportsUserDisable": false,
+    "defaultEnabled": true
+  },
+  "lifecycle": {
+    "required": true,
+    "bundled": true,
+    "removable": false
+  },
+  "features": [
+    {
+      "id": "memory.vault-index",
+      "description": "Each account's notes are split into searchable pieces and indexed every fifteen minutes, covering the private note copies Moss saves and the folder named in the account's people notes preference. The Attachments and Exports folders are never indexed. Changed files are re-indexed, deleted files are dropped, and an unchanged note is not read again after a change of search model. The owner starts that re-embed from the Search model settings screen. A restart does not re-index. Other modules can ask for one saved note copy to be indexed sooner through the requestVaultIndex API.",
+      "errors": [
+        {
+          "code": "memory-index-unavailable",
+          "class": "transient",
+          "description": "A note could not be indexed this time. The next scheduled run tries it again.",
+          "remediationRef": "memory-set-up-embedding"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "memory-set-up-embedding",
+          "description": "Check the search model settings",
+          "path": "/settings/memory/search-model"
+        }
+      ]
+    },
+    {
+      "id": "memory.embedding",
+      "description": "Sets the model that turns note text into searchable vectors. Admins choose the model that runs on this server, which downloads about 550 MB on first use and shows its progress, or save an endpoint address, a model name and an optional key. The key is sealed on save and never shown again. Note text leaves this server only for an endpoint, and the screen says so before saving.",
+      "errors": [
+        {
+          "code": "embedding-not-set-up",
+          "class": "validation",
+          "description": "No embedding model is set up",
+          "remediationRef": "memory-set-up-embedding"
+        },
+        {
+          "code": "embedding-endpoint-unreachable",
+          "class": "transient",
+          "description": "The embedding endpoint did not return a usable answer",
+          "remediationRef": "memory-set-up-embedding"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "memory-set-up-embedding",
+          "description": "Set up an embedding model",
+          "path": "/settings/memory/search-model"
+        }
+      ]
+    },
+    {
+      "id": "memory.screen",
+      "description": "The Memory screen under Settings, Memory & context. To review lists what Moss suggests, five at a time, and each suggestion can be accepted, dismissed or never suggested again. A dismissed or never-suggested item does not come back. Saved memories lists what Moss knows with search, status, kind and source filters and paging. Each memory can be pinned, confirmed, corrected, replaced, marked stale or forgotten, and you can add one by hand. History shows replaced and expired memories and dismissed suggestions. Memory text is shown only to its owner.",
+      "errors": [
+        {
+          "code": "memory-suggestion-gone",
+          "class": "validation",
+          "description": "The suggestion was already decided or no longer exists",
+          "remediationRef": "memory-open-screen"
+        },
+        {
+          "code": "memory-subject-ambiguous",
+          "class": "validation",
+          "description": "More than one memory entity has the name a suggestion mentions",
+          "remediationRef": "memory-open-screen"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "memory-open-screen",
+          "description": "Open the Memory screen",
+          "path": "/settings/memory"
+        }
+      ]
+    },
+    {
+      "id": "memory.public-api",
+      "description": "Other modules read and write memory only through a fixed set of calls, never through its tables. They cover searching and listing note, chat and screen passages, recalling saved facts, keeping the chat memory list and its rejections, and proposing new suggestions for the person to review. Every call acts only on the signed-in person's own memory. Callers send text, never vectors, and the text goes only to the configured search model.",
+      "errors": [
+        {
+          "code": "memory-public-unavailable",
+          "class": "transient",
+          "description": "Memory search is unavailable",
+          "remediationRef": "memory-set-up-embedding"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "memory-set-up-embedding",
+          "description": "Set up an embedding model",
+          "path": "/settings/memory/search-model"
+        }
+      ]
+    },
+    {
+      "id": "memory.recall",
+      "description": "Finds the facts the signed-in person has saved that fit a question, best match first, each with its sources and how sure Moss is. Also lists the always-relevant facts. Recall uses the configured embedding model to match meaning, and sends the question text to that endpoint. Only the person's own facts are ever read.",
+      "errors": [
+        {
+          "code": "memory-query-required",
+          "class": "validation",
+          "description": "q is required"
+        },
+        {
+          "code": "embedding-not-set-up",
+          "class": "validation",
+          "description": "No embedding model is set up",
+          "remediationRef": "memory-set-up-embedding"
+        },
+        {
+          "code": "memory-search-unavailable",
+          "class": "transient",
+          "description": "Memory search is unavailable",
+          "remediationRef": "memory-set-up-embedding"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "memory-set-up-embedding",
+          "description": "Set up an embedding model",
+          "path": "/settings/memory/search-model"
+        }
+      ]
+    },
+    {
+      "id": "memory.remember",
+      "description": "Saves a fact, or an entity such as a person or project, for the signed-in person, with the note, chat or other source it came from. The fact is saved first. Its search vector is made afterwards using the configured embedding model, which receives the fact text. If that fails the fact stays saved and the answer says the search entry is still pending.",
+      "errors": [
+        {
+          "code": "memory-one-object-target",
+          "class": "validation",
+          "description": "memory fact requires exactly one object target"
+        },
+        {
+          "code": "memory-search-pending",
+          "class": "transient",
+          "description": "The fact is saved but its search entry is not made yet",
+          "remediationRef": "memory-set-up-embedding"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "memory-set-up-embedding",
+          "description": "Set up an embedding model",
+          "path": "/settings/memory/search-model"
+        }
+      ]
+    },
+    {
+      "id": "memory.lifecycle",
+      "description": "Lets the signed-in person pin or unpin a saved fact, confirm it, correct its wording, mark it stale, expired or rejected, retire it as superseded, or delete it. Confirming a fact that disagrees with others keeps it and retires the others. Correcting saves a new confirmed fact with the same sources and retires the old one. A retired fact cannot be made active again, so a new fact is needed. Facts that come from a meeting recording are changed through recording memory, not here.",
+      "errors": [
+        {
+          "code": "memory-fact-not-found",
+          "class": "validation",
+          "description": "Memory fact not found"
+        },
+        {
+          "code": "memory-conflict-group-status",
+          "class": "validation",
+          "description": "conflict-group memory must be resolved with confirm or correct"
+        },
+        {
+          "code": "memory-superseded-reactivation",
+          "class": "validation",
+          "description": "Cannot reactivate a superseded memory record; create a new fact instead"
+        },
+        {
+          "code": "memory-recording-changed",
+          "class": "validation",
+          "description": "This recording's memory has changed or is being removed; refresh its saved state before continuing"
+        }
+      ],
+      "remediations": []
+    },
+    {
+      "id": "memory.conflict_groups",
+      "description": "Facts that disagree sit together in a conflict group and stay out of normal answers. Confirming or correcting one resolves the group. Deleting one leaves the group open while two or more remain, and when only one remains it becomes active again and the group is resolved.",
+      "errors": [],
+      "remediations": []
+    },
+    {
+      "id": "memory.forget_approval",
+      "description": "Deleting a memory through chat always asks first. The approval card shows the memory in words, never IDs, and is good for one use. If the memory changed after the card was shown, the deletion is refused and a new request is needed. Rejecting the card tells Moss the person declined.",
+      "errors": [
+        {
+          "code": "memory-changed-since-approval",
+          "class": "validation",
+          "description": "The memory changed or is no longer available. Find it again and review a new request."
+        },
+        {
+          "code": "memory-forget-not-ready",
+          "class": "transient",
+          "description": "Memory deletion is not ready. Start a new chat and try again."
+        }
+      ],
+      "remediations": []
+    },
+    {
+      "id": "memory.recording",
+      "description": "Keeps facts Moss derives from a person's recorded meetings in that person's own memory. Each fact has versions, a receipt per recording item, and a proposal that must be applied before it appears. Undoing, restoring and removing a recording reverse its facts, and removal deletes facts no other recording supports. Cleanup runs in batches and reports whether work remains. The person can export their versions, receipts and proposals. Without Meetings connected, every change is refused as changed. No screen is part of this package yet.",
+      "errors": [
+        {
+          "code": "memory-recording-unavailable",
+          "class": "validation",
+          "description": "This recording memory is unavailable"
+        },
+        {
+          "code": "memory-recording-conflict",
+          "class": "validation",
+          "description": "This recording memory has changed; refresh its current review"
+        },
+        {
+          "code": "memory-recording-input",
+          "class": "validation",
+          "description": "Recording facts require nonempty text of at most 2048 UTF-8 bytes"
+        },
+        {
+          "code": "memory-recording-cleanup-incomplete",
+          "class": "validation",
+          "description": "Recording Memory cleanup is incomplete"
+        }
+      ],
+      "remediations": []
+    },
+    {
+      "id": "memory.reembed",
+      "description": "After the search model changes, the Search model settings screen counts the passages made with another model, and the owner can re-embed them. The old vectors are kept until every new one is ready and then all swap in at once. Search only reads vectors made by the current model, so note search misses old passages until the run finishes. The owner can cancel a run, and a stopped or failed run leaves the old vectors as they were. Every fifteen minutes Moss also gives facts that were saved without a vector another try.",
+      "errors": [
+        {
+          "code": "reembed-already-running",
+          "class": "validation",
+          "description": "A re-embed is already running"
+        },
+        {
+          "code": "reembed-nothing-to-do",
+          "class": "validation",
+          "description": "Nothing needs a new search model"
+        },
+        {
+          "code": "reembed-stopped",
+          "class": "transient",
+          "description": "The re-embed stopped and the old search data is unchanged. Start it again.",
+          "remediationRef": "memory-set-up-embedding"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "memory-set-up-embedding",
+          "description": "Check the search model settings",
+          "path": "/settings/memory/search-model"
+        }
+      ]
+    },
+    {
+      "id": "memory.account",
+      "description": "When a person exports their account data, Memory adds everything it holds for them (passages, saved facts, entities, aliases, sources, suggestions and recording facts) without the search vectors. When a person deletes their account data, Memory removes all of those rows for that person only. Nobody can export or delete another person's memory, and an admin has no extra access.",
+      "errors": [
+        {
+          "code": "memory-export-section-unknown",
+          "class": "validation",
+          "description": "That part of the memory export does not exist"
+        }
+      ],
+      "remediations": []
+    }
+  ],
+  "tools": {
+    "memory.recall": {
+      "description": "Recall source-backed graph memory owned by the active actor.",
+      "risk": "read"
+    },
+    "memory.remember": {
+      "description": "Create a source-backed graph memory fact for the active actor.",
+      "risk": "write"
+    },
+    "memory.forget": {
+      "description": "Delete one saved memory fact for the active actor. Always asks first, showing the memory in words.",
+      "risk": "destructive",
+      "approvalVersion": true
+    }
+  },
+  "jobs": {
+    "memory.vault-ingest-tick": {},
+    "memory.vault-ingest-sweep": {
+      "offset": {
+        "kind": "count"
+      }
+    },
+    "memory.vault-ingest-nudge": {
+      "nudge-id": {
+        "kind": "id"
+      }
+    },
+    "memory.reembed-step": {
+      "run-id": {
+        "kind": "id"
+      }
+    }
+  },
+  "screens": {
+    "/settings/memory": "ui/index.html",
+    "/settings/memory/search-model": "ui/embedding.html"
+  },
+  "navigation": [],
+  "settings": [
+    {
+      "id": "memory.screen",
+      "label": "Memory & context",
+      "path": "/settings/memory",
+      "scope": "user",
+      "description": "Everything Moss remembers about you. Review what Moss suggests, search saved memories, and add, pin, confirm, correct, replace, mark stale or forget each one."
+    },
+    {
+      "id": "memory.embedding",
+      "label": "Memory search model",
+      "path": "/settings/memory/search-model",
+      "scope": "admin",
+      "description": "The endpoint and model that turn note text into searchable vectors for every account. By default the model runs on this server and note text stays on it; note text is sent out only if you choose an endpoint."
+    }
+  ]
+}

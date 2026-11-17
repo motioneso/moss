@@ -26,6 +26,7 @@ use tower_http::services::ServeDir;
 mod desktop_notices;
 mod module_admin;
 mod module_ai;
+mod module_embedding;
 mod module_install;
 mod modules;
 mod runner_data;
@@ -248,7 +249,7 @@ fn main() {
         // The host opens in the background, last: errors above must not drop its runtimes on
         // this executor, and a module installed later is picked up without a restart.
         let modules: modules::Slot = Arc::new(Mutex::new(None));
-        let loader = modules_path.map(|path| {
+        let loader = modules_path.clone().map(|path| {
             let (slot, database, stop) = (modules.clone(), platform.app.clone(), stop.clone());
             tokio::task::spawn_blocking(move || {
                 modules::load_when_ready(slot, path, database, stop)
@@ -259,7 +260,7 @@ fn main() {
             .clone()
             .map(|folder| Arc::new(module_admin::Admin::new(platform.clone(), folder)));
         let data = Arc::new(Accounts {
-            platform,
+            platform: platform.clone(),
             can_install_modules: args.instance.is_some(),
             runner: args.runner,
             data: Mutex::new(HashMap::new()),
@@ -267,6 +268,23 @@ fn main() {
         let private = router(data, args.web.clone());
         let private = match &loader {
             Some(_) => private.merge(modules::routes(modules.clone(), args.web.clone())),
+            None => private,
+        };
+        // Embedding settings are served by the host itself, so the credential never reaches a
+        // module's guest code.
+        let private = match modules_path
+            .as_deref()
+            .and_then(|path| modules::read_settings(path).ok())
+        {
+            Some(settings) => match module_embedding::EmbeddingConfig::new(
+                platform.app.clone(),
+                &settings.connector_key,
+                &settings.data,
+                settings.embeddings.is_some(),
+            ) {
+                Ok(embedding) => private.merge(module_embedding::routes(Arc::new(embedding))),
+                Err(_) => private,
+            },
             None => private,
         };
         let private = match admin {
@@ -278,8 +296,9 @@ fn main() {
     });
     let (listener, acceptor, app, running, modules, loader) = match prepared {
         Ok(parts) => parts,
-        Err(_) => {
-            eprintln!("moss-shell: could not start secure HTTPS; check private configuration, certificates and runtime database roles");
+        Err(reason) => {
+            // The reasons are fixed messages that never carry secrets.
+            eprintln!("moss-shell: could not start secure HTTPS ({reason}); check private configuration, certificates and runtime database roles");
             std::process::exit(1);
         }
     };
@@ -295,11 +314,11 @@ fn main() {
     // The loader can sit in a database wait or a lock held by another installer. Give it a few
     // seconds, then leave without it so shutdown never hangs.
     let stuck = match loader {
+        // The timer needs the runtime, so build the timeout inside the future.
         Some(loader) => runtime
-            .block_on(tokio::time::timeout(
-                std::time::Duration::from_secs(5),
-                loader,
-            ))
+            .block_on(async {
+                tokio::time::timeout(std::time::Duration::from_secs(5), loader).await
+            })
             .is_err(),
         None => false,
     };

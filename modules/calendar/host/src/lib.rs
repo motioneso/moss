@@ -8,6 +8,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+mod cache;
 pub mod package;
 mod settings;
 mod sources;
@@ -76,6 +77,16 @@ impl Ports for CalendarPorts {
                 .as_str()
                 .filter(|id| !id.is_empty())
                 .ok_or_else(|| anyhow::anyhow!("Reference id required"))?;
+            if request.resource == "calendar.task-reference" && self.references.is_none() {
+                // The Tasks package answers through its public API, under this account.
+                let call = Request {
+                    operation: "call".into(),
+                    resource: "tasks".into(),
+                    parameters: serde_json::json!({"name":"getTaskReference","parameters":{"id":id}}),
+                };
+                moss_module_host::runtime::authorize(scope.module(), "api", &call)?;
+                return self.next.invoke(scope, "api", &call);
+            }
             let references = self
                 .references
                 .as_ref()
@@ -92,6 +103,27 @@ impl Ports for CalendarPorts {
         {
             moss_module_host::runtime::authorize(scope.module(), port, request)?;
             return self.source_behaviors(scope, request);
+        }
+        if port == "kv"
+            && scope.module().id == "calendar"
+            && request.resource == "calendar.cache-write"
+        {
+            moss_module_host::runtime::authorize(scope.module(), port, request)?;
+            ensure!(!scope.remaining().is_zero(), "Calendar deadline expired");
+            return self.runtime.block_on(async {
+                tokio::time::timeout(scope.remaining(), async {
+                    let cx = DataContext::open_bounded(&self.database, scope.access(), scope.remaining())
+                        .await
+                        .map_err(|_| anyhow::anyhow!("Calendar data unavailable"))?;
+                    let result = cache::run(&cx, request).await?;
+                    cx.commit_bounded(scope.remaining())
+                        .await
+                        .map_err(|_| anyhow::anyhow!("Calendar data unavailable"))?;
+                    Ok(result)
+                })
+                .await
+                .map_err(|_| anyhow::anyhow!("Calendar deadline expired"))?
+            });
         }
         if port != "kv"
             || !matches!(

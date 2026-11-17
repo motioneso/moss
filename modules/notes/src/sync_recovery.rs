@@ -99,7 +99,7 @@ fn try_maintain(host: &impl Host) -> Result<()> {
 }
 
 /// Shift an RFC 3339 UTC time (`YYYY-MM-DDTHH:MM:SS[.fff]Z`) by whole seconds.
-fn shift_seconds(time: &str, delta: i64) -> Option<String> {
+pub(crate) fn shift_seconds(time: &str, delta: i64) -> Option<String> {
     let (date, clock) = time.split_once('T')?;
     let mut d = date.split('-').map(|n| n.parse::<i64>().ok());
     let (y, m, day) = (d.next()??, d.next()??, d.next()??);

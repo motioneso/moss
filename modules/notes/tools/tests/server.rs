@@ -49,6 +49,8 @@ impl moss_module_host::ai::Intelligence for NoAi {
 }
 /// A real HTTP embeddings endpoint on this machine (OpenAI-style). It hashes words into a
 /// 768-slot vector, so texts sharing words are close. It stands in for a hosted provider.
+static SEEN_AUTHORIZATION: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
 fn embedding_stub(port: &str) {
     use std::io::{Read, Write};
     let listener = std::net::TcpListener::bind(format!("127.0.0.1:{port}")).unwrap();
@@ -79,6 +81,15 @@ fn embedding_stub(port: &str) {
                         }
                     }
                 };
+                let head = String::from_utf8_lossy(&data).to_string();
+                for line in head.lines() {
+                    if line.to_ascii_lowercase().starts_with("authorization:") {
+                        SEEN_AUTHORIZATION
+                            .lock()
+                            .unwrap()
+                            .push(line["authorization:".len()..].trim().to_owned());
+                    }
+                }
                 let input: Value = serde_json::from_slice(&body).unwrap();
                 let mut vector = vec![0f64; 768];
                 for word in input["input"]
@@ -136,17 +147,32 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
     );
     assert!(!port.0.is_empty());
     let origin = format!("https://localhost:{}", port.0);
+    // MOSS_NOTES_HOST names the address another device uses. When set, the listener binds
+    // every interface, trusts that origin and turns sharing on. The test stays on loopback.
+    let remote = std::env::var("MOSS_NOTES_HOST")
+        .ok()
+        .map(|host| format!("https://{host}:{}", port.0));
     let cert = root.join("tls/certificate.pem");
     assert!(Command::new(std::env::var("JS170_CERTIFICATE").unwrap())
         .args(["local-certificate"])
         .arg(root.join("tls"))
         .arg(&origin)
+        .args(&remote)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
         .unwrap()
         .success());
     fs::create_dir(root.join("web")).unwrap();
+    if let Ok(shared) = std::env::var("MOSS_MODULE_SHARED_DIR") {
+        // Generated shared styles and fonts for a manual browser check.
+        assert!(Command::new("cp")
+            .args(["-r", &shared])
+            .arg(root.join("web/module-shared"))
+            .status()
+            .unwrap()
+            .success());
+    }
     fs::write(
         root.join("web/index.html"),
         "<!doctype html><title>Notes</title>",
@@ -161,9 +187,13 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
         &root.join("credentials.json"),
         &json!({"app_url":app_url,"auth_url":auth_url,"auth_secret":"temporary-disposable-notes-signing-secret-183","connector_key":connector_key}),
     );
+    let origins: Vec<String> = [Some(origin.clone()), remote.clone()]
+        .into_iter()
+        .flatten()
+        .collect();
     private(
         &root.join("network.json"),
-        &json!({"listen":format!("127.0.0.1:{}",port.0),"origins":[origin],"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
+        &json!({"listen":format!("{}:{}",if remote.is_some() {"0.0.0.0"} else {"127.0.0.1"},port.0),"origins":origins,"sharing":remote.is_some(),"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
     );
     let client = reqwest::blocking::Client::builder()
         .add_root_certificate(reqwest::Certificate::from_pem(&fs::read(&cert).unwrap()).unwrap())
@@ -279,6 +309,7 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
                 version: "0.1.0".parse().unwrap(),
                 compiled_cache: None,
                 fuel_ceiling: None,
+                browser_dir: None,
             },
             Ok,
         )
@@ -289,8 +320,14 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
             fs::read(std::env::var("NOTES_TOOL_COMPONENT").unwrap()).unwrap(),
         )
         .unwrap();
+        // Memory's own guest sits in the same registry so its route and jobs run in the real server.
+        let memory_files = moss_memory_host::package::files(
+            &repo,
+            &fs::read(std::env::var("MEMORY_CORE_WASM").unwrap()).unwrap(),
+        )
+        .unwrap();
         let registry = root.join("registry");
-        let fixture = support::Registry::create(&registry, &files);
+        let fixture = support::Registry::create_all(&registry, &[&files, &memory_files]);
         let catalog = application
             .installer
             .refresh(
@@ -314,6 +351,19 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
             .installer
             .install(&access, &catalog, artifact, true)
             .unwrap();
+        let memory_artifact = catalog
+            .select(
+                "memory",
+                None,
+                &"0.1.0".parse().unwrap(),
+                &Default::default(),
+                &Default::default(),
+            )
+            .unwrap();
+        application
+            .installer
+            .install(&access, &catalog, memory_artifact, true)
+            .unwrap();
     }
     let embedding_port = Port(
         String::from_utf8(
@@ -332,13 +382,15 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
     let embedding_url = format!("http://127.0.0.1:{}/v1/embeddings", embedding_port.0);
     private(
         &root.join("modules.json"),
-        &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"notes_base":root.join("notes"),"embeddings":{"url":embedding_url,"model":"bag-of-words-768","api_key":"local-stub"}}),
+        &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"notes_base":root.join("notes"),"private_base":root.join("private"),"embeddings":{"url":embedding_url,"model":"bag-of-words-768","api_key":"local-stub"}}),
     );
     let _server = start(true);
+    // With MOSS_NOTES_HOST set, Notes calls cross the non-loopback address.
+    let notes_origin = remote.clone().unwrap_or_else(|| origin.clone());
     let call = |method: reqwest::Method, path: &str, cookie: Option<&str>, body: Option<Value>| {
         let mut request = client
-            .request(method, format!("{origin}/api/m/notes{path}"))
-            .header("origin", &origin);
+            .request(method, format!("{notes_origin}/api/m/notes{path}"))
+            .header("origin", &notes_origin);
         if let Some(cookie) = cookie {
             request = request.header("cookie", cookie);
         }
@@ -382,6 +434,12 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
         b"# Garden\nTomato seedlings need compost and sunny soil.\n",
     )
     .unwrap();
+    // Optional manual browser check: keep the server up and print where it is. The browser
+    // must leave the folder unlinked before the hold ends.
+    if let Ok(seconds) = std::env::var("MOSS_NOTES_HOLD_SECONDS") {
+        println!("HOLD {} for {seconds}s", remote.as_ref().unwrap_or(&origin));
+        std::thread::sleep(Duration::from_secs(seconds.parse().unwrap_or(0)));
+    }
     let (status, roots) = call(
         Method::GET,
         "/notes-source/directories",
@@ -554,6 +612,111 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
     let kept = rows("SELECT id::text FROM app.notes_sync_checkpoints WHERE owner_user_id=$1 AND id::text LIKE '0a000000-%' ORDER BY id");
     assert_eq!(kept, vec!["0a000000-0000-4000-8000-0000000000a2".to_string()]);
     println!("tick retention removed the old checkpoint and kept the recent one: {kept:?}");
+    // Sync now while a recent request for the same folder is still waiting reuses it
+    // instead of stacking a second one.
+    let waiting = "0b000000-0000-4000-8000-0000000000b1";
+    {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        runtime.block_on(async {
+            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
+                .await
+                .unwrap();
+            tokio::spawn(async move {
+                let _ = connection.await;
+            });
+            db.execute(
+                "INSERT INTO app.notes_sync_checkpoints (id, owner_user_id, checkpoint) VALUES ($1::text::uuid, $2, jsonb_build_object('sourcePath', $3::text))",
+                &[&waiting, &owner, &journal.to_str().unwrap()],
+            )
+            .await
+            .unwrap();
+        });
+    }
+    let again = call(Method::POST, "/notes/sync", Some(&cookie), Some(json!({})));
+    assert_eq!(again.0, 202, "{}", again.1);
+    assert_eq!(again.1["jobId"], json!(waiting), "{}", again.1);
+    println!("Sync now reused the waiting request: {}", again.1);
+    // Settings route, live: the owner sets the endpoint in the app. The server must then embed
+    // through the saved endpoint with the saved credential, and nothing may leak it.
+    {
+        const SAVED_KEY: &str = "settings-credential-7d41c9";
+        const MARKER_TEXT: &str = "zanzibar-quokka-marker";
+        let settings = |method: Method, body: Option<Value>| {
+            let mut request = client
+                .request(method, format!("{notes_origin}/api/m/memory/embedding"))
+                .header("origin", &notes_origin)
+                .header("cookie", &cookie);
+            if let Some(body) = body {
+                request = request.json(&body);
+            }
+            let response = request.send().unwrap();
+            let status = response.status().as_u16();
+            let text = response.text().unwrap();
+            (status, text)
+        };
+        let (status, text) = settings(Method::GET, None);
+        assert_eq!(status, 200, "{text}");
+        assert!(text.contains("hasCredential"), "{text}");
+        let refused = settings(
+            Method::PUT,
+            Some(json!({"url":embedding_url,"model":"bag-of-words-768","apiKey":SAVED_KEY})),
+        );
+        assert_eq!(refused.0, 400, "{}", refused.1);
+        assert!(refused.1.contains("memory text will be sent"), "{}", refused.1);
+        let saved = settings(
+            Method::PUT,
+            Some(json!({"url":embedding_url,"model":"bag-of-words-768","apiKey":SAVED_KEY,"confirmOffDevice":true})),
+        );
+        assert_eq!(saved.0, 200, "{}", saved.1);
+        let moved = settings(
+            Method::PUT,
+            Some(json!({"url":"https://other.example.test/v1/embeddings","model":"x","confirmOffDevice":true})),
+        );
+        assert_eq!(moved.0, 400, "a new address must not inherit the old key: {}", moved.1);
+        let insecure = settings(
+            Method::PUT,
+            Some(json!({"url":"http://203.0.113.9/v1/embeddings","model":"x","apiKey":"k","confirmOffDevice":true})),
+        );
+        assert_eq!(insecure.0, 400, "plain http off this machine: {}", insecure.1);
+        let shown = settings(Method::GET, None);
+        assert_eq!(shown.0, 200, "{}", shown.1);
+        assert!(shown.1.contains("\"hasCredential\":true"), "{}", shown.1);
+        for text in [&saved.1, &shown.1, &refused.1] {
+            assert!(!text.contains(SAVED_KEY), "{text}");
+        }
+        let sealed = fs::read_to_string(root.join("data/embedding-credential.json")).unwrap();
+        assert!(!sealed.contains(SAVED_KEY), "the credential file is sealed");
+        fs::write(
+            journal.join("marker.md"),
+            format!("# Marker\n\n{MARKER_TEXT} lives only in this note.\n"),
+        )
+        .unwrap();
+        let sync = call(Method::POST, "/notes/sync", Some(&cookie), Some(json!({})));
+        assert_eq!(sync.0, 202, "{}", sync.1);
+        let deadline = Instant::now() + Duration::from_secs(90);
+        while !rows(indexed_sql).iter().any(|p| p.ends_with("marker.md")) {
+            assert!(
+                Instant::now() < deadline,
+                "the marker note was not indexed through the saved endpoint\n{}",
+                fs::read_to_string(root.join("server.log")).unwrap_or_default()
+            );
+            std::thread::sleep(Duration::from_millis(500));
+        }
+        let bearer = format!("Bearer {SAVED_KEY}");
+        assert!(
+            SEEN_AUTHORIZATION.lock().unwrap().iter().any(|h| *h == bearer),
+            "the endpoint never received the saved credential"
+        );
+        let log = fs::read_to_string(root.join("server.log")).unwrap_or_default();
+        assert!(!log.contains(SAVED_KEY), "the credential reached the server log");
+        assert!(!log.contains(MARKER_TEXT), "note text reached the server log");
+        let activity = rows("SELECT coalesce(model_name,'') || '|' || action || '|' || outcome || '|' || coalesce(result,'') FROM app.moss_model_activity_log WHERE kind='embedding' AND owner_user_id=$1");
+        assert!(activity.iter().any(|r| r.starts_with("bag-of-words-768|embed document|ok|")), "{activity:?}");
+        for row in &activity {
+            assert!(!row.contains(MARKER_TEXT) && !row.contains(SAVED_KEY), "{row}");
+        }
+        println!("PASS memory settings: the owner set the embedding endpoint over HTTPS (refused without the off-device confirmation), the credential was never in a response, the sealed file, the server log or an activity row, the endpoint received it, and a marker note indexed through the saved endpoint; {} activity rows", activity.len());
+    }
     // Search runs through the same host ports in this process (the server has no tool
     // endpoint yet), against the real index and the same embeddings endpoint.
     {
@@ -595,6 +758,7 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
                 version: "0.1.0".parse().unwrap(),
                 compiled_cache: None,
                 fuel_ceiling: None,
+                browser_dir: None,
             },
             |services| {
                 Ok(Arc::new(
@@ -681,6 +845,7 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
                 version: "0.1.0".parse().unwrap(),
                 compiled_cache: None,
                 fuel_ceiling: None,
+                browser_dir: None,
             },
             |services| {
                 let folders = PreferenceFolders::new(
@@ -742,6 +907,36 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
         );
         assert!(private_base.join(other.to_string()).join("notes/generated").join(source).join("v1.md").is_file());
         println!("private export -> written, unchanged, conflict (kept), missing; second actor isolated");
+        // Memory's own index: the real server starts the sweep over HTTPS, the scheduler
+        // keeps a fifteen-minute schedule, and the worker embeds the exported copy.
+        let started = client
+            .request(Method::POST, format!("{notes_origin}/api/m/memory/vault-index/start"))
+            .header("origin", &notes_origin)
+            .header("cookie", &cookie)
+            .json(&json!({}))
+            .send()
+            .unwrap();
+        let started_status = started.status().as_u16();
+        let started_body = started.text().unwrap_or_default();
+        assert_eq!(started_status, 202, "{started_body}");
+        let memory_sql = "SELECT DISTINCT source_path FROM app.memory_chunks WHERE owner_user_id=$1 AND source_path LIKE 'notes/generated/%' AND embedding IS NOT NULL";
+        let memory_deadline = Instant::now() + Duration::from_secs(90);
+        let memory_rows = loop {
+            let found = rows(memory_sql);
+            if !found.is_empty() {
+                break found;
+            }
+            assert!(
+                Instant::now() < memory_deadline,
+                "memory sweep did not index the export\n{}",
+                fs::read_to_string(root.join("server.log")).unwrap_or_default()
+            );
+            std::thread::sleep(Duration::from_millis(500));
+        };
+        assert!(memory_rows.iter().any(|p| p.ends_with("v1.md")), "{memory_rows:?}");
+        let memory_schedule = "SELECT cron FROM moss_queue.schedules WHERE actor_user_id=$1 AND queue LIKE '%memory.vault-ingest-tick' AND disabled_reason IS NULL";
+        assert_eq!(rows(memory_schedule), vec!["*/15 * * * *".to_string()]);
+        println!("PASS memory index: the server's sweep, started over HTTPS, embedded the private export {memory_rows:?} through the saved endpoint, and a fifteen-minute schedule was registered");
         drop(application);
         drop(runtime);
     }
@@ -785,6 +980,7 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
                 version: "0.1.0".parse().unwrap(),
                 compiled_cache: None,
                 fuel_ceiling: None,
+                browser_dir: None,
             },
             |services| {
                 let folders = PreferenceFolders::new(

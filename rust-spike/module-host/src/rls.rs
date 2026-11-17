@@ -41,3 +41,61 @@ pub async fn emit(
     }
     Ok(())
 }
+
+/// Lets the owner delete rows of a legacy table. A share never grants delete.
+pub async fn emit_owner_delete(tx: &tokio_postgres::Transaction<'_>, table: &str) -> Result<()> {
+    tx.batch_execute(&format!(
+        "SET LOCAL ROLE jarvis_migration_owner; \
+         GRANT DELETE ON {table} TO jarvis_app_runtime, jarvis_worker_runtime; \
+         DROP POLICY IF EXISTS moss_module_delete ON {table}; \
+         CREATE POLICY moss_module_delete ON {table} FOR DELETE TO jarvis_app_runtime, jarvis_worker_runtime \
+           USING (app.current_actor_user_id() IS NOT NULL AND owner_user_id = app.current_actor_user_id()); \
+         RESET ROLE"
+    ))
+    .await?;
+    Ok(())
+}
+
+/// Owner-only rules for a legacy-ledger table whose own SQL declared none. A table that already
+/// has rules is left alone. One with no owner column fails the install.
+pub async fn emit_legacy_owner_only(tx: &tokio_postgres::Transaction<'_>, table: &str) -> Result<()> {
+    let (schema, name) = table.split_once('.').unwrap_or(("public", table));
+    let has_rules: bool = tx
+        .query_one(
+            "SELECT EXISTS(SELECT 1 FROM pg_policies WHERE schemaname=$1 AND tablename=$2)",
+            &[&schema, &name],
+        )
+        .await?
+        .get(0);
+    let has_owner: bool = tx
+        .query_one(
+            "SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema=$1 AND table_name=$2 AND column_name='owner_user_id')",
+            &[&schema, &name],
+        )
+        .await?
+        .get(0);
+    if has_rules {
+        return Ok(());
+    }
+    anyhow::ensure!(has_owner, "Legacy table {table} has no owner_user_id column, so it cannot be made owner-only");
+    let owner = "owner_user_id=app.current_actor_user_id()";
+    let roles = "jarvis_app_runtime, jarvis_worker_runtime";
+    let mut sql = format!(
+        "SET LOCAL ROLE jarvis_migration_owner; \
+         ALTER TABLE {table} ENABLE ROW LEVEL SECURITY; ALTER TABLE {table} FORCE ROW LEVEL SECURITY; \
+         GRANT SELECT,INSERT,UPDATE,DELETE ON {table} TO {roles}; "
+    );
+    for (policy, command, using, check) in [
+        ("select", "SELECT", Some(owner), None),
+        ("insert", "INSERT", None, Some(owner)),
+        ("update", "UPDATE", Some(owner), Some(owner)),
+        ("delete", "DELETE", Some(owner), None),
+    ] {
+        let using = using.map(|c| format!("USING ({c})")).unwrap_or_default();
+        let check = check.map(|c| format!("WITH CHECK ({c})")).unwrap_or_default();
+        sql += &format!("CREATE POLICY moss_legacy_{policy} ON {table} FOR {command} TO {roles} {using} {check}; ");
+    }
+    sql += "RESET ROLE";
+    tx.batch_execute(&sql).await?;
+    Ok(())
+}

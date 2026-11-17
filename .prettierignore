@@ -98,7 +98,26 @@ docs/superpowers/specs/mockups/moss-runs-itself/
 docs/superpowers/mockups/summary-update-guard/
 # Summary owner context and speaker guesses mockups (JS-27): static page that borrows the classifier-gate stylesheet, frozen for review.
 docs/superpowers/mockups/summary-owner-context/
+# Memory screen mockups (JS-239): static page that borrows the classifier-gate fonts, frozen for review.
+docs/superpowers/mockups/memory-screen/
 
 # Generated build output for the isolated Rust platform workspace.
 rust-spike/platform/target/
 rust-spike/**/target/
+modules/memory/tools/score-cases.json
+modules/memory/tools/lifecycle-cases.json
+modules/meetings/tools/transcript-cases.json
+
+# Generated reference vectors, kept on one line so the file stays under the size limit.
+rust-spike/on-device/fixtures/old-vectors.json
+modules/meetings/tools/recording-cases.json
+
+# Generated golden cases (one case per line, written by modules/news/reader/tools).
+modules/news/reader/tests/golden/
+
+# Recorded ESPN pages and generated golden output, kept on one line so each file stays under the size limit.
+modules/sports/tests/fixtures/eng1-teams.json
+modules/sports/tests/fixtures/ncaaf-standings.json
+modules/sports/tests/fixtures/nhl-scoreboard-20261112.json
+modules/sports/tests/fixtures/public-routes.golden.json
+modules/sports/tests/fixtures/overview-routes.golden.json

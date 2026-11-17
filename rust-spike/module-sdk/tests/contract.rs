@@ -37,6 +37,21 @@ fn composite_key_delete_reaches_the_host_as_a_typed_query() {
     assert_eq!(calls[0][3], serde_json::to_value(query).unwrap());
 }
 #[test]
+fn a_page_render_reaches_the_host_as_a_browser_call_on_the_public_web() {
+    let host = Recording(RefCell::default());
+    Client(&host)
+        .render_page("https://example.test/news", &["example.test"])
+        .unwrap();
+    let calls = host.0.borrow();
+    assert_eq!(calls[0][0], "browser");
+    assert_eq!(calls[0][1], "render");
+    assert_eq!(calls[0][2], "public-web");
+    assert_eq!(
+        calls[0][3],
+        json!({"url":"https://example.test/news","allowedHosts":["example.test"]})
+    );
+}
+#[test]
 fn public_api_arguments_cannot_choose_a_provider_handler() {
     let host = Recording(RefCell::default());
     Client(&host)

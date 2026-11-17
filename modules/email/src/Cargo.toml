@@ -1,0 +1,47 @@
+[package]
+name = "moss-email"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[lib]
+path = "lib.rs"
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+moss-module-sdk = { path = "../../../rust-spike/module-sdk" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+
+[[test]]
+name = "routes"
+path = "tests/routes.rs"
+
+[[test]]
+name = "cache"
+path = "tests/cache.rs"
+
+[[test]]
+name = "otp"
+path = "tests/otp.rs"
+
+[[bin]]
+name = "email-oracle"
+path = "bin/oracle.rs"
+
+[[test]]
+
+name = "understand"
+path = "tests/understand.rs"
+
+[[test]]
+
+name = "pass"
+path = "tests/pass.rs"
+
+[[test]]
+name = "providers"
+path = "tests/providers.rs"

@@ -1,6 +1,21 @@
 # Tasks package changes
 
-## Unreleased
+## 0.1.4
+
+- `listBriefingTasks` also accepts status `suggested`, which returns the caller's suggested tasks with description, source, source reference, update time and suggestion metadata, so Briefings can show action rows.
+- `listBriefingTasks` returns only tasks owned by the caller, so tasks other people shared with them never reach a briefing.
+
+## 0.1.3
+
+- Add the public `listBriefingTasks` call, which gives Briefings the caller's open tasks, or tasks finished after a given time, with only id, title, status, due time and priority.
+
+## 0.1.2
+
+- Add the public `createMeetingTask` call, which makes one task from an accepted meeting action and returns the same task when asked again.
+
+## 0.1.1
+
+- Add the public `getTaskReference` call, which returns only a task's id, owner, status and due time to another module, read under the caller's account.
 
 - Add Do First, At risk and Done today focus presets in both task views, using the saved account timezone for day filters. Presets replace status; choosing a status or clearing filters leaves focus.
 

@@ -36,7 +36,17 @@ function render() {
   void client.resize(document.documentElement.scrollHeight).catch(() => {});
 }
 async function request(method, path, body) {
-  const reply = await client.request(method, `/${path}`, body);
+  let reply;
+  try {
+    reply = await client.request(method, `/${path}`, body);
+  } catch (error) {
+    if (!Number.isInteger(error?.status)) throw error;
+    reply = { status: error.status, body: error.body };
+  }
+  // The server returns the plain body; the package check host returns {status, body}.
+  if (!(reply && typeof reply.status === "number" && "body" in reply)) {
+    reply = { status: 200, body: reply };
+  }
   if (reply.status >= 400) {
     const error = new Error("Notes request failed");
     error.status = reply.status;

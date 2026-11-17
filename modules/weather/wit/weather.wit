@@ -1,0 +1,12 @@
+package moss:module@1.0.0;
+
+interface context { call: func(request: string) -> result<string, string>; }
+interface kv { call: func(request: string) -> result<string, string>; }
+interface fetch { call: func(request: string) -> result<string, string>; }
+
+world weather {
+  import context;
+  import kv;
+  import fetch;
+  export handle: func(kind: string, payload: string) -> result<string, string>;
+}

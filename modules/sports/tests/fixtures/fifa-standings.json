@@ -1,0 +1,65 @@
+{
+  "season": {
+    "year": 2026,
+    "startDate": "2026-06-11T04:00Z",
+    "endDate": "2026-12-31T04:59Z",
+    "displayName": "2026 FIFA World Cup"
+  },
+  "seasons": [
+    {
+      "year": 2026,
+      "startDate": "2026-06-11T04:00Z",
+      "endDate": "2026-12-31T04:59Z",
+      "displayName": "2026 FIFA World Cup",
+      "types": [
+        {
+          "name": "Group Stage",
+          "startDate": "2026-06-11T04:00Z",
+          "endDate": "2026-06-28T03:59Z"
+        },
+        {
+          "name": "Final",
+          "startDate": "2026-07-19T04:00Z",
+          "endDate": "2026-08-01T03:59Z"
+        }
+      ]
+    }
+  ],
+  "children": [
+    {
+      "name": "Group A",
+      "standings": {
+        "entries": [
+          {
+            "team": { "id": "202", "abbreviation": "MEX", "displayName": "Mexico" },
+            "note": { "description": "Advances to knockout stage", "color": "#2a66d1" },
+            "stats": [
+              { "name": "rank", "value": 1 },
+              { "name": "points", "value": 7 },
+              { "name": "wins", "value": 2 },
+              { "name": "losses", "value": 0 },
+              { "name": "ties", "value": 1 }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "Group B",
+      "standings": {
+        "entries": [
+          {
+            "team": { "id": "660", "abbreviation": "ENG", "displayName": "England" },
+            "stats": [
+              { "name": "rank", "value": 2 },
+              { "name": "points", "value": 4 },
+              { "name": "wins", "value": 1 },
+              { "name": "losses", "value": 0 },
+              { "name": "ties", "value": 1 }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

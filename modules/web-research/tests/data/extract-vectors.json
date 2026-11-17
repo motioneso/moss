@@ -1,0 +1,172 @@
+[
+  {
+    "html": "",
+    "title": "",
+    "text": ""
+  },
+  {
+    "html": "plain text only",
+    "title": "",
+    "text": "plain text only"
+  },
+  {
+    "html": "<html><head><title>  Hello &amp; World  </title></head><body><p>One</p><p>Two</p></body></html>",
+    "title": "Hello & World",
+    "text": "Hello & World One Two"
+  },
+  {
+    "html": "<TITLE>Upper</TITLE><BODY>x</BODY>",
+    "title": "Upper",
+    "text": "Upper x"
+  },
+  {
+    "html": "<title lang=en>Attr</title>text",
+    "title": "Attr",
+    "text": "Attr text"
+  },
+  {
+    "html": "<title>Open only<body>words</body>",
+    "title": "",
+    "text": "Open only words"
+  },
+  {
+    "html": "<titlefoo>odd</title>after",
+    "title": "odd",
+    "text": "odd after"
+  },
+  {
+    "html": "<head><title>A</title><title>B</title></head>",
+    "title": "A",
+    "text": "A B"
+  },
+  {
+    "html": "a<!-- hidden <b>x</b> -->b",
+    "title": "",
+    "text": "a b"
+  },
+  {
+    "html": "a<!-- never closed <b>x</b> c",
+    "title": "",
+    "text": "a x c"
+  },
+  {
+    "html": "a<!---->b<!-->c-->d",
+    "title": "",
+    "text": "a b d"
+  },
+  {
+    "html": "<script>var a = '<p>no</p>';</script>visible<script src=x></script>more",
+    "title": "",
+    "text": "visible more"
+  },
+  {
+    "html": "<SCRIPT type='x'>1</SCRIPT>ok<style>p{color:red}</style>end<style\n>x</style>z",
+    "title": "",
+    "text": "ok end z"
+  },
+  {
+    "html": "<nav><a href=/>Home</a></nav>main<nav class=x>menu</nav>tail",
+    "title": "",
+    "text": "main tail"
+  },
+  {
+    "html": "<noscript>enable js</noscript>ok<svg><path d='M0'/></svg>done",
+    "title": "",
+    "text": "ok done"
+  },
+  {
+    "html": "<scripty>keep</scripty>text<script>drop</script>",
+    "title": "",
+    "text": "keep text"
+  },
+  {
+    "html": "<script>never closed text <p>stays",
+    "title": "",
+    "text": "never closed text stays"
+  },
+  {
+    "html": "<script",
+    "title": "",
+    "text": "<script"
+  },
+  {
+    "html": "x < y and y > z",
+    "title": "",
+    "text": "x z"
+  },
+  {
+    "html": "a <> b",
+    "title": "",
+    "text": "a <> b"
+  },
+  {
+    "html": "1 < 2 <b>bold</b> 3 > 2",
+    "title": "",
+    "text": "1 bold 3 > 2"
+  },
+  {
+    "html": "tail < no close",
+    "title": "",
+    "text": "tail < no close"
+  },
+  {
+    "html": "&nbsp;a&nbsp;&nbsp;b&amp;c&lt;d&gt;e&quot;f&#39;g&copy;h",
+    "title": "",
+    "text": "a b&c<d>e\"f'g&copy;h"
+  },
+  {
+    "html": "&amp;lt;b&amp;gt; &amp;amp;",
+    "title": "",
+    "text": "<b> &amp;"
+  },
+  {
+    "html": "line1\n\n\tline2  line3 line4﻿line5line6",
+    "title": "",
+    "text": "line1 line2 line3 line4 line5line6"
+  },
+  {
+    "html": "﻿<p>bom</p>",
+    "title": "",
+    "text": "bom"
+  },
+  {
+    "html": "<p>café 中文 😀 emoji</p>",
+    "title": "",
+    "text": "café 中文 😀 emoji"
+  },
+  {
+    "html": "<div><script>a</script><style>b</style><nav>c</nav>d<!--e-->f</div>",
+    "title": "",
+    "text": "d f"
+  },
+  {
+    "html": "<p>unterminated <b",
+    "title": "",
+    "text": "unterminated <b"
+  },
+  {
+    "html": "<a href=\"x>y\">link</a> after",
+    "title": "",
+    "text": "y\">link after"
+  },
+  {
+    "html": "<title>T</title><script>s</script><style>st</style><p>Body &amp; soul</p>",
+    "title": "T",
+    "text": "T Body & soul"
+  },
+  {
+    "html": "<SVG>x</SVG>y<Svg>z</Svg>w",
+    "title": "",
+    "text": "y w"
+  },
+  {
+    "html": "<script>1</script  >a<script>2</script>b",
+    "title": "",
+    "text": "b"
+  },
+  {
+    "html": "<style>1</style>a<style>2",
+    "title": "",
+    "text": "a 2"
+  }
+]
