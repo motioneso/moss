@@ -711,10 +711,14 @@ fn the_followed_team_tools_stay_inside_one_persons_follows_and_fail_without_row_
     assert_eq!(run(b, "sports.unfollowTeam", league.clone())["data"]["removed"], false);
     assert_eq!(w.follow_rows(a), 1, "A's follow survived B");
     // B reads nothing of A's follows through the briefing facts or the heartbeat.
+    run(a, "sports.followTeam", json!({"competitionKey":"ger.1"}));
     let facts = run(b, "sports.followedFactsToday", json!({"timeZone":"America/New_York"}));
     assert!(facts["data"]["evidence"]["version"] == 1, "{facts}");
+    assert!(!facts.to_string().contains("ger.1"), "B's facts hold A's league: {facts}");
     let beat = run(b, "sports.heartbeatNextFixtures", json!({}));
     assert_eq!(beat["data"]["source"], "sports", "{beat}");
+    assert!(!beat.to_string().contains("ger.1"), "B's fixtures hold A's league: {beat}");
+    run(a, "sports.unfollowTeam", json!({"competitionKey":"ger.1"}));
     println!("GREEN: B cannot unfollow A's follow and reads no facts or fixtures from it");
     // With row security removed, B's unfollow removes A's follow.
     w.f.rt.block_on(w.f.root.batch_execute("ALTER TABLE app.sports_follows DISABLE ROW LEVEL SECURITY")).unwrap();

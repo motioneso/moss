@@ -211,12 +211,18 @@ fn another_person_cannot_unfollow_your_team_and_the_test_fails_without_the_owner
     let host = Both::new();
     host.follow("nhl", "BOS", "1");
     let input = json!({"competitionKey":"nhl","teamKey":"bos"});
+    host.at(EVENING);
+    let mine = facts(&host, "UTC");
     host.follows.as_actor(B);
     assert_eq!(call(&host, "sports.unfollowTeam", input.clone(), None)["data"]["removed"], false);
     assert_eq!(rows(&host).len(), 1, "the other person's follow is still there");
     // Their facts hold nothing of yours.
     host.at(EVENING);
-    assert_eq!(facts(&host, "UTC")["evidence"]["games"].as_array().map(|g| g.iter().all(|x| x["competitionKey"] != "xx")), Some(true));
+    let theirs = facts(&host, "UTC");
+    assert_ne!(theirs["facts"], mine["facts"], "B's facts differ from A's");
+    let lines: Vec<&str> = theirs["facts"].as_array().unwrap().iter().filter_map(|f| f["text"].as_str()).collect();
+    assert!(!lines.is_empty() && lines.iter().all(|l| l.ends_with("on the slate.")), "B sees only the default slate: {lines:?}");
+
     // With the owner rule off, the same call removes your follow. That is what the rule prevents.
     host.follows.rls_off.set(true);
     assert_eq!(call(&host, "sports.unfollowTeam", input, None)["data"]["removed"], true);
