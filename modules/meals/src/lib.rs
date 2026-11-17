@@ -3,6 +3,7 @@
 pub mod input;
 pub mod kitchen;
 pub mod md5;
+pub mod recipe;
 pub mod rules;
 pub mod safety;
 pub mod safety_terms;
