@@ -90,7 +90,7 @@ pub struct Book {
     pub card_assignments: Vec<Value>,
 }
 
-fn paged<H: Host + ?Sized>(host: &H, table: &str, order: &[&str]) -> Result<Vec<Value>> {
+pub(crate) fn paged<H: Host + ?Sized>(host: &H, table: &str, order: &[&str]) -> Result<Vec<Value>> {
     let client = Client(host);
     let mut out = Vec::new();
     loop {
