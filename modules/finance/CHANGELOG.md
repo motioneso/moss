@@ -1,5 +1,15 @@
 # Finance package
 
+## 0.5.0
+
+- You can share a bank account with your household. Other people see its name, balance and transactions with category and amount, never your notes, review state or bank link details. You can stop sharing at any time and the copy is removed.
+- Shared accounts from other people appear in your account list and your monthly transactions, marked with their owner.
+- You can read a monthly spending report and a net worth chart, and list the transactions behind a figure. Net worth is never shared.
+- You can export your own transaction history as a spreadsheet. Other people's rows are never in it.
+- You can list recent changes and undo a category choice, a rule, a new category or an archive, when nothing has changed since.
+- You can archive a category that holds no budget money. Income and transfers are protected.
+- Not built: undoing a budget change, the Moss guess step for categories, and hiding shared rows from people whose account is switched off.
+
 ## 0.4.0
 
 - You can plan bills that repeat, change one coming bill, put it back to its plan, and record a bill as paid.

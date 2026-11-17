@@ -1,7 +1,7 @@
 //! Category upsert (`app.finance_categories`). Needs the saved category list, which the budget
 //! policy row marks ready. Archiving is not part of this build because it must check budget lines.
 use crate::input::{self, refuse};
-use crate::ledger::{first, log, values, Outcome};
+use crate::ledger::{first, log, log_as, values, Outcome};
 use moss_module_sdk::{
     query::{Filter, Order, Query},
     Client, Host, Result,
@@ -80,7 +80,7 @@ pub fn upsert<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Outcome> {
                 CATEGORIES,
                 &Query::insert(values(vec![("id", json!(id)), ("group_name", json!(group)), ("name", json!(name)), ("sort_order", json!(order)), ("is_income", json!(income))])),
             )?;
-            log(host, "category.create", json!({"categoryId":id}))?;
+            log_as(host, "user", "category.create", json!({"categoryId":id}), Some(json!({"categoryId":id})))?;
             Ok(Ok(json!({"status":"ok","before":null,"after":{"id":id,"name":name,"group":group,"isIncome":income}})))
         }
     }

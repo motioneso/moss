@@ -709,6 +709,34 @@ fn installed_finance_package_serves_routes_from_the_real_server() {
     assert_eq!(json_of(&text)["items"][0]["status"], "connected", "{text}");
     assert_eq!(names(&cookie).len(), owned.len(), "a reconnect adds no second bank");
     println!("PASS live bank: reconnected, one bank, sync works again");
+    // Household sharing through the real routes, on the account the stand-in bank synced.
+    let (_, text) = call(Method::GET, "/finance/accounts", Some(&cookie), None);
+    let account = json_of(&text)["accounts"][0]["accountId"].as_str().unwrap().to_owned();
+    assert_eq!(names(&other).len(), 0, "nothing is shared yet");
+    let (status, text) = call(Method::POST, "/finance/accounts/shared", Some(&cookie), Some(json!({"accountId":account,"shared":true})));
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let (_, text) = call(Method::GET, "/finance/accounts", Some(&other), None);
+    let seen = json_of(&text);
+    assert_eq!(seen["accounts"].as_array().unwrap().len(), 1, "{text}");
+    assert_eq!(seen["accounts"][0]["ownerUserId"], json!(owner.to_string()), "{text}");
+    assert!(seen["accounts"][0].get("officialName").is_none(), "{text}");
+    let (status, text) = call(Method::POST, "/finance/accounts/shared", Some(&other), Some(json!({"accountId":account,"shared":false})));
+    assert_eq!((status, json_of(&text)["code"].clone()), (404, json!("unknown_account")), "the other person cannot unshare it: {text}");
+    let (status, mine) = call(Method::GET, "/finance/transactions/export", Some(&cookie), None);
+    assert_eq!(status, 200, "{mine}");
+    let (status, theirs) = call(Method::GET, "/finance/transactions/export", Some(&other), None);
+    assert_eq!(status, 200, "{theirs}");
+    assert!(json_of(&mine)["totalCount"].as_i64().unwrap() >= 1, "{mine}");
+    assert_eq!(json_of(&theirs)["totalCount"], 0, "the other person's export holds someone else's rows: {theirs}");
+    for path in ["/finance/reports/spending?months=1", "/finance/reports/net-worth", "/finance/activity?from=2020-01-01T00:00:00Z&to=2099-01-01T00:00:00Z"] {
+        let (status, text) = call(Method::GET, path, Some(&other), None);
+        assert_eq!(status, 200, "{path} {text}");
+        assert!(!text.contains(NOTE) && !text.contains(BANK_TOKEN), "{path} showed private text");
+    }
+    let (status, text) = call(Method::POST, "/finance/accounts/shared", Some(&cookie), Some(json!({"accountId":account,"shared":false})));
+    assert_eq!(status, 200, "{text}");
+    assert_eq!(names(&other).len(), 0, "stopping removes the copy");
+    println!("PASS live sharing: shared, seen by the second person only as allowed, export own rows only, unshared");
     // Activity rows, job rows and the server log hold no bank token, key or bank text.
     let activity = serde_json::to_string(&services.activity("finance", &access).unwrap()).unwrap();
     runtime.block_on(async {

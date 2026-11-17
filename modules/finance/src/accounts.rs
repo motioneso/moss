@@ -105,7 +105,7 @@ fn account(row: &Value) -> Result<Value> {
     Ok(Value::Object(view))
 }
 
-/// `finance.accounts.list`. The person's own accounts only.
+/// `finance.accounts.list`. The person's own accounts, then other people's shared accounts.
 pub fn list<H: Host + ?Sized>(host: &H) -> Result<Value> {
     let client = Client(host);
     let mut query = Query::select(Filter::All);
@@ -151,6 +151,7 @@ pub fn list<H: Host + ?Sized>(host: &H) -> Result<Value> {
         })
         .collect();
     let none = own.is_empty();
+    own.extend(crate::shared::accounts(host)?);
     let mut out = json!({"accounts":own,"banks":banks,"supportsManualManagement":true});
     if none {
         out["nextStep"] = json!("Add a manual account or connect a bank");
