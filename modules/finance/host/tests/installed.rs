@@ -489,6 +489,7 @@ fn bank_tokens_and_private_text_never_reach_job_rows_activity_rows_or_finance_ta
             .collect()
     });
     assert!(!jobs.is_empty(), "the connect polls were queued, saw {}", jobs.len());
+    println!("JOBS {}", jobs.join(" || "));
     let tables: Vec<String> = w.f.rt.block_on(async {
         w.f.root
             .query(
