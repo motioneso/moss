@@ -299,7 +299,22 @@
         }
       ]
     },
-    {"id": "meals.chat-log", "description": "Chat can log what you ate from a description, read a day or a range of up to 92 days, retry an estimate, correct a meal or one of its foods, and delete a meal. A new meal is saved at once as pending and a background job estimates its calories and macros. Every estimate is shown as an estimate, and anything the estimate could not tell stays unknown, never zero. Each person sees only their own log. Adding, retrying and correcting need the host's one-use approval, and deleting asks every time.", "errors": [{"code": "invalid_input", "class": "validation", "description": "A field is missing or out of range, the meal id names no meal of yours, or the time could not be read. Read the log and try again with corrected input."}, {"code": "approval_required", "class": "validation", "description": "The tool cannot run without approval. Ask for approval for these exact inputs and try again."}]}
+    {
+      "id": "meals.chat-log",
+      "description": "Chat can log what you ate from a description, read a day or a range of up to 92 days, retry an estimate, correct a meal or one of its foods, and delete a meal. A new meal is saved at once as pending and a background job estimates its calories and macros. Every estimate is shown as an estimate, and anything the estimate could not tell stays unknown, never zero. Each person sees only their own log. Adding, retrying and correcting need the host's one-use approval, and deleting asks every time.",
+      "errors": [
+        {
+          "code": "invalid_input",
+          "class": "validation",
+          "description": "A field is missing or out of range, the meal id names no meal of yours, or the time could not be read. Read the log and try again with corrected input."
+        },
+        {
+          "code": "approval_required",
+          "class": "validation",
+          "description": "The tool cannot run without approval. Ask for approval for these exact inputs and try again."
+        }
+      ]
+    }
   ],
   "tools": {
     "meals.kitchen.get": {

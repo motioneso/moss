@@ -27,7 +27,7 @@ const { actor, role, tool, parameters, answer } = JSON.parse(raw) as {
   /** The model's reply as text, or null when the model call should fail. */
   answer?: string | null;
 };
-const tools: Record<string, Function> = {
+const tools: Record<string, (...args: never[]) => unknown> = {
   "meals.log.list": logList,
   "meals.log.summarize": logSummarize,
   "meals.log.add": logAdd,
@@ -57,7 +57,10 @@ try {
             ? { ok: false as const, error: "provider_error" as const }
             : { ok: true as const, object: JSON.parse(answer) }
       };
-      const data = await runLogEstimate({ store: sqlLogStore(db as never), ai } as never, parameters);
+      const data = await runLogEstimate(
+        { store: sqlLogStore(db as never), ai } as never,
+        parameters
+      );
       reply = { data };
     } else {
       const run = tools[tool];
