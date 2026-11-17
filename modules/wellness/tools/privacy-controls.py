@@ -21,7 +21,7 @@ def control(name, path, old, new, manifest, test, case, extra):
             ["cargo", "+1.95.0", "test", "--locked", "--offline", "--manifest-path",
              manifest, "--test", test, case, "--", *extra],
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            env={**os.environ, **({"CARGO_TARGET_DIR": str(target / "guest")} if name == "error body" else {})},
+            env={**os.environ, **({"CARGO_TARGET_DIR": str(target / "guest")} if manifest.endswith("src/Cargo.toml") else {})},
             check=False,
         )
         # No private marker or source paths in the printed receipt. Full output stays in scratch.
@@ -39,8 +39,18 @@ control("error body", "modules/wellness/src/lib.rs",
         'result.unwrap_or_else(|_| Response::new(500, json!({"error":"Internal server error"})))',
         'result.unwrap_or_else(|e| Response::new(500, json!({"error": e.to_string()})))',
         "modules/wellness/src/Cargo.toml", "privacy", GUEST, [])
+control("unchosen category", "modules/wellness/src/export.rs",
+        'let therapy = if wants("therapyNotes") {',
+        'let therapy = if wants("therapyNotes") || true {',
+        "modules/wellness/src/Cargo.toml", "therapy_export", "a_finished_export_holds_only_the_chosen_categories", [])
+control("export expiry", "modules/wellness/src/export.rs",
+        'status == "ready" && instant(record, "expiresAt").is_some_and(|at| at <= now)',
+        'false',
+        "modules/wellness/src/Cargo.toml", "therapy_export", "an_export_reads_as_gone_after_24_hours", [])
 # Re-run both assertions after restoring their guards; a negative control alone is not proof.
 for manifest, test, case, extra, output in [
+    ("modules/wellness/src/Cargo.toml", "therapy_export", "a_finished_export_holds_only_the_chosen_categories", [], target / "guest"),
+    ("modules/wellness/src/Cargo.toml", "therapy_export", "an_export_reads_as_gone_after_24_hours", [], target / "guest"),
     ("modules/wellness/src/Cargo.toml", "privacy", GUEST, [], target / "guest"),
     ("modules/wellness/host/Cargo.toml", "installed", HOST,
      ["--ignored", "--test-threads=1"], target),

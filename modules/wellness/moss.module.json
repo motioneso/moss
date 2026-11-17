@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "wellness",
   "name": "Wellness",
-  "description": "Private mood check-ins, medications with their schedules and dose records, and the choice of whether the assistant may use them. Therapy notes, insights, export, chat tools and the screens are not built yet.",
+  "description": "Private mood check-ins, medications with their schedules and dose records, therapy notes, a selective export of check-ins and therapy notes, and the choice of whether the assistant may use them. Insights, chat tools and the screens are not built yet.",
   "publisher": "Moss",
   "version": "0.1.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
@@ -12,13 +12,27 @@
     {
       "port": "db",
       "operations": ["query"],
-      "resources": ["app.wellness_checkins", "app.medications", "app.medication_logs"]
+      "resources": [
+        "app.wellness_checkins",
+        "app.wellness_therapy_notes",
+        "app.medications",
+        "app.medication_logs"
+      ]
     },
-    { "port": "context", "operations": ["local-date"], "resources": ["account"] },
+    {
+      "port": "context",
+      "operations": ["local-date", "read", "uuid"],
+      "resources": ["account", "call", "new"]
+    },
     {
       "port": "kv",
-      "operations": ["preference.read", "preference.write"],
-      "resources": ["ai-consent"]
+      "operations": ["preference.read", "preference.write", "get", "set", "delete"],
+      "resources": ["ai-consent", "wellness.export-jobs", "wellness.export-files"]
+    },
+    {
+      "port": "jobs",
+      "operations": ["enqueue-options"],
+      "resources": ["wellness-export"]
     }
   ],
   "database": {
@@ -48,30 +62,123 @@
     ],
     "ledger": "core-legacy",
     "access": {
-      "app.wellness_checkins": { "access": "owner-only" },
-      "app.medications": { "access": "owner-only" },
-      "app.medication_logs": { "access": "owner-only" },
-      "app.wellness_therapy_notes": { "access": "owner-only" }
+      "app.wellness_checkins": {
+        "access": "owner-only"
+      },
+      "app.medications": {
+        "access": "owner-only"
+      },
+      "app.medication_logs": {
+        "access": "owner-only"
+      },
+      "app.wellness_therapy_notes": {
+        "access": "owner-only"
+      }
     }
   },
   "routes": [
-    { "method": "GET", "path": "/wellness/ai-consent", "signIn": true },
-    { "method": "PUT", "path": "/wellness/ai-consent", "signIn": true },
-    { "method": "POST", "path": "/wellness/checkins", "signIn": true },
-    { "method": "GET", "path": "/wellness/checkins", "signIn": true },
-    { "method": "PATCH", "path": "/wellness/checkins/:id", "signIn": true },
-    { "method": "GET", "path": "/wellness/medications", "signIn": true },
-    { "method": "POST", "path": "/wellness/medications", "signIn": true },
-    { "method": "PATCH", "path": "/wellness/medications/:id", "signIn": true },
-    { "method": "GET", "path": "/wellness/medications/schedule", "signIn": true },
-    { "method": "GET", "path": "/wellness/medications/logs", "signIn": true },
-    { "method": "POST", "path": "/wellness/medications/:id/logs", "signIn": true }
+    {
+      "method": "GET",
+      "path": "/wellness/ai-consent",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/wellness/ai-consent",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/wellness/checkins",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/wellness/checkins",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/wellness/checkins/:id",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/wellness/medications",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/wellness/medications",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/wellness/medications/:id",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/wellness/medications/schedule",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/wellness/medications/logs",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/wellness/medications/:id/logs",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/wellness/therapy-notes",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/wellness/therapy-notes",
+      "signIn": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/wellness/therapy-notes/:id",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/wellness/export",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/wellness/export/:id",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/wellness/export/:id/download",
+      "signIn": true
+    }
   ],
   "requires": {},
-  "provides": { "medicationAdherence": "1.0.0" },
+  "provides": {
+    "medicationAdherence": "1.0.0",
+    "collectWellnessExportSection": "1.0.0",
+    "deleteWellnessAccountData": "1.0.0"
+  },
   "icons": ["icons/wellness.svg"],
-  "accounts": { "supportsUserDisable": true, "defaultEnabled": true },
-  "lifecycle": { "required": false, "bundled": true, "removable": true },
+  "accounts": {
+    "supportsUserDisable": true,
+    "defaultEnabled": true
+  },
+  "lifecycle": {
+    "required": false,
+    "bundled": true,
+    "removable": true
+  },
   "screens": {},
   "navigation": [],
   "settings": [
@@ -147,7 +254,71 @@
           "description": "The person has switched assistant access to Wellness off. Ask them to turn it on in Wellness settings first."
         }
       ]
+    },
+    {
+      "id": "wellness.therapy_notes",
+      "description": "A person can write a private therapy note, optionally tied to one of their own check-ins or to one of the six core feelings, read their notes newest first, and delete a note. Each person sees only their own notes. The notes screen is not built yet.",
+      "errors": [
+        {
+          "code": "wellness_therapy_note_invalid",
+          "class": "validation",
+          "description": "The note text is empty, or the linked feeling is not one of the six core feelings. Fix the value named in the message and try again."
+        },
+        {
+          "code": "wellness_therapy_note_checkin_not_found",
+          "class": "validation",
+          "description": "The check-in the note points to does not exist or belongs to another person. Pick one of your own check-ins and try again."
+        },
+        {
+          "code": "wellness_therapy_note_not_found",
+          "class": "validation",
+          "description": "The note does not exist or belongs to another person. Check the note and try again."
+        }
+      ]
+    },
+    {
+      "id": "wellness.export",
+      "description": "A person can ask for a printable page of their own mood check-ins and therapy notes for a date range of at most 366 days, check on its progress, and download it for 24 hours. Only the chosen categories appear in the page. Medications and insights cannot be chosen yet. The page comes back inside a small JSON envelope with its file name. The export screen is not built yet.",
+      "errors": [
+        {
+          "code": "wellness_export_invalid",
+          "class": "validation",
+          "description": "The dates, the date range or the chosen categories were not accepted. Fix the value named in the message and try again."
+        },
+        {
+          "code": "wellness_export_in_progress",
+          "class": "validation",
+          "description": "Another export with different dates or categories is still being built. Wait for it to finish, then start the new one."
+        },
+        {
+          "code": "wellness_export_not_ready",
+          "class": "validation",
+          "description": "The export is still being built, or it failed. Check its status and wait, or start it again."
+        },
+        {
+          "code": "wellness_export_expired",
+          "class": "validation",
+          "description": "The export is more than 24 hours old and has been removed. Start a new export."
+        },
+        {
+          "code": "wellness_export_not_found",
+          "class": "validation",
+          "description": "No export with that id exists for this person. Start a new export."
+        }
+      ]
+    },
+    {
+      "id": "wellness.account-data",
+      "description": "The whole-account export collects a person's Wellness check-ins and therapy notes, and the whole-account delete removes their check-ins, therapy notes, medications and medication logs together with any saved exports. Each call touches only the signed-in person's rows.",
+      "errors": []
     }
   ],
-  "jobs": { "wellness-medication-reminder": {} }
+  "jobs": {
+    "wellness-medication-reminder": {},
+    "wellness-export": {
+      "export-id": {
+        "kind": "id"
+      }
+    }
+  }
 }

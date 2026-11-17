@@ -544,6 +544,41 @@ fn installed_wellness_package_serves_routes_from_the_real_server() {
     );
     assert_eq!(call(Method::GET, "/wellness/medications", None, None).0, 401);
     println!("PASS live medications: two medicines, a dose, the day and the summary worked over HTTPS, and the second person saw none of it");
+    // Therapy notes and export on the real server. The worker runs inside the server process, so
+    // the export is polled until it is ready.
+    const NOTE: &str = "PLANTED-THERAPY-MARKER-91c3";
+    let (status, text) = call(Method::POST, "/wellness/therapy-notes", Some(&cookie), Some(json!({"body":NOTE,"linkedCheckinId":id})));
+    assert_eq!(status, 201, "{text}\n{}", log());
+    let note_id = json_of(&text)["note"]["id"].as_str().unwrap().to_owned();
+    let (_, text) = call(Method::GET, "/wellness/therapy-notes", Some(&other), None);
+    assert_eq!(json_of(&text), json!({"notes":[]}), "{text}");
+    assert_eq!(call(Method::DELETE, &format!("/wellness/therapy-notes/{note_id}"), Some(&other), None).0, 404);
+    let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+    let (status, text) = call(Method::POST, "/wellness/export", Some(&cookie), Some(json!({"from":today,"to":today,"categories":["therapyNotes"]})));
+    assert_eq!(status, 202, "{text}\n{}", log());
+    let job = json_of(&text)["jobId"].as_str().unwrap().to_owned();
+    let waited = std::time::Instant::now();
+    loop {
+        let (_, text) = call(Method::GET, &format!("/wellness/export/{job}"), Some(&cookie), None);
+        let state = json_of(&text)["status"].as_str().unwrap_or("").to_owned();
+        if state == "ready" {
+            break;
+        }
+        assert!(state != "failed" && waited.elapsed() < std::time::Duration::from_secs(120), "export did not finish: {text}\n{}", log());
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+    let (status, text) = call(Method::GET, &format!("/wellness/export/{job}/download"), Some(&cookie), None);
+    assert_eq!(status, 200, "{text}");
+    let file = json_of(&text);
+    assert!(file["html"].as_str().unwrap().contains(NOTE));
+    assert!(!file["html"].as_str().unwrap().contains("Mood check-ins"), "unchosen category present");
+    for who in [&other] {
+        assert_eq!(call(Method::GET, &format!("/wellness/export/{job}/download"), Some(who), None).0, 404);
+        assert_eq!(call(Method::GET, &format!("/wellness/export/{job}"), Some(who), None).0, 404);
+    }
+    assert_eq!(call(Method::GET, &format!("/wellness/export/{job}/download"), None, None).0, 401);
+    assert_eq!(call(Method::DELETE, &format!("/wellness/therapy-notes/{note_id}"), Some(&cookie), None).0, 200);
+    println!("PASS live: therapy notes and a selective export worked over HTTPS for two people; the other person got 404");
     // Real activity rows hold no check-in text, and nothing the test sent reached the server log.
     let services = moss_module_host::services::ServicePorts::new(
         &root.join("data"),
@@ -555,8 +590,9 @@ fn installed_wellness_package_serves_routes_from_the_real_server() {
     )
     .unwrap();
     let activity = serde_json::to_string(&services.activity("wellness", &access).unwrap()).unwrap();
-    assert!(!activity.contains(MARK) && !activity.contains(MED_MARK));
+    assert!(!activity.contains(MARK) && !activity.contains(MED_MARK) && !activity.contains(NOTE));
     assert!(!log().to_lowercase().contains(&MARK.to_lowercase()));
     assert!(!log().to_lowercase().contains(&MED_MARK.to_lowercase()));
-    println!("wellness live: check-ins, history paging, change, consent and medicines for two people worked over HTTPS");
+    assert!(!log().to_lowercase().contains(&NOTE.to_lowercase()), "therapy-note text reached the server log");
+    println!("wellness live: check-ins, history paging, change, consent, medicines and therapy notes for two people worked over HTTPS");
 }

@@ -574,6 +574,82 @@ scripts/run-gate.sh start --gate test:rust-commitments-live
   with a leak added.
 - **Other devices.** The live run was on the same machine.
 
+## Wellness package: therapy notes, export and account sections (part 15)
+
+Card JS-300. Part of [issue 4027](https://github.com/motioneso/moss/issues/4027). Release note
+Category: N/A.
+
+### What was built
+
+Eight more routes in the Wellness package, plus two calls the whole-account export and delete will
+use. No screens.
+
+- **Therapy notes.** List newest first, save one (optionally linked to one of your own check-ins and
+  tagged with a feeling), and delete one. Wording of every refusal matches the old server, except
+  one case listed below.
+- **Selective export.** Ask for a date range and categories, check progress, download. The file is
+  built by a background job that carries only the export id. It is kept 24 hours, then reads as
+  gone (410), and its record is dropped after seven more days. A repeat request for the same range
+  reuses the same job, and a different one while a job runs gets the old 409 wording. A job stuck
+  for 15 minutes counts as failed. A failed build says so in fixed words and never echoes text.
+- **Only chosen categories.** An unchosen category is left out of the file entirely.
+- **Account sections.** One call returns the caller's check-ins and therapy notes for the account
+  export. One deletes the caller's check-ins, therapy notes, medicines and dose logs and the
+  saved export records and files. Both act on the caller only.
+- **Same data.** No new database file. The four tables and their owner-only rules are the old ones.
+- **App map.** The manifest lists the three features with plain error descriptions.
+
+### Differences from the old code (on purpose)
+
+- **Download is a JSON envelope** with the file name, type and page text, because a package route
+  can only send JSON. The shell or screen turns it into a file.
+- **Medicines and insights export** answer 400 "not available yet" until parts 14 and 16.
+- **Owner name in the file** is the account id, because the package cannot read the users table.
+- **Export records live in per-person package storage**, not the old export table.
+- **A therapy note linked to a non-UUID id** answers 404. The old server answers 500.
+- **A range with 1000 or more rows in one category** is refused with the "too large" message, because
+  the host returns at most 1000 rows per query.
+
+### Proof
+
+| Claim                                          | Evidence                                                                                                                                                                                                                 |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Routes match the old handlers                  | Old routes and the package run side by side, ids and times masked. 36 steps without ids and 7 with ids match, covering therapy notes (good and bad bodies, missing ids) and export validation (dates, range, categories) |
+| A second person cannot read or delete notes    | Real database test as two people. With the owner rule opened the second person read the note, with it restored they read none. The second person also gets 404 on delete                                                 |
+| Marker never reaches prompt, log or other file | Note text is absent from every queue and log table, the activity record, the real server log and the unchosen export. A guest test checks the job payload holds only the export id                                       |
+| Expired export reads as gone                   | Guest test moves the clock. 23:59:59.999 after completion still downloads, 24 hours exactly gives 410, and the stored file is deleted. Seen failing with the expiry check removed                                        |
+| Unselected categories absent                   | Guest and real-host tests ask for one category and look for the other's marker and heading. Seen failing with the selection check removed                                                                                |
+| Account sections cover only the caller         | Real host test calls both sections as two people. The second person's rows stay                                                                                                                                          |
+| Native and WebAssembly                         | Guest tests run natively (6 behaviour, 2 privacy, 16 new). The same code is built as a component and loaded by the real host (6 package tests, 3 installed tests)                                                        |
+| Real server, other device, two people          | Live test over https on a non-loopback address with certificate checking and trusted origins. Notes and an export worked for two people, the second got 404, and the server log held no marker                           |
+
+Commands (expected exit code 0, both through `scripts/run-gate.sh`):
+
+```bash
+scripts/run-gate.sh start --gate test:rust-wellness
+scripts/run-gate.sh start --gate test:rust-wellness-live
+```
+
+### Not proven or not built
+
+- **Real-host expiry.** Expiry was proven by moving the clock in the guest tests only. The real
+  host run does not wait 24 hours.
+- **Whole-account orchestration** is not built. Only the two section calls exist.
+- **Two requests at once** can race, because package storage replaces the whole value on each
+  write. The 409 rule is exact only for one request at a time.
+- **Old export table rows** are not read, so exports made by the old server are not downloadable.
+- **Old status and download routes** were not replayed, because they live in the old settings
+  routes. Their wording was read from source.
+- **The old export request** was replayed with a stand-in queue, so only its answers were compared.
+- **Medicines and insights export** answer "not available yet". Chat tools and screens are part 16 and later.
+- **Delete during a build.** An export being built while the person deletes their account data can save one page after the delete. It can never be downloaded, and the next delete removes it.
+- **Many exports in a day.** All pages of one person share one stored value, so many exports inside 24 hours grow it. One at a time and the 24 hour expiry bound it.
+- **Note list size.** The therapy note list relies on the host's own row cap and has no warning when it is reached.
+- **The old energy-trend note** is still not written (see part 13).
+- **Shared Rust toolchain folders.** Builds used the existing shared cargo and rustup folders
+  unchanged, because offline builds need their cached crates. Only the build output folder was
+  task-owned, and it is deleted when the task ends.
+
 ## Commitments extraction (part 8)
 
 ### What was built
