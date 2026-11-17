@@ -90,10 +90,10 @@ impl TransactionalDatabasePorts {
         let (mut query, nulls_first) = typed_query::parse(request.parameters.clone())?;
         // Validate before using the table in any PostgreSQL metadata request.
         typed_query::compile_with_nulls_first(table, &query, &nulls_first)?;
-        let role = if scope.module().database.ledger != crate::manifest::Ledger::Module
+        let role = if scope.module().database.ledger == crate::manifest::Ledger::CoreLegacy
             && crate::legacy::owns(&scope.module().id, table)
         {
-            // Legacy tables already grant the app and worker their own RLS-bound
+            // Core-legacy tables already grant the app and worker their own RLS-bound
             // roles. A worker cannot switch into the app role, nor should it need to.
             self.database.role().name().into()
         } else {
