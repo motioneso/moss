@@ -57,11 +57,16 @@ fn approval_is_exact_account_bound_one_use_and_append_updates_the_same_note() {
     let w = World::new();
     let a = w.f.a;
     let b = w.f.b;
-    w.route(a, "PUT", "/note", json!({"body":format!("{MARK}😀"),"revision":0}));
+    w.route(
+        a,
+        "PUT",
+        "/note",
+        json!({"body":format!("{MARK}😀"),"revision":0}),
+    );
     let input = json!({"text":format!(" {MARK} appended ")});
     let card = w.api(a, "prepareScratchpadAction", input.clone()).unwrap();
     assert_eq!(card["revision"], 1);
-    assert_eq!(card["characterCount"], MARK.len()+2);
+    assert_eq!(card["characterCount"], MARK.len() + 2);
     assert_eq!(
         card["fields"],
         json!([{"label":"Text to append","value":format!(" {MARK} appended ")}])
@@ -115,7 +120,16 @@ fn approval_is_exact_account_bound_one_use_and_append_updates_the_same_note() {
         "SELECT table_schema||'.'||table_name FROM information_schema.tables WHERE table_schema IN ('moss_queue','moss_modules') OR table_name IN ('moss_activity_detail','moss_error_log','moss_action_audit_log','moss_model_activity_log')",&[])).unwrap().iter().map(|r|r.get(0)).collect();
     assert!(tables.iter().any(|t| t.starts_with("moss_queue.")));
     for table in &tables {
-        let hits:i64=w.f.rt.block_on(w.f.root.query_one(&format!("SELECT count(*) FROM {table} t WHERE to_jsonb(t)::text LIKE '%'||$1||'%'"),&[&MARK])).unwrap().get(0);
+        let hits: i64 =
+            w.f.rt
+                .block_on(w.f.root.query_one(
+                    &format!(
+                        "SELECT count(*) FROM {table} t WHERE to_jsonb(t)::text LIKE '%'||$1||'%'"
+                    ),
+                    &[&MARK],
+                ))
+                .unwrap()
+                .get(0);
         assert_eq!(hits, 0, "{table} contains private text");
     }
     w.route(

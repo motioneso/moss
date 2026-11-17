@@ -125,3 +125,24 @@ run for this Rust slice.
 - Account-wide export/deletion orchestration and its UI consuming these public table APIs.
 - Writing a mirrored Markdown file. This part preserves the existing copying preference and
   its folder prerequisite; it does not add a Notes file writer.
+
+### Review notes
+
+The first independent review found no major or blocking issue. Its minor suggestions led to
+correcting the changelog heading, formatting the new chat test, and recording these limits:
+
+- The existing host consumes approval before execution. A full note or a store failure needs
+  fresh approval for another attempt. The stored version/count describe preparation time;
+  the additive append does not reject a newer version of the note.
+- Missing append approval currently returns a scrubbed 500 response. A dedicated approval
+  status for the future chat UI is not added here.
+- Approval preparation is stricter than the old presentation: it returns no card for blank,
+  invalid or over-2000-character input. The route and tool execution replay counts above
+  compare the old handlers, not the old approval presenter.
+- Public export/delete APIs follow the existing dependency-bound, caller-account API model.
+  An authorized dependent module can operate on the calling person's note; there is no
+  cross-account parameter. Account-wide orchestration must retain its own approval boundary.
+
+Suggestions to version-bind additive append and change the host's grant-consumption timing
+were left for the shared approval design. Existing code formatting was retained; no further
+unrelated formatting changes were added.
