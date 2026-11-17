@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 2,
+  "id": "plaidprobe",
+  "name": "Plaid probe",
+  "publisher": "Moss",
+  "version": "0.1.0",
+  "description": "Test-only package for the Finance platform probe. It asks the host to talk to Plaid for it and never holds a key or a bank token. Never shipped.",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "fuelLimit": 200000000,
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "credentials",
+      "operations": [
+        "status",
+        "request",
+        "exchange",
+        "forget"
+      ],
+      "resources": [
+        "sandbox.plaid.com",
+        "production.plaid.com"
+      ]
+    }
+  ],
+  "credentials": {
+    "plaid-keys": {
+      "scope": "instance",
+      "hosts": [
+        "sandbox.plaid.com",
+        "production.plaid.com"
+      ],
+      "attachment": {
+        "kind": "fields",
+        "name": {
+          "client_id": "clientId",
+          "secret": "clientSecret"
+        }
+      },
+      "exposeFields": [
+        "link_token",
+        "public_token"
+      ]
+    },
+    "plaid-item": {
+      "scope": "account",
+      "hosts": [
+        "sandbox.plaid.com",
+        "production.plaid.com"
+      ],
+      "attachment": {
+        "kind": "fields",
+        "name": {
+          "access_token": "accessToken"
+        }
+      },
+      "with": [
+        "plaid-keys"
+      ],
+      "exchange": {
+        "endpoint": "https://production.plaid.com/item/public_token/exchange",
+        "grantType": "token_swap",
+        "format": "json",
+        "input": "public_token"
+      }
+    }
+  },
+  "routes": [
+    {
+      "method": "POST",
+      "path": "/status",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/link",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/balance",
+      "signIn": true
+    }
+  ],
+  "requires": {},
+  "provides": {},
+  "tools": {},
+  "icons": [],
+  "accounts": {
+    "supportsUserDisable": true,
+    "defaultEnabled": true
+  },
+  "lifecycle": {
+    "required": false,
+    "bundled": false,
+    "removable": true
+  },
+  "screens": {},
+  "navigation": [],
+  "settings": [],
+  "features": [],
+  "optionalRequires": {}
+}
