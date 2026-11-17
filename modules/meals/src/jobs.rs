@@ -273,6 +273,7 @@ pub fn run_plan_day<H: Host + ?Sized>(host: &H, params: &Value) -> Result<DayOut
                 ready = failure.is_none();
                 provider_down = failure == Some("provider_error");
                 store::finish_day(host, day_id, generation, if ready { "ready" } else { "failed" }, failure)?;
+                crate::shopping::on_plan_change(host, plan_id)?;
             }
         }
     }

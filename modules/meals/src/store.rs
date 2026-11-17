@@ -15,14 +15,14 @@ pub const EATERS: &str = "app.meals_planned_meal_eaters";
 pub const RECIPES: &str = "app.meals_recipes";
 pub const INGREDIENTS: &str = "app.meals_recipe_ingredients";
 
-fn asc(column: &str) -> Order {
+pub(crate) fn asc(column: &str) -> Order {
     Order {
         column: column.into(),
         descending: false,
     }
 }
 
-fn desc(column: &str) -> Order {
+pub(crate) fn desc(column: &str) -> Order {
     Order {
         column: column.into(),
         descending: true,
@@ -44,25 +44,25 @@ fn and(filters: Vec<Filter>) -> Filter {
     Filter::And { filters }
 }
 
-fn in_list(column: &str, ids: &[String]) -> Filter {
+pub(crate) fn in_list(column: &str, ids: &[String]) -> Filter {
     Filter::In {
         column: column.into(),
         values: ids.iter().map(|i| json!(i)).collect(),
     }
 }
 
-fn select<H: Host + ?Sized>(host: &H, table: &str, query: Query) -> Result<Vec<Value>> {
+pub(crate) fn select<H: Host + ?Sized>(host: &H, table: &str, query: Query) -> Result<Vec<Value>> {
     Client(host).query(table, &query)
 }
 
-fn find<H: Host + ?Sized>(host: &H, table: &str, filter: Filter) -> Result<Option<Value>> {
+pub(crate) fn find<H: Host + ?Sized>(host: &H, table: &str, filter: Filter) -> Result<Option<Value>> {
     let mut query = Query::select(filter);
     query.limit = Some(1);
     Ok(select(host, table, query)?.into_iter().next())
 }
 
 /// True when the update touched a row, so a guard that no longer holds reads as false.
-fn update<H: Host + ?Sized>(
+pub(crate) fn update<H: Host + ?Sized>(
     host: &H,
     table: &str,
     filter: Filter,
@@ -75,7 +75,7 @@ fn update<H: Host + ?Sized>(
         .is_empty())
 }
 
-fn insert_ignore<H: Host + ?Sized>(
+pub(crate) fn insert_ignore<H: Host + ?Sized>(
     host: &H,
     table: &str,
     fields: Vec<(&str, Value)>,

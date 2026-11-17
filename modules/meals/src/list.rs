@@ -86,8 +86,10 @@ pub struct Stored {
     pub not_in_plan: bool,
     pub converted_from: Vec<String>,
     pub source_meal_ids: Vec<String>,
-    pub checked: bool,
-    pub bought: bool,
+    pub checked_at: Option<String>,
+    pub bought_at: Option<String>,
+    /// The row's last-change stamp, which keys the Pantry rows a purchase adds.
+    pub version: String,
 }
 
 #[derive(Clone, Debug)]
@@ -287,7 +289,7 @@ pub fn build_list(meals: &[MealInput], pantry: Option<&BuildPantry>) -> Vec<Gene
 /// Matching lines update in place, so ticks carry over. Manual and bought lines are left alone.
 /// A ticked line that left the plan stays and is marked not in plan; an unticked one goes.
 pub fn reconcile_list(stored: &[Stored], generated: &[Generated]) -> Diff {
-    let open: Vec<&Stored> = stored.iter().filter(|l| !l.manual && !l.bought).collect();
+    let open: Vec<&Stored> = stored.iter().filter(|l| !l.manual && l.bought_at.is_none()).collect();
     let by_key: HashMap<&str, &Stored> =
         open.iter().filter_map(|l| l.line_key.as_deref().map(|k| (k, *l))).collect();
     let mut seen: Vec<&str> = vec![];
@@ -329,7 +331,7 @@ pub fn reconcile_list(stored: &[Stored], generated: &[Generated]) -> Diff {
         if l.line_key.as_deref().is_some_and(|k| seen.contains(&k)) {
             continue;
         }
-        if !l.checked {
+        if l.checked_at.is_none() {
             remove.push(l.line_id.clone());
         } else if !l.not_in_plan {
             update.push(Update {
@@ -419,7 +421,7 @@ mod tests {
     fn stored(id: &str, key: &str, name: &str, checked: bool) -> Stored {
         Stored { line_id: id.into(), line_key: Some(key.into()), manual: false, name: name.into(), quantity: Some(1.0),
             unit: None, purchase: None, section: "other".into(), covered: false, not_in_plan: false,
-            converted_from: vec![], source_meal_ids: vec![], checked, bought: false }
+            converted_from: vec![], source_meal_ids: vec![], checked_at: checked.then(|| "t".to_owned()), bought_at: None, version: String::new() }
     }
 
     #[test]
