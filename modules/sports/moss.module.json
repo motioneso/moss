@@ -4,7 +4,7 @@
   "name": "Sports",
   "publisher": "Moss",
   "version": "0.1.0",
-  "description": "Keeps each person's followed leagues and teams, private to the owner. A whole league can be followed once, and following it again returns the saved follow. A followed team is tied to the provider's permanent team number. The standings picker remembers the leagues a person chose and the standings view they last opened, under the same saved settings as before. Account export and deletion cover all six Sports tables. The package reads ESPN's public data for the league catalog, each league's team list and club search, and keeps a shared copy so one person's lookup serves everyone. The copy holds only public sports data, never a person's follows or searches. Following a team checks the live team list and is refused, with the same fail-closed messages the old app gave, when ESPN is down. Scoreboard, standings and news reading are built but not yet offered as routes. A person can add news sources of their own, up to ten, each a website with a news feed or a subreddit, and choose which sports and followed teams each one covers, up to twenty choices in all. Adding a source shows a preview first, which names the reason when a site cannot be used, and a source saves only after the person confirms it. Two subreddits that differ only by letter case are one source. The package reads those public sites itself, and keeps unconfirmed previews for ten minutes under the person's own saved settings. Source retry, rebuild, headline photos, sites that need an AI-built recipe or a browser, chat tools and the screens are not part of this package yet.",
+  "description": "Keeps each person's followed leagues and teams, private to the owner. A whole league can be followed once, and following it again returns the saved follow. A followed team is tied to the provider's permanent team number. The standings picker remembers the leagues a person chose and the standings view they last opened, under the same saved settings as before. Account export and deletion cover all six Sports tables. The package reads ESPN's public data for the league catalog, each league's team list and club search, and keeps a shared copy so one person's lookup serves everyone. The copy holds only public sports data, never a person's follows or searches. Following a team checks the live team list and is refused, with the same fail-closed messages the old app gave, when ESPN is down. Scoreboard, standings and news reading are built but not yet offered as routes. A person can add news sources of their own, up to ten, each a website with a news feed or a subreddit, and choose which sports and followed teams each one covers, up to twenty choices in all. Adding a source shows a preview first, which names the reason when a site cannot be used, and a source saves only after the person confirms it. Two subreddits that differ only by letter case are one source. The package reads those public sites itself, and keeps unconfirmed previews for ten minutes under the person's own saved settings. A site with no feed can get a recipe that the person's chosen AI model proposes. The recipe is a strict description of one public address and where the headlines sit in it, it may only name sites the person already confirmed, and it is saved only after a real replay finds headlines. Sources are read again on a schedule without a browser or article text, each source shows whether it is healthy, drifted or missing its recipe, and a person can retry a source or rebuild its recipe after confirming a preview. Headline photos, sites that need a browser, chat tools and the screens are not part of this package yet.",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 250000000,
   "abi": "moss:module@1",
@@ -41,6 +41,11 @@
         "source-previews",
         "source-icon-misses"
       ]
+    },
+    {
+      "port": "ai",
+      "operations": ["generate"],
+      "resources": ["structured"]
     },
     {
       "port": "fetch",
@@ -193,6 +198,21 @@
       "signIn": true
     },
     {
+      "method": "POST",
+      "path": "/sources/:id/retry",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/sources/:id/rebuild/preview",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/sources/:id/rebuild",
+      "signIn": true
+    },
+    {
       "method": "DELETE",
       "path": "/sources/:id",
       "signIn": true
@@ -311,7 +331,7 @@
         {
           "code": "sports_source_unsupported",
           "class": "validation",
-          "description": "The site has no news feed Moss can read yet, so it cannot be added. Sites that need a browser or an AI-built recipe are not built."
+          "description": "The site has no news feed and the AI model could not give a recipe that finds headlines on the sites already confirmed, so it cannot be added. Sites that need a browser are not built."
         },
         {
           "code": "sports_source_limit",
@@ -323,6 +343,29 @@
         {
           "id": "sports.added_sources.other-address",
           "description": "Try the site's feed address, or a subreddit such as r/nfl, instead of the home page.",
+          "path": "/settings?section=modules&module=sports"
+        }
+      ]
+    },
+    {
+      "id": "sports.source_recipes",
+      "description": "A website with no news feed gets a recipe from the person's chosen AI model. The model is told which sites are allowed and a reply naming any other site is refused. The recipe is checked against a strict shape, then replayed once through the real fetch, and it is saved only if the replay finds at least one headline. Reading a saved source never opens a browser and never fetches article text. Each source shows a health state. A page that changed shape marks the recipe as drifted, a source without a usable recipe is marked missing, and a person can retry it now or rebuild the recipe from a preview they confirm, which is refused if the source changed in between. A rebuild never changes which site the source belongs to.",
+      "errors": [
+        {
+          "code": "sports_recipe_unavailable",
+          "class": "transient",
+          "description": "No AI model is set up or it did not answer, so a recipe could not be proposed."
+        },
+        {
+          "code": "sports_recipe_drift",
+          "class": "validation",
+          "description": "The saved recipe no longer finds headlines because the page changed."
+        }
+      ],
+      "remediations": [
+        {
+          "id": "sports.source_recipes.rebuild",
+          "description": "Rebuild the recipe from the source's preview and confirm it, or retry the source later.",
           "path": "/settings?section=modules&module=sports"
         }
       ]
