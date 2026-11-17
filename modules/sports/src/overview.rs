@@ -126,6 +126,7 @@ pub fn overview<H: Host + ?Sized>(host: &H) -> Result<Response> {
         .map(|d| d.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
         .unwrap_or_default();
     let mut degraded = false;
+    let mut feeds = datasets::Feeds::open(host)?;
     let follows: Vec<Follow> = load_follows(host)?.into_iter().filter(|f| catalog::entry(&f.competition_key).is_some()).collect();
     let today = eastern::day_of(now_ms);
     let day_before = eastern::add_days(&today, -1);
@@ -162,7 +163,7 @@ pub fn overview<H: Host + ?Sized>(host: &H) -> Result<Response> {
         degraded |= teams.degraded;
         let wanted = news_scope::competition(key);
         let headlines = if !team_only.contains(&key) && wanted.is_some_and(|w| news_scope::allows(&coverage, &follows, &w)) {
-            let answer = datasets::headlines(host, key, None)?;
+            let answer = feeds.headlines(host, key, None)?;
             degraded |= answer.degraded;
             story::resolve_team_keys(answer.data.as_array().cloned().unwrap_or_default(), &teams.teams)
         } else {
@@ -194,7 +195,7 @@ pub fn overview<H: Host + ?Sized>(host: &H) -> Result<Response> {
         // The league feed rarely files a story under a club, so the club's own feed is merged in for its card.
         let club_feed = follow.team_key.as_deref().and_then(|t| news_scope::team(&follow.competition_key, t));
         if club_feed.is_some_and(|w| news_scope::allows(&coverage, &follows, &w)) {
-            let answer = datasets::headlines(host, &follow.competition_key, Some(&id))?;
+            let answer = feeds.headlines(host, &follow.competition_key, Some(&id))?;
             degraded |= answer.degraded;
             let teams = comp.map(|c| c.teams.as_slice()).unwrap_or(&[]);
             for headline in story::resolve_team_keys(answer.data.as_array().cloned().unwrap_or_default(), teams) {
@@ -232,7 +233,7 @@ pub fn overview<H: Host + ?Sized>(host: &H) -> Result<Response> {
                 .as_str()
                 .map(str::to_owned)
                 .or_else(|| teams.iter().find(|t| t.team_key == team_key).and_then(|t| t.source_team_id.clone()));
-            let answer = datasets::headlines(host, &comp, Some(id.as_deref().unwrap_or(team_key)))?;
+            let answer = feeds.headlines(host, &comp, Some(id.as_deref().unwrap_or(team_key)))?;
             degraded |= answer.degraded;
             for headline in story::resolve_team_keys(answer.data.as_array().cloned().unwrap_or_default(), teams) {
                 merged = story::merge_scope(merged, headline);
@@ -290,6 +291,7 @@ pub fn overview<H: Host + ?Sized>(host: &H) -> Result<Response> {
 
     // The featured story is picked by the same rule the screen uses, and only its body is read.
     let feature = story::select_feature(&news, &followed_pairs).map(|h| (h["id"].as_str().unwrap_or_default().to_owned(), url_of(h), h["origin"] == "espn"));
+    feeds.save(host);
     let body = match &feature {
         Some((id, _, true)) => {
             let read = article::body(host, id)?;
