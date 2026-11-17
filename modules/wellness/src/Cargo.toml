@@ -39,3 +39,7 @@ path = "../tests/privacy.rs"
 [[test]]
 name = "medications"
 path = "../tests/medications.rs"
+
+[[test]]
+name = "therapy_export"
+path = "../tests/therapy_export.rs"

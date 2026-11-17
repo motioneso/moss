@@ -49,7 +49,7 @@ pub fn create<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Resp
         Err(message) => return Ok(bad_request(message)),
     };
     let day = host.call("context", "local-date", "account", json!({}))?;
-    let mut pairs = vec![
+    let pairs = vec![
         ("feeling_core", json!(data.feeling_core)),
         ("feeling_secondary", or_null(data.feeling_secondary.flatten())),
         ("feeling_tertiary", Value::Null),

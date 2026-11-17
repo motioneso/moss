@@ -62,9 +62,12 @@ fn the_package_asks_only_for_its_own_resources() {
         })
     };
     assert!(ask("db", "query", "app.wellness_checkins").is_ok());
+    // The account delete clears the medication tables too, so the package may name them.
     assert!(ask("db", "query", "app.medications").is_ok());
+    assert!(ask("db", "query", "app.memory_chunks").is_err());
     assert!(ask("db", "query", "app.medication_logs").is_ok());
-    assert!(ask("db", "query", "app.wellness_therapy_notes").is_err());
+    assert!(ask("db", "query", "app.wellness_therapy_notes").is_ok());
+    assert!(ask("kv", "get", "wellness.export-jobs").is_ok());
     assert!(ask("db", "query", "app.users").is_err());
     assert!(ask("kv", "preference.read", "ai-consent").is_ok());
     assert!(ask("kv", "preference.read", "locale").is_err());

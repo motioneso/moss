@@ -574,6 +574,82 @@ scripts/run-gate.sh start --gate test:rust-commitments-live
   with a leak added.
 - **Other devices.** The live run was on the same machine.
 
+## Wellness package: therapy notes, export and account sections (part 15)
+
+Card JS-300. Part of [issue 4027](https://github.com/motioneso/moss/issues/4027). Release note
+Category: N/A.
+
+### What was built
+
+Eight more routes in the Wellness package, plus two calls the whole-account export and delete will
+use. No screens.
+
+- **Therapy notes.** List newest first, save one (optionally linked to one of your own check-ins and
+  tagged with a feeling), and delete one. Wording of every refusal matches the old server, except
+  one case listed below.
+- **Selective export.** Ask for a date range and categories, check progress, download. The file is
+  built by a background job that carries only the export id. It is kept 24 hours, then reads as
+  gone (410), and its record is dropped after seven more days. A repeat request for the same range
+  reuses the same job, and a different one while a job runs gets the old 409 wording. A job stuck
+  for 15 minutes counts as failed. A failed build says so in fixed words and never echoes text.
+- **Only chosen categories.** An unchosen category is left out of the file entirely.
+- **Account sections.** One call returns the caller's check-ins and therapy notes for the account
+  export. One deletes the caller's check-ins, therapy notes, medicines and dose logs and the
+  saved export records and files. Both act on the caller only.
+- **Same data.** No new database file. The four tables and their owner-only rules are the old ones.
+- **App map.** The manifest lists the three features with plain error descriptions.
+
+### Differences from the old code (on purpose)
+
+- **Download is a JSON envelope** with the file name, type and page text, because a package route
+  can only send JSON. The shell or screen turns it into a file.
+- **Medicines and insights export** answer 400 "not available yet" until parts 14 and 16.
+- **Owner name in the file** is the account id, because the package cannot read the users table.
+- **Export records live in per-person package storage**, not the old export table.
+- **A therapy note linked to a non-UUID id** answers 404. The old server answers 500.
+- **A range with 1000 or more rows in one category** is refused with the "too large" message, because
+  the host returns at most 1000 rows per query.
+
+### Proof
+
+| Claim                                          | Evidence                                                                                                                                                                                                                 |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Routes match the old handlers                  | Old routes and the package run side by side, ids and times masked. 36 steps without ids and 7 with ids match, covering therapy notes (good and bad bodies, missing ids) and export validation (dates, range, categories) |
+| A second person cannot read or delete notes    | Real database test as two people. With the owner rule opened the second person read the note, with it restored they read none. The second person also gets 404 on delete                                                 |
+| Marker never reaches prompt, log or other file | Note text is absent from every queue and log table, the activity record, the real server log and the unchosen export. A guest test checks the job payload holds only the export id                                       |
+| Expired export reads as gone                   | Guest test moves the clock. 23:59:59.999 after completion still downloads, 24 hours exactly gives 410, and the stored file is deleted. Seen failing with the expiry check removed                                        |
+| Unselected categories absent                   | Guest and real-host tests ask for one category and look for the other's marker and heading. Seen failing with the selection check removed                                                                                |
+| Account sections cover only the caller         | Real host test calls both sections as two people. The second person's rows stay                                                                                                                                          |
+| Native and WebAssembly                         | Guest tests run natively (6 behaviour, 2 privacy, 16 new). The same code is built as a component and loaded by the real host (6 package tests, 3 installed tests)                                                        |
+| Real server, other device, two people          | Live test over https on a non-loopback address with certificate checking and trusted origins. Notes and an export worked for two people, the second got 404, and the server log held no marker                           |
+
+Commands (expected exit code 0, both through `scripts/run-gate.sh`):
+
+```bash
+scripts/run-gate.sh start --gate test:rust-wellness
+scripts/run-gate.sh start --gate test:rust-wellness-live
+```
+
+### Not proven or not built
+
+- **Real-host expiry.** Expiry was proven by moving the clock in the guest tests only. The real
+  host run does not wait 24 hours.
+- **Whole-account orchestration** is not built. Only the two section calls exist.
+- **Two requests at once** can race, because package storage replaces the whole value on each
+  write. The 409 rule is exact only for one request at a time.
+- **Old export table rows** are not read, so exports made by the old server are not downloadable.
+- **Old status and download routes** were not replayed, because they live in the old settings
+  routes. Their wording was read from source.
+- **The old export request** was replayed with a stand-in queue, so only its answers were compared.
+- **Medicines and insights export** answer "not available yet". Chat tools and screens are part 16 and later.
+- **Delete during a build.** An export being built while the person deletes their account data can save one page after the delete. It can never be downloaded, and the next delete removes it.
+- **Many exports in a day.** All pages of one person share one stored value, so many exports inside 24 hours grow it. One at a time and the 24 hour expiry bound it.
+- **Note list size.** The therapy note list relies on the host's own row cap and has no warning when it is reached.
+- **The old energy-trend note** is still not written (see part 13).
+- **Shared Rust toolchain folders.** Builds used the existing shared cargo and rustup folders
+  unchanged, because offline builds need their cached crates. Only the build output folder was
+  task-owned, and it is deleted when the task ends.
+
 ## Commitments extraction (part 8)
 
 ### What was built
@@ -645,3 +721,72 @@ scripts/run-gate.sh start --gate test:rust-commitments-live
   to the code to watch them fail.
 - **The live run never ran a job.** It showed the job queued, not the worker finishing it, because
   no model or text source exists on that server.
+
+## Finance platform probe (part 19)
+
+### Answer to plan section 5.3
+
+The module host can hold Plaid's keys and bank tokens itself, so Finance does not need the
+`credentials.read` exception. Four gaps stopped the old broker from doing Plaid. Each got a
+small, general extension, and no package ever sees a key or a bank token.
+
+| Gap in the old broker                                    | Extension                                                                 |
+| -------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Plaid wants its keys in the body of every call           | A credential can attach named fields to the body; the host sets them last |
+| The bank token swap sends a one-time public token        | A new token swap kind sends companion keys plus that one input field      |
+| Finance keeps one token per bank, the broker kept one    | Optional per-bank slots, with a forget operation                          |
+| Replies carrying `link_token` or `public_token` were cut | A credential may list reply fields that stay visible by design            |
+
+A failed swap returns `connected: false` and only Plaid's upper-case error code. Nothing is
+stored and earlier banks are untouched.
+
+### What was built
+
+- Broker changes in the module host (manifest, credentials, runtime).
+- A fake Plaid for tests that copies Plaid's rules: keys in every body, a public token works
+  once, a bank token works only for its own bank, Plaid's error codes, every call recorded.
+- Five host tests and four fake-Plaid contract tests.
+
+### Proof
+
+| Check                                                                                  | Result                                                                                                                                                                                                                                                                                                                     |
+| -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bank link through the real component host and encrypted store (`plaid_probe`, 5 tests) | passed                                                                                                                                                                                                                                                                                                                     |
+| Fake Plaid contract tests (`standins/tests/plaid.rs`, 4 tests)                         | passed                                                                                                                                                                                                                                                                                                                     |
+| Whole module host native suite                                                         | passed                                                                                                                                                                                                                                                                                                                     |
+| Planted client id, secret and bank token searched in replies and on disk               | never found                                                                                                                                                                                                                                                                                                                |
+| Remove the name-based reply stripping                                                  | leak test failed, restored                                                                                                                                                                                                                                                                                                 |
+| Remove per-person separation                                                           | second-person test failed, restored                                                                                                                                                                                                                                                                                        |
+| Let the module's own fields win over the host's                                        | override test failed, restored                                                                                                                                                                                                                                                                                             |
+| Live run: real server, real Plaid host, marker keys                                    | passed: Plaid answered INVALID_FIELD, the package saw only that code; signed out got 401; second person saw no bank (trivially, since nobody linked one; person-to-person separation is proven against the fake Plaid only); key scan of log, tables, data folder and package found nothing, and a planted leak was caught |
+| Old broker shapes against the fake Plaid                                               | refused with INVALID_API_KEYS                                                                                                                                                                                                                                                                                              |
+
+Commands, from `rust-spike`:
+
+```
+cargo +1.95.0 test --locked --offline --manifest-path module-host/Cargo.toml --test plaid_probe
+```
+
+```
+cargo +1.95.0 test --locked --offline --manifest-path standins/Cargo.toml --test plaid
+```
+
+From the repo root, through the gate script:
+
+```
+scripts/run-gate.sh start --gate test:rust-plaid-live
+```
+
+### Not proven or not built
+
+- **WebAssembly.** The host and the fake Plaid are native test code. The host tests run a real
+  WebAssembly sample, and the live run uses a small probe package built as real WebAssembly.
+- **Live run used marker keys, not a real bank.** The real server called the real Plaid host
+  and Plaid refused the keys, so the success path was proven only against the fake Plaid.
+- **A real Plaid account** is part 36. Real Plaid replies may differ from the fake.
+- **Package declarations are checked.** A bank swap must be per person, only link and public
+  tokens can be exposed in replies, and a shared credential cannot be forgotten by one person.
+  A test tries each and was seen failing with the check removed.
+- **Link and public tokens reach the module** on purpose. Only keys and bank tokens are hidden.
+- **No App Map entries,** because no screen, setting or route was added.
+- **Route parity** does not apply, since no route was added.

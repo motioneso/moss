@@ -38,3 +38,10 @@ pub fn iso_or_null(value: &Value) -> Result<Value> {
     }
     Ok(Value::String(iso(value)?))
 }
+
+/// True for the 8-4-4-4-12 hexadecimal shape of an id. Anything else cannot name a row.
+pub fn is_uuid(text: &str) -> bool {
+    let groups: Vec<&str> = text.split('-').collect();
+    groups.len() == 5
+        && [8, 4, 4, 4, 12].iter().zip(&groups).all(|(n, g)| g.len() == *n && g.bytes().all(|b| b.is_ascii_hexdigit()))
+}

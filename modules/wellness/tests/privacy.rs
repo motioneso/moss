@@ -62,11 +62,14 @@ fn medication_text_reaches_no_host_call_beyond_the_two_medication_tables() {
 fn the_manifest_declares_no_model_port() {
     let manifest: Value = serde_json::from_str(include_str!("../moss.module.json")).unwrap();
     let ports: Vec<&str> = manifest["capabilities"].as_array().unwrap().iter().map(|c| c["port"].as_str().unwrap()).collect();
-    assert_eq!(ports, ["db", "context", "kv"]);
-    for banned in ["ai", "model", "fetch", "network", "jobs", "memory", "tools"] {
+    assert_eq!(ports, ["db", "context", "kv", "jobs"]);
+    for banned in ["ai", "model", "fetch", "network", "memory", "tools"] {
         assert!(!ports.contains(&banned), "{banned}");
     }
     assert!(!include_str!("../moss.module.json").contains("\"ai\""));
-    // The reminder queue is declared with no parameters, so a job payload can hold nothing private.
-    assert_eq!(manifest["jobs"], json!({"wellness-medication-reminder": {}}));
+    // The reminder queue takes no parameters and the export queue takes one id, so a job payload can hold nothing private.
+    assert_eq!(
+        manifest["jobs"],
+        json!({"wellness-medication-reminder": {}, "wellness-export": {"export-id": {"kind": "id"}}})
+    );
 }
