@@ -1324,6 +1324,7 @@ dependencies = [
  "tokio",
  "tokio-postgres",
  "url",
+ "usefulness-rules",
  "uuid",
  "vault",
  "wasmtime",
@@ -2570,6 +2571,13 @@ dependencies = [
  "percent-encoding",
  "serde",
  "serde_derive",
+]
+
+[[package]]
+name = "usefulness-rules"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
 ]
 
 [[package]]

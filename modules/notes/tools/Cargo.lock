@@ -1810,9 +1810,14 @@ dependencies = [
 name = "moss-memory-host"
 version = "0.1.0"
 dependencies = [
+ "access-context",
  "anyhow",
  "moss-module-host",
+ "safety-core",
  "serde_json",
+ "sha2 0.10.9",
+ "tokio",
+ "tokio-postgres",
  "wat",
 ]
 
@@ -1842,6 +1847,7 @@ dependencies = [
  "tokio",
  "tokio-postgres",
  "url",
+ "usefulness-rules",
  "uuid",
  "vault",
  "wasmtime",
@@ -3624,6 +3630,13 @@ dependencies = [
  "percent-encoding",
  "serde",
  "serde_derive",
+]
+
+[[package]]
+name = "usefulness-rules"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
 ]
 
 [[package]]
