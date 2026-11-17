@@ -452,7 +452,12 @@ fn installed_news_package_serves_routes_from_the_real_server() {
         if status == 200 {
             assert!(kind.starts_with("image/") && cache.starts_with("private, max-age="), "{kind} {cache}");
             assert!(bytes.starts_with(&[0xff, 0xd8, 0xff]) || bytes.starts_with(b"\x89PNG") || bytes.starts_with(b"GIF8") || (bytes.len() > 12 && &bytes[8..12] == b"WEBP"), "bytes are a real picture");
-            assert_eq!(raw(&format!("/api/m/news/images/{id}"), &other).0, 404, "another person gets no picture");
+            // The other person may have compiled the same public story into their own page. They
+            // get a picture only for a story their own page holds.
+            let theirs = json_of(&call(Method::GET, "/overview", Some(&other), None).1);
+            let held = theirs["rankedStories"].as_array().is_some_and(|l| l.iter().any(|s| s["id"] == story["id"]));
+            let expect = if held { 200 } else { 404 };
+            assert_eq!(raw(&format!("/api/m/news/images/{id}"), &other).0, expect, "another person's picture follows their own page");
             served += 1;
         }
     }
