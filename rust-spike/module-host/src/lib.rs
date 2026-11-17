@@ -24,6 +24,7 @@ pub mod credentials;
 pub mod network;
 pub mod browser;
 pub mod public_web;
+pub mod route_image;
 pub mod robots;
 pub mod services;
 
