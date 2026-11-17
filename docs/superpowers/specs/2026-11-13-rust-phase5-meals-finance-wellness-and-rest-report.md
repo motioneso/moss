@@ -1056,3 +1056,63 @@ recipes existed in Rust.
 - **Numeric columns** may come back as numbers or text from the host. The store accepts both.
 - **No tracking card** for JS-308 was found in Vikunja.
 - **Release note** is not applicable.
+
+## Finance transactions (part 22)
+
+### What was built
+
+- Transactions: month query with filters, search, notes and splits; set a category; confirm what Moss sorted; bulk categorize and bulk confirm; save and read a note; split across up to 20 categories.
+- Payee rules: set a rule, list, preview what a rule would change, turn rules on or off.
+- Categories: add or rename inside a group.
+- Sorting: rule first, then the bank's own category, then an AI guess (the AI step is a stand-in, see below). The tiers are the old ones. A rule always confirms. A guess under 0.6 confidence needs a look. Otherwise a known payee follows the "sorting" tier (trusted by default) and a new payee follows "sorting_new" (asks each time by default). Only the trusted tier confirms without asking. The tiers are read live from the host's action policy and fall back to those defaults.
+- CSV import: parse, preview with duplicate choices, and apply. Caps stay at 1 MiB, 200 rows, 500 KiB per row, 50 columns. `csv` 1.4.0 is pinned (`=1.4.0`), the one approved new crate.
+- Routes (module-relative, all sign-in): screen routes for each action above, and chat routes under `/finance/chat/...` for the assistant's writes. Every route is declared in the manifest, with tools, risk, features, errors and policy routes. Package version is 0.2.0.
+
+### Proof
+
+| Check                                                                                         | Result                                                                                       |
+| --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Native guest tests (25 unit, finance 18, import 5, isolation 4, privacy 6, transactions 14)   | passed                                                                                       |
+| Package tests (6) and the real component built as WebAssembly, run against the real host      | passed, including the new table and action-policy grants                                     |
+| CSV fixture at both caps (1 MiB, 200 rows) read back from a real file; one step over each cap | passed; both over-cap files refused with the old messages                                    |
+| An import saved twice by replay                                                               | stays one set of rows, one balance move, one receipt, one activity row                       |
+| Sorting tiers, including the trusted tier that applies without asking                         | passed; a second sort run changes nothing                                                    |
+| Two people, guest level: second person reads and writes A's transactions, rules and notes     | nothing seen, nothing changed. With the owner filter switched off the same check fails (RED) |
+| Planted payee, note and amount searched in activity rows and every non-database host call     | none found; a planted leak is caught by the same scan (control)                              |
+| Live run: real server, real HTTPS on a non-loopback address, no response rewriting            | passed: query, category, note, import, replay stays 3 rows, sorting, second person sees none |
+| Stored job rows searched for the planted text in the live run                                 | none found; the same search finds the text in the transactions table (control)               |
+| Moss reachable from another device                                                            | passed, same live run (non-loopback address, certificate checked, untrusted origin refused)  |
+
+From the repo root, through the gate script:
+
+```
+scripts/run-gate.sh start --gate test:rust-finance
+```
+
+```
+scripts/run-gate.sh start --gate test:rust-finance-live
+```
+
+Both ended with exit code 0. The first run of the package gate failed because a test still expected the imports table to be refused. The test was updated because the table is now granted.
+
+### Deliberate differences from the old code
+
+- The old write version (row id plus the database's hidden change counter) is replaced by a hash of the fields a writer can change. Writes still refuse a stale version.
+- The old queue jobs for categorize, review and split run as part of the request, in one database transaction. No job is queued, so no job payload can carry private text.
+- A new `/finance/import/parse` route reads the file on the server. The old code parsed in the browser.
+- A batch review checks every row before it writes the first, because a chat tool call commits whatever it wrote before a refusal. A chat route now answers with the refusal's status (409, 404 or 400) instead of always 200.
+- Bulk categorize writes one activity row with the count. The old code wrote none.
+- The CSV reader is the `csv` crate, 1.4.0 pinned, with extra checks for stray quotes. A one-column file with blank lines is refused.
+- Letters in payee keys follow Rust's definition of a letter, not the old pattern for Unicode letters. Rare scripts may group differently.
+
+### Not proven or not built
+
+- The AI guess step has a trait and a fake only. The host-backed version is not built, so sorting here never asks a model.
+- Archiving a category is not built (it needs budget data from part 23).
+- Transactions export and reports, and the shared household mirror, belong to part 25.
+- The host stores tiers but does not enforce tool approval by tier. Enforcement is in the sorting code and the one-use approval on chat writes.
+- The unreachable error code for an over-long rule payee exists but cannot fire, because the 200-byte cap is hit first.
+- Route parity with the old handlers is checked through ported messages, status codes and shapes in the guest tests. The old handlers were not run side by side with the new ones.
+- Row-level security for the two new tables (rules, imports) is proven through the live run (second person sees none and cannot write) and the guest-level check. It was not separately re-run in Postgres with the protection removed.
+- The stored-job-row search was not seen failing with protection off, because Finance queues no jobs. The control shows the search can find stored text.
+- No screens were built.

@@ -1,10 +1,28 @@
 //! Finance package, part 20: the account list, manual account creation and manual entries, private
 //! to each owner. Everything crosses the guest-safe SDK Host interface. No model, network or job
 //! port is used, and no amount or account name is written to logs, jobs or activity rows.
+/// Leaves with the refusal when a reader fails.
+macro_rules! ask {
+    ($expr:expr) => {
+        match $expr {
+            Ok(value) => value,
+            Err(refusal) => return Ok(Err(refusal)),
+        }
+    };
+}
+
 pub mod accounts;
+pub mod categories;
+pub mod csv_import;
 pub mod input;
 pub mod ledger;
+pub mod rules;
+pub mod sort_run;
+pub mod splits;
+pub mod sorting;
+pub mod text;
 pub mod tools;
+pub mod transactions;
 
 #[cfg(target_arch = "wasm32")]
 mod component;
@@ -24,17 +42,65 @@ pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
         ("POST", "/finance/manual/entries") => {
             tools::route_write(ledger::create_entry(host, &request.body))
         }
-        ("POST", "/finance/chat/manual/account-create") => chat(host, "finance.manual.account-create", &request),
-        ("POST", "/finance/chat/manual/entry-create") => chat(host, "finance.manual.entry-create", &request),
-        _ => return Response::new(404, json!({"message":"Route not found"})),
+        _ => match (request.method.as_str(), tool_for(request.method.as_str(), request.path.as_str())) {
+            (_, Some((tool, true))) => chat(host, tool, &request),
+            (_, Some((tool, false))) => direct(host, tool, &request),
+            _ => return Response::new(404, json!({"message":"Route not found"})),
+        },
     };
     result.unwrap_or_else(|_| Response::new(500, json!({"error":"Internal server error"})))
+}
+
+/// Route to tool name. The flag says the route is the assistant's write path.
+fn tool_for(method: &str, path: &str) -> Option<(&'static str, bool)> {
+    Some(match (method, path) {
+        ("GET", "/finance/transactions") => ("finance.transactions.query", false),
+        ("POST", "/finance/transactions/category") => ("finance.transactions.category-set", false),
+        ("POST", "/finance/transactions/review") => ("finance.transactions.review-apply", false),
+        ("POST", "/finance/transactions/bulk-categorize") => ("finance.transactions.bulk-categorize", false),
+        ("POST", "/finance/transactions/bulk-confirm") => ("finance.transactions.bulk-confirm", false),
+        ("GET", "/finance/transactions/notes") => ("finance.transactions.notes.read", false),
+        ("POST", "/finance/transactions/notes") => ("finance.transactions.notes.save", false),
+        ("POST", "/finance/transactions/splits") => ("finance.transactions.splits", false),
+        ("GET", "/finance/rules") => ("finance.rules.list", false),
+        ("GET", "/finance/rules/preview") => ("finance.rules.preview", false),
+        ("POST", "/finance/rules") => ("finance.rules.update", false),
+        ("POST", "/finance/categories") => ("finance.categories.upsert", false),
+        ("POST", "/finance/import/parse") => ("finance.import.parse", false),
+        ("POST", "/finance/import/preview") => ("finance.import.preview", false),
+        ("POST", "/finance/import/apply") => ("finance.import.apply", false),
+        ("POST", "/finance/sorting/run") => ("finance.sorting.run", false),
+        ("POST", "/finance/chat/manual/account-create") => ("finance.manual.account-create", true),
+        ("POST", "/finance/chat/manual/entry-create") => ("finance.manual.entry-create", true),
+        ("POST", "/finance/chat/transactions/categorize") => ("finance.transactions.categorize", true),
+        ("POST", "/finance/chat/transactions/categorize-new") => ("finance.transactions.categorize-new", true),
+        ("POST", "/finance/chat/transactions/review") => ("finance.transactions.review-apply", true),
+        ("POST", "/finance/chat/transactions/bulk-categorize") => ("finance.transactions.bulk-categorize", true),
+        ("POST", "/finance/chat/transactions/bulk-confirm") => ("finance.transactions.bulk-confirm", true),
+        ("POST", "/finance/chat/transactions/notes") => ("finance.transactions.notes.save", true),
+        ("POST", "/finance/chat/transactions/splits") => ("finance.transactions.splits", true),
+        ("POST", "/finance/chat/rules/set") => ("finance.rule.set", true),
+        ("POST", "/finance/chat/import/apply") => ("finance.import.apply", true),
+        _ => return None,
+    })
+}
+
+/// A screen route runs the tool's code directly and answers with its status.
+fn direct<H: Host + ?Sized>(host: &H, tool: &str, request: &RouteRequest) -> moss_module_sdk::Result<Response> {
+    let parameters = if request.method == "GET" { json!(request.query) } else { request.body.clone() };
+    let reply = tools::execute(host, tools::Request { tool: tool.into(), parameters })?;
+    let status = match reply["status"] == "error" {
+        true => tools::status_of(&reply),
+        false => 200,
+    };
+    Ok(Response::new(status, reply))
 }
 
 /// The assistant's write path. The host checks the account's one-use approval before it runs.
 fn chat<H: Host + ?Sized>(host: &H, tool: &str, request: &RouteRequest) -> moss_module_sdk::Result<Response> {
     let reply = host.call("tools", "run", tool, json!({"parameters":request.body}))?;
-    Ok(Response::new(200, reply))
+    let status = if reply["status"] == "error" { tools::status_of(&reply) } else { 200 };
+    Ok(Response::new(status, reply))
 }
 
 /// The same entry point runs natively in tests and inside the packaged component.

@@ -22,7 +22,7 @@ fn only_the_finance_tables_and_the_clock_are_called() {
         assert!(["db", "context"].contains(&port.as_str()), "unexpected port {port}");
         if port == "db" {
             assert!(
-                ["app.finance_accounts", "app.finance_transactions", "app.finance_activity", "app.finance_budget_policy"].contains(&resource.as_str()),
+                ["app.finance_accounts", "app.finance_transactions", "app.finance_activity", "app.finance_budget_policy", "app.finance_merchant_rules", "app.finance_imports", "app.finance_categories"].contains(&resource.as_str()),
                 "unexpected table {resource}"
             );
         } else {
@@ -73,4 +73,59 @@ fn a_refusal_names_the_field_and_never_the_value() {
     assert!(!out.to_string().contains("PLANTED"), "{out}");
     let (_, out) = f.route("POST", "/finance/manual/accounts", json!({"operationId":NAME,"name":NAME}));
     assert!(!out.to_string().contains("PLANTED"), "{out}");
+}
+
+const MERCHANT: &str = "PLANTED-MERCHANT-3f9c21";
+
+/// Every place a stored private value could land: activity rows, tool results sent to chat
+/// routes, and the parameters of every non-database host call.
+fn leak_scan(f: &Fake, secrets: &[&str]) -> Vec<String> {
+    let mut found = vec![];
+    let mut texts: Vec<(String, String)> = f
+        .rows("app.finance_activity")
+        .iter()
+        .map(|r| ("activity".to_owned(), r.to_string()))
+        .collect();
+    for (port, _, resource, parameters) in f.calls.borrow().iter() {
+        if port != "db" {
+            texts.push((format!("{port}:{resource}"), parameters.to_string()));
+        }
+    }
+    for (place, text) in texts {
+        for s in secrets {
+            if text.contains(s) {
+                found.push(format!("{s} in {place}"));
+            }
+        }
+    }
+    found
+}
+
+fn drive_transaction_flows(f: &Fake) {
+    f.account("checking", OP1, "2026-01-01", AMOUNT);
+    let account = format!("manual:{OP1}");
+    f.route("POST", "/finance/import/apply", json!({"operationId":OP2,"accountId":account,"isoCurrency":"USD","expectedRevision":0,
+        "rows":[{"sourceRow":1,"date":"2026-11-03","name":MERCHANT,"amountCents":-AMOUNT,"notes":NOTE,"allowDuplicate":false}],"cleared":true}));
+    let id = f.rows("app.finance_transactions")[0]["id"].as_str().unwrap().to_owned();
+    f.route("POST", "/finance/transactions/notes", json!({"transactionId":id,"accountId":account,"notes":NOTE}));
+    f.route("POST", "/finance/transactions/category", json!({"transactionId":id,"accountId":account,"month":"2026-11","categoryId":"groceries"}));
+    f.tool("finance.rule.set", json!({"payee":MERCHANT,"categoryId":"groceries"}));
+    f.route("POST", "/finance/sorting/run", Value::Null);
+}
+
+#[test]
+fn transaction_flows_leave_no_names_notes_or_amounts_in_activity_or_host_calls() {
+    let f = Fake::new();
+    drive_transaction_flows(&f);
+    assert!(f.rows("app.finance_activity").len() >= 3, "the flows wrote no activity");
+    let secrets = [MERCHANT, NOTE, "7300123", "-7300123"];
+    assert_eq!(leak_scan(&f, &secrets), Vec::<String>::new());
+}
+
+#[test]
+fn the_scan_does_catch_a_planted_leak() {
+    let f = Fake::new();
+    drive_transaction_flows(&f);
+    f.seed("app.finance_activity", common::A, json!({"id":"x","kind":"test","params":{"name":MERCHANT}}));
+    assert!(!leak_scan(&f, &[MERCHANT]).is_empty());
 }

@@ -67,7 +67,7 @@ fn str_of(row: &Value, key: &str) -> Result<String> {
 }
 
 /// Database timestamps become the `toISOString` form the old app returned.
-fn iso(value: &Value) -> Value {
+pub(crate) fn iso(value: &Value) -> Value {
     match value.as_str() {
         Some(text) => DateTime::parse_from_rfc3339(text)
             .map(|at| json!(at.to_utc().to_rfc3339_opts(SecondsFormat::Millis, true)))
