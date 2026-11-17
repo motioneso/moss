@@ -54,7 +54,7 @@ fn units(text: &str) -> usize {
 }
 
 /// JavaScript trims these, including the byte order mark that Rust leaves alone.
-fn trim(text: &str) -> &str {
+pub fn trim(text: &str) -> &str {
     text.trim_matches(|c: char| c.is_whitespace() || c == '\u{feff}')
 }
 

@@ -10,4 +10,5 @@
 - The Pantry works through chat: read it, add, change and remove items, and add, rename and remove Staples. Changing the Pantry updates a list that follows a plan, and a finished plan day does the same.
 - Removing a line or item and marking lines as bought each leave an undo record. Undoing is not part of this package yet.
 - Clearing a list removes its lines and nothing else.
-- Recipes beyond plans, the food log, the wider pantry maths and screens are not part of this package yet.
+- The food log works through chat: log a meal from a description, read a day or a range, add up a range, retry an estimate, correct a meal or one of its foods, and delete a meal. A new meal is saved at once as pending and a background job estimates its calories and macros. An estimate is always shown as an estimate, and anything it cannot tell stays unknown, never zero.
+- Recipes beyond plans, the wider pantry maths and screens are not part of this package yet.

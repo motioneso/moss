@@ -2,11 +2,12 @@
   "schemaVersion": 2,
   "id": "meals",
   "name": "Meals",
-  "description": "Private kitchen and household for meal planning, with meal plans written day by day in the background, under the host's approval rules. Shopping lists and the pantry work through chat. Recipes beyond plans, the food log and the wider pantry maths are not part of this package yet. No screens.",
+  "description": "Private kitchen and household for meal planning, with meal plans written day by day in the background, under the host's approval rules. Shopping lists, the pantry and the food log work through chat, and a background job estimates each logged meal. Recipes beyond plans and the wider pantry maths are not part of this package yet. No screens.",
   "publisher": "Moss",
   "version": "0.1.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
+  "callLimitMs": 30000,
   "abi": "moss:module@1",
   "capabilities": [
     {
@@ -27,13 +28,16 @@
         "app.meals_staples",
         "app.meals_shopping_lists",
         "app.meals_shopping_list_items",
-        "app.meals_undo_actions"
+        "app.meals_undo_actions",
+        "app.meals_log_entries",
+        "app.meals_log_estimates",
+        "app.meals_log_estimate_items"
       ]
     },
     {
       "port": "context",
-      "operations": ["read", "uuid"],
-      "resources": ["call", "new"]
+      "operations": ["read", "uuid", "local-date"],
+      "resources": ["call", "new", "account"]
     },
     {
       "port": "tools",
@@ -53,7 +57,13 @@
         "meals.list.bought",
         "meals.list.clear",
         "meals.pantry.get",
-        "meals.pantry.edit"
+        "meals.pantry.edit",
+        "meals.log.list",
+        "meals.log.summarize",
+        "meals.log.add",
+        "meals.log.reestimate",
+        "meals.log.correct",
+        "meals.log.delete"
       ]
     },
     {
@@ -64,7 +74,7 @@
     {
       "port": "jobs",
       "operations": ["enqueue-options"],
-      "resources": ["meals-plan-day"]
+      "resources": ["meals-plan-day", "meals-log-estimate"]
     }
   ],
   "database": {
@@ -288,6 +298,22 @@
           "description": "The tool cannot run without approval. Ask for approval for these exact inputs and try again."
         }
       ]
+    },
+    {
+      "id": "meals.chat-log",
+      "description": "Chat can log what you ate from a description, read a day or a range of up to 31 days, add up a range of up to 92 days, retry an estimate, correct a meal or one of its foods, and delete a meal. A new meal is saved at once as pending and a background job estimates its calories and macros. Every estimate is shown as an estimate, and anything the estimate could not tell stays unknown, never zero. Each person sees only their own log. Adding, retrying and correcting need the host's one-use approval, and deleting asks every time.",
+      "errors": [
+        {
+          "code": "invalid_input",
+          "class": "validation",
+          "description": "A field is missing or out of range, the meal id names no meal of yours, or the time could not be read. Read the log and try again with corrected input."
+        },
+        {
+          "code": "approval_required",
+          "class": "validation",
+          "description": "The tool cannot run without approval. Ask for approval for these exact inputs and try again."
+        }
+      ]
     }
   ],
   "tools": {
@@ -350,9 +376,41 @@
     "meals.pantry.edit": {
       "description": "Add, change or remove a Pantry item or a Staple. action is add, update or remove. target is item (the default) or staple. add needs a name and takes an optional quantity and unit for an item; no quantity means the household has some. update changes an item by itemId, or renames a Staple by stapleId. Removing an item records an undo entry, but there is no undo tool yet. Changing the Pantry updates a shopping list that follows a plan.",
       "risk": "write"
+    },
+    "meals.log.list": {
+      "description": "List logged meals for one day (localDate) or a range of up to 31 days (fromLocalDate and toLocalDate). A single day also returns the day's totals, the self member's daily targets and how the calories compare to the calorie target. Totals count only estimated meals. A meal still being estimated is counted in entriesWithoutEstimate, never as zero.",
+      "risk": "read"
+    },
+    "meals.log.summarize": {
+      "description": "Add up nutrition across a date range of up to 92 days. Meals without an estimate are counted, never treated as zero.",
+      "risk": "read"
+    },
+    "meals.log.add": {
+      "description": "Log a meal from a description. The meal is saved at once as pending and Moss estimates calories and macros in the background. Read it again with meals.log.list to see the estimate. A retry with the same idempotencyKey returns the same meal.",
+      "risk": "write"
+    },
+    "meals.log.reestimate": {
+      "description": "Retry the estimate for a meal that is still pending or whose estimate failed. A meal that already has an estimate is left alone. Use meals.log.correct to change one.",
+      "risk": "write"
+    },
+    "meals.log.correct": {
+      "description": "Correct a logged meal's description, serving note, time or one of the foods in it. Pass the expectedRevision from the last read. A stale revision is refused. The meal's totals are recalculated from its foods.",
+      "risk": "write"
+    },
+    "meals.log.delete": {
+      "description": "Delete a logged meal.",
+      "risk": "destructive"
     }
   },
   "jobs": {
+    "meals-log-estimate": {
+      "entry-id": {
+        "kind": "id"
+      },
+      "revision": {
+        "kind": "count"
+      }
+    },
     "meals-plan-day": {
       "plan-id": {
         "kind": "id"
