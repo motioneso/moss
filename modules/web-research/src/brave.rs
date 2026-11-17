@@ -1,6 +1,6 @@
 //! The Brave Search request and reply. The key never appears here. The host attaches it.
 use crate::gate::{BRAVE_HOST, BRAVE_KEY};
-use crate::search::{Freshness, Found, Query};
+use crate::search::{Found, Freshness, Query};
 use moss_module_sdk::Host;
 use serde_json::{json, Value};
 
@@ -45,7 +45,10 @@ pub fn search<H: Host + ?Sized>(host: &H, query: &Query) -> Result<Vec<Found>, (
             json!({"credential": BRAVE_KEY, "url": url(query), "method": "GET"}),
         )
         .map_err(|_| ())?;
-    if !reply["status"].as_u64().is_some_and(|s| (200..300).contains(&s)) {
+    if !reply["status"]
+        .as_u64()
+        .is_some_and(|s| (200..300).contains(&s))
+    {
         return Err(());
     }
     Ok(parse(&reply["body"]))
@@ -64,7 +67,10 @@ pub fn parse(body: &Value) -> Vec<Found> {
                     title: text(&row["title"]),
                     url: text(&row["url"]),
                     snippet: text(&row["description"]),
-                    published_at: row["age"].as_str().filter(|a| !a.is_empty()).map(str::to_owned),
+                    published_at: row["age"]
+                        .as_str()
+                        .filter(|a| !a.is_empty())
+                        .map(str::to_owned),
                 })
                 .collect()
         })

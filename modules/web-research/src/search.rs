@@ -1,6 +1,9 @@
 //! One search, shaped like the old `web.search` tool: the query cut to 200 characters, at most
 //! five results, and a trace that says what was cut.
-use crate::{brave, gate::{self, Engine}};
+use crate::{
+    brave,
+    gate::{self, Engine},
+};
 use moss_module_sdk::Host;
 use serde_json::{json, Map, Value};
 
@@ -50,7 +53,10 @@ fn cut(text: &str) -> (String, bool) {
 
 pub fn parse(input: &Value) -> Query {
     let (text, truncated) = cut(input["query"].as_str().unwrap_or(""));
-    let requested = input["limit"].as_f64().filter(|n| n.is_finite()).unwrap_or(DEFAULT_RESULTS);
+    let requested = input["limit"]
+        .as_f64()
+        .filter(|n| n.is_finite())
+        .unwrap_or(DEFAULT_RESULTS);
     let limit = requested.trunc().clamp(1.0, MAX_RESULTS as f64) as usize;
     let freshness = match input["freshness"].as_str() {
         Some("any") => Some(Freshness::Any),
@@ -59,13 +65,25 @@ pub fn parse(input: &Value) -> Query {
         Some("month") => Some(Freshness::Month),
         _ => None,
     };
-    Query { text, limit, freshness, truncated, limit_cut: requested > limit as f64 }
+    Query {
+        text,
+        limit,
+        freshness,
+        truncated,
+        limit_cut: requested > limit as f64,
+    }
 }
 
 /// The host name of an address, or empty when it has none.
 pub fn domain(address: &str) -> String {
-    let Some((scheme, rest)) = address.split_once("://") else { return String::new() };
-    if scheme.is_empty() || !scheme.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'-' | b'.')) {
+    let Some((scheme, rest)) = address.split_once("://") else {
+        return String::new();
+    };
+    if scheme.is_empty()
+        || !scheme
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'-' | b'.'))
+    {
         return String::new();
     }
     let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
@@ -120,7 +138,11 @@ pub fn run<H: Host + ?Sized>(host: &H, input: &Value) -> Result<Value, &'static 
         Engine::None(reason) => Ok(unavailable(&query, "unavailable", Some(reason.as_str()))),
         // The host returns the model's words without the pages it cited. The old search refused
         // an address no citation backed, so this engine gives no results until it can.
-        Engine::ModelNative => Ok(unavailable(&query, "model-native", Some("citations-not-available"))),
+        Engine::ModelNative => Ok(unavailable(
+            &query,
+            "model-native",
+            Some("citations-not-available"),
+        )),
         Engine::Brave => {
             let found = brave::search(host, &query).map_err(|()| SEARCH_DOWN)?;
             let results = shaped(&found, query.limit);

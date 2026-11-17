@@ -43,11 +43,13 @@ impl Fake {
     }
     pub fn tool(&self, parameters: Value) -> Value {
         let payload = json!({"tool": "web.search", "parameters": parameters}).to_string();
-        serde_json::from_str(&moss_web_research_module::handle(self, "tool", &payload).unwrap()).unwrap()
+        serde_json::from_str(&moss_web_research_module::handle(self, "tool", &payload).unwrap())
+            .unwrap()
     }
     pub fn api(&self, name: &str, parameters: Value) -> Value {
         let payload = json!({"name": name, "parameters": parameters}).to_string();
-        serde_json::from_str(&moss_web_research_module::handle(self, "api", &payload).unwrap()).unwrap()
+        serde_json::from_str(&moss_web_research_module::handle(self, "api", &payload).unwrap())
+            .unwrap()
     }
     pub fn route(&self, method: &str, path: &str) -> (u16, Value) {
         let request = RouteRequest {
@@ -63,8 +65,19 @@ impl Fake {
 }
 
 impl Host for Fake {
-    fn call(&self, port: &str, operation: &str, resource: &str, parameters: Value) -> Result<Value> {
-        self.calls.borrow_mut().push((port.into(), operation.into(), resource.into(), parameters.clone()));
+    fn call(
+        &self,
+        port: &str,
+        operation: &str,
+        resource: &str,
+        parameters: Value,
+    ) -> Result<Value> {
+        self.calls.borrow_mut().push((
+            port.into(),
+            operation.into(),
+            resource.into(),
+            parameters.clone(),
+        ));
         match (port, operation) {
             ("credentials", "status") => Ok(json!({"configured": *self.key_saved.borrow()})),
             ("credentials", "request") => match self.brave.borrow().clone() {

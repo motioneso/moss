@@ -72,8 +72,13 @@ pub fn decide(key_saved: bool, native_enabled: bool, model: Option<bool>) -> Eng
 }
 
 fn key_saved<H: Host + ?Sized>(host: &H) -> bool {
-    host.call("credentials", "status", BRAVE_HOST, json!({"credential": BRAVE_KEY}))
-        .is_ok_and(|v| v["configured"] == true)
+    host.call(
+        "credentials",
+        "status",
+        BRAVE_HOST,
+        json!({"credential": BRAVE_KEY}),
+    )
+    .is_ok_and(|v| v["configured"] == true)
 }
 
 /// On unless an administrator turned it off. A missing or unreadable switch counts as on.
@@ -86,7 +91,9 @@ fn native_enabled<H: Host + ?Sized>(host: &H) -> bool {
 
 fn chat_model<H: Host + ?Sized>(host: &H) -> Option<bool> {
     let reply = host.call("ai", "capabilities", "chat", json!({})).ok()?;
-    reply["model"].is_object().then(|| reply["model"]["webSearch"] == true)
+    reply["model"]
+        .is_object()
+        .then(|| reply["model"]["webSearch"] == true)
 }
 
 /// Reads the three inputs through the host and decides. A host answer that cannot be read counts

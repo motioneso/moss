@@ -26,8 +26,14 @@ fn query_text_only_reaches_the_provider_address() {
 fn failures_never_echo_the_query_or_reply() {
     let host = Fake::new().with_key();
     *host.brave.borrow_mut() = Some((400, json!({"error": MARKER})));
-    assert!(!host.tool(json!({"query": MARKER})).to_string().contains(MARKER));
-    assert!(!host.api("webSearch", json!({"query": MARKER})).to_string().contains(MARKER));
+    assert!(!host
+        .tool(json!({"query": MARKER}))
+        .to_string()
+        .contains(MARKER));
+    assert!(!host
+        .api("webSearch", json!({"query": MARKER}))
+        .to_string()
+        .contains(MARKER));
 }
 
 #[test]

@@ -25,7 +25,11 @@ pub fn route_from<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response
 }
 
 /// The same entry point runs natively in tests and inside the packaged component.
-pub fn handle<H: Host + ?Sized>(host: &H, kind: &str, payload: &str) -> moss_module_sdk::Result<String> {
+pub fn handle<H: Host + ?Sized>(
+    host: &H,
+    kind: &str,
+    payload: &str,
+) -> moss_module_sdk::Result<String> {
     match kind {
         "health" | "install" => Ok("{}".into()),
         "route" => {
@@ -34,11 +38,14 @@ pub fn handle<H: Host + ?Sized>(host: &H, kind: &str, payload: &str) -> moss_mod
         }
         "tool" => {
             let request = serde_json::from_str(payload)?;
-            let result = tools::handle(host, request).map_err(|_| moss_module_sdk::Error::new("Web Research tool failed"))?;
+            let result = tools::handle(host, request)
+                .map_err(|_| moss_module_sdk::Error::new("Web Research tool failed"))?;
             Ok(serde_json::to_string(&result)?)
         }
         "api" => api(host, payload),
-        _ => Err(moss_module_sdk::Error::new("Unsupported Web Research invocation")),
+        _ => Err(moss_module_sdk::Error::new(
+            "Unsupported Web Research invocation",
+        )),
     }
 }
 
