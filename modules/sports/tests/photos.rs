@@ -243,3 +243,64 @@ fn private_text_stays_out_of_every_side_channel() {
         }
     }
 }
+
+#[test]
+fn the_model_is_not_started_with_too_little_time_left() {
+    let f = Src::new();
+    let (src, stories) = stale_setup(&f);
+    f.reply(RULE_REPLY);
+    let budget = Budget::at(1_794_000_000_000 - 16_000);
+    photo_pass::run(&f, &budget, &src, &stories).unwrap();
+    assert!(f.prompts().is_empty(), "the model was started with under 15 seconds left");
+    assert!(row(&f)["photo_relook_at"].is_null(), "no relook day was recorded as if the model had said no");
+    assert_eq!(row(&f)["photo_rule_state"], "stale");
+}
+
+#[test]
+fn one_refresh_stores_at_most_24_new_pictures_and_the_rest_are_not_misses() {
+    let f = Src::new();
+    let template = source(&f, A, "in_use", 1);
+    let budget = Budget::open(&f).unwrap();
+    let mut found = Vec::new();
+    for s in 0..3u32 {
+        let mut src = template.clone();
+        src["id"] = json!(format!("00000000-0000-4000-8000-0000000001{s:02}"));
+        let stories: Vec<Story> = (0..12u32)
+            .map(|i| {
+                let n = s * 12 + i + 1;
+                let url = format!("https://news.example.com/p{n}.png");
+                f.image(&url, "PIXELS");
+                story(n, Some(&url))
+            })
+            .collect();
+        found.push(photo_pass::run(&f, &budget, &src, &stories).unwrap());
+    }
+    assert_eq!(found, vec![12, 12, 0]);
+    let jpgs = f.vault_names(A).iter().filter(|n| n.ends_with(".jpg")).count();
+    assert_eq!(jpgs, 24);
+    assert_eq!(row(&f)["photo_miss_streak"], 1, "skipped stories are not misses");
+}
+
+#[test]
+fn a_picture_that_is_too_large_after_re_encoding_does_not_stop_the_pass() {
+    let f = Src::new();
+    let src = source(&f, A, "none", 0);
+    f.image("https://news.example.com/huge.png", "HUGE");
+    f.image("https://news.example.com/ok.png", "PIXELS");
+    let stories = [story(1, Some("https://news.example.com/huge.png")), story(2, Some("https://news.example.com/ok.png"))];
+    assert_eq!(run(&f, &src, &stories), 1);
+    assert_eq!(f.vault_names(A).len(), 2);
+}
+
+#[test]
+fn a_failed_save_counts_as_one_miss_and_the_pass_carries_on() {
+    let f = Src::new();
+    let src = source(&f, A, "in_use", 1);
+    f.put_fails.set(true);
+    f.image("https://news.example.com/one.png", "PIXELS");
+    f.image("https://news.example.com/two.png", "PIXELS");
+    let stories = [story(1, Some("https://news.example.com/one.png")), story(2, Some("https://news.example.com/two.png"))];
+    assert_eq!(run(&f, &src, &stories), 0);
+    assert!(f.fetched().contains(&"https://news.example.com/two.png".to_owned()), "the second story was still tried");
+    assert_eq!(row(&f)["photo_miss_streak"], 2, "a refresh with only misses adds one to the streak");
+}

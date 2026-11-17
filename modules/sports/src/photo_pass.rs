@@ -219,6 +219,10 @@ fn relook<H: Host + ?Sized>(host: &H, budget: &Budget, source: &Value, stories: 
     if pages.len() < 2 {
         return Ok(());
     }
+    // Too little time is not a "no" from the model, so no relook day is recorded.
+    if !budget.may_start_within(host, crate::photo_discovery::MODEL_MARGIN_MS)? {
+        return Ok(());
+    }
     match propose(host, budget, &pages, &confirmed)? {
         Some(rule) => write(host, id, vec![("photo_rule_json", rule.to_value()), ("photo_rule_state", json!("in_use")), ("photo_miss_streak", json!(0)), ("photo_relook_at", Value::Null), ("photo_last_outcome", json!("working"))]),
         None => write(host, id, vec![("photo_relook_at", json!(iso(now + RELOOK_MS)))]),

@@ -37,6 +37,8 @@ pub struct Src {
     pub vault: RefCell<BTreeMap<(String, String), Value>>,
     /// How many milliseconds every fetch takes.
     pub fetch_cost: Cell<i64>,
+    /// Makes every photo save fail.
+    pub put_fails: Cell<bool>,
     ids: Cell<u32>,
 }
 
@@ -54,6 +56,7 @@ impl Src {
             replies: RefCell::new(vec![]),
             vault: RefCell::new(BTreeMap::new()),
             fetch_cost: Cell::new(0),
+            put_fails: Cell::new(false),
             ids: Cell::new(1),
         }
     }
@@ -66,9 +69,13 @@ impl Src {
             "reencode" => match p["bodyBase64"].as_str().unwrap_or("") {
                 "TINY" => json!({"ok":false,"reason":"too-small"}),
                 "BAD" => json!({"ok":false,"reason":"undecodable"}),
+                "HUGE" => json!({"ok":false,"reason":"too-large"}),
                 body => json!({"ok":true,"contentType":"image/jpeg","bodyBase64":format!("JPEG:{body}"),"width":640,"height":360,"originalWidth":1600,"originalHeight":900,"bytes":2048}),
             },
             "put" => {
+                if self.put_fails.get() {
+                    return Err(Error::new("Sports host call failed"));
+                }
                 vault.insert(key(name), p.clone());
                 json!({})
             }
