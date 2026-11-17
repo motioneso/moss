@@ -397,3 +397,11 @@ mod shape_tests {
         }
     }
 }
+
+/// Public host projection for modules that only need to know whether Notes is linked.
+/// Preserves the legacy non-empty-string preference rule without exposing the path.
+pub async fn notes_folder_configured(cx: &DataContext) -> Result<bool> {
+    Ok(cx.db().query_one(
+        "SELECT COALESCE((SELECT jsonb_typeof(value_json)='string' AND value_json #>> '{}' <> '' FROM app.preferences WHERE owner_user_id=app.current_actor_user_id() AND key='notes-source-path'),false)", &[]
+    ).await?.get(0))
+}

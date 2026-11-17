@@ -1,3 +1,8 @@
+# 0.1.1
+
+- Add chat read and approved append, deterministic approval details, and account export/deletion.
+- Use the public host Notes-folder projection.
+
 # Scratchpad package
 
 ## 0.1.0

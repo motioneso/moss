@@ -1390,6 +1390,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "moss-module-host",
+ "moss-module-sdk",
  "moss-platform-jobs",
  "moss-scratchpad-module",
  "ring",

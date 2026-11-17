@@ -2,16 +2,16 @@
 mod common;
 #[path = "people_routes/installed.rs"]
 mod installed;
+use access_context::AccessContext;
 use common::Keys;
 use moss_module_host::{
     archive::Package,
     registry::{Artifact, Channel, Index, Source},
     trust::{self, Publisher, RegistryIdentity},
 };
-use std::collections::{BTreeMap, BTreeSet};
-use access_context::AccessContext;
 use safety_core::db::{Database, RuntimeRole};
 use serde_json::{json, Value};
+use std::collections::{BTreeMap, BTreeSet};
 use std::{
     fs,
     path::Path,
@@ -66,7 +66,9 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
     // MOSS_SCRATCHPAD_HOST names the address another device uses. When set, the listener binds
     // every interface and trusts that origin, and MOSS_SCRATCHPAD_REMOTE_SSH names a device
     // that asks the server for the signed-in status from there.
-    let remote = std::env::var("MOSS_SCRATCHPAD_HOST").ok().map(|host| format!("https://{host}:{}", port.0));
+    let remote = std::env::var("MOSS_SCRATCHPAD_HOST")
+        .ok()
+        .map(|host| format!("https://{host}:{}", port.0));
     let cert = root.join("tls/certificate.pem");
     assert!(Command::new(std::env::var("JS170_CERTIFICATE").unwrap())
         .args(["local-certificate"])
@@ -102,7 +104,10 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
         &root.join("credentials.json"),
         &json!({"app_url":app_url,"auth_url":auth_url,"auth_secret":"temporary-disposable-scratchpad-signing-secret-235","connector_key":connector_key}),
     );
-    let origins: Vec<String> = [Some(origin.clone()), remote.clone()].into_iter().flatten().collect();
+    let origins: Vec<String> = [Some(origin.clone()), remote.clone()]
+        .into_iter()
+        .flatten()
+        .collect();
     private(
         &root.join("network.json"),
         &json!({"listen":format!("{}:{}",if remote.is_some() {"0.0.0.0"} else {"127.0.0.1"},port.0),"origins":origins,"sharing":remote.is_some(),"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
@@ -158,7 +163,10 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
         let response = client.post(format!("{origin}/api/auth/sign-up/email")).header("origin", &origin).json(&json!({"name":name,"email":email,"password":"temporary-scratchpad-password-235-not-a-real-secret"})).send().unwrap();
         let status = response.status();
         if status != 200 {
-            panic!("sign-up answered {status}: {}", response.text().unwrap_or_default());
+            panic!(
+                "sign-up answered {status}: {}",
+                response.text().unwrap_or_default()
+            );
         }
         response.headers()["set-cookie"]
             .to_str()
@@ -208,32 +216,36 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
     let keys = Keys::new();
     fs::create_dir_all(root.join("registry/packages")).unwrap();
     let artifacts: Vec<Artifact> = [("JS286_SCRATCHPAD_PACKAGE", "scratchpad")]
-    .iter()
-    .map(|(variable, id)| {
-        let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
-        let digest = trust::digest(&bytes);
-        let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
-        let manifest = &package.manifest;
-        assert_eq!(manifest.id, *id);
-        fs::write(root.join(format!("registry/packages/{digest}.mosspkg")), &bytes).unwrap();
-        Artifact {
-            id: manifest.id.clone(),
-            version: manifest.version.clone(),
-            digest: digest.clone(),
-            size: bytes.len() as u64,
-            publisher_key: "scratchpad-test".into(),
-            signature: Keys::sign(&keys.publisher, digest.as_bytes()),
-            requires_moss: manifest.requires_moss.clone(),
-            abi: manifest.abi.clone(),
-            capabilities: manifest.capabilities.clone(),
-            migrations: manifest.database.migrations.clone(),
-            requires: manifest.requires.clone(),
-            changelog: "Scratchpad live gate".into(),
-            channel: Channel::Stable,
-            urgent: false,
-        }
-    })
-    .collect();
+        .iter()
+        .map(|(variable, id)| {
+            let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
+            let digest = trust::digest(&bytes);
+            let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
+            let manifest = &package.manifest;
+            assert_eq!(manifest.id, *id);
+            fs::write(
+                root.join(format!("registry/packages/{digest}.mosspkg")),
+                &bytes,
+            )
+            .unwrap();
+            Artifact {
+                id: manifest.id.clone(),
+                version: manifest.version.clone(),
+                digest: digest.clone(),
+                size: bytes.len() as u64,
+                publisher_key: "scratchpad-test".into(),
+                signature: Keys::sign(&keys.publisher, digest.as_bytes()),
+                requires_moss: manifest.requires_moss.clone(),
+                abi: manifest.abi.clone(),
+                capabilities: manifest.capabilities.clone(),
+                migrations: manifest.database.migrations.clone(),
+                requires: manifest.requires.clone(),
+                changelog: "Scratchpad live gate".into(),
+                channel: Channel::Stable,
+                urgent: false,
+            }
+        })
+        .collect();
     let identity = RegistryIdentity {
         id: "scratchpad-test-registry".into(),
         name: "Scratchpad test registry".into(),
@@ -257,11 +269,23 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
         revoked: vec![],
     };
     for (name, data, key) in [
-        ("registry.json", serde_json::to_vec(&identity).unwrap(), &keys.root),
-        ("index.json", serde_json::to_vec(&index).unwrap(), &keys.index),
+        (
+            "registry.json",
+            serde_json::to_vec(&identity).unwrap(),
+            &keys.root,
+        ),
+        (
+            "index.json",
+            serde_json::to_vec(&index).unwrap(),
+            &keys.index,
+        ),
     ] {
         fs::write(root.join("registry").join(name), &data).unwrap();
-        fs::write(root.join("registry").join(format!("{name}.sig")), Keys::sign(key, &data)).unwrap();
+        fs::write(
+            root.join("registry").join(format!("{name}.sig")),
+            Keys::sign(key, &data),
+        )
+        .unwrap();
     }
     let installer = installed::reopen(
         &root.join("data"),
@@ -303,18 +327,28 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
         let signed = client.post(format!("{origin}/api/auth/sign-in/email")).header("origin", &origin)
             .json(&json!({"email":"scratchpad-other@example.test","password":"temporary-scratchpad-password-235-not-a-real-secret"})).send().unwrap();
         assert_eq!(signed.status(), 200, "second person sign-in");
-        signed.headers()["set-cookie"].to_str().unwrap().split(';').next().unwrap().to_owned()
+        signed.headers()["set-cookie"]
+            .to_str()
+            .unwrap()
+            .split(';')
+            .next()
+            .unwrap()
+            .to_owned()
     };
     let log = || fs::read_to_string(root.join("server.log")).unwrap_or_default();
     let call = |method: reqwest::Method, path: &str, cookie: Option<&str>, body: Option<Value>| {
-        let mut request = client.request(method, format!("{origin}/api/m/scratchpad{path}")).header("origin", &origin);
+        let mut request = client
+            .request(method, format!("{origin}/api/m/scratchpad{path}"))
+            .header("origin", &origin);
         if let Some(cookie) = cookie {
             request = request.header("cookie", cookie);
         }
         if let Some(body) = body {
             request = request.json(&body);
         }
-        let response = request.send().unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
+        let response = request
+            .send()
+            .unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
         let status = response.status().as_u16();
         let text = response.text().unwrap_or_default();
         println!("{method_path} -> {status}", method_path = path);
@@ -326,39 +360,211 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
     assert_eq!(call(Method::GET, "/note", None, None).0, 401);
     // The server answers 503 until its module host has finished starting.
     let started = std::time::Instant::now();
-    while call(Method::GET, "/note", Some(&cookie), None).0 == 503 && started.elapsed() < std::time::Duration::from_secs(60) {
+    while call(Method::GET, "/note", Some(&cookie), None).0 == 503
+        && started.elapsed() < std::time::Duration::from_secs(60)
+    {
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
     for who in [&cookie, &other] {
         let (status, text) = call(Method::GET, "/note", Some(who), None);
         assert_eq!(status, 200, "{text}\n{}", log());
         let body = json_of(&text);
-        assert_eq!((body["revision"].clone(), body["body"].clone(), body["maxChars"].clone()), (json!(0), json!(""), json!(64000)));
+        assert_eq!(
+            (
+                body["revision"].clone(),
+                body["body"].clone(),
+                body["maxChars"].clone()
+            ),
+            (json!(0), json!(""), json!(64000))
+        );
     }
     // Save, conflict and append work for the owner.
-    let (status, text) = call(Method::PUT, "/note", Some(&cookie), Some(json!({"body": format!("owner {MARK}"), "revision": 0})));
-    assert_eq!((status, json_of(&text)["revision"].clone()), (200, json!(1)), "{text}");
-    let (status, text) = call(Method::PUT, "/note", Some(&cookie), Some(json!({"body": "late", "revision": 0})));
-    assert_eq!((status, json_of(&text)["error"].clone()), (409, json!("scratchpad_conflict")), "{text}");
-    let (status, text) = call(Method::POST, "/append", Some(&cookie), Some(json!({"text": "second"})));
-    assert_eq!((status, json_of(&text)["appended"].clone()), (200, json!("\nsecond")), "{text}");
+    let (status, text) = call(
+        Method::PUT,
+        "/note",
+        Some(&cookie),
+        Some(json!({"body": format!("owner {MARK}"), "revision": 0})),
+    );
+    assert_eq!(
+        (status, json_of(&text)["revision"].clone()),
+        (200, json!(1)),
+        "{text}"
+    );
+    let (status, text) = call(
+        Method::PUT,
+        "/note",
+        Some(&cookie),
+        Some(json!({"body": "late", "revision": 0})),
+    );
+    assert_eq!(
+        (status, json_of(&text)["error"].clone()),
+        (409, json!("scratchpad_conflict")),
+        "{text}"
+    );
+    let (status, text) = call(
+        Method::POST,
+        "/append",
+        Some(&cookie),
+        Some(json!({"text": "second"})),
+    );
+    assert_eq!(
+        (status, json_of(&text)["appended"].clone()),
+        (200, json!("\nsecond")),
+        "{text}"
+    );
+    // The real HTTPS path asks the Wasm guest for stored-record approval details.
+    let input = json!({"text":format!("chat {MARK}")});
+    let (status, text) = call(
+        Method::POST,
+        "/chat/approval",
+        Some(&cookie),
+        Some(input.clone()),
+    );
+    assert_eq!(status, 200);
+    let card = json_of(&text);
+    assert_eq!(card["revision"], 2);
+    assert_eq!(
+        card["characterCount"],
+        format!("owner {MARK}\nsecond").encode_utf16().count()
+    );
+    assert_eq!(card["fields"][0]["value"], input["text"]);
+    assert_eq!(
+        call(
+            Method::POST,
+            "/chat/append",
+            Some(&cookie),
+            Some(input.clone())
+        )
+        .0,
+        500
+    );
+    // Setup the grant through the real trusted host API, as the approval UI does.
+    // No response is intercepted; the server consumes the actual persisted grant.
+    struct NoAi;
+    impl moss_module_host::ai::Intelligence for NoAi {
+        fn generate(
+            &self,
+            _: &moss_module_host::runtime::CallScope,
+            _: &moss_module_host::runtime::Request,
+        ) -> anyhow::Result<Value> {
+            anyhow::bail!("No AI")
+        }
+        fn embed(
+            &self,
+            _: &moss_module_host::runtime::CallScope,
+            _: &moss_module_host::runtime::Request,
+        ) -> anyhow::Result<Value> {
+            anyhow::bail!("No AI")
+        }
+    }
+    let services = moss_module_host::services::ServicePorts::new(
+        &root.join("data"),
+        std::sync::Arc::new(
+            safety_core::secret::SecretCipher::connectors(&Default::default()).unwrap(),
+        ),
+        std::sync::Arc::new(NoAi),
+        std::sync::Arc::new(moss_module_host::runtime::DenyPorts),
+    )
+    .unwrap();
+    services
+        .approve_tool(&access, "scratchpad", "scratchpad.append", &input)
+        .unwrap();
+    assert_eq!(
+        call(
+            Method::POST,
+            "/chat/append",
+            Some(&other),
+            Some(input.clone())
+        )
+        .0,
+        500
+    );
+    let (status, text) = call(
+        Method::POST,
+        "/chat/append",
+        Some(&cookie),
+        Some(input.clone()),
+    );
+    assert_eq!(status, 200);
+    assert_eq!(json_of(&text)["data"]["appended"], format!("\nchat {MARK}"));
+    assert_eq!(
+        call(Method::POST, "/chat/append", Some(&cookie), Some(input)).0,
+        500
+    );
+    let (status, text) = call(Method::GET, "/chat/read", Some(&cookie), None);
+    assert_eq!(status, 200);
+    assert_eq!(
+        json_of(&text)["data"]["body"],
+        format!("owner {MARK}\nsecond\nchat {MARK}")
+    );
+    println!("scratchpad live: stored-record approval, denied unapproved/other-account/replay, approved chat append through HTTPS");
     // The other person sees none of it, and cannot save over it.
     let (_, text) = call(Method::GET, "/note", Some(&other), None);
     let seen = json_of(&text);
-    assert_eq!((seen["body"].clone(), seen["revision"].clone()), (json!(""), json!(0)));
+    assert_eq!(
+        (seen["body"].clone(), seen["revision"].clone()),
+        (json!(""), json!(0))
+    );
     assert!(!text.contains(MARK));
-    let (status, text) = call(Method::PUT, "/note", Some(&other), Some(json!({"body": "taken", "revision": 1})));
+    let (status, text) = call(
+        Method::PUT,
+        "/note",
+        Some(&other),
+        Some(json!({"body": "taken", "revision": 1})),
+    );
     assert_eq!(status, 409, "{text}");
-    assert!(!text.contains(MARK), "a conflict must not show another person's note");
+    assert!(
+        !text.contains(MARK),
+        "a conflict must not show another person's note"
+    );
     let (_, text) = call(Method::GET, "/note", Some(&cookie), None);
-    assert_eq!(json_of(&text)["body"], json!(format!("owner {MARK}\nsecond")));
+    assert_eq!(
+        json_of(&text)["body"],
+        json!(format!("owner {MARK}\nsecond\nchat {MARK}"))
+    );
     // Settings, validation and unknown routes.
-    let (status, text) = call(Method::PATCH, "/settings", Some(&cookie), Some(json!({"shortcut": "alt+j"})));
-    assert_eq!((status, json_of(&text)["shortcut"].clone()), (200, json!("alt+j")), "{text}");
-    let (status, text) = call(Method::PATCH, "/settings", Some(&cookie), Some(json!({"syncToNotes": true})));
-    assert_eq!((status, json_of(&text)["code"].clone()), (409, json!("scratchpad_notes_folder_missing")), "{text}");
-    assert_eq!(call(Method::PATCH, "/settings", Some(&cookie), Some(json!({"shortcut": "ctrl+k"}))).0, 400);
-    assert_eq!(call(Method::PUT, "/note", Some(&cookie), Some(json!({"body": 3, "revision": 0}))).0, 400);
+    let (status, text) = call(
+        Method::PATCH,
+        "/settings",
+        Some(&cookie),
+        Some(json!({"shortcut": "alt+j"})),
+    );
+    assert_eq!(
+        (status, json_of(&text)["shortcut"].clone()),
+        (200, json!("alt+j")),
+        "{text}"
+    );
+    let (status, text) = call(
+        Method::PATCH,
+        "/settings",
+        Some(&cookie),
+        Some(json!({"syncToNotes": true})),
+    );
+    assert_eq!(
+        (status, json_of(&text)["code"].clone()),
+        (409, json!("scratchpad_notes_folder_missing")),
+        "{text}"
+    );
+    assert_eq!(
+        call(
+            Method::PATCH,
+            "/settings",
+            Some(&cookie),
+            Some(json!({"shortcut": "ctrl+k"}))
+        )
+        .0,
+        400
+    );
+    assert_eq!(
+        call(
+            Method::PUT,
+            "/note",
+            Some(&cookie),
+            Some(json!({"body": 3, "revision": 0}))
+        )
+        .0,
+        400
+    );
     // The server refuses a route the manifest does not declare before the module runs.
     assert_eq!(call(Method::DELETE, "/note", Some(&cookie), None).0, 400);
     // A second device on the network reaches the same server and sees only its own account.
@@ -375,9 +581,41 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
             String::from_utf8_lossy(&output.stdout).trim().to_owned()
         };
         let (signed_out, signed_in) = (ask("none=1"), ask(&cookie));
-        println!("scratchpad live: another device got {signed_out} signed out and {signed_in} signed in");
-        assert_eq!((signed_out.as_str(), signed_in.as_str()), ("401", "200"), "the other device must reach the server");
+        println!(
+            "scratchpad live: another device got {signed_out} signed out and {signed_in} signed in"
+        );
+        assert_eq!(
+            (signed_out.as_str(), signed_in.as_str()),
+            ("401", "200"),
+            "the other device must reach the server"
+        );
     }
+    let (status, text) = call(Method::GET, "/account/export", Some(&cookie), None);
+    assert_eq!(status, 200);
+    assert_eq!(
+        json_of(&text)["scratchpad"]["body"],
+        format!("owner {MARK}\nsecond\nchat {MARK}")
+    );
+    assert_eq!(
+        call(Method::DELETE, "/account/data", Some(&other), None).0,
+        200
+    );
+    let (_, text) = call(Method::GET, "/account/export", Some(&cookie), None);
+    assert!(json_of(&text)["scratchpad"]["body"]
+        .as_str()
+        .unwrap()
+        .contains(MARK));
+    let (status, text) = call(Method::DELETE, "/account/data", Some(&cookie), None);
+    assert_eq!(status, 200);
+    assert_eq!(json_of(&text)["deleted"], 1);
+    let (_, text) = call(Method::GET, "/account/export", Some(&cookie), None);
+    assert_eq!(json_of(&text), json!({"scratchpad":null}));
+    assert!(
+        !serde_json::to_string(&services.activity("scratchpad", &access).unwrap())
+            .unwrap()
+            .contains(MARK)
+    );
+    println!("scratchpad live: account export and deletion run through HTTPS, activity and server log contain no planted text");
     // Nothing the test sent reached the server log.
     assert!(!log().contains(MARK));
     println!("scratchpad live: read, save, conflict, append and settings worked over HTTPS for two people");

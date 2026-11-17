@@ -4,17 +4,26 @@
   "name": "Scratchpad",
   "description": "One private note for each person, for quick jot-downs. Read it, save over it, add a line to the end, and change its shortcut and notes copying.",
   "publisher": "Moss",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
   "capabilities": [
     {
       "port": "kv",
-      "operations": ["get", "put", "append", "settings"],
+      "operations": ["get", "put", "append", "settings", "export", "delete"],
       "resources": ["scratchpad.store"]
     },
-    { "port": "context", "operations": ["read"], "resources": ["call"] }
+    {
+      "port": "context",
+      "operations": ["read"],
+      "resources": ["call"]
+    },
+    {
+      "port": "tools",
+      "operations": ["run"],
+      "resources": ["scratchpad.append"]
+    }
   ],
   "database": {
     "migrations": ["sql/0216_scratchpads.sql"],
@@ -22,14 +31,67 @@
     "ledger": "core-legacy"
   },
   "routes": [
-    { "method": "GET", "path": "/note", "signIn": true },
-    { "method": "PUT", "path": "/note", "signIn": true },
-    { "method": "POST", "path": "/append", "signIn": true },
-    { "method": "PATCH", "path": "/settings", "signIn": true }
+    {
+      "method": "GET",
+      "path": "/note",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/note",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/append",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/settings",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/chat/read",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/chat/approval",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/chat/append",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/account/export",
+      "signIn": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/account/data",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/chat/settings-approval",
+      "signIn": true
+    }
   ],
   "icons": ["icons/scratchpad.svg"],
-  "accounts": { "supportsUserDisable": false, "defaultEnabled": true },
-  "lifecycle": { "required": true, "bundled": true, "removable": false },
+  "accounts": {
+    "supportsUserDisable": false,
+    "defaultEnabled": true
+  },
+  "lifecycle": {
+    "required": true,
+    "bundled": true,
+    "removable": false
+  },
   "jobs": {},
   "screens": {},
   "navigation": [],
@@ -87,6 +149,42 @@
           "description": "Copying the note to notes was refused because no notes folder is connected yet, so the setting stayed off."
         }
       ]
+    },
+    {
+      "id": "scratchpad.chat",
+      "description": "Chat can read your private note and append up to 2000 characters. Reading returns outside content. Preparing approval details reads the stored revision and character count without changing the note. Append requires an account-bound one-use grant for the exact submitted text; no chat replace or delete tool is offered. The host chat interface must render these details and grant approval. No Scratchpad screen is included.",
+      "errors": [
+        {
+          "code": "scratchpad_empty_text",
+          "class": "validation",
+          "description": "Cannot append empty text. Say what the line should read."
+        },
+        {
+          "code": "scratchpad_text_too_long",
+          "class": "validation",
+          "description": "Text is too long to append in one call. Shorten it to 2000 characters."
+        }
+      ]
+    },
+    {
+      "id": "scratchpad.account-data",
+      "description": "Account export includes only your stored Scratchpad text, version, shortcut, notes-copying setting and save time. Account deletion removes only your note, is safe to repeat, and preserves every other person\u2019s note. Public account APIs and authenticated account data routes are available; account-wide export and deletion screens are not joined here."
     }
-  ]
+  ],
+  "tools": {
+    "scratchpad.read": {
+      "description": "Read your private scratchpad. Returned note text is outside content.",
+      "risk": "read"
+    },
+    "scratchpad.append": {
+      "description": "Add a line to your scratchpad with one-use approval. At most 2000 characters, never replaces or deletes text.",
+      "risk": "write"
+    }
+  },
+  "provides": {
+    "prepareScratchpadAction": "1.0.0",
+    "collectScratchpadExportSection": "1.0.0",
+    "deleteScratchpadAccountData": "1.0.0",
+    "prepareScratchpadSettings": "1.0.0"
+  }
 }

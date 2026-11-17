@@ -11,7 +11,7 @@ pub fn is_js_space(c: char) -> bool {
 }
 
 /// Length as the old web code counted it (UTF-16 units).
-fn js_len(text: &str) -> usize {
+pub(crate) fn js_len(text: &str) -> usize {
     text.encode_utf16().count()
 }
 
@@ -20,17 +20,51 @@ fn error(status: u16, message: &str) -> Response {
 }
 
 fn too_large() -> Response {
-    Response::new(413, json!({"code": "scratchpad_too_large", "maxChars": MAX_CHARS}))
+    Response::new(
+        413,
+        json!({"code": "scratchpad_too_large", "maxChars": MAX_CHARS}),
+    )
 }
 
 fn object(request: &RouteRequest) -> std::result::Result<&Map<String, Value>, Response> {
-    request.body.as_object().ok_or_else(|| error(400, "Request body must be an object"))
+    request
+        .body
+        .as_object()
+        .ok_or_else(|| error(400, "Request body must be an object"))
 }
 
 /// Routes use the module-relative path template. Host failures never carry request text.
 pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
     let result = match (request.method.as_str(), request.path.as_str()) {
         ("GET", "/note") => read(host),
+        ("GET", "/chat/read") => crate::tools::execute(
+            host,
+            crate::tools::Request {
+                tool: "scratchpad.read".into(),
+                parameters: json!({}),
+            },
+        )
+        .map(|v| Response::new(200, v)),
+        ("POST", "/chat/settings-approval") => {
+            crate::tools::prepare_settings(host, &request.body).map(|v| Response::new(200, v))
+        }
+        ("POST", "/chat/approval") => {
+            crate::tools::prepare(host, &request.body).map(|v| Response::new(200, v))
+        }
+        ("POST", "/chat/append") => host
+            .call(
+                "tools",
+                "run",
+                "scratchpad.append",
+                json!({"parameters":request.body}),
+            )
+            .map(|v| Response::new(200, v)),
+        ("GET", "/account/export") => {
+            call(host, "export", json!({})).map(|v| Response::new(200, v))
+        }
+        ("DELETE", "/account/data") => {
+            call(host, "delete", json!({})).map(|v| Response::new(200, v))
+        }
         ("PUT", "/note") => replace(host, &request),
         ("POST", "/append") => append(host, &request),
         ("PATCH", "/settings") => settings(host, &request),
@@ -63,7 +97,10 @@ fn replace<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Respons
     }
     let saved = call(host, "put", json!({"body": body, "revision": revision}))?;
     if saved["ok"] == json!(true) {
-        return Ok(Response::new(200, json!({"revision": saved["revision"], "updatedAt": saved["updatedAt"]})));
+        return Ok(Response::new(
+            200,
+            json!({"revision": saved["revision"], "updatedAt": saved["updatedAt"]}),
+        ));
     }
     let current = &saved["current"];
     Ok(Response::new(
@@ -78,7 +115,12 @@ fn replace<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Respons
 }
 
 fn non_negative_integer(value: &Value) -> Option<u64> {
-    value.as_u64().or_else(|| value.as_f64().filter(|n| *n >= 0.0 && n.fract() == 0.0 && *n < 9e15).map(|n| n as u64))
+    value.as_u64().or_else(|| {
+        value
+            .as_f64()
+            .filter(|n| *n >= 0.0 && n.fract() == 0.0 && *n < 9e15)
+            .map(|n| n as u64)
+    })
 }
 
 fn append<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Response> {
@@ -119,11 +161,26 @@ fn settings<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Respon
     let shortcut_text = match map.get("shortcut") {
         None => None,
         Some(Value::String(text)) if shortcut::is_valid(text) => Some(text.as_str()),
-        Some(_) => return Ok(Response::new(400, json!({"code": "scratchpad_shortcut_invalid"}))),
+        Some(_) => {
+            return Ok(Response::new(
+                400,
+                json!({"code": "scratchpad_shortcut_invalid"}),
+            ))
+        }
     };
-    let saved = call(host, "settings", json!({"syncToNotes": sync, "shortcut": shortcut_text}))?;
+    let saved = call(
+        host,
+        "settings",
+        json!({"syncToNotes": sync, "shortcut": shortcut_text}),
+    )?;
     if saved["notesFolderMissing"] == json!(true) {
-        return Ok(Response::new(409, json!({"code": "scratchpad_notes_folder_missing"})));
+        return Ok(Response::new(
+            409,
+            json!({"code": "scratchpad_notes_folder_missing"}),
+        ));
     }
-    Ok(Response::new(200, json!({"syncToNotes": saved["syncToNotes"], "shortcut": saved["shortcut"]})))
+    Ok(Response::new(
+        200,
+        json!({"syncToNotes": saved["syncToNotes"], "shortcut": saved["shortcut"]}),
+    ))
 }
