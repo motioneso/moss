@@ -679,6 +679,47 @@ scripts/run-gate.sh start --gate test:rust-news-live
 - A phone or second computer reaching the server was not re-checked. The package adds no screen or listener.
 - The model's ranking quality and the real daily firing at 04:43 were not observed; the schedule was made due by hand in the test.
 
+## Part 7: pictures, chat tools and briefing news (JS-298)
+
+News now has its chat tools, serves story pictures and publisher icons, builds the approval card for each, and feeds the Briefings news section. This closes the Briefings news gap. No screens.
+
+### What was built
+
+- Chat tools: top headlines, the headline feed for the heartbeat, source status for keyed publishers (a state only, never a secret), source preview, and a refresh that queues one job with no private text.
+- Briefings: the morning and evening briefing now show up to five top stories from News. Nothing is fetched while a briefing is built. With no stored page, or a failed read, the briefing shows a news gap instead of the old "not built" gap.
+- Pictures: `GET /images/:articleId` loads a picture only for a story on the person's own stored page, no older than seven days. `GET /favicon/:domain` loads an icon only for a publisher the person already sees. The shell re-checks type (jpeg, png, gif, webp, icon), file signature, size and status before it sends anything, and caps how long a browser may keep it.
+- Binary replies: module routes could only return JSON. A route may now return a picture, carried as base64 in the reply; the shell turns it back into bytes.
+- Approval cards: for refresh, picture and icon loads, built from the stored record. Extra input gets no card.
+- App map: three new features in the News listing (story pictures, chat tools, briefing headlines).
+
+### Proof
+
+| Claim                                      | Evidence                                                                                                                                                                                   |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Briefings shows news instead of a gap      | Briefings unit tests: stories become lines, no stored page or a failed read is a gap; the gather test no longer expects the "not built" gap                                                |
+| Only checked pictures are served           | Guest tests: wrong signature, wrong type and missing story are refused; shell tests: bad pictures give 502, good ones carry the type, cache limit and no-sniff header                      |
+| A second person sees none of it            | Guest tests and a real-database gate test: another person gets no picture, headline or heartbeat item. With row security removed the real-database test shows the leak, restored it closes |
+| Private text stays out of jobs and logs    | Guest and real-database tests plant a marker in a headline and find it in no job, queue table or notice. The guest test was seen failing when a leak was added on purpose                  |
+| Approval card comes from the stored record | Guest test: the card for a picture takes its target from the stored story, and another person gets none                                                                                    |
+| Native and WebAssembly builds              | The gate runs the guest tests natively, builds the component and runs the package tests against it                                                                                         |
+
+### How to run
+
+```
+scripts/run-gate.sh start --gate test:rust-news
+```
+
+### Not proven or not built
+
+- Story feedback is not built. No usefulness-feedback module exists in Rust yet, and the story reference needs a hashing crate outside the allowed list. Stories carry no feedback reference and no dismissed story is filtered out.
+- A picture is limited to about 700 KB, down from 2 MiB, because it crosses the host as base64 inside a 1 MiB message.
+- The key status tool reads whole credential rows inside the package. The sealed text reaches the package's memory but is never returned or logged.
+- Nothing consumes the approval cards yet, as with Tasks and Notes. They are proven through the package interface only.
+- The old "custom sources need a model" message is not separate. A source lookup that cannot run says discovery is unavailable.
+- The base64 picture fetch through the real host was exercised with a stand-in web in the database test, not a live remote site.
+- No card number was given for this task, so none is recorded.
+- A phone or second computer reaching the server was not re-checked. The package adds no screen or listener.
+
 ## Part 15: host browser port
 
 Adds a host "browser" port. A route call hands it a page address the person confirmed and a list of

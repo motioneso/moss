@@ -12,3 +12,7 @@
 - Each person has a refresh record with the last success, the last failure and why. A failed refresh keeps the previous page.
 - People who added a source or topic get a daily check of those sources at 04:43 UTC. The check updates each source's health, and one notice says "News sources need attention" when something newly needs it.
 - Sources checked under another model setting are checked once more automatically.
+- Chat tools: top headlines, the headline feed for the heartbeat, source status for keyed publishers, source preview, and a refresh that queues one job. Briefings reads the same top five stories. Nothing is fetched while a briefing is built.
+- Story pictures and publisher icons load through the package after the shell re-checks type, signature and size. A picture only loads for a story on the person's own stored page, and an icon only for a publisher they already see. A picture is limited to about 700 KB.
+- The approval card for refresh and for picture and icon loads is built from the stored record.
+- Story feedback is not part of this package yet.

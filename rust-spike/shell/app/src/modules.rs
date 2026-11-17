@@ -805,8 +805,8 @@ async fn dispatch(
     }
 }
 
-/// Old Settings paths for the weather place and unit, served by the Weather package for the
-/// support window. Every other path passes through unchanged.
+/// Old Settings paths for the weather place and unit, and the old News picture and icon paths,
+/// served by the packages for the support window. Every other path passes through unchanged.
 fn alias(target: &str) -> String {
     for (old, new) in [
         ("/api/me/weather-location", "/api/m/weather/location"),
