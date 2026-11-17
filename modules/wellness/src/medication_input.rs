@@ -472,7 +472,7 @@ pub fn dose(body: &Value) -> Result<NewDose, String> {
     let scheduled = nullable_text(map, "scheduledFor")?;
     // A prn log may not name a slot. The route schema asks for null here, and empty text reads as null.
     if status == "prn" && scheduled.as_deref().is_some_and(|t| !t.is_empty()) {
-        return Err("body/scheduledFor must be null, body must match \"then\" schema".into());
+        return Err("body/scheduledFor must be null".into());
     }
     let scheduled = trimmed(scheduled).flatten();
     if status != "prn" && scheduled.is_none() {
