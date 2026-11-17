@@ -220,8 +220,8 @@ impl World {
     fn approve(&self, actor: uuid::Uuid, name: &str, parameters: &Value, version: &str) {
         self.app.services.approve_tool_at_version(&AccessContext::new(actor, "sports-approve"), "sports", name, parameters, version).unwrap();
     }
-    fn source_rows(&self) -> i64 {
-        self.f.rt.block_on(self.f.root.query_one("SELECT count(*) FROM app.sports_custom_sources", &[])).unwrap().get(0)
+    fn source_rows(&self, id: &str) -> i64 {
+        self.f.rt.block_on(self.f.root.query_one("SELECT count(*) FROM app.sports_custom_sources WHERE id::text=$1", &[&id])).unwrap().get(0)
     }
     fn follow_rows(&self, who: uuid::Uuid) -> i64 {
         self.f.rt.block_on(self.f.root.query_one("SELECT count(*) FROM app.sports_follows WHERE owner_user_id=$1", &[&who])).unwrap().get(0)
@@ -611,18 +611,18 @@ fn removing_a_source_asks_first_and_another_person_cannot_use_the_card_and_it_fa
     assert!(card["fields"].to_string().contains("Example Daily"), "{card}");
     // No approval: the host refuses and the row stays.
     assert!(w.tool(a, "sports.removeSource", input.clone()).is_err(), "no approval, no removal");
-    assert_eq!(w.source_rows(), 1);
+    assert_eq!(w.source_rows(&id), 1);
     // An old version is refused by the tool and the row stays.
     w.approve(a, "sports.removeSource", &input, "an-old-version");
     let stale = w.tool(a, "sports.removeSource", input.clone()).unwrap();
     assert!(stale["data"]["error"].as_str().is_some_and(|e| e.contains("approval no longer matches")), "{stale}");
-    assert_eq!(w.source_rows(), 1);
+    assert_eq!(w.source_rows(&id), 1);
     // B has no card for A's source and cannot remove it even with an approval of their own.
     assert_eq!(w.card(b, "sports.removeSource", &input), Value::Null);
     w.approve(b, "sports.removeSource", &input, "guess");
     let theirs = w.tool(b, "sports.removeSource", input.clone()).unwrap();
     assert!(theirs["data"]["error"].is_string(), "{theirs}");
-    assert_eq!(w.source_rows(), 1, "A's source survived B");
+    assert_eq!(w.source_rows(&id), 1, "A's source survived B");
     let listed = w.tool(b, "sports.listSources", json!({}));
     if let Ok(listed) = &listed {
         assert!(!listed.to_string().contains("news.example.com"), "{listed}");
@@ -641,7 +641,7 @@ fn removing_a_source_asks_first_and_another_person_cannot_use_the_card_and_it_fa
     w.approve(a, "sports.removeSource", &input, version);
     let done = w.tool(a, "sports.removeSource", input.clone()).unwrap();
     assert_eq!(done["data"]["removed"], true, "{done}");
-    assert_eq!(w.source_rows(), 0);
+    assert_eq!(w.source_rows(&id), 0);
     assert!(w.tool(a, "sports.removeSource", input).is_err(), "an approval is used once");
     println!("PASS: the approved removal deleted the row and the approval worked once");
 }
