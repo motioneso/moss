@@ -559,7 +559,9 @@ None added.
 - Both packages were checked as registry packages. Each one is packed, listed
   in a signed registry index, fetched back by its fingerprint, and checked
   against the index entry before it is opened. A changed package is refused.
-- An upgrade check runs on data shaped like an existing install. The sealed
+- An upgrade data-shape check runs on rows seeded by hand into the current
+  tables, shaped like an existing install. It does not install an older
+  package version and upgrade it. The sealed
   account secret, the cached mail, the feature switches and the capture
   position all read back unchanged through the upgraded code.
 
@@ -604,8 +606,20 @@ None added.
 - No mailbox is read by the capture itself, as in the old app, where the
   collector was never switched on either.
 
+## Known limits
+
+- Capture stops at a message the model or Notes keeps failing on, so mail
+  behind it waits until it succeeds. This keeps mail from being skipped
+  silently. A retry limit that marks the message and moves on is a later
+  choice.
+- The saved position uses the same key as the old app. If the old shape ever
+  differs, the position resets and a few messages may be judged again. The
+  receipt in the note stops a duplicate entry.
+
 ## Not proven
 
+- An upgrade from an older installed package version (only the data-shape
+  check above ran).
 - One real Google account and one real IMAP account. That pass needs Ben. The
   live pass above used stand-in servers on the real Rust server.
 - A model call with a real configured model. The tests use a fixed answer.

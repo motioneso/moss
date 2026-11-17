@@ -110,8 +110,8 @@ pub fn advance(mut cursor: Cursor, sender: &str, subject: &str, received_at: &st
 }
 
 /// A note is private when its front matter sets `private` to anything but
-/// false. Missing or unreadable front matter is treated as private, so a
-/// doubtful note is never written to.
+/// false. A note with no front matter is not private. An unterminated or
+/// unreadable header counts as private, so a doubtful note is never written to.
 pub fn is_private_note(content: &str) -> bool {
     let text = content.strip_prefix('\u{feff}').unwrap_or(content);
     let Some(rest) = text.strip_prefix("---\n").or_else(|| text.strip_prefix("---\r\n")) else {
