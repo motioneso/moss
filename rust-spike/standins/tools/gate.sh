@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Contract tests for the Google, IMAP and SMTP stand-ins. Native build, no database.
+# Contract tests for the Google, IMAP and SMTP stand-ins and the invented Wellness data. Native build, no database.
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
 [[ "${JARVIS_GATE_RUN:-}" == 1 ]] || { echo 'Use scripts/run-gate.sh' >&2; exit 4; }
