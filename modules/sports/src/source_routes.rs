@@ -407,7 +407,7 @@ pub fn remove<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Resp
     };
     let deleted = sources::remove(host, &id)?;
     // The copies are private files, so they go with the source. If removal fails, no route can
-    // reach the leftover copy, and the retention sweep removes it later.
+    // reach the leftover copy. The retention sweep removes it at the next photo pass.
     if deleted {
         let _ = crate::photo_store::remove_source(host, &id);
     }

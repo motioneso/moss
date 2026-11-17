@@ -56,10 +56,16 @@ fn prompt(pages: &[Page], confirmed: &[String]) -> String {
     )
 }
 
+/// Time a model reply may need. The model is not started with less than this left.
+const MODEL_MARGIN_MS: i64 = 15_000;
+
 /// A rule that works, or nothing. It must find a usable photo on at least two of the pages, and
 /// each photo must download and decode. An unreachable model gives nothing.
 pub fn propose<H: Host + ?Sized>(host: &H, budget: &Budget, pages: &[Page], confirmed: &[String]) -> Result<Option<Rule>> {
     if pages.len() < 2 {
+        return Ok(None);
+    }
+    if !budget.may_start_within(host, MODEL_MARGIN_MS)? {
         return Ok(None);
     }
     let answer = host.call("ai", "generate", "structured", json!({"prompt": prompt(pages, confirmed), "maxOutputTokens": 1000}));

@@ -24,7 +24,7 @@ pub fn photo<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Respo
     }
 }
 
-/// Stops using Moss's photos for a source: forgets the saved rule and deletes the copies.
+/// Stops using Moss's photos for a source: forgets the saved rule and deletes the copies. Feed and share pictures are found again at the next refresh.
 pub fn stop_photos<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Response> {
     let id = match source_id(request) {
         Ok(id) => id,

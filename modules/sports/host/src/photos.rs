@@ -182,10 +182,9 @@ fn reencode(p: &Params) -> Result<Value> {
         rgb.height(),
         image::ExtendedColorType::Rgb8,
     )?;
-    ensure!(
-        out.len() <= MAX_STORED,
-        "The re-encoded picture is too large"
-    );
+    if out.len() > MAX_STORED {
+        return Ok(json!({"ok": false, "reason": "too-large"}));
+    }
     Ok(json!({
         "ok": true,
         "contentType": "image/jpeg",

@@ -16,6 +16,8 @@ use serde_json::{json, Value};
 /// How long one call may run, and how much of the end of it is kept free of new network calls.
 pub const CALL_LIMIT_MS: i64 = 30_000;
 pub const DEADLINE_MARGIN_MS: i64 = 3_000;
+/// New pictures one refresh may store across all sources.
+const MAX_NEW_PHOTOS: usize = 24;
 const PAGES_PER_SOURCE: usize = 6;
 const STORIES_PER_SOURCE: usize = 12;
 const PAGE_BYTES: u64 = 1_000_000;
@@ -27,15 +29,28 @@ const RELOOK_MS: i64 = 24 * 60 * 60 * 1000;
 /// The time left for starting network calls.
 pub struct Budget {
     pub start_ms: i64,
+    stored: std::cell::Cell<usize>,
 }
 
 impl Budget {
     pub fn open<H: Host + ?Sized>(host: &H) -> Result<Self> {
-        Ok(Self { start_ms: now_ms(host)? })
+        Ok(Self { start_ms: now_ms(host)?, stored: std::cell::Cell::new(0) })
     }
     /// False once starting a call now could run into the call's time limit.
     pub fn may_start<H: Host + ?Sized>(&self, host: &H) -> Result<bool> {
-        Ok(now_ms(host)? + DEADLINE_MARGIN_MS < self.start_ms + CALL_LIMIT_MS)
+        self.may_start_within(host, DEADLINE_MARGIN_MS)
+    }
+    /// Like `may_start`, for a call that can run longer than a download, such as a model reply.
+    pub fn may_start_within<H: Host + ?Sized>(&self, host: &H, margin_ms: i64) -> Result<bool> {
+        Ok(now_ms(host)? + margin_ms < self.start_ms + CALL_LIMIT_MS)
+    }
+    /// True while this refresh may still store a new picture. Each one crosses the module as
+    /// large text several times, so the count is capped to stay inside the step limit.
+    pub fn may_store(&self) -> bool {
+        self.stored.get() < MAX_NEW_PHOTOS
+    }
+    pub fn note_stored(&self) {
+        self.stored.set(self.stored.get() + 1);
     }
 }
 
@@ -93,6 +108,9 @@ struct Pass<'a, H: ?Sized> {
 impl<H: Host + ?Sized> Pass<'_, H> {
     /// Tries one address: download, re-encode, store. `Some(outcome)` ends the story.
     fn try_photo(&mut self, address: &str, story_url: &str) -> Result<Option<Outcome>> {
+        if !self.budget.may_store() {
+            return Ok(Some(Outcome::Skipped));
+        }
         let body = match download(self.host, self.budget, address)? {
             Fetched::Image(body) => body,
             Fetched::Skipped => return Ok(Some(Outcome::Skipped)),
@@ -100,7 +118,10 @@ impl<H: Host + ?Sized> Pass<'_, H> {
         };
         let Ok(photo) = store::reencode(self.host, &body)? else { return Ok(None) };
         let key = photo_key(self.source_id, address);
-        store::put(self.host, &key, self.source_id, story_url, &photo, self.now)?;
+        if store::put(self.host, &key, self.source_id, story_url, &photo, self.now).is_err() {
+            return Ok(None);
+        }
+        self.budget.note_stored();
         self.existing.insert(key.clone());
         Ok(Some(Outcome::Working(key)))
     }

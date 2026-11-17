@@ -49,7 +49,27 @@ host's thread, the Reddit exception covered every Reddit path, percent-encoded p
 disallows, blank lines dropped later rules, long disallows vanished). All five are fixed with tests.
 It found no way to reach a private address and no leak into the activity record.
 
+### Review round 1 changes
+
+- A refresh stores at most 24 new pictures. Each picture crosses the module as large text about four
+  times, and no installed refresh with 10 sources x 12 new stories at 760 KB was measured against
+  the 250 million step limit, so the cap stands in for that measurement.
+- The daily relook does not start the model with under 15 seconds left in the call.
+- One picture that cannot be stored (too large after re-encode, or a failed save) counts as a miss
+  for that story and no longer ends the source's photo pass.
+- Stopping photos forgets the page rule and clears the copies. The old app only forgot the rule.
+  Feed and share pictures come back at the next refresh. The map text says so.
+- The Part 14a live run used the BBC feed. Part 17 swapped the live feed to the Telegraph sport
+  feed (BBC pictures sit on another site and are rejected by design), so earlier proof is not a
+  rerun on the same feed.
+
 ### Not proven or not built
+
+- The photo read route answers JSON with the picture in base64. The old route sent the raw image
+  with a week-long private cache, an ETag and 304 answers. The screens part must read the JSON or
+  add a raw image answer. The route parity test compares error steps only.
+- Step use of a busy installed refresh (10 sources x 12 new stories, pictures near 760 KB) is not
+  measured. The 24-picture cap limits it.
 
 - `aborted` is not produced. A guest cannot cancel a host call, so there is nothing to abort.
 - This part has no database tables. The second-person test covers the per-account activity record.
@@ -1006,7 +1026,7 @@ how recipes work.
 - Re-encoding happens in the host, not in the module. A 1 MB photo costs about 2.5 to 5 billion
   steps inside the module, and the module's budget is 250 million, so it could not be done there.
   The image library (one approved free library, JPEG, PNG, WebP and GIF reading only) lives in the
-  Sports host crate, so it ships with the Sports package and no other module carries it.
+  Sports host crate. The app links that host crate, so the library is built into the app itself, but only the Sports host code uses it.
 - The re-encode writes a fresh JPEG (quality 80), fitted inside 1280 by 720, never enlarged, with
   transparency put on white. Because the file is written new, camera and location data is dropped.
   Pictures smaller than 64 pixels on the short side are refused.
