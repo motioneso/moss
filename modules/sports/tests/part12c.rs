@@ -1,6 +1,6 @@
 mod common;
 use common::both::Both;
-use common::{team, Teams, A, B};
+use common::{team, Teams, B};
 use moss_sports_module::tools;
 use serde_json::{json, Value};
 
