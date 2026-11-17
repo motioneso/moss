@@ -26,3 +26,12 @@ pub fn context<H: moss_module_sdk::Host + ?Sized>(host: &H) -> Result<(String, S
     };
     Ok((field("actorUserId")?, field("now")?))
 }
+
+/// A number as a person writes it: no trailing ".0".
+pub fn number(value: f64) -> String {
+    if value.fract() == 0.0 && value.abs() < 1e15 {
+        format!("{}", value as i64)
+    } else {
+        format!("{value}")
+    }
+}

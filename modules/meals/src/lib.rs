@@ -1,8 +1,10 @@
 //! Meals package, part 28: the kitchen and household, with their four chat tools. Each
 //! person's rows are private to them. All effects cross the guest-safe SDK Host interface.
+pub mod draft;
 pub mod input;
 pub mod kitchen;
 pub mod md5;
+pub mod pantry;
 pub mod recipe;
 pub mod rules;
 pub mod safety;
