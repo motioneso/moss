@@ -152,8 +152,11 @@ fn quiet_window(saved: &quiet_hours::Saved, pref: &Value) -> Option<(String, Str
                 return None;
             }
             let valid = |t: &str| {
-                let (h, m) = (t[..2].parse::<u8>().ok(), t[3..].parse::<u8>().ok());
-                h.is_some_and(|h| h < 24) && m.is_some_and(|m| m < 60)
+                let (h, m) = (
+                    t.get(..2).and_then(|h| h.parse::<u8>().ok()),
+                    t.get(3..).and_then(|m| m.parse::<u8>().ok()),
+                );
+                t.len() == 5 && h.is_some_and(|h| h < 24) && m.is_some_and(|m| m < 60)
             };
             let (start, end) = (
                 quiet["startLocalTime"].as_str()?,
