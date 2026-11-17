@@ -654,7 +654,7 @@ fn removing_a_source_asks_first_and_another_person_cannot_use_the_card_and_it_fa
 fn mark_photos_found(w: &World, id: uuid::Uuid) {
     w.f.rt
         .block_on(w.f.root.execute(
-            "UPDATE app.sports_custom_sources SET photo_rule_state='in_use', photo_last_outcome='working', photo_miss_streak=1 WHERE id=$1",
+            "UPDATE app.sports_custom_sources SET photo_rule_state='in_use', photo_rule_json='{\"version\":1}'::jsonb, photo_last_outcome='working', photo_miss_streak=1 WHERE id=$1",
             &[&id],
         ))
         .unwrap();
