@@ -26,7 +26,7 @@ struct Job {
 }
 
 /// Asks the model through the host. Any failure leaves as a provider error.
-struct AiModel<'a, H: Host + ?Sized>(&'a H);
+pub(crate) struct AiModel<'a, H: Host + ?Sized>(pub(crate) &'a H);
 
 impl<H: Host + ?Sized> Model for AiModel<'_, H> {
     fn ask(&mut self, prompt: &str) -> std::result::Result<String, Reason> {
@@ -294,6 +294,9 @@ pub fn handle<H: Host + ?Sized>(host: &H, payload: &str) -> Result<String> {
     match job.queue.as_str() {
         PLAN_DAY_QUEUE => {
             run_plan_day(host, &job.parameters)?;
+        }
+        crate::log::LOG_ESTIMATE_QUEUE => {
+            crate::log::run_estimate(host, &job.parameters)?;
         }
         _ => return Err(Error::new("Unknown Meals job")),
     }
