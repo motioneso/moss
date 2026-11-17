@@ -311,6 +311,7 @@ impl Host for Fake {
                 }
                 Ok(json!(found
                     .into_iter()
+                    .skip(query.offset as usize)
                     .take(query.limit.unwrap_or(1000) as usize)
                     .collect::<Vec<_>>()))
             }

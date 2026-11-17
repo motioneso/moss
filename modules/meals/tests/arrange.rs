@@ -257,6 +257,18 @@ fn the_account_export_and_delete_cover_every_table_for_the_caller_only() {
     assert_eq!(f.rows("app.meals_recipes").iter().filter(|m| m["owner_user_id"] == B).count(), 1);
 }
 
+#[test]
+fn the_export_returns_every_row_of_a_large_table() {
+    let f = Fake::new();
+    for i in 0..1200 {
+        f.seed("app.meals_log_entries", A, json!({"entry_id": format!("00000000-0000-4000-8000-{i:012}")}));
+    }
+    f.as_actor(A);
+    let payload = json!({"name":"collectMealsExportSection","parameters":{}}).to_string();
+    let export: Value = serde_json::from_str(&moss_meals_module::handle(&f, "api", &payload).expect("api")).unwrap();
+    assert_eq!(export["log_entries"].as_array().unwrap().len(), 1200);
+}
+
 fn add_member(f: &Fake, name: &str) -> String {
     let saved = f.ok("meals.household.save", json!({"name":name}));
     saved["members"].as_array().unwrap_or(&vec![]).iter().find(|m| m["name"] == name).map(|m| m["memberId"].as_str().unwrap().to_owned())
