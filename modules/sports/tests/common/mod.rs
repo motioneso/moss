@@ -4,6 +4,7 @@
 //! person and key. The real-database tests in the host crate prove the same rules in Postgres.
 pub mod both;
 pub mod espn;
+pub mod sources;
 use moss_module_sdk::{
     query::{Compare, Conflict, Filter, Kind, Query},
     Error, Host, Result, RouteRequest,

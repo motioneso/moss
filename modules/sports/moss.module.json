@@ -4,7 +4,7 @@
   "name": "Sports",
   "publisher": "Moss",
   "version": "0.1.0",
-  "description": "Keeps each person's followed leagues and teams, private to the owner. A whole league can be followed once, and following it again returns the saved follow. A followed team is tied to the provider's permanent team number. The standings picker remembers the leagues a person chose and the standings view they last opened, under the same saved settings as before. Account export and deletion cover all six Sports tables. The package reads ESPN's public data for the league catalog, each league's team list and club search, and keeps a shared copy so one person's lookup serves everyone. The copy holds only public sports data, never a person's follows or searches. Following a team checks the live team list and is refused, with the same fail-closed messages the old app gave, when ESPN is down. Scoreboard, standings and news reading are built but not yet offered as routes. News sources, source setup, chat tools and the screens are not part of this package yet.",
+  "description": "Keeps each person's followed leagues and teams, private to the owner. A whole league can be followed once, and following it again returns the saved follow. A followed team is tied to the provider's permanent team number. The standings picker remembers the leagues a person chose and the standings view they last opened, under the same saved settings as before. Account export and deletion cover all six Sports tables. The package reads ESPN's public data for the league catalog, each league's team list and club search, and keeps a shared copy so one person's lookup serves everyone. The copy holds only public sports data, never a person's follows or searches. Following a team checks the live team list and is refused, with the same fail-closed messages the old app gave, when ESPN is down. Scoreboard, standings and news reading are built but not yet offered as routes. A person can add news sources of their own, up to ten, each a website with a news feed or a subreddit, and choose which sports and followed teams each one covers, up to twenty choices in all. Adding a source shows a preview first, which names the reason when a site cannot be used, and a source saves only after the person confirms it. Two subreddits that differ only by letter case are one source. The package reads those public sites itself, and keeps unconfirmed previews for ten minutes under the person's own saved settings. Source retry, rebuild, headline photos, sites that need an AI-built recipe or a browser, chat tools and the screens are not part of this package yet.",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 250000000,
   "abi": "moss:module@1",
@@ -37,13 +37,15 @@
         "espn-standings",
         "espn-teams",
         "standings-competitions",
-        "standings-last-viewed"
+        "standings-last-viewed",
+        "source-previews",
+        "source-icon-misses"
       ]
     },
     {
       "port": "fetch",
       "operations": ["get"],
-      "resources": ["content.core.api.espn.com", "site.api.espn.com"]
+      "resources": ["content.core.api.espn.com", "site.api.espn.com", "public-web"]
     }
   ],
   "installWideKv": [
@@ -159,6 +161,46 @@
       "method": "GET",
       "path": "/results/latest",
       "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/sources",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/sources/espn/coverage",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/sources/preview",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/sources",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/sources/:id/assignments/preview",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/sources/:id/assignments",
+      "signIn": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/sources/:id",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/sources/:id/icon",
+      "signIn": true
     }
   ],
   "requires": {},
@@ -184,6 +226,13 @@
       "path": "/settings?section=modules&module=sports",
       "scope": "user",
       "description": "Followed leagues and the standings choices can be changed through the Sports routes. The Settings page for them is not part of this package yet."
+    },
+    {
+      "id": "sports.sources",
+      "label": "News sources",
+      "path": "/settings?section=modules&module=sports",
+      "scope": "user",
+      "description": "Added news sources and the sports each one covers can be managed through the Sports routes. The Settings page for them is not part of this package yet."
     }
   ],
   "features": [
@@ -249,6 +298,38 @@
     {
       "id": "sports.latest_result",
       "description": "The latest completed result for one club reads from ESPN over the last ninety days, using the person's follows to find the club and every competition they follow it in. A name that matches more than one club asks the person to choose, and a result the source could not provide is reported as unavailable, never guessed."
+    },
+    {
+      "id": "sports.added_sources",
+      "description": "A person adds a news source of their own by typing a website address or a subreddit. The preview reads the public site and shows the sources it found with sample headlines, or names why it cannot be used. Saving needs the person's confirmation that they may read the site, and a preview expires after ten minutes. A person keeps at most ten added sources and twenty source choices in all, and a source that is already saved, including a subreddit differing only by letter case, is not added twice. Changing which sports and teams a source covers uses the same preview and confirm steps, and is refused if the source changed in between. Removing a source deletes it and its choices. A source icon is looked up on the site and shown only when it is a real image.",
+      "errors": [
+        {
+          "code": "sports_source_unreachable",
+          "class": "validation",
+          "description": "The site could not be read, was blocked, asked for a login or sign-in, or limited how often it can be read."
+        },
+        {
+          "code": "sports_source_unsupported",
+          "class": "validation",
+          "description": "The site has no news feed Moss can read yet, so it cannot be added. Sites that need a browser or an AI-built recipe are not built."
+        },
+        {
+          "code": "sports_source_limit",
+          "class": "validation",
+          "description": "The person already has ten added sources or twenty source choices."
+        }
+      ],
+      "remediations": [
+        {
+          "id": "sports.added_sources.other-address",
+          "description": "Try the site's feed address, or a subreddit such as r/nfl, instead of the home page.",
+          "path": "/settings?section=modules&module=sports"
+        }
+      ]
+    },
+    {
+      "id": "sports.espn_coverage",
+      "description": "ESPN headlines can cover chosen sports and followed teams. With no choice made the default coverage applies, and saving an empty choice turns ESPN headlines off. A followed team the person does not have is refused."
     }
   ],
   "optionalRequires": {}

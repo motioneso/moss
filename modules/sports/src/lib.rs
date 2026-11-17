@@ -4,6 +4,7 @@ pub mod catalog;
 mod catalog_table;
 pub mod datasets;
 pub mod eastern;
+pub mod espn_coverage;
 pub mod espn;
 pub mod espn_games;
 pub mod espn_schedule;
@@ -18,6 +19,14 @@ pub mod public_cache;
 pub mod public_routes;
 pub mod results;
 pub mod roster;
+pub mod source_discovery;
+pub mod source_icon;
+pub mod source_input;
+pub mod source_preview;
+pub mod source_routes;
+pub mod source_scope;
+pub mod source_web;
+pub mod sources;
 pub mod standings;
 pub mod standings_views;
 pub mod teams;
@@ -46,6 +55,14 @@ pub fn route_with<H: Host + ?Sized>(host: &H, teams: &dyn TeamList, request: Rou
         ("GET", "/overview") => overview::overview(host),
         ("GET", "/standings") => overview::standings(host, &request),
         ("GET", "/results/latest") => results::latest(host, &request),
+        ("GET", "/sources") => source_routes::list(host),
+        ("PUT", "/sources/espn/coverage") => source_routes::put_coverage(host, &request),
+        ("POST", "/sources/preview") => source_routes::preview_new(host, teams, &request),
+        ("POST", "/sources") => source_routes::confirm_new(host, &request),
+        ("POST", "/sources/:id/assignments/preview") => source_routes::preview_assignments(host, teams, &request),
+        ("PATCH", "/sources/:id/assignments") => source_routes::confirm_assignments(host, &request),
+        ("GET", "/sources/:id/icon") => source_icon::icon(host, &request),
+        ("DELETE", "/sources/:id") => source_routes::remove(host, &request),
         _ => return Response::new(404, json!({"message":"Route not found"})),
     };
     result.unwrap_or_else(|_| Response::new(500, json!({"message":"Internal server error"})))
