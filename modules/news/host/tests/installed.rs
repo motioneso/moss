@@ -55,7 +55,10 @@ impl moss_module_host::runtime::Ports for Web {
             ),
             "https://daily.sample.test/feed.xml" => found(
                 "application/rss+xml",
-                "<rss><channel><title>x</title><item><title>First story here</title><link>https://daily.sample.test/1</link></item></channel></rss>",
+                &format!(
+                    "<rss><channel><title>x</title><item><title>First story here</title><link>https://daily.sample.test/1</link><pubDate>{}</pubDate></item></channel></rss>",
+                    (chrono::Utc::now() - chrono::Duration::hours(2)).to_rfc2822()
+                ),
             ),
             "https://news.example.com/" => found(
                 "text/html",
