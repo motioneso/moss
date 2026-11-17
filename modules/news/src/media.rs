@@ -123,9 +123,9 @@ fn read_picture<H: Host + ?Sized>(host: &H, url: &str, limit: usize, hosts: Opti
     web::get(host, url, Some(extra)).ok().filter(|fetched| fetched.status == 200)
 }
 
-/// `GET /images/:articleId`.
+/// `GET /images/:article_id`.
 pub fn image<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Response> {
-    let id = request.params.get("articleId").map(String::as_str).unwrap_or_default();
+    let id = request.params.get("article_id").map(String::as_str).unwrap_or_default();
     let Some(url) = image_article(host, id)?.and_then(|a| a["imageUrl"].as_str().map(str::to_owned)) else {
         return Ok(error(404, "News image not found"));
     };

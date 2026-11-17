@@ -85,7 +85,7 @@ fn another_person_never_sees_my_stories_sources_or_pictures() {
     f.as_actor(B);
     assert_eq!(tool(&f, "news.topHeadlinesToday", json!({})).unwrap()["data"]["facts"], json!([]));
     assert_eq!(tool(&f, "news.credentialedSourceStatus", json!({})).unwrap()["data"]["sources"], json!([]));
-    assert_eq!(image_route(&f, "/images/:articleId", "articleId", "a1").status, 404);
+    assert_eq!(image_route(&f, "/images/:article_id", "article_id", "a1").status, 404);
     assert!(f.fetched().is_empty());
     f.as_actor(A);
     assert_eq!(tool(&f, "news.topHeadlinesToday", json!({})).unwrap()["data"]["facts"].as_array().unwrap().len(), 1);
@@ -106,18 +106,18 @@ fn picture_route_serves_only_checked_pictures_of_stored_stories() {
     let f = Fake::new();
     store_page(&f, A, vec![article(1, Some("https://img.example.com/1.png")), article(2, None)], FUTURE);
     f.page("https://img.example.com/1.png", 200, "image/png", PNG_B64);
-    let ok = image_route(&f, "/images/:articleId", "articleId", "a1");
+    let ok = image_route(&f, "/images/:article_id", "article_id", "a1");
     assert_eq!(ok.status, 200);
     let image = ok.image.expect("a picture");
     assert_eq!(image.content_type, "image/png");
-    assert_eq!(image_route(&f, "/images/:articleId", "articleId", "a2").status, 404);
-    assert_eq!(image_route(&f, "/images/:articleId", "articleId", "nope").status, 404);
+    assert_eq!(image_route(&f, "/images/:article_id", "article_id", "a2").status, 404);
+    assert_eq!(image_route(&f, "/images/:article_id", "article_id", "nope").status, 404);
     // A page that says png but holds other bytes is refused.
     f.page("https://img.example.com/1.png", 200, "image/png", "aGVsbG8gd29ybGQ=");
-    assert_eq!(image_route(&f, "/images/:articleId", "articleId", "a1").status, 502);
+    assert_eq!(image_route(&f, "/images/:article_id", "article_id", "a1").status, 502);
     // A type outside the list is refused.
     f.page("https://img.example.com/1.png", 200, "image/svg+xml", PNG_B64);
-    assert_eq!(image_route(&f, "/images/:articleId", "articleId", "a1").status, 502);
+    assert_eq!(image_route(&f, "/images/:article_id", "article_id", "a1").status, 502);
 }
 
 #[test]
@@ -143,11 +143,11 @@ fn refresh_card_is_built_from_the_stored_record_and_refuses_extra_input() {
     let extra = call_api(&f, "prepareNewsAction", json!({"tool": "news.refreshNews", "inputJson": "{\"x\":1}"}));
     assert_eq!(extra["ok"], Value::Null);
     store_page(&f, A, vec![article(1, Some("https://img.example.com/1.png"))], FUTURE);
-    let route = call_api(&f, "prepareNewsRoute", json!({"route": "newsImage", "paramsJson": "{\"articleId\":\"a1\"}", "queryJson": "{}", "bodyJson": "{}"}));
+    let route = call_api(&f, "prepareNewsRoute", json!({"route": "newsImage", "paramsJson": "{\"article_id\":\"a1\"}", "queryJson": "{}", "bodyJson": "{}"}));
     assert_eq!(route["ok"]["target"], json!("Story 1"));
     assert_eq!(route["ok"]["content"], json!("outside"));
     f.as_actor(B);
-    let other = call_api(&f, "prepareNewsRoute", json!({"route": "newsImage", "paramsJson": "{\"articleId\":\"a1\"}", "queryJson": "{}", "bodyJson": "{}"}));
+    let other = call_api(&f, "prepareNewsRoute", json!({"route": "newsImage", "paramsJson": "{\"article_id\":\"a1\"}", "queryJson": "{}", "bodyJson": "{}"}));
     assert_eq!(other["ok"], Value::Null);
 }
 
@@ -171,8 +171,8 @@ fn private_text_stays_out_of_reads_logs_jobs_and_activity_rows() {
     f.page("https://img.example.com/1.png", 200, "image/png", PNG_B64);
     tool(&f, "news.heartbeatHeadlines", json!({})).unwrap();
     tool(&f, "news.refreshNews", json!({})).unwrap();
-    image_route(&f, "/images/:articleId", "articleId", "a1");
-    call_api(&f, "prepareNewsRoute", json!({"route": "newsImage", "paramsJson": "{\"articleId\":\"a1\"}", "queryJson": "{}", "bodyJson": "{}"}));
+    image_route(&f, "/images/:article_id", "article_id", "a1");
+    call_api(&f, "prepareNewsRoute", json!({"route": "newsImage", "paramsJson": "{\"article_id\":\"a1\"}", "queryJson": "{}", "bodyJson": "{}"}));
     let calls = f.calls.borrow();
     for (port, _, resource, parameters) in calls.iter() {
         if port == "jobs" || resource.contains("activity") || resource.contains("log") {

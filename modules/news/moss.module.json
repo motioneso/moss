@@ -112,7 +112,7 @@
     },
     {
       "method": "GET",
-      "path": "/images/:articleId",
+      "path": "/images/:article_id",
       "signIn": true
     },
     {

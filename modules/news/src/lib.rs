@@ -33,7 +33,7 @@ pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
     let result = match (request.method.as_str(), request.path.as_str()) {
         ("GET", "/catalog") => Ok(Response::new(200, catalog::response())),
         ("GET", "/overview") => compile::overview(host),
-        ("GET", "/images/:articleId") => media::image(host, &request),
+        ("GET", "/images/:article_id") => media::image(host, &request),
         ("GET", "/favicon/:domain") => media::favicon(host, &request),
         ("GET", "/prefs") => prefs::list(host),
         ("POST", "/prefs") => prefs::create(host, &request),

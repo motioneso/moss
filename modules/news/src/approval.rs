@@ -33,7 +33,7 @@ fn route_card<H: Host + ?Sized>(host: &H, route: &str, params: &Map<String, Valu
     let only = |key: &str| (params.len() == 1).then(|| params.get(key)?.as_str()).flatten();
     match route {
         "newsImage" => {
-            let Some(id) = only("articleId") else { return Ok(None) };
+            let Some(id) = only("article_id") else { return Ok(None) };
             let Some(article) = media::image_article(host, id)? else { return Ok(None) };
             let url = article["imageUrl"].as_str().unwrap_or_default();
             let image_host = url.split("://").nth(1).and_then(|rest| rest.split(['/', '?', '#', ':']).next()).unwrap_or_default();
