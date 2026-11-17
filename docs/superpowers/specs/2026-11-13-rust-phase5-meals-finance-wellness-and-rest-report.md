@@ -1087,12 +1087,16 @@ planner but could not be edited.
 
 - There are no database transactions in the host. Marking lines bought runs in a fixed order
   (pantry rows, then the lines, then the undo record). The pantry rows get fixed ids built
-  from the line and its version, so a repeat after a crash finishes the work and adds no
-  second row. A crash after the lines change loses only the undo record.
+  from the line and its last-change time, so a repeat after a crash finishes the work and adds
+  no second row, unless a tick, untick or rebuild changed that line in between. A repeat after
+  full success is refused with the old "no shopping list line" message. A crash after the lines change loses only the undo record.
 - Sorting names uses a simple locale-style comparison. It matches the old order for plain
   Latin names and may differ for rare accents.
-- Bought lines older than one day are swept in memory when the list is read, using the host
-  clock.
+- Bought lines older than one day are deleted when the list is rebuilt after a plan or pantry
+  change, using the host clock. Reading the list does not sweep. The old code did the same.
+- A bought call that names the same line twice adds one pantry row. The old code added two.
+- Tick or untick with an empty line list gives "lineId is required" instead of the old
+  "lineIds must hold 1 to 100 line ids".
 - Staples have no changed-at column, so a rename writes the name directly.
 
 ### Proof
@@ -1130,7 +1134,9 @@ target. Neither was a code fault.
 
 ### Not proven or not built
 
-- **Undo restore** is not built. The undo records are written but nothing reads them back.
+- **Undo restore** is not built. The undo records are written but nothing reads them back,
+  and the tool descriptions now say so.
+- **Concurrent bought calls** may add a pantry row for a line another call already marked.
 - **No screens** were built.
 - **Plan delete hook** does not apply, because no plan delete tool exists. The hook runs
   only after the day job.

@@ -332,11 +332,11 @@
       "risk": "write"
     },
     "meals.list.edit": {
-      "description": "Add, change, remove, tick or untick shopping lines. add needs a name and takes an optional quantity, unit and store section. update changes a line by lineId, and on a line built from the plan the quantity is the amount to buy. remove returns an undo token. tick and untick take lineId, or lineIds to do several at once.",
+      "description": "Add, change, remove, tick or untick shopping lines. add needs a name and takes an optional quantity, unit and store section. update changes a line by lineId, and on a line built from the plan the quantity is the amount to buy. remove records an undo entry, but there is no undo tool yet. tick and untick take lineId, or lineIds to do several at once.",
       "risk": "write"
     },
     "meals.list.bought": {
-      "description": "Mark shopping lines as bought and add them to the Pantry. Without lines it takes every ticked line. Give a line a quantity and unit when you bought a different amount than the list said. Returns an undo token that reverses it.",
+      "description": "Mark shopping lines as bought and add them to the Pantry. Without lines it takes every ticked line. Give a line a quantity and unit when you bought a different amount than the list said. It records an undo entry, but there is no undo tool yet.",
       "risk": "write"
     },
     "meals.list.clear": {
@@ -348,7 +348,7 @@
       "risk": "read"
     },
     "meals.pantry.edit": {
-      "description": "Add, change or remove a Pantry item or a Staple. action is add, update or remove. target is item (the default) or staple. add needs a name and takes an optional quantity and unit for an item; no quantity means the household has some. update changes an item by itemId, or renames a Staple by stapleId. Removing an item returns an undo token. Changing the Pantry updates a shopping list that follows a plan.",
+      "description": "Add, change or remove a Pantry item or a Staple. action is add, update or remove. target is item (the default) or staple. add needs a name and takes an optional quantity and unit for an item; no quantity means the household has some. update changes an item by itemId, or renames a Staple by stapleId. Removing an item records an undo entry, but there is no undo tool yet. Changing the Pantry updates a shopping list that follows a plan.",
       "risk": "write"
     }
   },
