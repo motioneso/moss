@@ -69,8 +69,8 @@
       "feelingTertiary": null,
       "wheelVersion": "jarvis-emotion-v1",
       "sensations": [],
-      "intensity": 1,
-      "energy": 2,
+      "intensity": null,
+      "energy": null,
       "note": "MKR-CHK-A-05 invented short entry",
       "identifiedVia": "wheel",
       "createdAt": "2026-03-10T18:40:00.000Z"

@@ -111,6 +111,7 @@ fn the_data_covers_the_cases_later_parts_need() {
     let cores: BTreeSet<_> = checkins(a).iter().map(|c| s(c, "feelingCore").unwrap().to_string()).collect();
     assert_eq!(cores.len(), 6, "every core feeling appears");
     assert!(checkins(a).iter().any(|c| c["note"].is_null()) && checkins(a).iter().any(|c| c["intensity"].as_i64().is_some()));
+    assert!(checkins(a).iter().any(|c| c["intensity"].is_null() && c["energy"].is_null()), "a check-in with no numbers");
     let kinds: BTreeSet<_> = medications(a).iter().map(|m| s(m, "frequencyType").unwrap().to_string()).collect();
     assert_eq!(kinds.len(), 5);
     assert!(medications(a).iter().any(|m| m["active"] == json!(false)));

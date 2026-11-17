@@ -166,7 +166,7 @@ package, route, table, tool or screen exists yet. Those are parts 13 to 18.
   all) and 6 for Bob.
 - **Therapy notes.** 4 for Alice (alone, linked to a check-in, linked to an emotion, both
   kinds) and 2 for Bob.
-- **Markers.** Every private text value (check-in note, medicine name and note, dose, as-needed
+- **Markers.** Every private free-text value (check-in note, medicine name and note, dose, as-needed
   reason, therapy note) holds one token that starts with `MKR-` and names its owner, such as
   `MKR-THERAPY-A-02`. A later leak test plants the rows and searches logs, job payloads,
   activity rows and exports for those tokens. A helper returns each person's tokens.
@@ -177,7 +177,7 @@ package, route, table, tool or screen exists yet. Those are parts 13 to 18.
 
 | Claim                                               | Evidence                                                                                                                                                                                                                                                                                                                                       |
 | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Each row has exactly the old route's fields         | A native test compares every row's key set with the old Wellness response types                                                                                                                                                                                                                                                                |
+| Each row has exactly the old route's fields         | A native test compares every row's key set with a list copied from the old Wellness response types (it would not notice later drift in those types)                                                                                                                                                                                            |
 | Rows obey the old database rules                    | A native test mirrors the old column rules. Then the real old database accepted every row, inserted as each person under the old row security rules. This caught a bug in the first draft of the ids (one id was a character too long), now fixed                                                                                              |
 | A second person cannot read the first person's rows | Real database test: each person reads only their own count in all four tables. With the four read rules replaced by a wide-open rule, Bob saw all of Alice's rows, so the test can fail. With the real rules back, Bob saw only his own                                                                                                        |
 | Every private value carries a unique marker         | Native test. Seen failing when one marker was removed (`body has private text with no marker`)                                                                                                                                                                                                                                                 |
@@ -205,8 +205,10 @@ scripts/run-gate.sh start --gate test:rust-wellness-fixtures
 - **No app map entries.** Nothing a person sees or does has changed, and there is no Wellness
   manifest yet. Part 13 adds the manifest and its entries.
 - **Only five of the eight medicine schedule kinds** are covered (once a day, several times a day,
-  as needed, weekdays, cycle). The every-so-often and monthly kinds are added when part 14 needs
-  them.
+  as needed, weekdays, cycle). Every-n-hours, every-interval and monthly are added when part 14
+  needs them.
+- **Dosage, feeling words, body sensations and schedule times carry no marker.** They are plain
+  generic values, so a leak search cannot find them.
 - **Check-in feelings use the old taxonomy** only for core feelings plus three valid second-level
   words. Third-level words are left empty.
 - **No expected figures** (30-day counts, insights). Parts 14 and 16 work them out from the old
