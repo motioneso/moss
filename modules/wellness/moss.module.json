@@ -1,0 +1,153 @@
+{
+  "schemaVersion": 2,
+  "id": "wellness",
+  "name": "Wellness",
+  "description": "Private mood check-ins and the choice of whether the assistant may use them. Medications, therapy notes, insights, export, chat tools and the screens are not built yet.",
+  "publisher": "Moss",
+  "version": "0.1.0",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "fuelLimit": 200000000,
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "db",
+      "operations": ["query"],
+      "resources": ["app.wellness_checkins"]
+    },
+    {
+      "port": "context",
+      "operations": ["local-date"],
+      "resources": ["account"]
+    },
+    {
+      "port": "kv",
+      "operations": ["preference.read", "preference.write"],
+      "resources": ["ai-consent"]
+    }
+  ],
+  "database": {
+    "migrations": [
+      "sql/0082_wellness_checkins.sql",
+      "sql/0083_wellness_medications.sql",
+      "sql/0084_wellness_medication_logs.sql",
+      "sql/0088_wellness_emotion_taxonomy.sql",
+      "sql/0089_wellness_therapy_notes.sql",
+      "sql/0104_wellness_medication_logs_prn_reason_optional.sql",
+      "sql/0107_wellness_checkins_temporal.sql",
+      "sql/0114_data_export_jobs_format_and_params.sql",
+      "sql/0115_list_expired_data_export_jobs_format.sql",
+      "sql/0135_wellness_worker_read_grants.sql",
+      "sql/0136_admin_audit_events_worker_insert.sql",
+      "sql/0138_worker_get_data_export_job.sql",
+      "sql/0139_wellness_worker_read_policies.sql",
+      "sql/0143_wellness_checkins_local_date_backfill.sql",
+      "sql/0194_wellness_medication_schedule_v2.sql",
+      "sql/0197_wellness_medication_start_date_reminders.sql"
+    ],
+    "ownedTables": [
+      "app.wellness_checkins",
+      "app.medications",
+      "app.medication_logs",
+      "app.wellness_therapy_notes"
+    ],
+    "ledger": "core-legacy",
+    "access": {
+      "app.wellness_checkins": {
+        "access": "owner-only"
+      },
+      "app.medications": {
+        "access": "owner-only"
+      },
+      "app.medication_logs": {
+        "access": "owner-only"
+      },
+      "app.wellness_therapy_notes": {
+        "access": "owner-only"
+      }
+    }
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/wellness/ai-consent",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/wellness/ai-consent",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/wellness/checkins",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/wellness/checkins",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/wellness/checkins/:id",
+      "signIn": true
+    }
+  ],
+  "requires": {},
+  "provides": {},
+  "icons": ["icons/wellness.svg"],
+  "accounts": {
+    "supportsUserDisable": true,
+    "defaultEnabled": true
+  },
+  "lifecycle": {
+    "required": false,
+    "bundled": true,
+    "removable": true
+  },
+  "screens": {},
+  "navigation": [],
+  "settings": [
+    {
+      "id": "wellness.ai-consent",
+      "label": "Wellness",
+      "path": "/settings?section=modules&module=wellness",
+      "scope": "user",
+      "description": "Whether the assistant may use mood check-ins is read and saved through the Wellness routes. Until you choose, access stays on while Wellness is installed. The settings screen is not built yet."
+    }
+  ],
+  "features": [
+    {
+      "id": "wellness.mood_checkins",
+      "description": "A person can save a mood check-in with a feeling from the feeling wheel, body sensations, intensity, energy and a note, read their history newest first in pages, and change an earlier check-in. Each person sees only their own check-ins. The check-in screen is not built yet.",
+      "errors": [
+        {
+          "code": "wellness_checkin_invalid",
+          "class": "validation",
+          "description": "The feeling, its second level, a rating or the history paging value was not accepted. Fix the value named in the message and try again."
+        },
+        {
+          "code": "wellness_checkin_not_found",
+          "class": "validation",
+          "description": "The check-in does not exist or belongs to another person. Check the check-in and try again."
+        },
+        {
+          "code": "wellness_checkins_unavailable",
+          "class": "transient",
+          "description": "Check-ins could not be read or saved. Try again in a moment."
+        }
+      ]
+    },
+    {
+      "id": "wellness.ai-consent",
+      "description": "A person can read and change whether the assistant may use their mood check-ins. With no saved choice, access is on while Wellness is installed. No assistant feature uses check-ins in this version, and no check-in text is sent to any model.",
+      "errors": [
+        {
+          "code": "wellness_consent_invalid",
+          "class": "validation",
+          "description": "The choice must be true or false. Send one of those and try again."
+        }
+      ]
+    }
+  ]
+}

@@ -21,6 +21,8 @@ impl Host for ComponentHost {
             "context" => moss::module::context::call(&request),
             "kv" => moss::module::kv::call(&request),
             "fetch" => moss::module::fetch::call(&request),
+            "jobs" => moss::module::jobs::call(&request),
+            "notify" => moss::module::notify::call(&request),
             "ai" => moss::module::ai::call(&request),
             _ => return Err(Error::new("Unsupported News host port")),
         }

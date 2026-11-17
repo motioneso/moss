@@ -1,4 +1,4 @@
-//! Part 5a: compiling the page. Canned model answers and the fixed-order fallback are checked
+//! Part 5a: compiling the page. The overview route serves the stored page, so tests run the refresh job between reads. Canned model answers and the fixed-order fallback are checked
 //! against the order the old compiler produced for the same stories.
 mod common;
 use common::{Fake, A, B};
@@ -15,6 +15,17 @@ fn feed(items: &[(&str, &str, &str)]) -> String {
         })
         .collect();
     format!("<rss><channel><title>Daily</title>{rows}</channel></rss>")
+}
+
+/// Reads the page the way the app does. A stale page queues a refresh, the job runs, and the
+/// page is read again.
+fn overview(fake: &Fake) -> (u16, serde_json::Value) {
+    let first = fake.route("GET", "/overview", &[], json!(null));
+    if fake.open_jobs("news-refresh") == 0 {
+        return first;
+    }
+    fake.refresh();
+    fake.route("GET", "/overview", &[], json!(null))
 }
 
 fn saved_source(fake: &Fake) {
@@ -49,7 +60,7 @@ fn canned_model_ranking_orders_the_page_and_stores_the_snapshot() {
     );
     // The model puts Gamma first and drops Beta.
     fake.model_says(r#"{"rankings":[{"id":"c3","relevance":90,"eligible":true},{"id":"c1","relevance":50,"eligible":true},{"id":"c2","relevance":99,"eligible":false}]}"#);
-    let (status, body) = fake.route("GET", "/overview", &[], json!(null));
+    let (status, body) = overview(&fake);
     assert_eq!(status, 200);
     assert_eq!(titles(&body), vec!["Gamma story", "Alpha story"]);
     assert_eq!(body["topStories"].as_array().unwrap().len(), 2);
@@ -62,7 +73,7 @@ fn canned_model_ranking_orders_the_page_and_stores_the_snapshot() {
     assert_eq!(articles[0]["rank"], json!(1));
     // A second read serves the stored page without reading the feed again.
     let fetched_before = fake.fetched().len();
-    let (status, again) = fake.route("GET", "/overview", &[], json!(null));
+    let (status, again) = overview(&fake);
     assert_eq!(status, 200);
     assert_eq!(titles(&again), vec!["Gamma story", "Alpha story"]);
     assert_eq!(fake.fetched().len(), fetched_before);
@@ -84,7 +95,7 @@ fn fallback_order_matches_the_old_fixed_order() {
         ]),
     );
     // No model answer queued, so the model call fails and the fixed order applies.
-    let (status, body) = fake.route("GET", "/overview", &[], json!(null));
+    let (status, body) = overview(&fake);
     assert_eq!(status, 200);
     assert_eq!(titles(&body), vec!["Newer story", "Same time A", "Same time B", "Older story"]);
     assert_eq!(fake.model_calls(), 1);
@@ -106,7 +117,7 @@ fn filters_drop_excluded_old_and_duplicate_stories() {
             ("Future story", "https://daily.example.com/future", "Sat, 07 Nov 2026 10:00:00 GMT"),
         ]),
     );
-    let (status, body) = fake.route("GET", "/overview", &[], json!(null));
+    let (status, body) = overview(&fake);
     assert_eq!(status, 200);
     assert_eq!(titles(&body), vec!["Kept story"]);
 }
@@ -121,11 +132,11 @@ fn another_person_gets_their_own_page() {
         "application/rss+xml",
         &feed(&[("Alpha story", "https://daily.example.com/a", "Fri, 06 Nov 2026 09:00:00 GMT")]),
     );
-    let (status, body) = fake.route("GET", "/overview", &[], json!(null));
+    let (status, body) = overview(&fake);
     assert_eq!(status, 200);
     assert_eq!(titles(&body), vec!["Alpha story"]);
     fake.as_actor(B);
-    let (status, other) = fake.route("GET", "/overview", &[], json!(null));
+    let (status, other) = overview(&fake);
     assert_eq!(status, 200);
     // B has no saved source, and the default catalog feeds are not in the fake pages.
     assert!(other["rankedStories"].as_array().unwrap().iter().all(|row| row["title"] != json!("Alpha story")));
@@ -189,7 +200,7 @@ fn a_saved_site_page_with_growing_lowercase_letters_does_not_crash() {
         "text/html",
         "<html><head><meta property=\"article:published_time\" content=\"2026-11-06T09:00:00Z\"></head><body>İstanbul</body></html>",
     );
-    let (status, body) = fake.route("GET", "/overview", &[], json!(null));
+    let (status, body) = overview(&fake);
     assert_eq!(status, 200);
     assert_eq!(titles(&body), vec!["A story from İstanbul"]);
 }
@@ -253,7 +264,7 @@ fn a_failed_compile_serves_the_stored_page_marked_degraded() {
     saved_source(&fake);
     stale_snapshot(&fake);
     // No feed page is served, so gathering fails and the stored page is the answer.
-    let (status, body) = fake.route("GET", "/overview", &[], json!(null));
+    let (status, body) = overview(&fake);
     assert_eq!(status, 200);
     assert_eq!(body["degraded"], json!(true));
     assert_eq!(titles(&body), vec!["Stored story"]);
@@ -263,7 +274,7 @@ fn a_failed_compile_serves_the_stored_page_marked_degraded() {
 fn a_failed_compile_with_no_stored_page_is_empty_and_degraded() {
     let fake = Fake::new();
     saved_source(&fake);
-    let (status, body) = fake.route("GET", "/overview", &[], json!(null));
+    let (status, body) = overview(&fake);
     assert_eq!(status, 200);
     assert_eq!(body["degraded"], json!(true));
     assert_eq!(titles(&body), Vec::<String>::new());
@@ -280,7 +291,7 @@ fn malformed_model_answers_fall_back() {
         &feed(&[("Only story", "https://daily.example.com/a", "Fri, 06 Nov 2026 09:00:00 GMT")]),
     );
     fake.model_says("not json at all");
-    let (status, body) = fake.route("GET", "/overview", &[], json!(null));
+    let (status, body) = overview(&fake);
     assert_eq!(status, 200);
     assert_eq!(titles(&body), vec!["Only story"]);
 }

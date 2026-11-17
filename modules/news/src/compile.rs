@@ -684,7 +684,7 @@ fn snapshot_payload(ranked: &[Ranked]) -> Value {
 }
 
 /// The stored-payload guard, matching the old limits. Nothing is written unless this passes.
-fn snapshot_valid(payload: &Value) -> bool {
+pub fn snapshot_valid(payload: &Value) -> bool {
     let Some(map) = payload.as_object() else { return false };
     if map.len() != 1 {
         return false;
@@ -726,22 +726,38 @@ fn snapshot_valid(payload: &Value) -> bool {
     serde_json::to_string(payload).map(|text| text.len() <= SNAPSHOT_MAX_BYTES).unwrap_or(false)
 }
 
+/// Why a compile could not produce a page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Outcome {
-    Replaced,
-    KeptLastGood,
+pub enum FailureKind {
+    Fetch,
+    Internal,
 }
 
-/// Compiles the person's page and stores the snapshot. No candidates with fetch failures
-/// keeps the last good snapshot, as the old compiler did.
-pub fn compile<H: Host + ?Sized>(host: &H) -> Result<Outcome> {
+impl FailureKind {
+    pub fn word(self) -> &'static str {
+        match self {
+            FailureKind::Fetch => "fetch",
+            FailureKind::Internal => "internal",
+        }
+    }
+}
+
+/// The result of building a page. Nothing is stored until `store` is called.
+pub enum Built {
+    Page { at: DateTime<Utc>, payload: Value },
+    Failed(FailureKind),
+}
+
+/// Builds the person's page. No candidates with fetch failures counts as a fetch failure, so
+/// the last good page stays in place.
+pub fn build<H: Host + ?Sized>(host: &H) -> Result<Built> {
     let at = now(host)?;
     let now_ms = at.timestamp_millis();
     let saved = read_saved(host)?;
     // Gathering stops early so ranking and storing still fit the host's time limit.
     let collection = collect(host, &saved, now_ms, now_ms + GATHER_BUDGET_MS);
     if collection.candidates.is_empty() && collection.fetch_failures > 0 {
-        return Ok(Outcome::KeptLastGood);
+        return Ok(Built::Failed(FailureKind::Fetch));
     }
     let filtered = apply_filters(collection.candidates, &saved.exclusions, now_ms);
     let ranked = if filtered.is_empty() {
@@ -763,24 +779,25 @@ pub fn compile<H: Host + ?Sized>(host: &H) -> Result<Outcome> {
     };
     let payload = snapshot_payload(&ranked);
     if !snapshot_valid(&payload) {
-        return Ok(Outcome::KeptLastGood);
+        return Ok(Built::Failed(FailureKind::Internal));
     }
+    Ok(Built::Page { at, payload })
+}
+
+/// Stores a built page as the person's snapshot.
+pub fn store<H: Host + ?Sized>(host: &H, at: DateTime<Utc>, payload: &Value) -> Result<()> {
     let stamp = |when: DateTime<Utc>| when.to_rfc3339_opts(SecondsFormat::Millis, true);
-    let mut insert = Query::insert(values(vec![
-        ("compiled_at", json!(stamp(at))),
-        ("expires_at", json!(stamp(at + chrono::Duration::days(LIFETIME_DAYS)))),
-        ("payload", payload),
-    ]));
-    insert.conflict = Conflict::Update {
-        columns: vec!["owner_user_id".into()],
-        values: values(vec![
+    let set = || {
+        values(vec![
             ("compiled_at", json!(stamp(at))),
             ("expires_at", json!(stamp(at + chrono::Duration::days(LIFETIME_DAYS)))),
-            ("payload", snapshot_payload(&ranked)),
-        ]),
+            ("payload", payload.clone()),
+        ])
     };
+    let mut insert = Query::insert(set());
+    insert.conflict = Conflict::Update { columns: vec!["owner_user_id".into()], values: set() };
     Client(host).query(SNAPSHOTS, &insert)?;
-    Ok(Outcome::Replaced)
+    Ok(())
 }
 
 fn headline(article: &Value) -> Value {
@@ -887,54 +904,17 @@ fn compose(snapshot: &Value, saved: &Saved, now_ms: i64, degraded: bool) -> Valu
     })
 }
 
-/// `GET /overview`. A fresh snapshot is served as it stands. A missing or expired one is
-/// compiled on the spot, because the refresh job that would do it is part 5b.
+/// `GET /overview`. Serves the stored page. A missing or out-of-date page is served as it
+/// stands (or empty) and marked degraded, and one refresh is queued to replace it.
 pub fn overview<H: Host + ?Sized>(host: &H) -> Result<Response> {
-    let at = now(host)?;
-    let now_ms = at.timestamp_millis();
+    let now_ms = now(host)?.timestamp_millis();
     let saved = read_saved(host)?;
     let rows = Client(host).query(SNAPSHOTS, &Query::select(Filter::All))?;
-    // Kept in hand for the fallback below, so a failed compile needs no further read.
-    let stored = rows.into_iter().next();
-    if let Some(row) = &stored {
-        let fresh = parse_ms(text(row, "expires_at")).unwrap_or_default() > now_ms;
-        if fresh && snapshot_valid(&row["payload"]) {
-            return Ok(Response::new(200, compose(row, &saved, now_ms, false)));
-        }
-    }
-    // The compile stops gathering well before the host's time limit, leaving room to rank
-    // and store. If it still fails, the person gets the stored page already read above, or
-    // an empty page marked degraded, and the next read tries again. A hard halt by the host
-    // mid-compile cannot be caught here; part 5b moves this work into a job.
-    let outcome = compile(host).unwrap_or(Outcome::KeptLastGood);
-    match outcome {
-        Outcome::Replaced => {
-            let Ok(saved) = read_saved(host) else { return Ok(degraded_empty()) };
-            let Ok(rows) = Client(host).query(SNAPSHOTS, &Query::select(Filter::All)) else {
-                return Ok(degraded_empty());
-            };
-            match rows.first() {
-                Some(row) => Ok(Response::new(200, compose(row, &saved, now_ms, false))),
-                None => Ok(Response::new(200, compose(&json!({"payload":{"articles":[]}}), &saved, now_ms, true))),
-            }
-        }
-        Outcome::KeptLastGood => match &stored {
-            Some(row) if snapshot_valid(&row["payload"]) => {
-                Ok(Response::new(200, compose(row, &saved, now_ms, true)))
-            }
-            _ => Ok(Response::new(200, compose(&json!({"payload":{"articles":[]}}), &saved, now_ms, true))),
-        },
-    }
-}
-
-/// The answer when even the saved rows cannot be read. It names no sources, because none
-/// could be checked.
-fn degraded_empty() -> Response {
-    Response::new(
-        200,
-        json!({
-            "topStories": [], "rankedStories": [], "sourceGroups": [],
-            "activeTopics": [], "enabledSources": [], "degraded": true,
-        }),
-    )
+    let stored = rows.into_iter().next().filter(|row| snapshot_valid(&row["payload"]));
+    let fresh = stored.as_ref().is_some_and(|row| parse_ms(text(row, "expires_at")).unwrap_or_default() > now_ms);
+    crate::refresh::ensure(host, !fresh);
+    Ok(match stored {
+        Some(row) => Response::new(200, compose(&row, &saved, now_ms, !fresh)),
+        None => Response::new(200, compose(&json!({"payload":{"articles":[]}}), &saved, now_ms, true)),
+    })
 }

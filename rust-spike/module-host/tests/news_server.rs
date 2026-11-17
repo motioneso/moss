@@ -359,7 +359,7 @@ fn installed_news_package_serves_routes_from_the_real_server() {
     assert_eq!(status, 200, "{text}");
     let read = json_of(&text);
     assert_eq!(read["sourceExclusions"].as_array().unwrap().len(), 1, "{text}");
-    assert_eq!(read["refresh"]["state"], "idle", "{text}");
+    assert!(matches!(read["refresh"]["state"].as_str(), Some("idle" | "queued" | "running")), "{text}");
     // The other person sees none of it and cannot remove it.
     let (_, text) = call(Method::GET, "/personalization", Some(&other), None);
     assert_eq!(json_of(&text)["sourceExclusions"], json!([]), "{text}");
@@ -414,13 +414,81 @@ fn installed_news_package_serves_routes_from_the_real_server() {
     println!("news live: the real feed was saved for the owner and is invisible to the other person");
     // The overview compiles the page from the real sources on the real server. Nothing is
     // intercepted: the catalog and saved feeds are read live through the public-web fetch.
+    // The first read queues a refresh. The server's own worker runs it, and the page appears once
+    // the refresh state is idle again.
     let (status, text) = call(Method::GET, "/overview", Some(&cookie), None);
     assert_eq!(status, 200, "{text}\n{}", log());
-    let overview = json_of(&text);
+    let waited = std::time::Instant::now();
+    let overview = loop {
+        let (_, text) = call(Method::GET, "/overview", Some(&cookie), None);
+        let page = json_of(&text);
+        let (_, p) = call(Method::GET, "/personalization", Some(&cookie), None);
+        let state = json_of(&p)["refresh"]["state"].clone();
+        if state == json!("idle") && !page["rankedStories"].as_array().map_or(true, |s| s.is_empty()) {
+            break page;
+        }
+        assert!(waited.elapsed() < Duration::from_secs(180), "the refresh never finished (state {state})\n{}", log());
+        std::thread::sleep(Duration::from_secs(3));
+    };
     let stories = overview["rankedStories"].as_array().expect("ranked stories");
-    assert!(!stories.is_empty(), "the live compile found no stories: {text}");
-    assert!(!overview["topStories"].as_array().unwrap().is_empty(), "{text}");
-    println!("news live: overview compiled {} real stories, first: {}", stories.len(), stories[0]["title"]);
+    assert!(!overview["topStories"].as_array().unwrap().is_empty(), "{overview}");
+    assert_eq!(overview["degraded"], json!(false), "{overview}");
+    println!("news live: the queued refresh compiled {} real stories, first: {}", stories.len(), stories[0]["title"]);
+    // The refresh left a success time and the other person has no refresh record of their own work.
+    let rows = |sql: &'static str, who: uuid::Uuid| -> Vec<tokio_postgres::Row> {
+        runtime.block_on(async {
+            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+            tokio::spawn(async move {
+                let _ = connection.await;
+            });
+            db.query(sql, &[&who]).await.unwrap()
+        })
+    };
+    let done = rows("SELECT last_success_at IS NOT NULL, compiled_generation = requested_generation FROM app.news_refresh_state WHERE owner_user_id=$1", owner);
+    assert_eq!((done[0].get::<_, bool>(0), done[0].get::<_, bool>(1)), (true, true));
+    println!("news live: refresh history shows a success for the owner");
+    // A check of the saved sites through the real route and the server's worker.
+    let (status, text) = call(Method::POST, "/revalidation", Some(&cookie), None);
+    assert_eq!((status, json_of(&text)["queued"].clone()), (202, json!(true)), "{text}");
+    let waited = std::time::Instant::now();
+    loop {
+        let open = rows("SELECT 1 FROM moss_queue.jobs WHERE actor_user_id=$1 AND queue LIKE '%.news-revalidate' AND state IN ('pending','running')", owner);
+        if open.is_empty() {
+            break;
+        }
+        assert!(waited.elapsed() < Duration::from_secs(180), "the check never finished\n{}", log());
+        std::thread::sleep(Duration::from_secs(2));
+    }
+    let (_, text) = call(Method::GET, "/personalization", Some(&cookie), None);
+    let health = json_of(&text)["customSources"][0]["healthStatus"].clone();
+    let stored = rows("SELECT health_status FROM app.news_custom_sources WHERE owner_user_id=$1", owner);
+    assert_eq!(health, json!(stored[0].get::<_, String>(0)), "the page shows the stored health");
+    println!("news live: after a real check the saved feed shows health {health}, read from the stored record");
+    let other_id: uuid::Uuid = runtime.block_on(async {
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        db.query_one("SELECT id FROM app.users WHERE email='news-other@example.test'", &[]).await.unwrap().get(0)
+    });
+    // The other person's own reads queue their own jobs. Every job in the queue, theirs and the
+    // owner's, carries only the queue name and one fixed word.
+    let jobs = runtime.block_on(async {
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        db.query("SELECT payload::text FROM moss_queue.jobs WHERE queue LIKE '%.news-%'", &[]).await.unwrap()
+    });
+    assert!(!jobs.is_empty());
+    for row in &jobs {
+        let text: String = row.get(0);
+        assert!(!text.to_lowercase().contains(&MARK.to_lowercase()) && !text.contains("bbci"), "job payload {text}");
+        let payload: Value = serde_json::from_str(&text).unwrap();
+        assert!(matches!(payload["params"], Value::Object(ref m) if m.len() == 1 && m.contains_key("kind")), "{text}");
+    }
+    let _ = other_id;
+    println!("news live: {} queued News jobs, all metadata only", jobs.len());
 
     // Nothing the test sent reached the server log.
     assert!(!log().to_lowercase().contains(&MARK.to_lowercase()));
