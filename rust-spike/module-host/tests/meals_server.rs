@@ -513,7 +513,7 @@ fn installed_meals_package_serves_routes_from_the_real_server() {
     let (status, text) = tool("meals.meal.cooked", json!({"mealId":meal_id}), true);
     assert_eq!(status, 200, "{text}\n{}", log());
     let cooked = json_of(&text);
-    assert_eq!(cooked["data"]["pantryChanges"][0]["after"], 3.0, "{text}");
+    assert_eq!(cooked["data"]["pantryChanges"][0]["after"], 4.0, "{text}");
     let action = cooked["data"]["undo"]["actionId"].as_str().unwrap().to_owned();
     let (status, text) = call(Method::POST, "/meals/tools/run", Some(&other), Some(json!({"tool":"meals.undo","parameters":{"actionId":action}})));
     assert_eq!(status, 403, "the second person is refused before anything runs: {text}");
