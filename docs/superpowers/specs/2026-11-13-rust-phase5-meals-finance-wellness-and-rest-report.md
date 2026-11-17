@@ -143,3 +143,73 @@ scripts/run-gate.sh start --gate test:rust-web-research-live
   The Brave call has no 8 second cap of its own and uses the time the host has left.
 - **A failure reading the chat model shows as "no model".** The search stays off either way, but
   the reason shown can be the wrong one.
+
+## Wellness test stand-in (part 12)
+
+Card JS-294. Part of [issue 4027](https://github.com/motioneso/moss/issues/4027). Release note
+Category: N/A.
+
+### What was built
+
+Invented Wellness data for tests, and nothing else. It lives in the existing test-only stand-in
+crate (`rust-spike/standins`, which no module or app depends on), so it ships nowhere. No
+package, route, table, tool or screen exists yet. Those are parts 13 to 18.
+
+- **Two invented people**, Alice and Bob, with fixed ids and fixed dates around one reference
+  day (15 March 2026), so a later 30-day count has a known window.
+- **Check-ins.** Alice has 8 and Bob has 4. Together they cover all six core feelings, a note and
+  no note, a wheel and an assisted entry, and the missing numbers the old data allows.
+- **Medicines.** Alice has 6 (once a day, twice a day, as needed, certain weekdays, a cycle, and
+  one switched off). Bob has 2. The weekday and cycle ones are there so the schedule code in
+  part 14 has every shape the stand-in can cover.
+- **Dose logs.** 24 for Alice (taken, skipped, as-needed with a reason, and days with no log at
+  all) and 6 for Bob.
+- **Therapy notes.** 4 for Alice (alone, linked to a check-in, linked to an emotion, both
+  kinds) and 2 for Bob.
+- **Markers.** Every private text value (check-in note, medicine name and note, dose, as-needed
+  reason, therapy note) holds one token that starts with `MKR-` and names its owner, such as
+  `MKR-THERAPY-A-02`. A later leak test plants the rows and searches logs, job payloads,
+  activity rows and exports for those tokens. A helper returns each person's tokens.
+- **Field names** are the ones the old routes return, so a later part can post a row or compare
+  an answer without translating.
+
+### Proof
+
+| Claim                                               | Evidence                                                                                                                                                                                                                                                                                                                                       |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Each row has exactly the old route's fields         | A native test compares every row's key set with the old Wellness response types                                                                                                                                                                                                                                                                |
+| Rows obey the old database rules                    | A native test mirrors the old column rules. Then the real old database accepted every row, inserted as each person under the old row security rules. This caught a bug in the first draft of the ids (one id was a character too long), now fixed                                                                                              |
+| A second person cannot read the first person's rows | Real database test: each person reads only their own count in all four tables. With the four read rules replaced by a wide-open rule, Bob saw all of Alice's rows, so the test can fail. With the real rules back, Bob saw only his own                                                                                                        |
+| Every private value carries a unique marker         | Native test. Seen failing when one marker was removed (`body has private text with no marker`)                                                                                                                                                                                                                                                 |
+| The data is invented, never real                    | A native check refuses addresses outside `example.com`, web links and digit runs of 7 or more in any text field. Seen failing when a `gmail.com` address was planted in a note. A second test plants three real-looking values (a phone number, an outside address, a web link) and expects each caught, and two allowed values expecting none |
+| A reviewer reads each fixture                       | The four files are `rust-spike/standins/fixtures/wellness/*.json`, about 800 short lines in all. Every name is a made-up word (Placeholdin, Examplex, Samplet and so on), every free-text note says `invented`, and every id is a pattern                                                                                                      |
+
+Commands (expected exit code 0, both through `scripts/run-gate.sh`):
+
+```bash
+scripts/run-gate.sh start --gate test:rust-standins
+scripts/run-gate.sh start --gate test:rust-wellness-fixtures
+```
+
+### Not proven or not built
+
+- **Row security, log scans, job payloads and activity rows for the real package** are parts 13
+  to 16. There is no package yet, so there is nothing to leak from. Here only the data and the
+  old database were checked.
+- **Route parity against the old handlers** has nothing to compare yet, because no Rust route
+  exists. The field names and rules are matched against the old types and the old database.
+- **WebAssembly.** This crate is built and tested natively only. It is a test crate that no
+  package depends on, and the crate's servers use networking that does not build for
+  WebAssembly. The Wellness package in part 13 gets both builds.
+- **No live run and no second device.** There is no server path or screen to run.
+- **No app map entries.** Nothing a person sees or does has changed, and there is no Wellness
+  manifest yet. Part 13 adds the manifest and its entries.
+- **Only five of the eight medicine schedule kinds** are covered (once a day, several times a day,
+  as needed, weekdays, cycle). The every-so-often and monthly kinds are added when part 14 needs
+  them.
+- **Check-in feelings use the old taxonomy** only for core feelings plus three valid second-level
+  words. Third-level words are left empty.
+- **No expected figures** (30-day counts, insights). Parts 14 and 16 work them out from the old
+  code on these rows.
+- The numeric check-in values (intensity, energy) cannot carry a marker, so a leak test can only
+  search their text.
