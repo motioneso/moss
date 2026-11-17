@@ -704,8 +704,9 @@ fn refresh_runs_through_the_real_queue_with_metadata_only_payloads_and_private_s
 fn the_daily_check_fires_once_per_person() {
     let w = World::new();
     let (a, b) = (w.f.a, w.f.b);
+    let mut sites = vec![];
     for who in [a, b] {
-        w.plant_site(who, "host-ai-v1");
+        sites.push(w.plant_site(who, "host-ai-v1"));
         w.call(who, "POST", "/prefs", json!({"kind":"topic","key":"technology"}));
     }
     for who in [a, b] {
@@ -730,6 +731,12 @@ fn the_daily_check_fires_once_per_person() {
     for who in [a, b] {
         assert_eq!(w.queued(who, "news-revalidate").len(), 1, "not due again, so no second fire");
     }
-    // Removing the last added source and topic removes the schedule.
-    println!("PASS schedule: two people, one schedule each, one fire each");
+    // Removing the last added source removes only that person's schedule.
+    w.call(a, "DELETE", &format!("/sources/{}", sites[0]), json!({}));
+    let left = |who: uuid::Uuid| -> i64 {
+        rows_as(&w.f, who, "SELECT count(*) FROM moss_queue.schedules WHERE queue LIKE '%.news-revalidate'", &[])[0].get(0)
+    };
+    assert_eq!(left(a), 0, "no added source or topic, so no daily check");
+    assert_eq!(left(b), 1, "the other person keeps theirs");
+    println!("PASS schedule: two people, one schedule each, one fire each, removal drops only the owner's");
 }

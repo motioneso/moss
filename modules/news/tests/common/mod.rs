@@ -29,6 +29,8 @@ pub struct Fake {
     pub clock: Cell<i64>,
     /// Open jobs as (person, queue, key, parameters). Running one removes it.
     pub jobs: RefCell<Vec<(String, String, String, Value)>>,
+    /// Jobs being executed right now as (person, queue). They still count as open, like the real queue.
+    pub running: RefCell<Vec<(String, String)>>,
     /// Daily schedules as (person, queue, key) with the cron and zone.
     pub schedules: RefCell<BTreeMap<(String, String, String), Value>>,
     /// Notifications posted, as (person, parameters).
@@ -50,6 +52,7 @@ impl Fake {
             files: RefCell::new(BTreeMap::new()),
             clock: Cell::new(1_794_000_000_000),
             jobs: RefCell::new(vec![]),
+            running: RefCell::new(vec![]),
             schedules: RefCell::new(BTreeMap::new()),
             notices: RefCell::new(vec![]),
             before_model: RefCell::new(None),
@@ -121,7 +124,15 @@ impl Fake {
         let at = self.jobs.borrow().iter().position(|(who, q, _, _)| who == actor && q == queue)?;
         let (_, q, _, params) = self.jobs.borrow_mut().remove(at);
         let payload = json!({"queue": q, "parameters": params}).to_string();
-        Some(moss_news_module::handle(self, "job", &payload).expect("the job ran"))
+        self.running.borrow_mut().push((actor.to_owned(), q.clone()));
+        let answer = moss_news_module::handle(self, "job", &payload).expect("the job ran");
+        self.running.borrow_mut().retain(|(who, name)| !(who == actor && *name == q));
+        Some(answer)
+    }
+    /// Delivers a refresh job that the queue handed over before the request's own writes existed.
+    pub fn run_job_unqueued(&self, queue: &str) -> String {
+        let payload = json!({"queue": queue, "parameters": {"kind": "user_refresh"}}).to_string();
+        moss_news_module::handle(self, "job", &payload).expect("the job ran")
     }
     pub fn open_jobs(&self, queue: &str) -> usize {
         let actor = self.actor.get();
@@ -209,6 +220,13 @@ impl Host for Fake {
                     .iter()
                     .filter(|(who, q, _, _)| who == actor && q == resource)
                     .map(|(_, _, key, params)| json!({"id": key, "state": "pending", "params": params}))
+                    .chain(
+                        self.running
+                            .borrow()
+                            .iter()
+                            .filter(|(who, q)| who == actor && q == resource)
+                            .map(|_| json!({"id": "running", "state": "running", "params": {}})),
+                    )
                     .collect();
                 return Ok(json!({"jobs": open}));
             }

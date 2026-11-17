@@ -43,21 +43,27 @@ fn update_if_current<H: Host + ?Sized>(host: &H, expected: i64, set: Vec<(&str, 
     Ok(!Client(host).query(REFRESH, &Query::update(filter, set))?.is_empty())
 }
 
+/// Inserts the first state row at generation 1. False means another writer created it first.
+fn create_state<H: Host + ?Sized>(host: &H, state: &str) -> Result<bool> {
+    let at = stamp(host)?;
+    let mut insert = Query::insert(values(vec![
+        ("state", json!(state)),
+        ("requested_generation", json!(1)),
+        ("compiled_generation", json!(0)),
+        ("last_requested_at", json!(at)),
+        ("updated_at", json!(at)),
+    ]));
+    insert.conflict = Conflict::Ignore;
+    Ok(!Client(host).query(REFRESH, &insert)?.is_empty())
+}
+
 /// Records that the page is out of date. With `ensure` an already queued or running refresh
 /// is left alone. Returns the state the person sees and the generation now requested.
 pub fn bump<H: Host + ?Sized>(host: &H, ensure: bool) -> Result<String> {
     for _ in 0..MAX_RACES {
         let at = stamp(host)?;
         let Some(row) = read_state(host)? else {
-            let mut insert = Query::insert(values(vec![
-                ("state", json!("queued")),
-                ("requested_generation", json!(1)),
-                ("compiled_generation", json!(0)),
-                ("last_requested_at", json!(at)),
-                ("updated_at", json!(at)),
-            ]));
-            insert.conflict = Conflict::Ignore;
-            if !Client(host).query(REFRESH, &insert)?.is_empty() {
+            if create_state(host, "queued")? {
                 return Ok("queued".into());
             }
             continue;
@@ -81,16 +87,20 @@ pub fn bump<H: Host + ?Sized>(host: &H, ensure: bool) -> Result<String> {
 }
 
 /// Marks a run as started and returns the generation it works for.
-fn begin<H: Host + ?Sized>(host: &H) -> Result<Option<i64>> {
+fn begin<H: Host + ?Sized>(host: &H) -> Result<i64> {
     for _ in 0..MAX_RACES {
-        let Some(row) = read_state(host)? else { return Ok(None) };
+        let Some(row) = read_state(host)? else {
+            // The queue can deliver the first job before the request that queued it commits.
+            create_state(host, "running")?;
+            continue;
+        };
         let set = vec![
             ("state", json!("running")),
             ("failure_kind", Value::Null),
             ("last_attempt_at", json!(stamp(host)?)),
         ];
         if update_if_current(host, generation(&row), set)? {
-            return Ok(Some(generation(&row)));
+            return Ok(generation(&row));
         }
     }
     Err(Error::new("Refresh state is busy"))
@@ -125,14 +135,17 @@ fn fail_if_current<H: Host + ?Sized>(host: &H, run: i64, kind: FailureKind) -> R
     )
 }
 
-fn has_open<H: Host + ?Sized>(host: &H, queue: &str) -> Result<bool> {
+fn has_pending<H: Host + ?Sized>(host: &H, queue: &str) -> Result<bool> {
+    // A running job may already have read the state, so only a pending job covers a new request.
     let open = host.call("jobs", "list-open", queue, json!({}))?;
-    Ok(open["jobs"].as_array().is_some_and(|jobs| !jobs.is_empty()))
+    Ok(open["jobs"]
+        .as_array()
+        .is_some_and(|jobs| jobs.iter().any(|job| job["state"] == "pending")))
 }
 
 /// Queues one job unless one is already open. Returns whether a job was queued.
 fn enqueue<H: Host + ?Sized>(host: &H, queue: &str, kind: &str) -> Result<bool> {
-    if has_open(host, queue)? {
+    if has_pending(host, queue)? {
         return Ok(false);
     }
     let sent = host.call(
@@ -157,7 +170,6 @@ pub fn reconcile_schedule<H: Host + ?Sized>(host: &H) -> Result<()> {
     let client = Client(host);
     let mut one = Query::select(Filter::All);
     one.limit = Some(1);
-    let wanted = !client.query(SOURCES, &one)?.is_empty() || !client.query(TOPICS, &one)?.is_empty();
     let registered = host.call(
         "jobs",
         "schedule",
@@ -167,6 +179,8 @@ pub fn reconcile_schedule<H: Host + ?Sized>(host: &H) -> Result<()> {
             "params": {"kind": "revalidate"}, "keepExisting": true,
         }),
     )?;
+    // Read after registering so a source removed in the meantime is not missed.
+    let wanted = !client.query(SOURCES, &one)?.is_empty() || !client.query(TOPICS, &one)?.is_empty();
     if !wanted {
         if let Some(id) = registered["id"].as_str() {
             host.call("jobs", "unschedule", REVALIDATE_QUEUE, json!({"id": id}))?;
@@ -235,7 +249,7 @@ pub fn handle_job<H: Host + ?Sized>(host: &H, payload: &str) -> Result<String> {
 fn run_refresh<H: Host + ?Sized>(host: &H) -> Result<Value> {
     let mut stored = false;
     for _ in 0..MAX_RESTARTS {
-        let Some(run) = begin(host)? else { return Ok(json!({"ok": true, "stored": false})) };
+        let run = begin(host)?;
         match compile::build(host)? {
             Built::Failed(kind) => {
                 if fail_if_current(host, run, kind)? {

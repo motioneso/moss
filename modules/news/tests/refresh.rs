@@ -330,3 +330,35 @@ fn another_person_has_their_own_state_and_jobs() {
     assert_eq!(state(&fake)["requested_generation"], 1);
     assert_eq!(fake.jobs.borrow().len(), 2);
 }
+
+#[test]
+fn a_request_made_while_a_job_runs_still_queues_a_job() {
+    let fake = Fake::new();
+    source(&fake, A, "host-ai-v1", "healthy", "approved");
+    fake.page(FEED, 200, "application/rss+xml", RSS);
+    fake.route("POST", "/prefs", &[], json!({"kind":"topic","key":"technology"}));
+    assert_eq!(fake.open_jobs("news-refresh"), 1);
+    let seen = std::rc::Rc::new(std::cell::Cell::new(usize::MAX));
+    let probe = seen.clone();
+    // The running job still counts as open on the real queue, so only a pending job may suppress a new one.
+    *fake.before_model.borrow_mut() = Some(Box::new(move |f: &Fake| {
+        f.route("POST", "/prefs", &[], json!({"kind":"topic","key":"science"}));
+        probe.set(f.open_jobs("news-refresh"));
+    }));
+    fake.model_says(r#"{"rankings":[]}"#);
+    fake.model_says(r#"{"rankings":[]}"#);
+    fake.run_job("news-refresh").unwrap();
+    assert_eq!(seen.get(), 1, "a change during a run must queue a follow-up job");
+}
+
+#[test]
+fn the_first_job_creates_the_state_row_when_it_runs_before_the_request_commits() {
+    let fake = Fake::new();
+    source(&fake, A, "host-ai-v1", "healthy", "approved");
+    fake.page(FEED, 200, "application/rss+xml", RSS);
+    assert!(fake.rows("app.news_refresh_state").is_empty());
+    fake.model_says(r#"{"rankings":[]}"#);
+    let answer = fake.run_job_unqueued("news-refresh");
+    assert!(answer.contains("\"stored\":true"), "{answer}");
+    assert_eq!(state(&fake)["state"], "idle");
+}
