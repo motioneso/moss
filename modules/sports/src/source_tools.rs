@@ -103,11 +103,8 @@ pub fn run<H: Host + ?Sized>(host: &H, teams: &dyn TeamList, payload: &str) -> R
         "sports.confirmSourceRecipe" => reply(source_rebuild::confirm(host, &request("PATCH", "/sources/:id/rebuild", id, body()))?),
         "sports.retrySource" => reply(source_rebuild::retry(host, &request("POST", "/sources/:id/retry", id, json!({})))?),
         _ => {
-            let id = id.unwrap_or_default();
-            if sources::find(host, id)?.is_none() {
-                return Ok(failure("That sports source was not found."));
-            }
-            json!({"data":{"removed":sources::remove(host, id)?}})
+            let removed = routes::remove(host, &request("DELETE", "/sources/:id", id, json!({})))?;
+            json!({"data":{"removed":removed.body["deleted"].clone()}})
         }
     })
 }

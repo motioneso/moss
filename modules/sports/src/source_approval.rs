@@ -11,13 +11,7 @@ use crate::catalog;
 use moss_module_sdk::{Host, Result};
 use serde_json::{json, Map, Value};
 
-const REMOVAL: [(&str, &str); 2] = [
-    ("Source and coverage", "Remove this sports news source and all its coverage assignments."),
-    (
-        "Stored photos",
-        "Delete stored photos for this source. Any copies left after a cleanup failure are removed during later cleanup.",
-    ),
-];
+const REMOVAL: [(&str, &str); 1] = [("Source and coverage", "Remove this sports news source and all its coverage assignments.")];
 const REPLACEMENT: &str = "Replace all coverage assignments for this source with the complete list shown. Any assignment not listed will be removed.";
 const CLEARED: &str = "Remove all coverage assignments for this source.";
 

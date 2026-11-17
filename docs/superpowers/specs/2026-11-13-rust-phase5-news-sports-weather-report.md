@@ -931,4 +931,10 @@ runs the same code as the matching route, so a tool and a route cannot disagree.
 
 ### Review round 1 (part 14b)
 
-Pending.
+- Major, fixed: the removal card promised that stored photos would be deleted, but this package
+  stores none and removal never touched any. The line is gone.
+- Minor, fixed: the removal tool now runs the same code as the delete route.
+- Minor, not fixed: the live test prints "Not proven" when the recipe model gives no usable answer,
+  where it used to stop. This is listed above, so nothing passes silently.
+- Minor, not fixed: the chat route answers 403 for any host failure, as the Meals, Goals and
+  Wellness routes do. An expired preview or a team list outage also makes an approval stale.
