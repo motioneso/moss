@@ -203,6 +203,8 @@ fn cards_and_feedback_follow_the_rules_privately() {
     let (status, undone) = call!(rt, database, owner, |cx| feedback::undo(cx, &dismissal));
     assert_eq!((status, undone["feedback"]["status"].as_str()), (200, Some("undone")));
     let (_, listed) = call!(rt, database, owner, |cx| proactive_cards::list(cx, None));
+    let probe = rt.block_on(bootstrap.query_one("SELECT status, deferred_until::text, expires_at::text FROM app.proactive_cards WHERE id=$1", &[&card])).unwrap();
+    println!("card after undo: {:?} {:?} {:?}", probe.get::<_, String>(0), probe.get::<_, Option<String>>(1), probe.get::<_, Option<String>>(2));
     assert_eq!(listed["cards"].as_array().unwrap().len(), 1, "undo brings the card back");
     let (status, again) = call!(rt, database, owner, |cx| feedback::undo(cx, &dismissal));
     assert_eq!((status, again["feedback"]["status"].as_str()), (200, Some("undone")));
