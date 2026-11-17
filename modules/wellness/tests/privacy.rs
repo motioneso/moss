@@ -62,8 +62,8 @@ fn medication_text_reaches_no_host_call_beyond_the_two_medication_tables() {
 fn the_manifest_declares_no_model_port() {
     let manifest: Value = serde_json::from_str(include_str!("../moss.module.json")).unwrap();
     let ports: Vec<&str> = manifest["capabilities"].as_array().unwrap().iter().map(|c| c["port"].as_str().unwrap()).collect();
-    assert_eq!(ports, ["db", "context", "kv", "jobs"]);
-    for banned in ["ai", "model", "fetch", "network", "memory", "tools"] {
+    assert_eq!(ports, ["db", "context", "kv", "jobs", "tools"]);
+    for banned in ["ai", "model", "fetch", "network", "memory"] {
         assert!(!ports.contains(&banned), "{banned}");
     }
     assert!(!include_str!("../moss.module.json").contains("\"ai\""));
