@@ -55,6 +55,7 @@
     "test:rust-install-endpoints": "tsx rust-spike/module-host/tools/install-endpoints-gate.ts",
     "test:rust-calendar-server": "tsx modules/calendar/tools/server-gate.ts",
     "test:rust-standins": "bash rust-spike/standins/tools/gate.sh",
+    "test:rust-wellness-fixtures": "tsx scripts/test-integration.ts tests/integration/rust-wellness-fixtures.test.ts",
     "test:rust-connectors": "tsx modules/connectors/tools/gate.ts",
     "test:rust-email": "tsx modules/email/tools/gate.ts",
     "test:rust-email-live": "bash modules/email/tools/live.sh",

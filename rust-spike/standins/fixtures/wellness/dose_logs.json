@@ -1,0 +1,276 @@
+{
+  "alice": [
+    {
+      "id": "e1a00000-0000-4000-8000-000000000001",
+      "medicationId": "d1a00000-0000-4000-8000-000000000001",
+      "status": "taken",
+      "dose": "MKR-DOSE-A-01 invented dose",
+      "prnReason": null,
+      "scheduledFor": "2026-03-01T08:00:00.000Z",
+      "loggedAt": "2026-03-01T08:06:00.000Z"
+    },
+    {
+      "id": "e1a00000-0000-4000-8000-000000000002",
+      "medicationId": "d1a00000-0000-4000-8000-000000000001",
+      "status": "taken",
+      "dose": null,
+      "prnReason": null,
+      "scheduledFor": "2026-03-02T08:00:00.000Z",
+      "loggedAt": "2026-03-02T08:07:00.000Z"
+    },
+    {
+      "id": "e1a00000-0000-4000-8000-000000000003",
+      "medicationId": "d1a00000-0000-4000-8000-000000000001",
+      "status": "taken",
+      "dose": null,
+      "prnReason": null,
+      "scheduledFor": "2026-03-03T08:00:00.000Z",
+      "loggedAt": "2026-03-03T08:08:00.000Z"
+    },
+    {
+      "id": "e1a00000-0000-4000-8000-000000000004",
+      "medicationId": "d1a00000-0000-4000-8000-000000000001",
+      "status": "skipped",
+      "dose": null,
+      "prnReason": null,
+      "scheduledFor": "2026-03-04T08:00:00.000Z",
+      "loggedAt": "2026-03-04T08:09:00.000Z"
+    },
+    {
+      "id": "e1a00000-0000-4000-8000-000000000005",
+      "medicationId": "d1a00000-0000-4000-8000-000000000001",
+      "status": "taken",
+      "dose": null,
+      "prnReason": null,
+      "scheduledFor": "2026-03-05T08:00:00.000Z",
+      "loggedAt": "2026-03-05T08:10:00.000Z"
+    },
+    {
+      "id": "e1a00000-0000-4000-8000-000000000006",
+      "medicationId": "d1a00000-0000-4000-8000-000000000001",
+      "status": "taken",
+      "dose": null,
+      "prnReason": null,
+      "scheduledFor": "2026-03-07T08:00:00.000Z",
+      "loggedAt": "2026-03-07T08:12:00.000Z"
+    },
+    {
+      "id": "e1a00000-0000-4000-8000-000000000007",
+      "medicationId": "d1a00000-0000-4000-8000-000000000001",
+      "status": "taken",
+      "dose": null,
+      "prnReason": null,
+      "scheduledFor": "2026-03-08T08:00:00.000Z",
+      "loggedAt": "2026-03-08T08:13:00.000Z"
+    },
+    {
+      "id": "e1a00000-0000-4000-8000-000000000008",
+      "medicationId": "d1a00000-0000-4000-8000-000000000001",
+      "status": "skipped",
+      "dose": null,
+      "prnReason": null,
+      "scheduledFor": "2026-03-09T08:00:00.000Z",
+      "loggedAt": "2026-03-09T08:14:00.000Z"
+    },
+    {
+      "id": "e1a00000-0000-4000-8000-000000000009",
+      "medicationId": "d1a00000-0000-4000-8000-000000000001",
+      "status": "taken",
+      "dose": null,
+      "prnReason": null,
+      "scheduledFor": "2026-03-10T08:00:00.000Z",
+      "loggedAt": "2026-03-10T08:15:00.000Z"
+    },
+    {
+      "id": "e1a00000-0000-4000-8000-000000000010",
+      "medicationId": "d1a00000-0000-4000-8000-000000000001",
+      "status": "taken",
+      "dose": null,
+      "prnReason": null,
+      "scheduledFor": "2026-03-12T08:00:00.000Z",
+      "loggedAt": "2026-03-12T08:17:00.000Z"
+    },
+    {
+      "id": "e1a00000-0000-4000-8000-000000000011",
+      "medicationId": "d1a00000-0000-4000-8000-000000000001",
+      "status": "taken",
+      "dose": null,
+      "prnReason": null,
+      "scheduledFor": "2026-03-13T08:00:00.000Z",
+      "loggedAt": "2026-03-13T08:18:00.000Z"
+    },
+    {
+      "id": "e1a00000-0000-4000-8000-000000000012",
+      "medicationId": "d1a00000-0000-4000-8000-000000000001",
+      "status": "taken",
+      "dose": null,
+      "prnReason": null,
+      "scheduledFor": "2026-03-14T08:00:00.000Z",
+      "loggedAt": "2026-03-14T08:19:00.000Z"
+    },
+    {
+      "id": "e1a00000-0000-4000-8000-000000000013",
+      "medicationId": "d1a00000-0000-4000-8000-000000000002",
+      "status": "taken",
+      "dose": null,
+      "prnReason": null,
+      "scheduledFor": "2026-03-10T09:00:00.000Z",
+      "loggedAt": "2026-03-10T09:10:00.000Z"
+    },
+    {
+      "id": "e1a00000-0000-4000-8000-000000000014",
+      "medicationId": "d1a00000-0000-4000-8000-000000000002",
+      "status": "taken",
+      "dose": null,
+      "prnReason": null,
+      "scheduledFor": "2026-03-10T21:00:00.000Z",
+      "loggedAt": "2026-03-10T21:10:00.000Z"
+    },
+    {
+      "id": "e1a00000-0000-4000-8000-000000000015",
+      "medicationId": "d1a00000-0000-4000-8000-000000000002",
+      "status": "taken",
+      "dose": null,
+      "prnReason": null,
+      "scheduledFor": "2026-03-11T09:00:00.000Z",
+      "loggedAt": "2026-03-11T09:10:00.000Z"
+    },
+    {
+      "id": "e1a00000-0000-4000-8000-000000000016",
+      "medicationId": "d1a00000-0000-4000-8000-000000000002",
+      "status": "taken",
+      "dose": null,
+      "prnReason": null,
+      "scheduledFor": "2026-03-11T21:00:00.000Z",
+      "loggedAt": "2026-03-11T21:10:00.000Z"
+    },
+    {
+      "id": "e1a00000-0000-4000-8000-000000000017",
+      "medicationId": "d1a00000-0000-4000-8000-000000000002",
+      "status": "taken",
+      "dose": null,
+      "prnReason": null,
+      "scheduledFor": "2026-03-12T09:00:00.000Z",
+      "loggedAt": "2026-03-12T09:10:00.000Z"
+    },
+    {
+      "id": "e1a00000-0000-4000-8000-000000000018",
+      "medicationId": "d1a00000-0000-4000-8000-000000000002",
+      "status": "taken",
+      "dose": null,
+      "prnReason": null,
+      "scheduledFor": "2026-03-12T21:00:00.000Z",
+      "loggedAt": "2026-03-12T21:10:00.000Z"
+    },
+    {
+      "id": "e1a00000-0000-4000-8000-000000000019",
+      "medicationId": "d1a00000-0000-4000-8000-000000000002",
+      "status": "taken",
+      "dose": null,
+      "prnReason": null,
+      "scheduledFor": "2026-03-13T09:00:00.000Z",
+      "loggedAt": "2026-03-13T09:10:00.000Z"
+    },
+    {
+      "id": "e1a00000-0000-4000-8000-000000000020",
+      "medicationId": "d1a00000-0000-4000-8000-000000000002",
+      "status": "taken",
+      "dose": null,
+      "prnReason": null,
+      "scheduledFor": "2026-03-13T21:00:00.000Z",
+      "loggedAt": "2026-03-13T21:10:00.000Z"
+    },
+    {
+      "id": "e1a00000-0000-4000-8000-000000000021",
+      "medicationId": "d1a00000-0000-4000-8000-000000000002",
+      "status": "taken",
+      "dose": null,
+      "prnReason": null,
+      "scheduledFor": "2026-03-14T09:00:00.000Z",
+      "loggedAt": "2026-03-14T09:10:00.000Z"
+    },
+    {
+      "id": "e1a00000-0000-4000-8000-000000000022",
+      "medicationId": "d1a00000-0000-4000-8000-000000000002",
+      "status": "taken",
+      "dose": null,
+      "prnReason": null,
+      "scheduledFor": "2026-03-14T21:00:00.000Z",
+      "loggedAt": "2026-03-14T21:10:00.000Z"
+    },
+    {
+      "id": "e1a00000-0000-4000-8000-000000000023",
+      "medicationId": "d1a00000-0000-4000-8000-000000000003",
+      "status": "prn",
+      "dose": "MKR-DOSE-A-23 invented dose",
+      "prnReason": "MKR-PRN-A-23 invented reason",
+      "scheduledFor": null,
+      "loggedAt": "2026-03-07T15:20:00.000Z"
+    },
+    {
+      "id": "e1a00000-0000-4000-8000-000000000024",
+      "medicationId": "d1a00000-0000-4000-8000-000000000003",
+      "status": "prn",
+      "dose": null,
+      "prnReason": "MKR-PRN-A-24 invented second reason",
+      "scheduledFor": null,
+      "loggedAt": "2026-03-13T11:00:00.000Z"
+    }
+  ],
+  "bob": [
+    {
+      "id": "e1b00000-0000-4000-8000-000000000001",
+      "medicationId": "d1b00000-0000-4000-8000-000000000001",
+      "status": "taken",
+      "dose": null,
+      "prnReason": null,
+      "scheduledFor": "2026-03-10T08:00:00.000Z",
+      "loggedAt": "2026-03-10T08:20:00.000Z"
+    },
+    {
+      "id": "e1b00000-0000-4000-8000-000000000002",
+      "medicationId": "d1b00000-0000-4000-8000-000000000001",
+      "status": "taken",
+      "dose": null,
+      "prnReason": null,
+      "scheduledFor": "2026-03-11T08:00:00.000Z",
+      "loggedAt": "2026-03-11T08:20:00.000Z"
+    },
+    {
+      "id": "e1b00000-0000-4000-8000-000000000003",
+      "medicationId": "d1b00000-0000-4000-8000-000000000001",
+      "status": "skipped",
+      "dose": null,
+      "prnReason": null,
+      "scheduledFor": "2026-03-12T08:00:00.000Z",
+      "loggedAt": "2026-03-12T08:20:00.000Z"
+    },
+    {
+      "id": "e1b00000-0000-4000-8000-000000000004",
+      "medicationId": "d1b00000-0000-4000-8000-000000000001",
+      "status": "taken",
+      "dose": null,
+      "prnReason": null,
+      "scheduledFor": "2026-03-13T08:00:00.000Z",
+      "loggedAt": "2026-03-13T08:20:00.000Z"
+    },
+    {
+      "id": "e1b00000-0000-4000-8000-000000000005",
+      "medicationId": "d1b00000-0000-4000-8000-000000000001",
+      "status": "taken",
+      "dose": null,
+      "prnReason": null,
+      "scheduledFor": "2026-03-14T08:00:00.000Z",
+      "loggedAt": "2026-03-14T08:20:00.000Z"
+    },
+    {
+      "id": "e1b00000-0000-4000-8000-000000000006",
+      "medicationId": "d1b00000-0000-4000-8000-000000000002",
+      "status": "prn",
+      "dose": "MKR-DOSE-B-06 invented b dose",
+      "prnReason": "MKR-PRN-B-06 invented b reason",
+      "scheduledFor": null,
+      "loggedAt": "2026-03-11T16:00:00.000Z"
+    }
+  ]
+}
