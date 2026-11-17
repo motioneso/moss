@@ -1,16 +1,20 @@
 //! The four kitchen and household tools. The trusted host runs `handle` only after applying the
 //! person's approval policy; `run` is the signed-in transport that asks the host to do so.
 use crate::input::{self, coded, invalid, Checked, Fields, InputError};
-use crate::{kitchen, util};
+use crate::{kitchen, plans, util};
 use moss_module_sdk::{Host, Response, Result};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-pub const TOOLS: [&str; 4] = [
+pub const TOOLS: [&str; 8] = [
     "meals.kitchen.get",
     "meals.kitchen.save",
     "meals.household.save",
     "meals.household.remove",
+    "meals.plan.create",
+    "meals.plan.get",
+    "meals.plan.current",
+    "meals.plan.control",
 ];
 
 #[derive(Deserialize)]
@@ -147,6 +151,10 @@ fn call<H: Host + ?Sized>(host: &H, tool: &str, parameters: &Value) -> Result<Ch
         "meals.kitchen.save" => save_kitchen(host, &input)?,
         "meals.household.save" => save_member(host, &input)?,
         "meals.household.remove" => remove_member(host, &input)?,
+        "meals.plan.create" => plans::create(host, &input)?,
+        "meals.plan.get" => plans::get(host, &input)?,
+        "meals.plan.current" => plans::current(host, &input)?,
+        "meals.plan.control" => plans::control(host, &input)?,
         _ => return Err(moss_module_sdk::Error::new("Unknown Meals tool")),
     })
 }

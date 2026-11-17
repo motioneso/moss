@@ -992,6 +992,71 @@ Both are expected to finish with exit code 0.
 - **Route parity** applies only in that old Meals had no routes. There is nothing to compare.
 - **Release note** is not applicable.
 
+## Meals planning (part 29)
+
+### What existed before this part
+
+Part 28 gave Meals a package with the kitchen and household tools. Nothing for plans or
+recipes existed in Rust.
+
+### What was built
+
+- **Planning rules.** Date handling, the day and meal skeleton, portion sizes, the calorie band
+  and the recipe title key, ported from the old planning code.
+- **The safety rule.** The allergy and dietary check, the merge of the rule result with the
+  model's own safety answer, and the brand-name rule.
+- **Recipe answers read strictly.** The recipe and safety answers from the model are parsed
+  with fixed error text, and the prompts that ask for them are built in Rust.
+- **Pantry name matching.** Matching an ingredient to a pantry item by name, and finding
+  ingredients that are not in the pantry.
+- **The recipe drafting loop.** Draft, check safety, retry with the problem named, and give up
+  after a fixed number of tries. It runs against a stand-in model.
+- **Plan storage.** Plans, days, meals, eaters and recipes are read and written through the
+  host's typed queries. There are no transactions, so a repeated create with the same key
+  finishes a half-written plan, and day and meal changes use compare-and-set updates.
+- **Four plan tools.** Create, get, current and control (stop, resume, retry a day,
+  regenerate). Writes cross the host's one-use approval.
+- **The plan-day job.** Writes one day at a time through the drafting loop, reads the pantry
+  when the plan uses it, and chains the next pending day. A failed enqueue pauses the plan.
+- **Manifest, app map and changelog** carry the new tools, the job queue and the model and
+  jobs ports.
+- **Calories per serving stay empty.** The estimator is part 31. Pantry quantity maths is
+  part 30.
+
+### Proof
+
+- 23 native tests pass for the guest. The drafting loop is proven with a canned model
+  (clean draft, retry after a safety failure, retry after a malformed answer, giving up,
+  brand-name rejection).
+- The package gate passes: native tests, the WebAssembly build, package tests and the
+  installed-package tests.
+- One installed test proves plans are owner-only (a second person and the admin see nothing
+  and cannot stop a plan), that removing the owner rule on the plan and day tables makes the
+  second person see rows (so the check can fail), that the same key gives one plan, and that
+  a planted private marker is in no job payload and no activity row.
+
+### Not proven or not built
+
+- **Tools not built.** Meal edit, swap, servings and favourites edit, plan delete, meal get,
+  meal cooked, meal rate, day edit and re-plan are not built. Control rejects re-plan.
+- **The job has no native or installed test.** Only the drafting loop it calls is tested,
+  with a canned model. The store and plan code have no native unit tests of their own.
+- **No route parity run against the old handlers** for the plan tools, and no live run on the
+  real Rust server.
+- **Live model run.** The model dependency (JS-307) is not merged, so nothing has run against
+  a real model.
+- **Known gaps from review, not fixed.** A day or meal left in the writing state by a killed
+  job is never claimed again. A repeat create with the same key returns the plan as it is and
+  does not finish a half-written one (the store comment overstates this). A failed first
+  enqueue pauses the plan without telling the caller. Regenerate leaves the old recipe rows
+  behind. A regenerate across several days queues only the first day.
+- **Ratings vetoes** are not applied when drafting.
+- **Enqueue limits** are approximated. The host has no "limited" answer, so a failed enqueue
+  pauses the plan.
+- **Numeric columns** may come back as numbers or text from the host. The store accepts both.
+- **No tracking card** for JS-308 was found in Vikunja.
+- **Release note** is not applicable.
+
 ## Finance transactions (part 22)
 
 ### What was built
