@@ -1,6 +1,6 @@
 //! Assistant tools. The host enforces the account's approval policy before a write tool arrives.
 use crate::transactions::Merchant;
-use crate::{accounts, categories, connect, csv_import, input::Refusal, ledger, rules, sort_run, splits, sync, transactions};
+use crate::{accounts, budget, budget_write, categories, connect, csv_import, draft, input::Refusal, ledger, rules, sort_run, splits, sync, transactions};
 use moss_module_sdk::{Error, Host, Response, Result};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -23,7 +23,7 @@ pub fn status(refusal: &Refusal) -> u16 {
 fn status_code(code: &str) -> u16 {
     match code {
         "manual_conflict" | "manual_reconciled_period" | "stale_import" | "stale_transaction" | "stale_transactions"
-        | "stale_rules" | "duplicate_name" | "split_transaction" | "linked_transfer" | "amount_mismatch"
+        | "stale_rules" | "stale_budget" | "stale_previous" | "duplicate_name" | "split_transaction" | "linked_transfer" | "amount_mismatch"
         | "new_merchant" | "merchant_seen" => 409,
         "manual_unavailable" | "not_found" => 404,
         "bank_unavailable" => 502,
@@ -66,6 +66,15 @@ pub fn execute<H: Host + ?Sized>(host: &H, request: Request) -> Result<Value> {
         "finance.import.preview" => Ok(settle(csv_import::preview(host, &request.parameters)?)),
         "finance.import.apply" => Ok(settle(csv_import::apply(host, &request.parameters)?)),
         "finance.sorting.run" => Ok(settle(sort_run::run(host)?)),
+        "finance.budget.status" => Ok(settle(budget::status(host, &request.parameters)?)),
+        "finance.budget.configure" => Ok(settle(budget_write::configure(host, &request.parameters)?)),
+        "finance.budget.assign" => Ok(settle(budget_write::assign(host, &request.parameters)?)),
+        "finance.budget.move" => Ok(settle(budget_write::move_money(host, &request.parameters)?)),
+        "finance.budget.apply" => Ok(settle(budget_write::apply(host, &request.parameters)?)),
+        "finance.budget.draft.build" => Ok(settle(draft::build(host)?)),
+        "finance.budget.draft.get" => Ok(settle(draft::get(host)?)),
+        "finance.budget.draft.update" => Ok(settle(draft::update(host, &request.parameters)?)),
+        "finance.budget.draft.start" => Ok(settle(draft::start(host, &request.parameters)?)),
         _ => Err(Error::new("Unknown Finance tool")),
     }
 }

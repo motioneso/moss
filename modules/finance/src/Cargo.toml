@@ -1,6 +1,6 @@
 [package]
 name = "moss-finance-module"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 publish = false
 description = "Guest-safe Finance: accounts and manual entries"
@@ -52,3 +52,7 @@ path = "../tests/import.rs"
 [[test]]
 name = "isolation"
 path = "../tests/isolation.rs"
+
+[[test]]
+name = "budget"
+path = "../tests/budget.rs"

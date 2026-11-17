@@ -1204,3 +1204,55 @@ Both ended with exit code 0. The first run of the package gate failed because a 
 - Row-level security for the two new tables (rules, imports) is proven through the live run (second person sees none and cannot write) and the guest-level check. It was not separately re-run in Postgres with the protection removed.
 - The stored-job-row search was not seen failing with protection off, because Finance queues no jobs. The control shows the search can find stored text.
 - No screens were built.
+
+## Finance budgets (part 23)
+
+### What was built
+
+- Setup: choose the budget currency once (it cannot change afterwards) and say whether old budget data may be left behind. Repeating the same setup changes nothing.
+- Status for a month: money left to assign, each category's assigned, spent and available amounts, with unspent money carried forward and overspending taken out of next month's pool. Transfers between a person's own accounts are left out, including a matched pair within three days.
+- Assign and move: set what a category gets for a month, move money between categories or from the unassigned pool, and apply up to 20 changes together. Each save carries the review the person was looking at.
+- Drafts: build a draft budget from the last three complete months of stored transactions (monthly average, planned amount rounded up to the next five dollars, steady charges grouped as Bills, income as the middle monthly figure). A draft can be read, edited line by line, and started once.
+- The assistant's writes use `/finance/chat/budget/...` routes, each needing the host's one-use approval. The screen routes sit under `/finance/budget/...`. Package version is 0.3.0, with the new tables, routes, tools, risk levels, features and errors in the manifest.
+
+### Proof
+
+| Check                                                                                     | Result                                                                                                                                        |
+| ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Native guest tests (40 unit, budget 19, plus the older suites)                            | passed                                                                                                                                        |
+| Package tests and the real component built as WebAssembly, run against the real host      | passed, including the four new table grants and the refused tables                                                                            |
+| Draft figures come from stored records                                                    | passed in the guest tests and against the real database: 30000, 31234 and 32000 became 31078 and 31500                                        |
+| An uncertain save saves nothing and says so                                               | a stale review gets a 409 with "Refresh and review"; rows and revision are unchanged. A draft start that fails part way rolls back everything |
+| Two people, real database: second person and an admin read and change none of the budget  | passed. With row security switched off the same check fails (RED), and passes with it back on                                                 |
+| Private text searched for in job rows, host call logs, activity rows and the queue tables | none found; a planted leak is caught by the same scan, and a control that puts amounts into budget activity makes the test fail               |
+| Live run: real server, real HTTPS on a non-loopback address, no response rewriting        | passed: setup, assign, a stale review refused (409), a draft from stored rows, chat route refused without approval, second person sees none   |
+| Moss reachable from another device                                                        | same live run: non-loopback address, certificate checked, untrusted origin refused, sign-in                                                   |
+
+From the repo root, through the gate script:
+
+```
+scripts/run-gate.sh start --gate test:rust-finance
+```
+
+```
+scripts/run-gate.sh start --gate test:rust-finance-live
+```
+
+Both ended with exit code 0. The first package gate run failed twice before it passed: the worktree had no dependencies installed, and then a test module lacked an import. Neither touched product behaviour.
+
+### Deliberate differences from the old code
+
+- The budget-apply queue is gone. Applying changes runs inside the request in one database transaction, so no job payload exists that could carry private content.
+- Budget activity rows hold the month and category ids only. They hold no amounts and no undo record, so undoing a budget change is not built.
+- The review check is a policy revision plus a fingerprint of the budget columns, computed by the module. A save runs one conditional update on the revision and refuses on zero rows.
+- A chat route answers with the refusal's own status (409, 404 or 400) instead of always 200.
+
+### Not proven or not built
+
+- A concurrent writer between the module's fingerprint read and the revision update is guarded by the update itself, but that narrow window was not exercised with two real simultaneous writers.
+- Flex pools, targets and target funding, card reserves and bills (part 24), shared accounts and reports (part 25), and category archiving are not built.
+- Draft build and start do not refuse while flex pools are active, because flex pools do not exist yet.
+- Bank balance history written by bank sync (part 21) is not used by the budget yet. Budget figures come from the ledger and the saved balance snapshots only.
+- Route parity with the old handlers is checked through ported messages, status codes and shapes in the guest tests. The old handlers were not run side by side with the new ones.
+- Review notes left as they are: starting a draft that was discarded after a new setup returns a host error instead of a plain refusal (nothing is saved); a draft edit from the screen is recorded as changed by Moss; a move that is refused has no test showing the stored rows stay unchanged; a refund posted to the income category lowers the pool twice; draft months are counted from all transactions, not only the budget currency.
+- No screens were built.

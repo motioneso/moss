@@ -13,10 +13,14 @@ macro_rules! ask {
 }
 
 pub mod accounts;
+pub mod budget;
+pub mod budget_write;
 pub mod bank;
 pub mod categories;
 pub mod connect;
 pub mod csv_import;
+pub mod draft;
+pub mod envelope;
 pub mod input;
 pub mod ledger;
 pub mod rules;
@@ -92,6 +96,22 @@ fn tool_for(method: &str, path: &str) -> Option<(&'static str, bool)> {
         ("POST", "/finance/chat/transactions/splits") => ("finance.transactions.splits", true),
         ("POST", "/finance/chat/rules/set") => ("finance.rule.set", true),
         ("POST", "/finance/chat/import/apply") => ("finance.import.apply", true),
+        ("GET", "/finance/budget/status") => ("finance.budget.status", false),
+        ("GET", "/finance/budget/draft") => ("finance.budget.draft.get", false),
+        ("POST", "/finance/budget/configure") => ("finance.budget.configure", false),
+        ("POST", "/finance/budget/assign") => ("finance.budget.assign", false),
+        ("POST", "/finance/budget/move") => ("finance.budget.move", false),
+        ("POST", "/finance/budget/apply") => ("finance.budget.apply", false),
+        ("POST", "/finance/budget/draft/build") => ("finance.budget.draft.build", false),
+        ("POST", "/finance/budget/draft/update") => ("finance.budget.draft.update", false),
+        ("POST", "/finance/budget/draft/start") => ("finance.budget.draft.start", false),
+        ("POST", "/finance/chat/budget/configure") => ("finance.budget.configure", true),
+        ("POST", "/finance/chat/budget/assign") => ("finance.budget.assign", true),
+        ("POST", "/finance/chat/budget/move") => ("finance.budget.move", true),
+        ("POST", "/finance/chat/budget/apply") => ("finance.budget.apply", true),
+        ("POST", "/finance/chat/budget/draft/build") => ("finance.budget.draft.build", true),
+        ("POST", "/finance/chat/budget/draft/update") => ("finance.budget.draft.update", true),
+        ("POST", "/finance/chat/budget/draft/start") => ("finance.budget.draft.start", true),
         _ => return None,
     })
 }
