@@ -19,6 +19,8 @@ pub struct Limits {
     /// Host-wide cap on a manifest's requested fuel. Never below `fuel`.
     pub fuel_ceiling: u64,
     pub deadline: Duration,
+    /// Host-wide cap on a manifest's requested call limit. Never below `deadline`.
+    pub deadline_ceiling: Duration,
     pub message_bytes: usize,
 }
 impl Default for Limits {
@@ -28,6 +30,7 @@ impl Default for Limits {
             fuel: 10_000_000,
             fuel_ceiling: 10_000_000,
             deadline: Duration::from_secs(5),
+            deadline_ceiling: Duration::from_secs(30),
             message_bytes: 1024 * 1024,
         }
     }
@@ -36,6 +39,12 @@ impl Limits {
     /// A manifest may raise its budget above the default, never above the host ceiling.
     pub fn effective_fuel(&self, requested: Option<u64>) -> u64 {
         requested.map_or(self.fuel, |r| r.clamp(self.fuel, self.fuel_ceiling))
+    }
+    /// A manifest may lengthen the call limit above the default, never above the host ceiling.
+    pub fn effective_deadline(&self, requested_ms: Option<u64>) -> Duration {
+        requested_ms.map_or(self.deadline, |ms| {
+            Duration::from_millis(ms).clamp(self.deadline, self.deadline_ceiling)
+        })
     }
 }
 #[derive(Clone)]
@@ -129,7 +138,8 @@ impl Host {
             limits.fuel > 0
                 && limits.fuel_ceiling >= limits.fuel
                 && limits.memory_bytes > 0
-                && !limits.deadline.is_zero(),
+                && !limits.deadline.is_zero()
+                && limits.deadline_ceiling >= limits.deadline,
             "Host limits must be positive"
         );
         let mut config = Config::new();
@@ -271,11 +281,12 @@ impl Host {
             )?;
         }
         let fuel = self.limits.effective_fuel(manifest.fuel_limit);
+        let deadline = self.limits.effective_deadline(manifest.call_limit_ms);
         let scope = CallScope {
             call_id: uuid::Uuid::new_v4(),
             access,
             module: manifest,
-            deadline: Instant::now() + self.limits.deadline,
+            deadline: Instant::now() + deadline,
             kind: kind.to_owned(),
         };
         let mut completion = Completion {
@@ -300,7 +311,7 @@ impl Host {
         );
         store.limiter(|state| &mut state.limits);
         store.set_fuel(fuel)?;
-        store.set_epoch_deadline((self.limits.deadline.as_millis().div_ceil(10) as u64) + 1);
+        store.set_epoch_deadline((deadline.as_millis().div_ceil(10) as u64) + 1);
         let instance = linker.instantiate(&mut store, &component)?;
         let handle = instance
             .get_typed_func::<(String, String), (std::result::Result<String, String>,)>(
