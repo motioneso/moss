@@ -14,15 +14,21 @@ use std::sync::Arc;
 
 const MARK: &str = "PLANTED-MARKER-7d2e41";
 
-/// The plan tests never run a model. Every call fails, so no test can pass by reaching one by accident.
-struct NoModel;
-impl moss_module_host::ai::Intelligence for NoModel {
+type Answers = Arc<std::sync::Mutex<std::collections::VecDeque<Option<String>>>>;
+
+/// The model is a queue of canned answers. With the queue empty, or a `None` taken from it, the
+/// call fails, so no test can pass by reaching a model by accident.
+struct Canned(Answers);
+impl moss_module_host::ai::Intelligence for Canned {
     fn generate(
         &self,
         _: &moss_module_host::runtime::CallScope,
         _: &moss_module_host::runtime::Request,
     ) -> anyhow::Result<Value> {
-        anyhow::bail!("This test does not call a model")
+        match self.0.lock().unwrap().pop_front() {
+            Some(Some(text)) => Ok(json!({"text": text})),
+            _ => anyhow::bail!("This test has no model answer ready"),
+        }
     }
     fn embed(
         &self,
@@ -81,6 +87,7 @@ fn rows_as(f: &support::Fixture, actor: uuid::Uuid, sql: &str) -> Vec<tokio_post
 struct World {
     f: support::Fixture,
     app: Application,
+    answers: Answers,
     _dirs: (tempfile::TempDir, tempfile::TempDir),
 }
 impl World {
@@ -110,6 +117,7 @@ impl World {
         let reg = tempfile::tempdir().unwrap();
         let bytes = moss_meals_host::package::pack(&root(), &component()).unwrap();
         let (key, publisher, artifact) = registry::publish(reg.path(), &bytes);
+        let answers = Answers::default();
         let app = Application::open_extended_with(
             dir.path(),
             f.db.clone(),
@@ -118,7 +126,7 @@ impl World {
                 migrations: Secret::new(std::env::var("JS48_BOOTSTRAP_URL").unwrap()),
                 producer: Secret::new(std::env::var("JS48_APP_URL").unwrap()),
                 cipher: Arc::new(SecretCipher::connectors(&Default::default()).unwrap()),
-                intelligence: Arc::new(NoModel),
+                intelligence: Arc::new(Canned(answers.clone())),
                 version: "0.1.0".parse().unwrap(),
                 browser_dir: None,
                 compiled_cache: None,
@@ -143,6 +151,7 @@ impl World {
         Self {
             f,
             app,
+            answers,
             _dirs: (dir, reg),
         }
     }
@@ -160,6 +169,17 @@ impl World {
         )
         .unwrap()
     }
+    /// Queues the model's next answer, or a failure with `None`.
+    fn answer(&self, text: Option<String>) {
+        self.answers.lock().unwrap().push_back(text);
+    }
+    /// Runs every job that is due, as the worker would.
+    fn run_jobs(&self) {
+        let worker = Secret::new(std::env::var("JS48_WORKER_URL").unwrap());
+        for _ in 0..4 {
+            self.app.installer.run_job(&worker).unwrap();
+        }
+    }
     fn add_user(&self) -> uuid::Uuid {
         let id = uuid::Uuid::new_v4();
         self.f.rt.block_on(self.f.root.execute(
@@ -174,3 +194,5 @@ impl World {
 mod tools;
 #[path = "support/lists.rs"]
 mod lists;
+#[path = "support/log.rs"]
+mod log;
