@@ -738,6 +738,101 @@ fn typed_tool_text_reaches_no_other_table() {
 
 #[test]
 #[ignore = "Only through verify-gate"]
+fn the_followed_team_tools_stay_inside_one_persons_follows_and_fail_without_row_security() {
+    let w = World::new();
+    let (a, b) = (w.f.a, w.f.b);
+    let run = |who, name: &str, parameters: Value| {
+        w.approve(who, name, &parameters, "v");
+        w.tool(who, name, parameters).unwrap_or_else(|e| panic!("{name}: {e}"))
+    };
+    let league = json!({"competitionKey":"nfl"});
+    let followed = run(a, "sports.followTeam", league.clone());
+    assert!(followed["data"]["follow"]["id"].is_string(), "{followed}");
+    assert_eq!(w.follow_rows(a), 1);
+    // B's unfollow finds nothing of A's, and A's row stays.
+    assert_eq!(run(b, "sports.unfollowTeam", league.clone())["data"]["removed"], false);
+    assert_eq!(w.follow_rows(a), 1, "A's follow survived B");
+    // B reads nothing of A's follows through the briefing facts or the heartbeat.
+    run(a, "sports.followTeam", json!({"competitionKey":"ger.1"}));
+    let facts = run(b, "sports.followedFactsToday", json!({"timeZone":"America/New_York"}));
+    assert!(facts["data"]["evidence"]["version"] == 1, "{facts}");
+    assert!(!facts.to_string().contains("ger.1"), "B's facts hold A's league: {facts}");
+    let beat = run(b, "sports.heartbeatNextFixtures", json!({}));
+    assert_eq!(beat["data"]["source"], "sports", "{beat}");
+    assert!(!beat.to_string().contains("ger.1"), "B's fixtures hold A's league: {beat}");
+    run(a, "sports.unfollowTeam", json!({"competitionKey":"ger.1"}));
+    println!("GREEN: B cannot unfollow A's follow and reads no facts or fixtures from it");
+    // With row security removed, B's unfollow removes A's follow.
+    w.f.rt.block_on(w.f.root.batch_execute("ALTER TABLE app.sports_follows DISABLE ROW LEVEL SECURITY")).unwrap();
+    let open = run(b, "sports.unfollowTeam", league.clone());
+    w.f.rt.block_on(w.f.root.batch_execute("ALTER TABLE app.sports_follows ENABLE ROW LEVEL SECURITY; ALTER TABLE app.sports_follows FORCE ROW LEVEL SECURITY")).unwrap();
+    assert_eq!(open["data"]["removed"], true, "RED expected: B removes A's follow with row security removed, got {open}");
+    println!("RED: with row security removed B was handed A's follow and the tool reported it removed");
+    // The owner follows and unfollows through the tools and the follow route agrees.
+    run(a, "sports.followTeam", league.clone());
+    assert_eq!(w.call(a, "GET", "/follows", Value::Null)["body"]["follows"].as_array().map(Vec::len), Some(1));
+    assert_eq!(run(a, "sports.unfollowTeam", league)["data"]["removed"], true);
+    assert_eq!(w.follow_rows(a), 0);
+    println!("GREEN: the owner's follow and unfollow agree with the route");
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn the_briefing_api_answers_through_the_installed_component_without_a_provider() {
+    let w = World::new();
+    let out = w
+        .app
+        .installer
+        .call(
+            "sports",
+            AccessContext::new(w.f.a, "sports-briefing"),
+            "api",
+            &json!({"name":"sportsFollowedFactsToday","parameters":{"timeZone":"America/New_York"}}).to_string(),
+        )
+        .unwrap();
+    let answer: Value = serde_json::from_str(&out).unwrap();
+    assert!(answer["facts"].is_array() && answer["evidence"]["version"] == 1, "{answer}");
+    println!("PASS: the briefing api answers {}", answer["evidence"]["state"]);
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn typed_latest_result_text_reaches_no_other_table() {
+    let w = World::new();
+    let a = w.f.a;
+    let text = format!("{}fc", MARK.to_lowercase());
+    let params = json!({"teamName":text});
+    w.approve(a, "sports.latestResult", &params, "v");
+    let out = w.tool(a, "sports.latestResult", params);
+    assert!(out.is_ok(), "{out:?}");
+    let tables: Vec<String> = w.f.rt.block_on(async {
+        w.f.root
+            .query(
+                "SELECT table_schema||'.'||table_name FROM information_schema.tables WHERE table_schema IN ('moss_queue','moss_modules') \
+                 OR table_name IN ('notifications','moss_activity_detail','moss_error_log','moss_action_audit_log','moss_model_activity_log') \
+                 OR table_name LIKE 'sports\\_%'",
+                &[],
+            )
+            .await
+            .unwrap()
+            .iter()
+            .map(|r| r.get(0))
+            .collect()
+    });
+    for table in &tables {
+        let hits: i64 = w
+            .f
+            .rt
+            .block_on(w.f.root.query_one(&format!("SELECT count(*) FROM {table} t WHERE lower(to_jsonb(t)::text) LIKE '%'||lower($1)||'%'"), &[&text]))
+            .unwrap()
+            .get(0);
+        assert_eq!(hits, 0, "{table} holds typed text");
+    }
+    println!("PASS privacy: scanned {} tables after a latest-result call, the planted text is in none", tables.len());
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
 fn stopping_photos_clears_the_rule_and_the_installed_routes_match_the_old_routes() {
     let w = World::new();
     let a = w.f.a;

@@ -1085,6 +1085,6 @@ how recipes work.
 - The live run's last step (a model writing a recipe for the FA site) answered "unsupported" in
   two of two runs here. That step is outside this part and is a known varying step from part 14a.
 
-## Sports overview stories (part 12b)
+## Sports overview stories and tools (parts 12b, 12c)
 
-See `2026-11-17-rust-phase5-sports-part-12b-report.md`.
+See `2026-11-17-rust-phase5-sports-part-12b-report.md` and `2026-11-17-rust-phase5-sports-part-12c-report.md`.

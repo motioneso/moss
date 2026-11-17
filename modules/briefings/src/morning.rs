@@ -180,6 +180,8 @@ impl Composer for MorningComposer {
         calendar_today.lines = cap_lines(with_signals).0;
         let weather_section = crate::weather::section(host, &mut gaps);
         let news_section = subject.selected_tools.iter().any(|t| t == crate::news::TOOL).then(|| crate::news::section(host, &mut gaps));
+        let sports_section =
+            subject.selected_tools.iter().any(|t| t == crate::sports::TOOL).then(|| crate::sports::section(host, gathered.zone.name(), &mut gaps));
         subject.deadline.check(host)?;
         let mut prompt_sections: Vec<Section> = vec![
             Section::empty("commitments", "COMMITMENTS"),
@@ -192,6 +194,7 @@ impl Composer for MorningComposer {
             Section::empty("chats", "CHATS"),
             Section { label: "DAY PLAN", ..day_plan },
         ];
+        prompt_sections.extend(sports_section);
         prompt_sections.extend(news_section);
         prompt_sections.iter_mut().for_each(|s| s.raw.clear());
 

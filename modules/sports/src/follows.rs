@@ -78,30 +78,44 @@ fn shown_key(team: &Team) -> &str {
     team.abbreviation.as_deref().unwrap_or(&team.team_key)
 }
 
+/// What a follow request saves, checked against the catalog and the provider's team list.
+pub struct Pick {
+    pub team_key: Option<String>,
+    pub source_team_id: Option<String>,
+    pub name: Option<String>,
+}
+
+/// Closes a follow request against the catalog and today's team list. An empty list is an
+/// outage, and an outage refuses every team.
+pub fn pick(teams: &dyn TeamList, competition: &str, requested: Option<&str>) -> std::result::Result<Pick, String> {
+    if !catalog::is_known(competition) {
+        return Err(format!("Unknown competition: {competition}"));
+    }
+    let Some(requested) = requested else { return Ok(Pick { team_key: None, source_team_id: None, name: None }) };
+    let list = teams.teams(competition);
+    let Some(team) = list.iter().find(|t| t.team_key == requested) else {
+        return Err(format!("Unknown team: {requested}"));
+    };
+    let Some(id) = team.source_team_id.as_deref() else {
+        return Err(format!(
+            "Sports could not get a permanent id for {} from the provider, so this team cannot be followed yet. Try again later.",
+            team.name
+        ));
+    };
+    Ok(Pick { team_key: Some(shown_key(team).to_owned()), source_team_id: Some(id.to_owned()), name: Some(team.name.clone()) })
+}
+
 /// `POST /follows`.
 pub fn create<H: Host + ?Sized>(host: &H, teams: &dyn TeamList, request: &RouteRequest) -> Result<Response> {
     let (competition, requested) = match input::new_follow(&request.body) {
         Ok(parsed) => parsed,
         Err(message) => return Ok(bad_request(message)),
     };
-    if !catalog::is_known(&competition) {
-        return Ok(bad_request(format!("Unknown competition: {competition}")));
-    }
-    let Some(requested) = requested else {
-        return Ok(Response::new(200, json!({"follow":save(host, &competition, None, None)?})));
+    let pick = match pick(teams, &competition, requested.as_deref()) {
+        Ok(pick) => pick,
+        Err(message) => return Ok(bad_request(message)),
     };
-    // An empty list is an outage, and an outage refuses every team.
-    let list = teams.teams(&competition);
-    let Some(team) = list.iter().find(|t| t.team_key == requested) else {
-        return Ok(bad_request(format!("Unknown team: {requested}")));
-    };
-    let Some(id) = team.source_team_id.as_deref() else {
-        return Ok(bad_request(format!(
-            "Sports could not get a permanent id for {} from the provider, so this team cannot be followed yet. Try again later.",
-            team.name
-        )));
-    };
-    let follow = save(host, &competition, Some(shown_key(team)), Some(id))?;
+    let follow = save(host, &competition, pick.team_key.as_deref(), pick.source_team_id.as_deref())?;
     Ok(Response::new(200, json!({"follow":follow})))
 }
 

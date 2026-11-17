@@ -195,8 +195,8 @@ impl EveningComposer {
         if selected("goals.list") {
             sections.push(Section::empty("goals", "GOALS"));
         }
-        if selected("sports.followedFactsToday") {
-            sections.push(Section::empty("sports", "SPORTS"));
+        if selected(crate::sports::TOOL) {
+            sections.push(crate::sports::section(host, zone.name(), &mut gaps));
         }
         sections.extend([Section::empty("chats", "CHATS"), morning_section, day_plan]);
         if selected(crate::news::TOOL) {

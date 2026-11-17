@@ -687,7 +687,7 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
             std::sync::Arc::new(moss_module_host::runtime::DenyPorts),
         )
         .unwrap();
-        let policies = std::collections::BTreeMap::from(["sports.listSources", "sports.previewSource", "sports.previewSourceAssignments", "sports.rebuildSourceRecipe"].map(|name| (name.to_owned(), false)));
+        let policies = std::collections::BTreeMap::from(["sports.listSources", "sports.previewSource", "sports.previewSourceAssignments", "sports.rebuildSourceRecipe", "sports.followedFactsToday", "sports.heartbeatNextFixtures", "sports.latestResult"].map(|name| (name.to_owned(), false)));
         services.set_action_policy(&access, "sports", &policies).unwrap();
         let tool = |who: &str, name: &str, parameters: Value| call(Method::POST, "/tools/run", Some(who), Some(json!({"tool":name,"parameters":parameters})));
         let (status, text) = tool(&cookie, "sports.listSources", json!({}));
@@ -723,6 +723,28 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
         let (status, text) = tool(&other, "sports.removeSource", json!({"sourceId":"99999999-9999-4999-8999-999999999999"}));
         assert_eq!(status, 403, "{text}");
         println!("sports live: removeSource asks first: refused without an approval");
+        // The follow tools save and remove only the caller's own follows, and the read tools answer.
+        // The host asks for a one-use grant on every tool that is not read-only.
+        let league = json!({"competitionKey":"nfl"});
+        services.approve_tool(&access, "sports", "sports.followTeam", &league).unwrap();
+        let (status, text) = tool(&cookie, "sports.followTeam", league.clone());
+        assert_eq!(status, 200, "{text}\n{}", log());
+        let new_id = json_of(&text)["data"]["follow"]["id"].as_str().expect(&text).to_owned();
+        let (_, text) = call(Method::GET, "/follows", Some(&other), None);
+        assert!(!text.contains(&new_id), "the other person must not see it: {text}");
+        let (status, text) = tool(&cookie, "sports.followedFactsToday", json!({"timeZone":"America/New_York"}));
+        assert_eq!(status, 200, "{text}\n{}", log());
+        println!("sports live: followedFactsToday answered state {}", json_of(&text)["data"]["evidence"]["state"]);
+        let (status, text) = tool(&cookie, "sports.heartbeatNextFixtures", json!({"horizonHours":24,"limit":5}));
+        assert_eq!(status, 200, "{text}\n{}", log());
+        println!("sports live: heartbeatNextFixtures answered {} items, freshness {}", json_of(&text)["data"]["items"].as_array().map_or(0, Vec::len), json_of(&text)["data"]["freshness"]);
+        let (status, text) = tool(&cookie, "sports.latestResult", json!({}));
+        assert_eq!(status, 200, "{text}\n{}", log());
+        services.approve_tool(&access, "sports", "sports.unfollowTeam", &league).unwrap();
+        let (status, text) = tool(&cookie, "sports.unfollowTeam", league);
+        assert_eq!(status, 200, "{text}\n{}", log());
+        assert_eq!(json_of(&text)["data"]["removed"], true, "{text}");
+        println!("sports live: followTeam, followedFactsToday, heartbeatNextFixtures, latestResult and unfollowTeam worked through the tool route");
     }
     // Nothing the test sent reached the server log.
     assert!(!log().contains(MARK));

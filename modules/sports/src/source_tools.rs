@@ -115,7 +115,7 @@ pub fn transport<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Response> {
     let (Some(tool), Some(parameters)) = (body["tool"].as_str(), body.get("parameters").filter(|p| p.is_object())) else {
         return Ok(crate::util::bad_request("Invalid sports tool request"));
     };
-    if allowed(tool).is_none() {
+    if allowed(tool).is_none() && !crate::tools::owns(tool) {
         return Ok(crate::util::bad_request("Invalid sports tool request"));
     }
     match host.call("tools", "run", tool, json!({"parameters":parameters})) {
