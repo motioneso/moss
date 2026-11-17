@@ -137,6 +137,20 @@ impl SecretCipher {
         )
     }
 
+    /// `createIntegrationsCipher`.
+    pub fn integrations(env: &Env) -> Result<Self, CipherError> {
+        Self::from_env(
+            [
+                "JARVIS_INTEGRATIONS_SECRET_KEY",
+                "JARVIS_INTEGRATIONS_SECRET_KEY_ID",
+                "JARVIS_INTEGRATIONS_SECRET_KEYS",
+            ],
+            "jarv1s-development-integrations-secret",
+            "integration credential",
+            env,
+        )
+    }
+
     fn from_env(
         names: [&str; 3],
         dev_default: &str,
