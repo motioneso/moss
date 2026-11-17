@@ -29,8 +29,9 @@ try {
   };
   let reply: unknown;
   try {
-    // The handlers read only ctx.input and ctx.db for the kitchen, household, list and pantry tools.
-    const data = await handler({ input: parameters, db } as never);
+    // // The plan tools queue background work; the stand-in accepts every job so the reply can be compared.
+    const jobs = { enqueue: async () => ({ status: "queued" }) };
+    const data = await handler({ input: parameters, db, jobs } as never);
     reply = { data };
   } catch (error) {
     const failure = error as { message?: string; code?: unknown };
