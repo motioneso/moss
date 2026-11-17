@@ -479,6 +479,52 @@ fn installed_meals_package_serves_routes_from_the_real_server() {
     assert_eq!(status, 200, "{text}");
     let (_, after) = tool("meals.pantry.get", json!({}), false);
     assert!(after.contains(MARK), "clearing the list left the pantry alone");
+    // Cooking, ratings and undo through the same route. The plan and meal rows are set up in the
+    // database because writing a plan needs a model; every call after that goes through the server.
+    let milk = tool("meals.pantry.edit", json!({"action":"add","name":"Milk","quantity":5,"unit":"cup"}), true);
+    assert_eq!(milk.0, 200, "{}", milk.1);
+    let meal_id = runtime.block_on(async {
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        db.batch_execute(&format!(
+            "INSERT INTO app.meals_plans(owner_user_id,kitchen_id,plan_id,start_date,day_count,pantry_mode,idempotency_key)
+               SELECT '{owner}',kitchen_id,md5('live-plan')::uuid,DATE '2026-11-09',1,'prefer','live' FROM app.meals_kitchens WHERE owner_user_id='{owner}';
+             INSERT INTO app.meals_plan_days(owner_user_id,kitchen_id,plan_id,day_id,day_date,status)
+               SELECT '{owner}',kitchen_id,md5('live-plan')::uuid,md5('live-day')::uuid,DATE '2026-11-09','ready' FROM app.meals_kitchens WHERE owner_user_id='{owner}';
+             INSERT INTO app.meals_recipes(owner_user_id,kitchen_id,recipe_id,title,title_key,steps,cook_minutes,base_servings,source)
+               SELECT '{owner}',kitchen_id,md5('live-recipe')::uuid,'Live','live','[\"stir\"]'::jsonb,10,2,'generated' FROM app.meals_kitchens WHERE owner_user_id='{owner}';
+             INSERT INTO app.meals_recipe_ingredients(owner_user_id,kitchen_id,recipe_id,position,original_text,name,name_key,quantity,unit,store_section)
+               SELECT '{owner}',kitchen_id,md5('live-recipe')::uuid,0,'2 cups milk','milk','milk',2,'cup','dairy_eggs' FROM app.meals_kitchens WHERE owner_user_id='{owner}';
+             INSERT INTO app.meals_planned_meals(owner_user_id,kitchen_id,day_id,meal_id,slot_name,slot_position,kind,sharing,status,recipe_id)
+               SELECT '{owner}',kitchen_id,md5('live-day')::uuid,md5('live-meal')::uuid,'dinner',0,'recipe','shared','ready',md5('live-recipe')::uuid FROM app.meals_kitchens WHERE owner_user_id='{owner}';
+             INSERT INTO app.meals_planned_meal_eaters(owner_user_id,kitchen_id,meal_id,member_id,portion)
+               SELECT '{owner}',kitchen_id,md5('live-meal')::uuid,member_id,1 FROM app.meals_household_members WHERE owner_user_id='{owner}' AND is_self;"
+        ))
+        .await
+        .unwrap();
+        db.query_one("SELECT md5('live-meal')::uuid::text", &[]).await.unwrap().get::<_, String>(0)
+    });
+    let (_, kitchen) = tool("meals.kitchen.get", json!({}), true);
+    let me = json_of(&kitchen)["data"]["members"][0]["memberId"].as_str().unwrap().to_owned();
+    let (status, text) = tool("meals.meal.rate", json!({"mealId":meal_id,"ratings":[{"memberId":me,"stars":4}]}), true);
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let (status, text) = tool("meals.meal.cooked", json!({"mealId":meal_id}), true);
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let cooked = json_of(&text);
+    assert_eq!(cooked["data"]["pantryChanges"][0]["after"], 3.0, "{text}");
+    let action = cooked["data"]["undo"]["actionId"].as_str().unwrap().to_owned();
+    let (status, text) = call(Method::POST, "/meals/tools/run", Some(&other), Some(json!({"tool":"meals.undo","parameters":{"actionId":action}})));
+    assert_eq!(status, 403, "the second person is refused before anything runs: {text}");
+    let (status, text) = tool("meals.undo", json!({"actionId":action}), true);
+    assert_eq!(status, 200, "{text}\n{}", log());
+    assert_eq!(json_of(&text)["data"], json!({"restored":1,"skipped":0}), "{text}");
+    let (_, back) = tool("meals.pantry.get", json!({}), false);
+    assert!(back.contains("\"quantity\":5"), "undo put the milk back: {back}");
+    let (status, text) = tool("meals.undo", json!({"actionId":action}), true);
+    assert_eq!(json_of(&text)["data"]["code"], "invalid_input", "a second undo is refused: {text} {status}");
+    println!("PASS live cooking: rate, cook, undo and a refused second undo through the real server; second person refused");
     let activity = serde_json::to_string(&services.activity("meals", &access).unwrap()).unwrap();
     assert!(!activity.contains(MARK));
     // Nothing the test sent reached the server log.
