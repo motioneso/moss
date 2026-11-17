@@ -74,5 +74,5 @@ pub mod memory_vault;
 
 mod notifications;
 mod producer_queue;
-mod quiet_hours;
+pub mod quiet_hours;
 pub mod worker;

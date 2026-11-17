@@ -1,0 +1,13 @@
+[package]
+name = "usefulness-rules"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+description = "Pure rules for usefulness feedback and proactive cards, built native and as WebAssembly"
+
+# The WebAssembly build is loaded by a module-host test that calls the exported fixture runner.
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+serde_json = "1"
