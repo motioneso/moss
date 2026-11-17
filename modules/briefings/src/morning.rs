@@ -179,6 +179,7 @@ impl Composer for MorningComposer {
         with_signals.extend(std::mem::take(&mut calendar_today.lines));
         calendar_today.lines = cap_lines(with_signals).0;
         let weather_section = crate::weather::section(host, &mut gaps);
+        let news_section = subject.selected_tools.iter().any(|t| t == crate::news::TOOL).then(|| crate::news::section(host, &mut gaps));
         subject.deadline.check(host)?;
         let mut prompt_sections: Vec<Section> = vec![
             Section::empty("commitments", "COMMITMENTS"),
@@ -191,6 +192,7 @@ impl Composer for MorningComposer {
             Section::empty("chats", "CHATS"),
             Section { label: "DAY PLAN", ..day_plan },
         ];
+        prompt_sections.extend(news_section);
         prompt_sections.iter_mut().for_each(|s| s.raw.clear());
 
         let catch_up = action_rows::build_email_catch_up(&email_raw, &rows.source_refs, gathered.since, email_evidence::is_no_action_confirmation);

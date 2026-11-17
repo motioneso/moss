@@ -4,7 +4,7 @@
   "name": "News",
   "publisher": "Moss",
   "version": "0.1.0",
-  "description": "Keeps each person's own News choices, private to the owner. People can pick catalog sources and topics, exclude publishers by domain, and remove sources they added. A person's added sources, topics and exclusions can be exported, and account deletion covers all eight News tables. A person can add a source by typing a site address or a subreddit. Moss reads the public site, finds its feed, asks the person's own AI model whether the source is acceptable, and shows a preview to confirm. Adding a topic or changing one needs web search, which is not part of this package, so those requests are refused. The News page is compiled from the active sources: stories are filtered, ranked by the person's own AI model with a fixed-order fallback, stored as a snapshot and served by the overview route. Changes to a person's choices queue a refresh job that rebuilds the page, and a daily check at 04:43 UTC re-reads every added source and topic and records its health. Chat tools and the screens are not part of this package yet.",
+  "description": "Keeps each person's own News choices, private to the owner. People can pick catalog sources and topics, exclude publishers by domain, and remove sources they added. A person's added sources, topics and exclusions can be exported, and account deletion covers all eight News tables. A person can add a source by typing a site address or a subreddit. Moss reads the public site, finds its feed, asks the person's own AI model whether the source is acceptable, and shows a preview to confirm. Adding a topic or changing one needs web search, which is not part of this package, so those requests are refused. The News page is compiled from the active sources: stories are filtered, ranked by the person's own AI model with a fixed-order fallback, stored as a snapshot and served by the overview route. Changes to a person's choices queue a refresh job that rebuilds the page, and a daily check at 04:43 UTC re-reads every added source and topic and records its health. Story pictures and publisher icons are served only for stories and publishers the person already sees. Five chat tools read the stored headlines, check a source before it is added, report added-source status and ask for a refresh, and the Briefings module can read the top headlines. Story feedback and the screens are not part of this package yet.",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
@@ -188,7 +188,33 @@
   ],
   "requires": {},
   "provides": {
-    "collectNewsPersonalizationExportSection": "1.0.0"
+    "collectNewsPersonalizationExportSection": "1.0.0",
+    "newsTopHeadlinesToday": "1.0.0",
+    "prepareNewsAction": "1.0.0",
+    "prepareNewsRoute": "1.0.0"
+  },
+  "tools": {
+    "news.heartbeatHeadlines": {
+      "description": "Read the top stories already stored for the signed-in person. Never contacts a news source. Takes only horizonHours (1 to 48) and limit (1 to 20).",
+      "risk": "read"
+    },
+    "news.topHeadlinesToday": {
+      "description": "Read today's top stories for the signed-in person as short lines plus the evidence each came from.",
+      "risk": "read"
+    },
+    "news.credentialedSourceStatus": {
+      "description": "List the sources the person added with their health and whether a key is saved, with a plain next step. Never shows a key.",
+      "risk": "read"
+    },
+    "news.previewSource": {
+      "description": "Check a publisher address or name and return candidates to confirm. Saves nothing and never shows a feed address.",
+      "risk": "read"
+    },
+    "news.refreshNews": {
+      "description": "Ask Moss to rebuild the person's news page. The work runs in the background.",
+      "risk": "write",
+      "approvalVersion": true
+    }
   },
   "icons": ["icons/news.svg"],
   "accounts": {
@@ -276,6 +302,27 @@
     {
       "id": "news.compiled_page",
       "description": "The News page is built from the catalog sources the person has on and the sources they added. Stories from excluded publishers, stories that are too old or repeats are left out. The person's own AI model ranks what is left, and when the model cannot answer the stories keep a fixed order by source and time. The built page is stored for seven days and the overview route serves it, queueing a background refresh when the stored page is missing or out of date. The refresh job rebuilds the page and keeps the last good page if every source fails. Any change to the person's sources, topics, chosen sources or excluded publishers queues a refresh too, and a person can ask for one directly.",
+      "errors": []
+    },
+    {
+      "id": "news.story_pictures",
+      "description": "A story's picture and a publisher's icon are loaded by Moss on the person's behalf, so the person's browser never contacts the publisher. A picture is fetched only for a story in the person's own stored page, and an icon only for a catalog publisher or a source the person added. Pictures must be jpeg, png, gif or webp, and icons ico, png, gif or webp, checked by their first bytes. Pictures larger than about 700 KB are refused (the old limit was 2 MB) and icons larger than 256 KB are refused. The browser may keep a picture for five minutes and an icon for a day.",
+      "errors": [
+        {
+          "code": "news.image.unavailable",
+          "class": "transient",
+          "description": "The publisher's picture could not be read, was too large, or was not a picture."
+        }
+      ]
+    },
+    {
+      "id": "news.chat_tools",
+      "description": "Five chat tools. Reading the top stories, source status and checking a source need no approval. Asking for a refresh shows an approval card for Your news feed, built from the stored record. Story feedback is not part of this package yet, so stories carry no feedback reference.",
+      "errors": []
+    },
+    {
+      "id": "news.briefing_headlines",
+      "description": "Briefings reads up to five top stories from the stored page, with the source and a short summary for each. Nothing is fetched while a briefing is built. Without a stored page the briefing shows a news gap.",
       "errors": []
     },
     {
