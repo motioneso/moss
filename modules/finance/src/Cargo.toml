@@ -56,3 +56,7 @@ path = "../tests/isolation.rs"
 [[test]]
 name = "budget"
 path = "../tests/budget.rs"
+
+[[test]]
+name = "part25"
+path = "../tests/part25.rs"
