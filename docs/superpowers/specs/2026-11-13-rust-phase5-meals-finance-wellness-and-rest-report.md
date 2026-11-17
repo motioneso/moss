@@ -1409,3 +1409,63 @@ Both ended with exit code 0. The first package gate run failed twice before it p
 - Route parity with the old handlers is checked through ported messages, status codes and shapes in the guest tests. The old handlers were not run side by side with the new ones.
 - Review notes left as they are: starting a draft that was discarded after a new setup returns a host error instead of a plain refusal (nothing is saved); a draft edit from the screen is recorded as changed by Moss; a move that is refused has no test showing the stored rows stay unchanged; a refund posted to the income category lowers the pool twice; draft months are counted from all transactions, not only the budget currency.
 - No screens were built.
+
+## Finance bills, targets, flexible pool and card reserves (part 24)
+
+### What was built
+
+- Bills: plan a bill that repeats (once, weekly, every two weeks, monthly, yearly), read the coming bills for a window of up to a year, confirm or skip one, stop or clear a plan, and change the amount or date of one coming bill and put it back. Moss also suggests bills it finds in saved spending, and a suggestion can be dismissed. A bill can be recorded as paid with a manual entry after a preview.
+- Targets: monthly, weekly, refill and balance targets per category, with progress and a funding step that fills up to 20 targets from what is ready to assign. A target can be removed.
+- Flexible pool: preview, turn on or off, and set the total of one pool shared by several categories. The pool feeds the ready-to-assign figure and the budget status.
+- Card reserves: enroll a manual credit card and set aside money each month for its payment, with a preview. The reserves feed the ready-to-assign figure and the budget status.
+- Screen routes sit under `/finance/...` and the assistant's writes under `/finance/chat/...`, each needing the host's one-use approval. Package version is 0.4.0, with the tables, routes, tools, risk levels, features and errors in the manifest.
+
+### Proof
+
+| Check                                                                                      | Result                                                                                                                                                              |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Native guest tests (67 unit tests, 21 new route tests, plus the older suites)              | passed                                                                                                                                                              |
+| Package tests and the real component built as WebAssembly, run against the real host       | passed, including the new table grants and a refused table                                                                                                          |
+| Target, weekday, bill and card figures                                                     | checked with fixtures taken from the old code's tests; the old handlers were not run side by side                                                                   |
+| An old review saves nothing                                                                | a repeated bill save with the old review gets a 409 and writes no row, in the guest tests, the real database and the live run                                       |
+| Two people, real database: second person and an admin read and change none of part 24 rows | passed. With row security switched off the same check fails (RED: the admin saw exactly one row in each of seven part 24 tables) and passes with it back on (GREEN) |
+| Private text searched for in job rows, activity rows, queue tables and host calls          | none found; a planted leak is caught by the same scan, and a control that puts the bill name into the bill activity row makes the test fail                         |
+| Live run: real server, real HTTPS on a non-loopback address, no response rewriting         | passed: bill, target, pool preview, stale review refused (409), suggestions, chat route refused without approval, second person sees none                           |
+| Moss reachable from another device                                                         | same live run: non-loopback address, certificate checked, untrusted origin refused, sign-in                                                                         |
+
+From the repo root, through the gate script, with cargo on the path and dependencies installed in the worktree:
+
+```
+scripts/run-gate.sh start --gate test:rust-finance
+```
+
+```
+scripts/run-gate.sh start --gate test:rust-finance-live
+```
+
+Both ended with exit code 0. Earlier runs failed on setup problems only (no dependencies installed, cargo not on the path, an old test that expected the new tables to be refused, and a wrong guess in the new live check about the pool preview status).
+
+### Deliberate differences from the old code
+
+- Activity rows for bills, targets, the pool and card reserves hold ids, months and kinds only. The old code also logged amounts and weekdays, so those are gone.
+- No undo records are written for funding, moves or assigns. Undo is part 25.
+- Sorting uses byte order, not the old locale order.
+- The check that stops a draft from starting while the pool is active runs after the review check.
+- The old check in category archiving that blocks archiving a pooled category does not exist yet, because category archiving is not built.
+- Bill entry checks only future entries on the account, not the wider account-lifecycle ledger check.
+- Any eligibility failure in a save is reported as an old review (409), where the old code sometimes gave separate wording.
+- The old module had no per-tool HTTP routes, so these routes are new. Reads that need whole numbers or lists (pool, card and bill entry previews) are POST routes, because GET query values arrive as text.
+
+### Not proven or not built
+
+- Route parity with the old handlers is checked through ported messages, status codes and shapes in the guest tests. The old handlers were not run side by side with the new ones.
+- Weekly, refill and balance target progress is covered by the ported unit fixtures, not by a live run.
+- Flex configure, flex assign, card enroll and card funding were exercised in the guest tests against an in-memory host. The real database proof covers card enrolment rows only. The full flexible pool set-up was not run through the live server.
+- Bill suggestions built from real charges, and dismissing one, are covered by the ported unit fixtures but not by a route test.
+- Stopping a bill accepts an end date before its start date, and plan ids with capital letters behave differently between record and the other bill routes. Neither is fixed.
+- Suggestion dismissals are not in the real-database privacy test. Dismissing a bill suggestion saves without a review check, as the old code did. The review check also ignores bill names and dismissals, so a rename in another tab does not make a review stale.
+- Recording a bill payment makes three writes (balance, transaction, occurrence). They are atomic because the host runs a whole request in one database transaction (proved for part 23). The in-memory test host has no such rollback.
+- Funding targets, bill entry record and bill suggestions beyond a read were not exercised live.
+- A concurrent writer between the review read and the revision update is guarded by the update itself and was not tried with two real simultaneous writers.
+- Undo (part 25), shared accounts, reports and category archiving are not built.
+- No screens were built.
