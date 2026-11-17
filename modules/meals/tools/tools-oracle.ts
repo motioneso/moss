@@ -29,7 +29,7 @@ try {
   };
   let reply: unknown;
   try {
-    // // The plan tools queue background work; the stand-in accepts every job so the reply can be compared.
+    // The plan tools queue background work; the stand-in accepts every job so the reply can be compared.
     const jobs = { enqueue: async () => ({ status: "queued" }) };
     const data = await handler({ input: parameters, db, jobs } as never);
     reply = { data };
