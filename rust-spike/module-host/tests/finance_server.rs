@@ -616,7 +616,8 @@ fn installed_finance_package_serves_routes_from_the_real_server() {
     let (status, text) = call(Method::POST, "/finance/targets", Some(&cookie), Some(with(fresh(), json!({"categoryId":"dining","kind":"monthly","amountCents":25_000}))));
     assert_eq!(status, 200, "{text}\n{}", log());
     let (status, text) = call(Method::POST, "/finance/flex/preview", Some(&cookie), Some(json!({"month":"2026-11","mode":"flex","flexIds":["groceries"],"nonMonthlyIds":[]})));
-    assert_eq!(status, 400, "a pooled category with a target-free month answers a plain refusal or a preview: {text}");
+    assert_eq!(status, 200, "{text}\n{}", log());
+    assert_eq!(json_of(&text)["mode"], "flex", "{text}");
     let (status, text) = call(Method::GET, "/finance/bills/suggestions?from=2026-11-01&to=2026-12-31", Some(&cookie), None);
     assert_eq!(status, 200, "{text}\n{}", log());
     let (status, text) = call(Method::POST, "/finance/chat/targets", Some(&cookie), Some(with(fresh(), json!({"categoryId":"dining","kind":"monthly","amountCents":1}))));
