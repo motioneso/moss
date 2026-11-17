@@ -20,6 +20,8 @@ impl Host for ComponentHost {
             "db" => moss::module::db::call(&request),
             "tools" => moss::module::tools::call(&request),
             "context" => moss::module::context::call(&request),
+            "ai" => moss::module::ai::call(&request),
+            "jobs" => moss::module::jobs::call(&request),
             _ => return Err(Error::new("Unsupported Meals host port")),
         }
         .map_err(|_| Error::new("Meals host call failed"))?;

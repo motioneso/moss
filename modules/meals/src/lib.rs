@@ -2,15 +2,19 @@
 //! person's rows are private to them. All effects cross the guest-safe SDK Host interface.
 pub mod draft;
 pub mod input;
+pub mod jobs;
 pub mod kitchen;
 pub mod md5;
 pub mod pantry;
+pub mod plans;
 pub mod recipe;
 pub mod rules;
 pub mod safety;
 pub mod safety_terms;
+pub mod store;
 pub mod tools;
 pub mod util;
+pub mod view;
 
 #[cfg(target_arch = "wasm32")]
 mod component;
@@ -45,6 +49,7 @@ pub fn handle<H: Host + ?Sized>(
                 .map_err(|_| moss_module_sdk::Error::new("Meals tool failed"))?;
             Ok(serde_json::to_string(&result)?)
         }
+        "job" => jobs::handle(host, payload),
         "route" => {
             let request: RouteRequest = serde_json::from_str(payload)?;
             Ok(serde_json::to_string(&route(host, request))?)
