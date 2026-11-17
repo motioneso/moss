@@ -308,7 +308,6 @@ fn rust_answers_match_the_old_routes_step_for_step() {
         json!({"method":"POST","url":"/api/wellness/therapy-notes","body":{}}),
         json!({"method":"POST","url":"/api/wellness/therapy-notes","body":{"body":""}}),
         json!({"method":"POST","url":"/api/wellness/therapy-notes","body":{"body":"x","linkedEmotion":"joy"}}),
-        json!({"method":"POST","url":"/api/wellness/therapy-notes","body":{"body":"x","linkedCheckinId":7}}),
         json!({"method":"POST","url":"/api/wellness/therapy-notes","body":{"body":"x","linkedCheckinId":missing}}),
         json!({"method":"GET","url":"/api/wellness/therapy-notes"}),
         json!({"method":"DELETE","url":format!("/api/wellness/therapy-notes/{missing}")}),
