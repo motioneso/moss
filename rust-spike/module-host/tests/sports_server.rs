@@ -456,7 +456,7 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
     // Reddit turns this machine away now and then with a rate limit or a refusal, so a refusal is
     // retried after a pause. Every answer is the real one and is printed.
     let mut shown = Value::Null;
-    for attempt in 1..=6 {
+    for attempt in 1..=10 {
         let (status, text) = call(Method::POST, "/sources/preview", Some(&cookie), Some(json!({"url":"r/nfl","assignments":[{"target":{"kind":"sport","sportKey":"football"}}]})));
         assert_eq!(status, 200, "{text}\n{}", log());
         shown = json_of(&text);
@@ -465,7 +465,7 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
         if shown["status"] == "ok" || !retry {
             break;
         }
-        std::thread::sleep(std::time::Duration::from_secs(30));
+        std::thread::sleep(std::time::Duration::from_secs(60));
     }
     assert_eq!(shown["status"], "ok", "{shown}");
     let candidate = &shown["candidate"];
@@ -498,7 +498,7 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
             break;
         }
         println!("sports live: r/NFL preview answered {} {}", again["status"], again["reason"]);
-        std::thread::sleep(std::time::Duration::from_secs(30));
+        std::thread::sleep(std::time::Duration::from_secs(60));
     }
     assert_eq!(again["duplicateOfSourceId"], json!(source_id), "r/NFL is the same source as r/nfl: {text}");
     let (status, text) = call(Method::POST, "/sources", Some(&cookie), Some(json!({
