@@ -1007,7 +1007,7 @@ Both are expected to finish with exit code 0.
 
 | Check                                                                                         | Result                                                                                       |
 | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Native guest tests (25 unit, finance 18, import 5, isolation 4, privacy 6, transactions 13)   | passed                                                                                       |
+| Native guest tests (25 unit, finance 18, import 5, isolation 4, privacy 6, transactions 14)   | passed                                                                                       |
 | Package tests (6) and the real component built as WebAssembly, run against the real host      | passed, including the new table and action-policy grants                                     |
 | CSV fixture at both caps (1 MiB, 200 rows) read back from a real file; one step over each cap | passed; both over-cap files refused with the old messages                                    |
 | An import saved twice by replay                                                               | stays one set of rows, one balance move, one receipt, one activity row                       |
@@ -1035,6 +1035,7 @@ Both ended with exit code 0. The first run of the package gate failed because a 
 - The old write version (row id plus the database's hidden change counter) is replaced by a hash of the fields a writer can change. Writes still refuse a stale version.
 - The old queue jobs for categorize, review and split run as part of the request, in one database transaction. No job is queued, so no job payload can carry private text.
 - A new `/finance/import/parse` route reads the file on the server. The old code parsed in the browser.
+- A batch review checks every row before it writes the first, because a chat tool call commits whatever it wrote before a refusal. A chat route now answers with the refusal's status (409, 404 or 400) instead of always 200.
 - Bulk categorize writes one activity row with the count. The old code wrote none.
 - The CSV reader is the `csv` crate, 1.4.0 pinned, with extra checks for stray quotes. A one-column file with blank lines is refused.
 - Letters in payee keys follow Rust's definition of a letter, not the old pattern for Unicode letters. Rare scripts may group differently.

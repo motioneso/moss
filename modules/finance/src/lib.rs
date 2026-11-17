@@ -99,7 +99,8 @@ fn direct<H: Host + ?Sized>(host: &H, tool: &str, request: &RouteRequest) -> mos
 /// The assistant's write path. The host checks the account's one-use approval before it runs.
 fn chat<H: Host + ?Sized>(host: &H, tool: &str, request: &RouteRequest) -> moss_module_sdk::Result<Response> {
     let reply = host.call("tools", "run", tool, json!({"parameters":request.body}))?;
-    Ok(Response::new(200, reply))
+    let status = if reply["status"] == "error" { tools::status_of(&reply) } else { 200 };
+    Ok(Response::new(status, reply))
 }
 
 /// The same entry point runs natively in tests and inside the packaged component.

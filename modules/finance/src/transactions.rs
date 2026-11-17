@@ -8,7 +8,7 @@ use crate::ledger::{first, log, log_as, values, Outcome, TRANSACTIONS};
 use crate::text::{self, is_calendar_month, is_hash32, month_window, normalize_payee};
 use moss_module_sdk::{
     query::{Compare, Filter, Order, Query},
-    Client, Host, Result,
+    Client, Error, Host, Result,
 };
 use serde_json::{json, Map, Value};
 use std::collections::BTreeSet;
@@ -258,6 +258,15 @@ pub struct Apply<'a> {
 /// Sets the category on one unsplit, unlinked row and confirms it. Returns whether the category
 /// changed. Writes nothing when it refuses.
 pub(crate) fn apply_category<H: Host + ?Sized>(host: &H, a: &Apply, log_unchanged: bool) -> Result<std::result::Result<bool, Refusal>> {
+    let row = match check_category(host, a)? {
+        Ok(row) => row,
+        Err(refusal) => return Ok(Err(refusal)),
+    };
+    write_category(host, a, row, log_unchanged)
+}
+
+/// Every refusal `apply_category` can give before it writes. Writes nothing.
+fn check_category<H: Host + ?Sized>(host: &H, a: &Apply) -> Result<std::result::Result<Value, Refusal>> {
     let Some(row) = first(host, TRANSACTIONS, and(vec![Filter::eq("id", a.id), Filter::eq("account_id", a.account_id)]))? else {
         return Ok(Err(not_found()));
     };
@@ -286,6 +295,10 @@ pub(crate) fn apply_category<H: Host + ?Sized>(host: &H, a: &Apply, log_unchange
             _ => {}
         }
     }
+    Ok(Ok(row))
+}
+
+fn write_category<H: Host + ?Sized>(host: &H, a: &Apply, row: Value, log_unchanged: bool) -> Result<std::result::Result<bool, Refusal>> {
     let previous = row["category_id"].clone();
     let mut set = values(vec![
         ("category_id", json!(a.category)),
@@ -406,15 +419,28 @@ pub fn review_apply<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Outcome>
             return Ok(Err(bad_category()));
         }
     }
-    let mut results = Vec::new();
+    // Every refusal comes before the first write. A tool call commits whatever it wrote, so a
+    // refusal after a write would keep the earlier rows.
+    let mut checked = Vec::new();
     for i in 0..transactions.len() {
         let apply = Apply { id: &transactions[i], account_id: &accounts[i], month: &months[i], category: &categories[i], actor: Actor::User, merchant: Merchant::Any, amount_cents: None, notes: None };
-        let moved = ask!(apply_category(host, &apply, true)?);
+        checked.push(ask!(check_category(host, &apply)?));
+    }
+    let made = match rule {
+        Some(rule) => Some(ask!(crate::rules::set_from(host, rule, &categories[0], Actor::User)?)),
+        None => None,
+    };
+    let mut results = Vec::new();
+    for (i, row) in checked.into_iter().enumerate() {
+        let apply = Apply { id: &transactions[i], account_id: &accounts[i], month: &months[i], category: &categories[i], actor: Actor::User, merchant: Merchant::Any, amount_cents: None, notes: None };
+        let moved = match write_category(host, &apply, row, true)? {
+            Ok(moved) => moved,
+            Err(_) => return Err(Error::new("A transaction changed during the save")),
+        };
         results.push(json!({"transactionId":transactions[i],"unchanged":!moved}));
     }
     let mut out = json!({"status":"ok","applied":results.len(),"results":results});
-    if let Some(rule) = rule {
-        let made = ask!(crate::rules::set_from(host, rule, &categories[0], Actor::User)?);
+    if let Some(made) = made {
         out["rule"] = made;
     }
     Ok(Ok(out))
@@ -478,7 +504,8 @@ fn settle_rows<H: Host + ?Sized>(host: &H, rows: &[Value], set: impl Fn(&Value) 
             ),
         )?;
         if changed.is_empty() {
-            return Ok(Err(stale()));
+            // Earlier rows are already written, so ending the call rolls them back.
+            return Err(Error::new("A transaction changed during the save"));
         }
     }
     Ok(Ok(rows.len()))

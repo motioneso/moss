@@ -319,3 +319,17 @@ fn the_sorting_run_keeps_the_tiers_exactly_and_a_second_run_changes_nothing() {
     f.route("POST", "/finance/sorting/run", json!({}));
     assert_eq!(state("d").1, "needs_look", "the known-merchant tier is read live");
 }
+
+#[test]
+fn a_refused_batch_writes_nothing_before_the_refusal() {
+    let f = Fake::new();
+    f.seed("app.finance_categories", A, json!({"id":"groceries","name":"Groceries","archived_at":null}));
+    put(&f, row("t1", "2026-11-03", "Corner Cafe", 450), json!({"category_id":null,"review_state":"needs_look","categorized_by":null}));
+    put(&f, row("t2", "2026-11-04", "Split Shop", 900), json!({"splits":[{"categoryId":"groceries","amountCents":900}]}));
+    let before = f.rows(TX);
+    let (status, out) = f.route("POST", "/finance/transactions/review", json!({"transactionIds":["t1","t2"],"accountIds":[ACCT,ACCT],
+        "months":["2026-11","2026-11"],"categoryIds":["groceries","groceries"]}));
+    assert_eq!(status, 409, "{out}");
+    assert_eq!(f.rows(TX), before, "the first row was written before the second was refused");
+    assert!(f.rows("app.finance_activity").is_empty());
+}
