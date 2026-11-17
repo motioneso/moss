@@ -117,7 +117,16 @@ impl World {
                 compiled_cache: None,
                 fuel_ceiling: Some(250_000_000),
             },
-            |next| Ok(next),
+            |next| {
+                let database = f.db.clone();
+                Ok(Arc::new(
+                    moss_module_host::account_preferences::AccountPreferencesPorts::new(
+                        database,
+                        moss_module_host::account_preferences::wellness_bindings(),
+                        next,
+                    )?,
+                ))
+            },
         )
         .unwrap();
         let source = app
@@ -156,91 +165,87 @@ impl World {
     fn add_user(&self) -> uuid::Uuid {
         let id = uuid::Uuid::new_v4();
         self.f.rt.block_on(self.f.root.execute(
-            "INSERT INTO app.users(id,email,name,is_instance_admin) VALUES($1,$2,'Goal Parity',false)",
+            "INSERT INTO app.users(id,email,name,is_instance_admin) VALUES($1,$2,'Well Parity',false)",
             &[&id, &format!("{id}@example.test")],
         )).unwrap();
         id
     }
 }
 
+fn set_policy(w: &World, using: &str) {
+    w.f.rt
+        .block_on(w.f.root.execute(
+            "DROP POLICY wellness_checkins_select ON app.wellness_checkins",
+            &[],
+        ))
+        .unwrap();
+    w.f.rt
+        .block_on(w.f.root.execute(
+            &format!("CREATE POLICY wellness_checkins_select ON app.wellness_checkins FOR SELECT TO jarvis_app_runtime USING ({using})"),
+            &[],
+        ))
+        .unwrap();
+}
+
 #[test]
 #[ignore = "Only through verify-gate"]
-fn wellness_routes_work_and_a_second_person_is_refused() {
+fn check_ins_stay_private_and_a_second_person_is_refused() {
     let w = World::new();
     let (a, b) = (w.f.a, w.f.b);
     let created = w.call(
         a,
         "POST",
-        "/wellness",
-        json!({"title":MARK,"desiredOutcome":"Ship it","priority":4}),
+        "/wellness/checkins",
+        json!({"feelingCore":"happy","feelingSecondary":"Joy","note":MARK,"intensity":4}),
     );
     assert_eq!(created["status"], 201, "{created}");
-    let id = created["body"]["id"].as_str().unwrap().to_owned();
-    assert_eq!(created["body"]["status"], "active");
+    let id = created["body"]["checkin"]["id"].as_str().unwrap().to_owned();
+    assert_eq!(created["body"]["checkin"]["ownerUserId"], a.to_string());
 
-    let evidence = w.call(a, "POST", &format!("/wellness/{id}/evidence"),
-        json!({"evidenceKind":"progress","sourceKind":"manual","sourceLabel":"Note","summary":MARK}));
-    assert_eq!(evidence["status"], 201, "{evidence}");
-
-    let list = w.call(a, "GET", "/wellness", json!(null));
-    assert_eq!(list["body"].as_array().unwrap().len(), 1);
+    let list = w.call(a, "GET", "/wellness/checkins", json!(null));
+    assert_eq!(list["body"]["checkins"].as_array().unwrap().len(), 1);
 
     // The second person sees nothing, through the routes or the database.
-    assert_eq!(w.call(b, "GET", "/wellness", json!(null))["body"], json!([]));
-    assert_eq!(
-        w.call(b, "GET", &format!("/wellness/{id}"), json!(null))["status"],
-        404
-    );
-    assert!(rows_as(&w.f, b, "SELECT id FROM app.moss_wellness").is_empty());
-    assert_eq!(rows_as(&w.f, a, "SELECT id FROM app.moss_wellness").len(), 1);
-    println!("PASS rls: the second person reads no wellness");
-
-    // With the owner rule removed, the second person can read them. The rule is put back.
-    w.f.rt
-        .block_on(
-            w.f.root
-                .execute("DROP POLICY moss_wellness_rw ON app.moss_wellness", &[]),
-        )
-        .unwrap();
-    w.f.rt.block_on(w.f.root.execute(
-        "CREATE POLICY moss_wellness_rw ON app.moss_wellness FOR ALL TO jarvis_app_runtime USING (true) WITH CHECK (true)",
-        &[],
-    )).unwrap();
-    let leaked = rows_as(&w.f, b, "SELECT id FROM app.moss_wellness");
-    w.f.rt
-        .block_on(
-            w.f.root
-                .execute("DROP POLICY moss_wellness_rw ON app.moss_wellness", &[]),
-        )
-        .unwrap();
-    w.f.rt.block_on(w.f.root.execute(
-        "CREATE POLICY moss_wellness_rw ON app.moss_wellness FOR ALL TO jarvis_app_runtime USING (owner_user_id = app.current_actor_user_id()) WITH CHECK (owner_user_id = app.current_actor_user_id())",
-        &[],
-    )).unwrap();
-    assert_eq!(
-        leaked.len(),
-        1,
-        "without the policy the second person must see the goal"
-    );
-    assert!(rows_as(&w.f, b, "SELECT id FROM app.moss_wellness").is_empty());
-    println!(
-        "PASS rls: removing the policy lets the second person in, restoring it shuts them out"
-    );
-
-    // Closing refuses further evidence.
-    let closed = w.call(
-        a,
+    let theirs = w.call(b, "GET", "/wellness/checkins", json!(null));
+    assert_eq!(theirs["body"]["checkins"], json!([]));
+    let changed = w.call(
+        b,
         "PATCH",
-        &format!("/wellness/{id}"),
-        json!({"status":"completed"}),
+        &format!("/wellness/checkins/{id}"),
+        json!({"feelingCore":"happy","note":"stolen"}),
     );
-    assert_eq!(closed["body"]["status"], "completed");
-    let refused = w.call(a, "POST", &format!("/wellness/{id}/evidence"),
-        json!({"evidenceKind":"progress","sourceKind":"manual","sourceLabel":"Note","summary":"Late"}));
-    assert_eq!(refused["status"], 409, "{refused}");
-    println!("PASS closed goal: evidence on a completed goal is refused");
+    assert_eq!(changed["status"], 404, "{changed}");
+    assert!(rows_as(&w.f, b, "SELECT id FROM app.wellness_checkins").is_empty());
+    assert_eq!(
+        rows_as(&w.f, a, "SELECT id FROM app.wellness_checkins").len(),
+        1
+    );
+    println!("PASS rls: the second person reads no check-ins and changes none");
 
-    // The marker reaches no job payload, no other person's answer and no error body.
+    // With the owner rule removed, the second person can read the row. The rule is put back.
+    set_policy(&w, "true");
+    let leaked = rows_as(&w.f, b, "SELECT id FROM app.wellness_checkins");
+    set_policy(&w, "owner_user_id = app.current_actor_user_id()");
+    // The database also holds rows from earlier runs, so look for this run's row by id.
+    assert!(
+        leaked.iter().any(|row| row.get::<_, uuid::Uuid>(0).to_string() == id),
+        "without the policy the second person must see the check-in"
+    );
+    assert!(rows_as(&w.f, b, "SELECT id FROM app.wellness_checkins").is_empty());
+    println!("PASS rls: removing the policy lets the second person in, restoring it shuts them out");
+
+    // The saved choice is per person.
+    let first = w.call(a, "GET", "/wellness/ai-consent", json!(null));
+    assert_eq!(first["body"], json!({"effective":true,"explicit":null}));
+    let off = w.call(a, "PUT", "/wellness/ai-consent", json!({"granted":false}));
+    assert_eq!(off["body"], json!({"effective":false,"explicit":false}));
+    assert_eq!(
+        w.call(b, "GET", "/wellness/ai-consent", json!(null))["body"],
+        json!({"effective":true,"explicit":null})
+    );
+    println!("PASS consent: one person's choice does not change another's");
+
+    // The note reaches no job payload, no activity row and no other person's answer.
     let jobs: i64 =
         w.f.rt
             .block_on(w.f.root.query_one(
@@ -250,11 +255,21 @@ fn wellness_routes_work_and_a_second_person_is_refused() {
             .unwrap()
             .get(0);
     assert_eq!(jobs, 0);
+    // The activity log records only calls to service ports. Wellness makes none, so the log is
+    // empty today, and this check guards against check-in text ever entering it.
+    for actor in [a, b, w.f.admin] {
+        let activity = serde_json::to_string(
+            &w.app.services.activity("wellness", &w.f.access(actor)).unwrap(),
+        )
+        .unwrap();
+        assert!(!activity.contains(MARK), "activity holds check-in text");
+        assert!(!activity.contains("stolen"));
+    }
     assert!(!w
-        .call(b, "GET", "/wellness", json!(null))
+        .call(b, "GET", "/wellness/checkins", json!(null))
         .to_string()
         .contains(MARK));
-    println!("PASS privacy: the marker is in no job payload and no second-person answer");
+    println!("PASS privacy: the note is in no job payload, no activity row and no second-person answer");
     let _ = Host::new(Limits::default()).unwrap();
     let _ = AccessContext::new(a, "wellness-proof");
 }
@@ -266,16 +281,29 @@ fn rust_answers_match_the_old_routes_step_for_step() {
     let old_actor = w.add_user();
     let new_actor = w.add_user();
     let missing = "99999999-9999-4999-8999-999999999999";
-    // Steps that need no id from a create.
     let steps: Vec<Value> = vec![
-        json!({"method":"GET","url":"/api/wellness"}),
-        json!({"method":"POST","url":"/api/wellness","body":{"title":"Parity goal","desiredOutcome":"Same answer","priority":4,"reviewCadence":"daily","targetAt":"2030-01-01T00:00:00.000Z"}}),
-        json!({"method":"POST","url":"/api/wellness","body":{"desiredOutcome":"x"}}),
-        json!({"method":"POST","url":"/api/wellness","body":{"title":"","desiredOutcome":"x"}}),
-        json!({"method":"POST","url":"/api/wellness","body":{"title":"t","desiredOutcome":"x","priority":9}}),
-        json!({"method":"POST","url":"/api/wellness","body":{"title":"t","desiredOutcome":"x","reviewCadence":"yearly"}}),
-        json!({"method":"GET","url":"/api/wellness"}),
-        json!({"method":"GET","url":format!("/api/wellness/{missing}")}),
+        json!({"method":"GET","url":"/api/wellness/ai-consent"}),
+        json!({"method":"PUT","url":"/api/wellness/ai-consent","body":{"granted":false}}),
+        json!({"method":"PUT","url":"/api/wellness/ai-consent","body":{"granted":"yes"}}),
+        json!({"method":"PUT","url":"/api/wellness/ai-consent","body":{}}),
+        json!({"method":"GET","url":"/api/wellness/ai-consent"}),
+        json!({"method":"GET","url":"/api/wellness/checkins"}),
+        json!({"method":"POST","url":"/api/wellness/checkins","body":{"feelingCore":"happy","feelingSecondary":"Joy","sensations":["warm"],"intensity":4,"energy":3,"note":"fine"}}),
+        json!({"method":"POST","url":"/api/wellness/checkins","body":{"feelingCore":"sad"}}),
+        json!({"method":"POST","url":"/api/wellness/checkins","body":{}}),
+        json!({"method":"POST","url":"/api/wellness/checkins","body":{"feelingCore":"nope"}}),
+        json!({"method":"POST","url":"/api/wellness/checkins","body":{"feelingCore":"happy","feelingSecondary":"Fear"}}),
+        json!({"method":"POST","url":"/api/wellness/checkins","body":{"feelingCore":"happy","intensity":11}}),
+        json!({"method":"POST","url":"/api/wellness/checkins","body":{"feelingCore":"happy","energy":0}}),
+        json!({"method":"POST","url":"/api/wellness/checkins","body":{"feelingCore":"happy","sensations":"tight"}}),
+        json!({"method":"POST","url":"/api/wellness/checkins","body":{"feelingCore":"happy","identifiedVia":"wheel"}}),
+        json!({"method":"GET","url":"/api/wellness/checkins"}),
+        json!({"method":"GET","url":"/api/wellness/checkins?limit=2"}),
+        json!({"method":"GET","url":"/api/wellness/checkins?limit=0"}),
+        json!({"method":"GET","url":"/api/wellness/checkins?limit=501"}),
+        json!({"method":"GET","url":"/api/wellness/checkins?since=soon"}),
+        json!({"method":"GET","url":"/api/wellness/checkins?cursor=not-a-cursor"}),
+        json!({"method":"PATCH","url":format!("/api/wellness/checkins/{missing}"),"body":{"note":"x"}}),
     ];
     let old = replay::old_routes(old_actor, &steps, &json!({}));
     let mut new = vec![];
@@ -285,43 +313,38 @@ fn rust_answers_match_the_old_routes_step_for_step() {
             .as_str()
             .unwrap()
             .replace("/api/wellness", "/wellness");
-        let body = if step.get("body").is_some() {
-            step["body"].clone()
-        } else {
-            json!(null)
-        };
+        let body = step.get("body").cloned().unwrap_or(json!(null));
         let answer = w.call(new_actor, method, &url, body);
         new.push(json!({"status":answer["status"],"body":answer["body"]}));
     }
     let (mut old, mut new) = (old, new);
     old.iter_mut().for_each(replay::mask);
     new.iter_mut().for_each(replay::mask);
-    assert_eq!(new, old);
+    for (n, (o, r)) in old.iter().zip(&new).enumerate() {
+        assert_eq!(r, o, "step {n}: {}", steps[n]);
+    }
     println!("PASS parity: {} steps match the old routes", steps.len());
 
-    // Steps that use the created goal's id, run on each side with its own id.
-    let created_old = replay::old_routes(
-        old_actor,
-        &[
-            json!({"method":"POST","url":"/api/wellness","body":{"title":"Id goal","desiredOutcome":"x"}}),
-        ],
-        &json!({}),
-    );
-    let old_id = created_old[0]["body"]["id"].as_str().unwrap().to_owned();
-    let created_new = w.call(
-        new_actor,
-        "POST",
-        "/wellness",
-        json!({"title":"Id goal","desiredOutcome":"x"}),
-    );
-    let new_id = created_new["body"]["id"].as_str().unwrap().to_owned();
+    // Steps that use a created check-in's id, run on each side with its own id.
+    let seed = json!({"method":"POST","url":"/api/wellness/checkins","body":{"feelingCore":"happy","feelingSecondary":"Joy","note":"keep","energy":2}});
+    let old_id = replay::old_routes(old_actor, &[seed.clone()], &json!({}))[0]["body"]["checkin"]
+        ["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let new_id = w.call(new_actor, "POST", "/wellness/checkins", seed["body"].clone())["body"]
+        ["checkin"]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
     let id_steps: Vec<Value> = vec![
-        json!({"method":"GET","url":"/api/wellness/{id}"}),
-        json!({"method":"PATCH","url":"/api/wellness/{id}","body":{"title":"Renamed","blockerSummary":"Blocked"}}),
-        json!({"method":"PATCH","url":"/api/wellness/{id}","body":{"targetAt":null,"blockerSummary":null}}),
-        json!({"method":"POST","url":"/api/wellness/{id}/evidence","body":{"evidenceKind":"progress","sourceKind":"manual","sourceLabel":"Note","summary":"Moved"}}),
-        json!({"method":"POST","url":"/api/wellness/{id}/evidence","body":{"evidenceKind":"nope","sourceKind":"manual","sourceLabel":"Note","summary":"Moved"}}),
-        json!({"method":"GET","url":"/api/wellness/{id}"}),
+        json!({"method":"PATCH","url":"/api/wellness/checkins/{id}","body":{"feelingCore":"happy","intensity":5}}),
+        json!({"method":"PATCH","url":"/api/wellness/checkins/{id}","body":{"feelingCore":"sad"}}),
+        json!({"method":"PATCH","url":"/api/wellness/checkins/{id}","body":{"feelingCore":"sad","feelingSecondary":null}}),
+        json!({"method":"PATCH","url":"/api/wellness/checkins/{id}","body":{"feelingCore":"happy","note":null,"energy":null}}),
+        json!({"method":"PATCH","url":"/api/wellness/checkins/{id}","body":{"feelingCore":"happy","intensity":99}}),
+        json!({"method":"PATCH","url":"/api/wellness/checkins/{id}","body":{}}),
+        json!({"method":"GET","url":"/api/wellness/checkins?limit=1"}),
     ];
     let mut old = replay::old_routes(old_actor, &id_steps, &json!({"id":old_id}));
     let mut new = vec![];
@@ -337,12 +360,8 @@ fn rust_answers_match_the_old_routes_step_for_step() {
     }
     old.iter_mut().for_each(replay::mask);
     new.iter_mut().for_each(replay::mask);
-    assert_eq!(new, old);
-    println!(
-        "PASS parity: {} id steps match the old routes",
-        id_steps.len()
-    );
+    for (n, (o, r)) in old.iter().zip(&new).enumerate() {
+        assert_eq!(r, o, "id step {n}: {}", id_steps[n]);
+    }
+    println!("PASS parity: {} id steps match the old routes", id_steps.len());
 }
-
-#[path = "support/tools.rs"]
-mod tools;

@@ -18,7 +18,17 @@ pub fn mask(value: &mut Value) {
             }
         }
         Value::Array(items) => items.iter_mut().for_each(mask),
-        Value::Object(fields) => fields.values_mut().for_each(mask),
+        Value::Object(fields) => {
+            if let Some(Value::String(token)) = fields.get("nextCursor") {
+                // A cursor holds a time and an id, so only its shape is compared.
+                use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+                let inner: Value = serde_json::from_slice(&URL_SAFE_NO_PAD.decode(token).unwrap()).unwrap();
+                let keys: Vec<&String> = inner.as_object().unwrap().keys().collect();
+                let shape = format!("<cursor {keys:?}>");
+                fields.insert("nextCursor".into(), Value::String(shape));
+            }
+            fields.values_mut().for_each(mask)
+        }
         _ => {}
     }
 }
@@ -62,32 +72,4 @@ pub fn old_routes(actor: uuid::Uuid, steps: &[Value], vars: &Value) -> Vec<Value
     );
     let parsed: Value = serde_json::from_slice(&out.stdout).unwrap();
     parsed["responses"].as_array().unwrap().clone()
-}
-
-pub fn old_tool(actor: uuid::Uuid, tool: &str, parameters: Value) -> Value {
-    let mut child = Command::new("pnpm")
-        .args(["exec", "tsx", "modules/wellness/tools/tools-oracle.ts"])
-        .current_dir(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.."))
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(
-            json!({"actor":actor,"tool":tool,"parameters":parameters})
-                .to_string()
-                .as_bytes(),
-        )
-        .unwrap();
-    let output = child.wait_with_output().unwrap();
-    assert!(
-        output.status.success(),
-        "Legacy tools failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    serde_json::from_slice(&output.stdout).unwrap()
 }

@@ -5,7 +5,7 @@ import { createDatabase, DataContextRunner, getMossDatabaseUrls } from "@moss/db
 import { setMossErrorHandler } from "../../../apps/api/src/error-handling.js";
 import { registerWellnessRoutes } from "../../../packages/wellness/src/routes.js";
 
-type Step = { method: "GET" | "POST" | "PATCH"; url: string; body?: unknown };
+type Step = { method: "GET" | "POST" | "PATCH" | "PUT"; url: string; body?: unknown };
 
 export async function routesOracle(
   actor: string,
@@ -18,8 +18,7 @@ export async function routesOracle(
   setMossErrorHandler(server);
   registerWellnessRoutes(server, {
     resolveAccessContext: async () => ({ actorUserId: actor, requestId: "wellness-parity" }),
-    dataContext: new DataContextRunner(db),
-    boss: { send: async () => null } as never
+    dataContext: new DataContextRunner(db)
   });
   try {
     const responses = [];

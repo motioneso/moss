@@ -21,7 +21,7 @@ def control(name, path, old, new, manifest, test, case, extra):
             ["cargo", "+1.95.0", "test", "--locked", "--offline", "--manifest-path",
              manifest, "--test", test, case, "--", *extra],
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            env={**os.environ, **({"CARGO_TARGET_DIR": str(target / "guest")} if name == "tool error" else {})},
+            env={**os.environ, **({"CARGO_TARGET_DIR": str(target / "guest")} if name == "error body" else {})},
             check=False,
         )
         # No private marker or source paths in the printed receipt. Full output stays in scratch.
@@ -33,23 +33,16 @@ def control(name, path, old, new, manifest, test, case, extra):
         source.write_bytes(original)
 
 
-control("tool error", "modules/wellness/src/lib.rs",
-        '.map_err(|_| moss_module_sdk::Error::new("Wellness tool failed"))?',
-        '.map_err(|error| error)?', "modules/wellness/src/Cargo.toml", "wellness",
-        "tool_validation_and_errors_do_not_echo_private_input_or_host_failures", [])
-control("host activity", "rust-spike/module-host/src/services.rs",
-        '"success":result.is_ok(),"at":chrono::Utc::now()',
-        '"success":result.is_ok(),"parameters":r.parameters,"at":chrono::Utc::now()',
-        "modules/wellness/host/Cargo.toml", "installed",
-        "tools_and_today_keep_both_tables_private_and_activity_metadata_only",
-        ["--ignored", "--test-threads=1"])
-
+GUEST = "check_in_text_reaches_no_host_call_beyond_the_check_in_table"
+HOST = "check_ins_stay_private_and_a_second_person_is_refused"
+control("error body", "modules/wellness/src/lib.rs",
+        'result.unwrap_or_else(|_| Response::new(500, json!({"error":"Internal server error"})))',
+        'result.unwrap_or_else(|e| Response::new(500, json!({"error": e.to_string()})))',
+        "modules/wellness/src/Cargo.toml", "privacy", GUEST, [])
 # Re-run both assertions after restoring their guards; a negative control alone is not proof.
 for manifest, test, case, extra, output in [
-    ("modules/wellness/src/Cargo.toml", "wellness",
-     "tool_validation_and_errors_do_not_echo_private_input_or_host_failures", [], target / "guest"),
-    ("modules/wellness/host/Cargo.toml", "installed",
-     "tools_and_today_keep_both_tables_private_and_activity_metadata_only",
+    ("modules/wellness/src/Cargo.toml", "privacy", GUEST, [], target / "guest"),
+    ("modules/wellness/host/Cargo.toml", "installed", HOST,
      ["--ignored", "--test-threads=1"], target),
 ]:
     subprocess.run(["cargo", "+1.95.0", "test", "--locked", "--offline", "--manifest-path",

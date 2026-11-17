@@ -44,7 +44,7 @@ fn an_unsupported_invocation_leaks_no_request_text() {
 #[test]
 fn the_package_builds_and_the_manifest_validates() {
     let files = moss_wellness_host::package::files(&root(), &component()).unwrap();
-    assert_eq!(files.keys().filter(|k| k.starts_with("sql/")).count(), 3);
+    assert_eq!(files.keys().filter(|k| k.starts_with("sql/")).count(), 16);
     for needed in ["moss.module.json", "code/module.wasm", "LICENSE", "NOTICE", "CHANGELOG.md"] {
         assert!(files.contains_key(needed), "{needed} missing");
     }
@@ -61,12 +61,14 @@ fn the_package_asks_only_for_its_own_resources() {
             parameters: json!({"kind":"select"}),
         })
     };
-    assert!(ask("db", "query", "app.moss_wellness").is_ok());
-    assert!(ask("db", "query", "app.moss_goal_evidence").is_ok());
+    assert!(ask("db", "query", "app.wellness_checkins").is_ok());
+    assert!(ask("db", "query", "app.medications").is_err());
     assert!(ask("db", "query", "app.users").is_err());
-    assert!(ask("db", "query", "app.tasks").is_err());
-    assert!(ask("jobs", "enqueue-after-commit", "wellness-memory-sync").is_err());
+    assert!(ask("kv", "preference.read", "ai-consent").is_ok());
+    assert!(ask("kv", "preference.read", "locale").is_err());
     assert!(ask("kv", "get", "wellness.store").is_err());
+    assert!(ask("ai", "generate", "chat").is_err());
+    assert!(ask("jobs", "enqueue-after-commit", "wellness-reminder").is_err());
 }
 
 #[test]
@@ -77,12 +79,13 @@ fn changing_one_byte_of_the_legacy_sql_stops_the_build() {
     let from = root().join("packages/wellness");
     let to = copy.join("packages/wellness");
     std::fs::create_dir_all(to.join("sql")).unwrap();
-    for name in ["0123_long_running_wellness.sql", "0182_moss_rename_wellness.sql", "0300_wellness_id_defaults.sql"] {
-        let mut bytes = std::fs::read(from.join("sql").join(name)).unwrap();
-        if name.starts_with("0123") {
+    for entry in std::fs::read_dir(from.join("sql")).unwrap() {
+        let name = entry.unwrap().file_name();
+        let mut bytes = std::fs::read(from.join("sql").join(&name)).unwrap();
+        if name.to_string_lossy().starts_with("0082") {
             bytes.push(b'\n');
         }
-        std::fs::write(to.join("sql").join(name), bytes).unwrap();
+        std::fs::write(to.join("sql").join(&name), bytes).unwrap();
     }
     assert!(moss_wellness_host::package::files(copy, &component()).is_err());
 }
