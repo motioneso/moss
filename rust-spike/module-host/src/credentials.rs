@@ -42,6 +42,10 @@ impl ServicePorts {
         }
         let _lock = self.credential_lock(&scope.module().id, access.actor_user_id(), name)?;
         if r.operation == "forget" {
+            ensure!(
+                declaration.scope != CredentialScope::Instance,
+                "A shared credential cannot be forgotten by one person"
+            );
             // Drops one stored token, leaving the others. A missing credential is not an error.
             let Ok(fields) = self.credential(access, &scope.module().id, name) else {
                 return Ok(json!({"forgotten":false}));
@@ -105,7 +109,7 @@ impl ServicePorts {
             if swap {
                 let target = url::Url::parse(&exchange.endpoint)?;
                 ensure!(
-                    url.path() == target.path(),
+                    url.path() == target.path() && url.host_str() == target.host_str(),
                     "Token exchange destination not declared"
                 );
                 return self.token_swap(

