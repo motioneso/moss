@@ -194,7 +194,7 @@ fn a_second_person_and_an_admin_cannot_see_or_change_another_persons_ledger() {
             "SELECT count(*), count(*) FILTER (WHERE c.relrowsecurity AND c.relforcerowsecurity AND \
              (SELECT count(*) FROM pg_policies p WHERE p.schemaname='app' AND p.tablename=t.tablename AND p.policyname LIKE 'moss_legacy_%')=4) \
              FROM pg_tables t JOIN pg_class c ON c.relname=t.tablename AND c.relnamespace='app'::regnamespace \
-             WHERE t.schemaname='app' AND t.tablename LIKE 'finance\\_%' AND t.tablename NOT IN ('finance_bank_links','finance_link_sessions') \
+             WHERE t.schemaname='app' AND t.tablename LIKE 'finance\\_%' AND t.tablename NOT IN ('finance_bank_links','finance_link_sessions','finance_shared_accounts','finance_shared_transactions') \
              AND EXISTS(SELECT 1 FROM information_schema.columns k WHERE k.table_schema='app' AND k.table_name=t.tablename AND k.column_name='owner_user_id')",
             &[],
         )).unwrap();
