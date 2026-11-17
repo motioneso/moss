@@ -47,8 +47,7 @@ pub fn enqueue_day<H: Host + ?Sized>(host: &H, plan_id: &str, day_id: &str) -> R
         }),
     );
     if let Err(e) = &queued {
-        if std::env::var("MEALS_DIAG").is_ok() || true { return Err(moss_module_sdk::Error::new(format!("DIAG {e:?}"))); }
-        store::set_plan_state(host, plan_id, "paused", Some("pending"))?;
+        store::set_plan_state(host, plan_id, "paused", Some(&format!("DIAG {e:?}")))?;
     }
     Ok(())
 }
