@@ -434,6 +434,38 @@ fn installed_news_package_serves_routes_from_the_real_server() {
     assert!(!overview["topStories"].as_array().unwrap().is_empty(), "{overview}");
     assert_eq!(overview["degraded"], json!(false), "{overview}");
     println!("news live: the queued refresh compiled {} real stories, first: {}", stories.len(), stories[0]["title"]);
+    // Pictures and icons come back from the real server as real bytes. The shell re-checks them.
+    let raw = |path: &str, cookie: &str| {
+        let response = client.get(format!("{origin}{path}")).header("origin", &origin).header("cookie", cookie).send().unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
+        let status = response.status().as_u16();
+        let kind = response.headers().get("content-type").and_then(|v| v.to_str().ok()).unwrap_or("").to_owned();
+        let cache = response.headers().get("cache-control").and_then(|v| v.to_str().ok()).unwrap_or("").to_owned();
+        (status, kind, cache, response.bytes().unwrap_or_default().to_vec())
+    };
+    let with_picture: Vec<&Value> = stories.iter().filter(|s| s["imageUrl"].is_string()).collect();
+    println!("news live: {} of {} real stories carry a picture address", with_picture.len(), stories.len());
+    let mut served = 0;
+    for story in with_picture.iter().take(6) {
+        let id = story["id"].as_str().unwrap();
+        let (status, kind, cache, bytes) = raw(&format!("/api/m/news/images/{id}"), &cookie);
+        println!("news live: picture for story -> {status} {kind} {} bytes ({cache})", bytes.len());
+        if status == 200 {
+            assert!(kind.starts_with("image/") && cache.starts_with("private, max-age="), "{kind} {cache}");
+            assert!(bytes.starts_with(&[0xff, 0xd8, 0xff]) || bytes.starts_with(b"\x89PNG") || bytes.starts_with(b"GIF8") || (bytes.len() > 12 && &bytes[8..12] == b"WEBP"), "bytes are a real picture");
+            assert_eq!(raw(&format!("/api/m/news/images/{id}"), &other).0, 404, "another person gets no picture");
+            served += 1;
+        }
+    }
+    if let Some(story) = with_picture.first() {
+        assert!(served > 0, "no real picture could be served\n{}", log());
+        assert_eq!(raw(&format!("/api/news/images/{}", story["id"].as_str().unwrap()), &cookie).0, 200, "the old picture address still works");
+    }
+    assert_eq!(raw("/api/m/news/images/not-a-story", &cookie).0, 404);
+    let (icon_status, icon_kind, _, icon_bytes) = raw("/api/m/news/favicon/feeds.bbci.co.uk", &cookie);
+    println!("news live: icon for the saved publisher -> {icon_status} {icon_kind} {} bytes", icon_bytes.len());
+    assert!(matches!(icon_status, 200 | 404), "icon status {icon_status}");
+    assert_eq!(raw("/api/m/news/favicon/unsaved.example.org", &cookie).0, 404, "an unseen publisher is refused");
+    assert_eq!(raw("/api/m/news/favicon/feeds.bbci.co.uk", &other).0, 404, "another person has no such publisher");
     // The refresh left a success time and the other person has no refresh record of their own work.
     let rows = |sql: &'static str, who: uuid::Uuid| -> Vec<tokio_postgres::Row> {
         runtime.block_on(async {
