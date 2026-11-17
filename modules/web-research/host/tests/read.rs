@@ -80,9 +80,20 @@ impl Site {
         let names: Vec<_> = table().iter().map(|(n, _)| format!("DNS:{n}")).collect();
         let made = Command::new("openssl")
             .args([
-                "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1",
-                "-nodes", "-days", "2", "-subj", "/CN=ok.test", "-addext",
-                "basicConstraints=critical,CA:FALSE", "-addext",
+                "req",
+                "-x509",
+                "-newkey",
+                "ec",
+                "-pkeyopt",
+                "ec_paramgen_curve:prime256v1",
+                "-nodes",
+                "-days",
+                "2",
+                "-subj",
+                "/CN=ok.test",
+                "-addext",
+                "basicConstraints=critical,CA:FALSE",
+                "-addext",
             ])
             .arg(format!("subjectAltName={}", names.join(",")))
             .arg("-keyout")
@@ -92,7 +103,11 @@ impl Site {
             .output()
             .unwrap();
         assert!(made.status.success(), "openssl failed");
-        let port = TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        let port = TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
         let ready = dir.path().join("ready");
         let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../../rust-spike/module-host/tests/data/public_web_fixture.py");
@@ -118,7 +133,12 @@ impl Site {
         }
         assert!(ready.exists(), "fixture site did not start");
         let pem = std::fs::read_to_string(&cert).unwrap();
-        Self { child, dir, port, pem }
+        Self {
+            child,
+            dir,
+            port,
+            pem,
+        }
     }
     fn log(&self) -> String {
         std::fs::read_to_string(self.dir.path().join("log")).unwrap_or_default()
@@ -136,7 +156,12 @@ impl World {
         let data = tempfile::tempdir().unwrap();
         let names = table()
             .into_iter()
-            .map(|(n, ips)| (n.to_string(), ips.iter().map(|i| i.parse().unwrap()).collect()))
+            .map(|(n, ips)| {
+                (
+                    n.to_string(),
+                    ips.iter().map(|i| i.parse().unwrap()).collect(),
+                )
+            })
             .collect();
         let resolver = Arc::new(Fixture {
             names,
@@ -158,19 +183,21 @@ impl World {
         }
     }
     fn read_as(&self, who: uuid::Uuid, urls: Value) -> Value {
-        let out = Host::new(Limits::default()).unwrap().call(
-            &std::fs::read(
-                std::env::var("WEB_RESEARCH_COMPONENT_WASM")
-                    .expect("Run modules/web-research/tools/check.sh to build the component"),
+        let out = Host::new(Limits::default())
+            .unwrap()
+            .call(
+                &std::fs::read(
+                    std::env::var("WEB_RESEARCH_COMPONENT_WASM")
+                        .expect("Run modules/web-research/tools/check.sh to build the component"),
+                )
+                .unwrap(),
+                Arc::new(moss_web_research_host::package::manifest().unwrap()),
+                AccessContext::new(who, "web-research-read"),
+                self.services.clone(),
+                "tool",
+                &json!({"tool":"web.read","parameters":{"urls":urls}}).to_string(),
             )
-            .unwrap(),
-            Arc::new(moss_web_research_host::package::manifest().unwrap()),
-            AccessContext::new(who, "web-research-read"),
-            self.services.clone(),
-            "tool",
-            &json!({"tool":"web.read","parameters":{"urls":urls}}).to_string(),
-        )
-        .unwrap();
+            .unwrap();
         serde_json::from_str::<Value>(&out).unwrap()["data"].clone()
     }
     fn read(&self, urls: Value) -> Value {
@@ -179,7 +206,10 @@ impl World {
     fn reason(&self, url: &str) -> String {
         let data = self.read(json!([url]));
         assert_eq!(data["trace"]["fetchedUrlCount"], 0, "{data}");
-        data["trace"]["documents"][0]["reason"].as_str().unwrap().to_owned()
+        data["trace"]["documents"][0]["reason"]
+            .as_str()
+            .unwrap()
+            .to_owned()
     }
 }
 
@@ -194,7 +224,13 @@ fn a_public_page_becomes_readable_text_through_the_real_host() {
     assert_eq!(docs[1]["text"], "just plain words");
     assert!(docs[0]["fetchedAt"].as_str().unwrap().ends_with('Z'));
     let log = w.site.log();
-    assert!(log.lines().next().unwrap().starts_with("ok.test /robots.txt"), "{log}");
+    assert!(
+        log.lines()
+            .next()
+            .unwrap()
+            .starts_with("ok.test /robots.txt"),
+        "{log}"
+    );
     assert!(log.contains("UA=Moss-WebResearch/0.1"), "{log}");
 }
 
@@ -233,7 +269,11 @@ fn plain_http_and_odd_ports_are_refused() {
 fn a_site_that_forbids_robots_is_not_read() {
     let w = World::new(Duration::ZERO);
     assert_eq!(w.reason("https://deny.test/article"), "robots");
-    assert!(!w.site.log().contains("deny.test /article"), "{}", w.site.log());
+    assert!(
+        !w.site.log().contains("deny.test /article"),
+        "{}",
+        w.site.log()
+    );
 }
 
 #[test]
@@ -243,10 +283,18 @@ fn one_site_is_paced_and_a_long_wait_is_refused() {
     // The robots file and the page are two calls to one site.
     let data = w.read(json!(["https://ok.test/article"]));
     assert_eq!(data["documents"].as_array().unwrap().len(), 1, "{data}");
-    assert!(started.elapsed() >= Duration::from_millis(400), "{:?}", started.elapsed());
+    assert!(
+        started.elapsed() >= Duration::from_millis(400),
+        "{:?}",
+        started.elapsed()
+    );
     let slow = World::new(Duration::from_secs(30));
     assert_eq!(slow.reason("https://ok.test/article"), "rate_limited");
-    assert!(!slow.site.log().contains("ok.test /article"), "{}", slow.site.log());
+    assert!(
+        !slow.site.log().contains("ok.test /article"),
+        "{}",
+        slow.site.log()
+    );
 }
 
 #[test]

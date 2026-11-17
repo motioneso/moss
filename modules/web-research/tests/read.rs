@@ -13,8 +13,18 @@ fn extraction_matches_the_old_reader_on_every_vector() {
     assert!(rows.len() >= 30);
     for row in rows {
         let (title, text) = extract_readable_text(row["html"].as_str().unwrap());
-        assert_eq!(title, row["title"].as_str().unwrap(), "title of {}", row["html"]);
-        assert_eq!(text, row["text"].as_str().unwrap(), "text of {}", row["html"]);
+        assert_eq!(
+            title,
+            row["title"].as_str().unwrap(),
+            "title of {}",
+            row["html"]
+        );
+        assert_eq!(
+            text,
+            row["text"].as_str().unwrap(),
+            "text of {}",
+            row["html"]
+        );
     }
 }
 
@@ -46,7 +56,12 @@ fn a_page_becomes_a_document_with_text_excerpt_and_time() {
     assert_eq!(doc["status"], 200);
     let trace = &out["data"]["trace"];
     assert_eq!(
-        (trace["requestedUrlCount"].as_u64(), trace["fetchedUrlCount"].as_u64(), trace["skippedUrlCount"].as_u64(), trace["urlLimitApplied"].as_bool()),
+        (
+            trace["requestedUrlCount"].as_u64(),
+            trace["fetchedUrlCount"].as_u64(),
+            trace["skippedUrlCount"].as_u64(),
+            trace["urlLimitApplied"].as_bool()
+        ),
         (Some(1), Some(1), Some(0), Some(false))
     );
 }
@@ -75,7 +90,11 @@ fn only_five_addresses_are_read_and_the_rest_count_as_skipped() {
     assert_eq!(out["data"]["documents"].as_array().unwrap().len(), 5);
     assert_eq!(fake.fetches().len(), 5);
     assert_eq!(
-        (trace["requestedUrlCount"].as_u64(), trace["skippedUrlCount"].as_u64(), trace["urlLimitApplied"].as_bool()),
+        (
+            trace["requestedUrlCount"].as_u64(),
+            trace["skippedUrlCount"].as_u64(),
+            trace["urlLimitApplied"].as_bool()
+        ),
         (Some(7), Some(2), Some(true))
     );
 }
@@ -84,13 +103,19 @@ fn only_five_addresses_are_read_and_the_rest_count_as_skipped() {
 fn refused_pages_show_a_fixed_reason_and_unknown_reasons_read_as_network() {
     let fake = Fake::new();
     fake.refuse("https://a.test/", json!({"ok": false, "reason": "robots"}));
-    fake.refuse("https://b.test/", json!({"ok": false, "reason": "something odd <b>"}));
+    fake.refuse(
+        "https://b.test/",
+        json!({"ok": false, "reason": "something odd <b>"}),
+    );
     fake.refuse("https://c.test/", json!({"ok": false, "reason": "http_error", "detail": "response_too_large", "body": "SECRET-BODY"}));
     fake.page("https://d.test/", "text/plain", "fine");
     let out = fake.read_tool(json!({"urls": ["https://a.test/", "https://b.test/", "https://c.test/", "https://d.test/"]}));
     let seen = out["data"]["trace"]["documents"].as_array().unwrap();
     let find = |u: &str| seen.iter().find(|r| r["url"] == u).unwrap().clone();
-    assert_eq!(find("https://a.test/"), json!({"url":"https://a.test/","status":"skipped","reason":"robots"}));
+    assert_eq!(
+        find("https://a.test/"),
+        json!({"url":"https://a.test/","status":"skipped","reason":"robots"})
+    );
     assert_eq!(find("https://b.test/")["reason"], "network");
     assert_eq!(find("https://c.test/")["detail"], "response_too_large");
     assert_eq!(out["data"]["trace"]["skippedUrlCount"], 3);
@@ -116,7 +141,10 @@ fn the_host_gets_exact_limits_and_the_address_goes_only_to_the_fetch() {
     assert_eq!(sent.len(), 1);
     assert_eq!(sent[0]["maxBytes"], 500_000);
     assert_eq!(sent[0]["timeoutMs"], 8_000);
-    assert_eq!(sent[0]["allowedContentTypes"], json!(["text/html", "application/xhtml+xml", "text/plain"]));
+    assert_eq!(
+        sent[0]["allowedContentTypes"],
+        json!(["text/html", "application/xhtml+xml", "text/plain"])
+    );
     for (port, _, _, params) in fake.calls.borrow().iter() {
         if port != "fetch" {
             let text = params.to_string();

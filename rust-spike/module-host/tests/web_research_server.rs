@@ -2,16 +2,16 @@
 mod common;
 #[path = "people_routes/installed.rs"]
 mod installed;
+use access_context::AccessContext;
 use common::Keys;
 use moss_module_host::{
     archive::Package,
     registry::{Artifact, Channel, Index, Source},
     trust::{self, Publisher, RegistryIdentity},
 };
-use std::collections::{BTreeMap, BTreeSet};
-use access_context::AccessContext;
 use safety_core::db::{Database, RuntimeRole};
 use serde_json::{json, Value};
+use std::collections::{BTreeMap, BTreeSet};
 use std::{
     fs,
     path::Path,
@@ -153,7 +153,10 @@ fn installed_web_research_package_serves_status_from_the_real_server() {
         let response = client.post(format!("{origin}/api/auth/sign-up/email")).header("origin", &origin).json(&json!({"name":name,"email":email,"password":"temporary-web-research-password-289-not-a-real-secret"})).send().unwrap();
         let status = response.status();
         if status != 200 {
-            panic!("sign-up answered {status}: {}", response.text().unwrap_or_default());
+            panic!(
+                "sign-up answered {status}: {}",
+                response.text().unwrap_or_default()
+            );
         }
         response.headers()["set-cookie"]
             .to_str()
@@ -203,32 +206,36 @@ fn installed_web_research_package_serves_status_from_the_real_server() {
     let keys = Keys::new();
     fs::create_dir_all(root.join("registry/packages")).unwrap();
     let artifacts: Vec<Artifact> = [("JS235_WEB_RESEARCH_PACKAGE", "web")]
-    .iter()
-    .map(|(variable, id)| {
-        let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
-        let digest = trust::digest(&bytes);
-        let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
-        let manifest = &package.manifest;
-        assert_eq!(manifest.id, *id);
-        fs::write(root.join(format!("registry/packages/{digest}.mosspkg")), &bytes).unwrap();
-        Artifact {
-            id: manifest.id.clone(),
-            version: manifest.version.clone(),
-            digest: digest.clone(),
-            size: bytes.len() as u64,
-            publisher_key: "web-test".into(),
-            signature: Keys::sign(&keys.publisher, digest.as_bytes()),
-            requires_moss: manifest.requires_moss.clone(),
-            abi: manifest.abi.clone(),
-            capabilities: manifest.capabilities.clone(),
-            migrations: manifest.database.migrations.clone(),
-            requires: manifest.requires.clone(),
-            changelog: "Web Research live gate".into(),
-            channel: Channel::Stable,
-            urgent: false,
-        }
-    })
-    .collect();
+        .iter()
+        .map(|(variable, id)| {
+            let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
+            let digest = trust::digest(&bytes);
+            let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
+            let manifest = &package.manifest;
+            assert_eq!(manifest.id, *id);
+            fs::write(
+                root.join(format!("registry/packages/{digest}.mosspkg")),
+                &bytes,
+            )
+            .unwrap();
+            Artifact {
+                id: manifest.id.clone(),
+                version: manifest.version.clone(),
+                digest: digest.clone(),
+                size: bytes.len() as u64,
+                publisher_key: "web-test".into(),
+                signature: Keys::sign(&keys.publisher, digest.as_bytes()),
+                requires_moss: manifest.requires_moss.clone(),
+                abi: manifest.abi.clone(),
+                capabilities: manifest.capabilities.clone(),
+                migrations: manifest.database.migrations.clone(),
+                requires: manifest.requires.clone(),
+                changelog: "Web Research live gate".into(),
+                channel: Channel::Stable,
+                urgent: false,
+            }
+        })
+        .collect();
     let identity = RegistryIdentity {
         id: "web-test-registry".into(),
         name: "Web Research test registry".into(),
@@ -252,11 +259,23 @@ fn installed_web_research_package_serves_status_from_the_real_server() {
         revoked: vec![],
     };
     for (name, data, key) in [
-        ("registry.json", serde_json::to_vec(&identity).unwrap(), &keys.root),
-        ("index.json", serde_json::to_vec(&index).unwrap(), &keys.index),
+        (
+            "registry.json",
+            serde_json::to_vec(&identity).unwrap(),
+            &keys.root,
+        ),
+        (
+            "index.json",
+            serde_json::to_vec(&index).unwrap(),
+            &keys.index,
+        ),
     ] {
         fs::write(root.join("registry").join(name), &data).unwrap();
-        fs::write(root.join("registry").join(format!("{name}.sig")), Keys::sign(key, &data)).unwrap();
+        fs::write(
+            root.join("registry").join(format!("{name}.sig")),
+            Keys::sign(key, &data),
+        )
+        .unwrap();
     }
     let installer = installed::reopen(
         &root.join("data"),
@@ -298,15 +317,25 @@ fn installed_web_research_package_serves_status_from_the_real_server() {
         let signed = client.post(format!("{origin}/api/auth/sign-in/email")).header("origin", &origin)
             .json(&json!({"email":"web-other@example.test","password":"temporary-web-research-password-289-not-a-real-secret"})).send().unwrap();
         assert_eq!(signed.status(), 200, "second person sign-in");
-        signed.headers()["set-cookie"].to_str().unwrap().split(';').next().unwrap().to_owned()
+        signed.headers()["set-cookie"]
+            .to_str()
+            .unwrap()
+            .split(';')
+            .next()
+            .unwrap()
+            .to_owned()
     };
     let log = || fs::read_to_string(root.join("server.log")).unwrap_or_default();
     let call = |path: &str, cookie: Option<&str>| {
-        let mut request = client.get(format!("{origin}/api/m/web{path}")).header("origin", &origin);
+        let mut request = client
+            .get(format!("{origin}/api/m/web{path}"))
+            .header("origin", &origin);
         if let Some(cookie) = cookie {
             request = request.header("cookie", cookie);
         }
-        let response = request.send().unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
+        let response = request
+            .send()
+            .unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
         let status = response.status().as_u16();
         let text = response.text().unwrap_or_default();
         println!("{path} -> {status}");
@@ -323,7 +352,12 @@ fn installed_web_research_package_serves_status_from_the_real_server() {
     let expected = json!({"webSearchConfigured":false,"engine":"none","webSearchReason":"no-key-no-native-model"});
     for who in [&cookie, &other] {
         let (status, text) = call("/status", Some(who));
-        assert_eq!((status, json_of(&text)), (200, expected.clone()), "{text}\n{}", log());
+        assert_eq!(
+            (status, json_of(&text)),
+            (200, expected.clone()),
+            "{text}\n{}",
+            log()
+        );
     }
     // The server refuses a path the manifest does not declare before the package sees it.
     assert_eq!(call("/nope", Some(&cookie)).0, 400);
@@ -337,7 +371,9 @@ fn installed_web_research_package_serves_status_from_the_real_server() {
         if let Some(cookie) = cookie {
             request = request.header("cookie", cookie);
         }
-        let response = request.send().unwrap_or_else(|e| panic!("read: {e}\n{}", log()));
+        let response = request
+            .send()
+            .unwrap_or_else(|e| panic!("read: {e}\n{}", log()));
         let status = response.status().as_u16();
         let body = json_of(&response.text().unwrap_or_default());
         println!("POST /read -> {status}");
@@ -348,35 +384,68 @@ fn installed_web_research_package_serves_status_from_the_real_server() {
     let private_marker = format!("https://10.0.0.5/{MARK}");
     for who in [&cookie, &other] {
         let (status, body) = read(
-            json!([private_marker, "https://127.0.0.1/", "https://localhost/", "http://example.com/"]),
+            json!([
+                private_marker,
+                "https://127.0.0.1/",
+                "https://localhost/",
+                "http://example.com/"
+            ]),
             Some(who),
         );
         assert_eq!(status, 200, "{body}");
         assert_eq!(body["documents"].as_array().unwrap().len(), 0, "{body}");
-        let reasons: Vec<&str> = body["trace"]["documents"].as_array().unwrap().iter().map(|r| r["reason"].as_str().unwrap()).collect();
-        assert_eq!(reasons, ["blocked", "blocked", "blocked", "not_https"], "{body}");
+        let reasons: Vec<&str> = body["trace"]["documents"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["reason"].as_str().unwrap())
+            .collect();
+        assert_eq!(
+            reasons,
+            ["blocked", "blocked", "blocked", "not_https"],
+            "{body}"
+        );
     }
     println!("private and loopback addresses refused for two people");
     for who in [&cookie, &other] {
         let (status, body) = read(json!(["https://example.com/"]), Some(who));
         assert_eq!(status, 200, "{body}");
         let doc = &body["documents"][0];
-        println!("LIVE example.com read -> title={} text_len={}", doc["title"], doc["text"].as_str().map_or(0, str::len));
-        assert!(doc["text"].as_str().unwrap_or("").contains("Example Domain"), "{body}");
+        println!(
+            "LIVE example.com read -> title={} text_len={}",
+            doc["title"],
+            doc["text"].as_str().map_or(0, str::len)
+        );
+        assert!(
+            doc["text"]
+                .as_str()
+                .unwrap_or("")
+                .contains("Example Domain"),
+            "{body}"
+        );
         assert_eq!(doc["domain"], "example.com");
         std::thread::sleep(Duration::from_millis(1500));
     }
     // Another device reaches the server through the machine's network address, not loopback. The
     // address is found from the routing table and is never printed.
     let lan = std::net::UdpSocket::bind("0.0.0.0:0")
-        .and_then(|socket| socket.connect("192.0.2.1:9").and_then(|_| socket.local_addr()))
+        .and_then(|socket| {
+            socket
+                .connect("192.0.2.1:9")
+                .and_then(|_| socket.local_addr())
+        })
         .map(|addr| addr.ip());
     match lan {
         Ok(ip) if !ip.is_loopback() => {
             let remote = reqwest::blocking::Client::builder()
-                .add_root_certificate(reqwest::Certificate::from_pem(&fs::read(&cert).unwrap()).unwrap())
+                .add_root_certificate(
+                    reqwest::Certificate::from_pem(&fs::read(&cert).unwrap()).unwrap(),
+                )
                 .no_proxy()
-                .resolve("localhost", std::net::SocketAddr::new(ip, port.0.parse().unwrap()))
+                .resolve(
+                    "localhost",
+                    std::net::SocketAddr::new(ip, port.0.parse().unwrap()),
+                )
                 .timeout(Duration::from_secs(60))
                 .build()
                 .unwrap();
@@ -428,11 +497,18 @@ fn installed_web_research_package_serves_status_from_the_real_server() {
     };
     let set_name = |name: &str| {
         runtime.block_on(async {
-            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
+                .await
+                .unwrap();
             tokio::spawn(async move {
                 let _ = connection.await;
             });
-            db.execute("UPDATE app.users SET name=$1 WHERE email='web-other@example.test'", &[&name]).await.unwrap();
+            db.execute(
+                "UPDATE app.users SET name=$1 WHERE email='web-other@example.test'",
+                &[&name],
+            )
+            .await
+            .unwrap();
         })
     };
     set_name(MARK);
@@ -442,5 +518,7 @@ fn installed_web_research_package_serves_status_from_the_real_server() {
     println!("privacy scan FAILED with a leak planted");
     scan();
     println!("privacy scan PASSED with no leak");
-    println!("web research live: status for two people over HTTPS, 401 signed out, 400 undeclared route");
+    println!(
+        "web research live: status for two people over HTTPS, 401 signed out, 400 undeclared route"
+    );
 }

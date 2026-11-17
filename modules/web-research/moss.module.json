@@ -11,60 +11,35 @@
   "capabilities": [
     {
       "port": "credentials",
-      "operations": [
-        "status",
-        "request"
-      ],
-      "resources": [
-        "api.search.brave.com"
-      ]
+      "operations": ["status", "request"],
+      "resources": ["api.search.brave.com"]
     },
     {
       "port": "ai",
-      "operations": [
-        "capabilities"
-      ],
-      "resources": [
-        "chat"
-      ]
+      "operations": ["capabilities"],
+      "resources": ["chat"]
     },
     {
       "port": "kv",
-      "operations": [
-        "get"
-      ],
-      "resources": [
-        "native-search"
-      ]
+      "operations": ["get"],
+      "resources": ["native-search"]
     },
     {
       "port": "fetch",
-      "operations": [
-        "get"
-      ],
-      "resources": [
-        "public-web"
-      ]
+      "operations": ["get"],
+      "resources": ["public-web"]
     },
     {
       "port": "context",
-      "operations": [
-        "read"
-      ],
-      "resources": [
-        "call"
-      ]
+      "operations": ["read"],
+      "resources": ["call"]
     }
   ],
-  "installWideKv": [
-    "native-search"
-  ],
+  "installWideKv": ["native-search"],
   "credentials": {
     "braveSearch": {
       "scope": "instance",
-      "hosts": [
-        "api.search.brave.com"
-      ],
+      "hosts": ["api.search.brave.com"],
       "attachment": {
         "kind": "header",
         "name": "x-subscription-token"
@@ -99,9 +74,7 @@
       "risk": "read"
     }
   },
-  "icons": [
-    "icons/web-research.svg"
-  ],
+  "icons": ["icons/web-research.svg"],
   "accounts": {
     "supportsUserDisable": false,
     "defaultEnabled": true
