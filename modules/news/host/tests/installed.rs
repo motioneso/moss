@@ -112,6 +112,23 @@ fn rows_as(
     })
 }
 
+/// Reads as News's own database role with the actor set. Its tables are granted to that role.
+fn rows_as_news(f: &support::Fixture, actor: uuid::Uuid, sql: &str) -> Vec<tokio_postgres::Row> {
+    f.rt.block_on(async {
+        let (mut client, conn) =
+            tokio_postgres::connect(&std::env::var("JS48_APP_URL").unwrap(), tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(async move {
+            let _ = conn.await;
+        });
+        let tx = client.transaction().await.unwrap();
+        tx.execute("SELECT set_config('app.actor_user_id', $1, true)", &[&actor.to_string()]).await.unwrap();
+        tx.batch_execute(&format!("SET LOCAL ROLE {}", moss_module_host::database::runtime_role("news"))).await.unwrap();
+        let rows = tx.query(sql, &[]).await.unwrap();
+        tx.commit().await.unwrap();
+        rows
+    })
+}
+
 /// One installed News package on a fresh database.
 struct World {
     f: support::Fixture,
@@ -852,10 +869,10 @@ fn story_feedback_belongs_to_the_person_hides_the_story_and_leaks_no_text() {
     assert_eq!(w.call(a, "GET", "/story-feedback", Value::Null)["body"]["feedback"].as_array().unwrap().len(), 1);
     // Row security: an admin reads none of A's rows, and the read leaks once it is removed.
     let table = "app.news_story_feedback";
-    let seen: i64 = rows_as(&w.f, admin, &format!("SELECT count(*) FROM {table}"), &[])[0].get(0);
+    let seen: i64 = rows_as_news(&w.f, admin, &format!("SELECT count(*) FROM {table}"))[0].get(0);
     assert_eq!(seen, 0, "an admin sees none of A's feedback");
     w.f.rt.block_on(w.f.root.batch_execute(&format!("ALTER TABLE {table} DISABLE ROW LEVEL SECURITY"))).unwrap();
-    let open: i64 = rows_as(&w.f, admin, &format!("SELECT count(*) FROM {table}"), &[])[0].get(0);
+    let open: i64 = rows_as_news(&w.f, admin, &format!("SELECT count(*) FROM {table}"))[0].get(0);
     w.f.rt.block_on(w.f.root.batch_execute(&format!("ALTER TABLE {table} ENABLE ROW LEVEL SECURITY; ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))).unwrap();
     assert!(open >= 1, "RED expected: feedback leaks with row security removed, got {open}");
     println!("RED then GREEN: {table} leaks with row security removed and is closed again after");
