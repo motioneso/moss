@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "meals",
   "name": "Meals",
-  "description": "Private kitchen and household for meal planning, with meal plans written day by day in the background, under the host's approval rules. Recipes beyond plans, lists, pantry maths and the food log are not part of this package yet. No screens.",
+  "description": "Private kitchen and household for meal planning, with meal plans written day by day in the background, under the host's approval rules. Shopping lists and the pantry work through chat. Recipes beyond plans, the food log and the wider pantry maths are not part of this package yet. No screens.",
   "publisher": "Moss",
   "version": "0.1.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
@@ -24,7 +24,10 @@
         "app.meals_recipes",
         "app.meals_recipe_ingredients",
         "app.meals_pantry_items",
-        "app.meals_staples"
+        "app.meals_staples",
+        "app.meals_shopping_lists",
+        "app.meals_shopping_list_items",
+        "app.meals_undo_actions"
       ]
     },
     {
@@ -43,7 +46,14 @@
         "meals.plan.create",
         "meals.plan.get",
         "meals.plan.current",
-        "meals.plan.control"
+        "meals.plan.control",
+        "meals.list.get",
+        "meals.list.build",
+        "meals.list.edit",
+        "meals.list.bought",
+        "meals.list.clear",
+        "meals.pantry.get",
+        "meals.pantry.edit"
       ]
     },
     {
@@ -246,6 +256,38 @@
           "description": "The tool cannot run without approval. Ask for approval for these exact inputs and try again."
         }
       ]
+    },
+    {
+      "id": "meals.chat-list",
+      "description": "Chat can build a shopping list from a meal plan, read it, add, change, tick, untick and remove lines, mark ticked lines as bought so they move into the Pantry, and clear the list. Each person sees only their own list. Changes need the host's one-use approval, and clearing the list asks every time.",
+      "errors": [
+        {
+          "code": "invalid_input",
+          "class": "validation",
+          "description": "A line, plan or list was not found, belongs to another person, or a field is missing or out of range. Read the list and try again with corrected input."
+        },
+        {
+          "code": "approval_required",
+          "class": "validation",
+          "description": "The tool cannot run without approval. Ask for approval for these exact inputs and try again."
+        }
+      ]
+    },
+    {
+      "id": "meals.chat-pantry",
+      "description": "Chat can read the Pantry and its Staples, add, change or remove Pantry items, and add, rename or remove Staples. Changing the Pantry updates a shopping list that follows a plan. Each person sees only their own Pantry.",
+      "errors": [
+        {
+          "code": "invalid_input",
+          "class": "validation",
+          "description": "The item or Staple was not found, belongs to another person, a Staple with that name exists, or a field is missing or out of range. Read the Pantry and try again with corrected input."
+        },
+        {
+          "code": "approval_required",
+          "class": "validation",
+          "description": "The tool cannot run without approval. Ask for approval for these exact inputs and try again."
+        }
+      ]
     }
   ],
   "tools": {
@@ -279,6 +321,34 @@
     },
     "meals.plan.control": {
       "description": "Stop a plan that is being written, resume a stopped or paused plan, retry one day that failed, or regenerate the plan, one day or one meal. Locked, cooked and text meals are never replaced.",
+      "risk": "write"
+    },
+    "meals.list.get": {
+      "description": "Read the shopping list. Lines are grouped by store section and carry the amount the recipes need, the amount to buy, the meals each line is for, whether it is ticked, and whether it is already bought. A line marked notInPlan is ticked but no longer needed by the plan. Returns an empty list before one is built.",
+      "risk": "read"
+    },
+    "meals.list.build": {
+      "description": "Build the shopping list from a meal plan, or rebuild it after the plan changed. The same ingredient across meals becomes one line, and amounts round up to what the shop sells. Lines you ticked stay ticked, lines you added stay, and a ticked line the plan no longer needs stays, marked not in the plan.",
+      "risk": "write"
+    },
+    "meals.list.edit": {
+      "description": "Add, change, remove, tick or untick shopping lines. add needs a name and takes an optional quantity, unit and store section. update changes a line by lineId, and on a line built from the plan the quantity is the amount to buy. remove returns an undo token. tick and untick take lineId, or lineIds to do several at once.",
+      "risk": "write"
+    },
+    "meals.list.bought": {
+      "description": "Mark shopping lines as bought and add them to the Pantry. Without lines it takes every ticked line. Give a line a quantity and unit when you bought a different amount than the list said. Returns an undo token that reverses it.",
+      "risk": "write"
+    },
+    "meals.list.clear": {
+      "description": "Remove every line from the shopping list, including lines you added. This cannot be undone.",
+      "risk": "destructive"
+    },
+    "meals.pantry.get": {
+      "description": "Read the Pantry. Items carry a name, an optional amount and unit (no amount means the household has some), and where the item came from. Staples are the things always on hand, such as salt and oil, that never go on the shopping list.",
+      "risk": "read"
+    },
+    "meals.pantry.edit": {
+      "description": "Add, change or remove a Pantry item or a Staple. action is add, update or remove. target is item (the default) or staple. add needs a name and takes an optional quantity and unit for an item; no quantity means the household has some. update changes an item by itemId, or renames a Staple by stapleId. Removing an item returns an undo token. Changing the Pantry updates a shopping list that follows a plan.",
       "risk": "write"
     }
   },
