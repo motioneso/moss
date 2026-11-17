@@ -94,7 +94,11 @@ fn two_people_use_cards_and_feedback_on_the_real_server() {
     );
     let deadline = Instant::now() + Duration::from_secs(30);
     while !client.get(format!("{origin}/api/hello")).send().is_ok_and(|r| r.status().is_success()) {
-        assert!(Instant::now() < deadline, "server startup deadline");
+        assert!(
+            Instant::now() < deadline,
+            "server startup deadline\n{}",
+            fs::read_to_string(root.join("server.log")).unwrap_or_default()
+        );
         std::thread::sleep(Duration::from_millis(100));
     }
 
