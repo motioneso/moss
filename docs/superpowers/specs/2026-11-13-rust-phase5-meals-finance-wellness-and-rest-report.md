@@ -1209,6 +1209,13 @@ Claude sign-in had expired.
 
 ### Not proven or not built
 
+- **Known gaps found in review, kept as the old code behaved.** Re-estimating an entry that is
+  still waiting reuses its queue key, so a lost first job is not replaced until the entry fails.
+  A correction that empties the food list marks the entry estimated with no figures. A blank
+  idempotency key is accepted. A crash between the revision change and the estimate rows leaves
+  an estimated entry with no rows. A model call over 30 seconds is cut off by the host and the
+  entry stays waiting. Correcting only the description of an entry that needs details does not
+  queue a new estimate.
 - **Voice and photo capture** only record the capture kind. Nothing reads audio or images.
 - **The default clock time for a meal type** is tested natively only, because the old-code
   comparison would depend on the real clock.

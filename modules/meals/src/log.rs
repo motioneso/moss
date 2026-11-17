@@ -399,7 +399,7 @@ pub fn correct<H: Host + ?Sized>(host: &H, input: &Fields) -> Result<Checked<Val
         }
     };
     if !input::is_uuid(&id) {
-        return Ok(invalid(STALE));
+        return Ok(invalid(NO_ENTRY));
     }
     let patch = Patch { description, serving_note, when, items };
     let entry = match diary::correct(host, &id, revision, &patch)? {
