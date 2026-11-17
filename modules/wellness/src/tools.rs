@@ -35,7 +35,11 @@ fn recent<H: Host + ?Sized>(host: &H) -> Result<Value> {
         .map(|row| {
             let dto = checkins::dto(row)?;
             let mood = match dto["intensity"].as_f64() {
-                Some(intensity) => json!(insights::mood_index(dto["feelingCore"].as_str().unwrap_or_default(), intensity)),
+                Some(intensity) => {
+                    let mood = insights::mood_index(dto["feelingCore"].as_str().unwrap_or_default(), intensity);
+                    // A whole number is written without a decimal point, as the old server wrote it.
+                    if mood.fract() == 0.0 { json!(mood as i64) } else { json!(mood) }
+                }
                 None => Value::Null,
             };
             Ok(json!({

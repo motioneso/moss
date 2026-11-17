@@ -43,8 +43,8 @@ fn with_consent_on_recent_check_ins_come_newest_first_with_a_mood_index() {
     let items = out["data"]["items"].as_array().unwrap();
     assert_eq!(items.len(), 2);
     assert_eq!(items[0]["feelingCore"], "sad");
-    assert_eq!(items[0]["moodIndex"], -3.0);
-    assert_eq!(items[1]["moodIndex"], 5.0);
+    assert_eq!(items[0]["moodIndex"], -3);
+    assert_eq!(items[1]["moodIndex"], 5);
     assert_eq!(out["columnOrder"], json!(["checkedInAt", "feelingCore", "feelingSecondary", "intensity", "moodIndex", "note"]));
     assert!(items[0].get("id").is_none());
 }
