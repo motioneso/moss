@@ -447,7 +447,7 @@ fn installed_finance_package_serves_routes_from_the_real_server() {
         Method::POST,
         "/finance/manual/entries",
         Some(&other),
-        Some(json!({"operationId":uuid::Uuid::new_v4().to_string(),"accountId":account,"name":"Stolen","date":"2026-11-10","amountCents":-1,"isoCurrency":"USD"})),
+        Some(json!({"operationId":uuid::Uuid::new_v4().to_string(),"accountId":account,"name":"Stolen","date":"2026-11-10","amountCents":-1,"isoCurrency":"USD","cleared":true})),
     );
     assert_eq!(status, 404, "{text}");
     assert_eq!(json_of(&text)["code"], "manual_unavailable");
