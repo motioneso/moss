@@ -1,12 +1,12 @@
 //! The four kitchen and household tools. The trusted host runs `handle` only after applying the
 //! person's approval policy; `run` is the signed-in transport that asks the host to do so.
 use crate::input::{self, coded, invalid, Checked, Fields, InputError};
-use crate::{cooking, kitchen, log, plans, shopping, stock, undo, util};
+use crate::{arrange, cooking, favourites, swap, kitchen, log, plans, shopping, stock, undo, util};
 use moss_module_sdk::{Host, Response, Result};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-pub const TOOLS: [&str; 24] = [
+pub const TOOLS: [&str; 31] = [
     "meals.kitchen.get",
     "meals.kitchen.save",
     "meals.household.save",
@@ -31,6 +31,13 @@ pub const TOOLS: [&str; 24] = [
     "meals.meal.cooked",
     "meals.meal.rate",
     "meals.undo",
+    "meals.plan.delete",
+    "meals.meal.get",
+    "meals.meal.servings",
+    "meals.meal.edit",
+    "meals.meal.swap",
+    "meals.day.edit",
+    "meals.favourites.edit",
 ];
 
 #[derive(Deserialize)]
@@ -187,6 +194,13 @@ fn call<H: Host + ?Sized>(host: &H, tool: &str, parameters: &Value) -> Result<Ch
         "meals.meal.cooked" => cooking::cooked(host, &input)?,
         "meals.meal.rate" => cooking::rate(host, &input)?,
         "meals.undo" => undo::undo(host, &input)?,
+        "meals.plan.delete" => arrange::plan_delete(host, &input)?,
+        "meals.meal.get" => arrange::meal_get(host, &input)?,
+        "meals.meal.servings" => arrange::meal_servings(host, &input)?,
+        "meals.meal.edit" => arrange::meal_edit(host, &input)?,
+        "meals.meal.swap" => swap::meal_swap(host, &input)?,
+        "meals.day.edit" => arrange::day_edit(host, &input)?,
+        "meals.favourites.edit" => favourites::edit(host, &input)?,
         _ => return Err(moss_module_sdk::Error::new("Unknown Meals tool")),
     })
 }

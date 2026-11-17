@@ -52,7 +52,7 @@ pub fn enqueue_day<H: Host + ?Sized>(host: &H, plan_id: &str, day_id: &str) -> R
     Ok(())
 }
 
-fn load_view<H: Host + ?Sized>(host: &H, plan: &Value) -> Result<Value> {
+pub(crate) fn load_view<H: Host + ?Sized>(host: &H, plan: &Value) -> Result<Value> {
     let plan_id = text(plan, "plan_id");
     let days = store::list_days(host, &plan_id)?;
     let day_ids: Vec<String> = days.iter().map(|d| text(d, "day_id")).collect();
@@ -72,7 +72,7 @@ fn load_view<H: Host + ?Sized>(host: &H, plan: &Value) -> Result<Value> {
     ))
 }
 
-fn require_plan<H: Host + ?Sized>(host: &H, plan_id: &str) -> Result<Checked<Value>> {
+pub(crate) fn require_plan<H: Host + ?Sized>(host: &H, plan_id: &str) -> Result<Checked<Value>> {
     Ok(match store::get_plan(host, plan_id)? {
         Some(plan) => Ok(plan),
         None => invalid("No plan with that id"),
@@ -261,7 +261,7 @@ pub fn current<H: Host + ?Sized>(host: &H, input: &Fields) -> Result<Checked<Val
     })
 }
 
-fn find_day<'a>(days: &'a [Value], input: &Fields) -> Checked<&'a Value> {
+pub(crate) fn find_day<'a>(days: &'a [Value], input: &Fields) -> Checked<&'a Value> {
     let by_id = input::text(input, "dayId", false, 64)?;
     let wanted = match &by_id {
         Some(_) => None,
@@ -328,6 +328,57 @@ fn regenerate<H: Host + ?Sized>(host: &H, plan_id: &str, input: &Fields) -> Resu
     Ok(Ok(()))
 }
 
+/// The household's local date and "HH:MM", from the host clock and the account's zone.
+fn local_now<H: Host + ?Sized>(host: &H) -> Result<(String, String)> {
+    let (_, now) = crate::util::context(host)?;
+    let answer: Value = host.call("context", "local-date", "account", json!({"instant": now}))?;
+    let date = answer["date"].as_str().unwrap_or_default().to_owned();
+    let offset = answer["offsetMinutes"].as_i64().unwrap_or(0);
+    let clock = |from: usize, to: usize| now.get(from..to).and_then(|s| s.parse::<i64>().ok());
+    let minutes = (clock(11, 13).unwrap_or(0) * 60 + clock(14, 16).unwrap_or(0) + offset).rem_euclid(1440);
+    Ok((date, format!("{:02}:{:02}", minutes / 60, minutes % 60)))
+}
+
+/// Mid-week re-plan. Past days never change. A meal today stays once its slot's usual time has
+/// passed. A pantry-ignoring plan is raised to prefer, so new days lean on what is on hand.
+fn replan<H: Host + ?Sized>(host: &H, plan_id: &str) -> Result<Checked<()>> {
+    let days = store::list_days(host, plan_id)?;
+    let day_ids: Vec<String> = days.iter().map(|d| text(d, "day_id")).collect();
+    let meals = store::meals_of_days(host, &day_ids)?;
+    let rules = crate::kitchen::view(host)?;
+    let usual = |slot: &str| -> Option<String> {
+        rules["slotRules"]
+            .as_array()?
+            .iter()
+            .find(|r| r["slotName"] == slot)
+            .and_then(|r| r["usualTime"].as_str().map(str::to_owned))
+    };
+    let (today, clock) = local_now(host)?;
+    let targets: Vec<Value> = meals
+        .into_iter()
+        .filter(view::is_replaceable)
+        .filter(|meal| {
+            let Some(day) = days.iter().find(|d| d["day_id"] == meal["day_id"]) else {
+                return false;
+            };
+            let date = text(day, "day_date");
+            if date < today {
+                return false;
+            }
+            date != today || usual(&text(meal, "slot_name")).is_none_or(|time| clock <= time)
+        })
+        .collect();
+    if targets.is_empty() {
+        return Ok(invalid("There is nothing to re-plan"));
+    }
+    let plan = store::get_plan(host, plan_id)?;
+    if plan.is_some_and(|p| p["pantry_mode"] == "ignore") {
+        store::set_plan_pantry_mode(host, plan_id, "prefer")?;
+    }
+    reset_and_enqueue(host, plan_id, &days, &targets)?;
+    Ok(Ok(()))
+}
+
 pub fn control<H: Host + ?Sized>(host: &H, input: &Fields) -> Result<Checked<Value>> {
     let parsed = (|| {
         Ok(input::text(input, "planId", true, 64)?.unwrap_or_default())
@@ -365,7 +416,16 @@ pub fn control<H: Host + ?Sized>(host: &H, input: &Fields) -> Result<Checked<Val
                 return Ok(Err(e));
             }
         }
-        _ => return Ok(invalid("action must be stop, resume, retry_day or regenerate")),
+        Some("replan") => {
+            if let Err(e) = replan(host, &plan_id)? {
+                return Ok(Err(e));
+            }
+        }
+        _ => {
+            return Ok(invalid(
+                "action must be stop, resume, retry_day, regenerate or replan",
+            ))
+        }
     }
     Ok(match require_plan(host, &plan_id)? {
         Ok(plan) => Ok(load_view(host, &plan)?),

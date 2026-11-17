@@ -23,6 +23,7 @@
         "app.meals_plan_days",
         "app.meals_planned_meals",
         "app.meals_planned_meal_eaters",
+        "app.meals_swap_choices",
         "app.meals_recipes",
         "app.meals_recipe_ingredients",
         "app.meals_pantry_items",
@@ -67,7 +68,14 @@
         "meals.log.delete",
         "meals.meal.cooked",
         "meals.meal.rate",
-        "meals.undo"
+        "meals.undo",
+        "meals.plan.delete",
+        "meals.meal.get",
+        "meals.meal.servings",
+        "meals.meal.edit",
+        "meals.meal.swap",
+        "meals.day.edit",
+        "meals.favourites.edit"
       ]
     },
     {
@@ -78,7 +86,7 @@
     {
       "port": "jobs",
       "operations": ["enqueue-options"],
-      "resources": ["meals-plan-day", "meals-log-estimate"]
+      "resources": ["meals-plan-day", "meals-log-estimate", "meals-meal-job"]
     }
   ],
   "database": {
@@ -205,7 +213,10 @@
     }
   ],
   "requires": {},
-  "provides": {},
+  "provides": {
+    "collectMealsExportSection": "1.0.0",
+    "deleteMealsAccountData": "1.0.0"
+  },
   "icons": ["icons/meals.svg"],
   "accounts": {
     "supportsUserDisable": true,
@@ -334,6 +345,27 @@
           "description": "The tool cannot run without approval. Ask for approval for these exact inputs and try again."
         }
       ]
+    },
+    {
+      "id": "meals.chat-arrange",
+      "description": "Chat can read one meal as a recipe, change its servings in halves, lock, unlock, move or change who eats it, swap it for one of three checked choices or a quick one, arrange a day (plain-text slots, one-off meals, cook-time limits, shared or solo slots), edit favourites and place one into a meal, re-plan the rest of the week, and delete a plan, which is destructive. Swaps and Safety re-checks run as background jobs that carry only ids. Changes need the host's one-use approval.",
+      "errors": [
+        {
+          "code": "invalid_input",
+          "class": "validation",
+          "description": "The meal, day or plan was not found, belongs to another person, or a field is missing or out of range. Read it again and retry with corrected input."
+        },
+        {
+          "code": "approval_required",
+          "class": "validation",
+          "description": "The tool cannot run without approval. Ask for approval for these exact inputs and try again."
+        }
+      ]
+    },
+    {
+      "id": "meals.account-data",
+      "description": "The whole-account export collects a person's kitchen, household, plans, recipes, shopping lists, pantry, food log, ratings and undo records, and the whole-account delete removes all of them. Each call touches only the signed-in person's rows.",
+      "errors": []
     }
   ],
   "tools": {
@@ -366,7 +398,7 @@
       "risk": "read"
     },
     "meals.plan.control": {
-      "description": "Stop a plan that is being written, resume a stopped or paused plan, retry one day that failed, or regenerate the plan, one day or one meal. Locked, cooked and text meals are never replaced.",
+      "description": "Stop a plan that is being written, resume a stopped or paused plan where it left off, retry one day that failed, regenerate, or re-plan the rest of the week. A retry keeps the day's finished meals and rewrites only the rest. Name the day by dayId or date. Retrying a day on a stopped plan resumes the whole plan, so later unwritten days are written too. A retry asked for while another day is being written waits its turn. Regenerate replaces written and failed recipe meals with new ones and never touches locked meals, cooked meals or text meals. It covers the whole plan, one day (dayId or date) or one meal (mealId). Re-plan replaces only the meals still to come, from the Pantry as it is now: past days stay, today's meals stay once their usual time has passed, and locked, cooked and text meals stay. A plan that ignored the Pantry is raised to prefer what is on hand. The household's own time zone decides what today means. The plan's replaceable count says how many meals a whole-plan regenerate would replace. Shopping list ticks survive, and only lines whose amount changed show a new amount.",
       "risk": "write"
     },
     "meals.list.get": {
@@ -432,6 +464,34 @@
     "meals.undo": {
       "description": "Undo the change an undo token names. A removed shopping line or Pantry item comes back, a Bought is reversed, and a Mark cooked puts the meal back to not cooked and its Pantry amounts back. A Pantry amount that was edited after Bought or Mark cooked is left alone and counted as skipped.",
       "risk": "write"
+    },
+    "meals.plan.delete": {
+      "description": "Delete a meal plan with all its days and meals.",
+      "risk": "destructive"
+    },
+    "meals.meal.get": {
+      "description": "Read one planned meal as a recipe: steps, ingredients scaled to the servings, check-the-label notes, and each eater's portion, Safety result and calorie fit.",
+      "risk": "read"
+    },
+    "meals.meal.servings": {
+      "description": "Change how many servings a planned meal cooks, in steps of half a serving from 0.5 to 24, or pass null to go back to the eaters' portions. The recipe amounts and the shopping list follow the new servings.",
+      "risk": "write"
+    },
+    "meals.meal.edit": {
+      "description": "Lock or unlock one written recipe meal, move a meal to another day or slot in the same plan, or change who eats it. A locked meal stays through every Regenerate. Cooked meals and text meals cannot be locked, and a cooked meal cannot be moved. Moving takes targetDayId or targetDate, and targetSlotName when the meal also changes slot. Changing eaters takes eaterIds: servings follow the new eaters and Safety runs again for them before the meal shows as checked.",
+      "risk": "write"
+    },
+    "meals.meal.swap": {
+      "description": "Swap one written or failed recipe meal. request_choices starts three replacement recipes, each checked for Safety before it shows; read the meal to see them as they finish. choose takes a ready choiceId, replaces the meal with it and rebuilds the shopping list. quick takes maxMinutes (5 to 240) and writes one replacement inside that time, preferring what is on hand; read the meal to see it and what is still to buy. A locked meal can be swapped by asking.",
+      "risk": "write"
+    },
+    "meals.day.edit": {
+      "description": "Arrange one day of a plan. set_text turns a meal (mealId, text) into a plain-text slot such as eating out, which never reaches the shopping list; clear_text turns it back into a meal Moss writes. add_one_off adds a Solo meal for one person (dayId or planId and date, slotName, memberId). set_cook_limit sets a night's cook-time limit in minutes (minutes, 5 to 240, or null to clear), and Regenerate then writes inside it. set_sharing makes one slot Shared or Solo for that day only (slotName, sharing); Solo writes one meal per eater.",
+      "risk": "write"
+    },
+    "meals.favourites.edit": {
+      "description": "Add or remove a recipe as one person's favourite (action add or remove, with memberId and recipeId), or place a favourite into a planned meal (action place, with mealId). Placing runs the Never serve check for everyone who eats that meal and refuses when it fails or when the meal is locked. Returns the kitchen, and the meal when one was placed.",
+      "risk": "write"
     }
   },
   "jobs": {
@@ -452,6 +512,18 @@
       },
       "generation": {
         "kind": "count"
+      }
+    },
+    "meals-meal-job": {
+      "meal-id": {
+        "kind": "id"
+      },
+      "generation": {
+        "kind": "count"
+      },
+      "mode": {
+        "kind": "choice",
+        "choices": ["swap-choices", "quick-swap", "safety-recheck"]
       }
     }
   }

@@ -54,7 +54,7 @@ pub enum DayOutcome {
     Written { ready: bool },
 }
 
-fn verdict_row(eater: &Value, verdict: Option<&Verdict>) -> EaterRow {
+pub(crate) fn verdict_row(eater: &Value, verdict: Option<&Verdict>) -> EaterRow {
     let (safety, reason) = match verdict {
         Some(Verdict::Pass) => ("pass", None),
         Some(Verdict::Fail(reason)) => ("fail", Some(reason.clone())),
@@ -69,7 +69,7 @@ fn verdict_row(eater: &Value, verdict: Option<&Verdict>) -> EaterRow {
     }
 }
 
-fn read_pantry<H: Host + ?Sized>(host: &H, mode: &str) -> Result<PantryInput> {
+pub(crate) fn read_pantry<H: Host + ?Sized>(host: &H, mode: &str) -> Result<PantryInput> {
     let client = Client(host);
     let mut query = Query::select(Filter::All);
     query.order = vec![Order { column: "name_key".into(), descending: false }];
@@ -297,6 +297,9 @@ pub fn handle<H: Host + ?Sized>(host: &H, payload: &str) -> Result<String> {
         }
         crate::log::LOG_ESTIMATE_QUEUE => {
             crate::log::run_estimate(host, &job.parameters)?;
+        }
+        crate::swap::MEAL_JOB_QUEUE => {
+            crate::swap::run_meal_job(host, &job.parameters)?;
         }
         _ => return Err(Error::new("Unknown Meals job")),
     }

@@ -168,14 +168,56 @@ fn recipe_meal<H: Host + ?Sized>(host: &H, meal_id: &str) -> Result<Checked<(Val
     Ok(Ok((meal, recipe)))
 }
 
-/// The recipe screen for a meal: the meal, scaled ingredients and which ones to buy.
-fn recipe_view<H: Host + ?Sized>(host: &H, meal: &Value, recipe: &Value) -> Result<Value> {
+/// The swap choices stored for a meal, shaped for the recipe screen. A choice shows its eaters
+/// only once it is ready, because only then has it passed Safety.
+fn swap_choice_views<H: Host + ?Sized>(
+    host: &H,
+    meal: &Value,
+    members: &std::collections::HashMap<String, &Value>,
+) -> Result<Vec<Value>> {
+    let choices = store::list_swap_choices(host, &text(meal, "meal_id"))?;
+    let ids: Vec<String> = choices.iter().filter_map(|c| c["recipe_id"].as_str().map(str::to_owned)).collect();
+    let recipes = store::get_recipes(host, &ids)?;
+    let slot = text(meal, "slot_name");
+    let none = Marks::default();
+    Ok(choices
+        .iter()
+        .map(|choice| {
+            let recipe = choice["recipe_id"]
+                .as_str()
+                .and_then(|id| recipes.iter().find(|r| r["recipe_id"] == id));
+            let ready = choice["status"] == "ready" && recipe.is_some();
+            let eaters: Vec<Value> = match (ready, recipe) {
+                (true, Some(recipe)) => view::choice_eaters(meal, recipe, members)
+                    .iter()
+                    .map(|e| view::eater_view(e, &slot, recipe["recipe_id"].as_str(), members, &none))
+                    .collect(),
+                _ => vec![],
+            };
+            json!({
+                "choiceId": choice["choice_id"],
+                "status": choice["status"],
+                "title": recipe.map_or(Value::Null, |r| r["title"].clone()),
+                "cookMinutes": recipe.map_or(Value::Null, |r| r["cook_minutes"].clone()),
+                "eaters": eaters,
+            })
+        })
+        .collect())
+}
+
+/// The recipe screen for a meal: the meal, scaled ingredients and which ones to buy. A text
+/// slot or an unwritten meal has no recipe, so its ingredients and steps are empty.
+pub fn recipe_view<H: Host + ?Sized>(host: &H, meal: &Value, recipe: Option<&Value>) -> Result<Value> {
     let kitchen = kitchen::view(host)?;
     let members = view::members_by_id(&kitchen);
     let marks = read_marks(host)?;
-    let meal_json = view::meal_view(meal, Some(recipe), &members, &marks);
-    let base = num(&recipe["base_servings"]).unwrap_or(1.0);
-    let scale = meal_json["servings"].as_f64().unwrap_or(base) / base;
+    let meal_json = view::meal_view(meal, recipe, &members, &marks);
+    let base = recipe.map_or(Value::Null, |r| jopt(num(&r["base_servings"])));
+    let base_n = base.as_f64().unwrap_or(1.0);
+    let scale = if recipe.is_some() { meal_json["servings"].as_f64().unwrap_or(base_n) / base_n } else { 1.0 };
+    let choices = swap_choice_views(host, meal, &members)?;
+    let recipe_owned = recipe.cloned().unwrap_or(Value::Null);
+    let recipe = &recipe_owned;
     let (items, staples) = shopping::read_pantry(host)?;
     let (stock, input) = pantry_of(&items, &staples);
     let lines = recipe["ingredients"].as_array().cloned().unwrap_or_default();
@@ -211,17 +253,17 @@ fn recipe_view<H: Host + ?Sized>(host: &H, meal: &Value, recipe: &Value) -> Resu
     Ok(json!({
         "meal": meal_json,
         "recipeId": recipe["recipe_id"],
-        "baseServings": jopt(Some(base)),
+        "baseServings": base,
         "servingsOverride": jopt(num(&meal["servings_override"])),
-        "steps": recipe["steps"],
+        "steps": if recipe.is_null() { json!([]) } else { recipe["steps"].clone() },
         "ingredients": ingredients,
-        "swapChoices": [],
+        "swapChoices": choices,
     }))
 }
 
 fn reload_view<H: Host + ?Sized>(host: &H, meal_id: &str) -> Result<Value> {
     match recipe_meal(host, meal_id)? {
-        Ok((meal, recipe)) => recipe_view(host, &meal, &recipe),
+        Ok((meal, recipe)) => recipe_view(host, &meal, Some(&recipe)),
         Err(_) => Ok(Value::Null),
     }
 }
@@ -319,7 +361,7 @@ pub fn cooked<H: Host + ?Sized>(host: &H, input: &Fields) -> Result<Checked<Valu
         .map(|e| num(&e["portion"]).unwrap_or(1.0));
     let after = store::get_meal(host, &meal_id)?.unwrap_or(meal);
     Ok(Ok(json!({
-        "meal": recipe_view(host, &after, &recipe)?["meal"],
+        "meal": recipe_view(host, &after, Some(&recipe))?["meal"],
         "pantryChanges": changes.iter().map(|c| json!({
             "name": c.name,
             "before": jnum(c.before),
