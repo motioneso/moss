@@ -47,7 +47,7 @@
     },
     {
       "port": "jobs",
-      "operations": ["enqueue-after-commit", "schedule"],
+      "operations": ["schedule", "enqueue-after-commit", "enqueue-options"],
       "resources": ["finance.sync-run", "finance.connect-poll"]
     }
   ],
