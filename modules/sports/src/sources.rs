@@ -432,8 +432,8 @@ pub fn replace_recipe<H: Host + ?Sized>(host: &H, id: &str, candidate: &Candidat
         ("last_checked_at", json!(candidate.checked_at)),
         ("last_success_at", json!(candidate.checked_at)),
     ]);
-    // The source row changes first, so a failure part way leaves a working source and not one
-    // with no targets. The host offers no transaction to this package.
+    // Not atomic. The host offers no transaction to this package, so a failure after the delete
+    // can leave the new recipe with no targets.
     let updated = client.query(SOURCES, &Query::update(Filter::eq("id", id), update))?;
     let row = updated.into_iter().next().ok_or_else(bad)?;
     for old in &current {
