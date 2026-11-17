@@ -55,3 +55,10 @@ pub fn take<H: Host + ?Sized>(host: &H, id: &str) -> Result<Option<Value>> {
     }
     Ok(found.filter(|entry| live(entry, now)).map(|entry| entry["v"].clone()))
 }
+
+/// The stored preview without removing it, so an approval card can show what a confirm would use.
+pub fn peek<H: Host + ?Sized>(host: &H, id: &str) -> Result<Option<Value>> {
+    let now = now_ms(host)?;
+    let entries = load(host)?;
+    Ok(entries.get(id).filter(|entry| live(entry, now)).map(|entry| entry["v"].clone()))
+}

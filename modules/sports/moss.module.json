@@ -4,7 +4,7 @@
   "name": "Sports",
   "publisher": "Moss",
   "version": "0.1.0",
-  "description": "Keeps each person's followed leagues and teams, private to the owner. A whole league can be followed once, and following it again returns the saved follow. A followed team is tied to the provider's permanent team number. The standings picker remembers the leagues a person chose and the standings view they last opened, under the same saved settings as before. Account export and deletion cover all six Sports tables. The package reads ESPN's public data for the league catalog, each league's team list and club search, and keeps a shared copy so one person's lookup serves everyone. The copy holds only public sports data, never a person's follows or searches. Following a team checks the live team list and is refused, with the same fail-closed messages the old app gave, when ESPN is down. Scoreboard, standings and news reading are built but not yet offered as routes. A person can add news sources of their own, up to ten, each a website with a news feed or a subreddit, and choose which sports and followed teams each one covers, up to twenty choices in all. Adding a source shows a preview first, which names the reason when a site cannot be used, and a source saves only after the person confirms it. Two subreddits that differ only by letter case are one source. The package reads those public sites itself, and keeps unconfirmed previews for ten minutes under the person's own saved settings. A site with no feed can get a recipe that the person's chosen AI model proposes. The recipe is a strict description of one public address and where the headlines sit in it, it may only name sites the person already confirmed, and it is saved only after a real replay finds headlines. Sources are read again on a schedule without a browser or article text, each source shows whether it is healthy, drifted or missing its recipe, and a person can retry a source or rebuild its recipe after confirming a preview. Headline photos, sites that need a browser, chat tools and the screens are not part of this package yet.",
+  "description": "Keeps each person's followed leagues and teams, private to the owner. A whole league can be followed once, and following it again returns the saved follow. A followed team is tied to the provider's permanent team number. The standings picker remembers the leagues a person chose and the standings view they last opened, under the same saved settings as before. Account export and deletion cover all six Sports tables. The package reads ESPN's public data for the league catalog, each league's team list and club search, and keeps a shared copy so one person's lookup serves everyone. The copy holds only public sports data, never a person's follows or searches. Following a team checks the live team list and is refused, with the same fail-closed messages the old app gave, when ESPN is down. Scoreboard, standings and news reading are built but not yet offered as routes. A person can add news sources of their own, up to ten, each a website with a news feed or a subreddit, and choose which sports and followed teams each one covers, up to twenty choices in all. Adding a source shows a preview first, which names the reason when a site cannot be used, and a source saves only after the person confirms it. Two subreddits that differ only by letter case are one source. The package reads those public sites itself, and keeps unconfirmed previews for ten minutes under the person's own saved settings. A site with no feed can get a recipe that the person's chosen AI model proposes. The recipe is a strict description of one public address and where the headlines sit in it, it may only name sites the person already confirmed, and it is saved only after a real replay finds headlines. Sources are read again on a schedule without a browser or article text, each source shows whether it is healthy, drifted or missing its recipe, and a person can retry a source or rebuild its recipe after confirming a preview. Nine chat tools list, preview, confirm, retry, rebuild and remove sources. Every change asks the person first, showing a card built from the saved source and the stored preview, and removing a source asks before it deletes. Headline photos, sites that need a browser, the followed-team chat tools and the screens are not part of this package yet.",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 250000000,
   "callLimitMs": 30000,
@@ -47,6 +47,21 @@
       "port": "ai",
       "operations": ["generate"],
       "resources": ["structured"]
+    },
+    {
+      "port": "tools",
+      "operations": ["offer", "run"],
+      "resources": [
+        "sports.listSources",
+        "sports.previewSource",
+        "sports.previewSourceAssignments",
+        "sports.rebuildSourceRecipe",
+        "sports.confirmSource",
+        "sports.confirmSourceAssignments",
+        "sports.confirmSourceRecipe",
+        "sports.retrySource",
+        "sports.removeSource"
+      ]
     },
     {
       "port": "fetch",
@@ -226,7 +241,8 @@
   ],
   "requires": {},
   "provides": {
-    "collectSportsSourcesExportSection": "1.0.0"
+    "collectSportsSourcesExportSection": "1.0.0",
+    "prepareSportsSourceAction": "1.0.0"
   },
   "icons": ["icons/sports.svg"],
   "accounts": {
@@ -372,9 +388,70 @@
       ]
     },
     {
+      "id": "sports.source_tools",
+      "description": "Nine chat tools manage added sources. Listing, previewing a new source, previewing new coverage and previewing a recipe rebuild only read. Confirming a source, new coverage or a rebuilt recipe, retrying a source and removing a source each ask the person first. Removing asks before it deletes. The approval card is built from the saved source, the saved follows and the stored preview, never from the model's text, and the approval is tied to that card: if the source, a follow or the preview changed since, the tool refuses and asks again. A confirm uses its preview once and a preview lasts ten minutes. A tool refusal carries the same wording the routes give.",
+      "errors": [
+        {
+          "code": "sports_source_approval_stale",
+          "class": "validation",
+          "description": "The source, a follow or the preview changed after the person approved, so the change was not made."
+        }
+      ],
+      "remediations": [
+        {
+          "id": "sports.source_tools.ask-again",
+          "description": "Ask for the change again so a fresh card can be reviewed.",
+          "path": "/settings?section=modules&module=sports"
+        }
+      ]
+    },
+    {
       "id": "sports.espn_coverage",
       "description": "ESPN headlines can cover chosen sports and followed teams. With no choice made the default coverage applies, and saving an empty choice turns ESPN headlines off. A followed team the person does not have is refused."
     }
   ],
-  "optionalRequires": {}
+  "optionalRequires": {},
+  "tools": {
+    "sports.listSources": {
+      "description": "List the active actor\u2019s bounded public sports sources, assignments, health, timestamps, and safe recovery status. Never returns recipes or opaque parameters.",
+      "risk": "read"
+    },
+    "sports.previewSource": {
+      "description": "Preview and safely verify one public unauthenticated sports publisher and optional followed targets before confirmation. Returned headline samples are external publisher content.",
+      "risk": "read"
+    },
+    "sports.previewSourceAssignments": {
+      "description": "Preview an exact replacement assignment set for one sports source. Added target samples are external publisher content.",
+      "risk": "read"
+    },
+    "sports.rebuildSourceRecipe": {
+      "description": "Preview a bounded safe rebuild of one saved sports source recipe without changing it. Samples are external publisher content.",
+      "risk": "read"
+    },
+    "sports.confirmSource": {
+      "description": "Confirm a sports source from its actor-bound preview using the exact displayed publisher, hosts, targets, and authorization acknowledgement.",
+      "risk": "write",
+      "approvalVersion": true
+    },
+    "sports.confirmSourceAssignments": {
+      "description": "Confirm the exact actor-bound sports source assignment replacement shown by the preview.",
+      "risk": "write",
+      "approvalVersion": true
+    },
+    "sports.confirmSourceRecipe": {
+      "description": "Confirm the exact actor-bound sports source recipe rebuild shown by the preview.",
+      "risk": "write",
+      "approvalVersion": true
+    },
+    "sports.retrySource": {
+      "description": "Retry every verified target for one actor-owned sports source through pinned safe fetch with no browser.",
+      "risk": "write",
+      "approvalVersion": true
+    },
+    "sports.removeSource": {
+      "description": "Remove one actor-owned sports source and its assignments.",
+      "risk": "destructive",
+      "approvalVersion": true
+    }
+  }
 }
