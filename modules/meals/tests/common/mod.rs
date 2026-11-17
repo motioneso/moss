@@ -141,6 +141,7 @@ fn defaults(table: &str, at: &str) -> Value {
             json!({"solo_weekdays":[],"usual_time":null,"created_at":at,"updated_at":at})
         }
         "app.meals_favourites" => json!({"created_at":at}),
+        "app.meals_ratings" => json!({"rated_at":at}),
         "app.meals_shopping_lists" => json!({"plan_id":null,"created_at":at,"updated_at":at}),
         "app.meals_shopping_list_items" => json!({"line_key":null,"quantity":null,"unit":null,
             "purchase_quantity":null,"purchase_unit":null,"store_section":"other","manual":false,
@@ -199,7 +200,7 @@ fn clash(table: &str, a: &Value, b: &Value) -> bool {
                 || (same("kitchen_id") && a["is_self"] == true && b["is_self"] == true)
         }
         "app.meals_meal_slot_rules" => same("kitchen_id") && same("slot_name"),
-        "app.meals_favourites" => same("member_id") && same("recipe_id"),
+        "app.meals_favourites" | "app.meals_ratings" => same("member_id") && same("recipe_id"),
         "app.meals_shopping_lists" => same("list_id"),
         "app.meals_shopping_list_items" => {
             same("line_id")

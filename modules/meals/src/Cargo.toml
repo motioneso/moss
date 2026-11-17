@@ -44,3 +44,7 @@ path = "../tests/lists.rs"
 [[test]]
 name = "log"
 path = "../tests/log.rs"
+
+[[test]]
+name = "cooking"
+path = "../tests/cooking.rs"
