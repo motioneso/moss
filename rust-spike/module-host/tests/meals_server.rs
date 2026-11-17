@@ -560,7 +560,7 @@ fn installed_meals_package_serves_routes_from_the_real_server() {
     assert_eq!(status, 200, "{text}\n{}", log());
     let (status, text) = tool("meals.meal.swap", json!({"mealId":meal_id,"action":"request_choices"}), true);
     assert_eq!(status, 200, "{text}\n{}", log());
-    assert_eq!(json_of(&text)["data"]["swapChoices"].as_array().unwrap().len(), 3, "{text}");
+    assert_eq!(json_of(&text)["data"]["swapChoices"].as_array().unwrap_or_else(|| panic!("{text}")).len(), 3, "{text}");
     let (status, text) = tool("meals.day.edit", json!({"action":"set_text","mealId":meal_id,"text":MARK}), true);
     assert_eq!(status, 200, "{text}");
     let (_, still) = tool("meals.plan.get", json!({"planId":plan_id}), true);
