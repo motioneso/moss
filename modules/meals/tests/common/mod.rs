@@ -161,6 +161,7 @@ fn defaults(table: &str, at: &str) -> Value {
         "app.meals_log_estimate_items" => json!({"portion_note":null,"calories_kcal":null,
             "protein_g":null,"carbohydrates_g":null,"fat_g":null,"fiber_g":null,"sugar_g":null,
             "sodium_mg":null,"created_at":at}),
+        "app.meals_swap_choices" => json!({"status":"pending","recipe_id":null,"generation":1,"created_at":at,"updated_at":at}),
         "app.meals_plans" | "app.meals_plan_days" | "app.meals_planned_meals"
         | "app.meals_planned_meal_eaters" | "app.meals_recipes"
         | "app.meals_recipe_ingredients" => json!({"created_at":at}),
@@ -211,6 +212,8 @@ fn clash(table: &str, a: &Value, b: &Value) -> bool {
                     && b["bought_at"].is_null())
         }
         "app.meals_pantry_items" => same("item_id"),
+        "app.meals_planned_meal_eaters" => same("meal_id") && same("member_id"),
+        "app.meals_swap_choices" => same("choice_id"),
         "app.meals_staples" => same("staple_id") || (same("kitchen_id") && same("name_key")),
         "app.meals_undo_actions" => same("action_id"),
         "app.meals_log_entries" => same("entry_id") || same("idempotency_key"),
