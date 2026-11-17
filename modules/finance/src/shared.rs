@@ -67,7 +67,7 @@ fn transaction_columns(row: &Value) -> BTreeMap<String, Value> {
     let mut out = values(
         [
             "id", "account_id", "date", "amount_cents", "iso_currency", "name", "merchant", "plaid_category", "category_id",
-            "pending", "pending_transaction_id", "categorized_by", "transfer_id",
+            "pending", "pending_transaction_id", "transfer_id",
         ]
         .iter()
         .map(|c| (*c, row[*c].clone()))
@@ -200,7 +200,7 @@ pub fn view(row: &Value) -> Value {
         "id": row["id"], "accountId": row["account_id"], "date": row["date"], "amountCents": row["amount_cents"],
         "isoCurrency": row["iso_currency"], "name": row["name"], "merchant": row["merchant"],
         "plaidCategory": row["plaid_category"], "categoryId": row["category_id"], "pending": row["pending"] == true,
-        "pendingTransactionId": row["pending_transaction_id"], "categorizedBy": row["categorized_by"],
+        "pendingTransactionId": row["pending_transaction_id"],
         "splits": row["splits"], "transferId": row["transfer_id"], "ownerUserId": row["owner_user_id"], "shared": true,
     })
 }

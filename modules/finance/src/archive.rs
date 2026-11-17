@@ -45,7 +45,7 @@ pub fn archive<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Outcome> {
     }
     let now = text(host, "call", "read", "now")?;
     Client(host).query(CATEGORIES, &Query::update(live, values(vec![("archived_at", json!(now))])))?;
-    log_as(host, "moss", "category.archive", json!({"categoryId":id}), Some(json!({"categoryId":id})))?;
+    log_as(host, "user", "category.archive", json!({"categoryId":id}), Some(json!({"categoryId":id})))?;
     Ok(Ok(json!({"status":"ok","categoryId":id,"before":{"archived":false},"after":{"archived":true}})))
 }
 

@@ -21,7 +21,7 @@ Part of the Phase 5 plan in `2026-11-13-rust-phase5-meals-finance-wellness-and-r
   Each undo record holds ids only and is refused if anything moved on since.
 - Archiving a category that holds no budget money. Income and transfers are protected.
 - Three new tool names, eleven routes (eight plain, three chat), five App Map feature entries in
-  the manifest, two SQL files (0371 and 0372) and a version bump to 0.4.0. The Finance manifest is
+  the manifest, two SQL files (0371 and 0372) and a version bump to 0.5.0. The Finance manifest is
   now exempt from the file size check, as part 24 also does.
 
 ### Proof
@@ -75,4 +75,10 @@ Native tests and the packaged WebAssembly component both ran: the guest tests na
 - **Cost of the copy refresh** on accounts with very many transactions. Each refresh compares every
   row of a flagged account. It was not measured on large data.
 - **Manual accounts** cannot be shared.
+- **A failed copy refresh** is dropped without a log or retry, so after a failed refresh other people can keep seeing removed rows until a later change succeeds. Not built: a retry job.
+- **Category names in the shared copy.** The copy holds the owner's category id, so another person's report shows the id or nothing rather than a name.
+- **Undo of a categorize** does not check whether the transaction was split afterwards.
+- **Archiving a category** leaves merchant rules that point at it untouched.
+- **Two undos of the same row at once** can both report success, though only one change is applied.
+- **Transfer link.** The copy keeps the transfer id, so a transfer to a private account shows as a transfer.
 - **Crates.** No new crates were needed.

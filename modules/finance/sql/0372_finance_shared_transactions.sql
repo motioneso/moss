@@ -11,7 +11,6 @@ CREATE TABLE app.finance_shared_transactions (
   category_id text,
   pending boolean NOT NULL,
   pending_transaction_id text,
-  categorized_by text,
   transfer_id uuid,
   splits jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(splits) = 'array'),
   PRIMARY KEY (owner_user_id, id)

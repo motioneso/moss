@@ -1208,7 +1208,7 @@
     },
     {
       "id": "finance.sharing",
-      "description": "A person can share a bank account with the household or stop sharing it. Others then see its name, balance and transactions with the category and amount, never notes, review state or bank link details. Manual accounts cannot be shared yet. No screen is built yet.",
+      "description": "A person can share a bank account with the household or stop sharing it. Others then see its name, balance and transactions with date, payee, merchant, bank category, category, amount, pending state and any transfer link, never notes, review state, who chose the category, or bank link details. Manual accounts cannot be shared yet. No screen is built yet.",
       "errors": [
         {
           "code": "unknown_account",
