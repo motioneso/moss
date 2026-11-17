@@ -468,9 +468,15 @@ fn run_both(w: &World, old: uuid::Uuid, new: uuid::Uuid, steps: &[Value], old_va
     assert_eq!(moments(&new_answers), moments(&old_answers), "scheduled moments differ");
     old_answers.iter_mut().for_each(replay::mask);
     new_answers.iter_mut().for_each(replay::mask);
-    for (n, (o, r)) in old_answers.iter().zip(&new_answers).enumerate() {
-        assert_eq!(r, o, "step {n}: {}", steps[n]);
-    }
+    // Every difference is listed at once, so one run shows them all.
+    let differences: Vec<String> = old_answers
+        .iter()
+        .zip(&new_answers)
+        .enumerate()
+        .filter(|(_, (o, r))| o != r)
+        .map(|(n, (o, r))| format!("step {n}: {}\n  old: {o}\n  new: {r}", steps[n]))
+        .collect();
+    assert!(differences.is_empty(), "{}", differences.join("\n"));
 }
 
 #[test]

@@ -3,7 +3,7 @@
 //! text or false in several places), then ran the route's own rules on the result. This file
 //! does both steps in that order and reports the first failure with the same words.
 use crate::input::{coerce_text, int_or_null, nullable_text, object, required, trimmed, union, unwrap_single};
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 
 pub const FREQUENCIES: [&str; 8] = [
     "once_daily",
@@ -136,6 +136,11 @@ fn weekdays(map: &Fields) -> Result<Option<Vec<i64>>, String> {
             Some(_) => None,
         };
         if let Some(f) = failure {
+            // The old validator also tries the null branch, which accepts 0, false and "" (alone or
+            // as the only list item) by turning them into null.
+            if matches!(unwrap_single(value), Value::Null | Value::Bool(false)) || unwrap_single(value) == &json!(0) || unwrap_single(value) == &json!("") {
+                return Ok(None);
+            }
             return Err(format!("{at} must {f}, body/weekdays must be null, body/weekdays must match a schema in anyOf"));
         }
         out.push(whole.unwrap());

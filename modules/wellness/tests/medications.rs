@@ -47,6 +47,8 @@ fn bad_bodies_get_plain_400s_and_store_nothing() {
         (json!({"name":"x","frequencyType":"hourly"}), "body/frequencyType must be equal to one of the allowed values"),
         (json!({"name":"x","frequencyType":"once_daily"}), "scheduleTimes is required for once_daily"),
         (json!({"name":"x","frequencyType":"times_per_day","timesPerDay":2,"scheduleTimes":["08:00"]}), "scheduleTimes length must equal timesPerDay"),
+        (json!({"name":"x","frequencyType":"specific_weekdays","weekdays":[0],"scheduleTimes":["08:00"]}), "weekdays is required for specific_weekdays"),
+        (json!({"name":"x","frequencyType":"specific_weekdays","weekdays":[8],"scheduleTimes":["08:00"]}), "body/weekdays/0 must be <= 7, body/weekdays must be null, body/weekdays must match a schema in anyOf"),
         (json!({"name":"x","frequencyType":"once_daily","timesPerDay":1,"scheduleTimes":["8am"]}), "scheduleTimes must be clock times such as 08:00"),
     ];
     for (body, message) in cases {
