@@ -23,8 +23,8 @@ fn dinner(f: &Fake, actor: &'static str, ids: [&str; 5]) {
     f.ok("meals.kitchen.get", json!({}));
     f.seed("app.meals_plans", actor, json!({"plan_id":plan,"kitchen_id":kitchen,"start_date":"2026-11-09","pantry_mode":"ignore","state":"active","allow_repeats":false,"request_text":null}));
     f.seed("app.meals_plan_days", actor, json!({"day_id":day,"plan_id":plan,"day_date":"2026-11-09","status":"ready","generation":1,"cook_time_limit_minutes":null,"sharing_overrides":{}}));
-    f.seed(MEALS, actor, json!({"meal_id":meal,"day_id":day,"slot_position":0,"slot_name":"dinner","kind":"recipe","sharing":"shared","status":"ready","recipe_id":recipe,"servings_override":null,"cooked_at":null,"locked":false,"job_generation":0,"generation":1,"attempts":0,"one_off_for":null,"favourite_of":null,"plain_text":null,"failure_reason":null,"quick_max_minutes":null}));
-    f.seed(EATERS, actor, json!({"meal_id":meal,"member_id":me(actor),"portion":1,"estimated_kcal":null,"safety":"pass","safety_reason":null}));
+    f.seed(MEALS, actor, json!({"kitchen_id":kitchen,"meal_id":meal,"day_id":day,"slot_position":0,"slot_name":"dinner","kind":"recipe","sharing":"shared","status":"ready","recipe_id":recipe,"servings_override":null,"cooked_at":null,"locked":false,"job_generation":0,"generation":1,"attempts":0,"one_off_for":null,"favourite_of":null,"plain_text":null,"failure_reason":null,"quick_max_minutes":null}));
+    f.seed(EATERS, actor, json!({"kitchen_id":kitchen,"meal_id":meal,"member_id":me(actor),"portion":1,"estimated_kcal":null,"safety":"pass","safety_reason":null}));
     f.seed("app.meals_recipes", actor, json!({"recipe_id":recipe,"kitchen_id":kitchen,"title":"Rice and eggs","title_key":"rice and eggs","base_servings":2,"cook_minutes":30,"kcal_per_serving":null,"steps":["Cook it"]}));
     f.seed("app.meals_recipe_ingredients", actor, json!({"recipe_id":recipe,"position":0,"original_text":"rice","name":"rice","quantity":200,"unit":"g","store_section":"pantry","check_label":false}));
 }
@@ -255,4 +255,82 @@ fn the_account_export_and_delete_cover_every_table_for_the_caller_only() {
     assert_eq!(f.rows("app.meals_plans").len(), 1);
     assert_eq!(f.rows(MEALS).iter().filter(|m| m["owner_user_id"] == B).count(), 1);
     assert_eq!(f.rows("app.meals_recipes").iter().filter(|m| m["owner_user_id"] == B).count(), 1);
+}
+
+fn add_member(f: &Fake, name: &str) -> String {
+    let saved = f.ok("meals.household.save", json!({"name":name}));
+    saved["members"].as_array().unwrap_or(&vec![]).iter().find(|m| m["name"] == name).map(|m| m["memberId"].as_str().unwrap().to_owned())
+        .or_else(|| saved["memberId"].as_str().map(str::to_owned))
+        .expect("the new member")
+}
+
+fn eaters_of(f: &Fake, meal: &str) -> Vec<Value> {
+    f.rows(EATERS).into_iter().filter(|e| e["meal_id"] == meal).collect()
+}
+
+#[test]
+fn changing_eaters_sets_safety_to_pending_and_the_recheck_job_settles_it() {
+    let f = Fake::new();
+    mine(&f);
+    let sam = add_member(&f, "Sam");
+    f.ok("meals.meal.edit", json!({"mealId":MEAL,"action":"set_eaters","eaterIds":[me(A), sam]}));
+    let rows = eaters_of(&f, MEAL);
+    assert_eq!(rows.len(), 2);
+    assert!(rows.iter().all(|e| e["safety"] == "pending"));
+    let (queue, params, _) = f.queued.borrow().last().cloned().unwrap();
+    assert_eq!(params["mode"], "safety-recheck");
+    f.model.borrow_mut().push_back(Ok(passing(2)));
+    run_job(&f, &queue, params);
+    assert!(eaters_of(&f, MEAL).iter().all(|e| e["safety"] == "pass"));
+    // Dropping a person removes only that person.
+    f.ok("meals.meal.edit", json!({"mealId":MEAL,"action":"set_eaters","eaterIds":[sam]}));
+    assert_eq!(eaters_of(&f, MEAL).len(), 1);
+    f.refused("meals.meal.edit", json!({"mealId":MEAL,"action":"set_eaters","eaterIds":["00000000-0000-4000-8000-0000000000ff"]}));
+}
+
+#[test]
+fn a_safety_recheck_queued_before_a_newer_change_saves_nothing() {
+    let f = Fake::new();
+    mine(&f);
+    let sam = add_member(&f, "Sam");
+    f.ok("meals.meal.edit", json!({"mealId":MEAL,"action":"set_eaters","eaterIds":[me(A), sam]}));
+    let (queue, old, _) = f.queued.borrow().last().cloned().unwrap();
+    f.ok("meals.meal.edit", json!({"mealId":MEAL,"action":"set_eaters","eaterIds":[me(A), sam]}));
+    f.model.borrow_mut().push_back(Ok(passing(2)));
+    run_job(&f, &queue, old);
+    assert!(eaters_of(&f, MEAL).iter().all(|e| e["safety"] == "pending"));
+}
+
+#[test]
+fn a_quick_swap_replaces_the_recipe_inside_the_time_limit() {
+    let f = Fake::new();
+    mine(&f);
+    f.ok("meals.meal.swap", json!({"mealId":MEAL,"action":"quick","maxMinutes":30}));
+    assert_eq!(meal_row(&f, MEAL)["quick_max_minutes"], 30);
+    let (queue, params, _) = f.queued.borrow().last().cloned().unwrap();
+    assert_eq!(params["mode"], "quick-swap");
+    f.model.borrow_mut().push_back(Ok(recipe("Lentil soup")));
+    f.model.borrow_mut().push_back(Ok(passing(1)));
+    f.model.borrow_mut().push_back(Ok(estimate(400)));
+    run_job(&f, &queue, params);
+    let row = meal_row(&f, MEAL);
+    assert_ne!(row["recipe_id"], RECIPE);
+    assert_eq!(row["status"], "ready");
+    f.refused("meals.meal.swap", json!({"mealId":MEAL,"action":"quick","maxMinutes":3}));
+}
+
+#[test]
+fn a_solo_slot_splits_into_one_meal_per_eater_and_a_shared_slot_joins_them_again() {
+    let f = Fake::new();
+    mine(&f);
+    let sam = add_member(&f, "Sam");
+    f.ok("meals.meal.edit", json!({"mealId":MEAL,"action":"set_eaters","eaterIds":[me(A), sam]}));
+    f.ok("meals.day.edit", json!({"action":"set_sharing","dayId":DAY,"slotName":"dinner","sharing":"solo"}));
+    let dinners: Vec<Value> = f.rows(MEALS).into_iter().filter(|m| m["day_id"] == DAY).collect();
+    assert_eq!(dinners.len(), 2);
+    assert!(dinners.iter().all(|m| eaters_of(&f, m["meal_id"].as_str().unwrap()).len() == 1));
+    f.ok("meals.day.edit", json!({"action":"set_sharing","dayId":DAY,"slotName":"dinner","sharing":"shared"}));
+    let joined: Vec<Value> = f.rows(MEALS).into_iter().filter(|m| m["day_id"] == DAY).collect();
+    assert_eq!(joined.len(), 1);
+    assert_eq!(eaters_of(&f, joined[0]["meal_id"].as_str().unwrap()).len(), 2);
 }
