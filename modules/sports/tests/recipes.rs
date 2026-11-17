@@ -235,3 +235,25 @@ fn another_person_cannot_use_a_preview_or_see_the_recipe() {
     let (_, list) = f.route("GET", "/sources", &[], Value::Null);
     assert!(!list.to_string().contains("recipe"));
 }
+
+#[test]
+fn a_reply_with_missing_keys_is_refused_without_panicking() {
+    let f = Src::new();
+    site(&f);
+    let mut cases = Vec::new();
+    let mut no_template = recipe("news.example.com");
+    no_template["request"].as_object_mut().unwrap().remove("urlTemplate");
+    cases.push(no_template);
+    let mut empty_slot = recipe("news.example.com");
+    empty_slot["request"]["slots"] = json!([{}]);
+    cases.push(empty_slot);
+    let mut html = recipe("news.example.com");
+    html["kind"] = json!("html");
+    html["request"]["headers"]["accept"] = json!("text/html,application/xhtml+xml");
+    html["extraction"] = json!({"collectionSelector": "ul", "itemSelector": "li", "headline": {"source": "text"}, "normalize": []});
+    cases.push(html);
+    for case in cases {
+        f.reply(&reply(&case));
+        assert_eq!(preview(&f)["status"], "rejected");
+    }
+}

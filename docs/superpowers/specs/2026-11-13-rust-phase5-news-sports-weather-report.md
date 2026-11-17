@@ -812,7 +812,7 @@ model proposes, and it reads saved sources again with health states. It still sh
   against real Postgres.
 - The new routes are not in the old-code comparison run. Route parity for them is by reading the
   old handlers.
-- Replacing a recipe deletes and inserts without a transaction, so it is not atomic.
+- Replacing a recipe is not atomic, because the package has no transaction. The source row changes first, so a failure part way leaves a working source with its old targets, not an empty one.
 - Retry waits and a headline cache from the old code are not built. The package cannot sleep.
 - The recipe's accept-language header cannot be sent, because the fetch port has no such option.
 - Feed items get the fetch time as their date.
@@ -821,3 +821,12 @@ model proposes, and it reads saved sources again with health states. It still sh
 - The fetched page is capped at 2 MB and 10,000 elements. Nesting depth is not checked.
 - The Reddit add still failed live on this box (sign-in needed or rate limited on all 4 tries).
 - Browser sources, chat tools (14b) and photos are later parts.
+
+### Review round 1 (part 14a)
+
+- Blocker, fixed: a model reply missing a key (no address template, an empty slot, a field with no
+  selector) made the recipe check panic. The check now refuses it, with a test for three cases.
+- Major, fixed in part: the rebuild deleted the old targets before updating the source. It now
+  updates the source first. Full atomicity still needs a host transaction and is listed above.
+- Minor, fixed: a slot value made only of dots is refused, and refresh re-checks that a recipe's
+  address is on one of its own sites.

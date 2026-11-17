@@ -81,7 +81,7 @@ fn normalize_ok(value: &Value) -> bool {
 
 fn field_ok(value: &Value) -> bool {
     let Some(o) = value.as_object() else { return false };
-    if text(&o["selector"], 1, 256).is_none() {
+    if o.get("selector").and_then(|v| text(v, 1, 256)).is_none() {
         return false;
     }
     match o.get("source").and_then(Value::as_str) {
@@ -106,17 +106,17 @@ fn slot_ok(value: &Value) -> Option<Slot> {
     if !only_keys(o, &["name", "location", "encoding", "maxLength"]) {
         return None;
     }
-    let name = text(&o["name"], 1, 32)?;
+    let name = text(o.get("name")?, 1, 32)?;
     let mut chars = name.chars();
     if !chars.next()?.is_ascii_alphabetic() || !chars.all(|c| c.is_ascii_alphanumeric() || c == '_') {
         return None;
     }
-    let location = o["location"].as_str()?;
-    let encoding = o["encoding"].as_str()?;
+    let location = o.get("location")?.as_str()?;
+    let encoding = o.get("encoding")?.as_str()?;
     if !matches!((location, encoding), ("path", "path_segment") | ("query", "query_value")) {
         return None;
     }
-    let max = o["maxLength"].as_u64().filter(|m| (1..=128).contains(m))?;
+    let max = o.get("maxLength")?.as_u64().filter(|m| (1..=128).contains(m))?;
     Some(Slot { name: name.to_owned(), location: location.to_owned(), max_length: max as usize })
 }
 
@@ -171,7 +171,7 @@ pub fn validate(value: &Value) -> Option<Recipe> {
     if !only_keys(request, &["urlTemplate", "slots", "headers"]) {
         return None;
     }
-    let template = text(&request["urlTemplate"], 1, 4096)?.to_owned();
+    let template = text(request.get("urlTemplate")?, 1, 4096)?.to_owned();
     let slot_values = request.get("slots")?.as_array()?;
     if slot_values.len() > 8 {
         return None;
@@ -321,7 +321,7 @@ pub fn expand(recipe: &Recipe, parameters: &Value) -> Option<String> {
     for slot in &recipe.slots {
         let value = given.get(&slot.name)?.as_str()?;
         let n = value.chars().count();
-        if n < 1 || n > slot.max_length || !value.chars().all(|c| c.is_ascii_alphanumeric() || "._~ -".contains(c)) {
+        if n < 1 || n > slot.max_length || value.chars().all(|c| c == '.') || !value.chars().all(|c| c.is_ascii_alphanumeric() || "._~ -".contains(c)) {
             return None;
         }
         url = url.replace(&format!("{{{}}}", slot.name), &encode(value));

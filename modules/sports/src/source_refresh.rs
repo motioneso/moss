@@ -117,6 +117,10 @@ fn read_recipe<H: Host + ?Sized>(host: &H, source: &Value, assignment: &Value, a
     if assignment["target_url"].as_str() != Some(url.as_str()) {
         return Ok(Outcome::bad("failing", "invalid_target", "The saved source target is no longer valid."));
     }
+    let url_host = moss_news_reader::url::Url::parse(&url).map(|u| u.hostname.to_lowercase()).unwrap_or_default();
+    if !parsed.fetch_hosts.contains(&url_host) {
+        return Ok(Outcome::bad("failing", "invalid_target", "The saved source target is no longer valid."));
+    }
     let answer = match recipe_fetch::get(host, &parsed, &url)? {
         Ok(answer) => answer,
         Err(failure) => return Ok(failure_outcome(&failure, false)),
