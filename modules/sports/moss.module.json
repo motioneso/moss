@@ -61,7 +61,12 @@
         "sports.confirmSourceAssignments",
         "sports.confirmSourceRecipe",
         "sports.retrySource",
-        "sports.removeSource"
+        "sports.removeSource",
+        "sports.followedFactsToday",
+        "sports.heartbeatNextFixtures",
+        "sports.latestResult",
+        "sports.followTeam",
+        "sports.unfollowTeam"
       ]
     },
     {
@@ -254,7 +259,8 @@
   "requires": {},
   "provides": {
     "collectSportsSourcesExportSection": "1.0.0",
-    "prepareSportsSourceAction": "1.0.0"
+    "prepareSportsSourceAction": "1.0.0",
+    "sportsFollowedFactsToday": "1.0.0"
   },
   "icons": ["icons/sports.svg"],
   "accounts": {
@@ -287,7 +293,7 @@
   "features": [
     {
       "id": "sports.follows",
-      "description": "Each person keeps private follows of whole leagues and of single teams. Following a whole league twice returns the first follow, so a league never appears twice. Removing a follow deletes only the person's own row. Following a team, or changing which team a saved follow means, is checked against ESPN's team list for that league, and is refused while ESPN cannot be reached.",
+      "description": "Each person keeps private follows of whole leagues and of single teams. Following a whole league twice returns the first follow, so a league never appears twice. Removing a follow deletes only the person's own row. Following a team, or changing which team a saved follow means, is checked against ESPN's team list for that league, and is refused while ESPN cannot be reached. Chat can also follow or unfollow a league or team after the person approves a card showing exactly what changes, and unfollowing something not followed changes nothing.",
       "errors": [
         {
           "code": "sports_team_list_unavailable",
@@ -438,6 +444,10 @@
     {
       "id": "sports.espn_coverage",
       "description": "ESPN headlines can cover chosen sports and followed teams. With no choice made the default coverage applies, and saving an empty choice turns ESPN headlines off. A followed team the person does not have is refused."
+    },
+    {
+      "id": "sports.briefing_facts",
+      "description": "Sports gives the daily briefing a short list of facts for the person's followed teams and leagues in their own time zone, covering games live now, still to play today and finished. A person who follows nothing sees the default leagues. When the scoreboards cannot be read, the briefing says so and shows no facts. A heartbeat tool lists the next followed fixtures from stored scoreboards only and reports whether they are fresh, stale or unknown."
     }
   ],
   "optionalRequires": {},
@@ -481,6 +491,28 @@
     "sports.removeSource": {
       "description": "Remove one actor-owned sports source and its assignments.",
       "risk": "destructive",
+      "approvalVersion": true
+    },
+    "sports.followedFactsToday": {
+      "description": "Today's facts for the actor's followed teams and leagues, in the actor's time zone, with a bounded evidence block. Reads only the actor's own follows and public scoreboards. Never fails; a source that cannot be read gives a degraded, empty answer.",
+      "risk": "read"
+    },
+    "sports.heartbeatNextFixtures": {
+      "description": "The actor's next followed fixtures from the cached scoreboards only, with a revision, the next boundary and a freshness label. Never calls the sports provider.",
+      "risk": "read"
+    },
+    "sports.latestResult": {
+      "description": "The most recent result for a named team or a followed team, using the same rules as the Sports latest-result route.",
+      "risk": "read"
+    },
+    "sports.followTeam": {
+      "description": "Follow a league, or one team in a league, for the active actor. Checked against the provider's team list.",
+      "risk": "write",
+      "approvalVersion": true
+    },
+    "sports.unfollowTeam": {
+      "description": "Stop following a league or team for the active actor. Does nothing if it is not followed.",
+      "risk": "write",
       "approvalVersion": true
     }
   }
