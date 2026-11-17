@@ -687,7 +687,7 @@ News now has its chat tools, serves story pictures and publisher icons, builds t
 
 - Chat tools: top headlines, the headline feed for the heartbeat, source status for keyed publishers (a state only, never a secret), source preview, and a refresh that queues one job with no private text.
 - Briefings: the morning and evening briefing now show up to five top stories from News. Nothing is fetched while a briefing is built. With no stored page, or a failed read, the briefing shows a news gap instead of the old "not built" gap.
-- Pictures: `GET /images/:articleId` loads a picture only for a story on the person's own stored page, no older than seven days. `GET /favicon/:domain` loads an icon only for a publisher the person already sees. The shell re-checks type (jpeg, png, gif, webp, icon), file signature, size and status before it sends anything, and caps how long a browser may keep it.
+- Pictures: `GET /images/:articleId` loads a picture only for a story on the person's own stored page, no older than seven days. `GET /favicon/:domain` loads an icon only for a publisher in the News catalog or one the person saved. The shell re-checks type (jpeg, png, gif, webp, icon), file signature, size and status before it sends anything, and caps how long a browser may keep it.
 - Binary replies: module routes could only return JSON. A route may now return a picture, carried as base64 in the reply; the shell turns it back into bytes.
 - Approval cards: for refresh, picture and icon loads, built from the stored record. Extra input gets no card.
 - App map: three new features in the News listing (story pictures, chat tools, briefing headlines).
