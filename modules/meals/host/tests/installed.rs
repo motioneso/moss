@@ -196,3 +196,5 @@ mod tools;
 mod lists;
 #[path = "support/log.rs"]
 mod log;
+#[path = "support/cooking.rs"]
+mod cooking;

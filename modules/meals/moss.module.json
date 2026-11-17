@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "meals",
   "name": "Meals",
-  "description": "Private kitchen and household for meal planning, with meal plans written day by day in the background, under the host's approval rules. Shopping lists, the pantry and the food log work through chat, and a background job estimates each logged meal. Recipes beyond plans and the wider pantry maths are not part of this package yet. No screens.",
+  "description": "Private kitchen and household for meal planning, with meal plans written day by day in the background, under the host's approval rules. Shopping lists, the pantry, cooking a meal, ratings, undo and the food log work through chat, and a background job estimates each logged meal. Recipes beyond plans and the wider pantry maths are not part of this package yet. No screens.",
   "publisher": "Moss",
   "version": "0.1.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
@@ -18,6 +18,7 @@
         "app.meals_household_members",
         "app.meals_meal_slot_rules",
         "app.meals_favourites",
+        "app.meals_ratings",
         "app.meals_plans",
         "app.meals_plan_days",
         "app.meals_planned_meals",
@@ -63,7 +64,10 @@
         "meals.log.add",
         "meals.log.reestimate",
         "meals.log.correct",
-        "meals.log.delete"
+        "meals.log.delete",
+        "meals.meal.cooked",
+        "meals.meal.rate",
+        "meals.undo"
       ]
     },
     {
@@ -314,6 +318,22 @@
           "description": "The tool cannot run without approval. Ask for approval for these exact inputs and try again."
         }
       ]
+    },
+    {
+      "id": "meals.chat-cooking",
+      "description": "Chat can mark a planned meal cooked, which takes what the recipe used out of the Pantry and offers to log the portion, rate a meal's recipe from 1 to 5 stars for each person, and undo a removed shopping line or Pantry item, a Bought, or a Mark cooked. Each person sees only their own meals, ratings and undo history. Changes need the host's one-use approval.",
+      "errors": [
+        {
+          "code": "invalid_input",
+          "class": "validation",
+          "description": "The meal has no recipe yet or is already cooked, the person is not in the household, stars are not a whole number from 1 to 5, or there is nothing to undo. Read the plan and try again with corrected input."
+        },
+        {
+          "code": "approval_required",
+          "class": "validation",
+          "description": "The tool cannot run without approval. Ask for approval for these exact inputs and try again."
+        }
+      ]
     }
   ],
   "tools": {
@@ -358,11 +378,11 @@
       "risk": "write"
     },
     "meals.list.edit": {
-      "description": "Add, change, remove, tick or untick shopping lines. add needs a name and takes an optional quantity, unit and store section. update changes a line by lineId, and on a line built from the plan the quantity is the amount to buy. remove records an undo entry, but there is no undo tool yet. tick and untick take lineId, or lineIds to do several at once.",
+      "description": "Add, change, remove, tick or untick shopping lines. add needs a name and takes an optional quantity, unit and store section. update changes a line by lineId, and on a line built from the plan the quantity is the amount to buy. remove records an undo entry that meals.undo can use. tick and untick take lineId, or lineIds to do several at once.",
       "risk": "write"
     },
     "meals.list.bought": {
-      "description": "Mark shopping lines as bought and add them to the Pantry. Without lines it takes every ticked line. Give a line a quantity and unit when you bought a different amount than the list said. It records an undo entry, but there is no undo tool yet.",
+      "description": "Mark shopping lines as bought and add them to the Pantry. Without lines it takes every ticked line. Give a line a quantity and unit when you bought a different amount than the list said. It records an undo entry that meals.undo can use.",
       "risk": "write"
     },
     "meals.list.clear": {
@@ -374,7 +394,7 @@
       "risk": "read"
     },
     "meals.pantry.edit": {
-      "description": "Add, change or remove a Pantry item or a Staple. action is add, update or remove. target is item (the default) or staple. add needs a name and takes an optional quantity and unit for an item; no quantity means the household has some. update changes an item by itemId, or renames a Staple by stapleId. Removing an item records an undo entry, but there is no undo tool yet. Changing the Pantry updates a shopping list that follows a plan.",
+      "description": "Add, change or remove a Pantry item or a Staple. action is add, update or remove. target is item (the default) or staple. add needs a name and takes an optional quantity and unit for an item; no quantity means the household has some. update changes an item by itemId, or renames a Staple by stapleId. Removing an item records an undo entry that meals.undo can use. Changing the Pantry updates a shopping list that follows a plan.",
       "risk": "write"
     },
     "meals.log.list": {
@@ -400,6 +420,18 @@
     "meals.log.delete": {
       "description": "Delete a logged meal.",
       "risk": "destructive"
+    },
+    "meals.meal.cooked": {
+      "description": "Mark a planned meal cooked. It takes what the recipe used, scaled to the servings, out of the Pantry without taking any item below zero, and returns what changed, an undo token for meals.undo, and an offer to log the person's portion. The offer is only an offer: to log it, call meals.log.add with its description and servingNote. A meal can be marked cooked once.",
+      "risk": "write"
+    },
+    "meals.meal.rate": {
+      "description": "Rate a meal's recipe from 1 to 5 stars for one or more household members, or pass null stars to clear a rating. One star keeps that recipe out of future plans that include that person, unless a request names the recipe.",
+      "risk": "write"
+    },
+    "meals.undo": {
+      "description": "Undo the change an undo token names. A removed shopping line or Pantry item comes back, a Bought is reversed, and a Mark cooked puts the meal back to not cooked and its Pantry amounts back. A Pantry amount that was edited after Bought or Mark cooked is left alone and counted as skipped.",
+      "risk": "write"
     }
   },
   "jobs": {

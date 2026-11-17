@@ -92,7 +92,7 @@ pub fn read_list<H: Host + ?Sized>(host: &H) -> Result<StoredList> {
     })
 }
 
-fn ensure_list<H: Host + ?Sized>(host: &H, kitchen_id: &str, plan_id: Option<&str>) -> Result<String> {
+pub(crate) fn ensure_list<H: Host + ?Sized>(host: &H, kitchen_id: &str, plan_id: Option<&str>) -> Result<String> {
     let (actor, _) = context(host)?;
     let list_id = md5::uuid_of(&format!("meals.list:{actor}"));
     insert_ignore(
@@ -236,7 +236,7 @@ fn list_view<H: Host + ?Sized>(host: &H, stored: &StoredList) -> Result<Value> {
     }))
 }
 
-fn token(action_id: &str, kind: &str, count: usize) -> Value {
+pub(crate) fn token(action_id: &str, kind: &str, count: usize) -> Value {
     json!({"actionId": action_id, "kind": kind, "count": count})
 }
 
@@ -552,7 +552,7 @@ pub fn list_edit<H: Host + ?Sized>(host: &H, input: &Fields) -> Result<Checked<V
 }
 
 /// A stored line as the snake_case record an undo keeps.
-fn line_record(line: &Stored) -> Value {
+pub(crate) fn line_record(line: &Stored) -> Value {
     json!({
         "line_id": line.line_id,
         "line_key": line.line_key,

@@ -71,8 +71,12 @@ fn the_package_asks_only_for_its_own_resources() {
     }
     assert!(ask("tools", "run", "finance.budget.assign").is_ok());
     assert!(ask("tools", "run", "finance.budget.status").is_err());
-    assert!(ask("db", "query", "app.finance_targets").is_err());
-    assert!(ask("db", "query", "app.finance_flex_policies").is_err());
+    for table in ["targets", "bill_plans", "bill_occurrences", "bill_adjustments", "bill_suggestion_dismissals", "flex_policies", "card_policies", "card_assignments"] {
+        assert!(ask("db", "query", &format!("app.finance_{table}")).is_ok(), "{table}");
+    }
+    assert!(ask("db", "query", "app.finance_reconciliations").is_err());
+    assert!(ask("tools", "run", "finance.targets.fund").is_ok());
+    assert!(ask("tools", "run", "finance.bills.read").is_err());
     assert!(ask("action-policy", "route-read", "sorting").is_ok());
     assert!(ask("action-policy", "route-read", "sorting_new").is_ok());
     assert!(ask("action-policy", "route-write", "sorting").is_err());

@@ -41,7 +41,10 @@ const exemptFiles = new Set<string>([
   // #3529 N3 observer wiring pushes the UAT provisioner just past the limit.
   "tests/uat/provisioner.ts",
   // #3886 the manifest declares every Meals tool schema; the host reads one file per module.
-  "external-modules/meals/jarvis.module.json"
+  "external-modules/meals/jarvis.module.json",
+  // The Rust Finance manifest declares every tool schema, route and app-map entry; the host
+  // reads one file per module.
+  "modules/finance/moss.module.json"
 ]);
 const checkedExtensions = new Set([
   ".css",
