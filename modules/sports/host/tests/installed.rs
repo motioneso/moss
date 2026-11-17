@@ -660,7 +660,7 @@ fn mark_photos_found(w: &World, id: uuid::Uuid) {
         .unwrap();
 }
 
-fn photo_state(w: &World, id: uuid::Uuid) -> (String, i32) {
+fn photo_state(w: &World, id: uuid::Uuid) -> (String, i16) {
     let row = w.f.rt.block_on(w.f.root.query_one("SELECT photo_rule_state, photo_miss_streak FROM app.sports_custom_sources WHERE id=$1", &[&id])).unwrap();
     (row.get(0), row.get(1))
 }
@@ -676,7 +676,7 @@ fn another_person_cannot_stop_photos_or_read_a_photo_and_the_check_fails_without
     let photo = format!("/headlines/{id}:{:024x}/photo", 1);
     let theirs = w.call(b, "DELETE", &stop, Value::Null);
     assert_eq!((theirs["status"].as_u64(), theirs["body"]["error"].as_str()), (Some(404), Some("Source not found")), "{theirs}");
-    assert_eq!(photo_state(&w, id), ("in_use".into(), 1), "B's request changed nothing");
+    assert_eq!(photo_state(&w, id), ("in_use".into(), 1i16), "B's request changed nothing");
     assert_eq!(w.call(b, "GET", &photo, Value::Null)["status"], 404);
     println!("GREEN: B cannot stop A's photos and gets 404 for A's photo address");
 
@@ -768,6 +768,6 @@ fn stopping_photos_clears_the_rule_and_the_installed_routes_match_the_old_routes
         println!("step {i} {} {}: old {} new {}", steps[i]["method"], steps[i]["url"], o["status"], n["status"]);
         assert!(same_status && message, "step {i} differs\nold: {o}\nnew: {n}");
     }
-    assert_eq!(photo_state(&w, id), ("none".into(), 0));
+    assert_eq!(photo_state(&w, id), ("none".into(), 0i16));
     println!("PASS parity: {} photo steps matched the old routes", steps.len());
 }
