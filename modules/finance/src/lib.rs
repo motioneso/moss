@@ -1,9 +1,22 @@
 //! Finance package, part 20: the account list, manual account creation and manual entries, private
 //! to each owner. Everything crosses the guest-safe SDK Host interface. No model, network or job
 //! port is used, and no amount or account name is written to logs, jobs or activity rows.
+/// Leaves with the refusal when a reader fails.
+macro_rules! ask {
+    ($expr:expr) => {
+        match $expr {
+            Ok(value) => value,
+            Err(refusal) => return Ok(Err(refusal)),
+        }
+    };
+}
+
 pub mod accounts;
+pub mod csv_import;
 pub mod input;
 pub mod ledger;
+pub mod sorting;
+pub mod text;
 pub mod tools;
 
 #[cfg(target_arch = "wasm32")]

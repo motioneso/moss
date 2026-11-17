@@ -18,6 +18,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 sha2 = "0.10"
 chrono = { version = "0.4", default-features = false, features = ["std"] }
+csv = "=1.4.0"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wit-bindgen = { version = "=0.57.1", default-features = false, features = ["macros", "realloc"] }
