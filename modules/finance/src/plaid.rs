@@ -268,6 +268,12 @@ pub fn accounts<H: Host + ?Sized>(host: &H, slot: &str, path: &str) -> Result<st
     }))
 }
 
+/// Whether the administrator has saved the Plaid keys.
+pub fn keys_saved<H: Host + ?Sized>(host: &H) -> Result<bool> {
+    let reply = host.call("credentials", "status", HOST, json!({"credential":KEYS}))?;
+    Ok(reply["configured"] == true)
+}
+
 /// Whether a bank token is stored under `slot`.
 pub fn configured<H: Host + ?Sized>(host: &H, slot: &str) -> Result<bool> {
     let reply = host.call("credentials", "status", HOST, json!({"credential":ITEM,"slot":slot}))?;

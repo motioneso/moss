@@ -25,6 +25,9 @@ fn unavailable() -> Refusal {
 
 /// `finance.connect.start`. A bank that needs a new sign-in is fixed in place, with no new bank.
 pub fn start<H: Host + ?Sized>(host: &H) -> Result<Outcome> {
+    if !plaid::keys_saved(host)? {
+        return Ok(Err(unavailable()));
+    }
     let client_user = crate::ledger::text(host, "call", "read", "actorUserId")?;
     let items = bank::items(host)?;
     let reauth = items.iter().find(|i| i["status"] == "reauth-required");

@@ -28,8 +28,11 @@ pub fn files(root: &Path, component: &[u8]) -> Result<BTreeMap<String, Vec<u8>>>
         } else {
             let bytes = std::fs::read(root.join("modules/finance").join(path))?;
             let pinned = match path.as_str() {
-                "sql/0043_finance_bank_links.sql" => {
-                    "9daef3696e4bacc23c879ce4b7915753f306cc71c91163c28f380400bd866550"
+                "sql/0368_finance_bank_links.sql" => {
+                    "57e32269ccd56454cd560e4fafcbbe38d24886c130743ea085c17d7f9d54a875"
+                }
+                "sql/0369_finance_link_sessions.sql" => {
+                    "90878a1e9d96baa12b9596f76cb3393145d7c7eaedade0b0f4a6b97f0412e38a"
                 }
                 _ => "",
             };

@@ -11,9 +11,7 @@
   "capabilities": [
     {
       "port": "db",
-      "operations": [
-        "query"
-      ],
+      "operations": ["query"],
       "resources": [
         "app.finance_accounts",
         "app.finance_transactions",
@@ -28,22 +26,12 @@
     },
     {
       "port": "context",
-      "operations": [
-        "local-date",
-        "read",
-        "uuid"
-      ],
-      "resources": [
-        "account",
-        "call",
-        "new"
-      ]
+      "operations": ["local-date", "read", "uuid"],
+      "resources": ["account", "call", "new"]
     },
     {
       "port": "tools",
-      "operations": [
-        "run"
-      ],
+      "operations": ["run"],
       "resources": [
         "finance.manual.account-create",
         "finance.manual.entry-create",
@@ -54,27 +42,13 @@
     },
     {
       "port": "credentials",
-      "operations": [
-        "status",
-        "request",
-        "exchange",
-        "forget"
-      ],
-      "resources": [
-        "sandbox.plaid.com",
-        "production.plaid.com"
-      ]
+      "operations": ["status", "request", "exchange", "forget"],
+      "resources": ["sandbox.plaid.com", "production.plaid.com"]
     },
     {
       "port": "jobs",
-      "operations": [
-        "enqueue-after-commit",
-        "schedule"
-      ],
-      "resources": [
-        "finance.sync-run",
-        "finance.connect-poll"
-      ]
+      "operations": ["enqueue-after-commit", "schedule"],
+      "resources": ["finance.sync-run", "finance.connect-poll"]
     }
   ],
   "database": {
@@ -121,7 +95,8 @@
       "sql/0040_create_finance_card_policies.sql",
       "sql/0041_create_finance_card_assignments.sql",
       "sql/0042_create_finance_bill_suggestion_dismissals.sql",
-      "sql/0043_finance_bank_links.sql"
+      "sql/0368_finance_bank_links.sql",
+      "sql/0369_finance_link_sessions.sql"
     ],
     "ownedTables": [
       "app.finance_accounts",
@@ -327,9 +302,7 @@
   },
   "requires": {},
   "provides": {},
-  "icons": [
-    "icons/finance.svg"
-  ],
+  "icons": ["icons/finance.svg"],
   "accounts": {
     "supportsUserDisable": true,
     "defaultEnabled": true
@@ -415,10 +388,7 @@
   "credentials": {
     "plaid-keys": {
       "scope": "instance",
-      "hosts": [
-        "sandbox.plaid.com",
-        "production.plaid.com"
-      ],
+      "hosts": ["sandbox.plaid.com", "production.plaid.com"],
       "attachment": {
         "kind": "fields",
         "name": {
@@ -426,34 +396,25 @@
           "secret": "clientSecret"
         }
       },
-      "exposeFields": [
-        "link_token",
-        "public_token",
-        "hosted_link_url",
-        "expiration"
-      ]
+      "exposeFields": ["link_token", "public_token", "hosted_link_url", "expiration"]
     },
     "plaid-item": {
       "scope": "account",
-      "hosts": [
-        "sandbox.plaid.com",
-        "production.plaid.com"
-      ],
+      "hosts": ["sandbox.plaid.com", "production.plaid.com"],
       "attachment": {
         "kind": "fields",
         "name": {
           "access_token": "accessToken"
         }
       },
-      "with": [
-        "plaid-keys"
-      ],
+      "with": ["plaid-keys"],
       "exchange": {
         "endpoint": "https://production.plaid.com/item/public_token/exchange",
         "grantType": "token_swap",
         "format": "json",
         "input": "public_token"
-      }
+      },
+      "exposeFields": ["link_token", "hosted_link_url", "expiration"]
     }
   },
   "jobs": {
