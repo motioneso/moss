@@ -1057,6 +1057,88 @@ recipes existed in Rust.
 - **No tracking card** for JS-308 was found in Vikunja.
 - **Release note** is not applicable.
 
+## Meals lists and pantry (part 30)
+
+### What existed before this part
+
+Parts 28 and 29 gave Meals a package with the kitchen, household and plan tools and the
+plan-day job. There was no shopping list and no pantry in Rust. The pantry was read by the
+planner but could not be edited.
+
+### What was built
+
+- **Unit maths.** Unit names, conversion between compatible units, and the rounding and
+  display rules, ported from the old code.
+- **List build and reconcile rules.** A list is built from the ingredients of the plan's meals,
+  merged by name and unit, with pantry coverage marked. Reconcile keeps manual lines, keeps
+  ticked lines, keeps bought lines, and only adds or removes what the plan changed.
+- **Pantry coverage.** A line is covered when the pantry or the staples already hold it.
+- **Five list tools.** Get, build, edit (add, update, remove, tick, untick), bought and clear.
+- **Two pantry tools.** Get and edit, for stock items and for staples (add, update, remove).
+- **Hooks.** The plan-day job rebuilds the list after it finishes a day. A pantry edit
+  re-checks coverage on the list.
+- **Mark bought.** Moves each bought line into the pantry once, even when repeated.
+- **Undo records.** Removing a line or a pantry item and marking lines bought each write an
+  undo record before or after the change, as the old code did.
+- **Manifest, app map and changelog** carry the seven new tools, the three new table grants
+  and two chat features.
+
+### Differences from the old code (on purpose)
+
+- There are no database transactions in the host. Marking lines bought runs in a fixed order
+  (pantry rows, then the lines, then the undo record). The pantry rows get fixed ids built
+  from the line and its version, so a repeat after a crash finishes the work and adds no
+  second row. A crash after the lines change loses only the undo record.
+- Sorting names uses a simple locale-style comparison. It matches the old order for plain
+  Latin names and may differ for rare accents.
+- Bought lines older than one day are swept in memory when the list is read, using the host
+  clock.
+- Staples have no changed-at column, so a rename writes the name directly.
+
+### Proof
+
+- Native guest tests pass: 33 unit tests, 8 list and pantry tests (empty read writes nothing,
+  manual line life cycle with undo, the old error messages, build from a plan with labels
+  such as "Mon dinner", bought once with undo, clear touches only the lines, pantry and
+  staple rules, a second person sees nothing), and the privacy test with the new tools.
+- The package gate passes: native tests, the WebAssembly build, package tests (6) and the
+  installed-package tests (5), all in one run.
+- Route parity against the old handlers: a 44-step script runs the old handlers and the new
+  package on the same fixtures and compares answers, with ids and timestamps masked.
+- Row-level security: a second person sees and changes nothing in the five new tables, and
+  removing the owner rule on each table makes the check fail, then it passes after restore.
+- Clearing a list changed only that list's lines. A digest of every other table, including
+  the second person's rows, is the same before and after.
+- A planted private word is in no job row and no activity row, and the privacy control that
+  plants it in a host call is seen failing.
+
+From the repo root, through the gate script:
+
+```
+scripts/run-gate.sh start --gate test:rust-meals
+```
+
+```
+scripts/run-gate.sh start --gate test:rust-meals-live
+```
+
+The live run passed on the real Rust server over real HTTPS on a non-loopback address, with no response rewriting and certificate checks on. It added a list and a pantry item, read them back, marked the line bought, cleared the list, and showed the pantry kept the item. A second person was refused (403) on clearing, and the list stayed. The private word was absent from activity and the server log. The same run showed an untrusted origin refused, which covers reaching Moss from another device.
+
+The first run of the package gate failed at once because the worktree had no installed web
+packages, and the second failed because the private Rust folder lacked the WebAssembly
+target. Neither was a code fault.
+
+### Not proven or not built
+
+- **Undo restore** is not built. The undo records are written but nothing reads them back.
+- **No screens** were built.
+- **Plan delete hook** does not apply, because no plan delete tool exists. The hook runs
+  only after the day job.
+- **Name order** is an approximation, see above.
+- **Crash window** in mark bought is described above and was reasoned through, not forced.
+- **No tracking card** for JS-310 was found in Vikunja after three searches.
+- **Release note** is not applicable.
+
 ## Finance transactions (part 22)
 
 ### What was built
