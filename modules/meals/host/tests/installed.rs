@@ -44,9 +44,10 @@ fn root() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..")
 }
 
-/// The database role the host runs the package's queries as.
+/// The database role the host runs the package's queries as. Meals is an old module whose
+/// tables the host already knew about, so it uses the shared app role.
 fn role() -> String {
-    moss_module_host::database::runtime_role("meals")
+    "jarvis_app_runtime".to_owned()
 }
 
 /// Reads as the package's database role with the actor set, so row security applies as it does at run time.

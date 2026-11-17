@@ -942,10 +942,8 @@ the host, so nothing was reused.
 - **The first read never writes.** A new person sees a default kitchen with their own "You"
   member. The same ids are stored on the first save.
 - **App map entries** for the tools are in the manifest.
-- **Two host fixes.** Old module SQL carries no grants and no privacy rules, so the host now
-  generates them for this kind of package. The host also now runs these packages as
-  their own database role instead of the shared app role, which had no grants on the tables.
-  Core-legacy packages (Goals, Wellness) are unchanged.
+- **No host change.** Meals tables are in the host's frozen list of old tables, so the host
+  already gives them the owner-only rules and runs queries as the shared app role.
 - **Nothing more.** Plans, recipes, lists, pantry and log tools are later parts.
 
 ### Differences from the old code (on purpose)
@@ -958,9 +956,7 @@ the host, so nothing was reused.
 ### Proof
 
 Native tests for the guest (13 pass) and WebAssembly package tests against the real host (6
-pass), then the database tests through the gate, which finished with exit code 0. The host's own
-database gate (`pnpm test:rust-module-database`, including the check that old core and module
-ledger hashes stay the same) also finished with exit code 0 after the host change:
+pass), then the database tests through the gate, which finished with exit code 0. This part changes no host code.
 
 - **Tool parity.** 15 steps run on the old handlers and on the installed package, with ids and
   times masked. Every reply matched, including the bad-input replies.

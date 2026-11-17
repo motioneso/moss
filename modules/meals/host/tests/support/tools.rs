@@ -208,8 +208,8 @@ fn tools_keep_both_tables_private_and_leave_no_text_behind() {
         ("app.meals_favourites", favourites.as_str()),
     ] {
         assert!(rows_as(&w.f, b, sql).is_empty());
-        let weaken = format!("DROP POLICY moss_module_select ON {table}; CREATE POLICY moss_module_select ON {table} FOR SELECT TO {} USING (true)", role());
-        let restore = format!("DROP POLICY moss_module_select ON {table}; CREATE POLICY moss_module_select ON {table} FOR SELECT TO {} USING (owner_user_id=app.current_actor_user_id())", role());
+        let weaken = format!("DROP POLICY moss_legacy_select ON {table}; CREATE POLICY moss_legacy_select ON {table} FOR SELECT TO jarvis_app_runtime, jarvis_worker_runtime USING (true)");
+        let restore = format!("DROP POLICY moss_legacy_select ON {table}; CREATE POLICY moss_legacy_select ON {table} FOR SELECT TO jarvis_app_runtime, jarvis_worker_runtime USING (owner_user_id=app.current_actor_user_id())");
         w.f.rt.block_on(w.f.root.batch_execute(&weaken)).unwrap();
         let weakened = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             assert!(rows_as(&w.f, b, sql).is_empty())
