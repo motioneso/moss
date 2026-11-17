@@ -25,6 +25,8 @@ pub struct Fake {
     pub calls: RefCell<Vec<(String, String, String, Value)>>,
     /// When set, every database call fails with this message.
     pub db_failure: RefCell<Option<String>>,
+    /// Turns the owner filter off, to show it is what keeps one person's rows from another.
+    pub rls_off: Cell<bool>,
     ids: Cell<u32>,
     clock: Cell<u32>,
 }
@@ -54,6 +56,7 @@ impl Fake {
             settings: RefCell::new(vec![]),
             calls: RefCell::new(vec![]),
             db_failure: RefCell::new(None),
+            rls_off: Cell::new(false),
             ids: Cell::new(0),
             clock: Cell::new(0),
         }
@@ -157,7 +160,7 @@ impl Host for Fake {
                     Kind::Select => {
                         let mut rows: Vec<Value> = follows
                             .iter()
-                            .filter(|r| r["owner_user_id"] == actor && matches(r, &query.filter))
+                            .filter(|r| (self.rls_off.get() || r["owner_user_id"] == actor) && matches(r, &query.filter))
                             .cloned()
                             .collect();
                         for order in query.order.iter().rev() {

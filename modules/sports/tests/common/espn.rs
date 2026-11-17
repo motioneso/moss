@@ -27,6 +27,14 @@ pub struct EspnHost {
     /// Serves endless full pages of generated teams instead of the fixtures.
     pub endless_pages: Cell<bool>,
     pub down: Cell<bool>,
+    /// What ESPN's content host sends for any article. None leaves the content host unmapped.
+    pub article_story: RefCell<Option<String>>,
+    /// Makes the content host answer with an error while the rest of ESPN works.
+    pub article_fails: Cell<bool>,
+    /// Shows every hockey game as not yet started ("pre") or in progress ("in").
+    pub hockey_state: RefCell<Option<&'static str>>,
+    /// Replaces every news list ESPN sends.
+    pub news_override: RefCell<Option<String>>,
 }
 
 impl EspnHost {
@@ -39,6 +47,10 @@ impl EspnHost {
             fetch_ms: Cell::new(0),
             endless_pages: Cell::new(false),
             down: Cell::new(false),
+            article_story: RefCell::new(None),
+            article_fails: Cell::new(false),
+            hockey_state: RefCell::new(None),
+            news_override: RefCell::new(None),
         }
     }
     fn file_for(url: &str) -> Option<&'static str> {
@@ -119,7 +131,30 @@ impl Host for EspnHost {
                 if self.down.get() {
                     return Ok(json!({"status": 503, "body": "down"}));
                 }
+                if url.contains("content.core.api.espn.com") {
+                    if self.article_fails.get() {
+                        return Ok(json!({"status": 500, "body": "{}"}));
+                    }
+                    if let Some(story) = self.article_story.borrow().clone() {
+                        return Ok(json!({"status": 200, "body": json!({"headlines": [{"story": story}]}).to_string()}));
+                    }
+                } else if url.contains("/news") {
+                    if let Some(body) = self.news_override.borrow().clone() {
+                        return Ok(json!({"status": 200, "body": body}));
+                    }
+                }
                 match Self::file_for(&url) {
+                    Some(f) if f.starts_with("nhl-scoreboard") && self.hockey_state.borrow().is_some() => {
+                        let state = self.hockey_state.borrow().unwrap();
+                        let mut data: Value = serde_json::from_str(&fixture(f)).unwrap();
+                        for event in data["events"].as_array_mut().unwrap() {
+                            let status = &mut event["competitions"][0]["status"]["type"];
+                            status["state"] = json!(state);
+                            status["completed"] = json!(false);
+                            status["name"] = json!(if state == "in" { "STATUS_IN_PROGRESS" } else { "STATUS_SCHEDULED" });
+                        }
+                        Ok(json!({"status": 200, "body": data.to_string()}))
+                    }
                     Some(f) => Ok(json!({"status": 200, "body": fixture(f)})),
                     None => Ok(json!({"status": 404, "body": "{}"})),
                 }
