@@ -90,19 +90,27 @@ impl Fake {
             row[k.as_str()] = v.clone();
         }
         self.ids.set(self.ids.get() + 1);
-        self.tables.borrow_mut().entry(table.into()).or_default().push(row);
+        self.tables
+            .borrow_mut()
+            .entry(table.into())
+            .or_default()
+            .push(row);
     }
 }
 
 /// The column defaults of the real tables.
 fn defaults(table: &str, at: &str) -> Value {
     match table {
-        "app.meals_kitchens" => json!({"units_system":"us","default_pantry_mode":"prefer","created_at":at,"updated_at":at}),
+        "app.meals_kitchens" => {
+            json!({"units_system":"us","default_pantry_mode":"prefer","created_at":at,"updated_at":at})
+        }
         "app.meals_household_members" => json!({"is_self":false,"linked_account_email":null,
             "calorie_target":null,"protein_target_g":null,"carb_target_g":null,"fat_target_g":null,
             "meal_pattern":["breakfast","lunch","dinner"],"restrictions":[],"preferences":[],
             "sort_order":0,"created_at":at,"updated_at":at}),
-        "app.meals_meal_slot_rules" => json!({"solo_weekdays":[],"usual_time":null,"created_at":at,"updated_at":at}),
+        "app.meals_meal_slot_rules" => {
+            json!({"solo_weekdays":[],"usual_time":null,"created_at":at,"updated_at":at})
+        }
         "app.meals_favourites" => json!({"created_at":at}),
         other => panic!("fake host does not know {other}"),
     }
@@ -131,7 +139,10 @@ fn clash(table: &str, a: &Value, b: &Value) -> bool {
     }
     match table {
         "app.meals_kitchens" => true,
-        "app.meals_household_members" => same("member_id") || (same("kitchen_id") && a["is_self"] == true && b["is_self"] == true),
+        "app.meals_household_members" => {
+            same("member_id")
+                || (same("kitchen_id") && a["is_self"] == true && b["is_self"] == true)
+        }
         "app.meals_meal_slot_rules" => same("kitchen_id") && same("slot_name"),
         _ => same("member_id") && same("recipe_id"),
     }
@@ -146,17 +157,32 @@ fn order_of(x: &Value, y: &Value) -> std::cmp::Ordering {
 }
 
 impl Host for Fake {
-    fn call(&self, port: &str, operation: &str, resource: &str, parameters: Value) -> Result<Value> {
-        self.calls.borrow_mut().push((port.into(), operation.into(), resource.into(), parameters.clone()));
+    fn call(
+        &self,
+        port: &str,
+        operation: &str,
+        resource: &str,
+        parameters: Value,
+    ) -> Result<Value> {
+        self.calls.borrow_mut().push((
+            port.into(),
+            operation.into(),
+            resource.into(),
+            parameters.clone(),
+        ));
         let actor = self.actor.get();
         match (port, operation) {
             ("db", "query") => {}
             ("context", "read") => {
                 let at = chrono::DateTime::from_timestamp_millis(1_794_000_000_000).unwrap();
-                return Ok(json!({"actorUserId": actor, "now": at.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)}));
+                return Ok(
+                    json!({"actorUserId": actor, "now": at.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)}),
+                );
             }
             ("context", "uuid") => return Ok(json!({"id": self.next_id()})),
-            ("tools", "run") if !self.tools_refuse.get() => return Ok(json!({"data":{"ran":resource}})),
+            ("tools", "run") if !self.tools_refuse.get() => {
+                return Ok(json!({"data":{"ran":resource}}))
+            }
             _ => return Err(Error::new("Unexpected host call")),
         }
         if let Some(message) = self.db_failure.borrow().clone() {
@@ -175,10 +201,17 @@ impl Host for Fake {
                 for order in query.order.iter().rev() {
                     found.sort_by(|a, b| {
                         let ord = order_of(&a[order.column.as_str()], &b[order.column.as_str()]);
-                        if order.descending { ord.reverse() } else { ord }
+                        if order.descending {
+                            ord.reverse()
+                        } else {
+                            ord
+                        }
                     });
                 }
-                Ok(json!(found.into_iter().take(query.limit.unwrap_or(1000) as usize).collect::<Vec<_>>()))
+                Ok(json!(found
+                    .into_iter()
+                    .take(query.limit.unwrap_or(1000) as usize)
+                    .collect::<Vec<_>>()))
             }
             Kind::Insert => {
                 drop(tables);
@@ -198,7 +231,11 @@ impl Host for Fake {
                         }
                         return Ok(json!([rows[at].clone()]));
                     }
-                    assert_eq!(query.conflict, Conflict::Ignore, "a clash needs the ignore or update rule");
+                    assert_eq!(
+                        query.conflict,
+                        Conflict::Ignore,
+                        "a clash needs the ignore or update rule"
+                    );
                     return Ok(json!([]));
                 }
                 rows.push(row.clone());
@@ -206,7 +243,10 @@ impl Host for Fake {
             }
             Kind::Update => {
                 let mut changed = vec![];
-                for row in rows.iter_mut().filter(|r| r["owner_user_id"] == actor && matches(r, &query.filter)) {
+                for row in rows
+                    .iter_mut()
+                    .filter(|r| r["owner_user_id"] == actor && matches(r, &query.filter))
+                {
                     for (k, v) in &query.values {
                         row[k.as_str()] = v.clone();
                     }
@@ -215,8 +255,9 @@ impl Host for Fake {
                 Ok(json!(changed))
             }
             Kind::Delete => {
-                let (gone, kept): (Vec<Value>, Vec<Value>) =
-                    rows.drain(..).partition(|r| r["owner_user_id"] == actor && matches(r, &query.filter));
+                let (gone, kept): (Vec<Value>, Vec<Value>) = rows
+                    .drain(..)
+                    .partition(|r| r["owner_user_id"] == actor && matches(r, &query.filter));
                 *rows = kept;
                 Ok(json!(gone))
             }

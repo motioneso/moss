@@ -62,7 +62,9 @@ fn rows_as(f: &support::Fixture, actor: uuid::Uuid, sql: &str) -> Vec<tokio_post
             let _ = conn.await;
         });
         let tx = client.transaction().await.unwrap();
-        tx.batch_execute(&format!("SET LOCAL ROLE {}", role())).await.unwrap();
+        tx.batch_execute(&format!("SET LOCAL ROLE {}", role()))
+            .await
+            .unwrap();
         tx.execute(
             "SELECT set_config('app.actor_user_id', $1, true)",
             &[&actor.to_string()],
@@ -91,11 +93,18 @@ impl World {
                 .unwrap()
                 .get::<_, bool>(0);
             if !ready {
-                f.root.batch_execute(moss_platform_jobs::MIGRATION).await.unwrap();
-                f.root.batch_execute(moss_module_host::jobs::MIGRATION).await.unwrap();
+                f.root
+                    .batch_execute(moss_platform_jobs::MIGRATION)
+                    .await
+                    .unwrap();
+                f.root
+                    .batch_execute(moss_module_host::jobs::MIGRATION)
+                    .await
+                    .unwrap();
             }
         });
-        f.rt.block_on(f.root.execute("DELETE FROM moss_modules.catalog", &[])).unwrap();
+        f.rt.block_on(f.root.execute("DELETE FROM moss_modules.catalog", &[]))
+            .unwrap();
         let dir = tempfile::tempdir().unwrap();
         let reg = tempfile::tempdir().unwrap();
         let bytes = moss_meals_host::package::pack(&root(), &component()).unwrap();
@@ -119,16 +128,33 @@ impl World {
         .unwrap();
         let source = app
             .installer
-            .refresh(&f.access(f.a), Source::Folder(reg.path().into()), &key, &publisher, "meals-test-registry")
+            .refresh(
+                &f.access(f.a),
+                Source::Folder(reg.path().into()),
+                &key,
+                &publisher,
+                "meals-test-registry",
+            )
             .unwrap();
-        app.installer.install(&f.access(f.a), &source, &artifact, true).unwrap();
-        Self { f, app, _dirs: (dir, reg) }
+        app.installer
+            .install(&f.access(f.a), &source, &artifact, true)
+            .unwrap();
+        Self {
+            f,
+            app,
+            _dirs: (dir, reg),
+        }
     }
     fn call(&self, actor: uuid::Uuid, method: &str, path: &str, body: Value) -> Value {
         serde_json::from_str(
             &self
                 .app
-                .dispatch_extended(self.f.access(actor), method, &format!("/api/m/meals{path}"), &body.to_string())
+                .dispatch_extended(
+                    self.f.access(actor),
+                    method,
+                    &format!("/api/m/meals{path}"),
+                    &body.to_string(),
+                )
                 .unwrap(),
         )
         .unwrap()

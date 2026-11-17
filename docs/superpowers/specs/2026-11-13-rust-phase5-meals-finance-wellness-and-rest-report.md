@@ -926,10 +926,10 @@ scripts/run-gate.sh start --gate test:rust-finance-live
 
 ## Meals package, kitchen and household (part 28)
 
-### What part 19 already had
+### What existed before this part
 
-Part 19 only built the bank token exchange through the host. It had nothing for Meals, so
-nothing was reused or rebuilt here.
+Nothing for Meals existed before this part. Part 19 only built the bank token exchange through
+the host, so nothing was reused.
 
 ### What was built
 
@@ -957,8 +957,10 @@ nothing was reused or rebuilt here.
 
 ### Proof
 
-Native tests for the guest (11 pass) and WebAssembly package tests against the real host (6
-pass), then the database tests through the gate, which finished with exit code 0:
+Native tests for the guest (13 pass) and WebAssembly package tests against the real host (6
+pass), then the database tests through the gate, which finished with exit code 0. The host's own
+database gate (`pnpm test:rust-module-database`, including the check that old core and module
+ledger hashes stay the same) also finished with exit code 0 after the host change:
 
 - **Tool parity.** 15 steps run on the old handlers and on the installed package, with ids and
   times masked. Every reply matched, including the bad-input replies.
@@ -970,7 +972,8 @@ pass), then the database tests through the gate, which finished with exit code 0
 - **Two protections removed.** The fixed error text and the activity record were each removed
   and the matching test failed.
 - **Live run.** The real Rust server, over HTTPS on a real network address, installed the
-  package and ran the tools. See the live line in the notes below.
+  package and ran the tools. It finished with exit code 0, including a refused untrusted origin,
+  a refused second person and no marker text in the activity record or server log.
 
 Commands, from the repo root, through the gate script:
 

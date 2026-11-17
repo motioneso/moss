@@ -31,13 +31,21 @@ fn the_component_loads_with_the_real_host() {
 
 #[test]
 fn an_unknown_route_is_a_plain_404() {
-    let out = call("route", r#"{"method":"GET","path":"/nope","params":{},"query":{},"body":null}"#).unwrap();
+    let out = call(
+        "route",
+        r#"{"method":"GET","path":"/nope","params":{},"query":{},"body":null}"#,
+    )
+    .unwrap();
     assert_eq!(serde_json::from_str::<Value>(&out).unwrap()["status"], 404);
 }
 
 #[test]
 fn an_unsupported_invocation_leaks_no_request_text() {
-    let err = call("job", &json!({"queue":"meals-x","payload":{"name":"SECRET-NAME"}}).to_string()).unwrap_err();
+    let err = call(
+        "job",
+        &json!({"queue":"meals-x","payload":{"name":"SECRET-NAME"}}).to_string(),
+    )
+    .unwrap_err();
     assert!(!format!("{err:#}").contains("SECRET-NAME"));
 }
 
@@ -45,7 +53,13 @@ fn an_unsupported_invocation_leaks_no_request_text() {
 fn the_package_builds_and_the_manifest_validates() {
     let files = moss_meals_host::package::files(&root(), &component()).unwrap();
     assert_eq!(files.keys().filter(|k| k.starts_with("sql/")).count(), 27);
-    for needed in ["moss.module.json", "code/module.wasm", "LICENSE", "NOTICE", "CHANGELOG.md"] {
+    for needed in [
+        "moss.module.json",
+        "code/module.wasm",
+        "LICENSE",
+        "NOTICE",
+        "CHANGELOG.md",
+    ] {
         assert!(files.contains_key(needed), "{needed} missing");
     }
     assert!(moss_meals_host::package::pack(&root(), &component()).is_ok());
@@ -55,11 +69,15 @@ fn the_package_builds_and_the_manifest_validates() {
 fn the_package_asks_only_for_its_own_resources() {
     let manifest = moss_meals_host::package::manifest().unwrap();
     let ask = |port: &str, operation: &str, resource: &str| {
-        authorize(&manifest, port, &Request {
-            operation: operation.into(),
-            resource: resource.into(),
-            parameters: json!({"kind":"select"}),
-        })
+        authorize(
+            &manifest,
+            port,
+            &Request {
+                operation: operation.into(),
+                resource: resource.into(),
+                parameters: json!({"kind":"select"}),
+            },
+        )
     };
     assert!(ask("db", "query", "app.meals_kitchens").is_ok());
     assert!(ask("db", "query", "app.meals_household_members").is_ok());

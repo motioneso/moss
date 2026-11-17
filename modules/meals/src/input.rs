@@ -175,7 +175,10 @@ pub fn is_clock_time(text: &str) -> bool {
     let b = text.as_bytes();
     b.len() == 5
         && b[2] == b':'
-        && matches!((b[0], b[1]), (b'0' | b'1', b'0'..=b'9') | (b'2', b'0'..=b'3'))
+        && matches!(
+            (b[0], b[1]),
+            (b'0' | b'1', b'0'..=b'9') | (b'2', b'0'..=b'3')
+        )
         && matches!(b[3], b'0'..=b'5')
         && b[4].is_ascii_digit()
 }

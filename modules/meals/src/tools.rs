@@ -23,8 +23,16 @@ pub struct Request {
 const KITCHEN_SAVE: [&str; 3] = ["unitsSystem", "defaultPantryMode", "slotRules"];
 const SLOT_RULE: [&str; 3] = ["slotName", "soloWeekdays", "usualTime"];
 const HOUSEHOLD_SAVE: [&str; 10] = [
-    "memberId", "name", "linkedAccountEmail", "calorieTarget", "proteinTargetG", "carbTargetG",
-    "fatTargetG", "mealPattern", "restrictions", "preferences",
+    "memberId",
+    "name",
+    "linkedAccountEmail",
+    "calorieTarget",
+    "proteinTargetG",
+    "carbTargetG",
+    "fatTargetG",
+    "mealPattern",
+    "restrictions",
+    "preferences",
 ];
 const MAX_SLOT_RULES: usize = 6;
 
@@ -37,7 +45,9 @@ struct Rule {
 fn slot_rules(raw: Option<&Value>) -> Checked<Vec<Rule>> {
     let Some(raw) = raw else { return Ok(vec![]) };
     let Some(items) = raw.as_array().filter(|a| a.len() <= MAX_SLOT_RULES) else {
-        return invalid(format!("slotRules must be an array of at most {MAX_SLOT_RULES} rules"));
+        return invalid(format!(
+            "slotRules must be an array of at most {MAX_SLOT_RULES} rules"
+        ));
     };
     items
         .iter()
@@ -46,12 +56,21 @@ fn slot_rules(raw: Option<&Value>) -> Checked<Vec<Rule>> {
                 return invalid("slotRules entries must be objects");
             };
             input::no_unknown_keys(rule, &SLOT_RULE)?;
-            let slot = input::text(rule, "slotName", true, 40)?.unwrap_or_default().to_lowercase();
-            let days: Option<Vec<i64>> = rule.get("soloWeekdays").and_then(Value::as_array).and_then(|days| {
-                days.iter()
-                    .map(|d| d.as_f64().filter(|n| n.fract() == 0.0 && (1.0..=7.0).contains(n)).map(|n| n as i64))
-                    .collect()
-            });
+            let slot = input::text(rule, "slotName", true, 40)?
+                .unwrap_or_default()
+                .to_lowercase();
+            let days: Option<Vec<i64>> = rule
+                .get("soloWeekdays")
+                .and_then(Value::as_array)
+                .and_then(|days| {
+                    days.iter()
+                        .map(|d| {
+                            d.as_f64()
+                                .filter(|n| n.fract() == 0.0 && (1.0..=7.0).contains(n))
+                                .map(|n| n as i64)
+                        })
+                        .collect()
+                });
             let Some(mut weekdays) = days else {
                 return invalid("soloWeekdays must hold ISO weekdays, 1 (Monday) to 7 (Sunday)");
             };
@@ -61,7 +80,11 @@ fn slot_rules(raw: Option<&Value>) -> Checked<Vec<Rule>> {
             if !usual_time.is_null() && !usual_time.as_str().is_some_and(input::is_clock_time) {
                 return invalid("usualTime must be HH:MM or null");
             }
-            Ok(Rule { slot, weekdays, usual_time })
+            Ok(Rule {
+                slot,
+                weekdays,
+                usual_time,
+            })
         })
         .collect()
 }
@@ -144,7 +167,13 @@ fn save_kitchen<H: Host + ?Sized>(host: &H, input: &Fields) -> Result<Checked<Va
         kitchen::update_kitchen(host, &kitchen_id, units, pantry)?;
     }
     for rule in &rules {
-        kitchen::upsert_rule(host, &kitchen_id, &rule.slot, &rule.weekdays, &rule.usual_time)?;
+        kitchen::upsert_rule(
+            host,
+            &kitchen_id,
+            &rule.slot,
+            &rule.weekdays,
+            &rule.usual_time,
+        )?;
     }
     Ok(Ok(kitchen::view(host)?))
 }
@@ -180,13 +209,16 @@ fn remove_member<H: Host + ?Sized>(host: &H, input: &Fields) -> Result<Checked<V
         Err(error) => return Ok(Err(error)),
     };
     let current = kitchen::view(host)?;
-    let is_self = current["members"]
-        .as_array()
-        .is_some_and(|all| all.iter().any(|m| m["memberId"] == member && m["isSelf"] == true));
+    let is_self = current["members"].as_array().is_some_and(|all| {
+        all.iter()
+            .any(|m| m["memberId"] == member && m["isSelf"] == true)
+    });
     if is_self {
         return Ok(coded("self_member", "the self member cannot be removed"));
     }
-    Ok(Ok(json!({"removed": kitchen::remove_member(host, &member)?})))
+    Ok(Ok(
+        json!({"removed": kitchen::remove_member(host, &member)?}),
+    ))
 }
 
 pub fn handle<H: Host + ?Sized>(host: &H, req: Request) -> Result<Value> {
@@ -206,8 +238,16 @@ pub fn run<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Response> {
     if !TOOLS.contains(&req.tool.as_str()) || !req.parameters.is_object() {
         return Ok(util::bad_request("Invalid Meals tool input"));
     }
-    match host.call("tools", "run", &req.tool, json!({"parameters":req.parameters})) {
+    match host.call(
+        "tools",
+        "run",
+        &req.tool,
+        json!({"parameters":req.parameters}),
+    ) {
         Ok(result) => Ok(Response::new(200, result)),
-        Err(_) => Ok(util::error(403, "Meals tool unavailable or approval required")),
+        Err(_) => Ok(util::error(
+            403,
+            "Meals tool unavailable or approval required",
+        )),
     }
 }

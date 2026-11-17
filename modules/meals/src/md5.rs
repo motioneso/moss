@@ -27,6 +27,7 @@ pub fn digest(input: &[u8]) -> [u8; 16] {
             .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
             .collect();
         let [mut a, mut b, mut c, mut d] = state;
+        #[allow(clippy::needless_range_loop)]
         for i in 0..64 {
             let (f, g) = match i / 16 {
                 0 => ((b & c) | (!b & d), i),
@@ -57,7 +58,10 @@ pub fn digest(input: &[u8]) -> [u8; 16] {
 
 /// What Postgres returns for `md5(text)::uuid`: the 32 hex digits regrouped as a uuid.
 pub fn uuid_of(text: &str) -> String {
-    let hex: String = digest(text.as_bytes()).iter().map(|b| format!("{b:02x}")).collect();
+    let hex: String = digest(text.as_bytes())
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
     format!(
         "{}-{}-{}-{}-{}",
         &hex[0..8],
@@ -73,7 +77,10 @@ mod tests {
     use super::*;
 
     fn hex(input: &str) -> String {
-        digest(input.as_bytes()).iter().map(|b| format!("{b:02x}")).collect()
+        digest(input.as_bytes())
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect()
     }
 
     #[test]
@@ -82,7 +89,10 @@ mod tests {
         assert_eq!(hex("a"), "0cc175b9c0f1b6a831c399e269772661");
         assert_eq!(hex("abc"), "900150983cd24fb0d6963f7d28e17f72");
         assert_eq!(hex("message digest"), "f96b697d7cb7938d525a2f31aaf161d0");
-        assert_eq!(hex("abcdefghijklmnopqrstuvwxyz"), "c3fcd3d76192e4007dfb496cca67e13b");
+        assert_eq!(
+            hex("abcdefghijklmnopqrstuvwxyz"),
+            "c3fcd3d76192e4007dfb496cca67e13b"
+        );
         assert_eq!(
             hex("12345678901234567890123456789012345678901234567890123456789012345678901234567890"),
             "57edf4a22be3c955ac49da2e2107b67a"

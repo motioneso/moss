@@ -18,10 +18,16 @@ pub const FAVOURITES: &str = "app.meals_favourites";
 const SELF_NAME: &str = "You";
 
 fn desc(column: &str) -> Order {
-    Order { column: column.into(), descending: true }
+    Order {
+        column: column.into(),
+        descending: true,
+    }
 }
 fn asc(column: &str) -> Order {
-    Order { column: column.into(), descending: false }
+    Order {
+        column: column.into(),
+        descending: false,
+    }
 }
 
 /// Kitchen id and self-member id, derived from the person exactly as the old database did.
@@ -72,14 +78,22 @@ pub fn view<H: Host + ?Sized>(host: &H) -> Result<Value> {
     let client = Client(host);
     let kitchen = kitchen_row(host)?;
     let kitchen_id = match &kitchen {
-        Some(row) => row["kitchen_id"].as_str().map(str::to_owned).ok_or_else(|| Error::new("Invalid kitchen row"))?,
+        Some(row) => row["kitchen_id"]
+            .as_str()
+            .map(str::to_owned)
+            .ok_or_else(|| Error::new("Invalid kitchen row"))?,
         None => derived_ids(host)?.0,
     };
     let mut members = vec![];
     let (mut rules, mut favourites) = (vec![], vec![]);
     if kitchen.is_some() {
         let mut query = Query::select(Filter::eq("kitchen_id", kitchen_id.as_str()));
-        query.order = vec![desc("is_self"), asc("sort_order"), asc("created_at"), asc("member_id")];
+        query.order = vec![
+            desc("is_self"),
+            asc("sort_order"),
+            asc("created_at"),
+            asc("member_id"),
+        ];
         members = client.query(MEMBERS, &query)?;
         let mut query = Query::select(Filter::eq("kitchen_id", kitchen_id.as_str()));
         query.order = vec![asc("created_at"), asc("slot_name")];
@@ -119,8 +133,12 @@ pub fn ensure<H: Host + ?Sized>(host: &H) -> Result<String> {
     let mut query = Query::insert(values(vec![("kitchen_id", json!(kitchen_id))]));
     query.conflict = Conflict::Ignore;
     client.query(KITCHENS, &query)?;
-    let stored = kitchen_row(host)?.ok_or_else(|| Error::new("Kitchen not visible after insert"))?;
-    let kitchen_id = stored["kitchen_id"].as_str().ok_or_else(|| Error::new("Invalid kitchen row"))?.to_owned();
+    let stored =
+        kitchen_row(host)?.ok_or_else(|| Error::new("Kitchen not visible after insert"))?;
+    let kitchen_id = stored["kitchen_id"]
+        .as_str()
+        .ok_or_else(|| Error::new("Invalid kitchen row"))?
+        .to_owned();
     let mut query = Query::insert(values(vec![
         ("kitchen_id", json!(kitchen_id)),
         ("member_id", json!(self_id)),
@@ -145,7 +163,10 @@ pub fn update_kitchen<H: Host + ?Sized>(
     if let Some(mode) = pantry_mode {
         set.push(("default_pantry_mode", json!(mode)));
     }
-    Client(host).query(KITCHENS, &Query::update(Filter::eq("kitchen_id", kitchen_id), values(set)))?;
+    Client(host).query(
+        KITCHENS,
+        &Query::update(Filter::eq("kitchen_id", kitchen_id), values(set)),
+    )?;
     Ok(())
 }
 
@@ -164,7 +185,11 @@ pub fn upsert_rule<H: Host + ?Sized>(
         ("usual_time", usual_time.clone()),
     ]));
     query.conflict = Conflict::Update {
-        columns: vec!["owner_user_id".into(), "kitchen_id".into(), "slot_name".into()],
+        columns: vec![
+            "owner_user_id".into(),
+            "kitchen_id".into(),
+            "slot_name".into(),
+        ],
         values: values(vec![
             ("solo_weekdays", json!(weekdays)),
             ("usual_time", usual_time.clone()),
@@ -175,7 +200,11 @@ pub fn upsert_rule<H: Host + ?Sized>(
     Ok(())
 }
 
-pub fn add_member<H: Host + ?Sized>(host: &H, kitchen_id: &str, mut fields: Vec<(&str, Value)>) -> Result<Value> {
+pub fn add_member<H: Host + ?Sized>(
+    host: &H,
+    kitchen_id: &str,
+    mut fields: Vec<(&str, Value)>,
+) -> Result<Value> {
     let mut query = Query::select(Filter::eq("kitchen_id", kitchen_id));
     query.order = vec![desc("sort_order")];
     query.limit = Some(1);
@@ -185,23 +214,41 @@ pub fn add_member<H: Host + ?Sized>(host: &H, kitchen_id: &str, mut fields: Vec<
         .and_then(|row| row["sort_order"].as_i64())
         .unwrap_or(0);
     let id = host.call("context", "uuid", "new", json!({}))?["id"].clone();
-    fields.extend([("kitchen_id", json!(kitchen_id)), ("member_id", id), ("sort_order", json!(top.max(0) + 1))]);
+    fields.extend([
+        ("kitchen_id", json!(kitchen_id)),
+        ("member_id", id),
+        ("sort_order", json!(top.max(0) + 1)),
+    ]);
     let rows = Client(host).query(MEMBERS, &Query::insert(values(fields)))?;
-    let row = rows.first().ok_or_else(|| Error::new("Member was not stored"))?;
+    let row = rows
+        .first()
+        .ok_or_else(|| Error::new("Member was not stored"))?;
     Ok(member_view(row, vec![]))
 }
 
 /// `None` when no member with this id is visible to the person.
-pub fn update_member<H: Host + ?Sized>(host: &H, member_id: &str, mut fields: Vec<(&str, Value)>) -> Result<Option<Value>> {
+pub fn update_member<H: Host + ?Sized>(
+    host: &H,
+    member_id: &str,
+    mut fields: Vec<(&str, Value)>,
+) -> Result<Option<Value>> {
     fields.push(("updated_at", json!(context(host)?.1)));
-    let rows = Client(host).query(MEMBERS, &Query::update(Filter::eq("member_id", member_id), values(fields)))?;
+    let rows = Client(host).query(
+        MEMBERS,
+        &Query::update(Filter::eq("member_id", member_id), values(fields)),
+    )?;
     Ok(rows.first().map(|row| member_view(row, vec![])))
 }
 
 /// False when the member is missing or is the self member, whose row is never deleted.
 pub fn remove_member<H: Host + ?Sized>(host: &H, member_id: &str) -> Result<bool> {
     let filter = Filter::And {
-        filters: vec![Filter::eq("member_id", member_id), Filter::eq("is_self", false)],
+        filters: vec![
+            Filter::eq("member_id", member_id),
+            Filter::eq("is_self", false),
+        ],
     };
-    Ok(!Client(host).query(MEMBERS, &Query::delete(filter))?.is_empty())
+    Ok(!Client(host)
+        .query(MEMBERS, &Query::delete(filter))?
+        .is_empty())
 }

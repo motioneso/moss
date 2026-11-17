@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use access_context::AccessContext;
-use tokio_postgres::{Client, NoTls};
 use safety_core::db::{Database, RuntimeRole};
+use tokio_postgres::{Client, NoTls};
 use uuid::Uuid;
 
 pub struct Fixture {
@@ -45,7 +45,14 @@ impl Fixture {
                 .unwrap();
             (root, db)
         });
-        Self { rt, root, db, a, b, admin }
+        Self {
+            rt,
+            root,
+            db,
+            a,
+            b,
+            admin,
+        }
     }
     pub fn access(&self, actor: Uuid) -> AccessContext {
         AccessContext::new(actor, "meals-proof")
