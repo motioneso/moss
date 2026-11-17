@@ -98,7 +98,7 @@ impl World {
     fn visible(&self, actor: Uuid, table: &str) -> i64 {
         self.f.rt.block_on(async {
             let cx = DataContext::open(&self.f.db, &self.f.access(actor)).await.unwrap();
-            if table.ends_with("finance_bank_links") || table.ends_with("finance_link_sessions") {
+            if table.ends_with("finance_bank_links") || table.ends_with("finance_link_sessions") || table.contains("finance_shared_") {
                 cx.db().batch_execute(&format!("SET LOCAL ROLE {}", moss_module_host::database::runtime_role("finance"))).await.unwrap();
             }
             cx.db().query_one(&format!("SELECT count(*) FROM {table}"), &[]).await.unwrap().get(0)
@@ -129,6 +129,7 @@ impl World {
     fn forged_mirror_write(&self, actor: Uuid, owner: Uuid) -> bool {
         self.f.rt.block_on(async {
             let cx = DataContext::open(&self.f.db, &self.f.access(actor)).await.unwrap();
+            cx.db().batch_execute(&format!("SET LOCAL ROLE {}", moss_module_host::database::runtime_role("finance"))).await.unwrap();
             cx.db().execute(
                 "INSERT INTO app.finance_shared_accounts (owner_user_id, account_id, name, type, balance_cents, iso_currency, updated_at) VALUES ($1,'forged','x','depository',1,'USD','x')",
                 &[&owner],
@@ -138,6 +139,7 @@ impl World {
     fn mirror_rows_changed_by(&self, actor: Uuid) -> u64 {
         self.f.rt.block_on(async {
             let cx = DataContext::open(&self.f.db, &self.f.access(actor)).await.unwrap();
+            cx.db().batch_execute(&format!("SET LOCAL ROLE {}", moss_module_host::database::runtime_role("finance"))).await.unwrap();
             let updated = cx.db().execute("UPDATE app.finance_shared_accounts SET name='hijacked'", &[]).await.unwrap();
             let deleted = cx.db().execute("DELETE FROM app.finance_shared_transactions", &[]).await.unwrap();
             updated + deleted
