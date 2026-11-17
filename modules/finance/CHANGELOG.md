@@ -1,5 +1,15 @@
 # Finance package
 
+## 0.4.0
+
+- You can plan bills that repeat, change one coming bill, put it back to its plan, and record a bill as paid.
+- Moss suggests bills it finds in your saved spending, and you can dismiss a suggestion.
+- You can set monthly, weekly, refill or balance targets for a category, and fund targets from what is ready to assign.
+- Several categories can share one flexible pool with one total.
+- You can set money aside for a manual credit card payment each month.
+- The activity record of these changes holds ids, months and kinds only. It does not store amounts, names or dates.
+- Undoing a change, shared accounts, reports and the screens are not part of this package yet.
+
 ## 0.3.0
 
 - You can choose your budget currency once. It cannot be changed afterwards.

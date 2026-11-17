@@ -2,9 +2,9 @@
   "schemaVersion": 2,
   "id": "finance",
   "name": "Finance",
-  "description": "Private money accounts and transactions. You can list your accounts, add manual accounts and transactions, connect a bank and pull its balances and transactions every six hours or on demand, sort and review transactions, set rules, split, add notes, import a CSV bank file, and plan a monthly budget with drafts. Bills, targets and the screens are not built yet.",
+  "description": "Private money accounts and transactions. You can list your accounts, add manual accounts and transactions, connect a bank and pull its balances and transactions every six hours or on demand, sort and review transactions, set rules, split, add notes, import a CSV bank file, and plan a monthly budget with drafts. It also plans bills, sets targets, shares a flexible pool and reserves money for card payments. The screens are not built yet.",
   "publisher": "Moss",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
@@ -26,7 +26,15 @@
         "app.finance_balance_snapshots",
         "app.finance_budget_assignments",
         "app.finance_budget_drafts",
-        "app.finance_budget_draft_lines"
+        "app.finance_budget_draft_lines",
+        "app.finance_targets",
+        "app.finance_bill_plans",
+        "app.finance_bill_occurrences",
+        "app.finance_bill_adjustments",
+        "app.finance_bill_suggestion_dismissals",
+        "app.finance_flex_policies",
+        "app.finance_card_policies",
+        "app.finance_card_assignments"
       ]
     },
     {
@@ -58,7 +66,21 @@
         "finance.budget.apply",
         "finance.budget.draft.build",
         "finance.budget.draft.update",
-        "finance.budget.draft.start"
+        "finance.budget.draft.start",
+        "finance.bill.create",
+        "finance.bill.decide",
+        "finance.bill.stop",
+        "finance.bill.clear",
+        "finance.bill.adjust",
+        "finance.bill.adjust-reset",
+        "finance.bills.suggestions.dismiss",
+        "finance.bill.entry-record",
+        "finance.target.set",
+        "finance.target.remove",
+        "finance.targets.fund",
+        "finance.flex.configure",
+        "finance.flex.assign",
+        "finance.card-reserve.save"
       ]
     },
     {
@@ -499,6 +521,171 @@
       "method": "POST",
       "path": "/finance/chat/budget/draft/start",
       "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/finance/bills",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/finance/bills/suggestions",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/bills/entry-preview",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/flex/preview",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/cards/preview",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/bills",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/bills",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/bills/decide",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/bills/decide",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/bills/stop",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/bills/stop",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/bills/clear",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/bills/clear",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/bills/adjust",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/bills/adjust",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/bills/adjust-reset",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/bills/adjust-reset",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/bills/suggestions/dismiss",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/bills/suggestions/dismiss",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/bills/entry-record",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/bills/entry-record",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/targets",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/targets",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/targets/remove",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/targets/remove",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/targets/fund",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/targets/fund",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/flex/configure",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/flex/configure",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/flex/assign",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/flex/assign",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/cards/save",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/cards/save",
+      "signIn": true
     }
   ],
   "tools": {
@@ -620,6 +807,82 @@
     },
     "finance.budget.draft.start": {
       "description": "Turn the open draft into this month's budget amounts.",
+      "risk": "write"
+    },
+    "finance.bills.read": {
+      "description": "Read the bill plans and the coming bills for a month.",
+      "risk": "read"
+    },
+    "finance.bills.suggestions": {
+      "description": "Suggest bills found in saved spending.",
+      "risk": "read"
+    },
+    "finance.bill.entry-preview": {
+      "description": "Preview the entry that would record a bill as paid.",
+      "risk": "read"
+    },
+    "finance.flex.preview": {
+      "description": "Preview a flexible pool for a month.",
+      "risk": "read"
+    },
+    "finance.card-reserve.preview": {
+      "description": "Preview a card payment reserve.",
+      "risk": "read"
+    },
+    "finance.bill.create": {
+      "description": "Create a bill plan.",
+      "risk": "write"
+    },
+    "finance.bill.decide": {
+      "description": "Confirm or skip a bill suggestion.",
+      "risk": "write"
+    },
+    "finance.bill.stop": {
+      "description": "Stop a bill plan.",
+      "risk": "write"
+    },
+    "finance.bill.clear": {
+      "description": "Clear a bill occurrence.",
+      "risk": "write"
+    },
+    "finance.bill.adjust": {
+      "description": "Change the amount or date of one coming bill.",
+      "risk": "write"
+    },
+    "finance.bill.adjust-reset": {
+      "description": "Put one coming bill back to its plan.",
+      "risk": "write"
+    },
+    "finance.bills.suggestions.dismiss": {
+      "description": "Dismiss a bill suggestion.",
+      "risk": "write"
+    },
+    "finance.bill.entry-record": {
+      "description": "Record a bill as paid with a manual entry.",
+      "risk": "write"
+    },
+    "finance.target.set": {
+      "description": "Set a category target.",
+      "risk": "write"
+    },
+    "finance.target.remove": {
+      "description": "Remove a category target.",
+      "risk": "destructive"
+    },
+    "finance.targets.fund": {
+      "description": "Fund targets from what is ready to assign.",
+      "risk": "write"
+    },
+    "finance.flex.configure": {
+      "description": "Choose which categories share the flexible pool.",
+      "risk": "write"
+    },
+    "finance.flex.assign": {
+      "description": "Set the total of the flexible pool.",
+      "risk": "write"
+    },
+    "finance.card-reserve.save": {
+      "description": "Enroll a card or set its payment reserve.",
       "risk": "write"
     }
   },
@@ -881,6 +1144,130 @@
           "code": "category_not_in_draft",
           "class": "validation",
           "description": "That category is not in the draft. To add a line, give its name, group and amount."
+        }
+      ]
+    },
+    {
+      "id": "finance.bills",
+      "description": "A person can plan bills that repeat, adjust one coming bill, accept or dismiss suggestions found in saved spending, and record a bill as paid.",
+      "errors": [
+        {
+          "code": "bill_entry_conflict",
+          "class": "validation",
+          "description": "The bill entry clashes with an existing one."
+        },
+        {
+          "code": "bill_entry_duplicate",
+          "class": "validation",
+          "description": "That bill is already recorded."
+        },
+        {
+          "code": "bill_already_reviewed",
+          "class": "validation",
+          "description": "That bill was already reviewed."
+        },
+        {
+          "code": "bill_entry_account",
+          "class": "validation",
+          "description": "Pick a manual account in the budget currency."
+        },
+        {
+          "code": "bill_entry_period",
+          "class": "validation",
+          "description": "That date falls in a reconciled period."
+        },
+        {
+          "code": "bill_entry_overflow",
+          "class": "validation",
+          "description": "The amount is too large."
+        },
+        {
+          "code": "bill_not_due",
+          "class": "validation",
+          "description": "That bill is not due yet."
+        },
+        {
+          "code": "invalid_bill_projection",
+          "class": "validation",
+          "description": "The bill dates cannot be worked out."
+        },
+        {
+          "code": "invalid_occurrence",
+          "class": "validation",
+          "description": "That coming bill does not exist."
+        }
+      ]
+    },
+    {
+      "id": "finance.targets",
+      "description": "A person can set monthly, weekly, refill or balance targets, and fund them from what is ready to assign.",
+      "errors": [
+        {
+          "code": "stale_target_guidance",
+          "class": "validation",
+          "description": "The target guidance is out of date. Refresh and try again."
+        },
+        {
+          "code": "target_unavailable",
+          "class": "validation",
+          "description": "That category cannot have a target."
+        },
+        {
+          "code": "insufficient_ready",
+          "class": "validation",
+          "description": "Not enough is ready to assign."
+        },
+        {
+          "code": "current_month_required",
+          "class": "validation",
+          "description": "Funding works on the current month only."
+        },
+        {
+          "code": "invalid_selection",
+          "class": "validation",
+          "description": "Pick between 1 and 20 different targets."
+        }
+      ]
+    },
+    {
+      "id": "finance.flex-pool",
+      "description": "A person can let several categories share one pool, set the pool total, and leave it again.",
+      "errors": [
+        {
+          "code": "flex_member",
+          "class": "validation",
+          "description": "That category is in the flexible pool."
+        },
+        {
+          "code": "flex_active",
+          "class": "validation",
+          "description": "The flexible pool is active for that month."
+        },
+        {
+          "code": "flex_target",
+          "class": "validation",
+          "description": "A flexible category cannot have a target."
+        },
+        {
+          "code": "future_assignments",
+          "class": "validation",
+          "description": "Later months already have amounts."
+        },
+        {
+          "code": "open_draft",
+          "class": "validation",
+          "description": "Finish the open draft first."
+        }
+      ]
+    },
+    {
+      "id": "finance.card-reserves",
+      "description": "A person can set aside money for a manual credit card payment, month by month.",
+      "errors": [
+        {
+          "code": "card_ledger_review_required",
+          "class": "validation",
+          "description": "The card ledger needs repair before reserves work."
         }
       ]
     }
