@@ -136,6 +136,12 @@ pub fn counts<H: Host + ?Sized>(host: &H) -> Result<Value> {
         expected += scheduled(&day_slots(&meds, &logged, schedule::previous_day(today, back), zone)).count() as i64;
     }
     let total = expected.max(taken + skipped);
-    let rate = if total > 0 { json!(((taken as f64 / total as f64) * 100.0).round() / 100.0) } else { Value::Null };
+    let rate = if total > 0 {
+        let share = ((taken as f64 / total as f64) * 100.0).round() / 100.0;
+        // 0 and 1 are written without a decimal point, as the old server wrote them.
+        if share.fract() == 0.0 { json!(share as i64) } else { json!(share) }
+    } else {
+        Value::Null
+    };
     Ok(json!({"windowDays": WINDOW_DAYS, "scheduled": total, "taken": taken, "skipped": skipped, "prn": prn, "adherenceRate": rate}))
 }
