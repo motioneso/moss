@@ -2,6 +2,8 @@
 
 ## 0.1.0
 
+- Insights work through the same route as before: up to five lines from your last 30 days, worked out in code, nothing sent to a model.
+- Two chat tools work as before: your 20 newest check-ins, and seven-day medication counts. With assistant access off, both answer only that access is off.
 - Therapy notes work through the same routes as before: list, save and delete. Each note can point to one of your own check-ins or one of the six core feelings.
 - Export works through the same request, status and download steps. It can now include check-ins and therapy notes, and only the chosen categories appear in the page.
 - Medications and insights cannot be chosen for an export yet. A finished export is kept for 24 hours and then reads as expired.

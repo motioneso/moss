@@ -4,6 +4,68 @@ Part of https://github.com/motioneso/moss/issues/4027. This report follows the p
 `2026-11-13-rust-phase5-meals-finance-wellness-and-rest-plan.md`. Each part adds its own section
 here as it is built.
 
+## Wellness package: insights and chat tools (part 16)
+
+Card JS-303. Part of [issue 4027](https://github.com/motioneso/moss/issues/4027). Release note
+Category: N/A.
+
+### What was built
+
+The insights route and the two chat tools. No screens.
+
+- **Insights.** Up to five lines worked out in code from the last 30 days: most-logged feeling,
+  hardest weekday, strongest weekday, sad or angry check-ins that carry a note, and medication
+  adherence. Nothing is returned under 7 check-ins or when the first one is under a week old.
+  Percentages round half up, as before. Nothing reaches a model.
+- **Recent check-ins tool.** The 20 newest check-ins with feeling, intensity, mood index and note.
+- **Medication adherence tool.** Seven-day counts only. It never lists a medicine.
+- **Consent.** With assistant access off, both tools answer the fixed refusal and read no row. The
+  check happens before any read.
+- **Approval.** Both tools are declared read-only in the manifest. The host applies the person's
+  approval choice before the package runs. The package never accepts an approval flag.
+- **Same data.** No new database file and no new crate.
+- **App map.** The manifest lists the insights and chat-tool features with their error text.
+
+### Differences from the old code (on purpose)
+
+- **Extra tool input is refused.** Both tools take no input. The old tools ignored extras.
+- **Whole numbers print without a decimal point** in the tool answers, as the old server printed them.
+- **Energy-trend note and focus signal are not brought back.** Both write into the assistant's prompt,
+  which this package cannot do (no model port, plan section 5.4). Part 13 left this to part 16.
+- **No "outside content" mark on tool answers.** The host's tool declaration has no way to say it.
+- **The insights route is not gated by consent**, matching the old route.
+- **Insights read at most 1000 check-ins** in the 30-day window, the host's row cap.
+
+### Proof
+
+| Claim                                       | Evidence                                                                                                                                                                               |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Consent off returns no private value        | Guest test plants a marker in a check-in, turns access off, calls both tools and sees only the refusal and no database call. Seen failing with the consent check removed               |
+| Insights and tools match the old code       | The old tool code and old insights route run on the same fixtures as the installed package. Both tools, the refusal and the insights route (5 lines) match with ids and times masked   |
+| A second person reads nothing               | Real database test as three people. Other person and admin get empty tool answers and no insights. With the owner rule opened the tool and insights leak, with it restored they do not |
+| Marker never reaches a log, job or activity | Note text is absent from every queue and log table and from the activity record. Guest test checks a host failure never echoes it. Seen failing with the error echo restored           |
+| Native and WebAssembly                      | 8 new guest tests run natively. The same code is built as a component and loaded by the real host, where 2 new installed tests pass                                                    |
+| Real server, other device                   | Live test over https on a non-loopback address. Both tools refused with access off and answered with it on, insights worked for two people, and the server log held no marker          |
+
+Commands (expected exit code 0, both through `scripts/run-gate.sh`):
+
+```bash
+scripts/run-gate.sh start --gate test:rust-wellness
+scripts/run-gate.sh start --gate test:rust-wellness-live
+```
+
+### Not proven or not built
+
+- **Medicines and insights in the selective export** still answer "not available yet".
+- **Approval prompts.** The host's approval rule was exercised in the live and installed runs only
+  by approving each call. A person's own choice to skip prompts was not run.
+- **Chat screens and the model's use of the tools** are not part of this package.
+- **Old energy-trend note and focus signal** are not built (see above).
+- **Time zone for insights.** The package reads the person's zone from the host. A person whose
+  saved zone changes mid-window was not tested.
+- **Shared Rust toolchain folders.** Builds used a copy of the cargo and rustup folders under the
+  task scratch folder, and the build output folder was task-owned. All were deleted at the end.
+
 ## Goals chat tools and Today data (part 5)
 
 Task JS-290, Card 604. Release note Category: N/A.
