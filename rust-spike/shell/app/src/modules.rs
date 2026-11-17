@@ -547,6 +547,8 @@ pub fn routes(slot: Slot, web: PathBuf) -> Router {
         .route("/api/me/weather-location", any(dispatch))
         .route("/api/me/weather-location/{leaf}", any(dispatch))
         .route("/api/me/weather-unit", any(dispatch))
+        .route("/api/news/images/{id}", any(dispatch))
+        .route("/api/news/favicon/{domain}", any(dispatch))
         .route("/api/modules/navigation", get(navigation))
         .route("/api/modules/{module}/screen", get(screen))
         .route("/module-ui/{module}/{digest}/{*path}", get(ui_asset))
