@@ -333,9 +333,14 @@ fn rust_answers_match_the_old_routes_step_for_step() {
     let (mut old, mut new) = (old, new);
     old.iter_mut().for_each(replay::mask);
     new.iter_mut().for_each(replay::mask);
-    for (n, (o, r)) in old.iter().zip(&new).enumerate() {
-        assert_eq!(r, o, "step {n}: {}", steps[n]);
-    }
+    let wrong: Vec<String> = old
+        .iter()
+        .zip(&new)
+        .enumerate()
+        .filter(|(_, (o, r))| o != r)
+        .map(|(n, (o, r))| format!("step {n}: {}\n  old: {o}\n  new: {r}", steps[n]))
+        .collect();
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
     println!("PASS parity: {} steps match the old routes", steps.len());
 
     // Steps that use a created check-in's id, run on each side with its own id.

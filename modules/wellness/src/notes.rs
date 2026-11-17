@@ -57,12 +57,19 @@ fn parse(body: &Value) -> std::result::Result<Draft, String> {
     let linked_checkin_id = match map.get("linkedCheckinId") {
         None | Some(Value::Null) => None,
         Some(Value::String(id)) => Some(id.clone()),
-        Some(_) => return Err("linkedCheckinId must be a UUID string or null".into()),
+        // The server's schema step turns numbers and booleans into text before the handler runs.
+        Some(Value::Number(n)) => Some(n.to_string()),
+        Some(Value::Bool(b)) => Some(b.to_string()),
+        Some(_) => {
+            return Err("body/linkedCheckinId must be string, body/linkedCheckinId must be null, body/linkedCheckinId must match a schema in anyOf".into())
+        }
     };
     let linked_emotion = match map.get("linkedEmotion") {
         None | Some(Value::Null) => None,
         Some(Value::String(core)) if CORES.contains(&core.as_str()) => Some(core.clone()),
-        Some(_) => return Err(format!("linkedEmotion must be one of {}", CORES.join(", "))),
+        Some(_) => {
+            return Err("body/linkedEmotion must be equal to one of the allowed values, body/linkedEmotion must be null, body/linkedEmotion must match a schema in anyOf".into())
+        }
     };
     Ok(Draft { body: text, linked_checkin_id, linked_emotion })
 }

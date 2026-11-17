@@ -56,8 +56,8 @@ fn bad_note_bodies_get_the_old_wording() {
         (json!([]), "Expected JSON object body"),
         (json!({}), "body must have required property 'body'"),
         (json!({"body":"   "}), "body is required"),
-        (json!({"body":"a","linkedCheckinId":5}), "linkedCheckinId must be a UUID string or null"),
-        (json!({"body":"a","linkedEmotion":"glad"}), "linkedEmotion must be one of happy, sad, fear, anger, disgust, surprise"),
+        (json!({"body":"a","linkedCheckinId":{"x":1}}), "body/linkedCheckinId must be string, body/linkedCheckinId must be null, body/linkedCheckinId must match a schema in anyOf"),
+        (json!({"body":"a","linkedEmotion":"glad"}), "body/linkedEmotion must be equal to one of the allowed values, body/linkedEmotion must be null, body/linkedEmotion must match a schema in anyOf"),
     ];
     for (body, message) in cases {
         let (status, out) = note(&f, body.clone());
