@@ -171,7 +171,7 @@ fn unknown_tool_and_api_are_refused() {
     assert!(moss_web_research_module::handle(
         &host,
         "tool",
-        r#"{"tool":"web.read","parameters":{}}"#
+        r#"{"tool":"web.nothing","parameters":{}}"#
     )
     .is_err());
     assert!(
