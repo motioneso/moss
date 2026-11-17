@@ -5,13 +5,14 @@
 //! before it leaves this file. Any failure gives no body and the screen shows the summary.
 use crate::public_cache::{self as cache, Store};
 use crate::espn;
-use moss_module_sdk::{Host, Result};
+use moss_module_sdk::Host;
 use serde_json::Value;
 
 const CONTENT_BASE: &str = "https://content.core.api.espn.com/v1/sports/news";
 const BODY_CHAR_CAP: usize = 900;
 const MAX_BODY_PARAGRAPHS: usize = 3;
 const SIX_HOURS_MS: i64 = 6 * 60 * 60 * 1000;
+const TEN_MINUTES_MS: i64 = 10 * 60 * 1000;
 
 /// Real article ids are numbers of four or more digits. The ids a list gets for a story with no
 /// id of its own are positions (one to three digits), and those name no article.
@@ -172,8 +173,8 @@ fn utf16_len(text: &str) -> usize {
     text.encode_utf16().count()
 }
 
-/// ESPN story HTML as plain text: the first three paragraphs, markup and placeholders gone, and
-/// at most 900 characters, cut at a word and ended with an ellipsis.
+/// Turns ESPN story HTML into plain text. It keeps the first three paragraphs, drops markup and
+/// placeholders, and clips to 900 characters at a word with an ellipsis.
 pub fn sanitize(story: Option<&str>) -> String {
     let Some(story) = story.filter(|s| !s.is_empty()) else { return String::new() };
     let mut found: Vec<String> = vec![];
@@ -211,28 +212,29 @@ pub fn sanitize(story: Option<&str>) -> String {
     format!("{}\u{2026}", end.trim_end())
 }
 
-/// What a body read found. A failed read is not remembered, so the next overview tries again.
+/// What a body read found. A failed read is remembered for ten minutes as an empty body, so a
+/// story whose article cannot be read does not call ESPN on every overview.
 pub struct Body {
     pub text: String,
-    /// True when ESPN could not be read, so the page is marked as partly out of date.
-    pub failed: bool,
 }
 
-/// The sanitised body of one article, from the shared copy when it is under six hours old.
-pub fn body<H: Host + ?Sized>(host: &H, article_id: &str) -> Result<Body> {
+/// The sanitised body of one article, from the shared copy when it is fresh. Any failure,
+/// including a storage or clock error, gives an empty body and the screen shows the summary.
+pub fn body<H: Host + ?Sized>(host: &H, article_id: &str) -> Body {
+    let empty = || Body { text: String::new() };
     if !is_article_id(article_id) {
-        return Ok(Body { text: String::new(), failed: false });
+        return empty();
     }
-    let now = cache::now_ms(host)?;
-    let mut store = Store::load(host, cache::ARTICLE_BODY)?;
+    let Ok(now) = cache::now_ms(host) else { return empty() };
+    let Ok(mut store) = Store::load(host, cache::ARTICLE_BODY) else { return empty() };
     if let Some(Value::String(hit)) = store.get(article_id, now) {
-        return Ok(Body { text: hit.clone(), failed: false });
+        return Body { text: hit.clone() };
     }
-    let Ok(data) = espn::fetch_json(host, &format!("{CONTENT_BASE}/{article_id}")) else {
-        return Ok(Body { text: String::new(), failed: true });
+    let (text, ttl) = match espn::fetch_json(host, &format!("{CONTENT_BASE}/{article_id}")) {
+        Ok(data) => (sanitize(data["headlines"][0]["story"].as_str()), SIX_HOURS_MS),
+        Err(_) => (String::new(), TEN_MINUTES_MS),
     };
-    let text = sanitize(data["headlines"][0]["story"].as_str());
-    store.put(article_id, Value::String(text.clone()), SIX_HOURS_MS, now);
+    store.put(article_id, Value::String(text.clone()), ttl, now);
     store.save(host);
-    Ok(Body { text, failed: false })
+    Body { text }
 }

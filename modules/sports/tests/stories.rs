@@ -76,21 +76,22 @@ fn a_featured_story_body_is_read_once_sanitised_and_shared() {
 }
 
 #[test]
-fn a_failed_body_read_leaves_the_summary_and_is_tried_again() {
+fn a_failed_body_read_leaves_the_summary_and_is_not_retried_at_once() {
     let host = league_host();
     host.espn.article_fails.set(true);
     let (status, body) = host.get("/overview", &[]);
     assert_eq!(status, 200);
     assert!(bodies(&body).is_empty());
-    assert_eq!(body["degraded"], true);
+    assert_eq!(body["degraded"], false);
     let featured = body["leagueNews"].as_array().unwrap().iter().flat_map(|g| g["headlines"].as_array().unwrap().clone()).count();
     assert!(featured > 0);
     assert_eq!(content_fetches(&host).len(), 1);
-    // Nothing was remembered, so a working read the next time fills the body in.
+    // The failure is remembered for a while, so the next load does not call ESPN again.
     host.espn.article_fails.set(false);
     *host.espn.article_story.borrow_mut() = Some(recorded_story());
     let (_, again) = host.get("/overview", &[]);
-    assert_eq!(bodies(&again).len(), 1);
+    assert!(bodies(&again).is_empty());
+    assert_eq!(content_fetches(&host).len(), 1);
 }
 
 #[test]

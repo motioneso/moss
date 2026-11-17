@@ -294,9 +294,7 @@ pub fn overview<H: Host + ?Sized>(host: &H) -> Result<Response> {
     feeds.save(host);
     let body = match &feature {
         Some((id, _, true)) => {
-            let read = article::body(host, id)?;
-            degraded |= read.failed;
-            read.text
+            article::body(host, id).text
         }
         _ => String::new(),
     };
