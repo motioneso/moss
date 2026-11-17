@@ -264,7 +264,9 @@ fn one_refresh_stores_at_most_24_new_pictures_and_the_rest_are_not_misses() {
     let mut found = Vec::new();
     for s in 0..3u32 {
         let mut src = template.clone();
-        src["id"] = json!(format!("00000000-0000-4000-8000-0000000001{s:02}"));
+        let id = format!("00000000-0000-4000-8000-0000000001{s:02}");
+        src["id"] = json!(id);
+        f.tables.borrow_mut().entry(SOURCES.into()).or_default().push(src.clone());
         let stories: Vec<Story> = (0..12u32)
             .map(|i| {
                 let n = s * 12 + i + 1;
@@ -278,7 +280,11 @@ fn one_refresh_stores_at_most_24_new_pictures_and_the_rest_are_not_misses() {
     assert_eq!(found, vec![12, 12, 0]);
     let jpgs = f.vault_names(A).iter().filter(|n| n.ends_with(".jpg")).count();
     assert_eq!(jpgs, 24);
-    assert_eq!(row(&f)["photo_miss_streak"], 1, "skipped stories are not misses");
+    let third = f.rows(SOURCES).into_iter().find(|r| r["id"] == "00000000-0000-4000-8000-000000000102").unwrap();
+    assert_eq!(third["photo_miss_streak"], 1, "skipped stories are not misses");
+    assert_eq!(third["photo_rule_state"], "in_use");
+    let first = f.rows(SOURCES).into_iter().find(|r| r["id"] == "00000000-0000-4000-8000-000000000100").unwrap();
+    assert_eq!(first["photo_miss_streak"], 0, "a source that found photos resets its streak");
 }
 
 #[test]
@@ -303,4 +309,16 @@ fn a_failed_save_counts_as_one_miss_and_the_pass_carries_on() {
     assert_eq!(run(&f, &src, &stories), 0);
     assert!(f.fetched().contains(&"https://news.example.com/two.png".to_owned()), "the second story was still tried");
     assert_eq!(row(&f)["photo_miss_streak"], 2, "a refresh with only misses adds one to the streak");
+}
+
+#[test]
+fn a_time_skip_after_the_model_answered_records_no_relook_day() {
+    let f = Src::new();
+    let (src, stories) = stale_setup(&f);
+    f.reply(RULE_REPLY);
+    // The model reply uses up the time, so the checking downloads are skipped.
+    f.model_cost.set(20_000);
+    run(&f, &src, &stories);
+    assert_eq!(f.prompts().len(), 1);
+    assert!(row(&f)["photo_relook_at"].is_null(), "a time skip is not a no from the model");
 }

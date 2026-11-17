@@ -57,29 +57,42 @@ fn prompt(pages: &[Page], confirmed: &[String]) -> String {
 }
 
 /// Time a model reply may need. The model is not started with less than this left.
-pub const MODEL_MARGIN_MS: i64 = 15_000;
+const MODEL_MARGIN_MS: i64 = 15_000;
+
+/// What a rule proposal came to.
+pub enum Proposal {
+    Rule(Rule),
+    /// No usable rule. The model said no, was unreachable, or its rule did not work.
+    No,
+    /// Time ran out before the answer was known. This is not a "no".
+    Skipped,
+}
 
 /// A rule that works, or nothing. It must find a usable photo on at least two of the pages, and
 /// each photo must download and decode. An unreachable model gives nothing.
-pub fn propose<H: Host + ?Sized>(host: &H, budget: &Budget, pages: &[Page], confirmed: &[String]) -> Result<Option<Rule>> {
+pub fn propose<H: Host + ?Sized>(host: &H, budget: &Budget, pages: &[Page], confirmed: &[String]) -> Result<Proposal> {
     if pages.len() < 2 {
-        return Ok(None);
+        return Ok(Proposal::No);
     }
     if !budget.may_start_within(host, MODEL_MARGIN_MS)? {
-        return Ok(None);
+        return Ok(Proposal::Skipped);
     }
     let answer = host.call("ai", "generate", "structured", json!({"prompt": prompt(pages, confirmed), "maxOutputTokens": 1000}));
-    let Ok(answer) = answer else { return Ok(None) };
-    let Some(rule) = answer["text"].as_str().and_then(reply_value).and_then(|v| validate(&v, confirmed)) else { return Ok(None) };
+    let Ok(answer) = answer else { return Ok(Proposal::No) };
+    let Some(rule) = answer["text"].as_str().and_then(reply_value).and_then(|v| validate(&v, confirmed)) else { return Ok(Proposal::No) };
     let mut working = 0;
     for page in pages {
         let page_host = Url::parse(&page.url).map(|u| u.hostname.to_lowercase()).unwrap_or_default();
         let Some(photo) = apply(&rule, &page.html, &page.url).and_then(|u| usable_candidate(&u, &page_host, confirmed)) else { continue };
-        if let Fetched::Image(body) = download(host, budget, &photo)? {
-            if reencode(host, &body)?.is_ok() {
-                working += 1;
+        match download(host, budget, &photo)? {
+            Fetched::Image(body) => {
+                if reencode(host, &body)?.is_ok() {
+                    working += 1;
+                }
             }
+            Fetched::Skipped => return Ok(Proposal::Skipped),
+            Fetched::Failed => {}
         }
     }
-    Ok((working >= 2).then_some(rule))
+    Ok(if working >= 2 { Proposal::Rule(rule) } else { Proposal::No })
 }

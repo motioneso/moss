@@ -2,7 +2,7 @@
 //! record of whether its photos work. No network call starts when the call is close to its time
 //! limit, and a story left undone for that reason is tried again at the next refresh.
 use crate::photo::{apply, photo_key, share_image, usable_candidate, validate, Rule};
-use crate::photo_discovery::{propose, read_pages};
+use crate::photo_discovery::{propose, read_pages, Proposal};
 use crate::photo_store as store;
 use crate::public_cache::now_ms;
 use crate::source_web::get_up_to;
@@ -219,13 +219,10 @@ fn relook<H: Host + ?Sized>(host: &H, budget: &Budget, source: &Value, stories: 
     if pages.len() < 2 {
         return Ok(());
     }
-    // Too little time is not a "no" from the model, so no relook day is recorded.
-    if !budget.may_start_within(host, crate::photo_discovery::MODEL_MARGIN_MS)? {
-        return Ok(());
-    }
     match propose(host, budget, &pages, &confirmed)? {
-        Some(rule) => write(host, id, vec![("photo_rule_json", rule.to_value()), ("photo_rule_state", json!("in_use")), ("photo_miss_streak", json!(0)), ("photo_relook_at", Value::Null), ("photo_last_outcome", json!("working"))]),
-        None => write(host, id, vec![("photo_relook_at", json!(iso(now + RELOOK_MS)))]),
+        Proposal::Rule(rule) => write(host, id, vec![("photo_rule_json", rule.to_value()), ("photo_rule_state", json!("in_use")), ("photo_miss_streak", json!(0)), ("photo_relook_at", Value::Null), ("photo_last_outcome", json!("working"))]),
+        Proposal::No => write(host, id, vec![("photo_relook_at", json!(iso(now + RELOOK_MS)))]),
+        Proposal::Skipped => Ok(()),
     }
 }
 

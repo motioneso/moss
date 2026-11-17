@@ -39,6 +39,8 @@ pub struct Src {
     pub fetch_cost: Cell<i64>,
     /// Makes every photo save fail.
     pub put_fails: Cell<bool>,
+    /// How many milliseconds a model reply takes.
+    pub model_cost: Cell<i64>,
     ids: Cell<u32>,
 }
 
@@ -57,6 +59,7 @@ impl Src {
             vault: RefCell::new(BTreeMap::new()),
             fetch_cost: Cell::new(0),
             put_fails: Cell::new(false),
+            model_cost: Cell::new(0),
             ids: Cell::new(1),
         }
     }
@@ -283,6 +286,7 @@ impl Host for Src {
                 if replies.is_empty() {
                     return Err(Error::new("needs_config"));
                 }
+                self.advance(self.model_cost.get());
                 return Ok(json!({"text": replies.remove(0)}));
             }
             _ => return Err(Error::new("Unexpected host call")),
