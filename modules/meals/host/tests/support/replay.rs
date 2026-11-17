@@ -52,3 +52,29 @@ pub fn old_tool(actor: uuid::Uuid, role: &str, tool: &str, parameters: Value) ->
     );
     serde_json::from_slice(&output.stdout).unwrap()
 }
+
+/// The old log tools and estimate job. Returns the reply and the jobs the old code queued.
+pub fn old_log(actor: uuid::Uuid, role: &str, tool: &str, parameters: Value, answer: Option<&str>) -> (Value, Value) {
+    let mut child = Command::new("pnpm")
+        .args(["exec", "tsx", "modules/meals/tools/log-oracle.ts"])
+        .current_dir(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.."))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(
+            json!({"actor":actor,"role":role,"tool":tool,"parameters":parameters,"answer":answer})
+                .to_string()
+                .as_bytes(),
+        )
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert!(output.status.success(), "Legacy log tools failed: {}", String::from_utf8_lossy(&output.stderr));
+    let whole: Value = serde_json::from_slice(&output.stdout).unwrap();
+    (whole["reply"].clone(), whole["queued"].clone())
+}

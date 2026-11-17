@@ -1145,6 +1145,159 @@ target. Neither was a code fault.
 - **No tracking card** for JS-310 was found in Vikunja after three searches.
 - **Release note** is not applicable.
 
+## Meals food log and estimates (part 31)
+
+### What existed before this part
+
+Parts 28 to 30 gave Meals the kitchen, household, plans, lists and pantry. There was no food
+log in Rust and no estimate job.
+
+### What was built
+
+- **Six log tools.** List, summarize, add, re-estimate, correct and delete.
+- **Estimate job.** Adding an entry queues one job that asks the model for the foods in the
+  meal and a figure for each nutrient. The answer is checked against a fixed schema first.
+- **Estimate states.** Waiting, needs details, estimated and failed. An entry shows as waiting,
+  with no figures, until the model answers.
+- **Unknown is not zero.** A figure the model did not give stays empty. Totals add up only the
+  foods that know that figure. A figure outside its ceiling is dropped as unknown.
+- **Times.** An entry keeps its calendar day and zone offset from the day it was made. A local
+  time is read in the person's zone and refused when a clock change skipped or repeated it.
+- **Manifest and changelog** carry the six tools, the three log tables, the job, the chat
+  feature and the longer model call limit (30 seconds). The app map comes from the manifest.
+
+### Differences from the old code (on purpose)
+
+- The job queue key is built from the entry, its revision and its last-change time, so a retry
+  after a failure gets a fresh key. The old key was one fixed text per revision. The job
+  parameters are named `entry-id` and `revision`; the old code used `entryId` and `revision`.
+- There are no database transactions. Writes compare the revision first, then add rows by fixed
+  id. A crash between the two leaves a waiting entry that a re-estimate recovers.
+- If the queue refuses the job, the entry is marked failed at once. The old code left it waiting.
+- A delete or other tool call with an id that is not a valid id gets the plain "no log entry"
+  refusal. The old code leaked a raw database error.
+- A local time inside a clock-change gap or repeat is refused. The old code guessed.
+
+### Proof
+
+- Native guest tests pass: 44 unit tests and 22 log tests, with model answers checked against
+  the schema, unknown staying empty, bad answers failing, model down then retry, stale
+  revisions, queue down, clock-change refusal, and two people kept apart.
+- Real database: the new tools match the old handlers step for step (31 steps including the
+  estimate job), a second person sees and changes nothing in the three tables with the owner
+  rule seen failing when removed, and a planted word is in no job row or activity row.
+- The sum of an entry's foods equals the stored total, and unknown stays empty in the table.
+- Live run on the real server over real HTTPS: a real model (gpt-5.6-luna through the local
+  proxy) estimated a real entry in 12 seconds. The entry showed as waiting with no figures
+  first, then as an estimate of 294 kcal. The model key is not in the server log and the second
+  person sees no entry. The manifest asks for the 30 second call limit.
+
+From the repo root, through the gate script:
+
+```
+scripts/run-gate.sh start --gate test:rust-meals
+```
+
+```
+scripts/run-gate.sh start --gate test:rust-meals-live
+```
+
+Both ended with exit code 0. Earlier runs failed for test faults, none in the module: no
+installed web packages, the Rust tools not on the path, two log tests taking each other's
+queued jobs, a comparison test that ran only the last job, and a live run where the proxy's
+Claude sign-in had expired.
+
+### Not proven or not built
+
+- **Known gaps found in review, kept as the old code behaved.** Re-estimating an entry that is
+  still waiting reuses its queue key, so a lost first job is not replaced until the entry fails.
+  A correction that empties the food list marks the entry estimated with no figures. A blank
+  idempotency key is accepted. A crash between the revision change and the estimate rows leaves
+  an estimated entry with no rows. A model call over 30 seconds is cut off by the host and the
+  entry stays waiting. Correcting only the description of an entry that needs details does not
+  queue a new estimate.
+- **Voice and photo capture** only record the capture kind. Nothing reads audio or images.
+- **The default clock time for a meal type** is tested natively only, because the old-code
+  comparison would depend on the real clock.
+- **No screens** were built.
+- **Release note** is not applicable.
+
+## Meals cooking and undo (part 32)
+
+### What existed before this part
+
+Parts 28 to 31 gave Meals the kitchen, household, plans, lists, pantry and food log. Lists and
+the pantry already saved an undo record for a removed line, a removed pantry item and a Bought,
+but nothing could use it, and there was no way to mark a meal cooked or rate a recipe.
+
+### What was built
+
+- **Three tools.** Mark cooked, rate a recipe and undo.
+- **Mark cooked.** Takes what the recipe used, scaled to the servings and each eater's portion,
+  out of the pantry. It never takes an item below zero, skips staples and lines with no amount,
+  and returns what changed, an undo token and an offer to log the portion. A meal can be marked
+  cooked once.
+- **Ratings.** One to five stars for one or more household members, or null to clear. One star
+  keeps that recipe out of later plans for that person. Plan and meal views now show the marks.
+- **Undo.** Works for every write that saves a record: removed line, removed pantry item,
+  Bought and cooked. It puts back what the write changed. A pantry amount edited after the write
+  is left alone and counted as skipped. A second undo of the same record is refused.
+- **Manifest and changelog** carry the three tools, the ratings table and the chat feature. The
+  app map comes from the manifest.
+
+### Differences from the old code (on purpose)
+
+- There are no database transactions. The undo record is saved before the write, the meal is
+  claimed with a guarded update, and the undone mark is written last. A crash part way leaves a
+  record that a retry finishes, because every restore can be repeated safely.
+- If two cook requests race for one meal, the loser deletes its own undo record and gets the
+  "already marked cooked" refusal.
+
+### Proof
+
+- Native guest tests pass, including pantry maths with scaling, refusals, undo for each write
+  kind, undo refused for unknown and other people's records, and rating input checks.
+- Real database: the three tools match the old handlers step for step (50 steps, covering
+  ratings, cooking, undo of every kind, and an edited pantry amount being skipped). Undo for each
+  of the four write kinds returns the pantry, list and meal to the state before the write.
+  A second person and the admin cannot undo, cook or rate someone else's records. The owner rule
+  on the ratings and undo tables was seen failing when removed. A planted word is in no job row
+  and no activity row, and the control that leaks it into activity was seen failing the test.
+- Live run on the real server over real HTTPS from a non-loopback address: the person rated a
+  meal, cooked it (milk went from 5 cups to 4), the second person's undo was refused, the
+  person's undo put the milk back to 5, and a second undo was refused. An untrusted origin was
+  refused. The earlier log, list and pantry live checks still pass.
+
+From the repo root, through the gate script:
+
+```
+scripts/run-gate.sh start --gate test:rust-meals
+```
+
+```
+scripts/run-gate.sh start --gate test:rust-meals-live
+```
+
+Both ended with exit code 0. Earlier runs failed for test faults, none in the module: no
+installed web packages in the worktree, a marker count that also counted earlier runs in the
+shared gate database, and a live-run expectation that used the wrong cup count.
+
+### Not proven or not built
+
+- **Swap choices** on a recipe view are always empty. Swapping is not part of this port yet.
+- **Servings editing and favourites editing** are part 33.
+- **Plan rows in the live run** were written straight into the database, because writing a plan
+  needs a model. Every call after that went through the real server.
+- **The second person in the live run** is stopped by the approval rule before the tool runs.
+  The owner-only refusal itself is proven in the database test.
+- **A crash between marking a meal cooked and updating the pantry** leaves the meal cooked with
+  the pantry unchanged and no undo token, and a retry is refused as already cooked. The other
+  order would leave a reduced pantry for an uncooked meal, which is worse. Found in review, kept.
+- **A pantry edit made between the read and the write** of a cook is overwritten. The old code
+  had the same gap.
+- **No screens** were built.
+- **Release note** is not applicable.
+
 ## Finance transactions (part 22)
 
 ### What was built
@@ -1257,3 +1410,115 @@ Both end with exit code 0 when waited on with `scripts/run-gate.sh wait --follow
 - The old handlers were not run side by side with the new ones.
 - No screens were built.
 - Release note is not applicable.
+
+## Finance budgets (part 23)
+
+### What was built
+
+- Setup: choose the budget currency once (it cannot change afterwards) and say whether old budget data may be left behind. Repeating the same setup changes nothing.
+- Status for a month: money left to assign, each category's assigned, spent and available amounts, with unspent money carried forward and overspending taken out of next month's pool. Transfers between a person's own accounts are left out, including a matched pair within three days.
+- Assign and move: set what a category gets for a month, move money between categories or from the unassigned pool, and apply up to 20 changes together. Each save carries the review the person was looking at.
+- Drafts: build a draft budget from the last three complete months of stored transactions (monthly average, planned amount rounded up to the next five dollars, steady charges grouped as Bills, income as the middle monthly figure). A draft can be read, edited line by line, and started once.
+- The assistant's writes use `/finance/chat/budget/...` routes, each needing the host's one-use approval. The screen routes sit under `/finance/budget/...`. Package version is 0.3.0, with the new tables, routes, tools, risk levels, features and errors in the manifest.
+
+### Proof
+
+| Check                                                                                     | Result                                                                                                                                        |
+| ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Native guest tests (40 unit, budget 19, plus the older suites)                            | passed                                                                                                                                        |
+| Package tests and the real component built as WebAssembly, run against the real host      | passed, including the four new table grants and the refused tables                                                                            |
+| Draft figures come from stored records                                                    | passed in the guest tests and against the real database: 30000, 31234 and 32000 became 31078 and 31500                                        |
+| An uncertain save saves nothing and says so                                               | a stale review gets a 409 with "Refresh and review"; rows and revision are unchanged. A draft start that fails part way rolls back everything |
+| Two people, real database: second person and an admin read and change none of the budget  | passed. With row security switched off the same check fails (RED), and passes with it back on                                                 |
+| Private text searched for in job rows, host call logs, activity rows and the queue tables | none found; a planted leak is caught by the same scan, and a control that puts amounts into budget activity makes the test fail               |
+| Live run: real server, real HTTPS on a non-loopback address, no response rewriting        | passed: setup, assign, a stale review refused (409), a draft from stored rows, chat route refused without approval, second person sees none   |
+| Moss reachable from another device                                                        | same live run: non-loopback address, certificate checked, untrusted origin refused, sign-in                                                   |
+
+From the repo root, through the gate script:
+
+```
+scripts/run-gate.sh start --gate test:rust-finance
+```
+
+```
+scripts/run-gate.sh start --gate test:rust-finance-live
+```
+
+Both ended with exit code 0. The first package gate run failed twice before it passed: the worktree had no dependencies installed, and then a test module lacked an import. Neither touched product behaviour.
+
+### Deliberate differences from the old code
+
+- The budget-apply queue is gone. Applying changes runs inside the request in one database transaction, so no job payload exists that could carry private content.
+- Budget activity rows hold the month and category ids only. They hold no amounts and no undo record, so undoing a budget change is not built.
+- The review check is a policy revision plus a fingerprint of the budget columns, computed by the module. A save runs one conditional update on the revision and refuses on zero rows.
+- A chat route answers with the refusal's own status (409, 404 or 400) instead of always 200.
+
+### Not proven or not built
+
+- A concurrent writer between the module's fingerprint read and the revision update is guarded by the update itself, but that narrow window was not exercised with two real simultaneous writers.
+- Flex pools, targets and target funding, card reserves and bills (part 24), shared accounts and reports (part 25), and category archiving are not built.
+- Draft build and start do not refuse while flex pools are active, because flex pools do not exist yet.
+- Bank balance history written by bank sync (part 21) is not used by the budget yet. Budget figures come from the ledger and the saved balance snapshots only.
+- Route parity with the old handlers is checked through ported messages, status codes and shapes in the guest tests. The old handlers were not run side by side with the new ones.
+- Review notes left as they are: starting a draft that was discarded after a new setup returns a host error instead of a plain refusal (nothing is saved); a draft edit from the screen is recorded as changed by Moss; a move that is refused has no test showing the stored rows stay unchanged; a refund posted to the income category lowers the pool twice; draft months are counted from all transactions, not only the budget currency.
+- No screens were built.
+
+## Finance bills, targets, flexible pool and card reserves (part 24)
+
+### What was built
+
+- Bills: plan a bill that repeats (once, weekly, every two weeks, monthly, yearly), read the coming bills for a window of up to a year, confirm or skip one, stop or clear a plan, and change the amount or date of one coming bill and put it back. Moss also suggests bills it finds in saved spending, and a suggestion can be dismissed. A bill can be recorded as paid with a manual entry after a preview.
+- Targets: monthly, weekly, refill and balance targets per category, with progress and a funding step that fills up to 20 targets from what is ready to assign. A target can be removed.
+- Flexible pool: preview, turn on or off, and set the total of one pool shared by several categories. The pool feeds the ready-to-assign figure and the budget status.
+- Card reserves: enroll a manual credit card and set aside money each month for its payment, with a preview. The reserves feed the ready-to-assign figure and the budget status.
+- Screen routes sit under `/finance/...` and the assistant's writes under `/finance/chat/...`, each needing the host's one-use approval. Package version is 0.4.0, with the tables, routes, tools, risk levels, features and errors in the manifest.
+
+### Proof
+
+| Check                                                                                      | Result                                                                                                                                                              |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Native guest tests (67 unit tests, 21 new route tests, plus the older suites)              | passed                                                                                                                                                              |
+| Package tests and the real component built as WebAssembly, run against the real host       | passed, including the new table grants and a refused table                                                                                                          |
+| Target, weekday, bill and card figures                                                     | checked with fixtures taken from the old code's tests; the old handlers were not run side by side                                                                   |
+| An old review saves nothing                                                                | a repeated bill save with the old review gets a 409 and writes no row, in the guest tests, the real database and the live run                                       |
+| Two people, real database: second person and an admin read and change none of part 24 rows | passed. With row security switched off the same check fails (RED: the admin saw exactly one row in each of seven part 24 tables) and passes with it back on (GREEN) |
+| Private text searched for in job rows, activity rows, queue tables and host calls          | none found; a planted leak is caught by the same scan, and a control that puts the bill name into the bill activity row makes the test fail                         |
+| Live run: real server, real HTTPS on a non-loopback address, no response rewriting         | passed: bill, target, pool preview, stale review refused (409), suggestions, chat route refused without approval, second person sees none                           |
+| Moss reachable from another device                                                         | same live run: non-loopback address, certificate checked, untrusted origin refused, sign-in                                                                         |
+
+From the repo root, through the gate script, with cargo on the path and dependencies installed in the worktree:
+
+```
+scripts/run-gate.sh start --gate test:rust-finance
+```
+
+```
+scripts/run-gate.sh start --gate test:rust-finance-live
+```
+
+Both ended with exit code 0. Earlier runs failed on setup problems only (no dependencies installed, cargo not on the path, an old test that expected the new tables to be refused, and a wrong guess in the new live check about the pool preview status).
+
+### Deliberate differences from the old code
+
+- Activity rows for bills, targets, the pool and card reserves hold ids, months and kinds only. The old code also logged amounts and weekdays, so those are gone.
+- No undo records are written for funding, moves or assigns. Undo is part 25.
+- Sorting uses byte order, not the old locale order.
+- The check that stops a draft from starting while the pool is active runs after the review check.
+- The old check in category archiving that blocks archiving a pooled category does not exist yet, because category archiving is not built.
+- Bill entry checks only future entries on the account, not the wider account-lifecycle ledger check.
+- Any eligibility failure in a save is reported as an old review (409), where the old code sometimes gave separate wording.
+- The old module had no per-tool HTTP routes, so these routes are new. Reads that need whole numbers or lists (pool, card and bill entry previews) are POST routes, because GET query values arrive as text.
+
+### Not proven or not built
+
+- Route parity with the old handlers is checked through ported messages, status codes and shapes in the guest tests. The old handlers were not run side by side with the new ones.
+- Weekly, refill and balance target progress is covered by the ported unit fixtures, not by a live run.
+- Flex configure, flex assign, card enroll and card funding were exercised in the guest tests against an in-memory host. The real database proof covers card enrolment rows only. The full flexible pool set-up was not run through the live server.
+- Bill suggestions built from real charges, and dismissing one, are covered by the ported unit fixtures but not by a route test.
+- Stopping a bill accepts an end date before its start date, and plan ids with capital letters behave differently between record and the other bill routes. Neither is fixed.
+- Suggestion dismissals are not in the real-database privacy test. Dismissing a bill suggestion saves without a review check, as the old code did. The review check also ignores bill names and dismissals, so a rename in another tab does not make a review stale.
+- Recording a bill payment makes three writes (balance, transaction, occurrence). They are atomic because the host runs a whole request in one database transaction (proved for part 23). The in-memory test host has no such rollback.
+- Funding targets, bill entry record and bill suggestions beyond a read were not exercised live.
+- A concurrent writer between the review read and the revision update is guarded by the update itself and was not tried with two real simultaneous writers.
+- Undo (part 25), shared accounts, reports and category archiving are not built.
+- No screens were built.

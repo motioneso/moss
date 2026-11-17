@@ -1,12 +1,12 @@
 //! The four kitchen and household tools. The trusted host runs `handle` only after applying the
 //! person's approval policy; `run` is the signed-in transport that asks the host to do so.
 use crate::input::{self, coded, invalid, Checked, Fields, InputError};
-use crate::{kitchen, plans, shopping, stock, util};
+use crate::{cooking, kitchen, log, plans, shopping, stock, undo, util};
 use moss_module_sdk::{Host, Response, Result};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-pub const TOOLS: [&str; 15] = [
+pub const TOOLS: [&str; 24] = [
     "meals.kitchen.get",
     "meals.kitchen.save",
     "meals.household.save",
@@ -22,6 +22,15 @@ pub const TOOLS: [&str; 15] = [
     "meals.list.clear",
     "meals.pantry.get",
     "meals.pantry.edit",
+    "meals.log.list",
+    "meals.log.summarize",
+    "meals.log.add",
+    "meals.log.reestimate",
+    "meals.log.correct",
+    "meals.log.delete",
+    "meals.meal.cooked",
+    "meals.meal.rate",
+    "meals.undo",
 ];
 
 #[derive(Deserialize)]
@@ -169,6 +178,15 @@ fn call<H: Host + ?Sized>(host: &H, tool: &str, parameters: &Value) -> Result<Ch
         "meals.list.clear" => shopping::list_clear(host, &input)?,
         "meals.pantry.get" => stock::get(host, &input)?,
         "meals.pantry.edit" => stock::edit(host, &input)?,
+        "meals.log.list" => log::list(host, &input)?,
+        "meals.log.summarize" => log::summarize(host, &input)?,
+        "meals.log.add" => log::add(host, &input)?,
+        "meals.log.reestimate" => log::reestimate(host, &input)?,
+        "meals.log.correct" => log::correct(host, &input)?,
+        "meals.log.delete" => log::delete(host, &input)?,
+        "meals.meal.cooked" => cooking::cooked(host, &input)?,
+        "meals.meal.rate" => cooking::rate(host, &input)?,
+        "meals.undo" => undo::undo(host, &input)?,
         _ => return Err(moss_module_sdk::Error::new("Unknown Meals tool")),
     })
 }

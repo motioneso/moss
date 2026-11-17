@@ -8,7 +8,7 @@ use moss_module_sdk::{
 };
 use serde_json::{json, Value};
 use std::cell::{Cell, RefCell};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 
 pub const A: &str = "00000000-0000-4000-8000-00000000000a";
 pub const B: &str = "00000000-0000-4000-8000-00000000000b";
@@ -21,7 +21,32 @@ pub struct Fake {
     pub db_failure: RefCell<Option<String>>,
     /// When set, the host's tool port refuses to run a tool.
     pub tools_refuse: Cell<bool>,
+    /// The model's answers, taken in order. An empty queue makes the model call fail.
+    pub model: RefCell<VecDeque<std::result::Result<String, String>>>,
+    /// When set, the host's job queue refuses to take a job.
+    pub queue_refuses: Cell<bool>,
+    /// Jobs taken as (queue, parameters, idempotency key).
+    pub queued: RefCell<Vec<(String, Value, String)>>,
+    /// Minutes east of UTC at an instant, for the person's time zone.
+    pub zone: Cell<fn(i64) -> i64>,
     ids: Cell<u32>,
+}
+
+/// A zone with a fixed offset of eight hours west of UTC.
+pub fn pacific_standard(_: i64) -> i64 {
+    -480
+}
+
+/// A zone that skips 02:00-03:00 on 2026-03-08 and repeats 01:00-02:00 on 2026-11-01, as the
+/// United States Pacific zone does.
+pub fn pacific(ms: i64) -> i64 {
+    let spring = 1_772_964_000_000; // 2026-03-08T10:00:00Z
+    let autumn = 1_793_523_600_000; // 2026-11-01T09:00:00Z
+    if (spring..autumn).contains(&ms) {
+        -420
+    } else {
+        -480
+    }
 }
 
 impl Fake {
@@ -32,6 +57,10 @@ impl Fake {
             calls: RefCell::new(vec![]),
             db_failure: RefCell::new(None),
             tools_refuse: Cell::new(false),
+            model: RefCell::new(VecDeque::new()),
+            queue_refuses: Cell::new(false),
+            queued: RefCell::new(vec![]),
+            zone: Cell::new(pacific_standard),
             ids: Cell::new(0),
         }
     }
@@ -112,6 +141,7 @@ fn defaults(table: &str, at: &str) -> Value {
             json!({"solo_weekdays":[],"usual_time":null,"created_at":at,"updated_at":at})
         }
         "app.meals_favourites" => json!({"created_at":at}),
+        "app.meals_ratings" => json!({"rated_at":at}),
         "app.meals_shopping_lists" => json!({"plan_id":null,"created_at":at,"updated_at":at}),
         "app.meals_shopping_list_items" => json!({"line_key":null,"quantity":null,"unit":null,
             "purchase_quantity":null,"purchase_unit":null,"store_section":"other","manual":false,
@@ -122,6 +152,15 @@ fn defaults(table: &str, at: &str) -> Value {
         }
         "app.meals_staples" => json!({"created_at":at}),
         "app.meals_undo_actions" => json!({"undone_at":null,"created_at":at}),
+        "app.meals_log_entries" => {
+            json!({"serving_note":null,"estimate_revision":1,"created_at":at,"updated_at":at})
+        }
+        "app.meals_log_estimates" => json!({"calories_kcal":null,"protein_g":null,
+            "carbohydrates_g":null,"fat_g":null,"fiber_g":null,"sugar_g":null,"sodium_mg":null,
+            "missing_details":null,"clarification_question":null,"created_at":at}),
+        "app.meals_log_estimate_items" => json!({"portion_note":null,"calories_kcal":null,
+            "protein_g":null,"carbohydrates_g":null,"fat_g":null,"fiber_g":null,"sugar_g":null,
+            "sodium_mg":null,"created_at":at}),
         "app.meals_plans" | "app.meals_plan_days" | "app.meals_planned_meals"
         | "app.meals_planned_meal_eaters" | "app.meals_recipes"
         | "app.meals_recipe_ingredients" => json!({"created_at":at}),
@@ -139,6 +178,10 @@ fn matches(row: &Value, filter: &Filter) -> bool {
         Filter::Compare { column, op, value } => match op {
             Compare::Eq => &row[column.as_str()] == value,
             Compare::Ne => &row[column.as_str()] != value,
+            Compare::Ge => order_of(&row[column.as_str()], value).is_ge(),
+            Compare::Le => order_of(&row[column.as_str()], value).is_le(),
+            Compare::Gt => order_of(&row[column.as_str()], value).is_gt(),
+            Compare::Lt => order_of(&row[column.as_str()], value).is_lt(),
             _ => panic!("fake host does not model this comparison"),
         },
     }
@@ -157,7 +200,7 @@ fn clash(table: &str, a: &Value, b: &Value) -> bool {
                 || (same("kitchen_id") && a["is_self"] == true && b["is_self"] == true)
         }
         "app.meals_meal_slot_rules" => same("kitchen_id") && same("slot_name"),
-        "app.meals_favourites" => same("member_id") && same("recipe_id"),
+        "app.meals_favourites" | "app.meals_ratings" => same("member_id") && same("recipe_id"),
         "app.meals_shopping_lists" => same("list_id"),
         "app.meals_shopping_list_items" => {
             same("line_id")
@@ -170,6 +213,11 @@ fn clash(table: &str, a: &Value, b: &Value) -> bool {
         "app.meals_pantry_items" => same("item_id"),
         "app.meals_staples" => same("staple_id") || (same("kitchen_id") && same("name_key")),
         "app.meals_undo_actions" => same("action_id"),
+        "app.meals_log_entries" => same("entry_id") || same("idempotency_key"),
+        "app.meals_log_estimates" => same("entry_id") && same("revision"),
+        "app.meals_log_estimate_items" => {
+            same("entry_id") && same("revision") && same("item_index")
+        }
         _ => false,
     }
 }
@@ -206,6 +254,30 @@ impl Host for Fake {
                 );
             }
             ("context", "uuid") => return Ok(json!({"id": self.next_id()})),
+            ("context", "local-date") => {
+                let at = parameters["instant"].as_str().and_then(moss_meals_module::util::epoch_ms);
+                let at = at.ok_or_else(|| Error::new("Unreadable instant"))?;
+                let days = parameters["offsetDays"].as_i64().unwrap_or(0);
+                let offset = (self.zone.get())(at);
+                let local = moss_meals_module::moments::iso_from_ms(at + offset * 60_000 + days * 86_400_000);
+                return Ok(json!({"date": &local[..10], "offsetMinutes": offset}));
+            }
+            ("ai", "generate") => {
+                return match self.model.borrow_mut().pop_front() {
+                    Some(Ok(text)) => Ok(json!({"text": text})),
+                    _ => Err(Error::new("The model is unavailable")),
+                };
+            }
+            ("jobs", "enqueue-options") => {
+                if self.queue_refuses.get() {
+                    return Err(Error::new("The job queue is unavailable"));
+                }
+                let key = parameters["idempotencyKey"].as_str().unwrap_or_default().to_owned();
+                self.queued
+                    .borrow_mut()
+                    .push((resource.to_owned(), parameters["params"].clone(), key));
+                return Ok(json!({}));
+            }
             ("tools", "run") if !self.tools_refuse.get() => {
                 return Ok(json!({"data":{"ran":resource}}))
             }
@@ -285,6 +357,20 @@ impl Host for Fake {
                     .drain(..)
                     .partition(|r| r["owner_user_id"] == actor && matches(r, &query.filter));
                 *rows = kept;
+                // A deleted entry takes its estimates and their items with it, as the real
+                // tables' cascading keys do.
+                if resource == "app.meals_log_entries" {
+                    for child in ["app.meals_log_estimates", "app.meals_log_estimate_items"] {
+                        if let Some(children) = tables.get_mut(child) {
+                            children.retain(|c| {
+                                !gone.iter().any(|g| {
+                                    g["owner_user_id"] == c["owner_user_id"]
+                                        && g["entry_id"] == c["entry_id"]
+                                })
+                            });
+                        }
+                    }
+                }
                 Ok(json!(gone))
             }
         }

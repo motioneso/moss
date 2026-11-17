@@ -9,3 +9,5 @@
 - Account export and deletion cover all six tables.
 - The overview, standings and latest-result routes read ESPN. Followed clubs appear as one card each across competitions, and ESPN days follow US Eastern time.
 - Headlines, the gameday hero, news sources, source setup, chat tools and the Sports screens are not part of this package yet.
+- A website with no news feed can get a recipe proposed by the person's AI model. A reply naming a site the person did not confirm is refused, and a recipe saves only after a real replay finds headlines. The module asks for a 30 second call limit so a real model can answer, and reads pages lightly to stay inside its processing budget.
+- Sources are read again without a browser or article text, show healthy, drifted or missing states, and can be retried or rebuilt after a confirmed preview.

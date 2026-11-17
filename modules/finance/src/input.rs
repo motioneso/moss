@@ -136,3 +136,36 @@ pub fn account_kind(kind: &str) -> (&'static str, String) {
         _ => ("other", kind.to_owned()),
     }
 }
+
+/// An integer from `min` to `max`.
+pub fn ranged(input: &Map<String, Value>, key: &str, min: i64, max: i64) -> Result<i64, Refusal> {
+    let value = int(input, key)?;
+    if !(min..=max).contains(&value) {
+        return Err(invalid(format!("{key} must be an integer from {min} to {max}")));
+    }
+    Ok(value)
+}
+
+/// A calendar date with no limit on how far ahead it is.
+pub fn any_date(input: &Map<String, Value>, key: &str) -> Result<String, Refusal> {
+    let value = required_string(input, key, None)?;
+    if !is_calendar_date(&value) {
+        return Err(invalid(format!("{key} must be a valid calendar date")));
+    }
+    Ok(value)
+}
+
+/// A UUID of version 1 to 8, in either case.
+pub fn is_uuid(value: &str) -> bool {
+    let b = value.as_bytes();
+    let hex = |range: std::ops::Range<usize>| b[range].iter().all(u8::is_ascii_hexdigit);
+    b.len() == 36
+        && [8, 13, 18, 23].iter().all(|&i| b[i] == b'-')
+        && hex(0..8)
+        && hex(9..13)
+        && matches!(b[14], b'1'..=b'8')
+        && hex(15..18)
+        && matches!(b[19].to_ascii_lowercase(), b'8' | b'9' | b'a' | b'b')
+        && hex(20..23)
+        && hex(24..36)
+}

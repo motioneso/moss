@@ -13,10 +13,21 @@ macro_rules! ask {
 }
 
 pub mod accounts;
+pub mod budget;
+pub mod bill_adjust;
+pub mod bill_entry;
+pub mod bill_suggest;
+pub mod bills;
+pub mod budget_write;
 pub mod bank;
+pub mod cards;
 pub mod categories;
 pub mod connect;
 pub mod csv_import;
+pub mod draft;
+pub mod envelope;
+pub mod flex;
+pub mod recurrence;
 pub mod input;
 pub mod ledger;
 pub mod rules;
@@ -25,6 +36,7 @@ pub mod sort_run;
 pub mod splits;
 pub mod sorting;
 pub mod sync;
+pub mod targets;
 pub mod text;
 pub mod tools;
 pub mod transactions;
@@ -92,6 +104,55 @@ fn tool_for(method: &str, path: &str) -> Option<(&'static str, bool)> {
         ("POST", "/finance/chat/transactions/splits") => ("finance.transactions.splits", true),
         ("POST", "/finance/chat/rules/set") => ("finance.rule.set", true),
         ("POST", "/finance/chat/import/apply") => ("finance.import.apply", true),
+        ("GET", "/finance/budget/status") => ("finance.budget.status", false),
+        ("GET", "/finance/budget/draft") => ("finance.budget.draft.get", false),
+        ("POST", "/finance/budget/configure") => ("finance.budget.configure", false),
+        ("POST", "/finance/budget/assign") => ("finance.budget.assign", false),
+        ("POST", "/finance/budget/move") => ("finance.budget.move", false),
+        ("POST", "/finance/budget/apply") => ("finance.budget.apply", false),
+        ("POST", "/finance/budget/draft/build") => ("finance.budget.draft.build", false),
+        ("POST", "/finance/budget/draft/update") => ("finance.budget.draft.update", false),
+        ("POST", "/finance/budget/draft/start") => ("finance.budget.draft.start", false),
+        ("POST", "/finance/chat/budget/configure") => ("finance.budget.configure", true),
+        ("POST", "/finance/chat/budget/assign") => ("finance.budget.assign", true),
+        ("POST", "/finance/chat/budget/move") => ("finance.budget.move", true),
+        ("POST", "/finance/chat/budget/apply") => ("finance.budget.apply", true),
+        ("POST", "/finance/chat/budget/draft/build") => ("finance.budget.draft.build", true),
+        ("POST", "/finance/chat/budget/draft/update") => ("finance.budget.draft.update", true),
+        ("POST", "/finance/chat/budget/draft/start") => ("finance.budget.draft.start", true),
+        ("GET", "/finance/bills") => ("finance.bills.read", false),
+        ("GET", "/finance/bills/suggestions") => ("finance.bills.suggestions", false),
+        ("POST", "/finance/bills/entry-preview") => ("finance.bill.entry-preview", false),
+        ("POST", "/finance/flex/preview") => ("finance.flex.preview", false),
+        ("POST", "/finance/cards/preview") => ("finance.card-reserve.preview", false),
+        ("POST", "/finance/bills") => ("finance.bill.create", false),
+        ("POST", "/finance/bills/decide") => ("finance.bill.decide", false),
+        ("POST", "/finance/bills/stop") => ("finance.bill.stop", false),
+        ("POST", "/finance/bills/clear") => ("finance.bill.clear", false),
+        ("POST", "/finance/bills/adjust") => ("finance.bill.adjust", false),
+        ("POST", "/finance/bills/adjust-reset") => ("finance.bill.adjust-reset", false),
+        ("POST", "/finance/bills/suggestions/dismiss") => ("finance.bills.suggestions.dismiss", false),
+        ("POST", "/finance/bills/entry-record") => ("finance.bill.entry-record", false),
+        ("POST", "/finance/targets") => ("finance.target.set", false),
+        ("POST", "/finance/targets/remove") => ("finance.target.remove", false),
+        ("POST", "/finance/targets/fund") => ("finance.targets.fund", false),
+        ("POST", "/finance/flex/configure") => ("finance.flex.configure", false),
+        ("POST", "/finance/flex/assign") => ("finance.flex.assign", false),
+        ("POST", "/finance/cards/save") => ("finance.card-reserve.save", false),
+        ("POST", "/finance/chat/bills") => ("finance.bill.create", true),
+        ("POST", "/finance/chat/bills/decide") => ("finance.bill.decide", true),
+        ("POST", "/finance/chat/bills/stop") => ("finance.bill.stop", true),
+        ("POST", "/finance/chat/bills/clear") => ("finance.bill.clear", true),
+        ("POST", "/finance/chat/bills/adjust") => ("finance.bill.adjust", true),
+        ("POST", "/finance/chat/bills/adjust-reset") => ("finance.bill.adjust-reset", true),
+        ("POST", "/finance/chat/bills/suggestions/dismiss") => ("finance.bills.suggestions.dismiss", true),
+        ("POST", "/finance/chat/bills/entry-record") => ("finance.bill.entry-record", true),
+        ("POST", "/finance/chat/targets") => ("finance.target.set", true),
+        ("POST", "/finance/chat/targets/remove") => ("finance.target.remove", true),
+        ("POST", "/finance/chat/targets/fund") => ("finance.targets.fund", true),
+        ("POST", "/finance/chat/flex/configure") => ("finance.flex.configure", true),
+        ("POST", "/finance/chat/flex/assign") => ("finance.flex.assign", true),
+        ("POST", "/finance/chat/cards/save") => ("finance.card-reserve.save", true),
         _ => return None,
     })
 }

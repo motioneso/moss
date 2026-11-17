@@ -1,6 +1,6 @@
 //! Assistant tools. The host enforces the account's approval policy before a write tool arrives.
 use crate::transactions::Merchant;
-use crate::{accounts, categories, connect, csv_import, input::Refusal, ledger, rules, sort_run, splits, sync, transactions};
+use crate::{accounts, bill_adjust, bill_entry, bill_suggest, bills, budget, budget_write, categories, connect, csv_import, cards, draft, flex, input::Refusal, ledger, rules, sort_run, splits, sync, targets, transactions};
 use moss_module_sdk::{Error, Host, Response, Result};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -23,8 +23,9 @@ pub fn status(refusal: &Refusal) -> u16 {
 fn status_code(code: &str) -> u16 {
     match code {
         "manual_conflict" | "manual_reconciled_period" | "stale_import" | "stale_transaction" | "stale_transactions"
-        | "stale_rules" | "duplicate_name" | "split_transaction" | "linked_transfer" | "amount_mismatch"
-        | "new_merchant" | "merchant_seen" => 409,
+        | "stale_rules" | "stale_budget" | "stale_previous" | "duplicate_name" | "split_transaction" | "linked_transfer" | "amount_mismatch"
+        | "new_merchant" | "merchant_seen" | "bill_entry_conflict" | "bill_entry_duplicate" | "bill_already_reviewed"
+        | "stale_target_guidance" | "flex_member" | "flex_active" | "flex_target" | "future_assignments" | "open_draft" | "insufficient_ready" => 409,
         "manual_unavailable" | "not_found" => 404,
         "bank_unavailable" => 502,
         _ => 400,
@@ -66,6 +67,34 @@ pub fn execute<H: Host + ?Sized>(host: &H, request: Request) -> Result<Value> {
         "finance.import.preview" => Ok(settle(csv_import::preview(host, &request.parameters)?)),
         "finance.import.apply" => Ok(settle(csv_import::apply(host, &request.parameters)?)),
         "finance.sorting.run" => Ok(settle(sort_run::run(host)?)),
+        "finance.budget.status" => Ok(settle(budget::status(host, &request.parameters)?)),
+        "finance.budget.configure" => Ok(settle(budget_write::configure(host, &request.parameters)?)),
+        "finance.budget.assign" => Ok(settle(budget_write::assign(host, &request.parameters)?)),
+        "finance.budget.move" => Ok(settle(budget_write::move_money(host, &request.parameters)?)),
+        "finance.budget.apply" => Ok(settle(budget_write::apply(host, &request.parameters)?)),
+        "finance.budget.draft.build" => Ok(settle(draft::build(host)?)),
+        "finance.budget.draft.get" => Ok(settle(draft::get(host)?)),
+        "finance.budget.draft.update" => Ok(settle(draft::update(host, &request.parameters)?)),
+        "finance.budget.draft.start" => Ok(settle(draft::start(host, &request.parameters)?)),
+        "finance.bills.read" => Ok(settle(bills::read(host, &request.parameters)?)),
+        "finance.bills.suggestions" => Ok(settle(bill_suggest::read(host, &request.parameters)?)),
+        "finance.bills.suggestions.dismiss" => Ok(settle(bill_suggest::dismiss(host, &request.parameters)?)),
+        "finance.bill.create" => Ok(settle(bills::create(host, &request.parameters)?)),
+        "finance.bill.decide" => Ok(settle(bills::decide(host, &request.parameters)?)),
+        "finance.bill.stop" => Ok(settle(bills::stop(host, &request.parameters)?)),
+        "finance.bill.clear" => Ok(settle(bills::clear(host, &request.parameters)?)),
+        "finance.bill.adjust" => Ok(settle(bill_adjust::save(host, &request.parameters)?)),
+        "finance.bill.adjust-reset" => Ok(settle(bill_adjust::reset(host, &request.parameters)?)),
+        "finance.bill.entry-preview" => Ok(settle(bill_entry::preview(host, &request.parameters)?)),
+        "finance.bill.entry-record" => Ok(settle(bill_entry::record(host, &request.parameters)?)),
+        "finance.target.set" => Ok(settle(targets::set(host, &request.parameters)?)),
+        "finance.target.remove" => Ok(settle(targets::remove(host, &request.parameters)?)),
+        "finance.targets.fund" => Ok(settle(targets::fund(host, &request.parameters)?)),
+        "finance.flex.preview" => Ok(settle(flex::preview(host, &request.parameters)?)),
+        "finance.flex.configure" => Ok(settle(flex::configure(host, &request.parameters)?)),
+        "finance.flex.assign" => Ok(settle(flex::assign(host, &request.parameters)?)),
+        "finance.card-reserve.preview" => Ok(settle(cards::preview(host, &request.parameters)?)),
+        "finance.card-reserve.save" => Ok(settle(cards::save(host, &request.parameters)?)),
         _ => Err(Error::new("Unknown Finance tool")),
     }
 }

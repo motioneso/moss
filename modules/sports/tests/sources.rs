@@ -110,10 +110,15 @@ fn each_failure_reason_reaches_the_preview() {
     let f = Src::new();
     f.moved("https://news.example.com/", "https://other.example.org/", "text/html", HOME);
     assert_eq!(reason(&f, "news.example.com"), "policy");
-    // A site with no feed would need the recipe maker, which is not built yet.
+    // A site with no feed goes to the recipe maker; a reply that is no recipe is unsupported.
     let f = Src::new();
     f.page("https://news.example.com/", "text/html", "<html><head><title>No feed</title></head></html>");
+    f.reply("I could not find one.");
     assert_eq!(reason(&f, "news.example.com"), "unsupported");
+    // With no model set up the answer says so instead.
+    let f = Src::new();
+    f.page("https://news.example.com/", "text/html", "<html><head><title>No feed</title></head></html>");
+    assert_eq!(preview(&f, "news.example.com")["status"], "unavailable");
     // A target the person no longer has, or a repeated one, is invalid input.
     let (status, body) = Src::new().route(
         "POST",
@@ -285,6 +290,7 @@ fn a_site_source_is_checked_again_and_a_changed_publisher_is_stale() {
     assert_eq!(plan["status"], "ok", "{plan}");
     assert!(f.fetched().len() > before, "a site source is read again");
     f.moved("https://news.example.com/feed.xml", "https://news.example.com/feed.xml", "application/rss+xml", "<html></html>");
+    f.reply("no recipe");
     let (_, plan) = f.route("POST", "/sources/:id/assignments/preview", &[("id", &id)], body);
     assert_eq!(plan["status"], "rejected", "{plan}");
 }
@@ -376,6 +382,7 @@ fn text_a_person_types_stays_out_of_logs_jobs_and_other_people() {
     let f = Src::new();
     let marked = format!("{}.example.com", MARK.to_lowercase());
     f.page(&format!("https://{marked}/"), "text/html", &format!("<html><head><title>{MARK}</title></head></html>"));
+    f.reply("no recipe");
     let (_, shown) = f.route("POST", "/sources/preview", &[], json!({"url":marked}));
     assert_eq!(shown["reason"], "unsupported");
     // Another person sees none of it and the calls reached only the expected ports.
@@ -383,9 +390,9 @@ fn text_a_person_types_stays_out_of_logs_jobs_and_other_people() {
     let (_, list) = f.route("GET", "/sources", &[], Value::Null);
     assert!(!list.to_string().contains(MARK));
     for (port, operation, resource, parameters) in f.calls.borrow().iter() {
-        assert!(["db", "kv", "context", "fetch"].contains(&port.as_str()), "{port}");
+        assert!(["db", "kv", "context", "fetch", "ai"].contains(&port.as_str()), "{port}");
         assert!(!(resource.contains("activity") || operation.contains("job")));
-        let sink = port != "fetch" && !(port == "db" && operation == "query");
+        let sink = port != "fetch" && port != "ai" && !(port == "db" && operation == "query");
         assert!(!(sink && parameters.to_string().to_lowercase().contains(&MARK.to_lowercase())), "{port}.{operation}.{resource}");
     }
 }

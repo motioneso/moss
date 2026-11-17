@@ -79,7 +79,7 @@ impl World {
         // Rows left by an earlier run in this throwaway database must not reach the marker scan.
         f.rt.block_on(f.root.batch_execute(
             "DO $$ BEGIN IF to_regclass('app.finance_activity') IS NOT NULL THEN \
-             TRUNCATE app.finance_activity, app.finance_transactions, app.finance_accounts CASCADE; END IF; END $$",
+             TRUNCATE app.finance_activity, app.finance_transactions, app.finance_accounts, app.finance_budget_policy, app.finance_budget_assignments, app.finance_budget_drafts, app.finance_budget_draft_lines, app.finance_targets, app.finance_bill_plans, app.finance_bill_occurrences, app.finance_bill_adjustments, app.finance_bill_suggestion_dismissals, app.finance_flex_policies, app.finance_card_policies, app.finance_card_assignments CASCADE; END IF; END $$",
         ))
         .unwrap();
         let dir = tempfile::tempdir().unwrap();
@@ -124,6 +124,13 @@ impl World {
             .dispatch_extended(self.f.access(actor), method, &format!("/api/m/finance{path}"), &body.to_string())
             .unwrap_or_else(|e| panic!("{method} {path}: {e:?}"));
         serde_json::from_str(&text).unwrap()
+    }
+    /// Like `call`, but a host failure comes back as an error value.
+    fn call_raw(&self, actor: Uuid, method: &str, path: &str, body: Value) -> Result<Value, String> {
+        self.app
+            .dispatch_extended(self.f.access(actor), method, &format!("/api/m/finance{path}"), &body.to_string())
+            .map(|t| serde_json::from_str(&t).unwrap())
+            .map_err(|e| format!("{e:?}"))
     }
     /// Rows `actor` can read straight from a table through their own policies.
     fn visible(&self, actor: Uuid, table: &str) -> i64 {
@@ -541,4 +548,244 @@ fn the_chat_bank_routes_need_an_approval_that_is_exact_and_used_once() {
     assert_eq!(w.post(w.f.a, "/finance/chat/connect/start")["status"], 200);
     assert_eq!(w.post(w.f.a, "/finance/chat/connect/start")["status"], 500, "an approval is used once");
     println!("PASS approval: chat bank connect is exact and one-use");
+}
+
+const BUDGET_TABLES: [&str; 4] = [
+    "app.finance_budget_policy",
+    "app.finance_budget_assignments",
+    "app.finance_budget_drafts",
+    "app.finance_budget_draft_lines",
+];
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn the_budget_is_private_drafts_use_stored_records_and_an_uncertain_save_saves_nothing() {
+    const PAYEE: &str = "PLANTED-PAYEE-MARKER-41ac90";
+    let w = World::new();
+    let (a, b) = (w.f.a, w.f.b);
+    let account = w.account(a, Uuid::new_v4(), NAME, 5_000_000)["body"]["id"].as_str().unwrap().to_owned();
+    let configured = w.call(a, "POST", "/finance/budget/configure", json!({"isoCurrency":"USD","acknowledgeLegacy":false}));
+    assert_eq!(configured["status"], 200, "{configured}");
+    let spend = |month: &str, cents: i64, name: &str| {
+        let made = w.call(
+            a,
+            "POST",
+            "/finance/manual/entries",
+            json!({"operationId":Uuid::new_v4().to_string(),"accountId":account,"name":name,"date":format!("{month}-10"),
+                "amountCents":cents,"isoCurrency":"USD","cleared":true,"categoryId":"groceries"}),
+        );
+        assert_eq!(made["status"], 200, "{made}");
+    };
+    for (month, cents) in [("2026-06", 30_000), ("2026-07", 31_234), ("2026-08", 32_000)] {
+        spend(month, cents, PAYEE);
+    }
+
+    // The draft's figures come from those stored rows.
+    let built = w.call(a, "POST", "/finance/budget/draft/build", json!({}));
+    assert_eq!((built["status"].clone(), built["body"]["built"].clone()), (json!(200), json!(true)), "{built}");
+    let draft = w.call(a, "GET", "/finance/budget/draft", Value::Null)["body"].clone();
+    let line = &draft["draft"]["groups"][0]["lines"][0];
+    assert_eq!((line["categoryKey"].clone(), line["basisMonthlyCents"].clone(), line["planCents"].clone()), (json!("groceries"), json!(31_078), json!(31_500)));
+    println!("PASS draft: three stored months of 30000, 31234 and 32000 gave a monthly basis of 31078 and a plan of 31500");
+
+    // A review taken now goes stale when the ledger changes, and the save then writes nothing.
+    let status = w.call(a, "GET", "/finance/budget/status?month=2026-11", Value::Null);
+    let current = status["body"]["currentMonth"].as_str().unwrap().to_owned();
+    let status = w.call(a, "GET", &format!("/finance/budget/status?month={current}"), Value::Null)["body"].clone();
+    let assign = |expected: &Value, cents: i64, previous: i64| {
+        json!({"month":current,"categoryId":"dining","amountCents":cents,"previousCents":previous,
+            "expectedRevision":expected["revision"],"expectedFingerprint":expected["fingerprint"]})
+    };
+    let first = assign(&status, 10_731, 0);
+    spend("2026-08", 700, "Another");
+    let counts = || (w.f.rt.block_on(w.f.root.query_one("SELECT count(*) FROM app.finance_budget_assignments", &[])).unwrap().get::<_, i64>(0),
+        w.f.rt.block_on(w.f.root.query_one("SELECT max(revision) FROM app.finance_budget_policy", &[])).unwrap().get::<_, i64>(0));
+    let before = counts();
+    let stale = w.call(a, "POST", "/finance/budget/assign", first.clone());
+    assert_eq!((stale["status"].clone(), stale["body"]["code"].clone()), (json!(409), json!("stale_budget")), "{stale}");
+    assert_eq!(before, counts(), "a refused save must change no row and not move the revision");
+    println!("PASS uncertain save: the stale review was refused with a 409 and the stored rows and revision stayed as they were");
+
+    // A fresh review saves, and a second save holding the same review is refused.
+    let fresh = w.call(a, "GET", &format!("/finance/budget/status?month={current}"), Value::Null)["body"].clone();
+    let one = assign(&fresh, 10_731, 0);
+    let two = json!({"month":current,"categoryId":"fuel","amountCents":5_000,"previousCents":0,
+        "expectedRevision":fresh["revision"],"expectedFingerprint":fresh["fingerprint"]});
+    assert_eq!(w.call(a, "POST", "/finance/budget/assign", one)["status"], 200);
+    assert_eq!(w.call(a, "POST", "/finance/budget/assign", two)["body"]["code"], "stale_budget");
+    assert_eq!(counts().0, 1);
+
+    // A host failure part way through a start rolls every earlier write back.
+    let draft_id = draft["draft"]["id"].clone();
+    let latest = w.call(a, "GET", "/finance/budget/draft", Value::Null)["body"].clone();
+    w.f.rt.block_on(w.f.root.batch_execute("ALTER TABLE app.finance_budget_assignments ADD CONSTRAINT js309_block CHECK (category_id <> 'groceries') NOT VALID")).unwrap();
+    let before = counts();
+    let broken = w.call_raw(a, "POST", "/finance/budget/draft/start", json!({"draftId":draft_id,"expectedRevision":latest["revision"],"expectedFingerprint":latest["fingerprint"]}));
+    w.f.rt.block_on(w.f.root.batch_execute("ALTER TABLE app.finance_budget_assignments DROP CONSTRAINT js309_block")).unwrap();
+    assert!(broken.is_err() || broken.as_ref().unwrap()["status"] != 200, "the failing start must not succeed: {broken:?}");
+    assert_eq!(before, counts(), "a start that fails part way saves nothing, not even the revision bump");
+    let status: String = w.f.rt.block_on(w.f.root.query_one("SELECT status FROM app.finance_budget_drafts LIMIT 1", &[])).unwrap().get(0);
+    assert_eq!(status, "open");
+    println!("PASS uncertain save: a failure part way through starting the draft left no assignment, no revision change and the draft open");
+
+    // The second person and the admin see none of it.
+    for other in [b, w.f.admin] {
+        for table in BUDGET_TABLES {
+            assert_eq!(w.visible(other, table), 0, "{table}");
+        }
+    }
+    let theirs = w.call(b, "GET", &format!("/finance/budget/status?month={current}"), Value::Null);
+    assert_eq!(theirs["body"]["setupRequired"], true, "{theirs}");
+    assert!(!theirs.to_string().contains("31500") && !theirs.to_string().contains("10731"));
+    let stolen = w.call(b, "POST", "/finance/budget/assign", assign(&fresh, 1, 0));
+    assert!(stolen["status"].as_i64().unwrap() >= 400, "{stolen}");
+    assert_eq!(counts().0, 1);
+    println!("PASS rls: the second person and the admin read no budget rows, see no budget and cannot save into it");
+
+    // With the owner rule removed the same reads fail.
+    let off: String = BUDGET_TABLES.iter().map(|t| format!("ALTER TABLE {t} DISABLE ROW LEVEL SECURITY;")).collect();
+    let on: String = BUDGET_TABLES.iter().map(|t| format!("ALTER TABLE {t} ENABLE ROW LEVEL SECURITY; ALTER TABLE {t} FORCE ROW LEVEL SECURITY;")).collect();
+    w.f.rt.block_on(w.f.root.batch_execute(&off)).unwrap();
+    let open: Vec<i64> = BUDGET_TABLES.iter().map(|t| w.visible(w.f.admin, t)).collect();
+    w.f.rt.block_on(w.f.root.batch_execute(&on)).unwrap();
+    assert!(open.iter().all(|n| *n >= 1), "RED expected: the admin sees budget rows without the rule, saw {open:?}");
+    println!("RED: with row security removed the admin saw {open:?} budget rows");
+    for table in BUDGET_TABLES {
+        assert_eq!(w.visible(w.f.admin, table), 0, "{table}");
+    }
+    println!("GREEN: row security restored, the admin sees 0 budget rows");
+
+    // Private text never reaches the queue, the activity rows, the logs or the activity feed.
+    let tables: Vec<String> = w.f.rt.block_on(async {
+        w.f.root
+            .query(
+                "SELECT table_schema||'.'||table_name FROM information_schema.tables WHERE table_schema IN ('moss_queue','moss_modules') \
+                 OR table_name IN ('moss_activity_detail','moss_error_log','moss_action_audit_log','moss_model_activity_log') OR table_name='finance_activity'",
+                &[],
+            )
+            .await
+            .unwrap()
+            .iter()
+            .map(|r| r.get(0))
+            .collect()
+    });
+    for table in &tables {
+        for text in [PAYEE.to_owned(), NAME.to_owned(), "31078".to_owned(), "31500".to_owned(), "10731".to_owned()] {
+            let hits: i64 = w.f.rt.block_on(w.f.root.query_one(&format!("SELECT count(*) FROM {table} t WHERE to_jsonb(t)::text LIKE '%'||$1||'%'"), &[&text])).unwrap().get(0);
+            assert_eq!(hits, 0, "{table} holds {text}");
+        }
+    }
+    let stored: i64 = w.f.rt.block_on(w.f.root.query_one("SELECT count(*) FROM app.finance_transactions t WHERE to_jsonb(t)::text LIKE '%'||$1||'%'", &[&PAYEE])).unwrap().get(0);
+    assert!(stored >= 3, "the payee marker must be stored in the ledger so the scan can see it");
+    let kinds: Vec<String> = w.f.rt.block_on(w.f.root.query("SELECT DISTINCT kind FROM app.finance_activity WHERE kind LIKE 'budget.%'", &[])).unwrap().iter().map(|r| r.get(0)).collect();
+    assert!(kinds.contains(&"budget.assign".to_owned()) && kinds.contains(&"budget.configure".to_owned()), "{kinds:?}");
+    println!("PASS privacy: scanned {} tables, budget activity rows {kinds:?} hold ids only", tables.len());
+}
+
+const PART24_TABLES: [&str; 7] = [
+    "app.finance_bill_occurrences",
+    "app.finance_bill_adjustments",
+    "app.finance_targets",
+    "app.finance_bill_plans",
+    "app.finance_flex_policies",
+    "app.finance_card_policies",
+    "app.finance_card_assignments",
+];
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn bills_targets_flex_and_card_reserves_are_private_and_leave_no_private_text() {
+    const BILL: &str = "PLANTED-BILL-MARKER-6e0b7d";
+    const CENTS: i64 = 4_271_828;
+    let w = World::new();
+    let (a, b) = (w.f.a, w.f.b);
+    let account = w.account(a, Uuid::new_v4(), NAME, 50_000_000)["body"]["id"].as_str().unwrap().to_owned();
+    let card_op = Uuid::new_v4();
+    let card = w.call(a, "POST", "/finance/manual/accounts", json!({"operationId":card_op.to_string(),"name":"Card","accountType":"credit",
+        "isoCurrency":"USD","cleared":true,"openingDate":"2026-01-01","openingBalanceCents":0}))["body"]["id"].as_str().unwrap().to_owned();
+    let configured = w.call(a, "POST", "/finance/budget/configure", json!({"isoCurrency":"USD","acknowledgeLegacy":false}));
+    assert_eq!(configured["status"], 200, "{configured}");
+    let status = |actor: Uuid| w.call(actor, "GET", "/finance/budget/status?month=2026-11", Value::Null)["body"].clone();
+    let current = status(a)["currentMonth"].as_str().unwrap().to_owned();
+    let review = |extra: Value| {
+        let s = w.call(a, "GET", &format!("/finance/budget/status?month={current}"), Value::Null)["body"].clone();
+        let mut body = json!({"month":current,"expectedRevision":s["revision"],"expectedFingerprint":s["fingerprint"]});
+        for (k, v) in extra.as_object().unwrap() {
+            body[k] = v.clone();
+        }
+        body
+    };
+
+    let bill_id = Uuid::new_v4().to_string();
+    let bill = review(json!({"id":bill_id,"name":BILL,"accountId":account,"categoryId":"groceries",
+        "amountCents":CENTS,"anchorDate":format!("{current}-20"),"cadence":"monthly"}));
+    let made = w.call(a, "POST", "/finance/bills", bill.clone());
+    assert_eq!(made["status"], 200, "{made}");
+    // The same review is now stale, so a second save writes nothing.
+    let again = w.call(a, "POST", "/finance/bills", bill);
+    assert_eq!((again["status"].clone(), again["body"]["code"].clone()), (json!(409), json!("stale_budget")), "{again}");
+    let target = w.call(a, "POST", "/finance/targets", review(json!({"categoryId":"dining","kind":"monthly","amountCents":CENTS})));
+    assert_eq!(target["status"], 200, "{target}");
+    let enrolled = w.call(a, "POST", "/finance/cards/save", review(json!({"accountId":card,"action":"enroll","availableCents":0})));
+    assert_eq!(enrolled["status"], 200, "{enrolled}");
+    let pool = w.call(a, "POST", "/finance/flex/configure", review(json!({"mode":"flex","flexIds":["groceries","transport"],"nonMonthlyIds":[]})));
+    assert_eq!(pool["status"], 200, "{pool}");
+    let due = format!("{current}-20");
+    let moved = w.call(a, "POST", "/finance/bills/adjust", review(json!({"planId":bill_id,"dueDate":due,"plannedDate":format!("{current}-21"),"amountCents":CENTS+1})));
+    assert_eq!(moved["status"], 200, "{moved}");
+    let skipped = w.call(a, "POST", "/finance/bills/decide", review(json!({"planId":bill_id,"dueDate":due,"state":"skipped"})));
+    assert_eq!(skipped["status"], 200, "{skipped}");
+    let listed = w.call(a, "GET", &format!("/finance/bills?from={current}-01&to={current}-28"), Value::Null);
+    assert!(listed.to_string().contains(BILL), "{listed}");
+    let counts: Vec<i64> = PART24_TABLES.iter().map(|t| w.visible(a, t)).collect();
+    assert_eq!(counts, vec![1; PART24_TABLES.len()], "exact rows per table for the owner");
+    println!("PASS bills: a bill, a target and a card reserve were saved, and a repeated save with a stale review was refused with a 409");
+
+    for other in [b, w.f.admin] {
+        for table in PART24_TABLES {
+            assert_eq!(w.visible(other, table), 0, "{table}");
+        }
+    }
+    let theirs = w.call(b, "GET", &format!("/finance/bills?from={current}-01&to={current}-28"), Value::Null);
+    assert!(!theirs.to_string().contains(BILL) && !theirs.to_string().contains("4271828"), "{theirs}");
+    let stolen = w.call(b, "POST", "/finance/targets/remove", json!({"month":current,"categoryId":"dining","expectedRevision":0,"expectedFingerprint":"x"}));
+    assert!(stolen["status"].as_i64().unwrap() >= 400, "{stolen}");
+    println!("PASS rls: the second person and the admin read no bill, target, flexible pool or card rows and cannot change them");
+
+    let off: String = PART24_TABLES.iter().map(|t| format!("ALTER TABLE {t} DISABLE ROW LEVEL SECURITY;")).collect();
+    let on: String = PART24_TABLES.iter().map(|t| format!("ALTER TABLE {t} ENABLE ROW LEVEL SECURITY; ALTER TABLE {t} FORCE ROW LEVEL SECURITY;")).collect();
+    w.f.rt.block_on(w.f.root.batch_execute(&off)).unwrap();
+    let open: Vec<i64> = PART24_TABLES.iter().map(|t| w.visible(w.f.admin, t)).collect();
+    w.f.rt.block_on(w.f.root.batch_execute(&on)).unwrap();
+    assert_eq!(open, vec![1; PART24_TABLES.len()], "RED expected: the admin sees rows without the rule, saw {open:?}");
+    println!("RED: with row security removed the admin saw {open:?} part 24 rows");
+    for table in PART24_TABLES {
+        assert_eq!(w.visible(w.f.admin, table), 0, "{table}");
+    }
+    println!("GREEN: row security restored, the admin sees 0 part 24 rows");
+
+    let tables: Vec<String> = w.f.rt.block_on(async {
+        w.f.root
+            .query(
+                "SELECT table_schema||'.'||table_name FROM information_schema.tables WHERE table_schema IN ('moss_queue','moss_modules') \
+                 OR table_name IN ('moss_activity_detail','moss_error_log','moss_action_audit_log','moss_model_activity_log') OR table_name='finance_activity'",
+                &[],
+            )
+            .await
+            .unwrap()
+            .iter()
+            .map(|r| r.get(0))
+            .collect()
+    });
+    for table in &tables {
+        for text in [BILL.to_owned(), "4271828".to_owned()] {
+            let hits: i64 = w.f.rt.block_on(w.f.root.query_one(&format!("SELECT count(*) FROM {table} t WHERE to_jsonb(t)::text LIKE '%'||$1||'%'"), &[&text])).unwrap().get(0);
+            assert_eq!(hits, 0, "{table} holds {text}");
+        }
+    }
+    let stored: i64 = w.f.rt.block_on(w.f.root.query_one("SELECT count(*) FROM app.finance_bill_plans t WHERE to_jsonb(t)::text LIKE '%'||$1||'%'", &[&BILL])).unwrap().get(0);
+    assert_eq!(stored, 1, "the bill name must be stored in the plan so the scan can see it");
+    let kinds: Vec<String> = w.f.rt.block_on(w.f.root.query("SELECT DISTINCT kind FROM app.finance_activity WHERE kind LIKE 'bill.%' OR kind LIKE 'target.%' OR kind LIKE 'card.%'", &[])).unwrap().iter().map(|r| r.get(0)).collect();
+    assert!(kinds.contains(&"bill.create".to_owned()) && kinds.contains(&"target.set".to_owned()) && kinds.contains(&"card.enroll".to_owned()), "{kinds:?}");
+    println!("PASS privacy: scanned {} tables, part 24 activity rows {kinds:?} hold ids only", tables.len());
 }

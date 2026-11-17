@@ -479,9 +479,108 @@ fn installed_meals_package_serves_routes_from_the_real_server() {
     assert_eq!(status, 200, "{text}");
     let (_, after) = tool("meals.pantry.get", json!({}), false);
     assert!(after.contains(MARK), "clearing the list left the pantry alone");
+    // Cooking, ratings and undo through the same route. The plan and meal rows are set up in the
+    // database because writing a plan needs a model; every call after that goes through the server.
+    let milk = tool("meals.pantry.edit", json!({"action":"add","name":"Milk","quantity":5,"unit":"cup"}), true);
+    assert_eq!(milk.0, 200, "{}", milk.1);
+    let meal_id = runtime.block_on(async {
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        db.batch_execute(&format!(
+            "INSERT INTO app.meals_plans(owner_user_id,kitchen_id,plan_id,start_date,day_count,pantry_mode,idempotency_key)
+               SELECT '{owner}',kitchen_id,md5('live-plan')::uuid,DATE '2026-11-09',1,'prefer','live' FROM app.meals_kitchens WHERE owner_user_id='{owner}';
+             INSERT INTO app.meals_plan_days(owner_user_id,kitchen_id,plan_id,day_id,day_date,status)
+               SELECT '{owner}',kitchen_id,md5('live-plan')::uuid,md5('live-day')::uuid,DATE '2026-11-09','ready' FROM app.meals_kitchens WHERE owner_user_id='{owner}';
+             INSERT INTO app.meals_recipes(owner_user_id,kitchen_id,recipe_id,title,title_key,steps,cook_minutes,base_servings,source)
+               SELECT '{owner}',kitchen_id,md5('live-recipe')::uuid,'Live','live','[\"stir\"]'::jsonb,10,2,'generated' FROM app.meals_kitchens WHERE owner_user_id='{owner}';
+             INSERT INTO app.meals_recipe_ingredients(owner_user_id,kitchen_id,recipe_id,position,original_text,name,name_key,quantity,unit,store_section)
+               SELECT '{owner}',kitchen_id,md5('live-recipe')::uuid,0,'2 cups milk','milk','milk',2,'cup','dairy_eggs' FROM app.meals_kitchens WHERE owner_user_id='{owner}';
+             INSERT INTO app.meals_planned_meals(owner_user_id,kitchen_id,day_id,meal_id,slot_name,slot_position,kind,sharing,status,recipe_id)
+               SELECT '{owner}',kitchen_id,md5('live-day')::uuid,md5('live-meal')::uuid,'dinner',0,'recipe','shared','ready',md5('live-recipe')::uuid FROM app.meals_kitchens WHERE owner_user_id='{owner}';
+             INSERT INTO app.meals_planned_meal_eaters(owner_user_id,kitchen_id,meal_id,member_id,portion)
+               SELECT '{owner}',kitchen_id,md5('live-meal')::uuid,member_id,1 FROM app.meals_household_members WHERE owner_user_id='{owner}' AND is_self;"
+        ))
+        .await
+        .unwrap();
+        db.query_one("SELECT md5('live-meal')::uuid::text", &[]).await.unwrap().get::<_, String>(0)
+    });
+    let (_, kitchen) = tool("meals.kitchen.get", json!({}), true);
+    let me = json_of(&kitchen)["data"]["members"][0]["memberId"].as_str().unwrap().to_owned();
+    let (status, text) = tool("meals.meal.rate", json!({"mealId":meal_id,"ratings":[{"memberId":me,"stars":4}]}), true);
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let (status, text) = tool("meals.meal.cooked", json!({"mealId":meal_id}), true);
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let cooked = json_of(&text);
+    assert_eq!(cooked["data"]["pantryChanges"][0]["after"], 4.0, "{text}");
+    let action = cooked["data"]["undo"]["actionId"].as_str().unwrap().to_owned();
+    let (status, text) = call(Method::POST, "/meals/tools/run", Some(&other), Some(json!({"tool":"meals.undo","parameters":{"actionId":action}})));
+    assert_eq!(status, 403, "the second person is refused before anything runs: {text}");
+    let (status, text) = tool("meals.undo", json!({"actionId":action}), true);
+    assert_eq!(status, 200, "{text}\n{}", log());
+    assert_eq!(json_of(&text)["data"], json!({"restored":1,"skipped":0}), "{text}");
+    let (_, back) = tool("meals.pantry.get", json!({}), false);
+    assert!(back.contains("\"quantity\":5"), "undo put the milk back: {back}");
+    let (status, text) = tool("meals.undo", json!({"actionId":action}), true);
+    assert_eq!(json_of(&text)["data"]["code"], "invalid_input", "a second undo is refused: {text} {status}");
+    println!("PASS live cooking: rate, cook, undo and a refused second undo through the real server; second person refused");
     let activity = serde_json::to_string(&services.activity("meals", &access).unwrap()).unwrap();
     assert!(!activity.contains(MARK));
     // Nothing the test sent reached the server log.
     assert!(!log().to_lowercase().contains(&MARK.to_lowercase()));
+    // The food log with a real model. The key comes from the box's own proxy file and is never
+    // printed. Without that file the proof is reported as not run, never as passed.
+    let key_file = std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".config/cliproxyapi/client-key");
+    let proxy_port = fs::read_to_string(key_file.with_file_name("port")).unwrap_or_default();
+    let model_key = fs::read_to_string(&key_file).map(|k| k.trim().to_owned()).ok().filter(|k| !k.is_empty());
+    let (Some(model_key), false) = (model_key, proxy_port.trim().is_empty()) else {
+        println!("NOT RUN live model: no local model proxy key on this box");
+        return;
+    };
+    let sealed = safety_core::secret::SecretCipher::ai(&[("JARVIS_AI_SECRET_KEY".into(), ai_key.clone())].into())
+        .unwrap()
+        .seal(&safety_core::secret::SecretFields::new().with("apiKey", safety_core::secret::Secret::new(&model_key)));
+    runtime.block_on(async {
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(async move { let _ = connection.await; });
+        let (provider, model) = (uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
+        db.execute(
+            "INSERT INTO app.ai_provider_configs(id,owner_user_id,provider_kind,display_name,base_url,encrypted_credential,is_instance_default) VALUES($1,$2,'openai-compatible','Local proxy',$3,$4,true)",
+            &[&provider, &owner, &format!("http://127.0.0.1:{}", proxy_port.trim()), &sealed],
+        ).await.unwrap();
+        db.execute(
+            "INSERT INTO app.ai_configured_models(id,provider_config_id,owner_user_id,provider_model_id,display_name,capabilities) VALUES($1,$2,$3,'gpt-5.6-luna','Small model',ARRAY['chat','json'])",
+            &[&model, &provider, &owner],
+        ).await.unwrap();
+    });
+    let manifest: Value = serde_json::from_str(&fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../modules/meals/moss.module.json")).unwrap()).unwrap();
+    assert_eq!(manifest["callLimitMs"], 30000, "the module asks for the longer model call limit");
+    let mut policies = policies.clone();
+    policies.insert("meals.log.list".into(), false);
+    services.set_action_policy(&access, "meals", &policies).unwrap();
+    let (status, text) = tool("meals.log.add", json!({"description":"two scrambled eggs and a slice of buttered toast","idempotencyKey":"live-1","consumedAt":"2026-11-10T08:00:00-08:00"}), true);
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let added = json_of(&text)["data"]["entry"].clone();
+    assert_eq!(added["estimateState"], "pending", "a new entry shows as waiting for an estimate");
+    assert!(added["nutrients"].is_null(), "no figures before the model answers");
+    let waited = Instant::now();
+    let entry = loop {
+        let (_, text) = tool("meals.log.list", json!({"localDate":"2026-11-10"}), false);
+        let found = json_of(&text)["data"]["entries"][0].clone();
+        if found["estimateState"] != "pending" {
+            break found;
+        }
+        assert!(waited.elapsed() < Duration::from_secs(120), "estimate did not finish: {found}\n{}", log());
+        std::thread::sleep(Duration::from_secs(2));
+    };
+    assert_eq!(entry["estimateState"], "estimated", "real model estimate: {entry}\n{}", log());
+    let kcal = entry["nutrients"]["caloriesKcal"].as_f64().expect("calories known");
+    assert!((100.0..=1500.0).contains(&kcal), "a plausible breakfast, got {kcal}");
+    assert!(entry["items"].as_array().is_some_and(|i| !i.is_empty()), "foods listed: {entry}");
+    let (_, theirs) = call(Method::POST, "/meals/tools/run", Some(&other), Some(json!({"tool":"meals.log.list","parameters":{}})));
+    assert!(!theirs.contains("scrambled"), "the second person sees no entries");
+    assert!(!log().contains(&model_key), "the model key never reaches the server log");
+    println!("PASS live model: gpt-5.6-luna estimated a real entry in {:?}: {kcal} kcal, shown as an estimate; key absent from the log", waited.elapsed());
     println!("PASS live HTTPS: kitchen, household, list and pantry tools, one-use approval, second person refused, private text absent from activity and the server log");
 }
