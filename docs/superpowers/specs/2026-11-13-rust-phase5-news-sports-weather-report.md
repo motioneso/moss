@@ -804,9 +804,18 @@ model proposes, and it reads saved sources again with health states. It still sh
 
 ### Not proven
 
-- A live recipe proposal did not happen. The test server has no AI model set up, so a site with
-  no feed answered "unavailable". The proposal is proven only with a fake model and the real fetch
-  of a fake page.
+- A live recipe proposal is still not proven, but the cause is now known. The live test now sets up
+  a real model through the shared test endpoint (Codex sign-in, model gpt-6.1-sol) and previews the
+  Premier League home page, which has no feed. The route answered "unavailable". The cause is a
+  platform limit, not the sports code. Every module call gets five seconds in the host, and every
+  model the test endpoint offers took 11 to 14 seconds on a one-line prompt (measured by direct
+  calls). The Claude route had an expired sign-in and the Gemini route was disabled. A real model
+  therefore cannot finish a proposal inside one request, for Sports or for any other module that
+  asks a model. The fix is a platform change that lets a module ask for a longer call limit, up to
+  a host ceiling, the way it already asks for more processing budget. A first attempt on the Sky
+  Sports home page also showed that a 500 KB page uses up the module's whole processing budget
+  while it is read. The proposal is proven only with a fake model and the real fetch of a fake
+  page.
 - The row-level-security test for the recipe columns relies on the existing six-table test. The
   new retry and rebuild routes are checked for a second person against the in-memory host, not
   against real Postgres.
