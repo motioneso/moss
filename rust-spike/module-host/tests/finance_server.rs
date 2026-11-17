@@ -516,6 +516,41 @@ fn installed_finance_package_serves_routes_from_the_real_server() {
     );
     assert_ne!(status, 200, "{text}");
     println!("PASS live finance transactions: query, category, note, import, replay and sorting worked over HTTPS, and the second person saw none of it");
+    // Budget: set up, assign against a review, a stale review saves nothing, a draft from stored rows, two people.
+    let (status, text) = call(Method::GET, "/finance/budget/status?month=2026-11", Some(&cookie), None);
+    assert_eq!(status, 200, "{text}\n{}", log());
+    assert_eq!(json_of(&text)["setupRequired"], true, "{text}");
+    let (status, text) = call(Method::POST, "/finance/budget/configure", Some(&cookie), Some(json!({"isoCurrency":"USD","acknowledgeLegacy":false})));
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let (_, text) = call(Method::GET, "/finance/budget/status?month=2026-11", Some(&cookie), None);
+    let review = json_of(&text);
+    assert!(review["setupRequired"] != json!(true), "{text}");
+    let assign = |review: &Value, cents: i64| {
+        json!({"month":"2026-11","expectedRevision":review["revision"],"expectedFingerprint":review["fingerprint"],"categoryId":"groceries","amountCents":cents,"previousCents":0})
+    };
+    let (status, text) = call(Method::POST, "/finance/budget/assign", Some(&cookie), Some(assign(&review, 40_000)));
+    assert_eq!(status, 200, "{text}\n{}", log());
+    // The same review is now old, so a second save is refused and nothing changes.
+    let (status, text) = call(Method::POST, "/finance/budget/assign", Some(&cookie), Some(assign(&review, 77_000)));
+    assert_eq!(status, 409, "{text}");
+    let (_, text) = call(Method::GET, "/finance/budget/status?month=2026-11", Some(&cookie), None);
+    assert_eq!(json_of(&text)["state"]["categories"]["groceries"]["assignedCents"], 40_000, "{text}");
+    let (status, text) = call(Method::POST, "/finance/budget/draft/build", Some(&cookie), Some(json!({})));
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let (status, text) = call(Method::GET, "/finance/budget/draft", Some(&cookie), None);
+    assert_eq!(status, 200, "{text}");
+    // The assistant's route is refused without the host's one-use approval.
+    let (status, text) = call(Method::POST, "/finance/chat/budget/assign", Some(&cookie), Some(assign(&review, 1)));
+    assert_ne!(status, 200, "{text}");
+    for path in ["/finance/budget/status?month=2026-11", "/finance/budget/draft"] {
+        let (status, text) = call(Method::GET, path, Some(&other), None);
+        assert!(status == 200 || status == 404, "{status} {text}");
+        assert!(!text.contains("40000") && !text.contains(NAME) && !text.contains(PAYEE), "the other person saw budget data: {text}");
+    }
+    let (status, text) = call(Method::POST, "/finance/budget/assign", Some(&other), Some(assign(&review, 5)));
+    assert_ne!(status, 200, "{text}");
+    assert_eq!(call(Method::GET, "/finance/budget/status?month=2026-11", None, None).0, 401);
+    println!("PASS live finance budget: setup, assign, a stale review refused, a draft from stored rows and two people worked over HTTPS");
     // Activity rows and the server log hold none of the text the test sent.
     let services = moss_module_host::services::ServicePorts::new(
         &root.join("data"),
