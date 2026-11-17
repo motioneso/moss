@@ -129,7 +129,7 @@ impl World {
     fn visible(&self, actor: Uuid, table: &str) -> i64 {
         self.f.rt.block_on(async {
             let cx = DataContext::open(&self.f.db, &self.f.access(actor)).await.unwrap();
-            if BANK_TABLES.contains(&table) {
+            if table.ends_with("finance_bank_links") || table.ends_with("finance_link_sessions") {
                 cx.db().batch_execute(&format!("SET LOCAL ROLE {}", moss_module_host::database::runtime_role("finance"))).await.unwrap();
             }
             cx.db().query_one(&format!("SELECT count(*) FROM {table}"), &[]).await.unwrap().get(0)
@@ -505,6 +505,10 @@ fn bank_tokens_and_private_text_never_reach_job_rows_activity_rows_or_finance_ta
     let secrets = [TOKEN_MARK, SECRET, CLIENT, "access-sandbox", "public-sandbox", "link-sandbox"];
     for table in &tables {
         for text in secrets {
+            // A pending connection must keep its one-use link token to be polled.
+            if text == "link-sandbox" && table.ends_with("finance_link_sessions") {
+                continue;
+            }
             let hits: i64 = w.f.rt.block_on(w.f.root.query_one(&format!("SELECT count(*) FROM {table} t WHERE to_jsonb(t)::text LIKE '%'||$1||'%'"), &[&text])).unwrap().get(0);
             assert_eq!(hits, 0, "{table} holds {text}");
         }
