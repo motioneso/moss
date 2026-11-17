@@ -1252,7 +1252,7 @@ Both ended with exit code 0. The first package gate run failed twice before it p
 - A concurrent writer between the module's fingerprint read and the revision update is guarded by the update itself, but that narrow window was not exercised with two real simultaneous writers.
 - Flex pools, targets and target funding, card reserves and bills (part 24), shared accounts and reports (part 25), and category archiving are not built.
 - Draft build and start do not refuse while flex pools are active, because flex pools do not exist yet.
-- Bank balance history is not used, because bank sync (part 21) is not merged.
+- Bank balance history written by bank sync (part 21) is not used by the budget yet. Budget figures come from the ledger and the saved balance snapshots only.
 - Route parity with the old handlers is checked through ported messages, status codes and shapes in the guest tests. The old handlers were not run side by side with the new ones.
 - Review notes left as they are: starting a draft that was discarded after a new setup returns a host error instead of a plain refusal (nothing is saved); a draft edit from the screen is recorded as changed by Moss; a move that is refused has no test showing the stored rows stay unchanged; a refund posted to the income category lowers the pool twice; draft months are counted from all transactions, not only the budget currency.
 - No screens were built.
