@@ -35,6 +35,7 @@ const PUBLIC: &str = "93.184.216.34";
 fn table() -> Vec<(&'static str, Vec<&'static str>)> {
     vec![
         ("ok.test", vec![PUBLIC]),
+        ("localhost", vec![PUBLIC]),
         ("deny.test", vec![PUBLIC]),
         ("rebind.test", vec!["10.0.0.9"]),
         ("loop.test", vec!["127.0.0.1"]),
