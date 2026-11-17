@@ -311,7 +311,7 @@ pub fn decide<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Outcome> {
             ("transaction_id", json!(transaction)), ("updated_at", json!(now)),
         ])),
     )?;
-    log_as(host, "user", "bill.decide", json!({"planId":plan,"dueDate":due,"state":state}), None)?;
+    log_as(host, "user", "bill.decide", json!({"planId":plan,"state":state}), None)?;
     Ok(Ok(json!({"status":"ok","planId":plan,"dueDate":due})))
 }
 
@@ -329,7 +329,7 @@ pub fn stop<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Outcome> {
         return Ok(Err(stale()));
     }
     Client(host).query(PLANS, &Query::update(Filter::eq("id", id.as_str()), values(vec![("end_date", json!(end))])))?;
-    log_as(host, "user", "bill.stop", json!({"planId":id,"endDate":end}), None)?;
+    log_as(host, "user", "bill.stop", json!({"planId":id}), None)?;
     Ok(Ok(json!({"status":"ok","id":id})))
 }
 
@@ -346,6 +346,6 @@ pub fn clear<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Outcome> {
     }
     let filter = Filter::And { filters: vec![Filter::eq("plan_id", plan.as_str()), Filter::eq("due_date", due.as_str())] };
     Client(host).query(OCCURRENCES, &Query::delete(filter))?;
-    log_as(host, "user", "bill.clear", json!({"planId":plan,"dueDate":due}), None)?;
+    log_as(host, "user", "bill.clear", json!({"planId":plan}), None)?;
     Ok(Ok(json!({"status":"ok","planId":plan,"dueDate":due})))
 }

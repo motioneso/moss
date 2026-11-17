@@ -834,7 +834,7 @@
       "risk": "write"
     },
     "finance.bill.decide": {
-      "description": "Confirm or skip a bill suggestion.",
+      "description": "Confirm, skip or match one coming bill.",
       "risk": "write"
     },
     "finance.bill.stop": {
@@ -1195,6 +1195,11 @@
           "code": "invalid_occurrence",
           "class": "validation",
           "description": "That coming bill does not exist."
+        },
+        {
+          "code": "invalid_date",
+          "class": "validation",
+          "description": "Choose a valid planned date."
         }
       ]
     },
@@ -1213,11 +1218,6 @@
           "description": "That category cannot have a target."
         },
         {
-          "code": "insufficient_ready",
-          "class": "validation",
-          "description": "Not enough is ready to assign."
-        },
-        {
           "code": "current_month_required",
           "class": "validation",
           "description": "Funding works on the current month only."
@@ -1226,6 +1226,21 @@
           "code": "invalid_selection",
           "class": "validation",
           "description": "Pick between 1 and 20 different targets."
+        },
+        {
+          "code": "not_enough_ready",
+          "class": "validation",
+          "description": "The targets cost more than is ready to assign."
+        },
+        {
+          "code": "cover_overspending",
+          "class": "validation",
+          "description": "Cover overspent categories and card payments before funding targets."
+        },
+        {
+          "code": "funding_unavailable",
+          "class": "validation",
+          "description": "Ready to assign cannot be worked out for that month."
         }
       ]
     },
@@ -1268,6 +1283,11 @@
           "code": "card_ledger_review_required",
           "class": "validation",
           "description": "The card ledger needs repair before reserves work."
+        },
+        {
+          "code": "insufficient_ready",
+          "class": "validation",
+          "description": "Choose less payment cash or release other assignments before saving."
         }
       ]
     }

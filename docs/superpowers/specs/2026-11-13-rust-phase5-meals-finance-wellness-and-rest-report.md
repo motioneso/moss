@@ -1269,16 +1269,16 @@ Both ended with exit code 0. The first package gate run failed twice before it p
 
 ### Proof
 
-| Check                                                                                      | Result                                                                                                                                      |
-| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| Native guest tests (67 unit tests, 15 new route tests, plus the older suites)              | passed                                                                                                                                      |
-| Package tests and the real component built as WebAssembly, run against the real host       | passed, including the new table grants and a refused table                                                                                  |
-| Target, weekday, bill and card figures                                                     | checked with fixtures taken from the old code's tests; the old handlers were not run side by side                                           |
-| An old review saves nothing                                                                | a repeated bill save with the old review gets a 409 and writes no row, in the guest tests, the real database and the live run               |
-| Two people, real database: second person and an admin read and change none of part 24 rows | passed. With row security switched off the same check fails (RED: the admin saw rows in four tables) and passes with it back on (GREEN)     |
-| Private text searched for in job rows, activity rows, queue tables and host calls          | none found; a planted leak is caught by the same scan, and a control that puts the bill name into the bill activity row makes the test fail |
-| Live run: real server, real HTTPS on a non-loopback address, no response rewriting         | passed: bill, target, pool preview, stale review refused (409), suggestions, chat route refused without approval, second person sees none   |
-| Moss reachable from another device                                                         | same live run: non-loopback address, certificate checked, untrusted origin refused, sign-in                                                 |
+| Check                                                                                      | Result                                                                                                                                                           |
+| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Native guest tests (67 unit tests, 15 new route tests, plus the older suites)              | passed                                                                                                                                                           |
+| Package tests and the real component built as WebAssembly, run against the real host       | passed, including the new table grants and a refused table                                                                                                       |
+| Target, weekday, bill and card figures                                                     | checked with fixtures taken from the old code's tests; the old handlers were not run side by side                                                                |
+| An old review saves nothing                                                                | a repeated bill save with the old review gets a 409 and writes no row, in the guest tests, the real database and the live run                                    |
+| Two people, real database: second person and an admin read and change none of part 24 rows | passed. With row security switched off the same check fails (RED: the admin saw rows in at least three of the part 24 tables) and passes with it back on (GREEN) |
+| Private text searched for in job rows, activity rows, queue tables and host calls          | none found; a planted leak is caught by the same scan, and a control that puts the bill name into the bill activity row makes the test fail                      |
+| Live run: real server, real HTTPS on a non-loopback address, no response rewriting         | passed: bill, target, pool preview, stale review refused (409), suggestions, chat route refused without approval, second person sees none                        |
+| Moss reachable from another device                                                         | same live run: non-loopback address, certificate checked, untrusted origin refused, sign-in                                                                      |
 
 From the repo root, through the gate script, with cargo on the path and dependencies installed in the worktree:
 
@@ -1307,7 +1307,9 @@ Both ended with exit code 0. Earlier runs failed on setup problems only (no depe
 
 - Route parity with the old handlers is checked through ported messages, status codes and shapes in the guest tests. The old handlers were not run side by side with the new ones.
 - Weekly, refill and balance target progress is covered by the ported unit fixtures, not by a live run.
-- Flex configure, flex assign and card save with real money were exercised in the guest tests and the card enroll in the real database, but not the full flexible pool set-up through the live server.
+- Flex configure, flex assign, card enroll and card funding were exercised in the guest tests against an in-memory host. The real database proof covers card enrolment rows only. The full flexible pool set-up was not run through the live server.
+- Dismissing a bill suggestion saves without a review check, as the old code did. The review check also ignores bill names and dismissals, so a rename in another tab does not make a review stale.
+- Recording a bill payment makes three writes (balance, transaction, occurrence). They are atomic because the host runs a whole request in one database transaction (proved for part 23). The in-memory test host has no such rollback.
 - Funding targets, bill entry record and bill suggestions beyond a read were not exercised live.
 - A concurrent writer between the review read and the revision update is guarded by the update itself and was not tried with two real simultaneous writers.
 - Undo (part 25), shared accounts, reports and category archiving are not built.

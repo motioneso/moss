@@ -207,6 +207,6 @@ pub fn record<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Outcome> {
         ("plan_id", json!(i.plan)), ("due_date", json!(i.due)), ("state", json!("matched")),
         ("transaction_id", json!(i.id)), ("updated_at", json!(at)),
     ])))?;
-    log_as(host, "user", "bill.record-entry", json!({"planId":i.plan,"dueDate":i.due,"transactionId":i.id,"accountId":i.account}), None)?;
+    log_as(host, "user", "bill.record-entry", json!({"planId":i.plan,"transactionId":i.id,"accountId":i.account}), None)?;
     Ok(Ok(json!({"status":"ok","id":i.id,"unchanged":false})))
 }

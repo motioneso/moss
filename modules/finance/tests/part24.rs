@@ -253,3 +253,129 @@ fn a_second_person_cannot_enroll_the_first_persons_card() {
     assert_ne!(s, 200);
     assert!(f.rows("app.finance_card_policies").is_empty());
 }
+
+const OCC: &str = "app.finance_bill_occurrences";
+
+fn rows_snapshot(f: &Fake) -> Vec<Vec<Value>> {
+    [PLANS, OCC, ADJ, TARGETS, FLEX, TX, "app.finance_accounts", "app.finance_budget_assignments", "app.finance_card_assignments"].iter().map(|t| f.rows(t)).collect()
+}
+
+fn stale_of(f: &Fake, review: &Value) -> Value {
+    let mut r = review.clone();
+    r["expectedRevision"] = json!(r["expectedRevision"].as_i64().unwrap() + 50);
+    r
+}
+
+#[test]
+fn deciding_clearing_and_stopping_a_bill_each_refuse_an_old_review_and_write_nothing() {
+    let f = setup();
+    make_bill(&f);
+    let before = rows_snapshot(&f);
+    let old = stale_of(&f, &review(&f, "2026-11"));
+    for (p, extra) in [
+        ("/finance/bills/decide", json!({"planId":PLAN,"dueDate":"2026-11-20","state":"skipped"})),
+        ("/finance/bills/clear", json!({"planId":PLAN,"dueDate":"2026-11-20"})),
+        ("/finance/bills/stop", json!({"id":PLAN,"endDate":"2026-12-01"})),
+        ("/finance/bills/adjust-reset", json!({"planId":PLAN,"dueDate":"2026-11-20"})),
+        ("/finance/bills/adjust", json!({"planId":PLAN,"dueDate":"2026-11-20","plannedDate":"2026-11-21","amountCents":9})),
+    ] {
+        let (s, b) = f.route("POST", p, with(old.clone(), extra));
+        assert_eq!((s, b["code"].clone()), (409, json!("stale_budget")), "{p} {b}");
+    }
+    assert_eq!(rows_snapshot(&f), before);
+}
+
+#[test]
+fn a_bill_occurrence_can_be_skipped_cleared_and_a_plan_stopped() {
+    let f = setup();
+    make_bill(&f);
+    let (s, b) = f.route("POST", "/finance/bills/decide", with(review(&f, "2026-11"), json!({"planId":PLAN,"dueDate":"2026-11-20","state":"skipped"})));
+    assert_eq!(s, 200, "{b}");
+    assert_eq!(f.rows(OCC).len(), 1);
+    let (s, b) = f.route("POST", "/finance/bills/clear", with(review(&f, "2026-11"), json!({"planId":PLAN,"dueDate":"2026-11-20"})));
+    assert_eq!(s, 200, "{b}");
+    assert!(f.rows(OCC).is_empty());
+    let (s, b) = f.route("POST", "/finance/bills/adjust", with(review(&f, "2026-11"), json!({"planId":PLAN,"dueDate":"2026-11-20","plannedDate":"2026-11-21","amountCents":9})));
+    assert_eq!(s, 200, "{b}");
+    let (s, b) = f.route("POST", "/finance/bills/adjust-reset", with(review(&f, "2026-11"), json!({"planId":PLAN,"dueDate":"2026-11-20"})));
+    assert_eq!(s, 200, "{b}");
+    assert!(f.rows(ADJ).is_empty());
+    let (s, b) = f.route("POST", "/finance/bills/stop", with(review(&f, "2026-11"), json!({"id":PLAN,"endDate":"2027-03-01"})));
+    assert_eq!(s, 200, "{b}");
+    assert_eq!(f.rows(PLANS)[0]["end_date"], "2027-03-01");
+}
+
+#[test]
+fn recording_a_bill_moves_the_balance_once_and_a_retry_changes_nothing() {
+    let f = setup();
+    make_bill(&f);
+    *f.today.borrow_mut() = "2026-11-21".into();
+    let entry = || {
+        with(review(&f, "2026-11"), json!({"operationId":"66666666-6666-4666-8666-666666666666","planId":PLAN,"dueDate":"2026-11-20","accountId":account(),
+            "categoryId":"groceries","name":BILL_NAME,"isoCurrency":"USD","date":"2026-11-10","amountCents":BILL_CENTS,"cleared":true}))
+    };
+    let (s, p) = f.route("POST", "/finance/bills/entry-preview", entry());
+    assert_eq!(s, 200, "{p}");
+    let balance = |f: &Fake| f.rows("app.finance_accounts")[0]["balance_cents"].as_i64().unwrap();
+    let start = balance(&f);
+    let (s, b) = f.route("POST", "/finance/bills/entry-record", entry());
+    assert_eq!(s, 200, "{b}");
+    assert_eq!(b["unchanged"], false);
+    assert_eq!(balance(&f), start - BILL_CENTS);
+    let (s, b) = f.route("POST", "/finance/bills/entry-record", entry());
+    assert_eq!((s, b["unchanged"].clone()), (200, json!(true)), "{b}");
+    assert_eq!(balance(&f), start - BILL_CENTS);
+    assert_eq!(f.rows(TX).len(), 1);
+    assert_eq!(f.rows(OCC).len(), 1);
+    assert!(!f.rows(ACTIVITY).iter().any(|r| r.to_string().contains(BILL_NAME) || r.to_string().contains("2026-11-20")));
+}
+
+#[test]
+fn funding_a_target_moves_ready_money_and_an_old_review_writes_nothing() {
+    let f = setup();
+    let set = with(review(&f, "2026-11"), json!({"categoryId":"dining","kind":"monthly","amountCents":25_000}));
+    assert_eq!(f.route("POST", "/finance/targets", set).0, 200);
+    let fund = |review: Value| with(review, json!({"categoryIds":["dining"],"expectedAmountsCents":[25_000]}));
+    let before = rows_snapshot(&f);
+    let (s, b) = f.route("POST", "/finance/targets/fund", fund(stale_of(&f, &review(&f, "2026-11"))));
+    assert_eq!((s, b["code"].clone()), (409, json!("stale_budget")), "{b}");
+    assert_eq!(rows_snapshot(&f), before);
+    let (s, b) = f.route("POST", "/finance/targets/fund", fund(review(&f, "2026-11")));
+    assert_eq!(s, 200, "{b}");
+    let assigned = f.rows("app.finance_budget_assignments").iter().find(|r| r["category_id"] == "dining").map(|r| r["assigned_cents"].clone());
+    assert_eq!(assigned, Some(json!(25_000)));
+}
+
+#[test]
+fn the_flexible_pool_is_set_up_assigned_and_an_old_review_writes_nothing() {
+    let f = setup();
+    let pool = with(review(&f, "2026-11"), json!({"mode":"flex","flexIds":["groceries","dining"],"nonMonthlyIds":[]}));
+    assert_eq!(f.route("POST", "/finance/flex/configure", pool).0, 200);
+    let assign = |review: Value| with(review, json!({"amountCents":30_000,"previousCents":0}));
+    let before = rows_snapshot(&f);
+    let (s, b) = f.route("POST", "/finance/flex/assign", assign(stale_of(&f, &review(&f, "2026-11"))));
+    assert_eq!((s, b["code"].clone()), (409, json!("stale_budget")), "{b}");
+    assert_eq!(rows_snapshot(&f), before);
+    let (s, b) = f.route("POST", "/finance/flex/assign", assign(review(&f, "2026-11")));
+    assert_eq!(s, 200, "{b}");
+    let leave = with(review(&f, "2026-11"), json!({"mode":"envelopes"}));
+    let (s, b) = f.route("POST", "/finance/flex/configure", leave);
+    assert!(s == 200 || s == 400, "{b}");
+    assert!(!f.rows(ACTIVITY).iter().any(|r| r.to_string().contains("30000")));
+}
+
+#[test]
+fn funding_a_card_reserve_needs_an_enrolled_card_and_an_old_review_writes_nothing() {
+    let f = setup();
+    f.account("credit", CARD, "2026-01-01", 0);
+    let card = format!("manual:{CARD}");
+    let fund = |review: Value, cents: i64| with(review, json!({"accountId":card,"action":"fund","availableCents":cents}));
+    let (s, b) = f.route("POST", "/finance/cards/save", fund(review(&f, "2026-11"), 0));
+    assert_eq!(s, 400, "{b}");
+    let enroll = with(review(&f, "2026-11"), json!({"accountId":card,"action":"enroll","availableCents":0}));
+    assert_eq!(f.route("POST", "/finance/cards/save", enroll).0, 200);
+    let before = rows_snapshot(&f);
+    let (s, b) = f.route("POST", "/finance/cards/save", fund(stale_of(&f, &review(&f, "2026-11")), 10_000));
+    assert_eq!((s, b["code"].clone()), (409, json!("stale_budget")), "{b}");
+    assert_eq!(rows_snapshot(&f), before);
+}

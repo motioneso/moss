@@ -54,7 +54,7 @@ pub fn save<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Outcome> {
         values: values(vec![("planned_date", json!(planned)), ("amount_cents", json!(cents)), ("updated_at", json!(now))]),
     };
     Client(host).query(ADJUSTMENTS, &upsert)?;
-    log_as(host, "user", "bill.adjust", json!({"planId":plan,"dueDate":due}), None)?;
+    log_as(host, "user", "bill.adjust", json!({"planId":plan}), None)?;
     Ok(Ok(json!({"status":"ok","planId":plan,"dueDate":due})))
 }
 
@@ -70,6 +70,6 @@ pub fn reset<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Outcome> {
     }
     let filter = Filter::And { filters: vec![Filter::eq("plan_id", plan.as_str()), Filter::eq("due_date", due.as_str())] };
     Client(host).query(ADJUSTMENTS, &Query::delete(filter))?;
-    log_as(host, "user", "bill.adjust-reset", json!({"planId":plan,"dueDate":due}), None)?;
+    log_as(host, "user", "bill.adjust-reset", json!({"planId":plan}), None)?;
     Ok(Ok(json!({"status":"ok","planId":plan,"dueDate":due})))
 }
