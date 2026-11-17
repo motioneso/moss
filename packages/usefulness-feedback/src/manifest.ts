@@ -52,6 +52,11 @@ export const usefulnessFeedbackModuleManifest = {
   ],
   features: [
     {
+      id: "usefulness-feedback.rust-server",
+      description:
+        "The Rust server records, lists, undoes and edits usefulness feedback with the same answers as this server. Dismissing a card there hides it and undo brings it back. It cannot yet turn a Remember this signal into a memory, and chat message and briefing signals are refused until their checks move over."
+    },
+    {
       id: "usefulness-feedback.record-only",
       description:
         "Record usefulness signals for chat messages, briefings and proactive cards. Approval identifies the exact owned item. Signals do not remove tasks, create memories, dismiss cards or refresh feeds; unavailable targets cannot be approved.",

@@ -39,6 +39,11 @@ export const proactiveMonitoringModuleManifest = {
         "Proactive cards found during quiet hours defer until the local daily end. They follow " +
         "the saved quiet-hours schedule in its own time zone; while an older alert schedule " +
         "differs from it, they keep following the older one."
+    },
+    {
+      id: "proactive-monitoring.rust-server",
+      description:
+        "The Rust server lists cards and accepts a refresh with the same answers as this server. A refresh queues no scan there yet because no scanners are installed, and the Rust app's Today still shows sample data."
     }
   ],
   permissions: [
