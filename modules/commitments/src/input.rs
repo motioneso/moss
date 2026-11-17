@@ -90,3 +90,13 @@ pub fn suppressed_by(body: &Value) -> Result<String, String> {
     required(map, "suppressedBy")?;
     Ok(text(map, "suppressedBy", 1)?.unwrap_or_default())
 }
+
+/// The extract body names one source kind. Anything else gets the old union answer.
+pub fn extract_source(body: &Value) -> Result<String, String> {
+    let map = object(body)?;
+    required(map, "sourceKind")?;
+    match map.get("sourceKind").and_then(Value::as_str) {
+        Some(k @ ("chat" | "email" | "notes")) => Ok(k.to_owned()),
+        _ => Err(union_error("body/sourceKind", 3)),
+    }
+}

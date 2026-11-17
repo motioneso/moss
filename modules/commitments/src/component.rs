@@ -19,6 +19,9 @@ impl Host for ComponentHost {
         let response = match port {
             "db" => moss::module::db::call(&request),
             "context" => moss::module::context::call(&request),
+            "ai" => moss::module::ai::call(&request),
+            "jobs" => moss::module::jobs::call(&request),
+            "api" => moss::module::api::call(&request),
             _ => return Err(Error::new("Unsupported Commitments host port")),
         }
         .map_err(|_| Error::new("Commitments host call failed"))?;
