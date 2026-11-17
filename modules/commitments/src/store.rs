@@ -95,6 +95,8 @@ pub fn upsert_candidate<H: Host + ?Sized>(host: &H, c: &Candidate) -> Result<Val
             ("counterparty_label", text(c.counterparty_label)),
             ("confidence", json!(c.confidence)),
             ("suggested_handling", text(c.suggested_handling)),
+            // A proposal always starts unreviewed and reaches no task list until the person accepts it.
+            ("status", json!("pending_review")),
             ("source_count", json!(1)),
             ("first_seen_at", json!(at)),
             ("last_seen_at", json!(at)),

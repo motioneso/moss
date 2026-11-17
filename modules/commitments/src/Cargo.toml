@@ -34,3 +34,7 @@ path = "../tests/commitments.rs"
 [[test]]
 name = "privacy"
 path = "../tests/privacy.rs"
+
+[[test]]
+name = "extraction"
+path = "../tests/extraction.rs"
