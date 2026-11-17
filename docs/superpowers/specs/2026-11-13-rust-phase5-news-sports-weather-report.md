@@ -985,3 +985,12 @@ how recipes work.
 - Chat tools never render, because the host allows the browser on routes only. The tool still
   tries once and gets a refusal. Allowing tools would need a host change.
 - The browser works on Linux only.
+- Changing which teams a source covers reuses the same discovery code, so a failed replay there
+  can also open the browser. No test covers that route.
+- For a saved source, the home page's own host comes from the page and is not checked against the
+  confirmed hosts before the browser opens it. A recipe still may name only confirmed hosts.
+
+### Review round 1 (part 16)
+
+- No blockers or majors. Three minors: the two above, and the call-ceiling note, which is listed
+  under Not proven. None was changed.
