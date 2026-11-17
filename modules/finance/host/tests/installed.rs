@@ -148,6 +148,30 @@ fn a_second_person_and_an_admin_cannot_see_or_change_another_persons_ledger() {
     );
     assert_eq!((theirs["status"].clone(), theirs["body"]["code"].clone()), (json!(404), json!("manual_unavailable")), "{theirs}");
     assert!(!theirs.to_string().contains(NAME), "a refusal must not show another person's account");
+    // Every legacy ledger table carries the owner-only rules, and a write for someone else is refused.
+    let (total, covered): (i64, i64) = {
+        let row = w.f.rt.block_on(w.f.root.query_one(
+            "SELECT count(*), count(*) FILTER (WHERE c.relrowsecurity AND c.relforcerowsecurity AND \
+             (SELECT count(*) FROM pg_policies p WHERE p.schemaname='app' AND p.tablename=t.tablename AND p.policyname LIKE 'moss_legacy_%')=4) \
+             FROM pg_tables t JOIN pg_class c ON c.relname=t.tablename AND c.relnamespace='app'::regnamespace \
+             WHERE t.schemaname='app' AND t.tablename LIKE 'finance\\_%' \
+             AND EXISTS(SELECT 1 FROM information_schema.columns k WHERE k.table_schema='app' AND k.table_name=t.tablename AND k.column_name='owner_user_id')",
+            &[],
+        )).unwrap();
+        (row.get(0), row.get(1))
+    };
+    assert!(total >= 20 && total == covered, "{covered} of {total} ledger tables carry owner-only rules");
+    let forged = w.f.rt.block_on(async {
+        let cx = DataContext::open(&w.f.db, &w.f.access(b)).await.unwrap();
+        cx.db()
+            .execute(
+                "INSERT INTO app.finance_activity (owner_user_id, id, at, actor, kind, params) VALUES ($1, gen_random_uuid(), now(), 'user', 'x', '{}')",
+                &[&w.f.a],
+            )
+            .await
+    });
+    assert!(forged.is_err(), "a write carrying another person's owner id must be refused");
+    println!("PASS rls: {total} ledger tables carry owner-only rules, a forged owner is refused");
     println!("PASS rls: the second person and the admin read no ledger rows and cannot add to the account");
 
     // With the owner rule removed on every table, the same checks fail.

@@ -57,7 +57,7 @@ pub async fn emit_owner_delete(tx: &tokio_postgres::Transaction<'_>, table: &str
 }
 
 /// Owner-only rules for a legacy-ledger table whose own SQL declared none. A table that already
-/// has rules, or has no owner column, is left alone.
+/// has rules is left alone. One with no owner column fails the install.
 pub async fn emit_legacy_owner_only(tx: &tokio_postgres::Transaction<'_>, table: &str) -> Result<()> {
     let (schema, name) = table.split_once('.').unwrap_or(("public", table));
     let has_rules: bool = tx
@@ -74,9 +74,10 @@ pub async fn emit_legacy_owner_only(tx: &tokio_postgres::Transaction<'_>, table:
         )
         .await?
         .get(0);
-    if has_rules || !has_owner {
+    if has_rules {
         return Ok(());
     }
+    anyhow::ensure!(has_owner, "Legacy table {table} has no owner_user_id column, so it cannot be made owner-only");
     let owner = "owner_user_id=app.current_actor_user_id()";
     let roles = "jarvis_app_runtime, jarvis_worker_runtime";
     let mut sql = format!(

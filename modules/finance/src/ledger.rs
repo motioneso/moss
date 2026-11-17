@@ -135,7 +135,13 @@ fn category_is_current<H: Host + ?Sized>(host: &H, id: &str) -> Result<bool> {
     Ok(crate::accounts::categories(host)?.iter().any(|c| c.id == id))
 }
 
+/// A writer that loses a race on the account rereads once, so a repeated operation answers
+/// unchanged and a different one applies on top of the winner's balance.
 pub fn create_entry<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Outcome> {
+    create_entry_attempt(host, body, true)
+}
+
+fn create_entry_attempt<H: Host + ?Sized>(host: &H, body: &Value, retry: bool) -> Result<Outcome> {
     let Some(input) = body.as_object() else {
         return Ok(Err(input::invalid("Input must be an object")));
     };
@@ -217,6 +223,9 @@ pub fn create_entry<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Outcome>
         ),
     )?;
     if changed.is_empty() {
+        if retry {
+            return create_entry_attempt(host, body, false);
+        }
         return Err(Error::new("The account changed during the save"));
     }
     let row = values(vec![

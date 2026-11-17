@@ -764,6 +764,12 @@ scripts/run-gate.sh start --gate test:rust-finance-live
   from routes.
 - The category list is the 16 seeded defaults, or the saved list once the budget policy says
   categories are ready. The old key-value fallback is not built.
+- Two writers on one account use a revision check, not a row lock. The loser rereads once, so
+  a repeated operation answers unchanged. A second loss fails the call with no balance change.
+- The account list sorts by account id in the database, so mixed manual and bank ids may order
+  differently from the old list.
+- A missing time zone and an unavailable old storage upgrade show as a generic tool failure, not
+  the old named errors.
 
 ### Not proven or not built
 
@@ -774,5 +780,8 @@ scripts/run-gate.sh start --gate test:rust-finance-live
 - **Bank link, sync, budgets, screens** belong to later parts.
 - **The wasm run is the packaged component loaded by the installed and live tests.** The guest
   unit tests themselves run native only.
+- **Rollback after a late failure** is not shown by a test. The host rolls the whole call back,
+  but no test forces a failure after the balance moves.
+- **The privacy scan reads database tables and the server log,** not the chat approval record.
 - **The two negative controls** cover the leak routes that were wired. Other fields were not
   each given a control.
