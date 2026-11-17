@@ -3,9 +3,14 @@ import assert from "node:assert/strict";
 import Fastify from "fastify";
 import { createDatabase, DataContextRunner, getMossDatabaseUrls } from "@moss/db";
 import { setMossErrorHandler } from "../../../apps/api/src/error-handling.js";
+import { registerWellnessExportRoutes } from "../../../packages/wellness/src/export-routes.js";
 import { registerWellnessRoutes } from "../../../packages/wellness/src/routes.js";
 
-type Step = { method: "GET" | "POST" | "PATCH" | "PUT"; url: string; body?: unknown };
+type Step = {
+  method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
+  url: string;
+  body?: unknown;
+};
 
 export async function routesOracle(
   actor: string,
@@ -17,6 +22,12 @@ export async function routesOracle(
   const server = Fastify();
   setMossErrorHandler(server);
   registerWellnessRoutes(server, {
+    resolveAccessContext: async () => ({ actorUserId: actor, requestId: "wellness-parity" }),
+    dataContext: new DataContextRunner(db)
+  });
+  // Only the queue is replaced. The export request still saves its real job row, and no job runs.
+  registerWellnessExportRoutes(server, {
+    boss: { send: async () => "queued" } as never,
     resolveAccessContext: async () => ({ actorUserId: actor, requestId: "wellness-parity" }),
     dataContext: new DataContextRunner(db)
   });

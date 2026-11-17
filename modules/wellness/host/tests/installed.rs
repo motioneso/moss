@@ -172,20 +172,18 @@ impl World {
     }
 }
 
-fn set_policy(w: &World, using: &str) {
+fn set_policy(w: &World, table: &str, policy: &str, using: &str) {
     w.f.rt
-        .block_on(w.f.root.execute(
-            "DROP POLICY wellness_checkins_select ON app.wellness_checkins",
-            &[],
-        ))
+        .block_on(w.f.root.execute(&format!("DROP POLICY {policy} ON app.{table}"), &[]))
         .unwrap();
     w.f.rt
         .block_on(w.f.root.execute(
-            &format!("CREATE POLICY wellness_checkins_select ON app.wellness_checkins FOR SELECT TO jarvis_app_runtime USING ({using})"),
+            &format!("CREATE POLICY {policy} ON app.{table} FOR SELECT TO jarvis_app_runtime USING ({using})"),
             &[],
         ))
         .unwrap();
 }
+const OWNER_ONLY: &str = "owner_user_id = app.current_actor_user_id()";
 
 #[test]
 #[ignore = "Only through verify-gate"]
@@ -223,9 +221,9 @@ fn check_ins_stay_private_and_a_second_person_is_refused() {
     println!("PASS rls: the second person reads no check-ins and changes none");
 
     // With the owner rule removed, the second person can read the row. The rule is put back.
-    set_policy(&w, "true");
+    set_policy(&w, "wellness_checkins", "wellness_checkins_select", "true");
     let leaked = rows_as(&w.f, b, "SELECT id FROM app.wellness_checkins");
-    set_policy(&w, "owner_user_id = app.current_actor_user_id()");
+    set_policy(&w, "wellness_checkins", "wellness_checkins_select", OWNER_ONLY);
     // The database also holds rows from earlier runs, so look for this run's row by id.
     assert!(
         leaked.iter().any(|row| row.get::<_, uuid::Uuid>(0).to_string() == id),
@@ -304,6 +302,21 @@ fn rust_answers_match_the_old_routes_step_for_step() {
         json!({"method":"GET","url":"/api/wellness/checkins?since=soon"}),
         json!({"method":"GET","url":"/api/wellness/checkins?cursor=not-a-cursor"}),
         json!({"method":"PATCH","url":format!("/api/wellness/checkins/{missing}"),"body":{"note":"x"}}),
+        json!({"method":"GET","url":"/api/wellness/therapy-notes"}),
+        json!({"method":"POST","url":"/api/wellness/therapy-notes","body":{"body":"  first note  "}}),
+        json!({"method":"POST","url":"/api/wellness/therapy-notes","body":{"body":"second","linkedEmotion":"sad"}}),
+        json!({"method":"POST","url":"/api/wellness/therapy-notes","body":{}}),
+        json!({"method":"POST","url":"/api/wellness/therapy-notes","body":{"body":""}}),
+        json!({"method":"POST","url":"/api/wellness/therapy-notes","body":{"body":"x","linkedEmotion":"joy"}}),
+        json!({"method":"POST","url":"/api/wellness/therapy-notes","body":{"body":"x","linkedCheckinId":7}}),
+        json!({"method":"POST","url":"/api/wellness/therapy-notes","body":{"body":"x","linkedCheckinId":missing}}),
+        json!({"method":"GET","url":"/api/wellness/therapy-notes"}),
+        json!({"method":"DELETE","url":format!("/api/wellness/therapy-notes/{missing}")}),
+        json!({"method":"POST","url":"/api/wellness/export","body":{}}),
+        json!({"method":"POST","url":"/api/wellness/export","body":{"from":"2026-11-01","to":"2026-10-01","categories":["checkins"]}}),
+        json!({"method":"POST","url":"/api/wellness/export","body":{"from":"2026-11-01","to":"2026-11-30","categories":["nope"]}}),
+        json!({"method":"POST","url":"/api/wellness/export","body":{"from":"2020-01-01","to":"2026-11-30","categories":["checkins"]}}),
+        json!({"method":"POST","url":"/api/wellness/export","body":{"from":"2026-11-01","to":"2026-11-30","categories":[]}}),
     ];
     let old = replay::old_routes(old_actor, &steps, &json!({}));
     let mut new = vec![];
@@ -364,4 +377,125 @@ fn rust_answers_match_the_old_routes_step_for_step() {
         assert_eq!(r, o, "id step {n}: {}", id_steps[n]);
     }
     println!("PASS parity: {} id steps match the old routes", id_steps.len());
+}
+
+/// Counts rows in the queue and log tables that mention the marker.
+fn mentions(w: &World, marker: &str) -> i64 {
+    w.f.rt.block_on(async {
+        let tables = w
+            .f
+            .root
+            .query(
+                "SELECT table_schema||'.'||table_name FROM information_schema.tables WHERE table_schema IN ('moss_queue','moss_modules') \
+                 OR table_name IN ('moss_activity_detail','moss_error_log','moss_action_audit_log','moss_model_activity_log')",
+                &[],
+            )
+            .await
+            .unwrap();
+        let mut found = 0;
+        for table in tables {
+            let name: String = table.get(0);
+            found += w
+                .f
+                .root
+                .query_one(
+                    &format!("SELECT count(*) FROM {name} t WHERE t::text LIKE $1"),
+                    &[&format!("%{marker}%")],
+                )
+                .await
+                .unwrap()
+                .get::<_, i64>(0);
+        }
+        found
+    })
+}
+
+const NOTE_MARK: &str = "THERAPY-MARKER-91c3be";
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn therapy_notes_stay_private_and_export_runs_on_the_real_host() {
+    let w = World::new();
+    let (a, b) = (w.f.a, w.f.b);
+    let made = w.call(a, "POST", "/wellness/therapy-notes", json!({"body":NOTE_MARK}));
+    assert_eq!(made["status"], 201, "{made}");
+    let id = made["body"]["note"]["id"].as_str().unwrap().to_owned();
+    assert_eq!(made["body"]["note"]["ownerUserId"], a.to_string());
+
+    // The second person sees nothing and deletes nothing, through the routes or the database.
+    assert_eq!(w.call(b, "GET", "/wellness/therapy-notes", json!(null))["body"]["notes"], json!([]));
+    let refused = w.call(b, "DELETE", &format!("/wellness/therapy-notes/{id}"), json!(null));
+    assert_eq!(refused["status"], 404, "{refused}");
+    assert!(rows_as(&w.f, b, "SELECT id FROM app.wellness_therapy_notes").is_empty());
+    assert_eq!(rows_as(&w.f, a, "SELECT id FROM app.wellness_therapy_notes").len(), 1);
+    println!("PASS rls: the second person reads no therapy notes and deletes none");
+
+    // With the owner rule relaxed, the second person reads the row. The rule is put back.
+    set_policy(&w, "wellness_therapy_notes", "wellness_therapy_notes_select", "true");
+    let leaked = rows_as(&w.f, b, "SELECT id FROM app.wellness_therapy_notes");
+    set_policy(&w, "wellness_therapy_notes", "wellness_therapy_notes_select", OWNER_ONLY);
+    assert!(
+        leaked.iter().any(|row| row.get::<_, uuid::Uuid>(0).to_string() == id),
+        "without the policy the second person must see the note"
+    );
+    assert!(rows_as(&w.f, b, "SELECT id FROM app.wellness_therapy_notes").is_empty());
+    println!("PASS rls: relaxing the therapy-note policy lets the second person in, restoring it shuts them out");
+
+    // A real check-in can be linked, and a second person's check-in cannot.
+    let ci = w.call(b, "POST", "/wellness/checkins", json!({"feelingCore":"happy"}));
+    let theirs = ci["body"]["checkin"]["id"].as_str().unwrap().to_owned();
+    let linked = w.call(a, "POST", "/wellness/therapy-notes", json!({"body":"x","linkedCheckinId":theirs}));
+    assert_eq!(linked["status"], 404, "{linked}");
+
+    // Export: a note-only request leaves check-ins out, and the file reaches only its owner.
+    let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+    let request = json!({"from":today,"to":today,"categories":["therapyNotes"]});
+    let started = w.call(a, "POST", "/wellness/export", request.clone());
+    assert_eq!(started["status"], 202, "{started}");
+    let job = started["body"]["jobId"].as_str().unwrap().to_owned();
+    let worker = Secret::new(std::env::var("JS48_WORKER_URL").unwrap());
+    for _ in 0..6 {
+        let _ = w.app.installer.run_job(&worker);
+    }
+    let status = w.call(a, "GET", &format!("/wellness/export/{job}"), json!(null));
+    assert_eq!(status["body"]["status"], "ready", "{status}");
+    let file = w.call(a, "GET", &format!("/wellness/export/{job}/download"), json!(null));
+    assert_eq!(file["status"], 200, "{file}");
+    let html = file["body"]["html"].as_str().unwrap();
+    assert!(html.contains(NOTE_MARK), "the chosen category is in the file");
+    assert!(!html.contains("Mood check-ins"), "the unchosen category is absent");
+    for other in [b, w.f.admin] {
+        let seen = w.call(other, "GET", &format!("/wellness/export/{job}/download"), json!(null));
+        assert_eq!(seen["status"], 404, "{seen}");
+        let state = w.call(other, "GET", &format!("/wellness/export/{job}"), json!(null));
+        assert_eq!(state["status"], 404, "{state}");
+    }
+    println!("PASS export: the file holds only chosen categories and only its owner can fetch it");
+
+    // The marker is in no queue row, no activity row, no log and no other person's answer.
+    assert_eq!(mentions(&w, NOTE_MARK), 0, "therapy-note text reached the queue or a log");
+    let activity = serde_json::to_string(&w.app.services.activity("wellness", &w.f.access(a)).unwrap()).unwrap();
+    assert!(!activity.contains(NOTE_MARK));
+    println!("PASS privacy: therapy-note text is in no job payload, activity row or log");
+
+    // Account sections act on the caller only.
+    let api = |actor, name: &str| -> Value {
+        serde_json::from_str(
+            &w.app
+                .installer
+                .call("wellness", w.f.access(actor), "api", &json!({"name":name,"parameters":{}}).to_string())
+                .unwrap(),
+        )
+        .unwrap()
+    };
+    let section = api(a, "collectWellnessExportSection");
+    assert_eq!(section["therapy_notes"].as_array().unwrap().len(), 1);
+    assert_eq!(section["checkins"], json!([]));
+    assert_eq!(api(b, "collectWellnessExportSection")["therapy_notes"], json!([]));
+    let gone = api(a, "deleteWellnessAccountData");
+    assert!(gone["deleted"].as_i64().unwrap() >= 1, "{gone}");
+    assert_eq!(w.call(a, "GET", "/wellness/therapy-notes", json!(null))["body"]["notes"], json!([]));
+    assert_eq!(w.call(a, "GET", &format!("/wellness/export/{job}"), json!(null))["status"], 404);
+    assert_eq!(w.call(b, "GET", "/wellness/checkins", json!(null))["body"]["checkins"].as_array().unwrap().len(), 1);
+    println!("PASS account: the sections cover only the caller and delete leaves the other person's rows");
 }
