@@ -15,6 +15,7 @@ macro_rules! ask {
 pub mod accounts;
 pub mod budget;
 pub mod bill_adjust;
+pub mod bill_entry;
 pub mod bills;
 pub mod budget_write;
 pub mod bank;
