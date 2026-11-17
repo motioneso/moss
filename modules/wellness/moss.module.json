@@ -11,9 +11,7 @@
   "capabilities": [
     {
       "port": "db",
-      "operations": [
-        "query"
-      ],
+      "operations": ["query"],
       "resources": [
         "app.wellness_checkins",
         "app.wellness_therapy_notes",
@@ -23,40 +21,18 @@
     },
     {
       "port": "context",
-      "operations": [
-        "local-date",
-        "read",
-        "uuid"
-      ],
-      "resources": [
-        "account",
-        "call",
-        "new"
-      ]
+      "operations": ["local-date", "read", "uuid"],
+      "resources": ["account", "call", "new"]
     },
     {
       "port": "kv",
-      "operations": [
-        "preference.read",
-        "preference.write",
-        "get",
-        "set",
-        "delete"
-      ],
-      "resources": [
-        "ai-consent",
-        "wellness.export-jobs",
-        "wellness.export-files"
-      ]
+      "operations": ["preference.read", "preference.write", "get", "set", "delete"],
+      "resources": ["ai-consent", "wellness.export-jobs", "wellness.export-files"]
     },
     {
       "port": "jobs",
-      "operations": [
-        "enqueue-options"
-      ],
-      "resources": [
-        "wellness-export"
-      ]
+      "operations": ["enqueue-options"],
+      "resources": ["wellness-export"]
     }
   ],
   "database": {
@@ -162,9 +138,7 @@
     "collectWellnessExportSection": "1.0.0",
     "deleteWellnessAccountData": "1.0.0"
   },
-  "icons": [
-    "icons/wellness.svg"
-  ],
+  "icons": ["icons/wellness.svg"],
   "accounts": {
     "supportsUserDisable": true,
     "defaultEnabled": true
