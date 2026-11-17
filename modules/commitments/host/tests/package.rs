@@ -63,6 +63,15 @@ fn the_package_asks_only_for_its_own_resources() {
     };
     assert!(ask("db", "query", "app.commitment_candidates").is_ok());
     assert!(ask("db", "query", "app.commitment_candidate_sources").is_ok());
+    assert!(ask("db", "query", "app.commitment_extraction_state").is_ok());
+    assert!(ask("db", "query", "app.commitment_email_thread_judgements").is_ok());
+    assert!(ask("ai", "generate", "summarization").is_ok());
+    assert!(ask("ai", "generate", "chat").is_err());
+    assert!(ask("ai", "embed", "summarization").is_err());
+    assert!(ask("jobs", "enqueue-options", "commitments-extraction").is_ok());
+    assert!(ask("jobs", "enqueue-options", "other-queue").is_err());
+    assert!(ask("api", "call", "email").is_ok());
+    assert!(ask("api", "call", "connectors").is_err());
     assert!(ask("db", "query", "app.users").is_err());
     assert!(ask("db", "query", "app.tasks").is_err());
     assert!(ask("jobs", "enqueue-after-commit", "commitments-memory-sync").is_err());

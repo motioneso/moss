@@ -12,9 +12,46 @@
     {
       "port": "db",
       "operations": ["query"],
-      "resources": ["app.commitment_candidates", "app.commitment_candidate_sources"]
+      "resources": [
+        "app.commitment_candidates",
+        "app.commitment_candidate_sources",
+        "app.commitment_extraction_state",
+        "app.commitment_email_thread_judgements"
+      ]
     },
-    { "port": "context", "operations": ["read"], "resources": ["call"] }
+    {
+      "port": "context",
+      "operations": ["read", "uuid", "local-date"],
+      "resources": ["call", "account"]
+    },
+    {
+      "port": "ai",
+      "operations": ["generate"],
+      "resources": ["summarization", "structured"]
+    },
+    {
+      "port": "jobs",
+      "operations": ["enqueue-options"],
+      "resources": ["commitments-extraction", "commitments-email-judgement"]
+    },
+    {
+      "port": "api",
+      "operations": ["call"],
+      "resources": ["email", "people", "tasks", "notes"]
+    },
+    {
+      "port": "tools",
+      "operations": ["offer", "run"],
+      "resources": [
+        "commitments.heartbeatOpen",
+        "commitments.list",
+        "commitments.threadJudgements",
+        "commitments.get",
+        "commitments.accept",
+        "commitments.reject",
+        "commitments.snooze"
+      ]
+    }
   ],
   "database": {
     "migrations": ["sql/0125_commitment_candidates.sql", "sql/0220_commitment_email_items.sql"],
@@ -27,25 +64,75 @@
     ],
     "ledger": "core-legacy",
     "access": {
-      "app.commitment_candidates": { "access": "owner-only" },
-      "app.commitment_candidate_sources": { "access": "owner-only" },
-      "app.commitment_candidate_events": { "access": "owner-only" },
-      "app.commitment_extraction_state": { "access": "owner-only" },
-      "app.commitment_email_thread_judgements": { "access": "owner-only" }
+      "app.commitment_candidates": {
+        "access": "owner-only"
+      },
+      "app.commitment_candidate_sources": {
+        "access": "owner-only"
+      },
+      "app.commitment_candidate_events": {
+        "access": "owner-only"
+      },
+      "app.commitment_extraction_state": {
+        "access": "owner-only"
+      },
+      "app.commitment_email_thread_judgements": {
+        "access": "owner-only"
+      }
     }
   },
   "routes": [
-    { "method": "GET", "path": "/candidates", "signIn": true },
-    { "method": "GET", "path": "/candidates/:id", "signIn": true },
-    { "method": "PATCH", "path": "/candidates/:id/status", "signIn": true },
-    { "method": "POST", "path": "/candidates/:id/resolve", "signIn": true },
-    { "method": "POST", "path": "/candidates/:id/suppress", "signIn": true }
+    {
+      "method": "GET",
+      "path": "/candidates",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/candidates/:id",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/candidates/:id/status",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/candidates/:id/resolve",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/candidates/:id/suppress",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/extract",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/extraction-state",
+      "signIn": true
+    }
   ],
   "requires": {},
-  "provides": {},
+  "provides": {
+    "requestThreadJudgement": "1.0.0",
+    "prepareCommitmentAction": "1.0.0"
+  },
   "icons": ["icons/commitments.svg"],
-  "accounts": { "supportsUserDisable": false, "defaultEnabled": true },
-  "lifecycle": { "required": true, "bundled": true, "removable": false },
+  "accounts": {
+    "supportsUserDisable": false,
+    "defaultEnabled": true
+  },
+  "lifecycle": {
+    "required": true,
+    "bundled": true,
+    "removable": false
+  },
   "screens": {},
   "navigation": [],
   "settings": [
@@ -54,13 +141,13 @@
       "label": "Commitments",
       "path": "/settings?section=modules&module=commitments",
       "scope": "user",
-      "description": "Commitments has no settings page. Review suggestions through the Commitments routes until the review screen arrives."
+      "description": "Commitments has no settings page. Review suggestions by asking Moss in chat."
     }
   ],
   "features": [
     {
       "id": "commitments.review-candidates",
-      "description": "A person can list the commitment suggestions Moss found, filter them by status, open one with its saved evidence, and accept it, reject it, snooze it or mark it as not owed. Each person sees only their own suggestions.",
+      "description": "A person can list the commitment suggestions Moss found, filter them by status, open one with its saved evidence, and accept it, reject it, snooze it or mark it as not owed. Each person sees only their own suggestions. Extraction and the email check run as background jobs and a person can queue one with the extract route.",
       "errors": [
         {
           "code": "candidate_not_found",
@@ -90,6 +177,100 @@
           "description": "Resolving suggestions is not available yet. Nothing was changed."
         }
       ]
+    },
+    {
+      "id": "commitments.where-to-find",
+      "description": "Commitments has no screen, navigation entry or settings pane. Moss finds commitment suggestions from your chats, notes and email in the background."
+    },
+    {
+      "id": "commitments.review-in-chat",
+      "description": "You review commitments by asking Moss in chat: list suggestions, show the evidence for one, then accept it, reject it or snooze it. Each change asks for your approval first. A suggestion reaches no task list until you accept it."
+    },
+    {
+      "id": "commitments.heartbeat_source",
+      "description": "Accepted commitments with a due date can appear in Moss check-ins. Check-ins read saved commitments only.",
+      "errors": [
+        {
+          "code": "commitments_heartbeat_source_unavailable",
+          "class": "transient",
+          "description": "Commitments could not be read for a check-in. The next check tries again."
+        }
+      ]
+    },
+    {
+      "id": "commitments.chat_app_actions",
+      "description": "Chat tools read suggestions, change their status after approval, and report which email threads were already judged. Resolving a suggestion is still unavailable."
+    },
+    {
+      "id": "structured.commitments.email-judgement",
+      "description": "Checked what new email asks of you"
+    },
+    {
+      "id": "commitments.email-owner-participation",
+      "description": "Email suggests commitments only when you wrote in the conversation. Unanswered questions stay eligible and answered threads are skipped. Email and People supply the thread and the sender, and a missing helper is noted and skipped. Chat and notes text is read only when a helper module supplies it. None does yet, so those runs finish with nothing found."
+    },
+    {
+      "id": "commitments.extract",
+      "description": "A person can ask Moss to read one source again for new commitments. The request is queued and the answer comes back at once.",
+      "errors": [
+        {
+          "code": "extract_source_invalid",
+          "class": "validation",
+          "description": "The source must be chat, email or notes. Pick one of those and try again."
+        }
+      ]
     }
-  ]
+  ],
+  "optionalRequires": {
+    "email": ">=0.1.0, <1.0.0",
+    "people": ">=0.1.0, <1.0.0",
+    "tasks": ">=0.1.4, <1.0.0",
+    "notes": ">=0.1.0, <1.0.0"
+  },
+  "jobs": {
+    "commitments-extraction": {
+      "source-kind": {
+        "kind": "choice",
+        "choices": ["chat", "email", "notes"]
+      }
+    },
+    "commitments-email-judgement": {
+      "message-id": {
+        "kind": "id"
+      }
+    }
+  },
+  "tools": {
+    "commitments.heartbeatOpen": {
+      "description": "Background read of accepted commitments that are due soon or recently overdue, with a change revision.",
+      "risk": "read"
+    },
+    "commitments.list": {
+      "description": "List commitment suggestions found in your chats, notes and email.",
+      "risk": "read"
+    },
+    "commitments.threadJudgements": {
+      "description": "Say which email threads were already judged, when, and with what outcome. No message text.",
+      "risk": "read"
+    },
+    "commitments.get": {
+      "description": "Show one commitment suggestion with its saved evidence.",
+      "risk": "read"
+    },
+    "commitments.accept": {
+      "description": "Accept a commitment suggestion after the person approves.",
+      "risk": "write",
+      "approvalVersion": true
+    },
+    "commitments.reject": {
+      "description": "Reject a commitment suggestion after the person approves.",
+      "risk": "write",
+      "approvalVersion": true
+    },
+    "commitments.snooze": {
+      "description": "Snooze a commitment suggestion until a date after the person approves.",
+      "risk": "write",
+      "approvalVersion": true
+    }
+  }
 }

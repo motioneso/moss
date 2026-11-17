@@ -123,6 +123,12 @@ impl World {
         ))).unwrap();
         id
     }
+    fn seed_state(&self, owner: uuid::Uuid, kind: &str) {
+        self.f.rt.block_on(self.f.root.execute(
+            "INSERT INTO app.commitment_extraction_state(owner_user_id,source_kind,last_extracted_at) VALUES($1,$2,now())",
+            &[&owner, &kind],
+        )).unwrap();
+    }
     fn add_user(&self) -> uuid::Uuid {
         let id = uuid::Uuid::new_v4();
         self.f.rt.block_on(self.f.root.execute(
@@ -233,6 +239,9 @@ fn rust_answers_match_the_old_routes_step_for_step() {
         )
     };
     let (o, n) = (seeded(old_actor), seeded(new_actor));
+    for actor in [old_actor, new_actor] {
+        w.seed_state(actor, "notes");
+    }
     let ids = |x: (uuid::Uuid, uuid::Uuid, uuid::Uuid, uuid::Uuid)| [("a", x.0), ("b", x.1), ("c", x.2), ("d", x.3)];
     let steps: Vec<Value> = vec![
         json!({"method":"GET","url":"/api/commitments/candidates"}),
@@ -253,6 +262,12 @@ fn rust_answers_match_the_old_routes_step_for_step() {
         json!({"method":"POST","url":"/api/commitments/candidates/{b}/suppress","body":{}}),
         json!({"method":"GET","url":"/api/commitments/candidates/99999999-9999-4999-8999-999999999999"}),
         json!({"method":"GET","url":"/api/commitments/candidates"}),
+        json!({"method":"POST","url":"/api/commitments/extract","body":{"sourceKind":"chat"}}),
+        json!({"method":"POST","url":"/api/commitments/extract","body":{"sourceKind":"notes"}}),
+        json!({"method":"POST","url":"/api/commitments/extract","body":{"sourceKind":"mail"}}),
+        json!({"method":"POST","url":"/api/commitments/extract","body":{}}),
+        json!({"method":"POST","url":"/api/commitments/extract","body":{"sourceKind":7}}),
+        json!({"method":"GET","url":"/api/commitments/extraction-state"}),
     ];
     let old = replay::old_routes(old_actor, &fill(&steps, &ids(o)), &json!({}));
     let mut new = vec![];
@@ -267,4 +282,72 @@ fn rust_answers_match_the_old_routes_step_for_step() {
     new.iter_mut().for_each(replay::mask);
     assert_eq!(new, old);
     println!("PASS parity: {} steps match the old routes", steps.len());
+}
+
+/// Turns the owner rule on a table into "anyone may read", asks the question, then puts it back.
+fn leak_check(w: &World, table: &str, policy: &str, roles: &str, who: uuid::Uuid) -> usize {
+    let (drop, restore) = (
+        format!("DROP POLICY {policy} ON {table}"),
+        format!(
+            "CREATE POLICY {policy} ON {table} FOR ALL TO {roles} USING (owner_user_id = app.current_actor_user_id()) WITH CHECK (owner_user_id = app.current_actor_user_id())"
+        ),
+    );
+    let open = format!(
+        "CREATE POLICY {policy} ON {table} FOR ALL TO {roles} USING (true) WITH CHECK (true)"
+    );
+    w.f.rt.block_on(w.f.root.execute(&drop, &[])).unwrap();
+    w.f.rt.block_on(w.f.root.execute(&open, &[])).unwrap();
+    let seen = rows_as(&w.f, who, &format!("SELECT 1 FROM {table}")).len();
+    w.f.rt.block_on(w.f.root.execute(&drop, &[])).unwrap();
+    w.f.rt.block_on(w.f.root.execute(&restore, &[])).unwrap();
+    seen
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn extraction_state_and_judgements_stay_private_and_jobs_carry_ids_only() {
+    let w = World::new();
+    let (a, b) = (w.f.a, w.f.b);
+    w.seed_state(a, "notes");
+    w.f.rt.block_on(w.f.root.execute(
+        "INSERT INTO app.commitment_email_thread_judgements(owner_user_id,thread_ref,last_judged_external_id,outcome) VALUES($1,$2,'e1','item')",
+        &[&a, &MARK],
+    )).unwrap();
+
+    let mine = w.call(a, "GET", "/extraction-state", json!(null));
+    assert_eq!(mine["body"].as_array().unwrap().len(), 1, "{mine}");
+    assert_eq!(w.call(b, "GET", "/extraction-state", json!(null))["body"], json!([]));
+    assert!(rows_as(&w.f, b, "SELECT 1 FROM app.commitment_extraction_state").is_empty());
+    assert!(rows_as(&w.f, b, "SELECT 1 FROM app.commitment_email_thread_judgements").is_empty());
+    println!("PASS rls: the second person sees no extraction state and no thread judgements");
+
+    // Each protection is removed in turn, the second person gets in, and the protection is put back.
+    let state = leak_check(&w, "app.commitment_extraction_state", "commitment_extraction_state_app_runtime", "jarvis_app_runtime", b);
+    assert_eq!(state, 1, "without the policy the second person must see the state");
+    let judged = leak_check(&w, "app.commitment_email_thread_judgements", "commitment_email_thread_judgements_owner", "jarvis_app_runtime, jarvis_worker_runtime", b);
+    assert_eq!(judged, 1, "without the policy the second person must see the judgements");
+    assert!(rows_as(&w.f, b, "SELECT 1 FROM app.commitment_extraction_state").is_empty());
+    assert!(rows_as(&w.f, b, "SELECT 1 FROM app.commitment_email_thread_judgements").is_empty());
+    println!("PASS rls: removing either policy lets the second person in, restoring it shuts them out");
+
+    // The extract request names a source and carries no text, even when text is sent along.
+    let queued = w.call(a, "POST", "/extract", json!({"sourceKind":"notes","text":MARK}));
+    assert_eq!((queued["status"].as_i64(), &queued["body"]), (Some(202), &json!({"queued":true})), "{queued}");
+    let payloads: Vec<String> = w.f.rt.block_on(w.f.root.query(
+        "SELECT payload::text FROM moss_queue.jobs WHERE queue LIKE '%commitments-extraction'", &[],
+    )).unwrap().iter().map(|r| r.get(0)).collect();
+    assert_eq!(payloads.len(), 1, "one waiting request: {payloads:?}");
+    assert!(payloads[0].contains("notes") && !payloads[0].contains(MARK), "{}", payloads[0]);
+    let again = w.call(a, "POST", "/extract", json!({"sourceKind":"notes"}));
+    assert_eq!(again["status"], 202);
+    let count: i64 = w.f.rt.block_on(w.f.root.query_one(
+        "SELECT count(*) FROM moss_queue.jobs WHERE queue LIKE '%commitments-extraction'", &[],
+    )).unwrap().get(0);
+    assert_eq!(count, 1, "asking twice folds into one waiting job");
+    let everywhere: i64 = w.f.rt.block_on(w.f.root.query_one(
+        "SELECT count(*) FROM moss_queue.jobs WHERE payload::text LIKE $1", &[&format!("%{MARK}%")],
+    )).unwrap().get(0);
+    assert_eq!(everywhere, 0);
+    println!("PASS jobs: the extract job carries the source kind only, and asking twice queues one job");
+    let _ = AccessContext::new(a, "commitments-proof");
 }
