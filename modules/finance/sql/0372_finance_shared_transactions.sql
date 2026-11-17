@@ -16,4 +16,3 @@ CREATE TABLE app.finance_shared_transactions (
   splits jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(splits) = 'array'),
   PRIMARY KEY (owner_user_id, id)
 );
-CREATE INDEX finance_shared_transactions_account ON app.finance_shared_transactions (owner_user_id, account_id);
