@@ -11,9 +11,7 @@
   "capabilities": [
     {
       "port": "db",
-      "operations": [
-        "query"
-      ],
+      "operations": ["query"],
       "resources": [
         "app.news_compilation_snapshots",
         "app.news_custom_sources",
@@ -27,64 +25,33 @@
     },
     {
       "port": "context",
-      "operations": [
-        "read",
-        "uuid"
-      ],
-      "resources": [
-        "call",
-        "new"
-      ]
+      "operations": ["read", "uuid"],
+      "resources": ["call", "new"]
     },
     {
       "port": "kv",
-      "operations": [
-        "get",
-        "set"
-      ],
-      "resources": [
-        "news.source-previews"
-      ]
+      "operations": ["get", "set"],
+      "resources": ["news.source-previews"]
     },
     {
       "port": "fetch",
-      "operations": [
-        "get"
-      ],
-      "resources": [
-        "public-web"
-      ]
+      "operations": ["get"],
+      "resources": ["public-web"]
     },
     {
       "port": "jobs",
-      "operations": [
-        "schedule",
-        "unschedule",
-        "enqueue-options",
-        "list-open"
-      ],
-      "resources": [
-        "news-refresh",
-        "news-revalidate"
-      ]
+      "operations": ["schedule", "unschedule", "enqueue-options", "list-open"],
+      "resources": ["news-refresh", "news-revalidate"]
     },
     {
       "port": "notify",
-      "operations": [
-        "post"
-      ],
-      "resources": [
-        "news"
-      ]
+      "operations": ["post"],
+      "resources": ["news"]
     },
     {
       "port": "ai",
-      "operations": [
-        "generate"
-      ],
-      "resources": [
-        "structured"
-      ]
+      "operations": ["generate"],
+      "resources": ["structured"]
     }
   ],
   "database": {
@@ -223,9 +190,7 @@
   "provides": {
     "collectNewsPersonalizationExportSection": "1.0.0"
   },
-  "icons": [
-    "icons/news.svg"
-  ],
+  "icons": ["icons/news.svg"],
   "accounts": {
     "supportsUserDisable": true,
     "defaultEnabled": true
@@ -239,17 +204,13 @@
     "news-refresh": {
       "kind": {
         "kind": "choice",
-        "choices": [
-          "user_refresh"
-        ]
+        "choices": ["user_refresh"]
       }
     },
     "news-revalidate": {
       "kind": {
         "kind": "choice",
-        "choices": [
-          "revalidate"
-        ]
+        "choices": ["revalidate"]
       }
     }
   },
