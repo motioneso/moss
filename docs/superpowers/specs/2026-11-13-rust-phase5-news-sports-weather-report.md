@@ -878,3 +878,57 @@ model proposes, and it reads saved sources again with health states. It still sh
   above. Round 2 rated the leftover risk minor.
 - Minor, fixed: a slot value made only of dots is refused, and refresh re-checks that a recipe's
   address is on one of its own sites.
+
+## Sports source chat tools (part 14b)
+
+### What was built
+
+The Sports package now offers nine chat tools for sources. It still shows no screen. Each tool
+runs the same code as the matching route, so a tool and a route cannot disagree.
+
+- Four tools only read: list sources, preview a new source, preview new followed teams for a
+  source, and preview a rebuilt recipe.
+- Four tools change something: confirm a new source, confirm new followed teams, confirm a rebuilt
+  recipe, and retry a source now. The person is asked first, every time.
+- One tool deletes a source. The person is asked first, with the saved source shown on the card.
+- A card is built from the stored source and the stored preview, never from text the chat sends.
+  Its version is a fingerprint of those records. The tool builds the card again when it runs and
+  refuses if the version the person approved no longer matches, so a change between asking and
+  running cannot slip through.
+- A tool refuses any extra field, and a source id that is not an id.
+- The package gains a signed-in route that hands a chat call to the host's approval check, as
+  Meals, Goals and Wellness have. The module's WebAssembly bridge gains the host tools connection.
+- The manifest gains the tools, the route, a features entry, one error and one fix path.
+
+### Proof
+
+| Claim                          | Check                                                                                                     | Result                                                       |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Removing asks first            | Remove with no approval, with a plain approval, with an out-of-date card, then with the real card         | Only the real card removed the source, once                  |
+| Cards come from stored records | Card built from the saved row and the stored preview; a different preview gives a different version       | Matched                                                      |
+| Another person is shut out     | Second person asks for a card, previews and removes                                                       | No card, nothing removed. Seen failing with row security off |
+| Private text stays out         | Planted text in a source; every table scanned after tool use (73 tables) and the native test's host calls | Found only in the owner's own rows                           |
+| Tools match the routes         | The four read tools against the route answers; coverage, rebuild and retry through cards                  | Same answers                                                 |
+| Same answers as the old code   | The part 14a replay of 34 source steps against the old routes (the routes did not change)                 | Matched                                                      |
+| Native and WebAssembly builds  | 8 native tool tests, 2 real-database tests against the built component, package tests                     | All passed                                                   |
+| Real server, real chat route   | Source list through the tool route; a removal with no approval; nothing rewritten                         | List answered; removal refused                               |
+
+### Not proven
+
+- Reddit refused the real server again, so a real subreddit preview through the tools was not seen.
+  The fake-data tests cover that path.
+- The model that writes recipes gave no usable answer in the live run, so a recipe save through the
+  tools was not seen live.
+- The full approved flow with the real card version cannot be built from outside the server. It is
+  proven in the real-database test, not in the live run. The live run proves the refusals.
+- The old chat tools were not run side by side with the new ones. Parity rests on the shared route
+  code and the part 14a replay.
+- The approval card is data only. No approval screen exists yet, since this part has no screens.
+
+### Not built
+
+- Nothing beyond the nine tools. No new crates were added.
+
+### Review round 1 (part 14b)
+
+Pending.
