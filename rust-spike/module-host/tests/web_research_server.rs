@@ -100,7 +100,7 @@ fn installed_web_research_package_serves_status_from_the_real_server() {
     );
     private(
         &root.join("network.json"),
-        &json!({"listen":format!("127.0.0.1:{}",port.0),"origins":[origin],"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
+        &json!({"listen":format!("0.0.0.0:{}",port.0),"origins":[origin],"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
     );
     let client = reqwest::blocking::Client::builder()
         .add_root_certificate(reqwest::Certificate::from_pem(&fs::read(&cert).unwrap()).unwrap())
@@ -327,9 +327,89 @@ fn installed_web_research_package_serves_status_from_the_real_server() {
     }
     // The server refuses a path the manifest does not declare before the package sees it.
     assert_eq!(call("/nope", Some(&cookie)).0, 400);
-    // A private search is never stored. The package has no route that takes one, so a marker in
-    // the person's own name stands in for private text the scan must be able to catch.
+    // Page reading goes through the same real route path, with the same sign-in rule.
     const MARK: &str = "PLANTED-LIVE-MARKER-web-7d2e";
+    let read = |urls: Value, cookie: Option<&str>| {
+        let mut request = client
+            .post(format!("{origin}/api/m/web/read"))
+            .header("origin", &origin)
+            .json(&json!({ "urls": urls }));
+        if let Some(cookie) = cookie {
+            request = request.header("cookie", cookie);
+        }
+        let response = request.send().unwrap_or_else(|e| panic!("read: {e}\n{}", log()));
+        let status = response.status().as_u16();
+        let body = json_of(&response.text().unwrap_or_default());
+        println!("POST /read -> {status}");
+        (status, body)
+    };
+    assert_eq!(read(json!(["https://example.com/"]), None).0, 401);
+    assert_eq!(read(json!([]), Some(&cookie)).0, 400);
+    let private_marker = format!("https://10.0.0.5/{MARK}");
+    for who in [&cookie, &other] {
+        let (status, body) = read(
+            json!([private_marker, "https://127.0.0.1/", "https://localhost/", "http://example.com/"]),
+            Some(who),
+        );
+        assert_eq!(status, 200, "{body}");
+        assert_eq!(body["documents"].as_array().unwrap().len(), 0, "{body}");
+        let reasons: Vec<&str> = body["trace"]["documents"].as_array().unwrap().iter().map(|r| r["reason"].as_str().unwrap()).collect();
+        assert_eq!(reasons, ["blocked", "blocked", "blocked", "not_https"], "{body}");
+    }
+    println!("private and loopback addresses refused for two people");
+    for who in [&cookie, &other] {
+        let (status, body) = read(json!(["https://example.com/"]), Some(who));
+        assert_eq!(status, 200, "{body}");
+        let doc = &body["documents"][0];
+        println!("LIVE example.com read -> title={} text_len={}", doc["title"], doc["text"].as_str().map_or(0, str::len));
+        assert!(doc["text"].as_str().unwrap_or("").contains("Example Domain"), "{body}");
+        assert_eq!(doc["domain"], "example.com");
+        std::thread::sleep(Duration::from_millis(1500));
+    }
+    // Another device reaches the server through the machine's network address, not loopback. The
+    // address is found from the routing table and is never printed.
+    let lan = std::net::UdpSocket::bind("0.0.0.0:0")
+        .and_then(|socket| socket.connect("192.0.2.1:9").and_then(|_| socket.local_addr()))
+        .map(|addr| addr.ip());
+    match lan {
+        Ok(ip) if !ip.is_loopback() => {
+            let remote = reqwest::blocking::Client::builder()
+                .add_root_certificate(reqwest::Certificate::from_pem(&fs::read(&cert).unwrap()).unwrap())
+                .no_proxy()
+                .resolve("localhost", std::net::SocketAddr::new(ip, port.0.parse().unwrap()))
+                .timeout(Duration::from_secs(60))
+                .build()
+                .unwrap();
+            let send = || {
+                remote
+                    .post(format!("{origin}/api/m/web/read"))
+                    .header("origin", &origin)
+                    .header("cookie", &other)
+                    .json(&json!({"urls": ["https://10.0.0.5/"]}))
+                    .send()
+                    .unwrap_or_else(|e| panic!("network address read: {e}"))
+            };
+            // Sharing is off by default, so another device is refused until the administrator
+            // turns it on through the real settings route.
+            assert_eq!(send().status().as_u16(), 403, "sharing is off");
+            let turned_on = client
+                .put(format!("{origin}/api/network"))
+                .header("origin", &origin)
+                .header("cookie", &cookie)
+                .json(&json!({"sharing": true}))
+                .send()
+                .unwrap();
+            assert_eq!(turned_on.status().as_u16(), 200);
+            let response = send();
+            assert_eq!(response.status().as_u16(), 200);
+            let body = json_of(&response.text().unwrap_or_default());
+            assert_eq!(body["trace"]["documents"][0]["reason"], "blocked", "{body}");
+            println!("reached through the machine's network address (not loopback): yes");
+        }
+        _ => println!("no network address found, so the other-device check did not run"),
+    }
+    // The marker was sent inside a refused address above, so the log and every table must not hold
+    // it. Planting it in a person's name shows the scan would catch a leak.
     let text = log();
     assert!(!text.contains(MARK), "marker reached the server log");
     let scan = || {
