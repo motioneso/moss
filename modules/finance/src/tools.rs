@@ -1,5 +1,5 @@
 //! Assistant tools. The host enforces the account's approval policy before a write tool arrives.
-use crate::{accounts, input::Refusal, ledger};
+use crate::{accounts, connect, input::Refusal, ledger, sync};
 use moss_module_sdk::{Error, Host, Response, Result};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -20,6 +20,7 @@ pub fn status(refusal: &Refusal) -> u16 {
     match refusal.code {
         "manual_conflict" | "manual_reconciled_period" => 409,
         "manual_unavailable" => 404,
+        "bank_unavailable" => 502,
         _ => 400,
     }
 }
@@ -33,6 +34,9 @@ pub fn execute<H: Host + ?Sized>(host: &H, request: Request) -> Result<Value> {
         "finance.manual.context" => accounts::context(host),
         "finance.manual.account-create" => Ok(settle(ledger::create_account(host, &request.parameters)?)),
         "finance.manual.entry-create" => Ok(settle(ledger::create_entry(host, &request.parameters)?)),
+        "finance.connect.start" => Ok(settle(connect::start(host)?)),
+        "finance.connect.poll" => connect::poll(host, false),
+        "finance.sync.run-now" => sync::run(host),
         _ => Err(Error::new("Unknown Finance tool")),
     }
 }

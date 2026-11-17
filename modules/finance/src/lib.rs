@@ -1,9 +1,14 @@
-//! Finance package, part 20: the account list, manual account creation and manual entries, private
-//! to each owner. Everything crosses the guest-safe SDK Host interface. No model, network or job
-//! port is used, and no amount or account name is written to logs, jobs or activity rows.
+//! Finance package, parts 20 and 21: the account list, manual accounts and entries, and bank
+//! connect and sync, all private to each owner. Everything crosses the guest-safe SDK Host
+//! interface. Bank keys and tokens stay in the host broker. No amount or account name is written
+//! to logs, jobs or activity rows.
 pub mod accounts;
+pub mod bank;
+pub mod connect;
 pub mod input;
 pub mod ledger;
+pub mod plaid;
+pub mod sync;
 pub mod tools;
 
 #[cfg(target_arch = "wasm32")]
@@ -24,6 +29,12 @@ pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
         ("POST", "/finance/manual/entries") => {
             tools::route_write(ledger::create_entry(host, &request.body))
         }
+        ("POST", "/finance/connect/start") => tools::route_write(connect::start(host)),
+        ("POST", "/finance/connect/poll") => connect::poll(host, false).map(|v| Response::new(200, v)),
+        ("POST", "/finance/sync/run-now") => sync::run(host).map(|v| Response::new(200, v)),
+        ("POST", "/finance/chat/connect/start") => chat(host, "finance.connect.start", &request),
+        ("POST", "/finance/chat/connect/poll") => chat(host, "finance.connect.poll", &request),
+        ("POST", "/finance/chat/sync/run-now") => chat(host, "finance.sync.run-now", &request),
         ("POST", "/finance/chat/manual/account-create") => chat(host, "finance.manual.account-create", &request),
         ("POST", "/finance/chat/manual/entry-create") => chat(host, "finance.manual.entry-create", &request),
         _ => return Response::new(404, json!({"message":"Route not found"})),
@@ -48,6 +59,15 @@ pub fn handle<H: Host + ?Sized>(
         "route" => {
             let request: RouteRequest = serde_json::from_str(payload)?;
             Ok(serde_json::to_string(&route(host, request))?)
+        }
+        "job" => {
+            let job: serde_json::Value = serde_json::from_str(payload)?;
+            let done = match job["queue"].as_str() {
+                Some(bank::SWEEP_QUEUE) => sync::run(host)?,
+                Some(bank::POLL_QUEUE) => connect::poll(host, true)?,
+                _ => return Err(moss_module_sdk::Error::new("Unsupported Finance job")),
+            };
+            Ok(done.to_string())
         }
         "tool" => {
             let result = tools::execute(host, serde_json::from_str(payload)?)

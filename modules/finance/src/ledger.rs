@@ -23,7 +23,7 @@ pub fn values(pairs: Vec<(&str, Value)>) -> BTreeMap<String, Value> {
     pairs.into_iter().map(|(k, v)| (k.to_owned(), v)).collect()
 }
 
-fn text<H: Host + ?Sized>(host: &H, port_resource: &str, operation: &str, key: &str) -> Result<String> {
+pub(crate) fn text<H: Host + ?Sized>(host: &H, port_resource: &str, operation: &str, key: &str) -> Result<String> {
     let value = host.call("context", operation, port_resource, json!({}))?;
     value[key].as_str().map(str::to_owned).ok_or_else(|| Error::new("Host context incomplete"))
 }
@@ -52,7 +52,7 @@ fn failed(reason: &str) -> Outcome {
     Err(refuse(code, message))
 }
 
-fn first<H: Host + ?Sized>(host: &H, table: &str, filter: Filter) -> Result<Option<Value>> {
+pub(crate) fn first<H: Host + ?Sized>(host: &H, table: &str, filter: Filter) -> Result<Option<Value>> {
     let mut query = Query::select(filter);
     query.limit = Some(1);
     Ok(Client(host).query(table, &query)?.into_iter().next())
@@ -60,9 +60,12 @@ fn first<H: Host + ?Sized>(host: &H, table: &str, filter: Filter) -> Result<Opti
 
 /// Activity rows hold ids only. No amount, name or note is written there.
 fn log<H: Host + ?Sized>(host: &H, kind: &str, params: Value) -> Result<()> {
+    log_as(host, "user", kind, params)
+}
+pub(crate) fn log_as<H: Host + ?Sized>(host: &H, actor: &str, kind: &str, params: Value) -> Result<()> {
     let id = text(host, "new", "uuid", "id")?;
     let at = text(host, "call", "read", "now")?;
-    let row = values(vec![("id", json!(id)), ("at", json!(at)), ("actor", json!("user")), ("kind", json!(kind)), ("params", params)]);
+    let row = values(vec![("id", json!(id)), ("at", json!(at)), ("actor", json!(actor)), ("kind", json!(kind)), ("params", params)]);
     Client(host).query(ACTIVITY, &Query::insert(row))?;
     Ok(())
 }
