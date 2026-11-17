@@ -13,7 +13,7 @@ pub const SOURCES: &str = "app.commitment_candidate_sources";
 
 /// The candidate as the old routes returned it. The resolution reference itself stays in the
 /// database. Only whether one exists leaves.
-fn candidate_dto(row: &Value) -> Result<Value> {
+pub(crate) fn candidate_dto(row: &Value) -> Result<Value> {
     let bad = || Error::new("Invalid candidate row");
     let text = |key: &str| row[key].as_str().ok_or_else(bad);
     let list = |key: &str| if row[key].is_array() { row[key].clone() } else { json!([]) };
@@ -63,18 +63,18 @@ fn evidence_dto(row: &Value) -> Result<Value> {
     }))
 }
 
-fn find<H: Host + ?Sized>(host: &H, id: &str) -> Result<Option<Value>> {
+pub(crate) fn find<H: Host + ?Sized>(host: &H, id: &str) -> Result<Option<Value>> {
     let mut query = Query::select(Filter::eq("id", id));
     query.limit = Some(1);
     Ok(Client(host).query(CANDIDATES, &query)?.into_iter().next())
 }
 
-fn now<H: Host + ?Sized>(host: &H) -> Result<String> {
+pub(crate) fn now<H: Host + ?Sized>(host: &H) -> Result<String> {
     let context = host.call("context", "read", "call", json!({}))?;
     context["now"].as_str().map(str::to_owned).ok_or_else(|| Error::new("Host clock unavailable"))
 }
 
-fn compare(column: &str, op: Compare, value: impl Into<Value>) -> Filter {
+pub(crate) fn compare(column: &str, op: Compare, value: impl Into<Value>) -> Filter {
     Filter::Compare { column: column.into(), op, value: value.into() }
 }
 
