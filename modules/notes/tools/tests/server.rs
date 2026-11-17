@@ -309,6 +309,7 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
                 version: "0.1.0".parse().unwrap(),
                 compiled_cache: None,
                 fuel_ceiling: None,
+                browser_dir: None,
             },
             Ok,
         )
@@ -757,6 +758,7 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
                 version: "0.1.0".parse().unwrap(),
                 compiled_cache: None,
                 fuel_ceiling: None,
+                browser_dir: None,
             },
             |services| {
                 Ok(Arc::new(
@@ -843,6 +845,7 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
                 version: "0.1.0".parse().unwrap(),
                 compiled_cache: None,
                 fuel_ceiling: None,
+                browser_dir: None,
             },
             |services| {
                 let folders = PreferenceFolders::new(
@@ -977,6 +980,7 @@ fn installed_notes_package_serves_folder_settings_from_the_real_server() {
                 version: "0.1.0".parse().unwrap(),
                 compiled_cache: None,
                 fuel_ceiling: None,
+                browser_dir: None,
             },
             |services| {
                 let folders = PreferenceFolders::new(

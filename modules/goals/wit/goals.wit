@@ -1,0 +1,10 @@
+package moss:module@1.0.0;
+
+interface db { call: func(request: string) -> result<string, string>; }
+interface context { call: func(request: string) -> result<string, string>; }
+
+world goals {
+  import db;
+  import context;
+  export handle: func(kind: string, payload: string) -> result<string, string>;
+}

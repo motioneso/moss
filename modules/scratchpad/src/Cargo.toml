@@ -1,0 +1,38 @@
+[package]
+name = "moss-scratchpad-module"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Guest-safe Scratchpad note, append and settings routes"
+
+[workspace]
+
+[lib]
+path = "lib.rs"
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+moss-module-sdk = { path = "../../../rust-spike/module-sdk" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wit-bindgen = { version = "=0.57.1", default-features = false, features = ["macros", "realloc"] }
+
+[profile.release]
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
+
+[[test]]
+name = "shortcut"
+path = "../tests/shortcut.rs"
+
+[[test]]
+name = "routes"
+path = "../tests/routes.rs"
+
+[[test]]
+name = "privacy"
+path = "../tests/privacy.rs"

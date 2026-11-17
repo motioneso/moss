@@ -100,6 +100,7 @@ impl Installed {
                 version: "0.1.0".parse().unwrap(),
                 compiled_cache: None,
                 fuel_ceiling: None,
+                browser_dir: None,
             },
             move |next| {
                 Ok(Arc::new(

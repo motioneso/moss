@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 2,
+  "id": "goals",
+  "name": "Goals",
+  "description": "Keeps each person's long-running goals and the evidence added to them, private to the owner. A person can list, create, change and close a goal, and add evidence to a goal that is still open. Evidence on a closed goal is refused. Chat tools, the Today section and the screen are not part of this package yet.",
+  "publisher": "Moss",
+  "version": "0.1.0",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "fuelLimit": 200000000,
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "db",
+      "operations": ["query"],
+      "resources": ["app.moss_goals", "app.moss_goal_evidence"]
+    },
+    {
+      "port": "context",
+      "operations": ["read"],
+      "resources": ["call"]
+    }
+  ],
+  "database": {
+    "migrations": [
+      "sql/0123_long_running_goals.sql",
+      "sql/0182_moss_rename_goals.sql",
+      "sql/0300_goals_id_defaults.sql"
+    ],
+    "ownedTables": ["app.moss_goals", "app.moss_goal_evidence"],
+    "ledger": "core-legacy",
+    "access": {
+      "app.moss_goals": { "access": "owner-only" },
+      "app.moss_goal_evidence": { "access": "owner-only" }
+    }
+  },
+  "routes": [
+    { "method": "GET", "path": "/goals", "signIn": true },
+    { "method": "POST", "path": "/goals", "signIn": true },
+    { "method": "GET", "path": "/goals/:id", "signIn": true },
+    { "method": "PATCH", "path": "/goals/:id", "signIn": true },
+    { "method": "POST", "path": "/goals/:id/evidence", "signIn": true }
+  ],
+  "requires": {},
+  "provides": {},
+  "icons": ["icons/goals.svg"],
+  "accounts": { "supportsUserDisable": false, "defaultEnabled": true },
+  "lifecycle": { "required": true, "bundled": true, "removable": false },
+  "screens": {},
+  "navigation": [],
+  "settings": [
+    {
+      "id": "goals.module-settings",
+      "label": "Goals",
+      "path": "/settings?section=modules&module=goals",
+      "scope": "user",
+      "description": "Goals can be reached through the Goals routes. Goals has no settings page, as before."
+    }
+  ],
+  "features": [
+    {
+      "id": "goals.list-create-change-close",
+      "description": "A person can list their goals in priority order, create a goal, change it, and close it by marking it completed or archived. Each person sees only their own goals.",
+      "errors": [
+        {
+          "code": "goal_not_found",
+          "class": "validation",
+          "description": "The goal does not exist or belongs to another person. Check the goal and try again."
+        },
+        {
+          "code": "goal_closed",
+          "class": "validation",
+          "description": "The goal is completed or archived, so new evidence is refused. Reopen the goal to add evidence."
+        }
+      ]
+    },
+    {
+      "id": "goals.evidence",
+      "description": "A person can add evidence to a goal that is still open, with its kind, source and summary. Adding evidence updates the goal's updated time.",
+      "errors": []
+    }
+  ]
+}

@@ -72,6 +72,7 @@ fn signed_rust_package_reuses_data_and_commits_only_successful_drafts() {
             version: "0.1.0".parse().unwrap(),
             compiled_cache: None,
             fuel_ceiling: None,
+            browser_dir: None,
         },
         move |next| {
             let guarded: Arc<dyn moss_module_host::runtime::Ports> = Arc::new(

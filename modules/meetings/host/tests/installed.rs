@@ -61,6 +61,7 @@ fn installed_meetings_keep_each_persons_records_notes_and_preferences_private() 
             version: "0.1.0".parse().unwrap(),
             compiled_cache: None,
             fuel_ceiling: None,
+            browser_dir: None,
         },
         move |next| {
             Ok(Arc::new(moss_meetings_host::MeetingsPorts::new(database, next)?)
