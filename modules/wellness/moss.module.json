@@ -11,31 +11,18 @@
   "capabilities": [
     {
       "port": "db",
-      "operations": [
-        "query"
-      ],
-      "resources": [
-        "app.wellness_checkins"
-      ]
+      "operations": ["query"],
+      "resources": ["app.wellness_checkins"]
     },
     {
       "port": "context",
-      "operations": [
-        "local-date"
-      ],
-      "resources": [
-        "account"
-      ]
+      "operations": ["local-date"],
+      "resources": ["account"]
     },
     {
       "port": "kv",
-      "operations": [
-        "preference.read",
-        "preference.write"
-      ],
-      "resources": [
-        "ai-consent"
-      ]
+      "operations": ["preference.read", "preference.write"],
+      "resources": ["ai-consent"]
     }
   ],
   "database": {
@@ -108,9 +95,7 @@
   ],
   "requires": {},
   "provides": {},
-  "icons": [
-    "icons/wellness.svg"
-  ],
+  "icons": ["icons/wellness.svg"],
   "accounts": {
     "supportsUserDisable": true,
     "defaultEnabled": true
