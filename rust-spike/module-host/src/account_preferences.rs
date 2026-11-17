@@ -39,6 +39,8 @@ pub enum JsonShape {
     /// The `timezone` text inside a larger saved object. Read only: a read returns just that
     /// text, or null when none is saved, and every write is refused.
     SavedTimezone,
+    /// A true or false choice.
+    Boolean,
 }
 /// The two values Weather may save as its unit.
 pub const WEATHER_UNITS: &[&str] = &["metric", "imperial"];
@@ -51,7 +53,7 @@ impl JsonShape {
                 _ => Value::Null,
             };
         }
-        if matches!(self, JsonShape::Place | JsonShape::Choice(_)) && !self.accepts(&value) {
+        if matches!(self, JsonShape::Place | JsonShape::Choice(_) | JsonShape::Boolean) && !self.accepts(&value) {
             Value::Null
         } else {
             value
@@ -66,6 +68,7 @@ impl JsonShape {
         }
         match self {
             JsonShape::SavedTimezone => false,
+            JsonShape::Boolean => value.is_boolean(),
             JsonShape::Place => value.as_object().is_some_and(|o| {
                 let degrees = |k: &str, max: f64| o.get(k).and_then(Value::as_f64).is_some_and(|n| n.is_finite() && n.abs() <= max);
                 let label = o.get("label").and_then(Value::as_str).is_some_and(|t| !t.trim().is_empty() && t.encode_utf16().count() <= 200);
@@ -101,6 +104,13 @@ pub fn weather_bindings() -> BTreeMap<(String, String), Binding> {
             Binding::Json { key: "locale".into(), shape: JsonShape::SavedTimezone },
         ),
     ])
+}
+/// Wellness keeps its assistant-access choice in the account preference the old routes used.
+pub fn wellness_bindings() -> BTreeMap<(String, String), Binding> {
+    BTreeMap::from([(
+        ("wellness".into(), "ai-consent".into()),
+        Binding::Json { key: "wellness.ai_consent_granted".into(), shape: JsonShape::Boolean },
+    )])
 }
 pub struct AccountPreferencesPorts {
     database: Database,

@@ -384,3 +384,79 @@ scripts/run-gate.sh start --gate test:rust-wellness-fixtures
   code on these rows.
 - The numeric check-in values (intensity, energy) cannot carry a marker, so a leak test can only
   search their text.
+
+## Wellness package: check-ins and assistant access (part 13)
+
+Card JS-296. Part of [issue 4027](https://github.com/motioneso/moss/issues/4027). Release note
+Category: N/A.
+
+### What was built
+
+A new package in `modules/wellness`, with its manifest and no screens. It serves five routes that
+behave like the old ones: save a mood check-in, read the history newest first in pages, change an
+earlier check-in, read whether the assistant may use check-ins, and change that choice.
+
+- **Same data.** The package owns the four existing Wellness tables, and its 16 database files are
+  the old ones byte for byte. Installing it changes no saved data. The frozen list of file
+  fingerprints already held all 16, so it did not change.
+- **Same answers.** The check-in routes copy the old rules: the same six feelings and their
+  second-level words, the same rating ranges, the same first-error wording, the same paging token
+  and the same refusal for a stale or mismatched token. Changing a check-in still needs the feeling
+  and still clears the third level.
+- **Local day.** A new check-in stores the person's own date and time zone offset. The host's date
+  call now also returns the offset, so the package needs no time zone library.
+- **Assistant access.** The choice is stored in the same preference as before. Until a person
+  chooses, access reads as on. The shell gets one more preference binding for it, and a true or
+  false shape for stored values.
+- **No model port.** The manifest asks for the database, the date call and the preference store,
+  and nothing else. No check-in text can be sent to a model, a job, a log or the network.
+- **App map.** The manifest lists the settings entry and the two features, with plain error
+  descriptions. It lists no screens or navigation.
+
+### Proof
+
+| Claim                                              | Evidence                                                                                                                                                                                                                                                                                                                   |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Routes match the old handlers                      | The test runs the old routes on the test database and the new package side by side, with ids and times masked. 22 steps without ids and 7 with ids match. Paging tokens are compared by shape, not by value                                                                                                                |
+| A second person cannot read or change check-ins    | Real database test through the installed package as two people. With the owner rule replaced by an open rule, the second person read the first person's row. With the rule restored, they read none                                                                                                                        |
+| Check-in text stays out of logs, jobs and activity | The note is absent from job payloads, the activity record and the second person's answers. A guest test shows a host failure never echoes the note. That test was seen failing with the protection removed                                                                                                                 |
+| No model port                                      | A test reads the manifest and expects exactly the database, date and preference ports                                                                                                                                                                                                                                      |
+| Native and WebAssembly builds                      | The guest tests run natively (6 behaviour, 2 privacy). The same code was built as a WebAssembly component and loaded by the real host in the package tests (6)                                                                                                                                                             |
+| A changed legacy database file stops the build     | Package test changes one byte of the first file and expects the build to refuse                                                                                                                                                                                                                                            |
+| Works on the real Rust server from another device  | Live test starts the real server over https on a network address that is not loopback, with certificate checking and a trusted-origin list. An untrusted origin was refused (403) and signed-out calls got 401. Two people signed in, saved, paged, changed and set the choice. The test data never reached the server log |
+
+Commands (expected exit code 0, both through `scripts/run-gate.sh`):
+
+```bash
+scripts/run-gate.sh start --gate test:rust-wellness
+scripts/run-gate.sh start --gate test:rust-wellness-live
+```
+
+### Not proven or not built
+
+- **The old energy-trend note is not written.** The old server wrote a fact about recent energy
+  into chat memory when a check-in was saved or its energy changed, and removed it when assistant
+  access was turned off. This package does not, so the earlier plan line that no Wellness data
+  reaches a model is true here but differs from the old code. Part 16 must decide whether to bring
+  it back.
+- **Activity rows were not exercised.** The activity record only covers calls to service ports,
+  and this package makes none, so it is empty. The check that it holds no note cannot fail today,
+  and no guard-removal run was possible for it.
+- **Part 12 fixtures were not used.** The tests plant one marker of their own. The shared fixture
+  files are for the later medicine and insight parts.
+- **Medicines, dose logs, therapy notes, insights, export, chat tools, reminders and the screens**
+  are parts 14 to 18. The package's database files create those tables, but no route reaches them.
+- **Queues.** No reminder or export queue is declared yet.
+- **The old non-UUID id on a change call** is passed to the database and answers 500. The old
+  server's answer for that input was not compared.
+- **Odd inputs** (null or zero ratings, text for numbers, odd date strings) are compared only for
+  the cases in the 29 steps. Other odd inputs follow the same hand-written rules but were not
+  all compared.
+- **The date window parser** accepts full timestamps and plain dates only. The old server accepted
+  a few more date spellings.
+- **No screens, so no click-through proof.** The live run used the routes only.
+- **The shared local-date lookup gained one extra field** (the minutes offset from UTC). The
+  existing account contracts test only reads other fields, and has no gate script of its own to
+  run here, so it was not rerun. The Wellness gates use the new field against a real database.
+- **Two other gates fail on main for unrelated reasons.** The weather preferences gate and the
+  briefings gate fail before and after this change.
