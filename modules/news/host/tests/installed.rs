@@ -14,6 +14,8 @@ use safety_core::secret::{Secret, SecretCipher};
 use serde_json::{json, Value};
 use std::sync::Arc;
 
+/// A one-pixel picture the test web serves for the story picture route.
+const PNG_B64: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAHdrYoQAAAABJRU5ErkJggg==";
 const MARK: &str = "PLANTED-MARKER-4f1c9b";
 /// Its own marker, so the saved source of the adding test does not show in the other scan.
 const ADD_MARK: &str = "PLANTED-ADD-MARKER-91c3d7";
@@ -50,6 +52,7 @@ impl moss_module_host::runtime::Ports for Web {
             ));
         }
         Ok(match url {
+            "https://img.sample.test/1.png" => json!({"ok":true,"status":200,"finalUrl":url,"contentType":"image/png","body":PNG_B64,"truncated":false,"hopCount":0,"encoding":"base64"}),
             "https://daily.sample.test/" => found(
                 "text/html",
                 "<html><head><title>Sample Daily</title><link rel=\"alternate\" type=\"application/rss+xml\" href=\"/feed.xml\"></head></html>",
@@ -188,6 +191,25 @@ impl World {
         let answer: Value = serde_json::from_str(&out.expect("the export finished")).unwrap();
         assert!(answer.get("error").is_none(), "{answer}");
         answer["ok"].clone()
+    }
+    /// Calls one chat tool through the real host as the actor.
+    fn tool(&self, actor: uuid::Uuid, name: &str, parameters: Value) -> Value {
+        let ports: Arc<dyn moss_module_host::runtime::Ports> = Arc::new(Web(Arc::new(
+            moss_module_host::transactional_database::TransactionalDatabasePorts::new(
+                self.f.db.clone(),
+                Arc::new(moss_module_host::context::ContextPorts::new(self.app.services.clone())),
+            )
+            .unwrap(),
+        )));
+        let out = Host::new(Limits::default()).unwrap().call(
+            &component(),
+            Arc::new(moss_news_host::package::manifest().unwrap()),
+            AccessContext::new(actor, "news-tool"),
+            ports,
+            "tool",
+            &json!({"tool": name, "parameters": parameters}).to_string(),
+        );
+        serde_json::from_str(&out.expect("the tool finished")).unwrap()
     }
     /// Runs the worker until the queue has nothing due.
     fn work(&self) {
@@ -739,4 +761,59 @@ fn the_daily_check_fires_once_per_person() {
     assert_eq!(left(a), 0, "no added source or topic, so no daily check");
     assert_eq!(left(b), 1, "the other person keeps theirs");
     println!("PASS schedule: two people, one schedule each, one fire each, removal drops only the owner's");
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn pictures_and_chat_tools_belong_to_the_person_and_the_check_fails_without_row_security() {
+    let w = World::new();
+    let (a, b) = (w.f.a, w.f.b);
+    let payload = json!({"articles":[
+        {"id":"story-a","publisher":"Sample Daily","canonicalDomain":"daily.sample.test","headline":"PLANTED-STORY-5a2e","url":"https://daily.sample.test/a","publishedAt":chrono::Utc::now().to_rfc3339(),"excerpt":"One","imageUrl":"https://img.sample.test/1.png","topics":[],"preferred":true,"rank":1}
+    ]});
+    w.f.rt.block_on(w.f.root.execute(
+        "INSERT INTO app.news_compilation_snapshots(owner_user_id,compiled_at,expires_at,payload) VALUES($1,now(),now()+interval '7 days',$2)",
+        &[&a, &payload],
+    )).unwrap();
+    let mine = w.call(a, "GET", "/images/story-a", Value::Null);
+    assert_eq!(mine["status"], 200, "{mine}");
+    assert_eq!(mine["image"]["contentType"], "image/png", "{mine}");
+    assert_eq!(w.tool(a, "news.topHeadlinesToday", json!({}))["data"]["facts"].as_array().unwrap().len(), 1);
+    // Another person gets no picture and no story.
+    assert_eq!(w.call(b, "GET", "/images/story-a", Value::Null)["status"], 404);
+    assert_eq!(w.tool(b, "news.topHeadlinesToday", json!({}))["data"]["facts"], json!([]));
+    assert_eq!(w.tool(b, "news.heartbeatHeadlines", json!({}))["data"]["items"], json!([]));
+    println!("GREEN: B gets no picture, headline or heartbeat item from A's page");
+    // With row security removed the same calls leak A's page to B.
+    let table = "app.news_compilation_snapshots";
+    w.f.rt.block_on(w.f.root.batch_execute(&format!("ALTER TABLE {table} DISABLE ROW LEVEL SECURITY"))).unwrap();
+    let open = w.call(b, "GET", "/images/story-a", Value::Null)["status"].clone();
+    let story = w.tool(b, "news.topHeadlinesToday", json!({}))["data"]["facts"].as_array().unwrap().len();
+    w.f.rt.block_on(w.f.root.batch_execute(&format!("ALTER TABLE {table} ENABLE ROW LEVEL SECURITY; ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))).unwrap();
+    println!("RED: with row security removed B's picture status is {open} and B sees {story} headline(s)");
+    assert!(open == 200 || story == 1, "RED expected: the picture or headline leaks without row security");
+    assert_eq!(w.call(b, "GET", "/images/story-a", Value::Null)["status"], 404, "closed again");
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn refreshing_by_tool_queues_a_metadata_only_job_and_leaks_no_story_text() {
+    let w = World::new();
+    let a = w.f.a;
+    w.f.rt.block_on(w.f.root.execute(
+        "INSERT INTO app.news_compilation_snapshots(owner_user_id,compiled_at,expires_at,payload) VALUES($1,now(),now()+interval '7 days',$2)",
+        &[&a, &json!({"articles":[{"id":"s","publisher":"P","canonicalDomain":"p.example.test","headline":"PLANTED-STORY-5a2e","url":"https://p.example.test/s","publishedAt":chrono::Utc::now().to_rfc3339(),"excerpt":null,"imageUrl":null,"topics":[],"preferred":true,"rank":1}]})],
+    )).unwrap();
+    w.tool(a, "news.topHeadlinesToday", json!({}));
+    w.tool(a, "news.heartbeatHeadlines", json!({}));
+    let out = w.tool(a, "news.refreshNews", json!({}));
+    assert_eq!(out["data"]["asynchronous"], json!(true), "{out}");
+    let jobs = w.queued(a, "news-refresh");
+    assert_eq!(jobs.len(), 1);
+    assert!(!jobs[0].to_string().contains("PLANTED-STORY-5a2e"), "{jobs:?}");
+    for table in ["moss_queue.jobs", "moss_queue.schedules"] {
+        let text: String = w.f.rt.block_on(w.f.root.query_one(&format!("SELECT coalesce(string_agg(t::text, ' '), '') FROM {table} t"), &[])).unwrap().get(0);
+        assert!(!text.contains("PLANTED-STORY-5a2e"), "{table}");
+    }
+    println!("PASS refreshNews: one metadata-only job and no story text in queue tables");
 }
