@@ -784,14 +784,17 @@ fn pictures_and_chat_tools_belong_to_the_person_and_the_check_fails_without_row_
     assert_eq!(w.tool(b, "news.topHeadlinesToday", json!({}))["data"]["facts"], json!([]));
     assert_eq!(w.tool(b, "news.heartbeatHeadlines", json!({}))["data"]["items"], json!([]));
     println!("GREEN: B gets no picture, headline or heartbeat item from A's page");
-    // With row security removed the same calls leak A's page to B.
+    // The host also scopes every package read to the caller, so the package calls stay closed on
+    // their own. The row security itself is shown the way the other News tests show it: B's direct
+    // read of A's stored page leaks with it removed and is closed again after.
     let table = "app.news_compilation_snapshots";
+    let shut: i64 = rows_as(&w.f, b, &format!("SELECT count(*) FROM {table}"), &[])[0].get(0);
+    assert_eq!(shut, 0, "B reads none of A's pages");
     w.f.rt.block_on(w.f.root.batch_execute(&format!("ALTER TABLE {table} DISABLE ROW LEVEL SECURITY"))).unwrap();
-    let open = w.call(b, "GET", "/images/story-a", Value::Null)["status"].clone();
-    let story = w.tool(b, "news.topHeadlinesToday", json!({}))["data"]["facts"].as_array().unwrap().len();
+    let open: i64 = rows_as(&w.f, b, &format!("SELECT count(*) FROM {table}"), &[])[0].get(0);
     w.f.rt.block_on(w.f.root.batch_execute(&format!("ALTER TABLE {table} ENABLE ROW LEVEL SECURITY; ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))).unwrap();
-    println!("RED: with row security removed B's picture status is {open} and B sees {story} headline(s)");
-    assert!(open == 200 || story == 1, "RED expected: the picture or headline leaks without row security");
+    println!("RED: with row security removed B reads {open} of A's stored page row(s)");
+    assert!(open >= 1, "RED expected: the page leaks without row security");
     assert_eq!(w.call(b, "GET", "/images/story-a", Value::Null)["status"], 404, "closed again");
 }
 
