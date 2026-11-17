@@ -542,7 +542,7 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
     // Part 14a. A real feed source is saved and read again through the real fetch path, with
     // nothing rewritten. A site with no feed asks the person's model for a recipe when one is set
     // up, and the answer is printed either way.
-    let (status, text) = call(Method::POST, "/sources/preview", Some(&cookie), Some(json!({"url":"https://feeds.bbci.co.uk/sport/rss.xml","assignments":[{"target":{"kind":"sport","sportKey":"football"}}]})));
+    let (status, text) = call(Method::POST, "/sources/preview", Some(&cookie), Some(json!({"url":"https://www.telegraph.co.uk/sport/rss.xml","assignments":[{"target":{"kind":"sport","sportKey":"football"}}]})));
     assert_eq!(status, 200, "{text}\n{}", log());
     let shown = json_of(&text);
     println!("sports live: real feed preview: {} {}", shown["status"], shown["reason"]);
@@ -563,6 +563,48 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
         let source = &json_of(&text)["source"];
         println!("sports live: retry of the real feed: health {} checked {}", source["healthState"], source["lastCheckedAt"]);
         assert_eq!(source["healthState"], "healthy", "{text}");
+        // Part 17. The refresh above also looked for story photos, over the real internet, with
+        // nothing rewritten. Stored copies are checked on disk, then read back through the route.
+        let stored = |dir: &Path| -> Vec<std::path::PathBuf> {
+            walk(dir).into_iter().filter(|p| p.extension().is_some_and(|e| e == "jpg")).collect()
+        };
+        let copies = stored(&root.join("data/modules/files/sports"));
+        println!("sports live: photo copies stored by the real refresh: {}", copies.len());
+        for copy in &copies {
+            let bytes = fs::read(copy).unwrap();
+            assert_eq!(&bytes[..3], &[0xff, 0xd8, 0xff], "a JPEG");
+            assert!(!bytes.windows(4).any(|w| w == b"Exif"), "no camera data survives");
+            assert!(bytes.len() <= 786_432);
+        }
+        if copies.is_empty() {
+            println!("sports live: NOT PROVEN: the real feed gave no photo that passed the checks");
+        } else {
+            use sha2::{Digest, Sha256};
+            let feed = client.get("https://www.telegraph.co.uk/sport/rss.xml").header("user-agent", "Mozilla/5.0").send().unwrap().text().unwrap();
+            let between = |text: &str, open: &str, close: &str| -> Option<String> {
+                let start = text.find(open)? + open.len();
+                let end = text[start..].find(close)? + start;
+                Some(text[start..end].replace("<![CDATA[", "").replace("]]>", "").trim().to_owned())
+            };
+            let mut served = 0;
+            for item in feed.split("<item>").skip(1).take(12) {
+                let (Some(title), Some(link)) = (between(item, "<title>", "</title>"), between(item, "<link>", "</link>")) else { continue };
+                let digest = format!("{:x}", Sha256::digest(format!("{link}\0{title}").as_bytes()));
+                let (status, text) = call(Method::GET, &format!("/headlines/{feed_id}:{}/photo", &digest[..24]), Some(&cookie), None);
+                if status == 200 {
+                    served += 1;
+                    assert_eq!(json_of(&text)["contentType"], "image/jpeg");
+                    assert_eq!(call(Method::GET, &format!("/headlines/{feed_id}:{}/photo", &digest[..24]), Some(&other), None).0, 404);
+                }
+            }
+            println!("sports live: photos served through the real route: {served}");
+            assert!(served > 0, "at least one stored photo is served");
+            assert_eq!(call(Method::DELETE, &format!("/sources/{feed_id}/photos"), Some(&other), None).0, 404);
+            let (status, _) = call(Method::DELETE, &format!("/sources/{feed_id}/photos"), Some(&cookie), None);
+            assert_eq!(status, 200);
+            assert!(stored(&root.join("data/modules/files/sports")).is_empty(), "stopping photos removed the files");
+            println!("sports live: stopping photos removed every stored copy");
+        }
         assert_eq!(call(Method::POST, &format!("/sources/{feed_id}/retry"), Some(&other), None).0, 404);
         let (status, text) = call(Method::POST, &format!("/sources/{feed_id}/rebuild/preview"), Some(&cookie), None);
         println!("sports live: rebuild preview of a feed source: {status} {}", text.chars().take(120).collect::<String>());

@@ -49,7 +49,27 @@ host's thread, the Reddit exception covered every Reddit path, percent-encoded p
 disallows, blank lines dropped later rules, long disallows vanished). All five are fixed with tests.
 It found no way to reach a private address and no leak into the activity record.
 
+### Review round 1 changes
+
+- A refresh stores at most 24 new pictures. Each picture crosses the module as large text about four
+  times, and no installed refresh with 10 sources x 12 new stories at 760 KB was measured against
+  the 250 million step limit, so the cap stands in for that measurement.
+- The daily relook does not start the model with under 15 seconds left in the call.
+- One picture that cannot be stored (too large after re-encode, or a failed save) counts as a miss
+  for that story and no longer ends the source's photo pass.
+- Stopping photos forgets the page rule and clears the copies. The old app only forgot the rule.
+  Feed and share pictures come back at the next refresh. The map text says so.
+- The Part 14a live run used the BBC feed. Part 17 swapped the live feed to the Telegraph sport
+  feed (BBC pictures sit on another site and are rejected by design), so earlier proof is not a
+  rerun on the same feed.
+
 ### Not proven or not built
+
+- The photo read route answers JSON with the picture in base64. The old route sent the raw image
+  with a week-long private cache, an ETag and 304 answers. The screens part must read the JSON or
+  add a raw image answer. The route parity test compares error steps only.
+- Step use of a busy installed refresh (10 sources x 12 new stories, pictures near 760 KB) is not
+  measured. The 24-picture cap limits it.
 
 - `aborted` is not produced. A guest cannot cancel a host call, so there is nothing to abort.
 - This part has no database tables. The second-person test covers the per-account activity record.
@@ -994,6 +1014,76 @@ how recipes work.
 
 - No blockers or majors. Three minors: the two above, and the call-ceiling note, which is listed
   under Not proven. None was changed.
+
+## Part 17: source photos
+
+### What was built
+
+- Each refresh now looks for a photo for the newest 12 stories of every added source. It tries the
+  picture the feed names, then a saved page rule, then the page's share picture. A picture is only
+  used when it comes from the story's own site or a site the person already confirmed, over HTTPS,
+  and is not an icon, logo, placeholder or tracking pixel.
+- Re-encoding happens in the host, not in the module. A 1 MB photo costs about 2.5 to 5 billion
+  steps inside the module, and the module's budget is 250 million, so it could not be done there.
+  The image library (one approved free library, JPEG, PNG, WebP and GIF reading only) lives in the
+  Sports host crate. The app links that host crate, so the library is built into the app itself, but only the Sports host code uses it.
+- The re-encode writes a fresh JPEG (quality 80), fitted inside 1280 by 720, never enlarged, with
+  transparency put on white. Because the file is written new, camera and location data is dropped.
+  Pictures smaller than 64 pixels on the short side are refused.
+- Copies live in the person's own private folder, an image file and a small record file each. They
+  are removed 14 days after they were last shown, and the folder is capped at 200 pictures and 40 MB.
+- A source whose page rule misses three refreshes in a row becomes stale. A stale rule is looked at
+  again at most once a day, only when an AI model is set up, and a new rule must find a usable photo
+  on two of three pages that download and decode.
+- Two routes: reading a story's photo, and stopping photos for a source (clears the saved rule and
+  deletes the copies). Deleting a source also deletes its copies.
+- Time guard: a call has 30 seconds. No download or page read starts in the last 3 seconds. A story
+  left undone for that reason is retried at the next refresh and does not count as a miss.
+- No screens, no new tables, no new setting. The five photo columns already existed.
+
+### Proof
+
+- Real Postgres, real installed package: a second person cannot stop another person's photos or read
+  their photo address, and the test was seen failing with row security removed (the second person
+  cleared the first person's photo rule).
+- Same test run, old routes against new routes: 7 photo steps (missing source, bad id, bad photo
+  address, real source, repeat stop) matched in status and message.
+- Host tests (6): a planted marker in a photo's camera data is gone after re-encode; the fit box and
+  no-enlarge rule hold for JPEG, PNG and WebP; tiny and unreadable pictures are refused; a second
+  person cannot see or delete another person's files; unsafe names and oversize pictures are refused.
+- Module tests (14): the deadline guard (seen failing with the guard removed, two tests), outcome
+  rules (three misses make a rule stale, a find resets it), once-a-day relook, no new rule without a
+  model, delete removes files, source delete removes files, sweep removes old copies, and a
+  private-text test that plants markers in the story address, the photo address and the picture and
+  finds them in no database call and no log, job or activity port call.
+- One check found a real bug while writing the tests: the rule checker counted four fields where the
+  rules it writes itself have five, so every proposed rule would have been refused.
+- Native and WebAssembly: the module tests ran natively and the package and photo host tests ran
+  against the built component.
+- Live, real server over HTTPS, real internet, nothing rewritten: a refresh of the Telegraph sport
+  feed stored real photos on disk (all JPEG, none with camera data, all under 768 KB), 7 stories
+  served their photo through the route, the second person got 404 for each, stopping photos left
+  no files, and the second person could not stop them.
+
+### How to run
+
+- `scripts/run-gate.sh start --gate test:rust-sports`, then `scripts/run-gate.sh wait`.
+- Live: the same with `--gate test:rust-sports-live`.
+
+### Not proven or not built
+
+- Photos larger than 768 KB are not used. Messages between the module and host are capped at 1 MB
+  and pictures cross as base64. The old app took up to 2 MB.
+- Old copies were WebP and are not carried over. The new app fetches them again as JPEG. The
+  WebP encoder in the library is lossless only, which makes files far too large.
+- The first rule for a source is never proposed on its own. As in the old app, only the daily
+  relook of a stale rule asks the model. The old app also shipped only the first two slices.
+- A feed picture on a different site than the story is only used when that site is confirmed.
+- The live run used one feed. A page rule and the page share picture were proven by module tests
+  with a fake network, not live.
+- The photo is read through chat only as far as the route; there are no chat tools for photos.
+- The live run's last step (a model writing a recipe for the FA site) answered "unsupported" in
+  two of two runs here. That step is outside this part and is a known varying step from part 14a.
 
 ## Sports overview stories and tools (parts 12b, 12c)
 

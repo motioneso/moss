@@ -121,7 +121,9 @@ fn refresh_reads_with_the_fetch_port_only_and_marks_the_source_healthy() {
     let ports: Vec<(String, String, String)> = f.calls.borrow().iter().filter(|(p, ..)| p != "db" && p != "kv" && p != "context").map(|(p, o, r, _)| (p.clone(), o.clone(), r.clone())).collect();
     assert!(!ports.is_empty());
     assert!(ports.iter().all(|(p, o, r)| (p.as_str(), o.as_str(), r.as_str()) == ("fetch", "get", "public-web")), "{ports:?}");
-    assert_eq!(f.fetched(), vec![API.to_owned()], "only the recipe address is read, never an article");
+    let fetched = f.fetched();
+    assert_eq!(fetched.iter().filter(|u| *u == API).count(), 1, "the recipe address is read once");
+    assert!(fetched.iter().all(|u| u == API || u == "https://news.example.com/a"), "after the recipe only story pages are read, for their photos: {fetched:?}");
 }
 
 #[test]

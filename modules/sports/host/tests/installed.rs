@@ -101,6 +101,7 @@ impl World {
         let bytes = moss_sports_host::package::pack(&root(), &component()).unwrap();
         let (key, publisher, artifact) = registry::publish(reg.path(), &bytes);
         let prefs_db = f.db.clone();
+        let files = dir.path().join("modules/files");
         let app = Application::open_extended_with(
             dir.path(),
             f.db.clone(),
@@ -115,7 +116,10 @@ impl World {
                 fuel_ceiling: Some(250_000_000),
                 browser_dir: None,
             },
-            move |next| Ok(Arc::new(preferences(prefs_db, next)?)),
+            move |next| {
+                let prefs: Arc<dyn moss_module_host::runtime::Ports> = Arc::new(preferences(prefs_db, next)?);
+                Ok(Arc::new(moss_sports_host::SportsPorts::new(prefs).with_files(&files)?))
+            },
         )
         .unwrap();
         let source = app
@@ -649,6 +653,44 @@ fn removing_a_source_asks_first_and_another_person_cannot_use_the_card_and_it_fa
     println!("PASS: the approved removal deleted the row and the approval worked once");
 }
 
+/// Sets the photo columns of a planted source, as a refresh that found photos would.
+fn mark_photos_found(w: &World, id: uuid::Uuid) {
+    w.f.rt
+        .block_on(w.f.root.execute(
+            "UPDATE app.sports_custom_sources SET photo_rule_state='in_use', photo_rule_json='{\"version\":1}'::jsonb, photo_last_outcome='working', photo_miss_streak=1 WHERE id=$1",
+            &[&id],
+        ))
+        .unwrap();
+}
+
+fn photo_state(w: &World, id: uuid::Uuid) -> (String, i16) {
+    let row = w.f.rt.block_on(w.f.root.query_one("SELECT photo_rule_state, photo_miss_streak FROM app.sports_custom_sources WHERE id=$1", &[&id])).unwrap();
+    (row.get(0), row.get(1))
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn another_person_cannot_stop_photos_or_read_a_photo_and_the_check_fails_without_row_security() {
+    let w = World::new();
+    let (a, b) = (w.f.a, w.f.b);
+    let id = w.plant_source(a, "news.example.com", "Example Daily");
+    mark_photos_found(&w, id);
+    let stop = format!("/sources/{id}/photos");
+    let photo = format!("/headlines/{id}:{:024x}/photo", 1);
+    let theirs = w.call(b, "DELETE", &stop, Value::Null);
+    assert_eq!((theirs["status"].as_u64(), theirs["body"]["error"].as_str()), (Some(404), Some("Source not found")), "{theirs}");
+    assert_eq!(photo_state(&w, id), ("in_use".into(), 1i16), "B's request changed nothing");
+    assert_eq!(w.call(b, "GET", &photo, Value::Null)["status"], 404);
+    println!("GREEN: B cannot stop A's photos and gets 404 for A's photo address");
+
+    w.f.rt.block_on(w.f.root.batch_execute("ALTER TABLE app.sports_custom_sources DISABLE ROW LEVEL SECURITY")).unwrap();
+    let open = w.call(b, "DELETE", &stop, Value::Null);
+    w.f.rt.block_on(w.f.root.batch_execute("ALTER TABLE app.sports_custom_sources ENABLE ROW LEVEL SECURITY; ALTER TABLE app.sports_custom_sources FORCE ROW LEVEL SECURITY")).unwrap();
+    assert_eq!(open["status"], 200, "RED expected: with row security removed B stops A's photos, got {open}");
+    assert_eq!(photo_state(&w, id).0, "none");
+    println!("RED: with row security removed B cleared A's photo rule, and it is restored after");
+}
+
 #[test]
 #[ignore = "Only through verify-gate"]
 fn typed_tool_text_reaches_no_other_table() {
@@ -787,4 +829,43 @@ fn typed_latest_result_text_reaches_no_other_table() {
         assert_eq!(hits, 0, "{table} holds typed text");
     }
     println!("PASS privacy: scanned {} tables after a latest-result call, the planted text is in none", tables.len());
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn stopping_photos_clears_the_rule_and_the_installed_routes_match_the_old_routes() {
+    let w = World::new();
+    let a = w.f.a;
+    let id = w.plant_source(a, "news.example.com", "Example Daily");
+    mark_photos_found(&w, id);
+    let missing = "99999999-9999-4999-8999-999999999999";
+    let del = |u: String| json!({"method":"DELETE","url":u});
+    let get = |u: String| json!({"method":"GET","url":u});
+    let steps = vec![
+        del(format!("/api/sports/sources/{missing}/photos")),
+        del("/api/sports/sources/not-a-uuid/photos".into()),
+        get("/api/sports/headlines/nocolon/photo".into()),
+        get(format!("/api/sports/headlines/{missing}:abc/photo")),
+        get(format!("/api/sports/headlines/{id}:{:024x}/photo", 1)),
+        del(format!("/api/sports/sources/{id}/photos")),
+        del(format!("/api/sports/sources/{id}/photos")),
+    ];
+    let old = replay::old_routes(a, &steps, json!({}));
+    mark_photos_found(&w, id);
+    let new: Vec<Value> = steps
+        .iter()
+        .map(|s| w.call(a, s["method"].as_str().unwrap(), &s["url"].as_str().unwrap().replace("/api/sports", ""), Value::Null))
+        .collect();
+    for (i, (o, n)) in old.iter().zip(&new).enumerate() {
+        let (mut o, mut n) = (o.clone(), n.clone());
+        replay::mask(&mut o);
+        replay::mask(&mut n);
+        let same_status = o["status"] == n["status"];
+        let error = |v: &Value| v["body"]["error"].clone();
+        let message = if o["status"].as_u64() == Some(400) || o["status"].as_u64() == Some(500) { true } else { error(&o) == error(&n) };
+        println!("step {i} {} {}: old {} new {}", steps[i]["method"], steps[i]["url"], o["status"], n["status"]);
+        assert!(same_status && message, "step {i} differs\nold: {o}\nnew: {n}");
+    }
+    assert_eq!(photo_state(&w, id), ("none".into(), 0i16));
+    println!("PASS parity: {} photo steps matched the old routes", steps.len());
 }
