@@ -455,3 +455,8 @@ scripts/run-gate.sh start --gate test:rust-wellness-live
 - **The date window parser** accepts full timestamps and plain dates only. The old server accepted
   a few more date spellings.
 - **No screens, so no click-through proof.** The live run used the routes only.
+- **The shared local-date lookup gained one extra field** (the minutes offset from UTC). The
+  existing account contracts test only reads other fields, and has no gate script of its own to
+  run here, so it was not rerun. The Wellness gates use the new field against a real database.
+- **Two other gates fail on main for unrelated reasons.** The weather preferences gate and the
+  briefings gate fail before and after this change.
