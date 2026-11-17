@@ -1,6 +1,6 @@
 //! Assistant tools. The host enforces the account's approval policy before a write tool arrives.
 use crate::transactions::Merchant;
-use crate::{accounts, budget, budget_write, categories, connect, csv_import, draft, input::Refusal, ledger, rules, sort_run, splits, sync, transactions};
+use crate::{accounts, activity, archive, budget, export, reports, shared, budget_write, categories, connect, csv_import, draft, input::Refusal, ledger, rules, sort_run, splits, sync, transactions};
 use moss_module_sdk::{Error, Host, Response, Result};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -25,7 +25,8 @@ fn status_code(code: &str) -> u16 {
         "manual_conflict" | "manual_reconciled_period" | "stale_import" | "stale_transaction" | "stale_transactions"
         | "stale_rules" | "stale_budget" | "stale_previous" | "duplicate_name" | "split_transaction" | "linked_transfer" | "amount_mismatch"
         | "new_merchant" | "merchant_seen" => 409,
-        "manual_unavailable" | "not_found" => 404,
+        "manual_unavailable" | "not_found" | "unknown_account" => 404,
+        "changed_since" | "has_assignments" | "report_scope_changed" => 409,
         "bank_unavailable" => 502,
         _ => 400,
     }
@@ -36,6 +37,17 @@ pub fn status_of(body: &Value) -> u16 {
 }
 fn settle(outcome: ledger::Outcome) -> Value {
     outcome.unwrap_or_else(|r| refusal(&r))
+}
+
+/// True for tools that can change the person's Finance data, so the household copy needs a look.
+pub fn changes_data(tool: &str) -> bool {
+    const READS: [&str; 15] = [
+        "finance.accounts.list", "finance.manual.context", "finance.transactions.query", "finance.transactions.notes.read",
+        "finance.transactions.export", "finance.rules.list", "finance.rules.preview", "finance.import.parse", "finance.import.preview",
+        "finance.budget.status", "finance.budget.draft.get", "finance.reports.spending", "finance.reports.net-worth",
+        "finance.reports.transactions", "finance.activity.list",
+    ];
+    !READS.contains(&tool)
 }
 
 pub fn execute<H: Host + ?Sized>(host: &H, request: Request) -> Result<Value> {
@@ -75,6 +87,14 @@ pub fn execute<H: Host + ?Sized>(host: &H, request: Request) -> Result<Value> {
         "finance.budget.draft.get" => Ok(settle(draft::get(host)?)),
         "finance.budget.draft.update" => Ok(settle(draft::update(host, &request.parameters)?)),
         "finance.budget.draft.start" => Ok(settle(draft::start(host, &request.parameters)?)),
+        "finance.account.set-shared" => Ok(settle(shared::set_shared(host, &request.parameters)?)),
+        "finance.category.archive" => Ok(settle(archive::archive(host, &request.parameters)?)),
+        "finance.activity.list" => Ok(settle(activity::list(host, &request.parameters)?)),
+        "finance.activity.undo" => Ok(settle(activity::undo(host, &request.parameters)?)),
+        "finance.reports.spending" => Ok(settle(reports::spending(host, &request.parameters)?)),
+        "finance.reports.net-worth" => Ok(settle(reports::net_worth(host, &request.parameters)?)),
+        "finance.reports.transactions" => Ok(settle(reports::details(host, &request.parameters)?)),
+        "finance.transactions.export" => Ok(settle(export::run(host, &request.parameters)?)),
         _ => Err(Error::new("Unknown Finance tool")),
     }
 }

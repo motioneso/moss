@@ -124,7 +124,7 @@ pub(crate) fn upsert<H: Host + ?Sized>(
             who,
             "merchant-rule.set",
             json!({"ruleId":id,"categoryId":category,"enabled":i32::from(on),"previousCategoryId":before}),
-            None,
+            Some(json!({"previousCategoryId":before})),
         )?;
     }
     Ok(Ok(Made { id, before, unchanged }))

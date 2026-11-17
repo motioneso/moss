@@ -36,6 +36,11 @@ pub fn window(today: &str, months: usize) -> Vec<String> {
     (0..months as i32).rev().map(|back| shift(&last, -back)).collect()
 }
 
+/// A whole number given as a number or, from a query string, as text.
+pub(crate) fn whole(v: &Value) -> Option<i64> {
+    v.as_i64().or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+}
+
 struct Params {
     months: usize,
     currency: Option<String>,
@@ -48,7 +53,7 @@ fn is_currency(code: &str) -> bool {
 fn params(input: &Map<String, Value>) -> std::result::Result<Params, Refusal> {
     let months = match input.get("months") {
         None | Some(Value::Null) => 6,
-        Some(v) => match v.as_i64() {
+        Some(v) => match whole(v) {
             Some(n) if (1..=MAX_MONTHS).contains(&n) => n,
             _ => return Err(input::invalid("months must be an integer from 1 to 24")),
         },
@@ -388,7 +393,7 @@ fn parts_for(row: &Value, group: &str, key: &str) -> Option<(i128, bool)> {
 fn optional_range(input: &Map<String, Value>, key: &str, low: i64, high: i64, default: i64) -> std::result::Result<i64, Refusal> {
     match input.get(key) {
         None | Some(Value::Null) => Ok(default),
-        Some(v) => match v.as_i64() {
+        Some(v) => match whole(v) {
             Some(n) if (low..=high).contains(&n) => Ok(n),
             _ => Err(input::invalid(format!("{key} must be an integer from {low} to {high}"))),
         },
