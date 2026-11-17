@@ -1145,6 +1145,76 @@ target. Neither was a code fault.
 - **No tracking card** for JS-310 was found in Vikunja after three searches.
 - **Release note** is not applicable.
 
+## Meals food log and estimates (part 31)
+
+### What existed before this part
+
+Parts 28 to 30 gave Meals the kitchen, household, plans, lists and pantry. There was no food
+log in Rust and no estimate job.
+
+### What was built
+
+- **Six log tools.** List, summarize, add, re-estimate, correct and delete.
+- **Estimate job.** Adding an entry queues one job that asks the model for the foods in the
+  meal and a figure for each nutrient. The answer is checked against a fixed schema first.
+- **Estimate states.** Waiting, needs details, estimated and failed. An entry shows as waiting,
+  with no figures, until the model answers.
+- **Unknown is not zero.** A figure the model did not give stays empty. Totals add up only the
+  foods that know that figure. A figure outside its ceiling is dropped as unknown.
+- **Times.** An entry keeps its calendar day and zone offset from the day it was made. A local
+  time is read in the person's zone and refused when a clock change skipped or repeated it.
+- **Manifest and changelog** carry the six tools, the three log tables, the job, the chat
+  feature and the longer model call limit (30 seconds). The app map comes from the manifest.
+
+### Differences from the old code (on purpose)
+
+- The job queue key is built from the entry, its revision and its last-change time, so a retry
+  after a failure gets a fresh key. The old key was one fixed text per revision. The job
+  parameters are named `entry-id` and `revision`; the old code used `entryId` and `revision`.
+- There are no database transactions. Writes compare the revision first, then add rows by fixed
+  id. A crash between the two leaves a waiting entry that a re-estimate recovers.
+- If the queue refuses the job, the entry is marked failed at once. The old code left it waiting.
+- A delete or other tool call with an id that is not a valid id gets the plain "no log entry"
+  refusal. The old code leaked a raw database error.
+- A local time inside a clock-change gap or repeat is refused. The old code guessed.
+
+### Proof
+
+- Native guest tests pass: 44 unit tests and 22 log tests, with model answers checked against
+  the schema, unknown staying empty, bad answers failing, model down then retry, stale
+  revisions, queue down, clock-change refusal, and two people kept apart.
+- Real database: the new tools match the old handlers step for step (31 steps including the
+  estimate job), a second person sees and changes nothing in the three tables with the owner
+  rule seen failing when removed, and a planted word is in no job row or activity row.
+- The sum of an entry's foods equals the stored total, and unknown stays empty in the table.
+- Live run on the real server over real HTTPS: a real model (gpt-5.6-luna through the local
+  proxy) estimated a real entry in 12 seconds. The entry showed as waiting with no figures
+  first, then as an estimate of 294 kcal. The model key is not in the server log and the second
+  person sees no entry. The manifest asks for the 30 second call limit.
+
+From the repo root, through the gate script:
+
+```
+scripts/run-gate.sh start --gate test:rust-meals
+```
+
+```
+scripts/run-gate.sh start --gate test:rust-meals-live
+```
+
+Both ended with exit code 0. Earlier runs failed for test faults, none in the module: no
+installed web packages, the Rust tools not on the path, two log tests taking each other's
+queued jobs, a comparison test that ran only the last job, and a live run where the proxy's
+Claude sign-in had expired.
+
+### Not proven or not built
+
+- **Voice and photo capture** only record the capture kind. Nothing reads audio or images.
+- **The default clock time for a meal type** is tested natively only, because the old-code
+  comparison would depend on the real clock.
+- **No screens** were built.
+- **Release note** is not applicable.
+
 ## Finance transactions (part 22)
 
 ### What was built
