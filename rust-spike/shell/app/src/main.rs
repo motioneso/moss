@@ -29,6 +29,7 @@ mod module_ai;
 mod module_embedding;
 mod module_install;
 mod modules;
+mod proactive_feedback;
 mod runner_data;
 
 type Data = Arc<dyn ShellData>;
@@ -287,6 +288,9 @@ fn main() {
             },
             None => private,
         };
+        let private = private.merge(proactive_feedback::routes(Arc::new(
+            proactive_feedback::Feedback::new(platform.app.clone()),
+        )));
         let private = match admin {
             Some(admin) => private.merge(module_admin::routes(admin)),
             None => private,
