@@ -478,6 +478,23 @@ fn installed_news_package_serves_routes_from_the_real_server() {
     assert_eq!(raw("/api/m/news/favicon/www.bbc.com", &other).0, 200, "a catalog publisher is not private data");
     assert_eq!(raw("/api/m/news/favicon/unsaved.example.org", &cookie).0, 404, "an unseen publisher is refused");
     assert_eq!(raw("/api/m/news/favicon/feeds.bbci.co.uk", &other).0, 404, "another person has no such publisher");
+    // Story feedback on the real server. A story marked "less" leaves the owner's overview and
+    // stays on the other person's page.
+    let first = stories[0]["id"].as_str().unwrap().to_owned();
+    let (status, text) = call(Method::POST, "/story-feedback", Some(&cookie), Some(json!({"storyRef":first,"kind":"less_like_this","reason":"live check"})));
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let feedback_id = json_of(&text)["feedback"]["id"].as_str().unwrap().to_owned();
+    let (_, text) = call(Method::GET, "/overview", Some(&cookie), None);
+    let ids = |text: &str| -> Vec<String> { json_of(text)["rankedStories"].as_array().unwrap().iter().map(|s| s["id"].as_str().unwrap().to_owned()).collect() };
+    assert!(!ids(&text).contains(&first), "the marked story is left out of the owner's overview");
+    let (_, text) = call(Method::GET, "/story-feedback", Some(&other), None);
+    assert_eq!(json_of(&text)["feedback"], json!([]), "{text}");
+    assert_eq!(call(Method::PATCH, &format!("/story-feedback/{feedback_id}"), Some(&other), Some(json!({"reason":"x"}))).0, 404);
+    assert_eq!(call(Method::POST, &format!("/story-feedback/{feedback_id}/undo"), Some(&other), None).0, 404);
+    assert_eq!(call(Method::POST, &format!("/story-feedback/{feedback_id}/undo"), Some(&cookie), None).0, 200);
+    let (_, text) = call(Method::GET, "/overview", Some(&cookie), None);
+    assert!(ids(&text).contains(&first), "undo brings the story back");
+    println!("news live: story feedback hid the story for the owner only and undo brought it back");
     // The refresh left a success time and the other person has no refresh record of their own work.
     let rows = |sql: &'static str, who: uuid::Uuid| -> Vec<tokio_postgres::Row> {
         runtime.block_on(async {

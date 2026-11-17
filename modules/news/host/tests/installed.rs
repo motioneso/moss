@@ -820,3 +820,52 @@ fn refreshing_by_tool_queues_a_metadata_only_job_and_leaks_no_story_text() {
     }
     println!("PASS refreshNews: one metadata-only job and no story text in queue tables");
 }
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn story_feedback_belongs_to_the_person_hides_the_story_and_leaks_no_text() {
+    let w = World::new();
+    let (a, b, admin) = (w.f.a, w.f.b, w.f.admin);
+    let page = |who| {
+        let payload = json!({"articles":[
+            {"id":"s1","publisher":"P","canonicalDomain":"p.example.test","headline":"First","url":"https://p.example.test/1","publishedAt":chrono::Utc::now().to_rfc3339(),"excerpt":null,"imageUrl":null,"topics":[],"preferred":true,"rank":1},
+            {"id":"s2","publisher":"P","canonicalDomain":"p.example.test","headline":"Second","url":"https://p.example.test/2","publishedAt":chrono::Utc::now().to_rfc3339(),"excerpt":null,"imageUrl":null,"topics":[],"preferred":true,"rank":2}
+        ]});
+        w.f.rt.block_on(w.f.root.execute(
+            "INSERT INTO app.news_compilation_snapshots(owner_user_id,compiled_at,expires_at,payload) VALUES($1,now(),now()+interval '7 days',$2)",
+            &[&who, &payload],
+        )).unwrap();
+    };
+    page(a);
+    page(b);
+    let stories = |who| w.tool(who, "news.topHeadlinesToday", json!({}))["data"]["evidence"]["stories"].as_array().unwrap().len();
+    assert_eq!(stories(a), 2);
+    let made = w.call(a, "POST", "/story-feedback", json!({"storyRef":"s1","kind":"less_like_this","reason":"PLANTED-REASON-9c41"}));
+    assert_eq!(made["status"], 200, "{made}");
+    let id = made["body"]["feedback"]["id"].as_str().unwrap().to_owned();
+    assert_eq!(stories(a), 1, "the marked story is left out");
+    assert_eq!(stories(b), 2, "B still sees it");
+    // B sees none of it, and cannot change or undo it.
+    assert_eq!(w.call(b, "GET", "/story-feedback", Value::Null)["body"], json!({"feedback":[]}));
+    assert_eq!(w.call(b, "PATCH", &format!("/story-feedback/{id}"), json!({"reason":"x"}))["status"], 404);
+    assert_eq!(w.call(b, "POST", &format!("/story-feedback/{id}/undo"), Value::Null)["status"], 404);
+    assert_eq!(w.call(a, "GET", "/story-feedback", Value::Null)["body"]["feedback"].as_array().unwrap().len(), 1);
+    // Row security: an admin reads none of A's rows, and the read leaks once it is removed.
+    let table = "app.news_story_feedback";
+    let seen: i64 = rows_as(&w.f, admin, &format!("SELECT count(*) FROM {table}"), &[])[0].get(0);
+    assert_eq!(seen, 0, "an admin sees none of A's feedback");
+    w.f.rt.block_on(w.f.root.batch_execute(&format!("ALTER TABLE {table} DISABLE ROW LEVEL SECURITY"))).unwrap();
+    let open: i64 = rows_as(&w.f, admin, &format!("SELECT count(*) FROM {table}"), &[])[0].get(0);
+    w.f.rt.block_on(w.f.root.batch_execute(&format!("ALTER TABLE {table} ENABLE ROW LEVEL SECURITY; ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))).unwrap();
+    assert!(open >= 1, "RED expected: feedback leaks with row security removed, got {open}");
+    println!("RED then GREEN: {table} leaks with row security removed and is closed again after");
+    // The reason reaches no queue table.
+    w.tool(a, "news.refreshNews", json!({}));
+    for queue_table in ["moss_queue.jobs", "moss_queue.schedules"] {
+        let text: String = w.f.rt.block_on(w.f.root.query_one(&format!("SELECT coalesce(string_agg(t::text, ' '), '') FROM {queue_table} t"), &[])).unwrap().get(0);
+        assert!(!text.contains("PLANTED-REASON-9c41"), "{queue_table}");
+    }
+    // Undo brings the story back.
+    assert_eq!(w.call(a, "POST", &format!("/story-feedback/{id}/undo"), Value::Null)["status"], 200);
+    assert_eq!(stories(a), 2);
+}
