@@ -515,3 +515,73 @@ scripts/run-gate.sh start --gate test:rust-commitments-live
 - **No leak-planted check for private text.** The privacy test passes, but it was not seen failing
   with a leak added.
 - **Other devices.** The live run was on the same machine.
+
+## Commitments extraction (part 8)
+
+### What was built
+
+- Finding suggestions in text. A quick word check drops text that cannot hold a promise. What is
+  left goes to the person's configured model, and every answer is checked before it is kept. The
+  model only proposes. Each suggestion starts as "pending review" and reaches no task list until
+  the person accepts it.
+- Email judging. One job reads a mail thread and decides whether it holds something the person
+  owes. A thread is judged once per burst of new mail, after a three minute wait. A thread whose
+  last message is from the person is not sent to the model, and a suggestion the person rejected
+  stays rejected.
+- Two routes: start an extraction, and read the saved extraction state. Starting one answers 202
+  and queues a job.
+- Seven chat tools: the heartbeat source, list, thread judgements, open one, and accept, reject
+  and snooze. The last three need a current approval version, so a stale view of a suggestion
+  cannot change it.
+- A heartbeat source that lists accepted commitments due soon or overdue, with a revision that
+  changes when the list changes.
+- Two things offered to other packages: request a thread judgement, and prepare a chat action.
+- The app map entries are in the manifest. No screens, no new tables, no new migration.
+
+### Differences from the old code (on purpose)
+
+- Job requests carry a source kind or a message id and nothing else. The old payload carried the
+  person and a request key. The host now adds the person, and the request key is a stable id
+  made from the person and the source.
+- The guest has no log port, so warnings (for example an unreadable model answer) come back as
+  the job result. They name the problem and never include text.
+- The check that drops sign-in codes is a simple word check, and lengths count characters rather
+  than UTF-16 units.
+
+### Proof
+
+| Claim                                                  | Evidence                                                                                                                                                                                                                                            |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A canned model run                                     | 15 native tests with a canned model: a note becomes one pending suggestion with its evidence, text that fails the word check never reaches the model, and an unreadable answer gives a warning with no text. Run with a fake host, not the real one |
+| A proposal reaches no task list before it is confirmed | New suggestions are saved as pending review. Accept, reject and snooze fail without the current approval version, and pass with it                                                                                                                  |
+| Job requests carry ids only                            | The queued row holds only the source kind, even when the request body includes text; asking twice queues one job. The live run checks the queue rows after a request that carried a planted marker                                                  |
+| A second person sees nothing                           | Extraction state and thread judgements return nothing for them. With each owner rule removed they read the row (the check fails); with the rule restored, none                                                                                      |
+| Private text stays private                             | The marker reaches no job row and not the server log in the live run. Warnings carry no text                                                                                                                                                        |
+| Route parity                                           | 24 steps replayed against the old routes on the same database, including the new start and state routes with a valid, an invalid and an empty request; answers match                                                                                |
+| Native and WebAssembly builds                          | 26 native tests; the same code as a component passes 6 package tests (including the queue parameter checks) and 3 installed-package tests in the real host                                                                                          |
+| Live run, reachable from another device                | Real Rust server over HTTPS on this machine's network address, not loopback, with certificate checking. An untrusted origin gets 403, signed out gets 401, start gets 202, an invalid source gets 400, the other person's state is empty            |
+
+Commands, all through `scripts/run-gate.sh` (expected exit code 0). The task used its own build
+folder, builds ran offline against the shared package cache, and nothing was installed globally.
+
+```bash
+scripts/run-gate.sh start --gate test:rust-commitments
+scripts/run-gate.sh start --gate test:rust-commitments-live
+```
+
+### Not proven or not built
+
+- **The canned model run is not through the installed host.** The installed test world has only
+  Commitments in it, so no model or text source exists there. The run uses a fake host.
+- **Email does not ask for judgements yet.** The judging job and the request are built and
+  tested, but nothing in Email calls the request.
+- **Chat and notes have no text provider.** Extraction for those sources warns "source provider
+  missing" and stops.
+- **Judgement skips calendar and notes context**, and the "sender was ruled not an obligation"
+  rule is not built.
+- **No "no model configured" message.** A missing model shows as a generic warning.
+- **Chat sources ignore the person's time zone.**
+- **No leak-planted check on the job payload.** The privacy tests pass, but a leak was not added
+  to the code to watch them fail.
+- **The live run never ran a job.** It showed the job queued, not the worker finishing it, because
+  no model or text source exists on that server.
