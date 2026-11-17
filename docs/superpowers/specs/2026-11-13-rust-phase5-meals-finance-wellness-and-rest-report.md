@@ -1215,13 +1215,15 @@ Connected tools (outside services chat can call) had 10 routes, 9 SQL files and 
 
 - A sorting library with the old tier rules, checked against the old code on shared fixtures.
 - A host layer with the 10 routes, the stored connections, the sort job, the manifest (12 features, copied from the old one) and tool discovery over MCP.
-- The connection credential is sealed with the same key and envelope as the old server, so either server opens the other's rows.
+- The connection credential is sealed with the old server's envelope and reads the same key variables as the old server, so either server opens the other's rows when both use the same key. The master-key store is not read. With no usable key the routes answer 503 "paused".
 - The Rust shell serves the routes and runs a worker that picks up queued sorts.
 - Account delete removes the person's connections.
 
 ### Differences from the old code (on purpose)
 
-- A queued sort uses a random id for its de-duplication key, so two quick requests can queue two sorts. The result is the same.
+- A queued sort uses a random id for its de-duplication key, so repeated reads of a connection whose sort failed for lack of a model can queue several sorts. The old code queued one. This costs nothing today because the shell has no model, and must be fixed before a model is plugged in.
+- Refreshing with a pasted spec answers 422 "OpenAPI connections are not available yet." and leaves the row untouched.
+- Discovery does not follow redirects, so a credential cannot be sent to another host.
 - With no chat model configured, sorting reports "no model" and tools stay unsorted.
 - Sending without asking on an unsorted tool is refused with 409, as before.
 
@@ -1246,6 +1248,9 @@ Both end with exit code 0 when waited on with `scripts/run-gate.sh wait --follow
 - Queuing preparation after a tool-choice change is not built.
 - No chat model adapter exists in the shell yet, so sorting never reaches a real model.
 - The key comes from the environment only. The master-key keyring is not built.
+- The start-up sweep that re-queues tools left unsorted after a lost job is written but not wired into the shell.
+- Creating or refreshing an OpenAPI connection, or pasting a spec, is unavailable. The MCP client has no fallback for servers that speak only the older streaming style.
+- The live run covers create, list, read, patch, delete, a second person, and the log and queue leak check. Refresh, kept-out, send-without-asking, sort, prepare and the paused answer are covered only by the database test with a fake service.
 - Edge cases not matched exactly: ordering and length of non-Latin text, lowercase and trim quirks, float formatting in schemas, names cut at 80 characters.
 - There is no activity table in the host, so private text was checked in job payloads and logs only.
 - The prepare route answer is accepted as 200 or 409 and the sort route as 200 or 202 in the database test.

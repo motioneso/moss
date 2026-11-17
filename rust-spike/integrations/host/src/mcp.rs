@@ -15,6 +15,7 @@ impl Default for McpDiscoverer {
     fn default() -> Self {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(20))
+            .redirect(reqwest::redirect::Policy::none())
             .build()
             .expect("http client");
         Self { client }

@@ -261,6 +261,9 @@ async fn refresh(
     };
     let cx = DataContext::open(&app.db, &access).await?;
     let Some(row) = store::get(cx.db(), &id, false).await? else { return Err(not_found()) };
+    if pasted.is_some() {
+        return Ok(json_reply(422, json!({ "error": "OpenAPI connections are not available yet." })));
+    }
     if row.spec_pasted && pasted.is_none() {
         return Ok(json_reply(422, json!({ "error": "Paste an updated spec to refresh." })));
     }

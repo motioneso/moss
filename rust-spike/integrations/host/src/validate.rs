@@ -80,12 +80,11 @@ pub fn placement(value: Option<&Value>) -> Result<Option<Value>, ApiError> {
     Ok(Some(Value::Object(out)))
 }
 
-fn tool_names(body: &Map<String, Value>, max: usize, label: &str) -> Result<Vec<String>, ApiError> {
+fn tool_names(body: &Map<String, Value>, max: usize) -> Result<Vec<String>, ApiError> {
     let names = required_string_array(body.get("toolNames"), "toolNames")?;
     if names.is_empty() || names.len() > max {
         return Err(bad(format!("toolNames must hold 1 to {max} names")));
     }
-    let _ = label;
     if names.iter().any(|n| n.chars().map(char::len_utf16).sum::<usize>() > TOOL_NAME_MAX_LENGTH) {
         return Err(bad("A tool name is too long"));
     }
@@ -97,12 +96,12 @@ pub fn send_without_asking(body: &Map<String, Value>) -> Result<(bool, Vec<Strin
     let Some(Value::Bool(allow)) = body.get("allow") else {
         return Err(bad("allow must be a boolean"));
     };
-    Ok((*allow, tool_names(body, SEND_WITHOUT_ASKING_MAX_TOOLS, "send")?))
+    Ok((*allow, tool_names(body, SEND_WITHOUT_ASKING_MAX_TOOLS)?))
 }
 
 pub fn kept_out(body: &Map<String, Value>) -> Result<(bool, Vec<String>), ApiError> {
     let Some(Value::Bool(kept)) = body.get("keptOut") else {
         return Err(bad("keptOut must be a boolean"));
     };
-    Ok((*kept, tool_names(body, KEPT_OUT_MAX_TOOLS, "kept")?))
+    Ok((*kept, tool_names(body, KEPT_OUT_MAX_TOOLS)?))
 }

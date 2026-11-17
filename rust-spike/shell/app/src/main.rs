@@ -296,7 +296,6 @@ fn main() {
                 let wiring = integrations::Wiring {
                     producer_url: settings.producer_url.clone(),
                     worker_url: settings.worker_url.clone(),
-                    key: settings.connector_key.clone(),
                 };
                 match integrations::routes(platform.app.clone(), wiring, stop.clone()).await {
                     Ok(routes) => private.merge(routes),
