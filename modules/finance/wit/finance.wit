@@ -5,6 +5,7 @@ interface context { call: func(request: string) -> result<string, string>; }
 interface tools { call: func(request: string) -> result<string, string>; }
 interface credentials { call: func(request: string) -> result<string, string>; }
 interface jobs { call: func(request: string) -> result<string, string>; }
+interface action-policy { call: func(request: string) -> result<string, string>; }
 
 world finance {
   import db;
@@ -12,5 +13,6 @@ world finance {
   import tools;
   import credentials;
   import jobs;
+  import action-policy;
   export handle: func(kind: string, payload: string) -> result<string, string>;
 }

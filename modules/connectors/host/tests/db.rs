@@ -304,3 +304,50 @@ fn a_second_person_cannot_write_an_outlook_health_row_for_another_persons_accoun
     assert_eq!(leaked, json!({"saved": true}), "the proof did not notice the missing protection");
     assert_eq!(rows_for(&f), 2);
 }
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn an_existing_install_survives_the_upgrade() {
+    let f = Fixture::new();
+    // Rows as an existing install holds them: a sealed account, cached mail,
+    // feature grants and the work mail capture position.
+    let account = f.create(f.a);
+    let id = account["id"].as_str().unwrap().to_string();
+    f.call(f.a, "set", "connectors.feature-grants", json!({"accountId":id,"value":{"email":true,"calendar":false},"audit":[]}));
+    let cursor = json!({"marker":null,"seen":["a".repeat(43)],"salt":"b".repeat(43)});
+    f.call(f.a, "set", "connectors.work-mail-cursor", cursor.clone());
+    let account_uuid: Uuid = id.parse().unwrap();
+    f.rt.block_on(f.root.execute(
+        "INSERT INTO app.email_messages(id,connector_account_id,owner_user_id,sender,recipients,subject,snippet,body_excerpt,received_at,external_id)
+         VALUES($1,$2,$3,'boss@example.test',ARRAY['me@example.test'],'Kept subject','snip','body',now(),'upgrade-1')",
+        &[&Uuid::new_v4(), &account_uuid, &f.a],
+    )).unwrap();
+
+    // The upgraded code reads every one of them back unchanged.
+    let listed = f.call(f.a, "get", "connectors.accounts", json!({}));
+    assert_eq!(listed.as_array().unwrap().len(), 1);
+    assert_eq!(listed[0]["id"], id);
+    assert_eq!(listed[0]["hasSecret"], true);
+    let stored: Value = f.rt.block_on(f.root.query_one(
+        "SELECT encrypted_secret FROM app.connector_accounts WHERE id=$1", &[&account_uuid],
+    )).unwrap().get(0);
+    let cipher = connector_cipher(KEY).unwrap();
+    let opened = cipher.decrypt_json(&cipher.parse_envelope(&stored).unwrap()).unwrap();
+    assert_eq!(opened.value["refreshToken"], SENTINEL);
+    assert_eq!(f.call(f.a, "get", "connectors.feature-grants", json!({"accountId":id})), json!({"email":true,"calendar":false}));
+    assert_eq!(f.call(f.a, "get", "connectors.work-mail-cursor", json!({})), cursor);
+    let diagnostics = f.call(f.a, "get", "connectors.diagnostics", json!({"limit":11}));
+    assert!(diagnostics.to_string().contains(&id), "{diagnostics}");
+    let kept: i64 = f.rt.block_on(f.root.query_one(
+        "SELECT count(*) FROM app.email_messages WHERE owner_user_id=$1 AND subject='Kept subject'", &[&f.a],
+    )).unwrap().get(0);
+    assert_eq!(kept, 1);
+
+    // The capture position belongs to its owner only, and the check has teeth.
+    assert!(f.call(f.b, "get", "connectors.work-mail-cursor", json!({})).is_null());
+    f.rt.block_on(f.root.batch_execute("ALTER TABLE app.preferences DISABLE ROW LEVEL SECURITY")).unwrap();
+    let leaked = f.call(f.b, "get", "connectors.work-mail-cursor", json!({}));
+    f.rt.block_on(f.root.batch_execute("ALTER TABLE app.preferences ENABLE ROW LEVEL SECURITY; ALTER TABLE app.preferences FORCE ROW LEVEL SECURITY")).unwrap();
+    println!("RED without row security: {leaked}");
+    assert_eq!(leaked, cursor, "proof did not notice removed row-level security");
+}

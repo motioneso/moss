@@ -1,5 +1,6 @@
 //! Assistant tools. The host enforces the account's approval policy before a write tool arrives.
-use crate::{accounts, connect, input::Refusal, ledger, sync};
+use crate::transactions::Merchant;
+use crate::{accounts, categories, connect, csv_import, input::Refusal, ledger, rules, sort_run, splits, sync, transactions};
 use moss_module_sdk::{Error, Host, Response, Result};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -17,12 +18,21 @@ pub fn refusal(refusal: &Refusal) -> Value {
     json!({"status":"error","code":refusal.code,"message":refusal.message})
 }
 pub fn status(refusal: &Refusal) -> u16 {
-    match refusal.code {
-        "manual_conflict" | "manual_reconciled_period" => 409,
-        "manual_unavailable" => 404,
+    status_code(refusal.code)
+}
+fn status_code(code: &str) -> u16 {
+    match code {
+        "manual_conflict" | "manual_reconciled_period" | "stale_import" | "stale_transaction" | "stale_transactions"
+        | "stale_rules" | "duplicate_name" | "split_transaction" | "linked_transfer" | "amount_mismatch"
+        | "new_merchant" | "merchant_seen" => 409,
+        "manual_unavailable" | "not_found" => 404,
         "bank_unavailable" => 502,
         _ => 400,
     }
+}
+/// The HTTP status for a refusal body made by `refusal`.
+pub fn status_of(body: &Value) -> u16 {
+    status_code(body["code"].as_str().unwrap_or(""))
 }
 fn settle(outcome: ledger::Outcome) -> Value {
     outcome.unwrap_or_else(|r| refusal(&r))
@@ -37,6 +47,25 @@ pub fn execute<H: Host + ?Sized>(host: &H, request: Request) -> Result<Value> {
         "finance.connect.start" => Ok(settle(connect::start(host)?)),
         "finance.connect.poll" => connect::poll(host, false),
         "finance.sync.run-now" => sync::run(host),
+        "finance.transactions.query" => Ok(settle(transactions::query(host, &request.parameters)?)),
+        "finance.transactions.categorize" => Ok(settle(transactions::categorize(host, &request.parameters, Merchant::Seen)?)),
+        "finance.transactions.categorize-new" => Ok(settle(transactions::categorize(host, &request.parameters, Merchant::New)?)),
+        "finance.transactions.category-set" => Ok(settle(transactions::set_category(host, &request.parameters)?)),
+        "finance.transactions.review-apply" => Ok(settle(transactions::review_apply(host, &request.parameters)?)),
+        "finance.transactions.bulk-categorize" => Ok(settle(transactions::bulk_categorize(host, &request.parameters)?)),
+        "finance.transactions.bulk-confirm" => Ok(settle(transactions::bulk_confirm(host, &request.parameters)?)),
+        "finance.transactions.notes.read" => Ok(settle(transactions::notes_read(host, &request.parameters)?)),
+        "finance.transactions.notes.save" => Ok(settle(transactions::notes_save(host, &request.parameters)?)),
+        "finance.transactions.splits" => Ok(settle(splits::apply(host, &request.parameters)?)),
+        "finance.rule.set" => Ok(settle(rules::set(host, &request.parameters)?)),
+        "finance.rules.list" => Ok(settle(rules::list(host, &request.parameters)?)),
+        "finance.rules.preview" => Ok(settle(rules::preview(host, &request.parameters)?)),
+        "finance.rules.update" => Ok(settle(rules::update(host, &request.parameters)?)),
+        "finance.categories.upsert" => Ok(settle(categories::upsert(host, &request.parameters)?)),
+        "finance.import.parse" => Ok(settle(csv_import::parse_file(&request.parameters))),
+        "finance.import.preview" => Ok(settle(csv_import::preview(host, &request.parameters)?)),
+        "finance.import.apply" => Ok(settle(csv_import::apply(host, &request.parameters)?)),
+        "finance.sorting.run" => Ok(settle(sort_run::run(host)?)),
         _ => Err(Error::new("Unknown Finance tool")),
     }
 }

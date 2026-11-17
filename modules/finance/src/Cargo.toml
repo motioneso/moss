@@ -1,6 +1,6 @@
 [package]
 name = "moss-finance-module"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 publish = false
 description = "Guest-safe Finance: accounts and manual entries"
@@ -18,6 +18,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 sha2 = "0.10"
 chrono = { version = "0.4", default-features = false, features = ["std"] }
+csv = "=1.4.0"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wit-bindgen = { version = "=0.57.1", default-features = false, features = ["macros", "realloc"] }
@@ -39,3 +40,15 @@ path = "../tests/privacy.rs"
 [[test]]
 name = "bank"
 path = "../tests/bank.rs"
+
+[[test]]
+name = "transactions"
+path = "../tests/transactions.rs"
+
+[[test]]
+name = "import"
+path = "../tests/import.rs"
+
+[[test]]
+name = "isolation"
+path = "../tests/isolation.rs"

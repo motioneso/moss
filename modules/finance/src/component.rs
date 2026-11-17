@@ -22,6 +22,7 @@ impl Host for ComponentHost {
             "tools" => moss::module::tools::call(&request),
             "credentials" => moss::module::credentials::call(&request),
             "jobs" => moss::module::jobs::call(&request),
+            "action-policy" => moss::module::action_policy::call(&request),
             _ => return Err(Error::new("Unsupported Finance host port")),
         }
         .map_err(|_| Error::new("Finance host call failed"))?;

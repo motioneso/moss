@@ -43,7 +43,7 @@ pub fn run<H: Host + ?Sized>(host: &H) -> Result<Value> {
 fn refuse<H: Host + ?Sized>(host: &H, item: &Value, id: &str, error: &PlaidError, counts: &Counts) -> Result<Value> {
     let status = bank::fail_item(host, id, error)?;
     if item["status"] != status {
-        log_as(host, "moss", "bank.sync-failed", json!({"itemId":id,"code":error.code}))?;
+        log_as(host, "moss", "bank.sync-failed", json!({"itemId":id,"code":error.code}), None)?;
     }
     Ok(report(id, status, counts))
 }

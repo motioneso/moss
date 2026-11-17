@@ -198,7 +198,7 @@ fn complete<H: Host + ?Sized>(host: &H, public: &str, update_item: Option<&str>)
         client.query(ITEMS, &Query::insert(row))?;
     }
     bank::store_accounts(host, &item_id, &listing.accounts, &at)?;
-    log_as(host, "user", if update_item.is_some() { "bank.reconnect" } else { "bank.connect" }, json!({"itemId":item_id}))?;
+    log_as(host, "user", if update_item.is_some() { "bank.reconnect" } else { "bank.connect" }, json!({"itemId":item_id}), None)?;
     Ok(Ok(()))
 }
 

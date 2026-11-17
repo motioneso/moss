@@ -33,7 +33,7 @@ pub fn today<H: Host + ?Sized>(host: &H) -> Result<String> {
 }
 
 /// sha256 of the JSON text of the ordered values, as the old code stored it.
-fn digest(ordered: &Map<String, Value>) -> Result<String> {
+pub(crate) fn digest(ordered: &Map<String, Value>) -> Result<String> {
     let json = serde_json::to_string(ordered)?;
     Ok(Sha256::digest(json.as_bytes()).iter().map(|b| format!("{b:02x}")).collect())
 }
@@ -59,25 +59,20 @@ pub(crate) fn first<H: Host + ?Sized>(host: &H, table: &str, filter: Filter) -> 
 }
 
 /// Activity rows hold ids only. No amount, name or note is written there.
-fn log<H: Host + ?Sized>(host: &H, kind: &str, params: Value) -> Result<()> {
-    log_as(host, "user", kind, params)
-}
-pub(crate) fn log_as<H: Host + ?Sized>(host: &H, actor: &str, kind: &str, params: Value) -> Result<()> {
-    let id = text(host, "new", "uuid", "id")?;
-    let at = text(host, "call", "read", "now")?;
-    let row = values(vec![("id", json!(id)), ("at", json!(at)), ("actor", json!(actor)), ("kind", json!(kind)), ("params", params)]);
-    Client(host).query(ACTIVITY, &Query::insert(row))?;
-    Ok(())
+pub(crate) fn log<H: Host + ?Sized>(host: &H, kind: &str, params: Value) -> Result<()> {
+    log_as(host, "user", kind, params, None)
 }
 
-/// Leaves with the refusal when a reader fails.
-macro_rules! ask {
-    ($expr:expr) => {
-        match $expr {
-            Ok(value) => value,
-            Err(refusal) => return Ok(Err(refusal)),
-        }
-    };
+/// An activity row for `actor` ("user" or "moss"), with an optional undo record of ids.
+pub(crate) fn log_as<H: Host + ?Sized>(host: &H, actor: &str, kind: &str, params: Value, undo: Option<Value>) -> Result<()> {
+    let id = text(host, "new", "uuid", "id")?;
+    let at = text(host, "call", "read", "now")?;
+    let mut row = values(vec![("id", json!(id)), ("at", json!(at)), ("actor", json!(actor)), ("kind", json!(kind)), ("params", params)]);
+    if let Some(undo) = undo {
+        row.insert("undo".into(), undo);
+    }
+    Client(host).query(ACTIVITY, &Query::insert(row))?;
+    Ok(())
 }
 
 pub fn create_account<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Outcome> {

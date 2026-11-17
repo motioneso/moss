@@ -2,9 +2,9 @@
   "schemaVersion": 2,
   "id": "finance",
   "name": "Finance",
-  "description": "Private money accounts. You can list your accounts, add a manual account and manual transactions, connect a bank, and pull its balances and transactions every six hours or on demand. Budgets, bills, targets, imports, categorizing and the screens are not built yet.",
+  "description": "Private money accounts and transactions. You can list your accounts, add manual accounts and transactions, connect a bank and pull its balances and transactions every six hours or on demand, sort and review transactions, set rules, split, add notes and import a CSV bank file. Budgets, bills, targets and the screens are not built yet.",
   "publisher": "Moss",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
@@ -19,6 +19,8 @@
         "app.finance_items",
         "app.finance_categories",
         "app.finance_budget_policy",
+        "app.finance_merchant_rules",
+        "app.finance_imports",
         "app.finance_bank_links",
         "app.finance_link_sessions",
         "app.finance_balance_snapshots"
@@ -35,6 +37,15 @@
       "resources": [
         "finance.manual.account-create",
         "finance.manual.entry-create",
+        "finance.transactions.categorize",
+        "finance.transactions.categorize-new",
+        "finance.transactions.review-apply",
+        "finance.transactions.bulk-categorize",
+        "finance.transactions.bulk-confirm",
+        "finance.transactions.notes.save",
+        "finance.transactions.splits",
+        "finance.rule.set",
+        "finance.import.apply",
         "finance.connect.start",
         "finance.connect.poll",
         "finance.sync.run-now"
@@ -49,6 +60,11 @@
       "port": "jobs",
       "operations": ["schedule", "enqueue-after-commit", "enqueue-options"],
       "resources": ["finance.sync-run", "finance.connect-poll"]
+    },
+    {
+      "port": "action-policy",
+      "operations": ["route-read"],
+      "resources": ["sorting", "sorting_new"]
     }
   ],
   "database": {
@@ -102,7 +118,6 @@
       "app.finance_accounts",
       "app.finance_activity",
       "app.finance_balance_snapshots",
-      "app.finance_bank_links",
       "app.finance_bill_adjustments",
       "app.finance_bill_occurrences",
       "app.finance_bill_plans",
@@ -117,14 +132,15 @@
       "app.finance_flex_policies",
       "app.finance_imports",
       "app.finance_items",
-      "app.finance_link_sessions",
       "app.finance_manual_transfers",
       "app.finance_merchant_rules",
       "app.finance_provider_handoffs",
       "app.finance_reconciliations",
       "app.finance_targets",
       "app.finance_transactions",
-      "app.finance_transfer_corrections"
+      "app.finance_transfer_corrections",
+      "app.finance_bank_links",
+      "app.finance_link_sessions"
     ],
     "ledger": "module-legacy",
     "access": {
@@ -240,6 +256,131 @@
       "signIn": true
     },
     {
+      "method": "GET",
+      "path": "/finance/transactions",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/transactions/category",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/transactions/review",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/transactions/bulk-categorize",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/transactions/bulk-confirm",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/finance/transactions/notes",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/transactions/notes",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/transactions/splits",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/finance/rules",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/finance/rules/preview",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/rules",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/categories",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/import/parse",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/import/preview",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/import/apply",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/sorting/run",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/transactions/categorize",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/transactions/categorize-new",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/transactions/review",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/transactions/bulk-categorize",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/transactions/bulk-confirm",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/transactions/notes",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/transactions/splits",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/rules/set",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/import/apply",
+      "signIn": true
+    },
+    {
       "method": "POST",
       "path": "/finance/connect/start",
       "signIn": true
@@ -287,6 +428,62 @@
       "description": "Add a manual transaction. Manual records only; no bank money is moved.",
       "risk": "write"
     },
+    "finance.transactions.query": {
+      "description": "List your transactions for a month, with filters, notes, splits and review state. Payee names and notes are outside content.",
+      "risk": "read"
+    },
+    "finance.transactions.categorize": {
+      "description": "Put a transaction you have seen before into a category. Moss's guess is trusted without asking by default.",
+      "risk": "write"
+    },
+    "finance.transactions.categorize-new": {
+      "description": "Put a transaction from a new payee into a category. This asks each time by default.",
+      "risk": "write"
+    },
+    "finance.transactions.review-apply": {
+      "description": "Confirm or change the category of transactions that need a look, optionally saving a rule.",
+      "risk": "write"
+    },
+    "finance.transactions.bulk-categorize": {
+      "description": "Put several transactions into one category.",
+      "risk": "write"
+    },
+    "finance.transactions.bulk-confirm": {
+      "description": "Confirm several transactions that Moss sorted.",
+      "risk": "write"
+    },
+    "finance.transactions.notes.read": {
+      "description": "Read the note on one transaction. Notes are outside content.",
+      "risk": "read"
+    },
+    "finance.transactions.notes.save": {
+      "description": "Save the note on one transaction.",
+      "risk": "write"
+    },
+    "finance.transactions.splits": {
+      "description": "Split a transaction across categories, or remove the split.",
+      "risk": "write"
+    },
+    "finance.rule.set": {
+      "description": "Always put a payee into a category from now on.",
+      "risk": "write"
+    },
+    "finance.rules.list": {
+      "description": "List your payee rules.",
+      "risk": "read"
+    },
+    "finance.rules.preview": {
+      "description": "Show which transactions a payee rule would change, without changing any.",
+      "risk": "read"
+    },
+    "finance.import.preview": {
+      "description": "Check a parsed bank file for duplicates before importing. Nothing is saved.",
+      "risk": "read"
+    },
+    "finance.import.apply": {
+      "description": "Import rows from a bank file into a manual account. Manual records only; no bank money is moved.",
+      "risk": "write"
+    },
     "finance.connect.start": {
       "description": "Start linking a bank, or reconnect one that needs a new sign-in. Returns a page address for the person to open. Needs approval.",
       "risk": "write"
@@ -318,7 +515,7 @@
   "features": [
     {
       "id": "finance.accounts",
-      "description": "A person can list their own accounts with current balances, currencies and, for manual accounts, the opening date and balance. With no accounts, the list suggests adding a manual account. Accounts shared by other people are not built yet. No screen is built yet.",
+      "description": "A person can list their own accounts with current balances, currencies and, for manual accounts, the opening date and balance. With no accounts, the list suggests adding a manual account. Accounts shared by other people and bank links are not built yet. No screen is built yet.",
       "errors": [
         {
           "code": "finance_accounts_unavailable",
@@ -385,6 +582,75 @@
       ]
     },
     {
+      "id": "finance.transactions",
+      "description": "A person can list their own transactions for a month with filters, search, notes and splits. They can set or change a category, confirm what Moss sorted, save a note, split a transaction across categories, and sort many at once. Moss sorts by payee rule first, then the bank's own category, and only confirms on its own when the sorting tier allows it. No screen is built yet.",
+      "errors": [
+        {
+          "code": "stale_transaction",
+          "class": "validation",
+          "description": "The transaction changed since you opened it. Reload and try again."
+        },
+        {
+          "code": "split_transaction",
+          "class": "validation",
+          "description": "This transaction is split. Remove the split before choosing one category."
+        },
+        {
+          "code": "linked_transfer",
+          "class": "validation",
+          "description": "This transaction is part of a transfer. Use the transfer workflow instead."
+        },
+        {
+          "code": "amount_mismatch",
+          "class": "validation",
+          "description": "The parts of a split must add up to the transaction amount."
+        },
+        {
+          "code": "new_merchant",
+          "class": "validation",
+          "description": "This payee is new, so the category needs your approval."
+        }
+      ]
+    },
+    {
+      "id": "finance.rules",
+      "description": "A person can list payee rules, preview what a rule would change, and turn rules on, off or remove them. A rule always confirms the category it sets.",
+      "errors": [
+        {
+          "code": "stale_rules",
+          "class": "validation",
+          "description": "Your rules changed since you opened them. Reload and try again."
+        }
+      ]
+    },
+    {
+      "id": "finance.categories",
+      "description": "A person can add or rename a category inside a group. Archiving a category is not built yet.",
+      "errors": [
+        {
+          "code": "duplicate_name",
+          "class": "validation",
+          "description": "A category with this name already exists. Choose another name."
+        }
+      ]
+    },
+    {
+      "id": "finance.import",
+      "description": "A person can read a CSV bank file of up to 1 MiB and 200 rows, check the rows against what is already saved, choose what to do with each duplicate, and import the rest into a manual account. Importing the same file twice with the same operation id saves it once. No bank money is moved.",
+      "errors": [
+        {
+          "code": "invalid_csv",
+          "class": "validation",
+          "description": "The file could not be read. The message names the row and what to fix."
+        },
+        {
+          "code": "stale_import",
+          "class": "validation",
+          "description": "The account changed since the preview. Preview again and import."
+        }
+      ]
+    },
+    {
       "id": "finance.bank-connect",
       "description": "A person can link a bank. Starting returns a page address to open, the person signs in there, and a check then saves the bank and pulls its first accounts and transactions. Starting again for a bank that needs a new sign-in reconnects it without a second copy. The assistant's version of starting needs a one-use approval. The bank's sign-in token never leaves the host.",
       "errors": [
@@ -406,6 +672,14 @@
       "errors": []
     }
   ],
+  "policyRoutes": {
+    "sorting": {
+      "installTier": "trusted_auto"
+    },
+    "sorting_new": {
+      "installTier": "ask_each_time"
+    }
+  },
   "credentials": {
     "plaid-keys": {
       "scope": "instance",
@@ -438,12 +712,12 @@
       "exposeFields": ["link_token", "hosted_link_url", "expiration"]
     }
   },
-  "jobs": {
-    "finance.sync-run": {},
-    "finance.connect-poll": {}
-  },
   "jobRetries": {
     "finance.sync-run": 3,
     "finance.connect-poll": 5
+  },
+  "jobs": {
+    "finance.sync-run": {},
+    "finance.connect-poll": {}
   }
 }

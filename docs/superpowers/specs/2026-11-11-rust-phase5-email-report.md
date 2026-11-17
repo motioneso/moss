@@ -532,3 +532,101 @@ None added.
   browser needs a websocket library the project does not have, which needs Ben's approval.
 - Very large calendars. Calendar import makes one call per changed event, so a scan near 1000
   events might pass the 5 second call limit.
+
+# Part 13: Remainder (work mail, audit lines, diagnostics, packaging, upgrade)
+
+## What was built
+
+- Work mail capture in the Connectors package. The host hands over mail it has
+  already collected. The package asks the person's model, through the router
+  and never by name, whether a message earns a short note. Plain mail is
+  skipped. A note is appended only through the Notes package's public calls,
+  so Connectors never touches a note file itself.
+- Notes gained two public calls for this. One lists note candidates and skips
+  any note marked private in its opening block. The other appends one entry,
+  refuses a private note, skips an entry that is already there, and reports a
+  note that changed in the meantime instead of overwriting it. The default
+  note is Work mail notes.md.
+- The place capture stopped is kept in the person's own preferences as hashed
+  markers only. Mail text never appears there, and a later run does not
+  repeat mail it has already seen. At most 25 messages are read per run, and
+  a failed model or notes answer stops the run without moving past it.
+- Admin audit lines and connection diagnostics were already in place from
+  earlier parts. This part checked them again and added the audit and
+  diagnostics reads to the upgrade proof below. Changing an Email or Calendar
+  switch writes one audit line, and the diagnostics read returns each
+  account's health without secrets or mail text.
+- Both packages were checked as registry packages. Each one is packed, listed
+  in a signed registry index, fetched back by its fingerprint, and checked
+  against the index entry before it is opened. A changed package is refused.
+- An upgrade data-shape check runs on rows seeded by hand into the current
+  tables, shaped like an existing install. It does not install an older
+  package version and upgrade it. The sealed
+  account secret, the cached mail, the feature switches and the capture
+  position all read back unchanged through the upgraded code.
+
+## Proof
+
+- Work mail capture tests (5, in the Connectors package): note-worthy mail is
+  appended through Notes and the position advances; plain mail is skipped; a
+  failed model answer stops without advancing; private notes are spotted and
+  unreadable note headers count as private; a model answer that copies the
+  mail or names a file is refused. The stored position was searched and holds
+  no mail text.
+- Notes append tests: the entry lands once in the default note, a repeat is
+  skipped, a private note is refused and left untouched, and private notes are
+  left out of the candidate list.
+- Registry tests for both packages (through the module gates): each package
+  downloads from a signed folder registry and opens; a tampered copy is
+  refused.
+- Upgrade and second-person database tests (through the gate): an existing
+  account, its sealed secret, cached mail, switches and capture position
+  survive. A second person reads none of it. The capture position check was
+  seen failing with the row protection switched off, then passing again with
+  it restored.
+- Native and WebAssembly builds with tests in both, through the module gates.
+- Live run on the real Rust server with the stand-in Google and mail servers
+  (the Connectors live command, which installs Tasks, Calendar, Email and
+  Connectors together): passed.
+- Gate results after the final change: Email gate passed (22 of 22 database
+  tests, plus the registry test). Connectors gate passed except the old Google
+  limiter test that already failed before this part. One Connectors writes
+  test failed once because earlier tests had left revoked accounts behind. The
+  test now skips revoked accounts, and the writes and database suites passed
+  on rerun.
+
+## Differences from the old app
+
+- The private-note check reads the opening block directly instead of parsing
+  it as full YAML. A doubtful header still counts as private, so nothing is
+  written to a note that might be private.
+- Memory preferences and sender context are not used yet. The old app read
+  them before asking the model; no public call for them exists yet, so the
+  model is asked without them.
+- No mailbox is read by the capture itself, as in the old app, where the
+  collector was never switched on either.
+
+## Known limits
+
+- Capture stops at a message the model or Notes keeps failing on, so mail
+  behind it waits until it succeeds. This keeps mail from being skipped
+  silently. A retry limit that marks the message and moves on is a later
+  choice.
+- The saved position uses the same key as the old app. If the old shape ever
+  differs, the position resets and a few messages may be judged again. The
+  receipt in the note stops a duplicate entry.
+
+## Not proven
+
+- An upgrade from an older installed package version (only the data-shape
+  check above ran).
+- One real Google account and one real IMAP account. That pass needs Ben. The
+  live pass above used stand-in servers on the real Rust server.
+- A model call with a real configured model. The tests use a fixed answer.
+- The two settings screen tests in the Notes package that were already
+  failing before this part (settings_input). They fail the same way without
+  these changes.
+- The separate Email live command. It installs Connectors but not Calendar,
+  which Email now requires, so it stops with "calendar missing". This
+  predates part 13 and was left alone. The Connectors live command covers
+  the same ground.

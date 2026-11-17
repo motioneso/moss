@@ -64,7 +64,13 @@ fn the_package_asks_only_for_its_own_resources() {
     assert!(ask("db", "query", "app.finance_accounts").is_ok());
     assert!(ask("db", "query", "app.finance_transactions").is_ok());
     assert!(ask("db", "query", "app.finance_activity").is_ok());
-    assert!(ask("db", "query", "app.finance_imports").is_err());
+    assert!(ask("db", "query", "app.finance_imports").is_ok());
+    assert!(ask("db", "query", "app.finance_merchant_rules").is_ok());
+    assert!(ask("db", "query", "app.finance_targets").is_err());
+    assert!(ask("action-policy", "route-read", "sorting").is_ok());
+    assert!(ask("action-policy", "route-read", "sorting_new").is_ok());
+    assert!(ask("action-policy", "route-write", "sorting").is_err());
+    assert!(ask("tools", "run", "finance.import.apply").is_ok());
     assert!(ask("db", "query", "app.users").is_err());
     assert!(ask("context", "local-date", "account").is_ok());
     assert!(ask("kv", "get", "finance.store").is_err());
