@@ -50,7 +50,7 @@ pub fn is_envelope(id: &str) -> bool {
     id != "income" && id != "transfers"
 }
 
-fn day_number(date: &str) -> i64 {
+pub fn day_number(date: &str) -> i64 {
     let part = |r: std::ops::Range<usize>| date[r].parse::<i64>().unwrap_or(0);
     let (mut y, m, d) = (part(0..4), part(5..7), part(8..10));
     if m <= 2 {

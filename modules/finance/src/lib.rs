@@ -21,6 +21,7 @@ pub mod connect;
 pub mod csv_import;
 pub mod draft;
 pub mod envelope;
+pub mod recurrence;
 pub mod input;
 pub mod ledger;
 pub mod rules;
