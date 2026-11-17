@@ -124,6 +124,8 @@ function cases() {
   add("empty", { discoveredTools: [], hasCredential: false, credentialPlacement: null });
   add("small", { discoveredTools: small, enabledTools: ["list_orders"] });
   add("derived_groups", { discoveredTools: names("hass_light", 40).concat(names("mail_msg", 5)) });
+  add("exactly_30_tools", { discoveredTools: names("t", 30) });
+  add("exactly_31_tools", { discoveredTools: names("t", 31) });
   add("explicit_groups", { discoveredTools: grouped, enabledGroups: ["Lights", "Other"] });
   add("classifier_sorted", {
     discoveredTools: small,

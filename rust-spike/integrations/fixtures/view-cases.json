@@ -2252,6 +2252,2757 @@
     }
   },
   {
+    "name": "exactly_30_tools",
+    "row": {
+      "id": "11111111-1111-4111-8111-111111111111",
+      "name": "Home",
+      "kind": "mcp",
+      "url": "https://example.test/mcp",
+      "credentialPlacement": {
+        "type": "bearer"
+      },
+      "hasCredential": true,
+      "enabled": true,
+      "baseUrl": null,
+      "specPasted": false,
+      "enabledGroups": [],
+      "enabledTools": [],
+      "mutedTools": [],
+      "unsuppressedTools": [],
+      "classifierEnabled": false,
+      "classifierSort": {
+        "version": 1,
+        "entries": {}
+      },
+      "classifierKeptOutTools": [],
+      "discoveredTools": [
+        {
+          "name": "t_0",
+          "description": "Does t_0",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_1",
+          "description": "Does t_1",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_2",
+          "description": "Does t_2",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_3",
+          "description": "Does t_3",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_4",
+          "description": "Does t_4",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_5",
+          "description": "Does t_5",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_6",
+          "description": "Does t_6",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_7",
+          "description": "Does t_7",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_8",
+          "description": "Does t_8",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_9",
+          "description": "Does t_9",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_10",
+          "description": "Does t_10",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_11",
+          "description": "Does t_11",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_12",
+          "description": "Does t_12",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_13",
+          "description": "Does t_13",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_14",
+          "description": "Does t_14",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_15",
+          "description": "Does t_15",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_16",
+          "description": "Does t_16",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_17",
+          "description": "Does t_17",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_18",
+          "description": "Does t_18",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_19",
+          "description": "Does t_19",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_20",
+          "description": "Does t_20",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_21",
+          "description": "Does t_21",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_22",
+          "description": "Does t_22",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_23",
+          "description": "Does t_23",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_24",
+          "description": "Does t_24",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_25",
+          "description": "Does t_25",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_26",
+          "description": "Does t_26",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_27",
+          "description": "Does t_27",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_28",
+          "description": "Does t_28",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_29",
+          "description": "Does t_29",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ],
+      "lastDiscoveryAt": "2026-11-16T09:30:00.000Z",
+      "lastError": null
+    },
+    "modelReady": false,
+    "expected": {
+      "id": "11111111-1111-4111-8111-111111111111",
+      "name": "Home",
+      "kind": "mcp",
+      "url": "https://example.test/mcp",
+      "enabled": true,
+      "hasCredential": true,
+      "toolCount": 30,
+      "enabledToolCount": 30,
+      "lastDiscoveryAt": "2026-11-16T09:30:00.000Z",
+      "lastError": null,
+      "credentialPlacement": {
+        "type": "bearer"
+      },
+      "tools": [
+        {
+          "name": "t_0",
+          "description": "Does t_0",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_1",
+          "description": "Does t_1",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_2",
+          "description": "Does t_2",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_3",
+          "description": "Does t_3",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_4",
+          "description": "Does t_4",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_5",
+          "description": "Does t_5",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_6",
+          "description": "Does t_6",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_7",
+          "description": "Does t_7",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_8",
+          "description": "Does t_8",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_9",
+          "description": "Does t_9",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_10",
+          "description": "Does t_10",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_11",
+          "description": "Does t_11",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_12",
+          "description": "Does t_12",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_13",
+          "description": "Does t_13",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_14",
+          "description": "Does t_14",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_15",
+          "description": "Does t_15",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_16",
+          "description": "Does t_16",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_17",
+          "description": "Does t_17",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_18",
+          "description": "Does t_18",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_19",
+          "description": "Does t_19",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_20",
+          "description": "Does t_20",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_21",
+          "description": "Does t_21",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_22",
+          "description": "Does t_22",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_23",
+          "description": "Does t_23",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_24",
+          "description": "Does t_24",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_25",
+          "description": "Does t_25",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_26",
+          "description": "Does t_26",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_27",
+          "description": "Does t_27",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_28",
+          "description": "Does t_28",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_29",
+          "description": "Does t_29",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ],
+      "groups": [
+        {
+          "name": "",
+          "toolCount": 30,
+          "enabled": false
+        }
+      ],
+      "enabledGroups": [],
+      "enabledTools": [],
+      "mutedTools": [],
+      "unsuppressedTools": [],
+      "groupOptIn": false,
+      "specPasted": false,
+      "classifierEnabled": false,
+      "classifierTools": [
+        {
+          "toolName": "t_0",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "0",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_1",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "1",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_2",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "2",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_3",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "3",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_4",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "4",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_5",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "5",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_6",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "6",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_7",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "7",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_8",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "8",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_9",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "9",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_10",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "10",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_11",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "11",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_12",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "12",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_13",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "13",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_14",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "14",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_15",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "15",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_16",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "16",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_17",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "17",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_18",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "18",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_19",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "19",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_20",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "20",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_21",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "21",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_22",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "22",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_23",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "23",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_24",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "24",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_25",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "25",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_26",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "26",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_27",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "27",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_28",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "28",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_29",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "29",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        }
+      ]
+    }
+  },
+  {
+    "name": "exactly_31_tools",
+    "row": {
+      "id": "11111111-1111-4111-8111-111111111111",
+      "name": "Home",
+      "kind": "mcp",
+      "url": "https://example.test/mcp",
+      "credentialPlacement": {
+        "type": "bearer"
+      },
+      "hasCredential": true,
+      "enabled": true,
+      "baseUrl": null,
+      "specPasted": false,
+      "enabledGroups": [],
+      "enabledTools": [],
+      "mutedTools": [],
+      "unsuppressedTools": [],
+      "classifierEnabled": false,
+      "classifierSort": {
+        "version": 1,
+        "entries": {}
+      },
+      "classifierKeptOutTools": [],
+      "discoveredTools": [
+        {
+          "name": "t_0",
+          "description": "Does t_0",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_1",
+          "description": "Does t_1",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_2",
+          "description": "Does t_2",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_3",
+          "description": "Does t_3",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_4",
+          "description": "Does t_4",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_5",
+          "description": "Does t_5",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_6",
+          "description": "Does t_6",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_7",
+          "description": "Does t_7",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_8",
+          "description": "Does t_8",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_9",
+          "description": "Does t_9",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_10",
+          "description": "Does t_10",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_11",
+          "description": "Does t_11",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_12",
+          "description": "Does t_12",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_13",
+          "description": "Does t_13",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_14",
+          "description": "Does t_14",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_15",
+          "description": "Does t_15",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_16",
+          "description": "Does t_16",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_17",
+          "description": "Does t_17",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_18",
+          "description": "Does t_18",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_19",
+          "description": "Does t_19",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_20",
+          "description": "Does t_20",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_21",
+          "description": "Does t_21",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_22",
+          "description": "Does t_22",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_23",
+          "description": "Does t_23",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_24",
+          "description": "Does t_24",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_25",
+          "description": "Does t_25",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_26",
+          "description": "Does t_26",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_27",
+          "description": "Does t_27",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_28",
+          "description": "Does t_28",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_29",
+          "description": "Does t_29",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_30",
+          "description": "Does t_30",
+          "group": "",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ],
+      "lastDiscoveryAt": "2026-11-16T09:30:00.000Z",
+      "lastError": null
+    },
+    "modelReady": false,
+    "expected": {
+      "id": "11111111-1111-4111-8111-111111111111",
+      "name": "Home",
+      "kind": "mcp",
+      "url": "https://example.test/mcp",
+      "enabled": true,
+      "hasCredential": true,
+      "toolCount": 31,
+      "enabledToolCount": 0,
+      "lastDiscoveryAt": "2026-11-16T09:30:00.000Z",
+      "lastError": null,
+      "credentialPlacement": {
+        "type": "bearer"
+      },
+      "tools": [
+        {
+          "name": "t_0",
+          "description": "Does t_0",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_1",
+          "description": "Does t_1",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_2",
+          "description": "Does t_2",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_3",
+          "description": "Does t_3",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_4",
+          "description": "Does t_4",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_5",
+          "description": "Does t_5",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_6",
+          "description": "Does t_6",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_7",
+          "description": "Does t_7",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_8",
+          "description": "Does t_8",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_9",
+          "description": "Does t_9",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_10",
+          "description": "Does t_10",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_11",
+          "description": "Does t_11",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_12",
+          "description": "Does t_12",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_13",
+          "description": "Does t_13",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_14",
+          "description": "Does t_14",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_15",
+          "description": "Does t_15",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_16",
+          "description": "Does t_16",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_17",
+          "description": "Does t_17",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_18",
+          "description": "Does t_18",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_19",
+          "description": "Does t_19",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_20",
+          "description": "Does t_20",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_21",
+          "description": "Does t_21",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_22",
+          "description": "Does t_22",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_23",
+          "description": "Does t_23",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_24",
+          "description": "Does t_24",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_25",
+          "description": "Does t_25",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_26",
+          "description": "Does t_26",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_27",
+          "description": "Does t_27",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_28",
+          "description": "Does t_28",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_29",
+          "description": "Does t_29",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "name": "t_30",
+          "description": "Does t_30",
+          "group": "Other",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ],
+      "groups": [
+        {
+          "name": "Other",
+          "toolCount": 31,
+          "enabled": false
+        }
+      ],
+      "enabledGroups": [],
+      "enabledTools": [],
+      "mutedTools": [],
+      "unsuppressedTools": [],
+      "groupOptIn": true,
+      "specPasted": false,
+      "classifierEnabled": false,
+      "classifierTools": [
+        {
+          "toolName": "t_0",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "0",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_1",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "1",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_2",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "2",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_3",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "3",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_4",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "4",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_5",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "5",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_6",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "6",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_7",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "7",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_8",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "8",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_9",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "9",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_10",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "10",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_11",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "11",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_12",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "12",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_13",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "13",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_14",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "14",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_15",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "15",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_16",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "16",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_17",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "17",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_18",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "18",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_19",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "19",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_20",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "20",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_21",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "21",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_22",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "22",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_23",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "23",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_24",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "24",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_25",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "25",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_26",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "26",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_27",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "27",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_28",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "28",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_29",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "29",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        },
+        {
+          "toolName": "t_30",
+          "status": "never_tried",
+          "risk": null,
+          "failure": null,
+          "sendWithoutAsking": false,
+          "asksFirst": true,
+          "readableName": "30",
+          "sortedAt": null,
+          "sortedBy": null,
+          "sortMethod": null,
+          "failedAt": null,
+          "keptOut": false,
+          "classifierState": "off",
+          "preparationFailure": null,
+          "preparedAt": null
+        }
+      ]
+    }
+  },
+  {
     "name": "explicit_groups",
     "row": {
       "id": "11111111-1111-4111-8111-111111111111",
