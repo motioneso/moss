@@ -8,4 +8,4 @@ export CARGO_TARGET_DIR
 CARGO_TARGET_DIR="$CARGO_TARGET_DIR/guest" cargo +1.95.0 test --locked --offline --manifest-path modules/web-research/src/Cargo.toml
 modules/web-research/tools/build-component.sh "$CARGO_TARGET_DIR/module.wasm"
 export WEB_RESEARCH_COMPONENT_WASM="$CARGO_TARGET_DIR/module.wasm"
-cargo +1.95.0 test --locked --offline --manifest-path modules/web-research/host/Cargo.toml --test package
+cargo +1.95.0 test --locked --offline --manifest-path modules/web-research/host/Cargo.toml --test package --test read

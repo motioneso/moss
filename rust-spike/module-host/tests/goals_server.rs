@@ -2,22 +2,41 @@
 mod common;
 #[path = "people_routes/installed.rs"]
 mod installed;
+use access_context::AccessContext;
 use common::Keys;
 use moss_module_host::{
     archive::Package,
     registry::{Artifact, Channel, Index, Source},
     trust::{self, Publisher, RegistryIdentity},
 };
-use std::collections::{BTreeMap, BTreeSet};
-use access_context::AccessContext;
 use safety_core::db::{Database, RuntimeRole};
 use serde_json::{json, Value};
+use std::collections::{BTreeMap, BTreeSet};
 use std::{
     fs,
     path::Path,
     process::{Child, Command, Stdio},
     time::{Duration, Instant},
 };
+// The live fixture grants approval through the real trusted host API, never through HTTP
+// parameters. It shares the server's private service store and disk locks.
+struct NoModel;
+impl moss_module_host::ai::Intelligence for NoModel {
+    fn generate(
+        &self,
+        _: &moss_module_host::runtime::CallScope,
+        _: &moss_module_host::runtime::Request,
+    ) -> anyhow::Result<Value> {
+        anyhow::bail!("No model")
+    }
+    fn embed(
+        &self,
+        _: &moss_module_host::runtime::CallScope,
+        _: &moss_module_host::runtime::Request,
+    ) -> anyhow::Result<Value> {
+        anyhow::bail!("No model")
+    }
+}
 struct Server(Child);
 impl Drop for Server {
     fn drop(&mut self) {
@@ -52,7 +71,7 @@ fn installed_goals_package_serves_routes_from_the_real_server() {
     let port = Port(
         String::from_utf8(
             Command::new("devports")
-                .args(["claim", &format!("js276-news-{}", std::process::id())])
+                .args(["claim", &format!("js290-goals-{}", std::process::id())])
                 .output()
                 .unwrap()
                 .stdout,
@@ -63,11 +82,18 @@ fn installed_goals_package_serves_routes_from_the_real_server() {
     );
     assert!(!port.0.is_empty());
     let origin = format!("https://localhost:{}", port.0);
+    let address: std::net::IpAddr = std::env::var("JS290_PROOF_ADDRESS")
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert!(!address.is_loopback() && address.is_ipv4());
+    let remote_origin = format!("https://{address}:{}", port.0);
     let cert = root.join("tls/certificate.pem");
     assert!(Command::new(std::env::var("JS170_CERTIFICATE").unwrap())
         .args(["local-certificate"])
         .arg(root.join("tls"))
         .arg(&origin)
+        .arg(&remote_origin)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
@@ -85,7 +111,7 @@ fn installed_goals_package_serves_routes_from_the_real_server() {
     }
     fs::write(
         root.join("web/index.html"),
-        "<!doctype html><title>News HTTP fixture</title>",
+        "<!doctype html><title>Goals HTTP fixture</title>",
     )
     .unwrap();
     let app_url = std::env::var("JS43_APP_URL").unwrap();
@@ -100,7 +126,7 @@ fn installed_goals_package_serves_routes_from_the_real_server() {
     );
     private(
         &root.join("network.json"),
-        &json!({"listen":format!("127.0.0.1:{}",port.0),"origins":[origin],"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
+        &json!({"listen":format!("0.0.0.0:{}",port.0),"sharing":true,"origins":[origin,remote_origin],"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
     );
     let client = reqwest::blocking::Client::builder()
         .add_root_certificate(reqwest::Certificate::from_pem(&fs::read(&cert).unwrap()).unwrap())
@@ -153,7 +179,10 @@ fn installed_goals_package_serves_routes_from_the_real_server() {
         let response = client.post(format!("{origin}/api/auth/sign-up/email")).header("origin", &origin).json(&json!({"name":name,"email":email,"password":"temporary-goals-password-287-not-a-real-secret"})).send().unwrap();
         let status = response.status();
         if status != 200 {
-            panic!("sign-up answered {status}: {}", response.text().unwrap_or_default());
+            panic!(
+                "sign-up answered {status}: {}",
+                response.text().unwrap_or_default()
+            );
         }
         response.headers()["set-cookie"]
             .to_str()
@@ -198,37 +227,41 @@ fn installed_goals_package_serves_routes_from_the_real_server() {
         )
     });
     let access = AccessContext::new(owner, "goals-install");
-    // Publish the News package through a signed folder registry and install it with the
+    // Publish the Goals package through a signed folder registry and install it with the
     // canonical installer, as the server would find it.
     let keys = Keys::new();
     fs::create_dir_all(root.join("registry/packages")).unwrap();
     let artifacts: Vec<Artifact> = [("JS287_GOALS_PACKAGE", "goals")]
-    .iter()
-    .map(|(variable, id)| {
-        let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
-        let digest = trust::digest(&bytes);
-        let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
-        let manifest = &package.manifest;
-        assert_eq!(manifest.id, *id);
-        fs::write(root.join(format!("registry/packages/{digest}.mosspkg")), &bytes).unwrap();
-        Artifact {
-            id: manifest.id.clone(),
-            version: manifest.version.clone(),
-            digest: digest.clone(),
-            size: bytes.len() as u64,
-            publisher_key: "goals-test".into(),
-            signature: Keys::sign(&keys.publisher, digest.as_bytes()),
-            requires_moss: manifest.requires_moss.clone(),
-            abi: manifest.abi.clone(),
-            capabilities: manifest.capabilities.clone(),
-            migrations: manifest.database.migrations.clone(),
-            requires: manifest.requires.clone(),
-            changelog: "Goals live gate".into(),
-            channel: Channel::Stable,
-            urgent: false,
-        }
-    })
-    .collect();
+        .iter()
+        .map(|(variable, id)| {
+            let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
+            let digest = trust::digest(&bytes);
+            let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
+            let manifest = &package.manifest;
+            assert_eq!(manifest.id, *id);
+            fs::write(
+                root.join(format!("registry/packages/{digest}.mosspkg")),
+                &bytes,
+            )
+            .unwrap();
+            Artifact {
+                id: manifest.id.clone(),
+                version: manifest.version.clone(),
+                digest: digest.clone(),
+                size: bytes.len() as u64,
+                publisher_key: "goals-test".into(),
+                signature: Keys::sign(&keys.publisher, digest.as_bytes()),
+                requires_moss: manifest.requires_moss.clone(),
+                abi: manifest.abi.clone(),
+                capabilities: manifest.capabilities.clone(),
+                migrations: manifest.database.migrations.clone(),
+                requires: manifest.requires.clone(),
+                changelog: "Goals live gate".into(),
+                channel: Channel::Stable,
+                urgent: false,
+            }
+        })
+        .collect();
     let identity = RegistryIdentity {
         id: "goals-test-registry".into(),
         name: "Goals test registry".into(),
@@ -252,11 +285,23 @@ fn installed_goals_package_serves_routes_from_the_real_server() {
         revoked: vec![],
     };
     for (name, data, key) in [
-        ("registry.json", serde_json::to_vec(&identity).unwrap(), &keys.root),
-        ("index.json", serde_json::to_vec(&index).unwrap(), &keys.index),
+        (
+            "registry.json",
+            serde_json::to_vec(&identity).unwrap(),
+            &keys.root,
+        ),
+        (
+            "index.json",
+            serde_json::to_vec(&index).unwrap(),
+            &keys.index,
+        ),
     ] {
         fs::write(root.join("registry").join(name), &data).unwrap();
-        fs::write(root.join("registry").join(format!("{name}.sig")), Keys::sign(key, &data)).unwrap();
+        fs::write(
+            root.join("registry").join(format!("{name}.sig")),
+            Keys::sign(key, &data),
+        )
+        .unwrap();
     }
     let installer = installed::reopen(
         &root.join("data"),
@@ -295,21 +340,31 @@ fn installed_goals_package_serves_routes_from_the_real_server() {
             db.execute("INSERT INTO app.users (id, name, email, email_verified, created_at, updated_at, is_instance_admin, status) VALUES ($1, 'Goals other', 'goals-other@example.test', false, now(), now(), false, 'active')", &[&id]).await.unwrap();
             db.execute("INSERT INTO app.auth_accounts (id, account_id, provider_id, user_id, password, created_at, updated_at) SELECT gen_random_uuid(), $1::uuid::text, 'credential', $1::uuid, password, now(), now() FROM app.auth_accounts WHERE user_id = $2::uuid AND provider_id = 'credential'", &[&id, &owner]).await.unwrap();
         });
-        let signed = client.post(format!("{origin}/api/auth/sign-in/email")).header("origin", &origin)
+        let signed = client.post(format!("{remote_origin}/api/auth/sign-in/email")).header("origin", &remote_origin)
             .json(&json!({"email":"goals-other@example.test","password":"temporary-goals-password-287-not-a-real-secret"})).send().unwrap();
         assert_eq!(signed.status(), 200, "second person sign-in");
-        signed.headers()["set-cookie"].to_str().unwrap().split(';').next().unwrap().to_owned()
+        signed.headers()["set-cookie"]
+            .to_str()
+            .unwrap()
+            .split(';')
+            .next()
+            .unwrap()
+            .to_owned()
     };
     let log = || fs::read_to_string(root.join("server.log")).unwrap_or_default();
     let call = |method: reqwest::Method, path: &str, cookie: Option<&str>, body: Option<Value>| {
-        let mut request = client.request(method, format!("{origin}/api/m/goals{path}")).header("origin", &origin);
+        let mut request = client
+            .request(method, format!("{remote_origin}/api/m/goals{path}"))
+            .header("origin", &remote_origin);
         if let Some(cookie) = cookie {
             request = request.header("cookie", cookie);
         }
         if let Some(body) = body {
             request = request.json(&body);
         }
-        let response = request.send().unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
+        let response = request
+            .send()
+            .unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
         let status = response.status().as_u16();
         let text = response.text().unwrap_or_default();
         println!("{method_path} -> {status}", method_path = path);
@@ -318,6 +373,19 @@ fn installed_goals_package_serves_routes_from_the_real_server() {
     let json_of = |text: &str| serde_json::from_str::<Value>(text).unwrap_or(Value::Null);
     use reqwest::Method;
     const MARK: &str = "PLANTED-LIVE-MARKER-7d2e";
+    assert_eq!(
+        client
+            .post(format!("{remote_origin}/api/m/goals/goals/tools/run"))
+            .header("origin", "https://untrusted.example")
+            .header("cookie", &cookie)
+            .json(&json!({"tool":"goals.list","parameters":{}}))
+            .send()
+            .unwrap()
+            .status()
+            .as_u16(),
+        403
+    );
+    println!("PASS live network: real non-loopback HTTPS with certificate verification; untrusted origin refused");
     assert_eq!(call(Method::GET, "/goals", None, None).0, 401);
     // The server answers 503, or holds the request, until its module host has finished starting.
     let started = std::time::Instant::now();
@@ -331,7 +399,11 @@ fn installed_goals_package_serves_routes_from_the_real_server() {
         if ready {
             break;
         }
-        assert!(started.elapsed() < std::time::Duration::from_secs(240), "module host start deadline\n{}", log());
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(240),
+            "module host start deadline\n{}",
+            log()
+        );
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
     for who in [&cookie, &other] {
@@ -339,28 +411,117 @@ fn installed_goals_package_serves_routes_from_the_real_server() {
         assert_eq!(status, 200, "{text}\n{}", log());
         assert_eq!(json_of(&text), json!([]));
     }
+    let services = moss_module_host::services::ServicePorts::new(
+        &root.join("data"),
+        std::sync::Arc::new(
+            safety_core::secret::SecretCipher::connectors(&Default::default()).unwrap(),
+        ),
+        std::sync::Arc::new(NoModel),
+        std::sync::Arc::new(moss_module_host::runtime::DenyPorts),
+    )
+    .unwrap();
+    let policies = BTreeMap::from([("goals.list".into(), false), ("goals.get".into(), false)]);
+    services
+        .set_action_policy(&access, "goals", &policies)
+        .unwrap();
+    let tool = |name: &str, parameters: Value, approve: bool| {
+        if approve {
+            services
+                .approve_tool(&access, "goals", name, &parameters)
+                .unwrap();
+        }
+        call(
+            Method::POST,
+            "/goals/tools/run",
+            Some(&cookie),
+            Some(json!({"tool":name,"parameters":parameters})),
+        )
+    };
+    assert_eq!(call(Method::GET, "/goals/today", None, None).0, 401);
+    let create = json!({"title":MARK,"desiredOutcome":"Tool created"});
+    assert_eq!(tool("goals.create", create.clone(), false).0, 403);
+    let (status, text) = tool("goals.create", create.clone(), true);
+    assert_eq!(status, 200, "{text}");
+    let tool_goal = json_of(&text)["data"].clone();
+    let tool_id = tool_goal["id"].as_str().unwrap();
+    assert_eq!(tool("goals.create", create, false).0, 403);
+    let (_, route_goal) = call(
+        Method::GET,
+        &format!("/goals/{tool_id}"),
+        Some(&cookie),
+        None,
+    );
+    assert_eq!(json_of(&route_goal), tool_goal);
+    let (_, list) = tool("goals.list", json!({}), false);
+    assert_eq!(json_of(&list)["data"]["items"].as_array().unwrap().len(), 1);
+    let evidence = json!({"goalId":tool_id,"evidenceKind":"progress","sourceKind":"manual","sourceLabel":"Note","summary":MARK});
+    assert_eq!(tool("goals.addEvidence", evidence, true).0, 200);
+    let (status, text) = tool("goals.get", json!({"goalId":tool_id}), false);
+    assert_eq!(status, 200);
+    assert_eq!(json_of(&text)["data"]["evidence"][0]["summary"], MARK);
+    let (_, today) = call(Method::GET, "/goals/today", Some(&cookie), None);
+    assert_eq!(json_of(&today).as_array().unwrap().len(), 1);
+    assert_eq!(
+        call(Method::GET, "/goals/today", Some(&other), None).1,
+        "[]"
+    );
+    let update = json!({"goalId":tool_id,"status":"completed"});
+    assert_eq!(tool("goals.update", update, true).0, 200);
+    let (_, today) = call(Method::GET, "/goals/today", Some(&cookie), None);
+    assert_eq!(json_of(&today), json!([]));
+    let evidence = json!({"goalId":tool_id,"evidenceKind":"progress","sourceKind":"manual","sourceLabel":"Note","summary":"Late"});
+    let (_, refused) = tool("goals.addEvidence", evidence, true);
+    assert_eq!(json_of(&refused)["data"]["error"], "Goal is closed");
+    let activity = serde_json::to_string(&services.activity("goals", &access).unwrap()).unwrap();
+    assert!(!activity.contains(MARK));
+    println!("PASS part5 live HTTPS: all five tools, exact-input one-use approval, shared route writes, Today active filter, second account and metadata-only activity");
     // The owner creates a goal and adds evidence.
-    let (status, text) = call(Method::POST, "/goals", Some(&cookie), Some(json!({"title":MARK,"desiredOutcome":"Ship it"})));
+    let (status, text) = call(
+        Method::POST,
+        "/goals",
+        Some(&cookie),
+        Some(json!({"title":MARK,"desiredOutcome":"Ship it"})),
+    );
     assert_eq!(status, 201, "{text}\n{}", log());
     let goal = json_of(&text);
     let id = goal["id"].as_str().unwrap().to_owned();
     assert_eq!(goal["status"], "active");
-    let (status, text) = call(Method::POST, &format!("/goals/{id}/evidence"), Some(&cookie),
-        Some(json!({"evidenceKind":"progress","sourceKind":"manual","sourceLabel":"Note","summary":MARK})));
+    let (status, text) = call(
+        Method::POST,
+        &format!("/goals/{id}/evidence"),
+        Some(&cookie),
+        Some(
+            json!({"evidenceKind":"progress","sourceKind":"manual","sourceLabel":"Note","summary":MARK}),
+        ),
+    );
     assert_eq!(status, 201, "{text}\n{}", log());
     let (_, list) = call(Method::GET, "/goals", Some(&cookie), None);
-    assert_eq!(json_of(&list).as_array().unwrap().len(), 1, "{list}");
+    assert_eq!(json_of(&list).as_array().unwrap().len(), 2, "{list}");
     // The other person sees none of it.
     let (_, text) = call(Method::GET, "/goals", Some(&other), None);
     assert_eq!(json_of(&text), json!([]), "{text}");
     assert!(!text.to_lowercase().contains(&MARK.to_lowercase()));
-    assert_eq!(call(Method::GET, &format!("/goals/{id}"), Some(&other), None).0, 404);
+    assert_eq!(
+        call(Method::GET, &format!("/goals/{id}"), Some(&other), None).0,
+        404
+    );
     // The owner closes the goal, and further evidence is refused.
-    let (status, text) = call(Method::PATCH, &format!("/goals/{id}"), Some(&cookie), Some(json!({"status":"completed"})));
+    let (status, text) = call(
+        Method::PATCH,
+        &format!("/goals/{id}"),
+        Some(&cookie),
+        Some(json!({"status":"completed"})),
+    );
     assert_eq!(status, 200, "{text}\n{}", log());
     assert_eq!(json_of(&text)["status"], "completed");
-    let (status, text) = call(Method::POST, &format!("/goals/{id}/evidence"), Some(&cookie),
-        Some(json!({"evidenceKind":"progress","sourceKind":"manual","sourceLabel":"Note","summary":"Late"})));
+    let (status, text) = call(
+        Method::POST,
+        &format!("/goals/{id}/evidence"),
+        Some(&cookie),
+        Some(
+            json!({"evidenceKind":"progress","sourceKind":"manual","sourceLabel":"Note","summary":"Late"}),
+        ),
+    );
     assert_eq!(status, 409, "{text}");
     // Nothing the test sent reached the server log.
     assert!(!log().to_lowercase().contains(&MARK.to_lowercase()));

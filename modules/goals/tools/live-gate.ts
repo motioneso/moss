@@ -1,6 +1,7 @@
 /** Real Rust server over HTTPS with the installed Goals package. Run through verify-gate. */
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
+import { networkInterfaces } from "node:os";
 import { getMossDatabaseUrls } from "@moss/db";
 
 if (process.env.JARVIS_GATE_RUN !== "1") throw new Error("Use verify-gate");
@@ -9,6 +10,10 @@ for (const name of ["CARGO_HOME", "RUSTUP_HOME", "CARGO_TARGET_DIR", "JS287_GOAL
 }
 const urls = getMossDatabaseUrls();
 const target = process.env.CARGO_TARGET_DIR!;
+const address = Object.values(networkInterfaces())
+  .flat()
+  .find((n) => n?.family === "IPv4" && !n.internal)?.address;
+if (!address) throw new Error("The live check needs a non-loopback network address");
 const sharedDir = join(target, "goals-shared");
 if (
   spawnSync("python3", ["rust-spike/module-ui/build-assets.py", sharedDir], { stdio: "inherit" })
@@ -56,6 +61,7 @@ cargo(
   ],
   {
     MOSS_MODULE_SHARED_DIR: sharedDir,
+    JS290_PROOF_ADDRESS: address,
     JS43_APP_URL: urls.app,
     JS43_WORKER_URL: urls.worker,
     JS43_BOOTSTRAP_URL: urls.bootstrap,

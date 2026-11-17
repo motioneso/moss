@@ -79,6 +79,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send(200, b"late", {"Content-Type": "text/plain"})
         if path == "/binary":
             return self.send(200, bytes(range(256)), {"Content-Type": "application/octet-stream"})
+        if path == "/article":
+            page = b"<html><head><title>Fixture &amp; Article</title><style>p{}</style></head><body><nav>menu</nav><p>First line</p><script>x()</script><p>Second line</p></body></html>"
+            return self.send(200, page, {"Content-Type": "text/html; charset=utf-8"})
+        if path == "/plain":
+            return self.send(200, b"just plain words", {"Content-Type": "text/plain"})
         if path == "/feed.xml":
             return self.send(200, b"<rss><channel><title>Fixture</title></channel></rss>", {"Content-Type": "application/rss+xml; charset=utf-8"})
         return self.send(200, b"<html><body>hello from " + host.encode() + b"</body></html>", {"Content-Type": "text/html; charset=utf-8"})
