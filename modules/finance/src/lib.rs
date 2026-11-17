@@ -23,6 +23,7 @@ pub mod draft;
 pub mod envelope;
 pub mod input;
 pub mod ledger;
+pub mod reports;
 pub mod rules;
 pub mod plaid;
 pub mod sort_run;
