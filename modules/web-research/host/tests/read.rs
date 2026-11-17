@@ -236,11 +236,16 @@ fn a_site_that_forbids_robots_is_not_read() {
 }
 
 #[test]
-fn one_site_is_paced() {
-    let w = World::new(Duration::from_secs(60));
-    let data = w.read(json!(["https://ok.test/article", "https://ok.test/plain"]));
+fn one_site_is_paced_and_a_long_wait_is_refused() {
+    let w = World::new(Duration::from_millis(400));
+    let started = std::time::Instant::now();
+    // The robots file and the page are two calls to one site.
+    let data = w.read(json!(["https://ok.test/article"]));
     assert_eq!(data["documents"].as_array().unwrap().len(), 1, "{data}");
-    assert_eq!(data["trace"]["documents"][1]["reason"], "rate_limited");
+    assert!(started.elapsed() >= Duration::from_millis(400), "{:?}", started.elapsed());
+    let slow = World::new(Duration::from_secs(30));
+    assert_eq!(slow.reason("https://ok.test/article"), "rate_limited");
+    assert!(!slow.site.log().contains("ok.test /article"), "{}", slow.site.log());
 }
 
 #[test]
