@@ -59,8 +59,8 @@ control("activity amounts", "modules/finance/src/ledger.rs",
 # The connect activity row must hold ids only. Put an account name into it and the bank scan must fail.
 BANK = "bank_tokens_and_private_text_never_reach_job_rows_activity_rows_or_finance_tables"
 control("connect activity", "modules/finance/src/connect.rs",
-        '"bank.connect" }, json!({"itemId":item_id}))',
-        '"bank.connect" }, json!({"itemId":item_id,"name":listing.accounts[0].name}))',
+        '"bank.connect" }, json!({"itemId":item_id}), None)',
+        '"bank.connect" }, json!({"itemId":item_id,"name":listing.accounts[0].name}), None)',
         "modules/finance/host/Cargo.toml", "installed", BANK, ["--ignored", "--test-threads=1"], target,
         rebuild=True)
 # Re-run the assertions after restoring their guards; a negative control alone is not proof.
