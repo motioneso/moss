@@ -16,20 +16,30 @@ pub struct Staged {
 
 impl Staged {
     pub fn new(key: String, bytes: Vec<u8>) -> Self {
-        table().lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), Arc::new(bytes));
+        table()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(key.clone(), Arc::new(bytes));
         Self { key }
     }
 }
 
 impl Drop for Staged {
     fn drop(&mut self) {
-        table().lock().unwrap_or_else(|e| e.into_inner()).remove(&self.key);
+        table()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&self.key);
     }
 }
 
 /// The bytes staged for this request id, if any.
 pub fn get(key: &str) -> Option<Arc<Vec<u8>>> {
-    table().lock().unwrap_or_else(|e| e.into_inner()).get(key).cloned()
+    table()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(key)
+        .cloned()
 }
 
 /// Request ids that carry staged bytes start with this prefix, so a normal request can never
@@ -39,7 +49,13 @@ pub const PREFIX: &str = "staged:";
 /// Stages `bytes` for the request and returns the JSON body the route receives in their place.
 pub fn stage_body(request_id: &str, bytes: Vec<u8>) -> (Staged, String) {
     use sha2::{Digest, Sha256};
-    let hash: String = Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();
-    let body = format!("{{\"staged\":{{\"bytes\":{},\"sha256\":\"{hash}\"}}}}", bytes.len());
+    let hash: String = Sha256::digest(&bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    let body = format!(
+        "{{\"staged\":{{\"bytes\":{},\"sha256\":\"{hash}\"}}}}",
+        bytes.len()
+    );
     (Staged::new(request_id.to_owned(), bytes), body)
 }

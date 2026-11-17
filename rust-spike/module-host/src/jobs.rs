@@ -95,7 +95,12 @@ impl JobPorts {
 fn schedule_id(scope: &CallScope, queue: &str, key: &str) -> uuid::Uuid {
     use sha2::Digest;
     let mut hash = sha2::Sha256::new();
-    for part in [module_key(&scope.module().id).as_str(), &scope.access().actor_user_id().to_string(), queue, key] {
+    for part in [
+        module_key(&scope.module().id).as_str(),
+        &scope.access().actor_user_id().to_string(),
+        queue,
+        key,
+    ] {
         hash.update((part.len() as u64).to_be_bytes());
         hash.update(part.as_bytes());
     }

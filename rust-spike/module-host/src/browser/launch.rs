@@ -262,7 +262,9 @@ pub fn watchdog(pid: u32, at: std::time::Instant) -> Watchdog {
             .expect("watchdog");
         // The lock is held while signalling, so a cancel waits for it to finish.
         if result.timed_out() && !*guard {
-            let _ = Command::new("/bin/kill").args(["-9", &pid.to_string()]).status();
+            let _ = Command::new("/bin/kill")
+                .args(["-9", &pid.to_string()])
+                .status();
         }
     });
     Watchdog(shared)
@@ -292,19 +294,28 @@ mod tests {
     use super::*;
 
     fn text(args: &[OsString]) -> Vec<String> {
-        args.iter().map(|a| a.to_string_lossy().into_owned()).collect()
+        args.iter()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect()
     }
 
     #[test]
     fn the_browser_always_gets_its_own_network_namespace_and_keeps_its_sandbox() {
         let args = text(&Launcher::new("/x").arguments(Path::new("/p")));
-        for needed in ["--unshare-net", "--unshare-user", "--unshare-pid", "--die-with-parent"] {
+        for needed in [
+            "--unshare-net",
+            "--unshare-user",
+            "--unshare-pid",
+            "--die-with-parent",
+        ] {
             assert!(args.iter().any(|a| a == needed), "{needed}");
         }
         assert!(!args.iter().any(|a| a == "--no-sandbox"));
         assert!(args.iter().any(|a| a == "--remote-debugging-pipe"));
         // No port-based debugging, and the page cannot see the host's folders.
-        assert!(!args.iter().any(|a| a.starts_with("--remote-debugging-port")));
+        assert!(!args
+            .iter()
+            .any(|a| a.starts_with("--remote-debugging-port")));
         assert!(!args.iter().any(|a| a == "/home" || a == "/root"));
     }
 

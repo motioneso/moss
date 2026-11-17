@@ -20,27 +20,42 @@ pub async fn connect_plain(addr: SocketAddr) -> Client {
     wrap(Box::new(tcp))
 }
 
-pub async fn connect_tls(addr: SocketAddr, cfg: Arc<ClientConfig>, host: &'static str) -> std::io::Result<Client> {
+pub async fn connect_tls(
+    addr: SocketAddr,
+    cfg: Arc<ClientConfig>,
+    host: &'static str,
+) -> std::io::Result<Client> {
     let tcp = tokio::net::TcpStream::connect(addr).await?;
-    let tls = TlsConnector::from(cfg).connect(ServerName::try_from(host).unwrap(), tcp).await?;
+    let tls = TlsConnector::from(cfg)
+        .connect(ServerName::try_from(host).unwrap(), tcp)
+        .await?;
     Ok(wrap(Box::new(tls)))
 }
 
 fn wrap(io: Box<dyn Io>) -> Client {
     let (r, w) = tokio::io::split(io);
-    Client { r: BufReader::new(r), w }
+    Client {
+        r: BufReader::new(r),
+        w,
+    }
 }
 
 impl Client {
     pub async fn line(&mut self) -> String {
         let mut l = String::new();
-        let n = tokio::time::timeout(std::time::Duration::from_secs(5), self.r.read_line(&mut l)).await.expect("server answered in time").unwrap();
+        let n = tokio::time::timeout(std::time::Duration::from_secs(5), self.r.read_line(&mut l))
+            .await
+            .expect("server answered in time")
+            .unwrap();
         assert!(n > 0, "server closed the connection");
         l.trim_end_matches(['\r', '\n']).to_string()
     }
 
     pub async fn send(&mut self, s: &str) {
-        self.w.write_all(format!("{s}\r\n").as_bytes()).await.unwrap();
+        self.w
+            .write_all(format!("{s}\r\n").as_bytes())
+            .await
+            .unwrap();
     }
 
     /// Sends a tagged IMAP command and returns every reply line up to and including the tagged one.

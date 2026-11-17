@@ -100,6 +100,7 @@ impl Application {
         body: &str,
         client: Option<std::net::IpAddr>,
     ) -> Result<String> {
-        self.installer.dispatch_extended_from(access, method, path, body, client)
+        self.installer
+            .dispatch_extended_from(access, method, path, body, client)
     }
 }

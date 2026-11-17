@@ -13,7 +13,9 @@ async fn plain() -> MailStandIn {
 async fn logged_in(s: &MailStandIn) -> Client {
     let mut c = connect_plain(s.imap_addr).await;
     assert!(c.line().await.starts_with("* OK"));
-    let r = c.imap("a1", "LOGIN \"bob@example.com\" \"correct-horse-battery\"").await;
+    let r = c
+        .imap("a1", "LOGIN \"bob@example.com\" \"correct-horse-battery\"")
+        .await;
     assert!(r.last().unwrap().starts_with("a1 OK"), "{r:?}");
     c
 }
@@ -29,11 +31,19 @@ async fn wrong_password_is_refused_with_authenticationfailed() {
     let s = plain().await;
     let mut c = connect_plain(s.imap_addr).await;
     c.line().await;
-    let r = c.imap("a1", "LOGIN \"bob@example.com\" \"not-the-password\"").await;
-    assert_eq!(r.last().unwrap(), "a1 NO [AUTHENTICATIONFAILED] Authentication failed.");
+    let r = c
+        .imap("a1", "LOGIN \"bob@example.com\" \"not-the-password\"")
+        .await;
+    assert_eq!(
+        r.last().unwrap(),
+        "a1 NO [AUTHENTICATIONFAILED] Authentication failed."
+    );
     // A refused login does not open the mailbox.
     let r = c.imap("a2", "LIST \"\" \"*\"").await;
-    assert_eq!(r.last().unwrap(), "a2 BAD Command received in Invalid state.");
+    assert_eq!(
+        r.last().unwrap(),
+        "a2 BAD Command received in Invalid state."
+    );
 }
 
 #[tokio::test]
@@ -42,8 +52,13 @@ async fn throttled_login_returns_the_connection_limit_alert() {
     s.throttle_imap_login(true);
     let mut c = connect_plain(s.imap_addr).await;
     c.line().await;
-    let r = c.imap("a1", "LOGIN \"bob@example.com\" \"correct-horse-battery\"").await;
-    assert_eq!(r.last().unwrap(), "a1 NO [ALERT] Too many simultaneous connections. (Failure)");
+    let r = c
+        .imap("a1", "LOGIN \"bob@example.com\" \"correct-horse-battery\"")
+        .await;
+    assert_eq!(
+        r.last().unwrap(),
+        "a1 NO [ALERT] Too many simultaneous connections. (Failure)"
+    );
 }
 
 #[tokio::test]
@@ -51,8 +66,14 @@ async fn lists_folders_with_special_use_attributes() {
     let s = plain().await;
     let mut c = logged_in(&s).await;
     let r = c.imap("a2", "LIST \"\" \"*\"").await;
-    assert!(r.contains(&"* LIST (\\HasNoChildren) \"/\" \"INBOX\"".to_string()), "{r:?}");
-    assert!(r.contains(&"* LIST (\\HasNoChildren \\Sent) \"/\" \"Sent\"".to_string()), "{r:?}");
+    assert!(
+        r.contains(&"* LIST (\\HasNoChildren) \"/\" \"INBOX\"".to_string()),
+        "{r:?}"
+    );
+    assert!(
+        r.contains(&"* LIST (\\HasNoChildren \\Sent) \"/\" \"Sent\"".to_string()),
+        "{r:?}"
+    );
 }
 
 #[tokio::test]
@@ -63,11 +84,16 @@ async fn select_reports_counts_and_uid_state() {
     let mut c = logged_in(&s).await;
     let r = c.imap("a2", "SELECT INBOX").await;
     assert!(r.contains(&"* 2 EXISTS".to_string()), "{r:?}");
-    assert!(r.iter().any(|l| l.starts_with("* OK [UIDVALIDITY 1700000001]")));
+    assert!(r
+        .iter()
+        .any(|l| l.starts_with("* OK [UIDVALIDITY 1700000001]")));
     assert!(r.iter().any(|l| l.starts_with("* OK [UIDNEXT 3]")));
     assert!(r.last().unwrap().starts_with("a2 OK [READ-WRITE]"));
     let r = c.imap("a3", "SELECT Nope").await;
-    assert_eq!(r.last().unwrap(), "a3 NO [NONEXISTENT] Mailbox doesn't exist: Nope");
+    assert_eq!(
+        r.last().unwrap(),
+        "a3 NO [NONEXISTENT] Mailbox doesn't exist: Nope"
+    );
 }
 
 #[tokio::test]
@@ -77,11 +103,17 @@ async fn fetch_returns_the_full_message_and_the_header_alone() {
     let mut c = logged_in(&s).await;
     c.imap("a2", "SELECT INBOX").await;
     let r = c.imap("a3", "UID FETCH 1 (UID FLAGS BODY.PEEK[])").await;
-    assert!(r[0].starts_with("* 1 FETCH (UID 1 FLAGS () BODY[] {"), "{r:?}");
+    assert!(
+        r[0].starts_with("* 1 FETCH (UID 1 FLAGS () BODY[] {"),
+        "{r:?}"
+    );
     assert!(r[0].contains("Subject: Thursday agenda"));
     assert!(r[0].contains("Hi Bob, the draft agenda"));
     let r = c.imap("a4", "UID FETCH 1 (BODY.PEEK[HEADER])").await;
-    assert!(r[0].contains("Subject: Thursday agenda") && !r[0].contains("Hi Bob"), "{r:?}");
+    assert!(
+        r[0].contains("Subject: Thursday agenda") && !r[0].contains("Hi Bob"),
+        "{r:?}"
+    );
 }
 
 #[tokio::test]
@@ -92,13 +124,26 @@ async fn sync_sees_a_changed_message_and_a_deleted_one() {
     let _c = s.add_message("INBOX", fixtures::MAIL_INVOICE);
     let mut c = logged_in(&s).await;
     let sel = c.imap("a2", "SELECT INBOX").await;
-    let high: u64 = sel.iter().find_map(|l| l.strip_prefix("* OK [HIGHESTMODSEQ ")).unwrap().split(']').next().unwrap().parse().unwrap();
+    let high: u64 = sel
+        .iter()
+        .find_map(|l| l.strip_prefix("* OK [HIGHESTMODSEQ "))
+        .unwrap()
+        .split(']')
+        .next()
+        .unwrap()
+        .parse()
+        .unwrap();
 
     // One message changes (read), another disappears.
     s.set_flags("INBOX", a, &["\\Seen"]);
     s.delete_message("INBOX", b);
 
-    let r = c.imap("a3", &format!("UID FETCH 1:* (FLAGS) (CHANGEDSINCE {high})")).await;
+    let r = c
+        .imap(
+            "a3",
+            &format!("UID FETCH 1:* (FLAGS) (CHANGEDSINCE {high})"),
+        )
+        .await;
     assert_eq!(r.len(), 2, "only the changed message comes back: {r:?}");
     assert!(r[0].contains("UID 1 FLAGS (\\Seen)"), "{r:?}");
 
@@ -136,27 +181,64 @@ async fn unknown_command_is_bad_and_logout_says_bye() {
 
 #[tokio::test]
 async fn tls_works_for_a_client_that_trusts_the_certificate() {
-    let s = MailStandIn::start(MailConfig { tls: Some(&tls::SELF_SIGNED), ..Default::default() }).await;
-    let mut c = connect_tls(s.imap_addr, tls::client_trusting(&tls::SELF_SIGNED), "localhost").await.unwrap();
+    let s = MailStandIn::start(MailConfig {
+        tls: Some(&tls::SELF_SIGNED),
+        ..Default::default()
+    })
+    .await;
+    let mut c = connect_tls(
+        s.imap_addr,
+        tls::client_trusting(&tls::SELF_SIGNED),
+        "localhost",
+    )
+    .await
+    .unwrap();
     assert!(c.line().await.starts_with("* OK"));
-    let r = c.imap("a1", "LOGIN \"bob@example.com\" \"correct-horse-battery\"").await;
+    let r = c
+        .imap("a1", "LOGIN \"bob@example.com\" \"correct-horse-battery\"")
+        .await;
     assert!(r.last().unwrap().starts_with("a1 OK"));
 }
 
 #[tokio::test]
 async fn self_signed_certificate_is_refused_by_a_client_that_does_not_know_it() {
-    let s = MailStandIn::start(MailConfig { tls: Some(&tls::SELF_SIGNED), ..Default::default() }).await;
-    let err = connect_tls(s.imap_addr, tls::client_trusting_nothing(), "localhost").await.err().expect("handshake must fail");
+    let s = MailStandIn::start(MailConfig {
+        tls: Some(&tls::SELF_SIGNED),
+        ..Default::default()
+    })
+    .await;
+    let err = connect_tls(s.imap_addr, tls::client_trusting_nothing(), "localhost")
+        .await
+        .err()
+        .expect("handshake must fail");
     let text = format!("{err:?}");
     assert!(text.contains("UnknownIssuer"), "{text}");
-    assert_eq!(s.imap_logins_seen(), 0, "no login is attempted over a failed handshake");
+    assert_eq!(
+        s.imap_logins_seen(),
+        0,
+        "no login is attempted over a failed handshake"
+    );
 }
 
 #[tokio::test]
 async fn certificate_for_another_host_is_refused() {
-    let s = MailStandIn::start(MailConfig { tls: Some(&tls::WRONG_HOST), ..Default::default() }).await;
+    let s = MailStandIn::start(MailConfig {
+        tls: Some(&tls::WRONG_HOST),
+        ..Default::default()
+    })
+    .await;
     // The client trusts this very certificate, so only the name is wrong.
-    let err = connect_tls(s.imap_addr, tls::client_trusting(&tls::WRONG_HOST), "localhost").await.err().expect("handshake must fail");
+    let err = connect_tls(
+        s.imap_addr,
+        tls::client_trusting(&tls::WRONG_HOST),
+        "localhost",
+    )
+    .await
+    .err()
+    .expect("handshake must fail");
     let text = format!("{err:?}");
-    assert!(text.contains("NotValidForName") || text.contains("NotValidForNameContext"), "{text}");
+    assert!(
+        text.contains("NotValidForName") || text.contains("NotValidForNameContext"),
+        "{text}"
+    );
 }

@@ -222,8 +222,8 @@ fn module_worker_and_https_feed_assemble_without_a_desktop() {
         intelligence: Arc::new(NoAi),
         version: "0.1.0".parse().unwrap(),
         compiled_cache: None,
-            fuel_ceiling: None,
-            browser_dir: None,
+        fuel_ceiling: None,
+        browser_dir: None,
     };
     let application =
         Application::open_extended(&root.join("data"), app.clone(), access.clone(), config)
@@ -330,12 +330,18 @@ fn module_worker_and_https_feed_assemble_without_a_desktop() {
     let mut serial = 10u32;
     let mut variant = |parameters: Value| {
         serial += 1;
-        let request = json!({"operation":"post","resource":"alerts","parameters":parameters}).to_string();
+        let request =
+            json!({"operation":"post","resource":"alerts","parameters":parameters}).to_string();
         manifest.version = format!("1.{serial}.0").parse().unwrap();
-        files.insert("moss.module.json".into(), serde_json::to_vec(&manifest).unwrap());
+        files.insert(
+            "moss.module.json".into(),
+            serde_json::to_vec(&manifest).unwrap(),
+        );
         files.insert("code/module.wasm".into(), fixture(false, &request));
         install(&files);
-        application.installer.call(&manifest.id, access.clone(), "route", "null")
+        application
+            .installer
+            .call(&manifest.id, access.clone(), "route", "null")
     };
     let shape = |db: &tokio_postgres::Client| {
         runtime.block_on(db.query(
@@ -345,36 +351,105 @@ fn module_worker_and_https_feed_assemble_without_a_desktop() {
             &[&owner],
         )).unwrap()
     };
-    variant(json!({"text":"Keyed A","body":"first body","href":"/tasks/7","eventKey":"k1"})).unwrap();
+    variant(json!({"text":"Keyed A","body":"first body","href":"/tasks/7","eventKey":"k1"}))
+        .unwrap();
     let first = shape(&db);
     assert_eq!(first.len(), 1);
-    assert_eq!(first[0].get::<_, Option<String>>(2).as_deref(), Some("/tasks/7"));
-    let notification: uuid::Uuid = runtime.block_on(db.query_one("SELECT id FROM app.notifications WHERE recipient_user_id=$1", &[&owner])).unwrap().get(0);
-    runtime.block_on(db.execute("INSERT INTO app.notification_reads(notification_id,user_id) VALUES($1,$2)", &[&notification, &owner])).unwrap();
+    assert_eq!(
+        first[0].get::<_, Option<String>>(2).as_deref(),
+        Some("/tasks/7")
+    );
+    let notification: uuid::Uuid = runtime
+        .block_on(db.query_one(
+            "SELECT id FROM app.notifications WHERE recipient_user_id=$1",
+            &[&owner],
+        ))
+        .unwrap()
+        .get(0);
+    runtime
+        .block_on(db.execute(
+            "INSERT INTO app.notification_reads(notification_id,user_id) VALUES($1,$2)",
+            &[&notification, &owner],
+        ))
+        .unwrap();
     variant(json!({"text":"Keyed B","eventKey":"k1"})).unwrap();
     let again = shape(&db);
-    assert_eq!(again.len(), 1, "the same event key must update one notification");
+    assert_eq!(
+        again.len(),
+        1,
+        "the same event key must update one notification"
+    );
     assert_eq!(again[0].get::<_, String>(0), "Keyed B");
-    assert_eq!(again[0].get::<_, i64>(5), 0, "an updated notification returns to unread");
-    for bad in ["https://evil.example/x", "//evil.example", "/a\\b", "javascript:alert(1)"].iter() {
-        assert!(variant(json!({"text":"Bad link","href":bad})).is_err(), "{bad}");
+    assert_eq!(
+        again[0].get::<_, i64>(5),
+        0,
+        "an updated notification returns to unread"
+    );
+    for bad in [
+        "https://evil.example/x",
+        "//evil.example",
+        "/a\\b",
+        "javascript:alert(1)",
+    ]
+    .iter()
+    {
+        assert!(
+            variant(json!({"text":"Bad link","href":bad})).is_err(),
+            "{bad}"
+        );
         assert_eq!(shape(&db).len(), 1);
     }
-    runtime.block_on(db.execute("INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'quiet-hours',$2)", &[&owner, &json!({"enabled":true,"start":"00:00","end":"00:00","timezone":"UTC"})])).unwrap();
+    runtime
+        .block_on(db.execute(
+            "INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'quiet-hours',$2)",
+            &[
+                &owner,
+                &json!({"enabled":true,"start":"00:00","end":"00:00","timezone":"UTC"}),
+            ],
+        ))
+        .unwrap();
     variant(json!({"text":"Quiet normal"})).unwrap();
     variant(json!({"text":"Quiet urgent","urgency":"urgent"})).unwrap();
     let quiet = shape(&db);
-    let deferred = |title: &str| quiet.iter().find(|r| r.get::<_, String>(0) == title).unwrap().get::<_, bool>(4);
-    assert!(deferred("Quiet normal"), "a normal alert inside quiet hours waits");
-    assert!(!deferred("Quiet urgent"), "an urgent alert is never held back");
+    let deferred = |title: &str| {
+        quiet
+            .iter()
+            .find(|r| r.get::<_, String>(0) == title)
+            .unwrap()
+            .get::<_, bool>(4)
+    };
+    assert!(
+        deferred("Quiet normal"),
+        "a normal alert inside quiet hours waits"
+    );
+    assert!(
+        !deferred("Quiet urgent"),
+        "an urgent alert is never held back"
+    );
     let forever = runtime.block_on(db.query_one("SELECT deferred_until = 'infinity' FROM app.notifications WHERE recipient_user_id=$1 AND title='Quiet normal'", &[&owner])).unwrap();
-    assert!(forever.get::<_, bool>(0), "start equal to end holds alerts back until quiet hours are switched off");
-    runtime.block_on(db.execute("DELETE FROM app.preferences WHERE owner_user_id=$1 AND key='quiet-hours'", &[&owner])).unwrap();
+    assert!(
+        forever.get::<_, bool>(0),
+        "start equal to end holds alerts back until quiet hours are switched off"
+    );
+    runtime
+        .block_on(db.execute(
+            "DELETE FROM app.preferences WHERE owner_user_id=$1 AND key='quiet-hours'",
+            &[&owner],
+        ))
+        .unwrap();
     files.insert("code/module.wasm".into(), fixture(false, DEFAULT_REQUEST));
     manifest.version = "2.0.0".parse().unwrap();
-    files.insert("moss.module.json".into(), serde_json::to_vec(&manifest).unwrap());
+    files.insert(
+        "moss.module.json".into(),
+        serde_json::to_vec(&manifest).unwrap(),
+    );
     install(&files);
-    runtime.block_on(db.execute("DELETE FROM app.notifications WHERE recipient_user_id=$1", &[&owner])).unwrap();
+    runtime
+        .block_on(db.execute(
+            "DELETE FROM app.notifications WHERE recipient_user_id=$1",
+            &[&owner],
+        ))
+        .unwrap();
     private(
         &root.join("modules.json"),
         &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key}),
@@ -455,7 +530,14 @@ fn module_worker_and_https_feed_assemble_without_a_desktop() {
         .unwrap()
         .json()
         .unwrap();
-    assert!(!feed["acknowledged"].as_array().unwrap().iter().any(|id| *id == json!(notice_id)), "a late receipt for an old version does not cover the newer one");
+    assert!(
+        !feed["acknowledged"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|id| *id == json!(notice_id)),
+        "a late receipt for an old version does not cover the newer one"
+    );
     let notification_id = uuid::Uuid::parse_str(&notice_id).unwrap();
     runtime.block_on(async {
         assert_eq!(db.query_one("SELECT count(*) FROM app.desktop_notification_receipts WHERE user_id=$1 AND client_id=$2 AND notification_id=$3", &[&owner, &client_id, &notification_id]).await.unwrap().get::<_,i64>(0), 1);
@@ -484,21 +566,66 @@ fn module_worker_and_https_feed_assemble_without_a_desktop() {
     };
     assert_eq!(feed(None, device).status(), 401);
     assert_eq!(feed(Some(&"x".repeat(64)), device).status(), 401);
-    assert_eq!(feed(Some(&token), uuid::Uuid::new_v4()).status(), 401, "a token works only for its own client");
+    assert_eq!(
+        feed(Some(&token), uuid::Uuid::new_v4()).status(),
+        401,
+        "a token works only for its own client"
+    );
     assert_eq!(feed(Some(&token), device).status(), 200);
     assert_eq!(
-        client.get(format!("{origin}/api/today")).header("authorization", format!("Bearer {token}")).send().unwrap().status(),
+        client
+            .get(format!("{origin}/api/today"))
+            .header("authorization", format!("Bearer {token}"))
+            .send()
+            .unwrap()
+            .status(),
         401,
         "a device token opens no other route"
     );
-    let stored: String = runtime.block_on(db.query_one("SELECT token_hash FROM app.desktop_notifier_devices WHERE client_id=$1", &[&device])).unwrap().get(0);
+    let stored: String = runtime
+        .block_on(db.query_one(
+            "SELECT token_hash FROM app.desktop_notifier_devices WHERE client_id=$1",
+            &[&device],
+        ))
+        .unwrap()
+        .get(0);
     assert_ne!(stored, token, "only a hash of the token is stored");
-    let fingerprint = String::from_utf8(Command::new("openssl").args(["x509","-noout","-fingerprint","-sha256","-in"]).arg(&cert).output().unwrap().stdout).unwrap();
-    let pin = fingerprint.trim().split_once('=').unwrap().1.replace(':', ": ");
+    let fingerprint = String::from_utf8(
+        Command::new("openssl")
+            .args(["x509", "-noout", "-fingerprint", "-sha256", "-in"])
+            .arg(&cert)
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap();
+    let pin = fingerprint
+        .trim()
+        .split_once('=')
+        .unwrap()
+        .1
+        .replace(':', ": ");
     let data = root.join("app-data");
     fs::create_dir(&data).unwrap();
     let app = std::env::var("JS196_APP").unwrap();
-    assert!(Command::new(&app).args(["notifier","add","--data"]).arg(&data).args(["--server","s1","--origin",&origin,"--pin",&pin,"--client",&device.to_string(),"--token",&token]).status().unwrap().success());
+    assert!(Command::new(&app)
+        .args(["notifier", "add", "--data"])
+        .arg(&data)
+        .args([
+            "--server",
+            "s1",
+            "--origin",
+            &origin,
+            "--pin",
+            &pin,
+            "--client",
+            &device.to_string(),
+            "--token",
+            &token
+        ])
+        .status()
+        .unwrap()
+        .success());
     let stub = std::env::var("JS196_STUB").unwrap();
     let mut rounds = 0;
     let mut round = || -> Vec<Value> {
@@ -509,12 +636,29 @@ fn module_worker_and_https_feed_assemble_without_a_desktop() {
             .arg("python3 \"$1\" \"$2\" & stub=$!; sleep 1.5; \"$3\" notifier once --data \"$4\"; code=$?; sleep 0.5; kill $stub; exit $code")
             .arg("sh").arg(&stub).arg(&log).arg(&app).arg(&data)
             .output().unwrap();
-        assert!(ran.status.success(), "{}", String::from_utf8_lossy(&ran.stderr));
-        println!("round {rounds} notifier stderr: {}", String::from_utf8_lossy(&ran.stderr));
+        assert!(
+            ran.status.success(),
+            "{}",
+            String::from_utf8_lossy(&ran.stderr)
+        );
+        println!(
+            "round {rounds} notifier stderr: {}",
+            String::from_utf8_lossy(&ran.stderr)
+        );
         // The server's own schedule keeps posting its synthetic alert every minute.
-        fs::read_to_string(&log).unwrap().lines().map(|l| serde_json::from_str::<Value>(l).unwrap()).filter(|t| t["title"] != "Synthetic module worker alert").collect()
+        fs::read_to_string(&log)
+            .unwrap()
+            .lines()
+            .map(|l| serde_json::from_str::<Value>(l).unwrap())
+            .filter(|t| t["title"] != "Synthetic module worker alert")
+            .collect()
     };
-    runtime.block_on(db.execute("DELETE FROM app.notifications WHERE recipient_user_id=$1", &[&owner])).unwrap();
+    runtime
+        .block_on(db.execute(
+            "DELETE FROM app.notifications WHERE recipient_user_id=$1",
+            &[&owner],
+        ))
+        .unwrap();
     let plant = |title: &str, deferred: bool| -> uuid::Uuid {
         let id = uuid::Uuid::new_v4();
         runtime.block_on(db.execute(
@@ -529,23 +673,56 @@ fn module_worker_and_https_feed_assemble_without_a_desktop() {
     assert_eq!(toasts.len(), 1, "{toasts:?}");
     assert_eq!(toasts[0]["title"], "Alert one");
     let second = round();
-    assert_eq!(second.len(), 0, "an accepted alert does not show twice: {second:?}");
-    runtime.block_on(db.execute("UPDATE app.notifications SET updated_at=now(), title='Alert one again' WHERE id=$1", &[&alert])).unwrap();
+    assert_eq!(
+        second.len(),
+        0,
+        "an accepted alert does not show twice: {second:?}"
+    );
+    runtime
+        .block_on(db.execute(
+            "UPDATE app.notifications SET updated_at=now(), title='Alert one again' WHERE id=$1",
+            &[&alert],
+        ))
+        .unwrap();
     let again = round();
     assert_eq!(again.len(), 1, "a refreshed notification alerts again");
     assert_eq!(again[0]["title"], "Alert one again");
-    let read_count: i64 = runtime.block_on(db.query_one("SELECT count(*) FROM app.notification_reads WHERE user_id=$1", &[&owner])).unwrap().get(0);
+    let read_count: i64 = runtime
+        .block_on(db.query_one(
+            "SELECT count(*) FROM app.notification_reads WHERE user_id=$1",
+            &[&owner],
+        ))
+        .unwrap()
+        .get(0);
     assert_eq!(read_count, 0, "desktop alerts never mark bell items read");
     fs::write(data.join("app-active.json"), "s1").unwrap();
     plant("While the window is open", false);
-    assert_eq!(round().len(), 0, "the notifier leaves a server the open window already handles");
-    fs::remove_file(data.join("app-active.json")).unwrap();
-    assert_eq!(round().len(), 1, "with the window closed the notifier alerts");
     assert_eq!(
-        client.delete(format!("{origin}/api/desktop/notifier?client={device}")).header("origin", &origin).header("cookie", &cookie).send().unwrap().status(),
+        round().len(),
+        0,
+        "the notifier leaves a server the open window already handles"
+    );
+    fs::remove_file(data.join("app-active.json")).unwrap();
+    assert_eq!(
+        round().len(),
+        1,
+        "with the window closed the notifier alerts"
+    );
+    assert_eq!(
+        client
+            .delete(format!("{origin}/api/desktop/notifier?client={device}"))
+            .header("origin", &origin)
+            .header("cookie", &cookie)
+            .send()
+            .unwrap()
+            .status(),
         200
     );
-    assert_eq!(feed(Some(&token), device).status(), 401, "a removed device token stops working");
+    assert_eq!(
+        feed(Some(&token), device).status(),
+        401,
+        "a removed device token stops working"
+    );
     println!("PASS notifier: device token opens only its feed (wrong client, no token, other routes refused; hash only stored); real desktop-service Notify calls captured on a private session bus; quiet-hours holds back; accepted alerts do not repeat, refreshed ones do; no bell reads; window heartbeat hands off; removal revokes");
     drop(server);
     println!("PASS real HTTPS executable: owner signup, existing module catalog, server-owned due schedule execution, synthetic Wasm notification in desktop feed, authenticated module dispatch, durable acknowledgement without bell reads; failed guest rolls notification back; module mute suppresses posts");

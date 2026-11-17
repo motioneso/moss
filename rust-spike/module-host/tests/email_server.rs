@@ -2,16 +2,16 @@
 mod common;
 #[path = "people_routes/installed.rs"]
 mod installed;
+use access_context::AccessContext;
 use common::Keys;
 use moss_module_host::{
     archive::Package,
     registry::{Artifact, Channel, Index, Source},
     trust::{self, Publisher, RegistryIdentity},
 };
-use std::collections::{BTreeMap, BTreeSet};
-use access_context::AccessContext;
 use safety_core::db::{Database, RuntimeRole};
 use serde_json::{json, Value};
+use std::collections::{BTreeMap, BTreeSet};
 use std::{
     fs,
     path::Path,
@@ -151,7 +151,10 @@ fn installed_email_package_serves_routes_from_the_real_server() {
         let response = client.post(format!("{origin}/api/auth/sign-up/email")).header("origin", &origin).json(&json!({"name":name,"email":email,"password":"temporary-email-password-225-not-a-real-secret"})).send().unwrap();
         let status = response.status();
         if status != 200 {
-            panic!("sign-up answered {status}: {}", response.text().unwrap_or_default());
+            panic!(
+                "sign-up answered {status}: {}",
+                response.text().unwrap_or_default()
+            );
         }
         response.headers()["set-cookie"]
             .to_str()
@@ -200,7 +203,10 @@ fn installed_email_package_serves_routes_from_the_real_server() {
     // canonical installer, as the server would find it.
     let keys = Keys::new();
     fs::create_dir_all(root.join("registry/packages")).unwrap();
-    let artifacts: Vec<Artifact> = [("JS225_EMAIL_PACKAGE", "email"), ("JS224_CONNECTORS_PACKAGE", "connectors")]
+    let artifacts: Vec<Artifact> = [
+        ("JS225_EMAIL_PACKAGE", "email"),
+        ("JS224_CONNECTORS_PACKAGE", "connectors"),
+    ]
     .iter()
     .map(|(variable, id)| {
         let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
@@ -208,7 +214,11 @@ fn installed_email_package_serves_routes_from_the_real_server() {
         let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
         let manifest = &package.manifest;
         assert_eq!(manifest.id, *id);
-        fs::write(root.join(format!("registry/packages/{digest}.mosspkg")), &bytes).unwrap();
+        fs::write(
+            root.join(format!("registry/packages/{digest}.mosspkg")),
+            &bytes,
+        )
+        .unwrap();
         Artifact {
             id: manifest.id.clone(),
             version: manifest.version.clone(),
@@ -250,11 +260,23 @@ fn installed_email_package_serves_routes_from_the_real_server() {
         revoked: vec![],
     };
     for (name, data, key) in [
-        ("registry.json", serde_json::to_vec(&identity).unwrap(), &keys.root),
-        ("index.json", serde_json::to_vec(&index).unwrap(), &keys.index),
+        (
+            "registry.json",
+            serde_json::to_vec(&identity).unwrap(),
+            &keys.root,
+        ),
+        (
+            "index.json",
+            serde_json::to_vec(&index).unwrap(),
+            &keys.index,
+        ),
     ] {
         fs::write(root.join("registry").join(name), &data).unwrap();
-        fs::write(root.join("registry").join(format!("{name}.sig")), Keys::sign(key, &data)).unwrap();
+        fs::write(
+            root.join("registry").join(format!("{name}.sig")),
+            Keys::sign(key, &data),
+        )
+        .unwrap();
     }
     let installer = installed::reopen(
         &root.join("data"),
@@ -291,7 +313,9 @@ fn installed_email_package_serves_routes_from_the_real_server() {
         if let Some(body) = body {
             request = request.json(&body);
         }
-        let response = request.send().unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
+        let response = request
+            .send()
+            .unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
         let status = response.status().as_u16();
         let text = response.text().unwrap_or_default();
         println!("{path} -> {status}");
@@ -329,50 +353,189 @@ fn installed_email_package_serves_routes_from_the_real_server() {
     };
     assert_eq!(status, 200, "{text}\n{}", log());
     let listed = json_of(&text);
-    assert_eq!(listed["messages"].as_array().map(Vec::len), Some(1), "{text}");
-    assert_eq!(listed["messages"][0]["id"], message_id.to_string(), "{text}");
+    assert_eq!(
+        listed["messages"].as_array().map(Vec::len),
+        Some(1),
+        "{text}"
+    );
+    assert_eq!(
+        listed["messages"][0]["id"],
+        message_id.to_string(),
+        "{text}"
+    );
     assert_eq!(listed["messages"][0]["subject"], "Live subject", "{text}");
-    let (status, text) = call(Method::GET, &format!("/messages/{message_id}"), Some(&cookie), None);
+    let (status, text) = call(
+        Method::GET,
+        &format!("/messages/{message_id}"),
+        Some(&cookie),
+        None,
+    );
     assert_eq!(status, 200, "{text}");
-    assert_eq!(json_of(&text)["message"]["id"], message_id.to_string(), "{text}");
+    assert_eq!(
+        json_of(&text)["message"]["id"],
+        message_id.to_string(),
+        "{text}"
+    );
     let missing = uuid::Uuid::new_v4();
-    let (status, text) = call(Method::GET, &format!("/messages/{missing}"), Some(&cookie), None);
-    assert_eq!((status, json_of(&text)), (404, json!({"error":"Email message not found"})));
+    let (status, text) = call(
+        Method::GET,
+        &format!("/messages/{missing}"),
+        Some(&cookie),
+        None,
+    );
+    assert_eq!(
+        (status, json_of(&text)),
+        (404, json!({"error":"Email message not found"}))
+    );
     // Settings: defaults, a change, then the change read back.
     let (status, text) = call(Method::GET, "/briefing-settings", Some(&cookie), None);
-    assert_eq!((status, json_of(&text)), (200, json!({"settings":{"createTasks":true,"suggestReplies":true,"draftReplies":true,"autoSend":false}})), "{text}");
-    let (status, text) = call(Method::PATCH, "/briefing-settings", Some(&cookie), Some(json!({"autoSend":true,"draftReplies":false})));
-    assert_eq!((status, json_of(&text)), (200, json!({"settings":{"createTasks":true,"suggestReplies":true,"draftReplies":false,"autoSend":true}})), "{text}");
+    assert_eq!(
+        (status, json_of(&text)),
+        (
+            200,
+            json!({"settings":{"createTasks":true,"suggestReplies":true,"draftReplies":true,"autoSend":false}})
+        ),
+        "{text}"
+    );
+    let (status, text) = call(
+        Method::PATCH,
+        "/briefing-settings",
+        Some(&cookie),
+        Some(json!({"autoSend":true,"draftReplies":false})),
+    );
+    assert_eq!(
+        (status, json_of(&text)),
+        (
+            200,
+            json!({"settings":{"createTasks":true,"suggestReplies":true,"draftReplies":false,"autoSend":true}})
+        ),
+        "{text}"
+    );
     let (status, text) = call(Method::GET, "/briefing-settings", Some(&cookie), None);
-    assert_eq!(json_of(&text)["settings"]["autoSend"], true, "{status} {text}");
+    assert_eq!(
+        json_of(&text)["settings"]["autoSend"],
+        true,
+        "{status} {text}"
+    );
     let (status, text) = call(Method::GET, "/task-creation-mode", Some(&cookie), None);
-    assert_eq!((status, json_of(&text)), (200, json!({"mode":"suggest"})), "{text}");
-    let (status, text) = call(Method::PUT, "/task-creation-mode", Some(&cookie), Some(json!({"mode":"auto_safe"})));
-    assert_eq!((status, json_of(&text)), (200, json!({"mode":"auto_safe"})), "{text}");
-    assert_eq!(json_of(&call(Method::GET, "/task-creation-mode", Some(&cookie), None).1), json!({"mode":"auto_safe"}));
-    assert_eq!(call(Method::PUT, "/task-creation-mode", Some(&cookie), Some(json!({"mode":"loud"}))).0, 400);
-    assert_eq!(json_of(&call(Method::GET, "/briefing-source", Some(&cookie), None).1), json!({"enabled":true}));
-    assert_eq!(json_of(&call(Method::PUT, "/briefing-source", Some(&cookie), Some(json!({"enabled":false}))).1), json!({"enabled":false}));
-    assert_eq!(json_of(&call(Method::GET, "/briefing-source", Some(&cookie), None).1), json!({"enabled":false}));
-    assert_eq!(json_of(&call(Method::GET, "/draft-policy", Some(&cookie), None).1), json!({"tier":"ask_each_time"}));
-    assert_eq!(json_of(&call(Method::PUT, "/draft-policy", Some(&cookie), Some(json!({"tier":"trusted_auto"}))).1), json!({"tier":"trusted_auto"}));
-    assert_eq!(json_of(&call(Method::GET, "/draft-policy", Some(&cookie), None).1), json!({"tier":"trusted_auto"}));
+    assert_eq!(
+        (status, json_of(&text)),
+        (200, json!({"mode":"suggest"})),
+        "{text}"
+    );
+    let (status, text) = call(
+        Method::PUT,
+        "/task-creation-mode",
+        Some(&cookie),
+        Some(json!({"mode":"auto_safe"})),
+    );
+    assert_eq!(
+        (status, json_of(&text)),
+        (200, json!({"mode":"auto_safe"})),
+        "{text}"
+    );
+    assert_eq!(
+        json_of(&call(Method::GET, "/task-creation-mode", Some(&cookie), None).1),
+        json!({"mode":"auto_safe"})
+    );
+    assert_eq!(
+        call(
+            Method::PUT,
+            "/task-creation-mode",
+            Some(&cookie),
+            Some(json!({"mode":"loud"}))
+        )
+        .0,
+        400
+    );
+    assert_eq!(
+        json_of(&call(Method::GET, "/briefing-source", Some(&cookie), None).1),
+        json!({"enabled":true})
+    );
+    assert_eq!(
+        json_of(
+            &call(
+                Method::PUT,
+                "/briefing-source",
+                Some(&cookie),
+                Some(json!({"enabled":false}))
+            )
+            .1
+        ),
+        json!({"enabled":false})
+    );
+    assert_eq!(
+        json_of(&call(Method::GET, "/briefing-source", Some(&cookie), None).1),
+        json!({"enabled":false})
+    );
+    assert_eq!(
+        json_of(&call(Method::GET, "/draft-policy", Some(&cookie), None).1),
+        json!({"tier":"ask_each_time"})
+    );
+    assert_eq!(
+        json_of(
+            &call(
+                Method::PUT,
+                "/draft-policy",
+                Some(&cookie),
+                Some(json!({"tier":"trusted_auto"}))
+            )
+            .1
+        ),
+        json!({"tier":"trusted_auto"})
+    );
+    assert_eq!(
+        json_of(&call(Method::GET, "/draft-policy", Some(&cookie), None).1),
+        json!({"tier":"trusted_auto"})
+    );
     // Understanding: the one cached message was sent by the person's own address, so the pass
     // settles it without any model call and a second pass finds nothing left to do.
-    assert_eq!(call(Method::POST, "/understand", None, Some(json!({}))).0, 401);
+    assert_eq!(
+        call(Method::POST, "/understand", None, Some(json!({}))).0,
+        401
+    );
     let (status, text) = call(Method::POST, "/understand", Some(&cookie), Some(json!({})));
-    assert_eq!((status, json_of(&text)), (200, json!({"analysed":1,"failed":0,"needsConfiguration":false})), "{text}\n{}", log());
+    assert_eq!(
+        (status, json_of(&text)),
+        (
+            200,
+            json!({"analysed":1,"failed":0,"needsConfiguration":false})
+        ),
+        "{text}\n{}",
+        log()
+    );
     let (status, text) = call(Method::POST, "/understand", Some(&cookie), Some(json!({})));
-    assert_eq!((status, json_of(&text)), (200, json!({"analysed":0,"failed":0,"needsConfiguration":false})), "{text}");
+    assert_eq!(
+        (status, json_of(&text)),
+        (
+            200,
+            json!({"analysed":0,"failed":0,"needsConfiguration":false})
+        ),
+        "{text}"
+    );
     seen.push(text);
     // Responses to settings calls and the not-found answer carry no message content.
-    for (_, text) in [call(Method::GET, "/briefing-settings", Some(&cookie), None), call(Method::GET, "/task-creation-mode", Some(&cookie), None)] {
+    for (_, text) in [
+        call(Method::GET, "/briefing-settings", Some(&cookie), None),
+        call(Method::GET, "/task-creation-mode", Some(&cookie), None),
+    ] {
         seen.push(text);
     }
-    seen.push(call(Method::GET, &format!("/messages/{missing}"), Some(&cookie), None).1);
+    seen.push(
+        call(
+            Method::GET,
+            &format!("/messages/{missing}"),
+            Some(&cookie),
+            None,
+        )
+        .1,
+    );
     for body in &seen {
         for marker in [MARKER_BODY, MARKER_ADDRESS] {
-            assert!(!body.contains(marker), "marker in a response that should not carry it: {body}");
+            assert!(
+                !body.contains(marker),
+                "marker in a response that should not carry it: {body}"
+            );
         }
     }
     // The message body and address must be in no log line and no job or audit row.
@@ -414,14 +577,31 @@ fn installed_email_package_serves_routes_from_the_real_server() {
     println!("PASS Email routes on the real server: sign-in required, list, detail, unknown message 404, briefing settings, task mode, briefing source, draft policy; message body and address absent from the server log and every job and audit row");
     let screen_url = format!("{origin}/api/modules/email/screen?path=/settings/email");
     assert_eq!(client.get(&screen_url).send().unwrap().status(), 401);
-    let screen: Value = client.get(&screen_url).header("cookie", &cookie).send().unwrap().json().unwrap();
+    let screen: Value = client
+        .get(&screen_url)
+        .header("cookie", &cookie)
+        .send()
+        .unwrap()
+        .json()
+        .unwrap();
     let src = screen["src"].as_str().expect("screen address");
     assert!(src.starts_with("/module-ui/email/"), "{screen}");
-    assert_eq!(client.get(format!("{origin}{src}")).header("origin", "null").header("sec-fetch-site", "cross-site").send().unwrap().status(), 200);
+    assert_eq!(
+        client
+            .get(format!("{origin}{src}"))
+            .header("origin", "null")
+            .header("sec-fetch-site", "cross-site")
+            .send()
+            .unwrap()
+            .status(),
+        200
+    );
     println!("PASS Email settings screen address and files served over HTTPS");
     {
-        let script = std::env::var("MOSS_EMAIL_BROWSER_SCRIPT").expect("the gate must supply the browser script");
-        let out = std::env::var("MOSS_EMAIL_BROWSER_OUT").unwrap_or_else(|_| root.display().to_string());
+        let script = std::env::var("MOSS_EMAIL_BROWSER_SCRIPT")
+            .expect("the gate must supply the browser script");
+        let out =
+            std::env::var("MOSS_EMAIL_BROWSER_OUT").unwrap_or_else(|_| root.display().to_string());
         let status = Command::new("pnpm")
             .args(["exec", "tsx", &script])
             .env("ORIGIN", &origin)

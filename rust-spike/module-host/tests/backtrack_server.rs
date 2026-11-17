@@ -2,16 +2,16 @@
 mod common;
 #[path = "people_routes/installed.rs"]
 mod installed;
+use access_context::AccessContext;
 use common::Keys;
 use moss_module_host::{
     archive::Package,
     registry::{Artifact, Channel, Index, Source},
     trust::{self, Publisher, RegistryIdentity},
 };
-use std::collections::{BTreeMap, BTreeSet};
-use access_context::AccessContext;
 use safety_core::db::{Database, RuntimeRole};
 use serde_json::{json, Value};
+use std::collections::{BTreeMap, BTreeSet};
 use std::{
     fs,
     path::Path,
@@ -66,7 +66,9 @@ fn installed_backtrack_package_serves_routes_from_the_real_server() {
     // MOSS_BACKTRACK_HOST names the address another device uses. When set, the listener binds
     // every interface and trusts that origin, and MOSS_BACKTRACK_REMOTE_SSH names a device
     // that asks the server for the signed-in status from there.
-    let remote = std::env::var("MOSS_BACKTRACK_HOST").ok().map(|host| format!("https://{host}:{}", port.0));
+    let remote = std::env::var("MOSS_BACKTRACK_HOST")
+        .ok()
+        .map(|host| format!("https://{host}:{}", port.0));
     let cert = root.join("tls/certificate.pem");
     assert!(Command::new(std::env::var("JS170_CERTIFICATE").unwrap())
         .args(["local-certificate"])
@@ -102,7 +104,10 @@ fn installed_backtrack_package_serves_routes_from_the_real_server() {
         &root.join("credentials.json"),
         &json!({"app_url":app_url,"auth_url":auth_url,"auth_secret":"temporary-disposable-backtrack-signing-secret-235","connector_key":connector_key}),
     );
-    let origins: Vec<String> = [Some(origin.clone()), remote.clone()].into_iter().flatten().collect();
+    let origins: Vec<String> = [Some(origin.clone()), remote.clone()]
+        .into_iter()
+        .flatten()
+        .collect();
     private(
         &root.join("network.json"),
         &json!({"listen":format!("{}:{}",if remote.is_some() {"0.0.0.0"} else {"127.0.0.1"},port.0),"origins":origins,"sharing":remote.is_some(),"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
@@ -158,7 +163,10 @@ fn installed_backtrack_package_serves_routes_from_the_real_server() {
         let response = client.post(format!("{origin}/api/auth/sign-up/email")).header("origin", &origin).json(&json!({"name":name,"email":email,"password":"temporary-backtrack-password-235-not-a-real-secret"})).send().unwrap();
         let status = response.status();
         if status != 200 {
-            panic!("sign-up answered {status}: {}", response.text().unwrap_or_default());
+            panic!(
+                "sign-up answered {status}: {}",
+                response.text().unwrap_or_default()
+            );
         }
         response.headers()["set-cookie"]
             .to_str()
@@ -207,7 +215,10 @@ fn installed_backtrack_package_serves_routes_from_the_real_server() {
     // canonical installer, as the server would find it.
     let keys = Keys::new();
     fs::create_dir_all(root.join("registry/packages")).unwrap();
-    let artifacts: Vec<Artifact> = [("JS231_MEMORY_PACKAGE", "memory"), ("JS261_BACKTRACK_PACKAGE", "backtrack")]
+    let artifacts: Vec<Artifact> = [
+        ("JS231_MEMORY_PACKAGE", "memory"),
+        ("JS261_BACKTRACK_PACKAGE", "backtrack"),
+    ]
     .iter()
     .map(|(variable, id)| {
         let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
@@ -215,7 +226,11 @@ fn installed_backtrack_package_serves_routes_from_the_real_server() {
         let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
         let manifest = &package.manifest;
         assert_eq!(manifest.id, *id);
-        fs::write(root.join(format!("registry/packages/{digest}.mosspkg")), &bytes).unwrap();
+        fs::write(
+            root.join(format!("registry/packages/{digest}.mosspkg")),
+            &bytes,
+        )
+        .unwrap();
         Artifact {
             id: manifest.id.clone(),
             version: manifest.version.clone(),
@@ -257,11 +272,23 @@ fn installed_backtrack_package_serves_routes_from_the_real_server() {
         revoked: vec![],
     };
     for (name, data, key) in [
-        ("registry.json", serde_json::to_vec(&identity).unwrap(), &keys.root),
-        ("index.json", serde_json::to_vec(&index).unwrap(), &keys.index),
+        (
+            "registry.json",
+            serde_json::to_vec(&identity).unwrap(),
+            &keys.root,
+        ),
+        (
+            "index.json",
+            serde_json::to_vec(&index).unwrap(),
+            &keys.index,
+        ),
     ] {
         fs::write(root.join("registry").join(name), &data).unwrap();
-        fs::write(root.join("registry").join(format!("{name}.sig")), Keys::sign(key, &data)).unwrap();
+        fs::write(
+            root.join("registry").join(format!("{name}.sig")),
+            Keys::sign(key, &data),
+        )
+        .unwrap();
     }
     let installer = installed::reopen(
         &root.join("data"),
@@ -303,18 +330,28 @@ fn installed_backtrack_package_serves_routes_from_the_real_server() {
         let signed = client.post(format!("{origin}/api/auth/sign-in/email")).header("origin", &origin)
             .json(&json!({"email":"backtrack-other@example.test","password":"temporary-backtrack-password-235-not-a-real-secret"})).send().unwrap();
         assert_eq!(signed.status(), 200, "second person sign-in");
-        signed.headers()["set-cookie"].to_str().unwrap().split(';').next().unwrap().to_owned()
+        signed.headers()["set-cookie"]
+            .to_str()
+            .unwrap()
+            .split(';')
+            .next()
+            .unwrap()
+            .to_owned()
     };
     let log = || fs::read_to_string(root.join("server.log")).unwrap_or_default();
     let call = |method: reqwest::Method, path: &str, cookie: Option<&str>, body: Option<Value>| {
-        let mut request = client.request(method, format!("{origin}/api/m/backtrack{path}")).header("origin", &origin);
+        let mut request = client
+            .request(method, format!("{origin}/api/m/backtrack{path}"))
+            .header("origin", &origin);
         if let Some(cookie) = cookie {
             request = request.header("cookie", cookie);
         }
         if let Some(body) = body {
             request = request.json(&body);
         }
-        let response = request.send().unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
+        let response = request
+            .send()
+            .unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
         let status = response.status().as_u16();
         let text = response.text().unwrap_or_default();
         println!("{method_path} -> {status}", method_path = path);
@@ -330,14 +367,19 @@ fn installed_backtrack_package_serves_routes_from_the_real_server() {
     // Both people start empty and see the storage switch as off.
     // The server answers 503 until its module host has finished starting.
     let started = std::time::Instant::now();
-    while call(Method::GET, "/status", Some(&cookie), None).0 == 503 && started.elapsed() < std::time::Duration::from_secs(60) {
+    while call(Method::GET, "/status", Some(&cookie), None).0 == 503
+        && started.elapsed() < std::time::Duration::from_secs(60)
+    {
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
     for who in [&cookie, &other] {
         let (status, text) = call(Method::GET, "/status", Some(who), None);
         assert_eq!(status, 200, "{text}\n{}", log());
         let body = json_of(&text);
-        assert_eq!((body["days"].clone(), body["storage"].clone()), (json!(0), json!("off")));
+        assert_eq!(
+            (body["days"].clone(), body["storage"].clone()),
+            (json!(0), json!("off"))
+        );
     }
     // A Mac upload is refused with nothing stored, because no Mac is linked to either person.
     let upload = json!({"sentAt": chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true), "segments": [{"startedAt": "2026-11-12T10:00:00.000Z", "endedAt": "2026-11-12T10:05:00.000Z", "appName": "Safari", "bundleId": "com.apple.Safari", "windowTitle": "t", "address": "https://example.test", "body": MARK}]});
@@ -345,19 +387,42 @@ fn installed_backtrack_package_serves_routes_from_the_real_server() {
     assert_eq!(status, 401, "{text}");
     assert!(!text.contains(MARK));
     // Pause is the person's own and does not leak across people.
-    let (status, text) = call(Method::PUT, "/preferences", Some(&cookie), Some(json!({"paused": true})));
-    assert_eq!((status, json_of(&text)["paused"].clone()), (200, json!(true)), "{text}");
+    let (status, text) = call(
+        Method::PUT,
+        "/preferences",
+        Some(&cookie),
+        Some(json!({"paused": true})),
+    );
+    assert_eq!(
+        (status, json_of(&text)["paused"].clone()),
+        (200, json!(true)),
+        "{text}"
+    );
     let seen = |who: &str| {
         let (_, text) = call(Method::GET, "/status", Some(who), None);
         json_of(&text)["paused"].clone()
     };
     assert_eq!((seen(&cookie), seen(&other)), (json!(true), json!(false)));
     // Bad input gets the legacy refusal, and delete works with storage off and no Mac.
-    let (status, _) = call(Method::PUT, "/preferences", Some(&cookie), Some(json!({"paused": "yes"})));
+    let (status, _) = call(
+        Method::PUT,
+        "/preferences",
+        Some(&cookie),
+        Some(json!({"paused": "yes"})),
+    );
     assert_eq!(status, 400);
     let (status, text) = call(Method::DELETE, "/segments", Some(&other), None);
-    assert_eq!((status, json_of(&text)["deleted"].clone()), (200, json!(0)), "{text}");
-    let (status, _) = call(Method::DELETE, "/segments", Some(&other), Some(json!({"from": "2026-11-02T00:00:00.000Z", "to": "2026-11-01T00:00:00.000Z"})));
+    assert_eq!(
+        (status, json_of(&text)["deleted"].clone()),
+        (200, json!(0)),
+        "{text}"
+    );
+    let (status, _) = call(
+        Method::DELETE,
+        "/segments",
+        Some(&other),
+        Some(json!({"from": "2026-11-02T00:00:00.000Z", "to": "2026-11-01T00:00:00.000Z"})),
+    );
     assert_eq!(status, 400);
     // A second device on the network reaches the same server and sees only its own account.
     if let (Some(remote), Ok(device)) = (&remote, std::env::var("MOSS_BACKTRACK_REMOTE_SSH")) {
@@ -373,8 +438,14 @@ fn installed_backtrack_package_serves_routes_from_the_real_server() {
             String::from_utf8_lossy(&output.stdout).trim().to_owned()
         };
         let (signed_out, signed_in) = (ask("none=1"), ask(&cookie));
-        println!("backtrack live: another device got {signed_out} signed out and {signed_in} signed in");
-        assert_eq!((signed_out.as_str(), signed_in.as_str()), ("401", "200"), "the other device must reach the server");
+        println!(
+            "backtrack live: another device got {signed_out} signed out and {signed_in} signed in"
+        );
+        assert_eq!(
+            (signed_out.as_str(), signed_in.as_str()),
+            ("401", "200"),
+            "the other device must reach the server"
+        );
     }
     // Nothing the test sent reached the server log.
     assert!(!log().contains(MARK));

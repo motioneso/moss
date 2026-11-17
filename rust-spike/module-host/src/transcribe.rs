@@ -35,7 +35,12 @@ impl TranscriptionRoute {
     pub fn digest(&self) -> String {
         let key = Sha256::digest(self.credential.expose_secret().as_bytes());
         let mut hash = Sha256::new();
-        for part in [self.base.as_str().as_bytes(), self.model.as_bytes(), self.provider.as_bytes(), &key] {
+        for part in [
+            self.base.as_str().as_bytes(),
+            self.model.as_bytes(),
+            self.provider.as_bytes(),
+            &key,
+        ] {
             hash.update((part.len() as u64).to_be_bytes());
             hash.update(part);
         }
@@ -124,9 +129,14 @@ struct Input {
 
 /// A malformed request is a bug in the package, so it is an error. A bad clip is a result.
 fn parse(parameters: &Value) -> Result<Result<Input, Failure>> {
-    let map = parameters.as_object().context("Transcription needs an object")?;
+    let map = parameters
+        .as_object()
+        .context("Transcription needs an object")?;
     ensure!(
-        map.keys().all(|k| matches!(k.as_str(), "audioBase64" | "language" | "prompt" | "expectedRoute")),
+        map.keys().all(|k| matches!(
+            k.as_str(),
+            "audioBase64" | "language" | "prompt" | "expectedRoute"
+        )),
         "Unknown transcription parameter"
     );
     let text = |name: &str, max: usize| -> Result<Option<String>> {
@@ -140,10 +150,16 @@ fn parse(parameters: &Value) -> Result<Result<Input, Failure>> {
         }
     };
     let expected = text("expectedRoute", 64)?.context("expectedRoute required")?;
-    ensure!(expected.len() == 64 && expected.bytes().all(|b| b.is_ascii_hexdigit()), "expectedRoute must be a route digest");
+    ensure!(
+        expected.len() == 64 && expected.bytes().all(|b| b.is_ascii_hexdigit()),
+        "expectedRoute must be a route digest"
+    );
     let language = text("language", MAX_LANGUAGE)?;
     let prompt = text("prompt", MAX_PROMPT)?;
-    let encoded = map.get("audioBase64").and_then(Value::as_str).context("audioBase64 required")?;
+    let encoded = map
+        .get("audioBase64")
+        .and_then(Value::as_str)
+        .context("audioBase64 required")?;
     // Reject before decoding, so a huge string never turns into a huge buffer.
     if encoded.len() > MAX_AUDIO_BYTES.div_ceil(3) * 4 {
         return Ok(Err(Failure(Reason::InvalidAudio, Stage::Validation)));
@@ -154,7 +170,12 @@ fn parse(parameters: &Value) -> Result<Result<Input, Failure>> {
     if audio.is_empty() || audio.len() > MAX_AUDIO_BYTES {
         return Ok(Err(Failure(Reason::InvalidAudio, Stage::Validation)));
     }
-    Ok(Ok(Input { audio, language, prompt, expected: expected.to_ascii_lowercase() }))
+    Ok(Ok(Input {
+        audio,
+        language,
+        prompt,
+        expected: expected.to_ascii_lowercase(),
+    }))
 }
 
 fn multipart(boundary: &str, route: &TranscriptionRoute, input: &Input) -> Vec<u8> {
@@ -190,15 +211,24 @@ fn failure_for_status(status: u16) -> Reason {
 fn segments(body: &[u8]) -> Result<Vec<Value>, Failure> {
     let invalid = || Failure(Reason::ProviderResponseInvalid, Stage::Validation);
     let value: Value = serde_json::from_slice(body).map_err(|_| invalid())?;
-    let list = value.get("segments").and_then(Value::as_array).ok_or_else(invalid)?;
+    let list = value
+        .get("segments")
+        .and_then(Value::as_array)
+        .ok_or_else(invalid)?;
     if list.len() > MAX_SEGMENTS {
         return Err(invalid());
     }
     let mut total = 0usize;
     let mut out = Vec::with_capacity(list.len());
     for item in list {
-        let start = item.get("start").and_then(Value::as_f64).filter(|n| n.is_finite() && *n >= 0.0);
-        let end = item.get("end").and_then(Value::as_f64).filter(|n| n.is_finite() && *n >= 0.0);
+        let start = item
+            .get("start")
+            .and_then(Value::as_f64)
+            .filter(|n| n.is_finite() && *n >= 0.0);
+        let end = item
+            .get("end")
+            .and_then(Value::as_f64)
+            .filter(|n| n.is_finite() && *n >= 0.0);
         let text = item.get("text").and_then(Value::as_str);
         let (Some(start), Some(end), Some(text)) = (start, end, text) else {
             return Err(invalid());
@@ -213,27 +243,47 @@ fn segments(body: &[u8]) -> Result<Vec<Value>, Failure> {
     Ok(out)
 }
 
-async fn send(route: &TranscriptionRoute, input: &Input, budget: Duration) -> Result<Vec<Value>, Failure> {
+async fn send(
+    route: &TranscriptionRoute,
+    input: &Input,
+    budget: Duration,
+) -> Result<Vec<Value>, Failure> {
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .timeout(budget)
         .build()
         .map_err(|_| Failure(Reason::ProviderNetwork, Stage::Dispatch))?;
-    let address = format!("{}/v1/audio/transcriptions", route.base.as_str().trim_end_matches('/'));
+    let address = format!(
+        "{}/v1/audio/transcriptions",
+        route.base.as_str().trim_end_matches('/')
+    );
     let boundary = format!("moss-{}", uuid::Uuid::new_v4().simple());
     let mut response = client
         .post(address)
         .bearer_auth(route.credential.expose_secret())
-        .header("content-type", format!("multipart/form-data; boundary={boundary}"))
+        .header(
+            "content-type",
+            format!("multipart/form-data; boundary={boundary}"),
+        )
         .body(multipart(&boundary, route, input))
         .send()
         .await
         .map_err(|e| {
-            Failure(if e.is_timeout() { Reason::ProviderTimeout } else { Reason::ProviderNetwork }, Stage::Dispatch)
+            Failure(
+                if e.is_timeout() {
+                    Reason::ProviderTimeout
+                } else {
+                    Reason::ProviderNetwork
+                },
+                Stage::Dispatch,
+            )
         })?;
     let status = response.status();
     if !status.is_success() {
-        return Err(Failure(failure_for_status(status.as_u16()), Stage::Response));
+        return Err(Failure(
+            failure_for_status(status.as_u16()),
+            Stage::Response,
+        ));
     }
     let mut bytes = Vec::new();
     loop {
@@ -247,7 +297,11 @@ async fn send(route: &TranscriptionRoute, input: &Input, budget: Duration) -> Re
             Ok(None) => break,
             Err(e) => {
                 return Err(Failure(
-                    if e.is_timeout() { Reason::ProviderTimeout } else { Reason::ProviderNetwork },
+                    if e.is_timeout() {
+                        Reason::ProviderTimeout
+                    } else {
+                        Reason::ProviderNetwork
+                    },
                     Stage::Response,
                 ))
             }
@@ -256,20 +310,43 @@ async fn send(route: &TranscriptionRoute, input: &Input, budget: Duration) -> Re
     segments(&bytes)
 }
 
-async fn run_create(store: &dyn TranscriptionStore, actor: Actor, input: Input, remaining: Duration) -> (Value, Option<String>, Option<&'static str>) {
+async fn run_create(
+    store: &dyn TranscriptionStore,
+    actor: Actor,
+    input: Input,
+    remaining: Duration,
+) -> (Value, Option<String>, Option<&'static str>) {
     let budget = remaining.min(DEADLINE);
     let result = tokio::time::timeout(budget, async {
-        let first = store.route(actor).await.map_err(|_| (Failure(Reason::ConfigurationUnavailable, Stage::Configuration), None))?;
+        let first = store.route(actor).await.map_err(|_| {
+            (
+                Failure(Reason::ConfigurationUnavailable, Stage::Configuration),
+                None,
+            )
+        })?;
         let model = first.model.clone();
         if !valid_endpoint_url(first.base.as_str()) {
-            return Err((Failure(Reason::ConfigurationUnavailable, Stage::Configuration), Some(model)));
+            return Err((
+                Failure(Reason::ConfigurationUnavailable, Stage::Configuration),
+                Some(model),
+            ));
         }
         if first.digest() != input.expected {
-            return Err((Failure(Reason::RouteChanged, Stage::Configuration), Some(model)));
+            return Err((
+                Failure(Reason::RouteChanged, Stage::Configuration),
+                Some(model),
+            ));
         }
-        let segments = send(&first, &input, budget).await.map_err(|f| (f, Some(model.clone())))?;
+        let segments = send(&first, &input, budget)
+            .await
+            .map_err(|f| (f, Some(model.clone())))?;
         // The configuration may have changed while the provider was working.
-        let after = store.route(actor).await.map_err(|_| (Failure(Reason::RouteChanged, Stage::Response), Some(model.clone())))?;
+        let after = store.route(actor).await.map_err(|_| {
+            (
+                Failure(Reason::RouteChanged, Stage::Response),
+                Some(model.clone()),
+            )
+        })?;
         if after.digest() != first.digest() {
             return Err((Failure(Reason::RouteChanged, Stage::Response), Some(model)));
         }
@@ -277,7 +354,11 @@ async fn run_create(store: &dyn TranscriptionStore, actor: Actor, input: Input, 
     })
     .await;
     match result {
-        Ok(Ok((segments, model))) => (json!({"ok":true,"segments":segments,"route":input.expected}), Some(model), None),
+        Ok(Ok((segments, model))) => (
+            json!({"ok":true,"segments":segments,"route":input.expected}),
+            Some(model),
+            None,
+        ),
         Ok(Err((failure, model))) => (failure.json(), model, Some(failure.0.name())),
         Err(_) => {
             let failure = Failure(Reason::ProviderTimeout, Stage::Dispatch);
@@ -294,12 +375,18 @@ pub fn handle(
     scope: &CallScope,
     request: &Request,
 ) -> Result<Value> {
-    let actor = Actor::from_authenticated_session(scope.access().actor_user_id(), uuid::Uuid::new_v4());
+    let actor =
+        Actor::from_authenticated_session(scope.access().actor_user_id(), uuid::Uuid::new_v4());
     match request.operation.as_str() {
         "availability" => {
-            ensure!(request.parameters.as_object().is_some_and(|m| m.is_empty()), "Availability takes no parameters");
+            ensure!(
+                request.parameters.as_object().is_some_and(|m| m.is_empty()),
+                "Availability takes no parameters"
+            );
             Ok(runtime.block_on(async {
-                match tokio::time::timeout(scope.remaining().min(DEADLINE), store.route(actor)).await {
+                match tokio::time::timeout(scope.remaining().min(DEADLINE), store.route(actor))
+                    .await
+                {
                     Ok(Ok(route)) if valid_endpoint_url(route.base.as_str()) => {
                         json!({"available":true,"route":route.digest(),"model":route.model})
                     }
@@ -308,13 +395,17 @@ pub fn handle(
             }))
         }
         "create" => {
-            ensure!(request.resource == "audio", "Unknown transcription resource");
+            ensure!(
+                request.resource == "audio",
+                "Unknown transcription resource"
+            );
             let input = match parse(&request.parameters)? {
                 Ok(input) => input,
                 Err(failure) => return Ok(failure.json()),
             };
             let size = input.audio.len();
-            let (reply, model, failed) = runtime.block_on(run_create(store, actor, input, scope.remaining()));
+            let (reply, model, failed) =
+                runtime.block_on(run_create(store, actor, input, scope.remaining()));
             if let Some(activity) = activity {
                 runtime.block_on(activity.record(EmbeddingCall {
                     actor: scope.access().actor_user_id(),

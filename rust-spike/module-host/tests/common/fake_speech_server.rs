@@ -55,14 +55,29 @@ pub fn segments_for(hash: &str) -> Vec<Value> {
 }
 
 fn find(haystack: &[u8], needle: &[u8], from: usize) -> Option<usize> {
-    haystack[from..].windows(needle.len()).position(|w| w == needle).map(|p| p + from)
+    haystack[from..]
+        .windows(needle.len())
+        .position(|w| w == needle)
+        .map(|p| p + from)
 }
 
 fn parse(head: &str, body: &[u8]) -> Received {
-    let path = head.lines().next().unwrap_or_default().split(' ').nth(1).unwrap_or_default().to_owned();
+    let path = head
+        .lines()
+        .next()
+        .unwrap_or_default()
+        .split(' ')
+        .nth(1)
+        .unwrap_or_default()
+        .to_owned();
     let boundary = head
         .lines()
-        .find_map(|l| l.to_ascii_lowercase().contains("content-type:").then(|| l.split("boundary=").nth(1).map(str::to_owned)).flatten())
+        .find_map(|l| {
+            l.to_ascii_lowercase()
+                .contains("content-type:")
+                .then(|| l.split("boundary=").nth(1).map(str::to_owned))
+                .flatten()
+        })
         .unwrap_or_default();
     let marker = format!("--{boundary}").into_bytes();
     let mut fields = BTreeMap::new();
@@ -70,23 +85,50 @@ fn parse(head: &str, body: &[u8]) -> Received {
     let mut at = 0;
     while let Some(start) = find(body, &marker, at) {
         let part_start = start + marker.len();
-        let Some(end) = find(body, &marker, part_start) else { break };
+        let Some(end) = find(body, &marker, part_start) else {
+            break;
+        };
         let part = &body[part_start..end];
         at = end;
-        let Some(split) = find(part, b"\r\n\r\n", 0) else { continue };
+        let Some(split) = find(part, b"\r\n\r\n", 0) else {
+            continue;
+        };
         let headers = String::from_utf8_lossy(&part[..split]).to_string();
         let mut data = &part[split + 4..];
         data = data.strip_suffix(b"\r\n").unwrap_or(data);
-        let name = headers.split("name=\"").nth(1).and_then(|n| n.split('"').next()).unwrap_or_default().to_owned();
+        let name = headers
+            .split("name=\"")
+            .nth(1)
+            .and_then(|n| n.split('"').next())
+            .unwrap_or_default()
+            .to_owned();
         if name == "file" {
-            fields.insert("file-name".into(), headers.split("filename=\"").nth(1).and_then(|n| n.split('"').next()).unwrap_or_default().to_owned());
+            fields.insert(
+                "file-name".into(),
+                headers
+                    .split("filename=\"")
+                    .nth(1)
+                    .and_then(|n| n.split('"').next())
+                    .unwrap_or_default()
+                    .to_owned(),
+            );
             audio = data.to_vec();
         } else {
             fields.insert(name, String::from_utf8_lossy(data).to_string());
         }
     }
-    let authorization = head.lines().find(|l| l.to_ascii_lowercase().starts_with("authorization:")).unwrap_or_default().to_owned();
-    Received { path, sha256: hex(&Sha256::digest(&audio)), audio, fields, authorization }
+    let authorization = head
+        .lines()
+        .find(|l| l.to_ascii_lowercase().starts_with("authorization:"))
+        .unwrap_or_default()
+        .to_owned();
+    Received {
+        path,
+        sha256: hex(&Sha256::digest(&audio)),
+        audio,
+        fields,
+        authorization,
+    }
 }
 
 impl FakeSpeechServer {
@@ -114,7 +156,11 @@ impl FakeSpeechServer {
                             let head = String::from_utf8_lossy(&data[..at]).to_string();
                             let length = head
                                 .lines()
-                                .find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap()))
+                                .find_map(|l| {
+                                    l.to_ascii_lowercase()
+                                        .strip_prefix("content-length:")
+                                        .map(|v| v.trim().parse::<usize>().unwrap())
+                                })
                                 .unwrap_or(0);
                             if data.len() >= at + 4 + length {
                                 break (head, data[at + 4..at + 4 + length].to_vec());
@@ -151,7 +197,12 @@ impl FakeSpeechServer {
                 });
             }
         });
-        Self { url, received, mode, on_request }
+        Self {
+            url,
+            received,
+            mode,
+            on_request,
+        }
     }
     pub fn set_mode(&self, mode: Mode) {
         *self.mode.lock().unwrap() = mode;

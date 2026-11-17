@@ -20,10 +20,7 @@ pub enum Binding {
         default: bool,
     },
     /// A whole JSON value under one key, replaced on write after the host checks its shape.
-    Json {
-        key: String,
-        shape: JsonShape,
-    },
+    Json { key: String, shape: JsonShape },
 }
 /// Shapes the host accepts for a `Binding::Json` value. `null` clears the value.
 #[derive(Clone, Copy)]
@@ -70,19 +67,40 @@ impl JsonShape {
             JsonShape::SavedTimezone => false,
             JsonShape::Boolean => value.is_boolean(),
             JsonShape::Place => value.as_object().is_some_and(|o| {
-                let degrees = |k: &str, max: f64| o.get(k).and_then(Value::as_f64).is_some_and(|n| n.is_finite() && n.abs() <= max);
-                let label = o.get("label").and_then(Value::as_str).is_some_and(|t| !t.trim().is_empty() && t.encode_utf16().count() <= 200);
+                let degrees = |k: &str, max: f64| {
+                    o.get(k)
+                        .and_then(Value::as_f64)
+                        .is_some_and(|n| n.is_finite() && n.abs() <= max)
+                };
+                let label = o
+                    .get("label")
+                    .and_then(Value::as_str)
+                    .is_some_and(|t| !t.trim().is_empty() && t.encode_utf16().count() <= 200);
                 o.len() == 3 && degrees("lat", 90.0) && degrees("lon", 180.0) && label
             }),
             JsonShape::Choice(allowed) => value.as_str().is_some_and(|t| allowed.contains(&t)),
             JsonShape::TextList { max_items, max_len } => value.as_array().is_some_and(|items| {
                 items.len() <= max_items
-                    && items.iter().all(|i| i.as_str().is_some_and(|t| !t.is_empty() && t.len() <= max_len))
+                    && items.iter().all(|i| {
+                        i.as_str()
+                            .is_some_and(|t| !t.is_empty() && t.len() <= max_len)
+                    })
             }),
             JsonShape::LastViewed => value.as_object().is_some_and(|o| {
-                let text = |k: &str, max: usize| o.get(k).and_then(Value::as_str).is_some_and(|t| !t.is_empty() && t.len() <= max);
-                let maybe = |k: &str, max: usize| o.get(k).is_some_and(|v| v.is_null() || v.as_str().is_some_and(|t| t.chars().count() <= max));
-                o.len() == 3 && text("competitionKey", 200) && maybe("viewKey", 100) && maybe("viewLabel", 200)
+                let text = |k: &str, max: usize| {
+                    o.get(k)
+                        .and_then(Value::as_str)
+                        .is_some_and(|t| !t.is_empty() && t.len() <= max)
+                };
+                let maybe = |k: &str, max: usize| {
+                    o.get(k).is_some_and(|v| {
+                        v.is_null() || v.as_str().is_some_and(|t| t.chars().count() <= max)
+                    })
+                };
+                o.len() == 3
+                    && text("competitionKey", 200)
+                    && maybe("viewKey", 100)
+                    && maybe("viewLabel", 200)
             }),
         }
     }
@@ -93,15 +111,24 @@ pub fn weather_bindings() -> BTreeMap<(String, String), Binding> {
     BTreeMap::from([
         (
             ("weather".into(), "location".into()),
-            Binding::Json { key: "weather-location".into(), shape: JsonShape::Place },
+            Binding::Json {
+                key: "weather-location".into(),
+                shape: JsonShape::Place,
+            },
         ),
         (
             ("weather".into(), "unit".into()),
-            Binding::Json { key: "weather-unit".into(), shape: JsonShape::Choice(WEATHER_UNITS) },
+            Binding::Json {
+                key: "weather-unit".into(),
+                shape: JsonShape::Choice(WEATHER_UNITS),
+            },
         ),
         (
             ("weather".into(), "saved-timezone".into()),
-            Binding::Json { key: "locale".into(), shape: JsonShape::SavedTimezone },
+            Binding::Json {
+                key: "locale".into(),
+                shape: JsonShape::SavedTimezone,
+            },
         ),
     ])
 }
@@ -243,7 +270,10 @@ impl AccountPreferencesPorts {
                     Some(json!({entry:enabled}))
                 }
                 Binding::Json { shape, .. } => {
-                    let value = request.parameters.get("value").context("Missing preference value")?;
+                    let value = request
+                        .parameters
+                        .get("value")
+                        .context("Missing preference value")?;
                     ensure!(shape.accepts(value), "Invalid preference value");
                     Some(value.clone())
                 }
@@ -332,21 +362,47 @@ mod shape_tests {
     #[test]
     fn a_place_within_range_is_accepted() {
         for (lat, lon) in [(51.5, -0.12), (90.0, 180.0), (-90.0, -180.0), (0.0, 0.0)] {
-            assert!(JsonShape::Place.accepts(&place(json!(lat), json!(lon), json!("London"))), "{lat},{lon}");
+            assert!(
+                JsonShape::Place.accepts(&place(json!(lat), json!(lon), json!("London"))),
+                "{lat},{lon}"
+            );
         }
         assert!(JsonShape::Place.accepts(&place(json!(40), json!(-74), json!("New York"))));
-        assert!(JsonShape::Place.accepts(&Value::Null), "null clears the place");
+        assert!(
+            JsonShape::Place.accepts(&Value::Null),
+            "null clears the place"
+        );
     }
     #[test]
     fn latitude_range() {
-        for lat in [json!(90.0001), json!(-90.5), json!(1e9), json!("51"), Value::Null, json!([51])] {
-            assert!(!JsonShape::Place.accepts(&place(lat.clone(), json!(0), json!("X"))), "{lat}");
+        for lat in [
+            json!(90.0001),
+            json!(-90.5),
+            json!(1e9),
+            json!("51"),
+            Value::Null,
+            json!([51]),
+        ] {
+            assert!(
+                !JsonShape::Place.accepts(&place(lat.clone(), json!(0), json!("X"))),
+                "{lat}"
+            );
         }
     }
     #[test]
     fn longitude_range() {
-        for lon in [json!(180.0001), json!(-181), json!(1e9), json!("0"), Value::Null, json!({})] {
-            assert!(!JsonShape::Place.accepts(&place(json!(0), lon.clone(), json!("X"))), "{lon}");
+        for lon in [
+            json!(180.0001),
+            json!(-181),
+            json!(1e9),
+            json!("0"),
+            Value::Null,
+            json!({}),
+        ] {
+            assert!(
+                !JsonShape::Place.accepts(&place(json!(0), lon.clone(), json!("X"))),
+                "{lon}"
+            );
         }
     }
     #[test]
@@ -356,13 +412,30 @@ mod shape_tests {
         assert!(JsonShape::Place.accepts(&place(json!(0), json!(0), json!(ok))));
         assert!(!JsonShape::Place.accepts(&place(json!(0), json!(0), json!(long))));
         // Each rocket is two UTF-16 units, so 100 fit and 101 do not.
-        assert!(JsonShape::Place.accepts(&place(json!(0), json!(0), json!("\u{1F680}".repeat(100)))));
-        assert!(!JsonShape::Place.accepts(&place(json!(0), json!(0), json!("\u{1F680}".repeat(101)))));
+        assert!(JsonShape::Place.accepts(&place(
+            json!(0),
+            json!(0),
+            json!("\u{1F680}".repeat(100))
+        )));
+        assert!(!JsonShape::Place.accepts(&place(
+            json!(0),
+            json!(0),
+            json!("\u{1F680}".repeat(101))
+        )));
     }
     #[test]
     fn a_blank_label_is_refused() {
-        for label in [json!(""), json!("   "), json!("\n\t"), json!(5), Value::Null] {
-            assert!(!JsonShape::Place.accepts(&place(json!(0), json!(0), label.clone())), "{label}");
+        for label in [
+            json!(""),
+            json!("   "),
+            json!("\n\t"),
+            json!(5),
+            Value::Null,
+        ] {
+            assert!(
+                !JsonShape::Place.accepts(&place(json!(0), json!(0), label.clone())),
+                "{label}"
+            );
         }
     }
     #[test]
@@ -377,7 +450,14 @@ mod shape_tests {
         for unit in ["metric", "imperial"] {
             assert!(UNIT.accepts(&json!(unit)));
         }
-        for unit in [json!("kelvin"), json!("Metric"), json!(""), json!(5), json!({}), json!(["metric"])] {
+        for unit in [
+            json!("kelvin"),
+            json!("Metric"),
+            json!(""),
+            json!(5),
+            json!({}),
+            json!(["metric"]),
+        ] {
             assert!(!UNIT.accepts(&unit), "{unit}");
         }
         assert!(UNIT.accepts(&Value::Null));
@@ -392,17 +472,35 @@ mod shape_tests {
         assert_eq!(JsonShape::Place.on_read(good.clone()), good);
         // Older shapes keep returning what is stored.
         let list = json!(["x".repeat(500)]);
-        assert_eq!(JsonShape::TextList { max_items: 1, max_len: 5 }.on_read(list.clone()), list);
+        assert_eq!(
+            JsonShape::TextList {
+                max_items: 1,
+                max_len: 5
+            }
+            .on_read(list.clone()),
+            list
+        );
     }
     #[test]
     fn the_saved_timezone_is_read_only_and_shows_nothing_else() {
         let zone = JsonShape::SavedTimezone;
-        for value in [json!(null), json!("UTC"), json!({"timezone":"UTC"}), json!({})] {
+        for value in [
+            json!(null),
+            json!("UTC"),
+            json!({"timezone":"UTC"}),
+            json!({}),
+        ] {
             assert!(!zone.accepts(&value), "{value}");
         }
         let saved = json!({"timezone":"Europe/Paris","language":"fr","extra":1});
         assert_eq!(zone.on_read(saved), json!("Europe/Paris"));
-        for value in [json!(null), json!({}), json!({"timezone":""}), json!({"timezone":5}), json!({"timezone":"x".repeat(65)})] {
+        for value in [
+            json!(null),
+            json!({}),
+            json!({"timezone":""}),
+            json!({"timezone":5}),
+            json!({"timezone":"x".repeat(65)}),
+        ] {
             assert_eq!(zone.on_read(value), Value::Null);
         }
     }

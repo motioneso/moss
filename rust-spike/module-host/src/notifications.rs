@@ -39,7 +39,10 @@ pub(crate) async fn post(cx: &DataContext, scope: &CallScope, r: &Request) -> Re
     let body = optional(r, "body", 4096)?;
     let event_key = optional(r, "eventKey", 128)?;
     let href = optional(r, "href", 2048)?;
-    ensure!(href.is_none_or(app_path), "href must be a path inside the app");
+    ensure!(
+        href.is_none_or(app_path),
+        "href must be a path inside the app"
+    );
     let urgency = optional(r, "urgency", 16)?.unwrap_or("normal");
     ensure!(
         matches!(urgency, "urgent" | "normal" | "low"),
@@ -62,7 +65,11 @@ pub(crate) async fn post(cx: &DataContext, scope: &CallScope, r: &Request) -> Re
         _ => crate::quiet_hours::window(cx, actor).await?,
     };
     let (zone, start, end) = match &quiet {
-        Some(w) => (Some(w.zone.as_str()), Some(w.start.as_str()), Some(w.end.as_str())),
+        Some(w) => (
+            Some(w.zone.as_str()),
+            Some(w.start.as_str()),
+            Some(w.end.as_str()),
+        ),
         None => (None, None, None),
     };
     let id = uuid::Uuid::new_v4();
@@ -117,7 +124,15 @@ mod tests {
         for good in ["/tasks", "/tasks/12?tab=open", "/"] {
             assert!(app_path(good), "{good}");
         }
-        for bad in ["tasks", "//evil.example", "/\\evil", "https://evil.example", "/a:b", "/a\nb", ""] {
+        for bad in [
+            "tasks",
+            "//evil.example",
+            "/\\evil",
+            "https://evil.example",
+            "/a:b",
+            "/a\nb",
+            "",
+        ] {
             assert!(!app_path(bad), "{bad:?}");
         }
     }

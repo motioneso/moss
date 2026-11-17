@@ -10,7 +10,11 @@ use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 pub(crate) async fn serve(io: Box<dyn Io>, state: Shared) {
     let (r, mut w) = tokio::io::split(io);
     let mut r = BufReader::new(r);
-    let _ = w.write_all(b"* OK [CAPABILITY IMAP4rev1 AUTH=PLAIN CONDSTORE UIDPLUS] Moss stand-in ready.\r\n").await;
+    let _ = w
+        .write_all(
+            b"* OK [CAPABILITY IMAP4rev1 AUTH=PLAIN CONDSTORE UIDPLUS] Moss stand-in ready.\r\n",
+        )
+        .await;
     let mut authed = false;
     let mut selected: Option<String> = None;
     let mut line = String::new();
@@ -43,14 +47,20 @@ pub(crate) async fn serve(io: Box<dyn Io>, state: Shared) {
             }
             "LOGIN" => {
                 let words = words(&args);
-                let (user, pass) = (words.first().cloned().unwrap_or_default(), words.get(1).cloned().unwrap_or_default());
+                let (user, pass) = (
+                    words.first().cloned().unwrap_or_default(),
+                    words.get(1).cloned().unwrap_or_default(),
+                );
                 let mut s = state.lock().unwrap();
                 s.imap_logins_seen += 1;
                 if s.throttle_imap_login {
-                    out += &format!("{tag} NO [ALERT] Too many simultaneous connections. (Failure)\r\n");
+                    out += &format!(
+                        "{tag} NO [ALERT] Too many simultaneous connections. (Failure)\r\n"
+                    );
                 } else if user == s.username && pass == s.password {
                     authed = true;
-                    out += &format!("{tag} OK [CAPABILITY IMAP4rev1 CONDSTORE UIDPLUS] Logged in\r\n");
+                    out +=
+                        &format!("{tag} OK [CAPABILITY IMAP4rev1 CONDSTORE UIDPLUS] Logged in\r\n");
                 } else {
                     out += &format!("{tag} NO [AUTHENTICATIONFAILED] Authentication failed.\r\n");
                 }
@@ -67,18 +77,28 @@ pub(crate) async fn serve(io: Box<dyn Io>, state: Shared) {
                 let name = words(&args).first().cloned().unwrap_or_default();
                 let s = state.lock().unwrap();
                 match s.folders.iter().find(|f| f.name == name) {
-                    None => out += &format!("{tag} NO [NONEXISTENT] Mailbox doesn't exist: {name}\r\n"),
+                    None => {
+                        out += &format!("{tag} NO [NONEXISTENT] Mailbox doesn't exist: {name}\r\n")
+                    }
                     Some(f) => {
                         selected = Some(name);
-                        out += &format!("* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n");
+                        out +=
+                            &format!("* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n");
                         out += "* OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft \\*)] Flags permitted.\r\n";
                         out += &format!("* {} EXISTS\r\n* 0 RECENT\r\n", f.messages.len());
                         out += &format!("* OK [UIDVALIDITY {}] UIDs valid\r\n", f.uid_validity);
                         out += &format!("* OK [UIDNEXT {}] Predicted next UID\r\n", f.next_uid);
                         let highest = f.messages.iter().map(|m| m.modseq).max().unwrap_or(1);
                         out += &format!("* OK [HIGHESTMODSEQ {highest}] Highest\r\n");
-                        let mode = if cmd == "SELECT" { "READ-WRITE" } else { "READ-ONLY" };
-                        out += &format!("{tag} OK [{mode}] {} completed\r\n", cmd.to_ascii_lowercase());
+                        let mode = if cmd == "SELECT" {
+                            "READ-WRITE"
+                        } else {
+                            "READ-ONLY"
+                        };
+                        out += &format!(
+                            "{tag} OK [{mode}] {} completed\r\n",
+                            cmd.to_ascii_lowercase()
+                        );
                     }
                 }
             }
@@ -100,9 +120,12 @@ pub(crate) async fn serve(io: Box<dyn Io>, state: Shared) {
             }
             "APPEND" => {
                 // `APPEND mailbox [(flags)] {size}` then the message after a continuation.
-                let size = args
-                    .rsplit_once('{')
-                    .and_then(|(_, n)| n.trim_end_matches('}').trim_end_matches('+').parse::<usize>().ok());
+                let size = args.rsplit_once('{').and_then(|(_, n)| {
+                    n.trim_end_matches('}')
+                        .trim_end_matches('+')
+                        .parse::<usize>()
+                        .ok()
+                });
                 let (Some(size), Some(name)) = (size, words(&args).first().cloned()) else {
                     out += &format!("{tag} BAD Error in IMAP command received by server.\r\n");
                     if w.write_all(out.as_bytes()).await.is_err() {
@@ -145,13 +168,18 @@ pub(crate) async fn serve(io: Box<dyn Io>, state: Shared) {
                     internal_date: "02-Mar-2026 09:15:00 +0000".into(),
                     modseq,
                 });
-                out += &format!("{tag} OK [APPENDUID {} {uid}] Append completed.\r\n", f.uid_validity);
+                out += &format!(
+                    "{tag} OK [APPENDUID {} {uid}] Append completed.\r\n",
+                    f.uid_validity
+                );
             }
             "CLOSE" => {
                 selected = None;
                 out += &format!("{tag} OK Close completed.\r\n");
             }
-            "EXPUNGE" | "UID" if selected.is_none() => out += &format!("{tag} BAD Command received in Invalid state.\r\n"),
+            "EXPUNGE" | "UID" if selected.is_none() => {
+                out += &format!("{tag} BAD Command received in Invalid state.\r\n")
+            }
             "EXPUNGE" => {
                 let mut s = state.lock().unwrap();
                 let f = folder_mut(&mut s.folders, selected.as_deref().unwrap());
@@ -163,15 +191,24 @@ pub(crate) async fn serve(io: Box<dyn Io>, state: Shared) {
                 match sub.to_ascii_uppercase().as_str() {
                     "SEARCH" => {
                         let s = state.lock().unwrap();
-                        let f = s.folders.iter().find(|f| Some(&f.name) == selected.as_ref()).unwrap();
+                        let f = s
+                            .folders
+                            .iter()
+                            .find(|f| Some(&f.name) == selected.as_ref())
+                            .unwrap();
                         out += &search(f, sub_args);
                         out += &format!("{tag} OK Search completed.\r\n");
                     }
                     "FETCH" => {
                         let s = state.lock().unwrap();
-                        let f = s.folders.iter().find(|f| Some(&f.name) == selected.as_ref()).unwrap();
+                        let f = s
+                            .folders
+                            .iter()
+                            .find(|f| Some(&f.name) == selected.as_ref())
+                            .unwrap();
                         fetch(f, sub_args, &mut bytes);
-                        bytes.extend_from_slice(format!("{tag} OK Fetch completed.\r\n").as_bytes());
+                        bytes
+                            .extend_from_slice(format!("{tag} OK Fetch completed.\r\n").as_bytes());
                     }
                     "STORE" => {
                         let mut s = state.lock().unwrap();
@@ -192,7 +229,8 @@ pub(crate) async fn serve(io: Box<dyn Io>, state: Shared) {
             }
             _ => out += &format!("{tag} BAD Error in IMAP command received by server.\r\n"),
         }
-        if w.write_all(out.as_bytes()).await.is_err() || w.write_all(&bytes).await.is_err() || done {
+        if w.write_all(out.as_bytes()).await.is_err() || w.write_all(&bytes).await.is_err() || done
+        {
             return;
         }
     }
@@ -224,7 +262,13 @@ fn words(s: &str) -> Vec<String> {
 
 fn uid_in_set(set: &str, uid: u32, max_uid: u32) -> bool {
     set.split(',').any(|part| {
-        let bound = |x: &str| if x == "*" { max_uid } else { x.parse().unwrap_or(0) };
+        let bound = |x: &str| {
+            if x == "*" {
+                max_uid
+            } else {
+                x.parse().unwrap_or(0)
+            }
+        };
         match part.split_once(':') {
             Some((a, b)) => {
                 let (a, b) = (bound(a), bound(b));
@@ -251,7 +295,10 @@ fn search(f: &Folder, criteria: &str) -> String {
             } else if c.trim() == "UNSEEN" {
                 !m.flags.contains("\\Seen")
             } else if let Some(day) = c.strip_prefix("SINCE ") {
-                match (day_key(day.trim()), day_key(&m.internal_date.to_ascii_uppercase())) {
+                match (
+                    day_key(day.trim()),
+                    day_key(&m.internal_date.to_ascii_uppercase()),
+                ) {
                     (Some(since), Some(sent)) => sent >= since,
                     _ => false,
                 }
@@ -263,7 +310,11 @@ fn search(f: &Folder, criteria: &str) -> String {
         })
         .map(|m| m.uid.to_string())
         .collect();
-    if hits.is_empty() { "* SEARCH\r\n".into() } else { format!("* SEARCH {}\r\n", hits.join(" ")) }
+    if hits.is_empty() {
+        "* SEARCH\r\n".into()
+    } else {
+        format!("* SEARCH {}\r\n", hits.join(" "))
+    }
 }
 
 /// Sortable (year, month, day) from "D-Mon-YYYY ..." text, upper case.
@@ -271,9 +322,11 @@ fn day_key(text: &str) -> Option<(u32, usize, u32)> {
     let mut parts = text.split(' ').next()?.split('-');
     let day = parts.next()?.parse().ok()?;
     let name = parts.next()?;
-    let month = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
-        .iter()
-        .position(|m| *m == name)?;
+    let month = [
+        "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
+    ]
+    .iter()
+    .position(|m| *m == name)?;
     Some((parts.next()?.parse().ok()?, month, day))
 }
 
@@ -285,7 +338,10 @@ fn fetch(f: &Folder, args: &str, out: &mut Vec<u8>) {
     let (set, items) = args.split_once(' ').unwrap_or((args, "FLAGS"));
     let upper = items.to_ascii_uppercase();
     let changed_since: Option<u64> = upper.split("CHANGEDSINCE ").nth(1).and_then(|r| {
-        r.trim_end_matches(')').split_whitespace().next().and_then(|n| n.parse().ok())
+        r.trim_end_matches(')')
+            .split_whitespace()
+            .next()
+            .and_then(|n| n.parse().ok())
     });
     let max = max_uid(f);
     for (i, m) in f.messages.iter().enumerate() {
@@ -309,7 +365,10 @@ fn fetch(f: &Folder, args: &str, out: &mut Vec<u8>) {
             Some(("BODY[HEADER]", header_of(&m.body)))
         } else if upper.contains("BODY.PEEK[]") || upper.contains("BODY[]") {
             // A partial fetch, `<0.N>`, returns at most N bytes from the start.
-            let limit = upper.split("<0.").nth(1).and_then(|r| r.split('>').next()?.parse().ok());
+            let limit = upper
+                .split("<0.")
+                .nth(1)
+                .and_then(|r| r.split('>').next()?.parse().ok());
             match limit {
                 Some(n) => Some(("BODY[]<0>", m.body[..m.body.len().min(n)].to_vec())),
                 None => Some(("BODY[]", m.body.clone())),
@@ -341,8 +400,16 @@ fn header_of(body: &[u8]) -> Vec<u8> {
 fn store(f: &mut Folder, args: &str, modseq: u64, out: &mut String) {
     // "<set> +FLAGS (\Seen)" or "<set> FLAGS (...)" or "<set> -FLAGS (...)"
     let mut it = args.splitn(3, ' ');
-    let (set, mode, list) = (it.next().unwrap_or(""), it.next().unwrap_or("").to_ascii_uppercase(), it.next().unwrap_or(""));
-    let flags: Vec<String> = list.trim_matches(['(', ')']).split_whitespace().map(String::from).collect();
+    let (set, mode, list) = (
+        it.next().unwrap_or(""),
+        it.next().unwrap_or("").to_ascii_uppercase(),
+        it.next().unwrap_or(""),
+    );
+    let flags: Vec<String> = list
+        .trim_matches(['(', ')'])
+        .split_whitespace()
+        .map(String::from)
+        .collect();
     let max = max_uid(f);
     for (i, m) in f.messages.iter_mut().enumerate() {
         if !uid_in_set(set, m.uid, max) {
@@ -358,7 +425,13 @@ fn store(f: &mut Folder, args: &str, modseq: u64, out: &mut String) {
             m.flags = flags.iter().cloned().collect();
         }
         m.modseq = modseq;
-        *out += &format!("* {} FETCH (UID {} FLAGS ({}) MODSEQ ({}))\r\n", i + 1, m.uid, flag_list(m), modseq);
+        *out += &format!(
+            "* {} FETCH (UID {} FLAGS ({}) MODSEQ ({}))\r\n",
+            i + 1,
+            m.uid,
+            flag_list(m),
+            modseq
+        );
     }
 }
 

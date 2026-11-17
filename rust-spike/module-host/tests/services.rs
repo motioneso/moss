@@ -350,7 +350,11 @@ fn credential_exchange_and_echo_redaction_use_the_real_guest_and_encrypted_store
             exchange: Some(Exchange {
                 endpoint: "https://example.test/token".into(),
                 grant_type: "client_credentials".into(),
+                format: None,
+                input: None,
             }),
+            with: vec![],
+            expose_fields: Default::default(),
         },
     );
     services
@@ -867,6 +871,8 @@ fn credential_status_says_only_whether_a_key_is_saved() {
                 hosts: ["example.test".into()].into(),
                 attachment: Attachment::Header("x-subscription-token".into()),
                 exchange: None,
+                with: vec![],
+                expose_fields: Default::default(),
             },
         );
     }

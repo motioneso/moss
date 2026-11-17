@@ -39,7 +39,10 @@ fn local_time(value: Option<&Value>) -> Option<String> {
     let b = text.as_bytes();
     let ok = b.len() == 5
         && b[2] == b':'
-        && matches!((b[0], b[1]), (b'0' | b'1', b'0'..=b'9') | (b'2', b'0'..=b'3'))
+        && matches!(
+            (b[0], b[1]),
+            (b'0' | b'1', b'0'..=b'9') | (b'2', b'0'..=b'3')
+        )
         && matches!(b[3], b'0'..=b'5')
         && b[4].is_ascii_digit();
     ok.then(|| text.to_owned())
@@ -65,7 +68,12 @@ fn profile_side(value: Option<&Value>, zone_ok: &dyn Fn(&str) -> bool) -> Side {
         Some(Value::String(z)) if zone_ok(z) => Some(z.clone()),
         Some(_) => return Side::Malformed,
     };
-    Side::Present(Schedule { enabled, start, end, zone })
+    Side::Present(Schedule {
+        enabled,
+        start,
+        end,
+        zone,
+    })
 }
 
 fn alerts_side(value: Option<&Value>) -> Side {
@@ -88,7 +96,10 @@ fn alerts_side(value: Option<&Value>) -> Side {
         return Side::Malformed;
     };
     Side::Present(Schedule {
-        enabled: quiet.get("enabled").and_then(Value::as_bool).unwrap_or(false),
+        enabled: quiet
+            .get("enabled")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
         start,
         end,
         zone: None,
@@ -108,7 +119,10 @@ pub(crate) fn classify(
         .filter(|z| z.len() <= 100 && zone_ok(z))
         .unwrap_or(DEFAULT_ZONE)
         .to_owned();
-    let marker = match profile.and_then(Value::as_object).and_then(|m| m.get("authority")) {
+    let marker = match profile
+        .and_then(Value::as_object)
+        .and_then(|m| m.get("authority"))
+    {
         None => None,
         Some(Value::String(s)) if s == "canonical" || s == "unresolved" => Some(s.as_str()),
         Some(_) => return None,
@@ -164,7 +178,10 @@ pub(crate) async fn window(cx: &DataContext, actor: Uuid) -> Result<Option<Windo
     }
     let known: Vec<String> = cx
         .db()
-        .query("SELECT name FROM pg_timezone_names WHERE name=ANY($1)", &[&zones])
+        .query(
+            "SELECT name FROM pg_timezone_names WHERE name=ANY($1)",
+            &[&zones],
+        )
         .await?
         .iter()
         .map(|r| r.get(0))
@@ -193,13 +210,25 @@ mod tests {
 
     #[test]
     fn profile_window_uses_its_own_zone_else_the_owner_zone() {
-        let profile = json!({"enabled":true,"start":"22:00","end":"07:00","timezone":"Europe/London"});
+        let profile =
+            json!({"enabled":true,"start":"22:00","end":"07:00","timezone":"Europe/London"});
         let w = classify(Some(&profile), None, None, &all).unwrap();
-        assert_eq!((w.start.as_str(), w.zone.as_str()), ("22:00", "Europe/London"));
+        assert_eq!(
+            (w.start.as_str(), w.zone.as_str()),
+            ("22:00", "Europe/London")
+        );
         let profile = json!({"enabled":true,"start":"22:00","end":"07:00"});
         let locale = json!({"timezone":"Asia/Tokyo"});
-        assert_eq!(classify(Some(&profile), None, Some(&locale), &all).unwrap().zone, "Asia/Tokyo");
-        assert_eq!(classify(Some(&profile), None, None, &all).unwrap().zone, DEFAULT_ZONE);
+        assert_eq!(
+            classify(Some(&profile), None, Some(&locale), &all)
+                .unwrap()
+                .zone,
+            "Asia/Tokyo"
+        );
+        assert_eq!(
+            classify(Some(&profile), None, None, &all).unwrap().zone,
+            DEFAULT_ZONE
+        );
     }
 
     #[test]
@@ -210,17 +239,27 @@ mod tests {
 
     #[test]
     fn older_alert_schedule_applies_when_profile_is_absent() {
-        let alerts = json!({"quietHours":{"enabled":true,"startLocalTime":"21:30","endLocalTime":"06:00"}});
-        assert_eq!(classify(None, Some(&alerts), None, &all).unwrap().start, "21:30");
+        let alerts =
+            json!({"quietHours":{"enabled":true,"startLocalTime":"21:30","endLocalTime":"06:00"}});
+        assert_eq!(
+            classify(None, Some(&alerts), None, &all).unwrap().start,
+            "21:30"
+        );
     }
 
     #[test]
     fn conflicting_schedules_defer_nothing_until_profile_is_canonical() {
         let profile = json!({"enabled":true,"start":"22:00","end":"07:00"});
-        let alerts = json!({"quietHours":{"enabled":true,"startLocalTime":"21:30","endLocalTime":"06:00"}});
+        let alerts =
+            json!({"quietHours":{"enabled":true,"startLocalTime":"21:30","endLocalTime":"06:00"}});
         assert_eq!(classify(Some(&profile), Some(&alerts), None, &all), None);
         let marked = json!({"enabled":true,"start":"22:00","end":"07:00","authority":"canonical"});
-        assert_eq!(classify(Some(&marked), Some(&alerts), None, &all).unwrap().end, "07:00");
+        assert_eq!(
+            classify(Some(&marked), Some(&alerts), None, &all)
+                .unwrap()
+                .end,
+            "07:00"
+        );
         let frozen = json!({"enabled":true,"start":"22:00","end":"07:00","authority":"unresolved"});
         assert_eq!(classify(Some(&frozen), Some(&alerts), None, &all), None);
     }

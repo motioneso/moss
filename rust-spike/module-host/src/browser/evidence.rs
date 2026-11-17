@@ -54,7 +54,10 @@ impl Evidence {
 }
 
 fn clip(text: &str, chars: usize) -> String {
-    text.chars().filter(|c| !c.is_control()).take(chars).collect()
+    text.chars()
+        .filter(|c| !c.is_control())
+        .take(chars)
+        .collect()
 }
 
 /// Parses the page script's answer. Keeps only links to approved hosts over HTTPS, at most five.
@@ -76,7 +79,9 @@ pub fn parse(raw: &str, allowed_hosts: &[String]) -> Option<Evidence> {
         ) else {
             continue;
         };
-        let Ok(parsed) = Url::parse(url) else { continue };
+        let Ok(parsed) = Url::parse(url) else {
+            continue;
+        };
         let host = parsed.host_str().map(str::to_ascii_lowercase);
         if url.len() <= 2048
             && parsed.scheme() == "https"
@@ -115,12 +120,16 @@ mod tests {
         let raw = json!({"title":"T","text":"body","links":links}).to_string();
         let evidence = parse(&raw, &allowed()).unwrap();
         assert_eq!(evidence.candidates.len(), 5);
-        assert!(evidence.candidates.iter().all(|(u, _)| u.starts_with("https://ok.test/")));
+        assert!(evidence
+            .candidates
+            .iter()
+            .all(|(u, _)| u.starts_with("https://ok.test/")));
     }
 
     #[test]
     fn text_is_clipped_and_controls_removed() {
-        let raw = json!({"title":"a\u{0}b","text":"x".repeat(TEXT_LIMIT + 50),"links":[]}).to_string();
+        let raw =
+            json!({"title":"a\u{0}b","text":"x".repeat(TEXT_LIMIT + 50),"links":[]}).to_string();
         let evidence = parse(&raw, &allowed()).unwrap();
         assert_eq!(evidence.title, "ab");
         assert_eq!(evidence.text.chars().count(), TEXT_LIMIT);

@@ -109,10 +109,7 @@ impl FakeEmbeddingModel {
                         .strip_prefix("search_document: ")
                         .or_else(|| text.strip_prefix("search_query: "))
                         .unwrap_or(&text);
-                    let vector = handmade
-                        .get(bare)
-                        .cloned()
-                        .unwrap_or_else(|| hashed(bare));
+                    let vector = handmade.get(bare).cloned().unwrap_or_else(|| hashed(bare));
                     let (status, reply) = match *m.lock().unwrap() {
                         Mode::Normal => (200, json!({"data":[{"embedding":vector}]})),
                         Mode::WrongSize => (200, json!({"data":[{"embedding":&vector[..767]}]})),

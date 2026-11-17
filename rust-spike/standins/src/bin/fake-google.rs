@@ -47,7 +47,11 @@ async fn main() {
                     let (title, days) = rest.rsplit_once(' ').unwrap_or((rest, "1"));
                     let days: i64 = days.parse().unwrap_or(1);
                     let day = |n: i64, hour: u32| {
-                        let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64 + n * 86_400;
+                        let secs = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs() as i64
+                            + n * 86_400;
                         let (y, m, d) = civil(secs.div_euclid(86_400));
                         format!("{y:04}-{m:02}-{d:02}T{hour:02}:00:00Z")
                     };

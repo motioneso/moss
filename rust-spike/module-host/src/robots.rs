@@ -217,19 +217,31 @@ mod tests {
     }
     #[test]
     fn percent_escapes_of_plain_characters_match() {
-        let r = Robots::parse("User-agent: *\nDisallow: /private\nDisallow: /a%2fb\n", "moss");
+        let r = Robots::parse(
+            "User-agent: *\nDisallow: /private\nDisallow: /a%2fb\n",
+            "moss",
+        );
         assert!(!r.allows("/%70rivate/report"));
         assert!(!r.allows("/a%2Fb"));
         assert!(r.allows("/a/b"));
     }
     #[test]
     fn long_disallow_is_kept_and_work_is_bounded() {
-        let r = Robots::parse(&format!("User-agent: *\nDisallow: /{}\n", "a".repeat(3000)), "moss");
+        let r = Robots::parse(
+            &format!("User-agent: *\nDisallow: /{}\n", "a".repeat(3000)),
+            "moss",
+        );
         assert!(!r.allows("/anything"));
-        let body = format!("User-agent: *\n{}", "Disallow: /*aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab$\n".repeat(2000));
+        let body = format!(
+            "User-agent: *\n{}",
+            "Disallow: /*aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab$\n".repeat(2000)
+        );
         let r = Robots::parse(&body, "moss");
         let started = std::time::Instant::now();
-        assert!(!r.allows(&format!("/{}", "a".repeat(100_000))), "an exhausted budget must fail closed");
+        assert!(
+            !r.allows(&format!("/{}", "a".repeat(100_000))),
+            "an exhausted budget must fail closed"
+        );
         assert!(started.elapsed() < std::time::Duration::from_secs(2));
     }
     #[test]

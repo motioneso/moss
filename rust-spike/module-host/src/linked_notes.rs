@@ -112,8 +112,11 @@ impl FolderProvider for PreferenceFolders {
             .private_exports
             .get(&(module.to_owned(), resource.to_owned()))
         {
-            let roots = crate::account_preferences::account_base_root(base, access.actor_user_id())?;
-            let root = roots.first().context("The private notes root is unavailable")?;
+            let roots =
+                crate::account_preferences::account_base_root(base, access.actor_user_id())?;
+            let root = roots
+                .first()
+                .context("The private notes root is unavailable")?;
             let target = root.join("notes").join("generated");
             std::fs::create_dir_all(&target)
                 .context("The private notes root could not be prepared")?;

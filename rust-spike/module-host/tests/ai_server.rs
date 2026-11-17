@@ -213,7 +213,8 @@ fn modules_ask_the_router_and_fail_closed_until_a_provider_exists() {
     };
     use reqwest::Method;
     // The provider the owner configures. Its address is this process; the key is fake.
-    let requests: std::sync::Arc<std::sync::Mutex<Vec<(String, String, Value)>>> = Default::default();
+    let requests: std::sync::Arc<std::sync::Mutex<Vec<(String, String, Value)>>> =
+        Default::default();
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let provider_port = listener.local_addr().unwrap().port();
     {
@@ -270,17 +271,38 @@ fn modules_ask_the_router_and_fail_closed_until_a_provider_exists() {
             Some(json!({"query":"finished stretch tasks"})),
         )
     };
-    assert_eq!(call(Method::POST, "/tasks/search/interpret", None, Some(json!({"query":"x"}))).0, 401);
+    assert_eq!(
+        call(
+            Method::POST,
+            "/tasks/search/interpret",
+            None,
+            Some(json!({"query":"x"}))
+        )
+        .0,
+        401
+    );
     let (status, body) = interpret();
     assert_eq!(status, 503, "no provider yet must fail closed: {body}");
-    assert!(requests.lock().unwrap().is_empty(), "nothing may be sent before a provider exists");
-    let sealed = safety_core::secret::SecretCipher::ai(&[("JARVIS_AI_SECRET_KEY".into(), ai_key.clone())].into())
-        .unwrap()
-        .seal(&safety_core::secret::SecretFields::new().with("apiKey", safety_core::secret::Secret::new("TEST-NOT-A-REAL-KEY-189")));
+    assert!(
+        requests.lock().unwrap().is_empty(),
+        "nothing may be sent before a provider exists"
+    );
+    let sealed = safety_core::secret::SecretCipher::ai(
+        &[("JARVIS_AI_SECRET_KEY".into(), ai_key.clone())].into(),
+    )
+    .unwrap()
+    .seal(&safety_core::secret::SecretFields::new().with(
+        "apiKey",
+        safety_core::secret::Secret::new("TEST-NOT-A-REAL-KEY-189"),
+    ));
     let seed = |sql: &'static str| {
         runtime.block_on(async {
-            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
-            tokio::spawn(async move { let _ = connection.await; });
+            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
+                .await
+                .unwrap();
+            tokio::spawn(async move {
+                let _ = connection.await;
+            });
             db.batch_execute(sql).await.unwrap();
         })
     };
@@ -299,15 +321,26 @@ fn modules_ask_the_router_and_fail_closed_until_a_provider_exists() {
         ).await.unwrap();
     });
     let (status, body) = interpret();
-    assert_eq!(status, 200, "{body}\n{}", fs::read_to_string(root.join("server.log")).unwrap_or_default());
+    assert_eq!(
+        status,
+        200,
+        "{body}\n{}",
+        fs::read_to_string(root.join("server.log")).unwrap_or_default()
+    );
     assert_eq!(body["intent"]["status"], "done", "{body}");
     {
         let seen = requests.lock().unwrap();
         assert_eq!(seen.len(), 1);
         assert_eq!(seen[0].0, "/v1/chat/completions");
-        assert_eq!(seen[0].1, "Bearer TEST-NOT-A-REAL-KEY-189", "the stored key must be opened and sent");
+        assert_eq!(
+            seen[0].1, "Bearer TEST-NOT-A-REAL-KEY-189",
+            "the stored key must be opened and sent"
+        );
         assert_eq!(seen[0].2["model"], "test-model-189");
-        assert!(seen[0].2["messages"][0]["content"].as_str().unwrap().contains("finished stretch tasks"));
+        assert!(seen[0].2["messages"][0]["content"]
+            .as_str()
+            .unwrap()
+            .contains("finished stretch tasks"));
     }
     // Disabling the provider closes the path again.
     seed("UPDATE app.ai_provider_configs SET status='disabled'");
@@ -330,7 +363,10 @@ fn modules_ask_the_router_and_fail_closed_until_a_provider_exists() {
         ).await.unwrap();
     });
     let (status, body) = interpret();
-    assert_eq!(status, 503, "a disabled default must not fall back to another provider: {body}");
+    assert_eq!(
+        status, 503,
+        "a disabled default must not fall back to another provider: {body}"
+    );
     assert_eq!(requests.lock().unwrap().len(), 1);
     let log = fs::read_to_string(root.join("server.log")).unwrap_or_default();
     assert!(!log.contains("TEST-NOT-A-REAL-KEY-189"));

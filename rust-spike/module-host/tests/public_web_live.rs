@@ -203,8 +203,8 @@ fn installed_package_reads_the_real_public_web_and_refuses_private_addresses() {
         intelligence: Arc::new(NoAi),
         version: "0.1.0".parse().unwrap(),
         compiled_cache: None,
-            fuel_ceiling: None,
-            browser_dir: None,
+        fuel_ceiling: None,
+        browser_dir: None,
     };
     let application =
         Application::open_extended(&root.join("data"), app.clone(), access.clone(), config)
@@ -256,8 +256,12 @@ fn installed_package_reads_the_real_public_web_and_refuses_private_addresses() {
     install(&files);
     let read = |url: &str, extra: Value| -> Value {
         let mut parameters = json!({"url": url});
-        parameters.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
-        let request = json!({"operation":"get","resource":"public-web","parameters":parameters}).to_string();
+        parameters
+            .as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        let request =
+            json!({"operation":"get","resource":"public-web","parameters":parameters}).to_string();
         let out = application
             .installer
             .call(&manifest.id, access.clone(), "route", &request)
@@ -265,7 +269,12 @@ fn installed_package_reads_the_real_public_web_and_refuses_private_addresses() {
         serde_json::from_str(&out).unwrap()
     };
     let page = read("https://example.com/", json!({}));
-    println!("LIVE example.com -> ok={} status={} bytes={}", page["ok"], page["status"], page["body"].as_str().map_or(0, str::len));
+    println!(
+        "LIVE example.com -> ok={} status={} bytes={}",
+        page["ok"],
+        page["status"],
+        page["body"].as_str().map_or(0, str::len)
+    );
     assert_eq!(page["ok"], true, "{page}");
     assert!(page["body"].as_str().unwrap().contains("Example Domain"));
     for (url, want) in [
@@ -279,10 +288,18 @@ fn installed_package_reads_the_real_public_web_and_refuses_private_addresses() {
     ] {
         let v = read(url, json!({}));
         println!("LIVE {url} -> {v}");
-        assert_eq!((v["ok"].as_bool(), v["reason"].as_str()), (Some(false), Some(want)), "{url}: {v}");
+        assert_eq!(
+            (v["ok"].as_bool(), v["reason"].as_str()),
+            (Some(false), Some(want)),
+            "{url}: {v}"
+        );
     }
     let v = read("https://example.com/", json!({"maxBytes": 100}));
-    assert_eq!((v["ok"].as_bool(), v["truncated"].as_bool()), (Some(true), Some(true)), "{v}");
+    assert_eq!(
+        (v["ok"].as_bool(), v["truncated"].as_bool()),
+        (Some(true), Some(true)),
+        "{v}"
+    );
     // The real server process starts with the installed package and stays reachable over HTTPS.
     private(
         &root.join("modules.json"),

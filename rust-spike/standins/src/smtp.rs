@@ -7,7 +7,10 @@ use base64::{engine::general_purpose::STANDARD, Engine};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 fn b64(s: &str) -> Option<String> {
-    STANDARD.decode(s.trim()).ok().and_then(|b| String::from_utf8(b).ok())
+    STANDARD
+        .decode(s.trim())
+        .ok()
+        .and_then(|b| String::from_utf8(b).ok())
 }
 
 pub(crate) async fn serve(io: Box<dyn Io>, state: Shared) {
