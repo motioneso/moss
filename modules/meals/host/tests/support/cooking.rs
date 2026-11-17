@@ -211,7 +211,7 @@ fn ratings_and_undo_records_are_private_and_keep_text_out_of_jobs_and_activity()
         println!("PASS rls negative control: {table} check failed when weakened and passed after restore");
     }
     // The undo record does hold the private name, so the table check above has something to protect.
-    let kept: i64 = w.f.rt.block_on(w.f.root.query_one("SELECT count(*) FROM app.meals_undo_actions WHERE before_state::text LIKE $1", &[&format!("%{MARK}%")])).unwrap().get(0);
+    let kept: i64 = w.f.rt.block_on(w.f.root.query_one("SELECT count(*) FROM app.meals_undo_actions WHERE owner_user_id = $1 AND before_state::text LIKE $2", &[&a, &format!("%{MARK}%")])).unwrap().get(0);
     assert_eq!(kept, 1);
     let jobs: i64 = w.f.rt.block_on(w.f.root.query_one("SELECT count(*) FROM moss_queue.jobs WHERE payload::text LIKE $1", &[&format!("%{MARK}%")])).unwrap().get(0);
     assert_eq!(jobs, 0);
