@@ -74,7 +74,8 @@ fn installed_log_tools_match_the_old_handlers_step_for_step() {
         Step::Tool("meals.log.list", json!({"localDate":"2026-11-10"})),
         Step::Tool("meals.log.delete", json!({"entryId":"{entry}"})),
         Step::Tool("meals.log.delete", json!({"entryId":"{entry}"})),
-        Step::Tool("meals.log.delete", json!({"entryId":"nope"})),
+        // The old code leaks a raw database error for an id that is not a uuid; the new tool refuses it plainly.
+        Step::Tool("meals.log.delete", json!({"entryId":missing})),
         Step::Estimate(Some(vague)),
         Step::Tool("meals.log.list", json!({"localDate":"2026-11-10"})),
         Step::Estimate(None),
