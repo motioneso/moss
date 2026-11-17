@@ -5,9 +5,12 @@
 //! update that matches only the revision it read, so two writers holding one review cannot both
 //! save. The fingerprint is a change detector and never grants anything.
 use crate::accounts::iso;
+use crate::cards;
 use crate::envelope::{self, Assignments, Month, Row};
+use crate::flex::{self, Policy as FlexPolicy};
 use crate::input::{self, refuse, Refusal, CURRENCIES, MAX_SAFE};
 use crate::ledger::{first, today, values, Outcome, ACCOUNTS, TRANSACTIONS};
+use crate::targets;
 use crate::text::{hash32, is_calendar_month, is_hash32, month_window};
 use crate::transactions::splits_of;
 use moss_module_sdk::{
@@ -24,6 +27,13 @@ pub const LINES: &str = "app.finance_budget_draft_lines";
 pub const CATEGORIES: &str = "app.finance_categories";
 pub const SNAPSHOTS: &str = "app.finance_balance_snapshots";
 pub const ITEMS: &str = "app.finance_items";
+pub const TARGETS: &str = "app.finance_targets";
+pub const PLANS: &str = "app.finance_bill_plans";
+pub const OCCURRENCES: &str = "app.finance_bill_occurrences";
+pub const ADJUSTMENTS: &str = "app.finance_bill_adjustments";
+pub const FLEX: &str = "app.finance_flex_policies";
+pub const CARD_POLICIES: &str = "app.finance_card_policies";
+pub const CARD_ASSIGNMENTS: &str = "app.finance_card_assignments";
 pub const READY_TO_ASSIGN: &str = "ready_to_assign";
 pub const BOUND: i64 = 100_000_000;
 
@@ -74,9 +84,16 @@ pub struct Book {
     pub lines: Vec<Value>,
     pub categories: Vec<Value>,
     pub snapshots: Vec<Value>,
+    pub targets: Vec<Value>,
+    pub plans: Vec<Value>,
+    pub occurrences: Vec<Value>,
+    pub adjustments: Vec<Value>,
+    pub flex: Vec<Value>,
+    pub card_policies: Vec<Value>,
+    pub card_assignments: Vec<Value>,
 }
 
-fn paged<H: Host + ?Sized>(host: &H, table: &str, order: &[&str]) -> Result<Vec<Value>> {
+pub(crate) fn paged<H: Host + ?Sized>(host: &H, table: &str, order: &[&str]) -> Result<Vec<Value>> {
     let client = Client(host);
     let mut out = Vec::new();
     loop {
@@ -102,6 +119,13 @@ pub fn load<H: Host + ?Sized>(host: &H) -> Result<Book> {
         lines: paged(host, LINES, &["draft_id", "category_key"])?,
         categories: paged(host, CATEGORIES, &["id"])?,
         snapshots: paged(host, SNAPSHOTS, &["account_id", "day"])?,
+        targets: paged(host, TARGETS, &["category_id", "effective_month"])?,
+        plans: paged(host, PLANS, &["id"])?,
+        occurrences: paged(host, OCCURRENCES, &["plan_id", "due_date"])?,
+        adjustments: paged(host, ADJUSTMENTS, &["plan_id", "due_date"])?,
+        flex: paged(host, FLEX, &["month"])?,
+        card_policies: paged(host, CARD_POLICIES, &["account_id"])?,
+        card_assignments: paged(host, CARD_ASSIGNMENTS, &["account_id", "month"])?,
     })
 }
 
@@ -118,6 +142,13 @@ pub fn fingerprint(book: &Book) -> String {
         pick(&book.drafts, &["id", "status", "basis_from", "basis_to", "monthly_income_cents"]),
         pick(&book.lines, &["draft_id", "category_key", "group_name", "category_name", "basis_monthly_cents", "proposed_cents", "adjusted_cents", "adjusted_by", "dropped"]),
         pick(&book.categories, &["id", "group_name", "name", "sort_order", "is_income", "archived_at"]),
+        pick(&book.targets, &["category_id", "effective_month", "kind", "amount_cents", "due_date", "weekday"]),
+        pick(&book.plans, &["id", "account_id", "category_id", "iso_currency", "amount_cents", "anchor_date", "cadence", "end_date"]),
+        pick(&book.occurrences, &["plan_id", "due_date", "state", "transaction_id"]),
+        pick(&book.adjustments, &["plan_id", "due_date", "planned_date", "amount_cents"]),
+        pick(&book.flex, &["month", "active", "flex_ids", "non_monthly_ids"]),
+        pick(&book.card_policies, &["account_id", "effective_month"]),
+        pick(&book.card_assignments, &["account_id", "month", "assigned_cents"]),
     ]);
     hash32(&document.to_string())
 }
@@ -152,13 +183,22 @@ pub struct Reviewed {
     pub fingerprint: String,
 }
 
-pub fn check<H: Host + ?Sized>(host: &H, expected: &Review) -> Result<std::result::Result<Reviewed, Refusal>> {
+/// The budget as it stands now, with no review to compare against.
+pub fn current<H: Host + ?Sized>(host: &H) -> Result<std::result::Result<Reviewed, Refusal>> {
     let policy = match require(host)? {
         Ok(p) => p,
         Err(r) => return Ok(Err(r)),
     };
     let book = load(host)?;
     let fingerprint = fingerprint(&book);
+    Ok(Ok(Reviewed { policy, book, fingerprint }))
+}
+
+pub fn check<H: Host + ?Sized>(host: &H, expected: &Review) -> Result<std::result::Result<Reviewed, Refusal>> {
+    let Reviewed { policy, book, fingerprint } = match current(host)? {
+        Ok(r) => r,
+        Err(r) => return Ok(Err(r)),
+    };
     if policy.revision != expected.revision || fingerprint != expected.fingerprint {
         return Ok(Err(stale()));
     }
@@ -278,6 +318,13 @@ pub struct Context {
     pub excluded_accounts: usize,
     pub pending: usize,
     pub needs_look: usize,
+    pub flex: Option<FlexPolicy>,
+    pub flex_detail: Vec<Value>,
+    pub card_overspent: bool,
+    pub cards: Vec<cards::State>,
+    pub card_payments: Vec<Value>,
+    pub card_choices: Vec<Value>,
+    pub card_error: Option<String>,
 }
 
 fn funding_balance(book: &Book, account: &Value, month: &str, current: &str, cutoff: &str) -> Option<(i64, Value)> {
@@ -307,18 +354,75 @@ fn funding_balance(book: &Book, account: &Value, month: &str, current: &str, cut
         .and_then(|s| Some((s["balance_cents"].as_i64()?, s["day"].clone())))
 }
 
+impl Context {
+    /// A card ledger that needs repair blocks every write that reads the budget context.
+    pub fn blocked(&self) -> std::result::Result<(), Refusal> {
+        match &self.card_error {
+            Some(message) => Err(cards::card_error(message)),
+            None => Ok(()),
+        }
+    }
+}
+
 pub fn context<H: Host + ?Sized>(host: &H, book: &Book, iso: &str, month: &str, date: &str) -> Result<Context> {
+    context_with(host, book, iso, month, date, None)
+}
+
+/// As `context`, with one month's flex policy swapped for a proposed one.
+pub fn context_with<H: Host + ?Sized>(host: &H, book: &Book, iso: &str, month: &str, date: &str, flex_override: Option<&FlexPolicy>) -> Result<Context> {
+    context_full(host, book, iso, month, date, flex_override, None)
+}
+
+/// As `context_with`, also applying a proposed card reserve change.
+pub fn context_full<H: Host + ?Sized>(host: &H, book: &Book, iso: &str, month: &str, date: &str, flex_override: Option<&FlexPolicy>, card_change: Option<&cards::Change>) -> Result<Context> {
     let rows = budget_rows(book, iso, date);
     let excluded = envelope::transfer_ids(&rows);
     let mut ledgers = ledgers(book);
     ledgers.entry(month.to_owned()).or_default();
-    let mut months = envelope::derive(&ledgers, &rows, &excluded)?;
-    let state = months.remove(month).ok_or_else(|| Error::new("Month missing"))?;
+    let flex_policies = flex::with_override(&flex::policies(book), flex_override);
+    let mut card_policies: Vec<(String, String)> = book.card_policies.iter().filter_map(|p| Some((p["account_id"].as_str()?.to_owned(), p["effective_month"].as_str()?.to_owned()))).collect();
+    let mut card_assignments: Vec<(String, String, i64)> = book
+        .card_assignments
+        .iter()
+        .filter_map(|a| Some((a["account_id"].as_str()?.to_owned(), a["month"].as_str()?.to_owned(), a["assigned_cents"].as_i64()?)))
+        .collect();
+    if let Some(change) = card_change {
+        card_policies.extend(change.enroll.clone());
+        card_assignments.retain(|a| !(a.0 == change.assignment.0 && a.1 == change.assignment.1));
+        card_assignments.push(change.assignment.clone());
+    }
+    for key in card_policies.iter().map(|p| &p.1).chain(card_assignments.iter().map(|a| &a.1)) {
+        ledgers.entry(key.clone()).or_default();
+    }
+    let months = envelope::derive(&ledgers, &rows, &excluded, &flex_policies)?;
+    let state = months.get(month).cloned().ok_or_else(|| Error::new("Month missing"))?;
+    let in_scope_rows: Vec<Value> = book
+        .txs
+        .iter()
+        .filter(|t| t["pending"] != true && t["iso_currency"] == iso && t["date"].as_str().is_some_and(|d| d <= date && &d[..7] <= month))
+        .filter(|t| book.accounts.iter().any(|a| a["account_id"] == t["account_id"] && budget_account(a, iso)))
+        .cloned()
+        .collect();
+    let scoped_policies: Vec<(String, String)> = card_policies.iter().filter(|p| p.1.as_str() <= month).cloned().collect();
+    let scoped_assignments: Vec<(String, String, i64)> = card_assignments.iter().filter(|a| a.1.as_str() <= month).cloned().collect();
+    let (cards, card_error) = match cards::derive(&cards::Input {
+        accounts: &book.accounts,
+        rows: &in_scope_rows,
+        policies: &scoped_policies,
+        assignments: &scoped_assignments,
+        ordinary: &months,
+        flex: &flex_policies,
+        excluded: &excluded,
+        through: date,
+    }) {
+        Ok(mut all) => (all.remove(month).unwrap_or_default(), None),
+        Err(message) => (Vec::new(), Some(message)),
+    };
 
     let current = &date[..7];
     let cutoff = if month == current { date.to_owned() } else { last_day(month) };
     let funding_accounts: Vec<&Value> = book.accounts.iter().filter(|a| budget_account(a, iso)).collect();
-    let (mut funding, mut missing, mut signed) = (Vec::new(), false, 0i128);
+    let (mut funding, mut missing, mut signed_by) = (Vec::new(), false, Vec::new());
     for account in &funding_accounts {
         if account["source"] == "manual" && account["opening_date"].as_str().is_some_and(|o| o > cutoff.as_str()) {
             continue;
@@ -331,7 +435,9 @@ pub fn context<H: Host + ?Sized>(host: &H, book: &Book, iso: &str, month: &str, 
                 None => true,
             };
         match &balance {
-            Some((cents, _)) => signed += sign(kind) * i128::from(*cents),
+            Some((cents, _)) => {
+                signed_by.push((account["account_id"].as_str().unwrap_or("").to_owned(), sign(kind) * i128::from(*cents)));
+            }
             None => missing = true,
         }
         funding.push(json!({
@@ -348,15 +454,33 @@ pub fn context<H: Host + ?Sized>(host: &H, book: &Book, iso: &str, month: &str, 
             .flat_map(|(_, l)| l.iter())
             .filter(|(id, _)| envelope::is_envelope(id))
             .map(|(_, c)| i128::from((*c).max(0)))
-            .sum();
+            .sum::<i128>()
+            + card_assignments.iter().filter(|a| a.1.as_str() > month).map(|a| i128::from(a.2.max(0))).sum::<i128>();
         envelope::safe(sum)?
     } else {
         0
     };
-    let ready = match unavailable {
-        Some(_) => None,
-        None => Some(envelope::safe(i128::from(envelope::ready(signed, &state.categories)?) - i128::from(future_reserved))?),
+    let unavailable = if card_error.is_some() && unavailable.is_none() { Some("card_ledger_review_required") } else { unavailable };
+    let ready = match (unavailable, &card_error) {
+        (Some(_), _) | (_, Some(_)) => None,
+        _ => Some(cards::ready(&signed_by, &state, &cards, future_reserved).map_err(|m| Error::new(m))?),
     };
+    let card_payments: Vec<Value> = cards
+        .iter()
+        .map(|c| {
+            let account = book.accounts.iter().find(|a| a["account_id"] == c.account_id.as_str());
+            let mut row = c.json();
+            row["name"] = account.map_or(Value::Null, |a| a["name"].clone());
+            row["archived"] = json!(account.is_some_and(|a| !a["archived_at"].is_null()));
+            row
+        })
+        .collect();
+    let card_choices: Vec<Value> = book
+        .accounts
+        .iter()
+        .filter(|a| a["source"] == "manual" && a["type"] == "credit" && a["iso_currency"] == iso && a["archived_at"].is_null() && !card_policies.iter().any(|p| a["account_id"] == p.0.as_str()))
+        .map(|a| json!({"accountId":a["account_id"],"name":a["name"]}))
+        .collect();
     let ids: BTreeSet<&str> = funding_accounts.iter().filter_map(|a| a["account_id"].as_str()).collect();
     let in_month = |t: &Value| t["date"].as_str().is_some_and(|d| d.starts_with(month));
     let pending = book.txs.iter().filter(|t| t["account_id"].as_str().is_some_and(|a| ids.contains(a)) && t["iso_currency"] == iso && t["pending"] == true && in_month(t)).count();
@@ -366,6 +490,24 @@ pub fn context<H: Host + ?Sized>(host: &H, book: &Book, iso: &str, month: &str, 
         .iter()
         .filter(|t| in_month(t) && t["review_state"] == "needs_look" && t["id"].as_str().is_some_and(|i| counted.contains(i)))
         .count();
+    let flex = flex::for_month(&flex_policies, month).cloned();
+    let flex_detail = match flex.as_ref().filter(|p| p.active) {
+        Some(p) => p
+            .flex_ids
+            .iter()
+            .map(|id| {
+                let activity: i128 = rows
+                    .iter()
+                    .filter(|r| !excluded.contains(&r.id) && r.date.starts_with(month))
+                    .flat_map(envelope::allocations)
+                    .filter(|(c, _)| c.as_deref() == Some(id.as_str()))
+                    .map(|(_, a)| i128::from(a))
+                    .sum();
+                json!({"id": id, "guidanceCents": ledgers.get(month).and_then(|l| l.get(id)).copied().unwrap_or(0), "activityCents": activity as i64})
+            })
+            .collect(),
+        None => Vec::new(),
+    };
     Ok(Context {
         month: state,
         ready,
@@ -375,6 +517,13 @@ pub fn context<H: Host + ?Sized>(host: &H, book: &Book, iso: &str, month: &str, 
         excluded_accounts: book.accounts.len() - funding_accounts.len(),
         pending,
         needs_look,
+        flex,
+        flex_detail,
+        card_overspent: cards.iter().any(|c| c.available < 0),
+        cards,
+        card_payments,
+        card_choices,
+        card_error,
     })
 }
 
@@ -384,7 +533,7 @@ pub fn status<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Outcome> {
     let month = ask!(read_month(input));
     let date = today(host)?;
     let book = load(host)?;
-    let categories = category_views(&book);
+    let mut categories = category_views(&book);
     let Some(row) = policy_row(host)? else {
         let ledgers = ledgers(&book);
         let legacy: Vec<Value> = ledgers
@@ -409,6 +558,9 @@ pub fn status<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Outcome> {
     let iso = row["iso_currency"].as_str().unwrap_or("").to_owned();
     let revision = row["revision"].as_i64().unwrap_or(0);
     let ctx = context(host, &book, &iso, &month, &date)?;
+    if ctx.card_error.is_some() {
+        return Ok(Ok(json!({"month": month, "cardLedgerReviewRequired": true, "readyUnavailable": "card_ledger_review_required", "readyToAssignCents": null})));
+    }
     let computed_at = crate::ledger::text(host, "call", "read", "now")?;
     let cats: Map<String, Value> = ctx
         .month
@@ -421,14 +573,37 @@ pub fn status<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Outcome> {
         .filter(|c| c["archived"] == false && c["id"] != "income" && c["id"] != "transfers")
         .map(|c| json!({"id":c["id"],"name":c["name"],"group":c["group"]}))
         .collect();
+    if let Some(p) = ctx.flex.as_ref().filter(|p| p.active) {
+        categories.retain(|c| !c["id"].as_str().is_some_and(|id| p.flex_ids.iter().any(|f| f == id)));
+        for c in &mut categories {
+            let non_monthly = c["id"].as_str().is_some_and(|id| p.non_monthly_ids.iter().any(|f| f == id));
+            c["tableGroup"] = json!(if non_monthly { "Non-monthly" } else { "Fixed" });
+        }
+        categories.push(json!({"id":flex::FLEX_POOL,"name":"Flexible spending","group":"everyday","archived":false,"tableGroup":"Flexible"}));
+    }
+    let name_of = |id: &str| book.categories.iter().find(|c| c["id"] == id).and_then(|c| c["name"].as_str()).unwrap_or(id).to_owned();
+    let flex_detail: Vec<Value> = ctx
+        .flex_detail
+        .iter()
+        .map(|row| {
+            let mut row = row.clone();
+            row["name"] = json!(name_of(row["id"].as_str().unwrap_or("")));
+            row
+        })
+        .collect();
+    let flex_json = ctx.flex.as_ref().map_or(Value::Null, |p| json!({"month":p.month,"active":p.active,"flexIds":p.flex_ids,"nonMonthlyIds":p.non_monthly_ids}));
+    let progress = targets::progress_all(&book, &ctx.month.categories, &month, &date);
+    let pooled = flex::pooled_ids_of(ctx.flex.as_ref());
+    let funding: Vec<Value> = targets::lines(&progress, &ctx.month.categories, &book, &pooled).iter().map(targets::Line::json).collect();
     Ok(Ok(json!({
-        "month": month, "setupRequired": false, "flex": null, "cardPayments": [], "cardChoices": [], "cardStorageReady": false,
-        "flexDetail": [], "isoCurrency": iso, "revision": revision, "fingerprint": fingerprint(&book), "currentMonth": &date[..7],
+        "month": month, "setupRequired": false, "flex": flex_json, "cardPayments": ctx.card_payments, "cardChoices": ctx.card_choices, "cardStorageReady": true,
+        "flexDetail": flex_detail, "isoCurrency": iso, "revision": revision, "fingerprint": fingerprint(&book), "currentMonth": &date[..7],
         "hasBank": !book.accounts.is_empty(), "hasBudget": !book.assignments.is_empty(),
         "state": {"computedAt": computed_at, "tbbCents": ctx.month.tbb, "categories": cats},
         "readyToAssignCents": ctx.ready, "readyUnavailable": ctx.unavailable, "futureReservedCents": ctx.future_reserved,
         "excludedAccountCount": ctx.excluded_accounts, "pendingCount": ctx.pending, "needsLookCount": ctx.needs_look,
-        "accounts": ctx.funding, "categories": categories, "targets": [], "targetFundingOverspent": false,
-        "targetFunding": [], "flexChoices": choices,
+        "accounts": ctx.funding, "categories": categories, "targets": progress.iter().map(targets::Progress::json).collect::<Vec<_>>(),
+        "targetFundingOverspent": targets::overspent(&ctx.month.categories) || ctx.card_overspent,
+        "targetFunding": funding, "flexChoices": choices,
     })))
 }

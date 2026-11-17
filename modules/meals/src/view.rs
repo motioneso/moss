@@ -3,9 +3,20 @@
 use crate::rules::calorie_band;
 use crate::store::{num, text};
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 const REMOVED_MEMBER: &str = "Removed member";
+
+/// Ratings and favourites, keyed by `member:recipe`.
+#[derive(Default)]
+pub struct Marks {
+    pub ratings: HashMap<String, i64>,
+    pub favourites: HashSet<String>,
+}
+
+pub fn mark_key(member: &str, recipe: &str) -> String {
+    format!("{member}:{recipe}")
+}
 
 /// Members of the kitchen view, by id.
 pub fn members_by_id(kitchen: &Value) -> HashMap<String, &Value> {
@@ -34,7 +45,14 @@ fn fit(target: i64, estimated: i64) -> Value {
     json!({"targetKcal":target,"estimatedKcal":estimated,"band":band,"differenceKcal":difference})
 }
 
-fn eater_view(eater: &Value, slot: &str, members: &HashMap<String, &Value>) -> Value {
+fn eater_view(
+    eater: &Value,
+    slot: &str,
+    recipe_id: Option<&str>,
+    members: &HashMap<String, &Value>,
+    marks: &Marks,
+) -> Value {
+    let key = recipe_id.zip(eater["member_id"].as_str()).map(|(r, m)| mark_key(m, r));
     let person = eater["member_id"].as_str().and_then(|id| members.get(id));
     let share = person.and_then(|p| share_kcal(p, slot));
     let estimated = eater["estimated_kcal"].as_i64();
@@ -45,16 +63,21 @@ fn eater_view(eater: &Value, slot: &str, members: &HashMap<String, &Value>) -> V
         "safety": eater["safety"],
         "safetyReason": eater["safety_reason"],
         "fit": match (share, estimated) { (Some(s), Some(e)) => fit(s, e), _ => Value::Null },
-        "rating": null,
-        "favourite": false
+        "rating": key.as_ref().and_then(|k| marks.ratings.get(k)).map_or(Value::Null, |s| json!(s)),
+        "favourite": key.as_ref().is_some_and(|k| marks.favourites.contains(k))
     })
 }
 
-pub fn meal_view(meal: &Value, recipe: Option<&Value>, members: &HashMap<String, &Value>) -> Value {
+pub fn meal_view(
+    meal: &Value,
+    recipe: Option<&Value>,
+    members: &HashMap<String, &Value>,
+    marks: &Marks,
+) -> Value {
     let slot = meal["slot_name"].as_str().unwrap_or_default();
     let eaters: Vec<Value> = meal["eaters"]
         .as_array()
-        .map(|all| all.iter().map(|e| eater_view(e, slot, members)).collect())
+        .map(|all| all.iter().map(|e| eater_view(e, slot, meal["recipe_id"].as_str(), members, marks)).collect())
         .unwrap_or_default();
     let servings = num(&meal["servings_override"]).unwrap_or_else(|| {
         eaters
@@ -125,6 +148,7 @@ pub fn plan_view(
     meals: &[Value],
     recipes: &[Value],
     kitchen: &Value,
+    marks: &Marks,
 ) -> Value {
     let members = members_by_id(kitchen);
     let recipe_of = |meal: &Value| {
@@ -138,7 +162,7 @@ pub fn plan_view(
             let mine: Vec<Value> = meals
                 .iter()
                 .filter(|m| m["day_id"] == day["day_id"])
-                .map(|m| meal_view(m, recipe_of(m), &members))
+                .map(|m| meal_view(m, recipe_of(m), &members, marks))
                 .collect();
             let fits = day_fit(&mine, &members);
             json!({

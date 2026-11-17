@@ -1,6 +1,6 @@
 //! Assistant tools. The host enforces the account's approval policy before a write tool arrives.
 use crate::transactions::Merchant;
-use crate::{accounts, activity, archive, budget, export, reports, shared, budget_write, categories, connect, csv_import, draft, input::Refusal, ledger, rules, sort_run, splits, sync, transactions};
+use crate::{accounts, activity, archive, export, reports, shared, bill_adjust, bill_entry, bill_suggest, bills, budget, budget_write, categories, connect, csv_import, cards, draft, flex, input::Refusal, ledger, rules, sort_run, splits, sync, targets, transactions};
 use moss_module_sdk::{Error, Host, Response, Result};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -24,9 +24,10 @@ fn status_code(code: &str) -> u16 {
     match code {
         "manual_conflict" | "manual_reconciled_period" | "stale_import" | "stale_transaction" | "stale_transactions"
         | "stale_rules" | "stale_budget" | "stale_previous" | "duplicate_name" | "split_transaction" | "linked_transfer" | "amount_mismatch"
-        | "new_merchant" | "merchant_seen" => 409,
+        | "new_merchant" | "merchant_seen" | "bill_entry_conflict" | "bill_entry_duplicate" | "bill_already_reviewed"
+        | "stale_target_guidance" | "flex_member" | "flex_active" | "flex_target" | "future_assignments" | "open_draft" | "insufficient_ready"
+        | "changed_since" | "has_assignments" | "report_scope_changed" => 409,
         "manual_unavailable" | "not_found" | "unknown_account" => 404,
-        "changed_since" | "has_assignments" | "report_scope_changed" => 409,
         "bank_unavailable" => 502,
         _ => 400,
     }
@@ -41,11 +42,12 @@ fn settle(outcome: ledger::Outcome) -> Value {
 
 /// True for tools that can change the person's Finance data, so the household copy needs a look.
 pub fn changes_data(tool: &str) -> bool {
-    const READS: [&str; 15] = [
+    const READS: [&str; 20] = [
         "finance.accounts.list", "finance.manual.context", "finance.transactions.query", "finance.transactions.notes.read",
         "finance.transactions.export", "finance.rules.list", "finance.rules.preview", "finance.import.parse", "finance.import.preview",
         "finance.budget.status", "finance.budget.draft.get", "finance.reports.spending", "finance.reports.net-worth",
-        "finance.reports.transactions", "finance.activity.list",
+        "finance.reports.transactions", "finance.activity.list", "finance.bills.read", "finance.bills.suggestions",
+        "finance.bill.entry-preview", "finance.flex.preview", "finance.card-reserve.preview",
     ];
     !READS.contains(&tool)
 }
@@ -87,6 +89,25 @@ pub fn execute<H: Host + ?Sized>(host: &H, request: Request) -> Result<Value> {
         "finance.budget.draft.get" => Ok(settle(draft::get(host)?)),
         "finance.budget.draft.update" => Ok(settle(draft::update(host, &request.parameters)?)),
         "finance.budget.draft.start" => Ok(settle(draft::start(host, &request.parameters)?)),
+        "finance.bills.read" => Ok(settle(bills::read(host, &request.parameters)?)),
+        "finance.bills.suggestions" => Ok(settle(bill_suggest::read(host, &request.parameters)?)),
+        "finance.bills.suggestions.dismiss" => Ok(settle(bill_suggest::dismiss(host, &request.parameters)?)),
+        "finance.bill.create" => Ok(settle(bills::create(host, &request.parameters)?)),
+        "finance.bill.decide" => Ok(settle(bills::decide(host, &request.parameters)?)),
+        "finance.bill.stop" => Ok(settle(bills::stop(host, &request.parameters)?)),
+        "finance.bill.clear" => Ok(settle(bills::clear(host, &request.parameters)?)),
+        "finance.bill.adjust" => Ok(settle(bill_adjust::save(host, &request.parameters)?)),
+        "finance.bill.adjust-reset" => Ok(settle(bill_adjust::reset(host, &request.parameters)?)),
+        "finance.bill.entry-preview" => Ok(settle(bill_entry::preview(host, &request.parameters)?)),
+        "finance.bill.entry-record" => Ok(settle(bill_entry::record(host, &request.parameters)?)),
+        "finance.target.set" => Ok(settle(targets::set(host, &request.parameters)?)),
+        "finance.target.remove" => Ok(settle(targets::remove(host, &request.parameters)?)),
+        "finance.targets.fund" => Ok(settle(targets::fund(host, &request.parameters)?)),
+        "finance.flex.preview" => Ok(settle(flex::preview(host, &request.parameters)?)),
+        "finance.flex.configure" => Ok(settle(flex::configure(host, &request.parameters)?)),
+        "finance.flex.assign" => Ok(settle(flex::assign(host, &request.parameters)?)),
+        "finance.card-reserve.preview" => Ok(settle(cards::preview(host, &request.parameters)?)),
+        "finance.card-reserve.save" => Ok(settle(cards::save(host, &request.parameters)?)),
         "finance.account.set-shared" => Ok(settle(shared::set_shared(host, &request.parameters)?)),
         "finance.category.archive" => Ok(settle(archive::archive(host, &request.parameters)?)),
         "finance.activity.list" => Ok(settle(activity::list(host, &request.parameters)?)),

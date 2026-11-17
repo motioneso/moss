@@ -295,6 +295,7 @@ pub fn build<H: Host + ?Sized>(host: &H) -> Result<Outcome> {
     }
     let date = today(host)?;
     let current = &date[..7];
+    ask!(crate::flex::assert_envelope_draft(&book, current));
     let counted: BTreeSet<String> = book.txs.iter().filter_map(|t| t["date"].as_str().map(|d| d[..7].to_owned())).collect();
     let basis = pick_months(&counted, current);
     let mut by_month: BTreeMap<String, Vec<Row>> = BTreeMap::new();
@@ -391,6 +392,7 @@ pub fn update<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Outcome> {
         Ok(r) => r,
         Err(r) => return Ok(Err(r)),
     };
+    ask!(crate::flex::assert_envelope_draft(&reviewed.book, &today(host)?[..7]));
     let Some(draft) = latest(&reviewed.book).filter(|d| d.id == draft_id) else {
         return Ok(Err(refuse("draft_not_found", "draftId does not name the current draft")));
     };

@@ -127,6 +127,10 @@ pub fn apply_items<H: Host + ?Sized>(host: &H, month: &str, items: &[Item], expe
     };
     let live = live_ids(&reviewed.book);
     let ledger = ledgers(&reviewed.book).remove(month).unwrap_or_default();
+    let touched: Vec<String> = items.iter().map(|i| i.category.clone()).collect();
+    if let Err(r) = crate::flex::assert_category_funding(&reviewed.book, month, &touched) {
+        return Ok(Err(r));
+    }
     for item in items {
         if !live.contains(&item.category) {
             return Ok(Err(refuse("invalid_category", "categoryId is not a live category")));
@@ -233,7 +237,15 @@ pub fn move_money<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Outcome> {
     };
     let date = today(host)?;
     let ctx = budget::context(host, &reviewed.book, &reviewed.policy.iso, &month, &date)?;
-    let live = live_ids(&reviewed.book);
+    ask!(ctx.blocked());
+    let mut live = live_ids(&reviewed.book);
+    let flex = crate::flex::active_for(&reviewed.book, &month);
+    if let Some(p) = &flex {
+        for id in &p.flex_ids {
+            live.remove(id);
+        }
+        live.insert(crate::flex::FLEX_POOL.to_owned());
+    }
     if !live.contains(&to) || (from != READY_TO_ASSIGN && !live.contains(&from)) {
         return Ok(Err(refuse("invalid_category", "a category id is not a live category or is funded through the flexible pool")));
     }
@@ -258,11 +270,15 @@ pub fn move_money<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Outcome> {
     if !gate(host, &reviewed)? {
         return Ok(Err(stale()));
     }
+    let ledger = ledgers(&reviewed.book).remove(&month).unwrap_or_default();
     if let Some(after) = from_after {
-        set_total(host, &month, &from, after)?;
+        let stored = ask!(crate::flex::stored_total(&from, after, &ledger, flex.as_ref()));
+        set_total(host, &month, &from, stored)?;
     }
-    set_total(host, &month, &to, to_after)?;
-    log_as(host, "moss", "budget.move", json!({"month":month,"fromCategoryId":from,"toCategoryId":to}), None)?;
+    let stored = ask!(crate::flex::stored_total(&to, to_after, &ledger, flex.as_ref()));
+    set_total(host, &month, &to, stored)?;
+    let kind = if from == crate::flex::FLEX_POOL || to == crate::flex::FLEX_POOL { "flex.move" } else { "budget.move" };
+    log_as(host, "moss", kind, json!({"month":month,"fromCategoryId":from,"toCategoryId":to}), None)?;
     Ok(Ok(json!({"status":"ok","month":month,"fromCategoryId":from,"toCategoryId":to,"amountCents":cents,
         "before":{"fromAssignedCents":from_before,"toAssignedCents":to_before},
         "after":{"fromAssignedCents":from_after,"toAssignedCents":to_after}})))

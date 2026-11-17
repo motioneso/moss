@@ -1,6 +1,6 @@
 # Finance package
 
-## 0.4.0
+## 0.5.0
 
 - You can share a bank account with your household. Other people see its name, balance and transactions with category and amount, never your notes, review state or bank link details. You can stop sharing at any time and the copy is removed.
 - Shared accounts from other people appear in your account list and your monthly transactions, marked with their owner.
@@ -9,6 +9,16 @@
 - You can list recent changes and undo a category choice, a rule, a new category or an archive, when nothing has changed since.
 - You can archive a category that holds no budget money. Income and transfers are protected.
 - Not built: undoing a budget change, the Moss guess step for categories, and hiding shared rows from people whose account is switched off.
+
+## 0.4.0
+
+- You can plan bills that repeat, change one coming bill, put it back to its plan, and record a bill as paid.
+- Moss suggests bills it finds in your saved spending, and you can dismiss a suggestion.
+- You can set monthly, weekly, refill or balance targets for a category, and fund targets from what is ready to assign.
+- Several categories can share one flexible pool with one total.
+- You can set money aside for a manual credit card payment each month.
+- The activity record of these changes holds ids, months and kinds only. It does not store amounts, names or dates.
+- Undoing a change, shared accounts, reports and the screens are not part of this package yet.
 
 ## 0.3.0
 

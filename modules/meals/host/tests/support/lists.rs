@@ -12,7 +12,7 @@ const INGREDIENTS: [(&str, &str, &str, &str, &str); 5] = [
 ];
 
 /// One ready Monday dinner for a person, with ids that differ per person so runs can be paired.
-fn seed_plan(w: &World, actor: uuid::Uuid, salt: &str) -> [String; 4] {
+pub(super) fn seed_plan(w: &World, actor: uuid::Uuid, salt: &str) -> [String; 4] {
     let id = |n: &str| format!("md5('{salt}-{n}')::uuid");
     let mut sql = format!(
         "INSERT INTO app.meals_plans(owner_user_id,kitchen_id,plan_id,start_date,day_count,pantry_mode,idempotency_key)
