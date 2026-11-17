@@ -94,7 +94,7 @@ fn nothing_starts_near_the_deadline_and_a_skip_is_not_a_miss() {
     let f = Src::new();
     let src = source(&f, A, "in_use", 1);
     f.image("https://news.example.com/one.png", "PIXELS-ONE");
-    let budget = Budget { start_ms: 1_794_000_000_000 - 27_500 };
+    let budget = Budget::at(1_794_000_000_000 - 27_500);
     let found = photo_pass::run(&f, &budget, &src, &[story(1, Some("https://news.example.com/one.png"))]).unwrap();
     assert_eq!(found, 0);
     assert!(f.fetched().is_empty(), "no network call started");

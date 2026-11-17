@@ -34,7 +34,10 @@ pub struct Budget {
 
 impl Budget {
     pub fn open<H: Host + ?Sized>(host: &H) -> Result<Self> {
-        Ok(Self { start_ms: now_ms(host)?, stored: std::cell::Cell::new(0) })
+        Ok(Self::at(now_ms(host)?))
+    }
+    pub fn at(start_ms: i64) -> Self {
+        Self { start_ms, stored: std::cell::Cell::new(0) }
     }
     /// False once starting a call now could run into the call's time limit.
     pub fn may_start<H: Host + ?Sized>(&self, host: &H) -> Result<bool> {
