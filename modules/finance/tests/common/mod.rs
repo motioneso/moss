@@ -132,6 +132,13 @@ fn keys(table: &str) -> &'static [&'static str] {
         "app.finance_budget_drafts" => &["id"],
         "app.finance_budget_draft_lines" => &["draft_id", "category_key"],
         "app.finance_balance_snapshots" => &["account_id", "day"],
+        "app.finance_targets" => &["category_id", "effective_month"],
+        "app.finance_bill_plans" => &["id"],
+        "app.finance_bill_occurrences" | "app.finance_bill_adjustments" => &["plan_id", "due_date"],
+        "app.finance_bill_suggestion_dismissals" => &["account_id", "payee_key", "cadence", "amount_cents"],
+        "app.finance_flex_policies" => &["month"],
+        "app.finance_card_policies" => &["account_id"],
+        "app.finance_card_assignments" => &["account_id", "month"],
         // One policy row per owner.
         "app.finance_budget_policy" => &["owner_user_id"],
         _ => &[],
@@ -240,7 +247,17 @@ impl Host for Fake {
                 }
                 Ok(json!(changed))
             }
-            Kind::Delete => panic!("Finance manual entry never deletes"),
+            Kind::Delete => {
+                let mut gone = vec![];
+                rows.retain(|r| {
+                    let hit = owns(r) && matches(r, &query.filter);
+                    if hit {
+                        gone.push(r.clone());
+                    }
+                    !hit
+                });
+                Ok(json!(gone))
+            }
         }
     }
 }

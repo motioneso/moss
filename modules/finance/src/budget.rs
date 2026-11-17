@@ -24,6 +24,13 @@ pub const LINES: &str = "app.finance_budget_draft_lines";
 pub const CATEGORIES: &str = "app.finance_categories";
 pub const SNAPSHOTS: &str = "app.finance_balance_snapshots";
 pub const ITEMS: &str = "app.finance_items";
+pub const TARGETS: &str = "app.finance_targets";
+pub const PLANS: &str = "app.finance_bill_plans";
+pub const OCCURRENCES: &str = "app.finance_bill_occurrences";
+pub const ADJUSTMENTS: &str = "app.finance_bill_adjustments";
+pub const FLEX: &str = "app.finance_flex_policies";
+pub const CARD_POLICIES: &str = "app.finance_card_policies";
+pub const CARD_ASSIGNMENTS: &str = "app.finance_card_assignments";
 pub const READY_TO_ASSIGN: &str = "ready_to_assign";
 pub const BOUND: i64 = 100_000_000;
 
@@ -74,6 +81,13 @@ pub struct Book {
     pub lines: Vec<Value>,
     pub categories: Vec<Value>,
     pub snapshots: Vec<Value>,
+    pub targets: Vec<Value>,
+    pub plans: Vec<Value>,
+    pub occurrences: Vec<Value>,
+    pub adjustments: Vec<Value>,
+    pub flex: Vec<Value>,
+    pub card_policies: Vec<Value>,
+    pub card_assignments: Vec<Value>,
 }
 
 fn paged<H: Host + ?Sized>(host: &H, table: &str, order: &[&str]) -> Result<Vec<Value>> {
@@ -102,6 +116,13 @@ pub fn load<H: Host + ?Sized>(host: &H) -> Result<Book> {
         lines: paged(host, LINES, &["draft_id", "category_key"])?,
         categories: paged(host, CATEGORIES, &["id"])?,
         snapshots: paged(host, SNAPSHOTS, &["account_id", "day"])?,
+        targets: paged(host, TARGETS, &["category_id", "effective_month"])?,
+        plans: paged(host, PLANS, &["id"])?,
+        occurrences: paged(host, OCCURRENCES, &["plan_id", "due_date"])?,
+        adjustments: paged(host, ADJUSTMENTS, &["plan_id", "due_date"])?,
+        flex: paged(host, FLEX, &["month"])?,
+        card_policies: paged(host, CARD_POLICIES, &["account_id"])?,
+        card_assignments: paged(host, CARD_ASSIGNMENTS, &["account_id", "month"])?,
     })
 }
 
@@ -118,6 +139,13 @@ pub fn fingerprint(book: &Book) -> String {
         pick(&book.drafts, &["id", "status", "basis_from", "basis_to", "monthly_income_cents"]),
         pick(&book.lines, &["draft_id", "category_key", "group_name", "category_name", "basis_monthly_cents", "proposed_cents", "adjusted_cents", "adjusted_by", "dropped"]),
         pick(&book.categories, &["id", "group_name", "name", "sort_order", "is_income", "archived_at"]),
+        pick(&book.targets, &["category_id", "effective_month", "kind", "amount_cents", "due_date", "weekday"]),
+        pick(&book.plans, &["id", "account_id", "category_id", "iso_currency", "amount_cents", "anchor_date", "cadence", "end_date"]),
+        pick(&book.occurrences, &["plan_id", "due_date", "state", "transaction_id"]),
+        pick(&book.adjustments, &["plan_id", "due_date", "planned_date", "amount_cents"]),
+        pick(&book.flex, &["month", "active", "flex_ids", "non_monthly_ids"]),
+        pick(&book.card_policies, &["account_id", "effective_month"]),
+        pick(&book.card_assignments, &["account_id", "month", "assigned_cents"]),
     ]);
     hash32(&document.to_string())
 }
