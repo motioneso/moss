@@ -44,7 +44,7 @@ fn an_unsupported_invocation_leaks_no_request_text() {
 #[test]
 fn the_package_builds_and_the_manifest_validates() {
     let files = moss_finance_host::package::files(&root(), &component()).unwrap();
-    assert_eq!(files.keys().filter(|k| k.starts_with("sql/")).count(), 42);
+    assert_eq!(files.keys().filter(|k| k.starts_with("sql/")).count(), 44);
     for needed in ["moss.module.json", "code/module.wasm", "LICENSE", "NOTICE", "CHANGELOG.md"] {
         assert!(files.contains_key(needed), "{needed} missing");
     }
@@ -66,7 +66,13 @@ fn the_package_asks_only_for_its_own_resources() {
     assert!(ask("db", "query", "app.finance_activity").is_ok());
     assert!(ask("db", "query", "app.finance_imports").is_ok());
     assert!(ask("db", "query", "app.finance_merchant_rules").is_ok());
+    for table in ["budget_policy", "budget_assignments", "budget_drafts", "budget_draft_lines", "balance_snapshots"] {
+        assert!(ask("db", "query", &format!("app.finance_{table}")).is_ok(), "{table}");
+    }
+    assert!(ask("tools", "run", "finance.budget.assign").is_ok());
+    assert!(ask("tools", "run", "finance.budget.status").is_err());
     assert!(ask("db", "query", "app.finance_targets").is_err());
+    assert!(ask("db", "query", "app.finance_flex_policies").is_err());
     assert!(ask("action-policy", "route-read", "sorting").is_ok());
     assert!(ask("action-policy", "route-read", "sorting_new").is_ok());
     assert!(ask("action-policy", "route-write", "sorting").is_err());

@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 const MARK: &str = "PLANTED-MARKER-7d2e41";
 
-/// Meals declares no model port in this part. The stub only satisfies the host's configuration.
+/// The plan tests never run a model. Every call fails, so no test can pass by reaching one by accident.
 struct NoModel;
 impl moss_module_host::ai::Intelligence for NoModel {
     fn generate(
@@ -22,7 +22,7 @@ impl moss_module_host::ai::Intelligence for NoModel {
         _: &moss_module_host::runtime::CallScope,
         _: &moss_module_host::runtime::Request,
     ) -> anyhow::Result<Value> {
-        anyhow::bail!("This part does not call a model")
+        anyhow::bail!("This test does not call a model")
     }
     fn embed(
         &self,
@@ -172,3 +172,5 @@ impl World {
 
 #[path = "support/tools.rs"]
 mod tools;
+#[path = "support/lists.rs"]
+mod lists;

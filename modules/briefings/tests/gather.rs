@@ -300,8 +300,8 @@ fn selected_sources_with_no_reader_show_unwired_gaps() {
     let fake = Fake::new();
     let g = run(&fake, &["news.topHeadlinesToday", "news.previewSource", "zzz.private-name", "goals.list", "vault"]);
     let gaps: Vec<_> = g.gaps.iter().map(|x| (x.source, x.reason.as_str())).collect();
-    assert_eq!(gaps.iter().filter(|(s, _)| *s == "news").count(), 1);
-    assert!(gaps.contains(&("news", "unwired")));
+    assert_eq!(gaps.iter().filter(|(s, _)| *s == "news").count(), 0);
+    assert!(!gaps.contains(&("news", "unwired")));
     assert!(gaps.contains(&("goals", "unwired")));
     assert!(gaps.contains(&("vault", "unwired")));
     // A name that is not a known source never reaches stored metadata.

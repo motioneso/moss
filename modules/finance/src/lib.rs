@@ -1,6 +1,7 @@
-//! Finance package, part 20: the account list, manual account creation and manual entries, private
-//! to each owner. Everything crosses the guest-safe SDK Host interface. No model, network or job
-//! port is used, and no amount or account name is written to logs, jobs or activity rows.
+//! Finance package, parts 20 to 22: the account list, manual accounts and entries, bank connect
+//! and sync, and transactions, rules, categories and CSV import, all private to each owner.
+//! Everything crosses the guest-safe SDK Host interface. Bank keys and tokens stay in the host
+//! broker. No amount or account name is written to logs, jobs or activity rows.
 /// Leaves with the refusal when a reader fails.
 macro_rules! ask {
     ($expr:expr) => {
@@ -12,14 +13,22 @@ macro_rules! ask {
 }
 
 pub mod accounts;
+pub mod budget;
+pub mod budget_write;
+pub mod bank;
 pub mod categories;
+pub mod connect;
 pub mod csv_import;
+pub mod draft;
+pub mod envelope;
 pub mod input;
 pub mod ledger;
 pub mod rules;
+pub mod plaid;
 pub mod sort_run;
 pub mod splits;
 pub mod sorting;
+pub mod sync;
 pub mod text;
 pub mod tools;
 pub mod transactions;
@@ -42,6 +51,9 @@ pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
         ("POST", "/finance/manual/entries") => {
             tools::route_write(ledger::create_entry(host, &request.body))
         }
+        ("POST", "/finance/connect/start") => tools::route_write(connect::start(host)),
+        ("POST", "/finance/connect/poll") => connect::poll(host, false).map(|v| Response::new(200, v)),
+        ("POST", "/finance/sync/run-now") => sync::run(host).map(|v| Response::new(200, v)),
         _ => match (request.method.as_str(), tool_for(request.method.as_str(), request.path.as_str())) {
             (_, Some((tool, true))) => chat(host, tool, &request),
             (_, Some((tool, false))) => direct(host, tool, &request),
@@ -70,6 +82,9 @@ fn tool_for(method: &str, path: &str) -> Option<(&'static str, bool)> {
         ("POST", "/finance/import/preview") => ("finance.import.preview", false),
         ("POST", "/finance/import/apply") => ("finance.import.apply", false),
         ("POST", "/finance/sorting/run") => ("finance.sorting.run", false),
+        ("POST", "/finance/chat/connect/start") => ("finance.connect.start", true),
+        ("POST", "/finance/chat/connect/poll") => ("finance.connect.poll", true),
+        ("POST", "/finance/chat/sync/run-now") => ("finance.sync.run-now", true),
         ("POST", "/finance/chat/manual/account-create") => ("finance.manual.account-create", true),
         ("POST", "/finance/chat/manual/entry-create") => ("finance.manual.entry-create", true),
         ("POST", "/finance/chat/transactions/categorize") => ("finance.transactions.categorize", true),
@@ -81,6 +96,22 @@ fn tool_for(method: &str, path: &str) -> Option<(&'static str, bool)> {
         ("POST", "/finance/chat/transactions/splits") => ("finance.transactions.splits", true),
         ("POST", "/finance/chat/rules/set") => ("finance.rule.set", true),
         ("POST", "/finance/chat/import/apply") => ("finance.import.apply", true),
+        ("GET", "/finance/budget/status") => ("finance.budget.status", false),
+        ("GET", "/finance/budget/draft") => ("finance.budget.draft.get", false),
+        ("POST", "/finance/budget/configure") => ("finance.budget.configure", false),
+        ("POST", "/finance/budget/assign") => ("finance.budget.assign", false),
+        ("POST", "/finance/budget/move") => ("finance.budget.move", false),
+        ("POST", "/finance/budget/apply") => ("finance.budget.apply", false),
+        ("POST", "/finance/budget/draft/build") => ("finance.budget.draft.build", false),
+        ("POST", "/finance/budget/draft/update") => ("finance.budget.draft.update", false),
+        ("POST", "/finance/budget/draft/start") => ("finance.budget.draft.start", false),
+        ("POST", "/finance/chat/budget/configure") => ("finance.budget.configure", true),
+        ("POST", "/finance/chat/budget/assign") => ("finance.budget.assign", true),
+        ("POST", "/finance/chat/budget/move") => ("finance.budget.move", true),
+        ("POST", "/finance/chat/budget/apply") => ("finance.budget.apply", true),
+        ("POST", "/finance/chat/budget/draft/build") => ("finance.budget.draft.build", true),
+        ("POST", "/finance/chat/budget/draft/update") => ("finance.budget.draft.update", true),
+        ("POST", "/finance/chat/budget/draft/start") => ("finance.budget.draft.start", true),
         _ => return None,
     })
 }
@@ -114,6 +145,15 @@ pub fn handle<H: Host + ?Sized>(
         "route" => {
             let request: RouteRequest = serde_json::from_str(payload)?;
             Ok(serde_json::to_string(&route(host, request))?)
+        }
+        "job" => {
+            let job: serde_json::Value = serde_json::from_str(payload)?;
+            let done = match job["queue"].as_str() {
+                Some(bank::SWEEP_QUEUE) => sync::run(host)?,
+                Some(bank::POLL_QUEUE) => connect::poll(host, true)?,
+                _ => return Err(moss_module_sdk::Error::new("Unsupported Finance job")),
+            };
+            Ok(done.to_string())
         }
         "tool" => {
             let result = tools::execute(host, serde_json::from_str(payload)?)

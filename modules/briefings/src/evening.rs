@@ -199,8 +199,8 @@ impl EveningComposer {
             sections.push(Section::empty("sports", "SPORTS"));
         }
         sections.extend([Section::empty("chats", "CHATS"), morning_section, day_plan]);
-        if selected("news.topHeadlinesToday") {
-            gaps.push(Gap { source: "news", reason: Reason::Unwired });
+        if selected(crate::news::TOOL) {
+            sections.push(crate::news::section(host, &mut gaps));
         }
 
         let lines_of = |key: &str| find(&sections, key).map(|s| s.lines.len()).unwrap_or(0);

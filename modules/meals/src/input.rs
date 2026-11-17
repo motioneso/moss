@@ -69,6 +69,14 @@ pub fn text(input: &Fields, key: &str, required: bool, max: usize) -> Checked<Op
     Ok(Some(trimmed.to_owned()))
 }
 
+/// Like `choice`, but a missing key is an error.
+pub fn required_choice(input: &Fields, key: &str, allowed: &[&str]) -> Checked<String> {
+    match choice(input, key, allowed)? {
+        Some(value) => Ok(value),
+        None => invalid(format!("{key} is required")),
+    }
+}
+
 pub fn choice(input: &Fields, key: &str, allowed: &[&str]) -> Checked<Option<String>> {
     match input.get(key) {
         None | Some(Value::Null) => Ok(None),

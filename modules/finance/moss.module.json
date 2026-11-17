@@ -2,9 +2,9 @@
   "schemaVersion": 2,
   "id": "finance",
   "name": "Finance",
-  "description": "Private money accounts and transactions. You can list your accounts, add manual accounts and transactions, sort and review transactions, set rules, split, add notes and import a CSV bank file. Bank links, budgets, bills, targets and the screens are not built yet.",
+  "description": "Private money accounts and transactions. You can list your accounts, add manual accounts and transactions, connect a bank and pull its balances and transactions every six hours or on demand, sort and review transactions, set rules, split, add notes, import a CSV bank file, and plan a monthly budget with drafts. Bills, targets and the screens are not built yet.",
   "publisher": "Moss",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
@@ -20,7 +20,13 @@
         "app.finance_categories",
         "app.finance_budget_policy",
         "app.finance_merchant_rules",
-        "app.finance_imports"
+        "app.finance_imports",
+        "app.finance_bank_links",
+        "app.finance_link_sessions",
+        "app.finance_balance_snapshots",
+        "app.finance_budget_assignments",
+        "app.finance_budget_drafts",
+        "app.finance_budget_draft_lines"
       ]
     },
     {
@@ -42,8 +48,28 @@
         "finance.transactions.notes.save",
         "finance.transactions.splits",
         "finance.rule.set",
-        "finance.import.apply"
+        "finance.import.apply",
+        "finance.connect.start",
+        "finance.connect.poll",
+        "finance.sync.run-now",
+        "finance.budget.configure",
+        "finance.budget.assign",
+        "finance.budget.move",
+        "finance.budget.apply",
+        "finance.budget.draft.build",
+        "finance.budget.draft.update",
+        "finance.budget.draft.start"
       ]
+    },
+    {
+      "port": "credentials",
+      "operations": ["status", "request", "exchange", "forget"],
+      "resources": ["sandbox.plaid.com", "production.plaid.com"]
+    },
+    {
+      "port": "jobs",
+      "operations": ["schedule", "enqueue-after-commit", "enqueue-options"],
+      "resources": ["finance.sync-run", "finance.connect-poll"]
     },
     {
       "port": "action-policy",
@@ -94,7 +120,9 @@
       "sql/0039_create_finance_provider_handoffs.sql",
       "sql/0040_create_finance_card_policies.sql",
       "sql/0041_create_finance_card_assignments.sql",
-      "sql/0042_create_finance_bill_suggestion_dismissals.sql"
+      "sql/0042_create_finance_bill_suggestion_dismissals.sql",
+      "sql/0368_finance_bank_links.sql",
+      "sql/0369_finance_link_sessions.sql"
     ],
     "ownedTables": [
       "app.finance_accounts",
@@ -120,7 +148,9 @@
       "app.finance_reconciliations",
       "app.finance_targets",
       "app.finance_transactions",
-      "app.finance_transfer_corrections"
+      "app.finance_transfer_corrections",
+      "app.finance_bank_links",
+      "app.finance_link_sessions"
     ],
     "ledger": "module-legacy",
     "access": {
@@ -194,6 +224,12 @@
         "access": "owner-only"
       },
       "app.finance_transfer_corrections": {
+        "access": "owner-only"
+      },
+      "app.finance_bank_links": {
+        "access": "owner-only"
+      },
+      "app.finance_link_sessions": {
         "access": "owner-only"
       }
     }
@@ -353,6 +389,116 @@
       "method": "POST",
       "path": "/finance/chat/import/apply",
       "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/connect/start",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/connect/poll",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/sync/run-now",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/connect/start",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/connect/poll",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/sync/run-now",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/finance/budget/status",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/finance/budget/draft",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/budget/configure",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/budget/assign",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/budget/move",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/budget/apply",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/budget/draft/build",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/budget/draft/update",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/budget/draft/start",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/budget/configure",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/budget/assign",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/budget/move",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/budget/apply",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/budget/draft/build",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/budget/draft/update",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/budget/draft/start",
+      "signIn": true
     }
   ],
   "tools": {
@@ -426,6 +572,54 @@
     },
     "finance.import.apply": {
       "description": "Import rows from a bank file into a manual account. Manual records only; no bank money is moved.",
+      "risk": "write"
+    },
+    "finance.connect.start": {
+      "description": "Start linking a bank, or reconnect one that needs a new sign-in. Returns a page address for the person to open. Needs approval.",
+      "risk": "write"
+    },
+    "finance.connect.poll": {
+      "description": "Check whether the person has finished the bank page and, if so, save the bank and pull its first data.",
+      "risk": "write"
+    },
+    "finance.sync.run-now": {
+      "description": "Pull the latest balances and transactions from every connected bank now.",
+      "risk": "write"
+    },
+    "finance.budget.configure": {
+      "description": "Choose the budget currency once and start the saved category list. The currency cannot be changed later.",
+      "risk": "write"
+    },
+    "finance.budget.status": {
+      "description": "Read one month of the budget: money in each category, what is ready to assign, and the review numbers a save needs.",
+      "risk": "read"
+    },
+    "finance.budget.assign": {
+      "description": "Set the amount assigned to one category for a month.",
+      "risk": "write"
+    },
+    "finance.budget.move": {
+      "description": "Move money between two categories, or from ready to assign into a category, for one month.",
+      "risk": "write"
+    },
+    "finance.budget.apply": {
+      "description": "Save the amounts for one category or a batch of up to 20 categories for a month, as the person typed them.",
+      "risk": "write"
+    },
+    "finance.budget.draft.build": {
+      "description": "Build a first budget draft from the last three full months of saved spending.",
+      "risk": "write"
+    },
+    "finance.budget.draft.get": {
+      "description": "Read the current budget draft.",
+      "risk": "read"
+    },
+    "finance.budget.draft.update": {
+      "description": "Change, add or drop one line of the open budget draft.",
+      "risk": "write"
+    },
+    "finance.budget.draft.start": {
+      "description": "Turn the open draft into this month's budget amounts.",
       "risk": "write"
     }
   },
@@ -581,6 +775,114 @@
           "description": "The account changed since the preview. Preview again and import."
         }
       ]
+    },
+    {
+      "id": "finance.bank-connect",
+      "description": "A person can link a bank. Starting returns a page address to open, the person signs in there, and a check then saves the bank and pulls its first accounts and transactions. Starting again for a bank that needs a new sign-in reconnects it without a second copy. The assistant's version of starting needs a one-use approval. The bank's sign-in token never leaves the host.",
+      "errors": [
+        {
+          "code": "bank_unavailable",
+          "class": "transient",
+          "description": "The bank service is not set up or could not start the link. Check the bank service keys in settings, then try again."
+        },
+        {
+          "code": "token_read_failed",
+          "class": "transient",
+          "description": "The saved bank sign-in could not be read. Try again, or reconnect the bank."
+        }
+      ]
+    },
+    {
+      "id": "finance.bank-sync",
+      "description": "Balances and transactions for every connected bank are pulled every six hours and on request. Each bank is handled on its own, so one failing bank never stops the others. A bank that needs a new sign-in is marked as needing a reconnect and keeps its saved data. A person's own category and note on a bank transaction are kept, and manual entries are never overwritten. Categorizing new transactions is not built yet.",
+      "errors": []
+    },
+    {
+      "id": "finance.budget",
+      "description": "A person can choose a budget currency once, see a month of the budget with each category's assigned, spent and available money and what is ready to assign, set the amount for one category or up to 20 at once, and move money between categories or from ready to assign. Every save needs the review numbers from the screen. If the budget or the ledger changed since, nothing is saved. Flexible pools, targets, card payments and bills are not built yet.",
+      "errors": [
+        {
+          "code": "stale_budget",
+          "class": "validation",
+          "description": "The budget or ledger changed. Refresh and review the amounts again before saving."
+        },
+        {
+          "code": "stale_previous",
+          "class": "validation",
+          "description": "The amount shown for a category is out of date. Refresh and try again."
+        },
+        {
+          "code": "invalid_category",
+          "class": "validation",
+          "description": "The category is not one that can be budgeted."
+        },
+        {
+          "code": "not_enough_ready",
+          "class": "validation",
+          "description": "The amount is more than is ready to assign."
+        },
+        {
+          "code": "not_enough_available",
+          "class": "validation",
+          "description": "The amount is more than the source category holds."
+        },
+        {
+          "code": "funding_unavailable",
+          "class": "validation",
+          "description": "Ready to assign cannot be worked out for that month."
+        },
+        {
+          "code": "budget_currency_required",
+          "class": "validation",
+          "description": "Choose a budget currency first."
+        },
+        {
+          "code": "budget_currency_fixed",
+          "class": "validation",
+          "description": "The budget currency is already chosen and cannot be changed."
+        },
+        {
+          "code": "legacy_review_required",
+          "class": "validation",
+          "description": "Earlier budget data exists. Review it and confirm before starting over."
+        },
+        {
+          "code": "storage_upgrade_required",
+          "class": "validation",
+          "description": "Finish the category upgrade before budgeting."
+        }
+      ]
+    },
+    {
+      "id": "finance.budget-drafts",
+      "description": "A person can ask for a first budget built from the last three full months of saved spending, edit its lines, and start it so its amounts become this month's budget. A draft is built once and never overwrites an existing budget.",
+      "errors": [
+        {
+          "code": "draft_not_found",
+          "class": "validation",
+          "description": "That draft is not the current draft."
+        },
+        {
+          "code": "draft_not_open",
+          "class": "validation",
+          "description": "The draft has already been started."
+        },
+        {
+          "code": "protected_category",
+          "class": "validation",
+          "description": "Income and transfers cannot be budgeted."
+        },
+        {
+          "code": "archived_category",
+          "class": "validation",
+          "description": "A planned line points at an archived category."
+        },
+        {
+          "code": "category_not_in_draft",
+          "class": "validation",
+          "description": "That category is not in the draft. To add a line, give its name, group and amount."
+        }
+      ]
     }
   ],
   "policyRoutes": {
@@ -590,5 +892,45 @@
     "sorting_new": {
       "installTier": "ask_each_time"
     }
+  },
+  "credentials": {
+    "plaid-keys": {
+      "scope": "instance",
+      "hosts": ["sandbox.plaid.com", "production.plaid.com"],
+      "attachment": {
+        "kind": "fields",
+        "name": {
+          "client_id": "clientId",
+          "secret": "clientSecret"
+        }
+      },
+      "exposeFields": ["link_token", "public_token", "hosted_link_url", "expiration"]
+    },
+    "plaid-item": {
+      "scope": "account",
+      "hosts": ["sandbox.plaid.com", "production.plaid.com"],
+      "attachment": {
+        "kind": "fields",
+        "name": {
+          "access_token": "accessToken"
+        }
+      },
+      "with": ["plaid-keys"],
+      "exchange": {
+        "endpoint": "https://production.plaid.com/item/public_token/exchange",
+        "grantType": "token_swap",
+        "format": "json",
+        "input": "public_token"
+      },
+      "exposeFields": ["link_token", "hosted_link_url", "expiration"]
+    }
+  },
+  "jobRetries": {
+    "finance.sync-run": 3,
+    "finance.connect-poll": 5
+  },
+  "jobs": {
+    "finance.sync-run": {},
+    "finance.connect-poll": {}
   }
 }

@@ -14,6 +14,8 @@ use safety_core::secret::{Secret, SecretCipher};
 use serde_json::{json, Value};
 use std::sync::Arc;
 
+/// A one-pixel picture the test web serves for the story picture route.
+const PNG_B64: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAHdrYoQAAAABJRU5ErkJggg==";
 const MARK: &str = "PLANTED-MARKER-4f1c9b";
 /// Its own marker, so the saved source of the adding test does not show in the other scan.
 const ADD_MARK: &str = "PLANTED-ADD-MARKER-91c3d7";
@@ -50,6 +52,7 @@ impl moss_module_host::runtime::Ports for Web {
             ));
         }
         Ok(match url {
+            "https://img.sample.test/1.png" => json!({"ok":true,"status":200,"finalUrl":url,"contentType":"image/png","body":PNG_B64,"truncated":false,"hopCount":0,"encoding":"base64"}),
             "https://daily.sample.test/" => found(
                 "text/html",
                 "<html><head><title>Sample Daily</title><link rel=\"alternate\" type=\"application/rss+xml\" href=\"/feed.xml\"></head></html>",
@@ -104,6 +107,23 @@ fn rows_as(
         let tx = client.transaction().await.unwrap();
         tx.execute("SELECT set_config('app.actor_user_id', $1, true)", &[&actor.to_string()]).await.unwrap();
         let rows = tx.query(sql, params).await.unwrap();
+        tx.commit().await.unwrap();
+        rows
+    })
+}
+
+/// Reads as News's own database role with the actor set. Its tables are granted to that role.
+fn rows_as_news(f: &support::Fixture, actor: uuid::Uuid, sql: &str) -> Vec<tokio_postgres::Row> {
+    f.rt.block_on(async {
+        let (mut client, conn) =
+            tokio_postgres::connect(&std::env::var("JS48_APP_URL").unwrap(), tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(async move {
+            let _ = conn.await;
+        });
+        let tx = client.transaction().await.unwrap();
+        tx.execute("SELECT set_config('app.actor_user_id', $1, true)", &[&actor.to_string()]).await.unwrap();
+        tx.batch_execute(&format!("SET LOCAL ROLE {}", moss_module_host::database::runtime_role("news"))).await.unwrap();
+        let rows = tx.query(sql, &[]).await.unwrap();
         tx.commit().await.unwrap();
         rows
     })
@@ -188,6 +208,25 @@ impl World {
         let answer: Value = serde_json::from_str(&out.expect("the export finished")).unwrap();
         assert!(answer.get("error").is_none(), "{answer}");
         answer["ok"].clone()
+    }
+    /// Calls one chat tool through the real host as the actor.
+    fn tool(&self, actor: uuid::Uuid, name: &str, parameters: Value) -> Value {
+        let ports: Arc<dyn moss_module_host::runtime::Ports> = Arc::new(Web(Arc::new(
+            moss_module_host::transactional_database::TransactionalDatabasePorts::new(
+                self.f.db.clone(),
+                Arc::new(moss_module_host::context::ContextPorts::new(self.app.services.clone())),
+            )
+            .unwrap(),
+        )));
+        let out = Host::new(Limits::default()).unwrap().call(
+            &component(),
+            Arc::new(moss_news_host::package::manifest().unwrap()),
+            AccessContext::new(actor, "news-tool"),
+            ports,
+            "tool",
+            &json!({"tool": name, "parameters": parameters}).to_string(),
+        );
+        serde_json::from_str(&out.expect("the tool finished")).unwrap()
     }
     /// Runs the worker until the queue has nothing due.
     fn work(&self) {
@@ -739,4 +778,114 @@ fn the_daily_check_fires_once_per_person() {
     assert_eq!(left(a), 0, "no added source or topic, so no daily check");
     assert_eq!(left(b), 1, "the other person keeps theirs");
     println!("PASS schedule: two people, one schedule each, one fire each, removal drops only the owner's");
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn pictures_and_chat_tools_belong_to_the_person_and_the_check_fails_without_row_security() {
+    let w = World::new();
+    let (a, b) = (w.f.a, w.f.b);
+    let payload = json!({"articles":[
+        {"id":"story-a","publisher":"Sample Daily","canonicalDomain":"daily.sample.test","headline":"PLANTED-STORY-5a2e","url":"https://daily.sample.test/a","publishedAt":chrono::Utc::now().to_rfc3339(),"excerpt":"One","imageUrl":"https://img.sample.test/1.png","topics":[],"preferred":true,"rank":1}
+    ]});
+    w.f.rt.block_on(w.f.root.execute(
+        "INSERT INTO app.news_compilation_snapshots(owner_user_id,compiled_at,expires_at,payload) VALUES($1,now(),now()+interval '7 days',$2)",
+        &[&a, &payload],
+    )).unwrap();
+    let mine = w.call(a, "GET", "/images/story-a", Value::Null);
+    assert_eq!(mine["status"], 200, "{mine}");
+    assert_eq!(mine["image"]["contentType"], "image/png", "{mine}");
+    assert_eq!(w.tool(a, "news.topHeadlinesToday", json!({}))["data"]["facts"].as_array().unwrap().len(), 1);
+    // Another person gets no picture and no story.
+    assert_eq!(w.call(b, "GET", "/images/story-a", Value::Null)["status"], 404);
+    assert_eq!(w.tool(b, "news.topHeadlinesToday", json!({}))["data"]["facts"], json!([]));
+    assert_eq!(w.tool(b, "news.heartbeatHeadlines", json!({}))["data"]["items"], json!([]));
+    println!("GREEN: B gets no picture, headline or heartbeat item from A's page");
+    // The host also scopes every package read to the caller, so the package calls stay closed on
+    // their own. The row security itself is shown the way the other News tests show it: B's direct
+    // read of A's stored page leaks with it removed and is closed again after.
+    let table = "app.news_compilation_snapshots";
+    let shut: i64 = rows_as(&w.f, b, &format!("SELECT count(*) FROM {table}"), &[])[0].get(0);
+    assert_eq!(shut, 0, "B reads none of A's pages");
+    w.f.rt.block_on(w.f.root.batch_execute(&format!("ALTER TABLE {table} DISABLE ROW LEVEL SECURITY"))).unwrap();
+    let open: i64 = rows_as(&w.f, b, &format!("SELECT count(*) FROM {table}"), &[])[0].get(0);
+    w.f.rt.block_on(w.f.root.batch_execute(&format!("ALTER TABLE {table} ENABLE ROW LEVEL SECURITY; ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))).unwrap();
+    println!("RED: with row security removed B reads {open} of A's stored page row(s)");
+    assert!(open >= 1, "RED expected: the page leaks without row security");
+    assert_eq!(w.call(b, "GET", "/images/story-a", Value::Null)["status"], 404, "closed again");
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn refreshing_by_tool_queues_a_metadata_only_job_and_leaks_no_story_text() {
+    let w = World::new();
+    let a = w.f.a;
+    w.f.rt.block_on(w.f.root.execute(
+        "INSERT INTO app.news_compilation_snapshots(owner_user_id,compiled_at,expires_at,payload) VALUES($1,now(),now()+interval '7 days',$2)",
+        &[&a, &json!({"articles":[{"id":"s","publisher":"P","canonicalDomain":"p.example.test","headline":"PLANTED-STORY-5a2e","url":"https://p.example.test/s","publishedAt":chrono::Utc::now().to_rfc3339(),"excerpt":null,"imageUrl":null,"topics":[],"preferred":true,"rank":1}]})],
+    )).unwrap();
+    w.tool(a, "news.topHeadlinesToday", json!({}));
+    w.tool(a, "news.heartbeatHeadlines", json!({}));
+    let out = w.tool(a, "news.refreshNews", json!({}));
+    assert_eq!(out["data"]["asynchronous"], json!(true), "{out}");
+    let jobs = w.queued(a, "news-refresh");
+    assert_eq!(jobs.len(), 1);
+    assert!(!jobs[0].to_string().contains("PLANTED-STORY-5a2e"), "{jobs:?}");
+    for table in ["moss_queue.jobs", "moss_queue.schedules"] {
+        let text: String = w.f.rt.block_on(w.f.root.query_one(&format!("SELECT coalesce(string_agg(t::text, ' '), '') FROM {table} t"), &[])).unwrap().get(0);
+        assert!(!text.contains("PLANTED-STORY-5a2e"), "{table}");
+    }
+    println!("PASS refreshNews: one metadata-only job and no story text in queue tables");
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn story_feedback_belongs_to_the_person_hides_the_story_and_leaks_no_text() {
+    let w = World::new();
+    let (a, b, admin) = (w.f.a, w.f.b, w.f.admin);
+    let page = |who| {
+        let payload = json!({"articles":[
+            {"id":"s1","publisher":"P","canonicalDomain":"p.example.test","headline":"First","url":"https://p.example.test/1","publishedAt":chrono::Utc::now().to_rfc3339(),"excerpt":null,"imageUrl":null,"topics":[],"preferred":true,"rank":1},
+            {"id":"s2","publisher":"P","canonicalDomain":"p.example.test","headline":"Second","url":"https://p.example.test/2","publishedAt":chrono::Utc::now().to_rfc3339(),"excerpt":null,"imageUrl":null,"topics":[],"preferred":true,"rank":2}
+        ]});
+        w.f.rt.block_on(w.f.root.execute(
+            "INSERT INTO app.news_compilation_snapshots(owner_user_id,compiled_at,expires_at,payload) VALUES($1,now(),now()+interval '7 days',$2)",
+            &[&who, &payload],
+        )).unwrap();
+    };
+    page(a);
+    page(b);
+    let stories = |who| w.tool(who, "news.topHeadlinesToday", json!({}))["data"]["evidence"]["stories"].as_array().unwrap().len();
+    assert_eq!(stories(a), 2);
+    let made = w.call(a, "POST", "/story-feedback", json!({"storyRef":"s1","kind":"less_like_this","reason":"PLANTED-REASON-9c41"}));
+    assert_eq!(made["status"], 200, "{made}");
+    let id = made["body"]["feedback"]["id"].as_str().unwrap().to_owned();
+    assert_eq!(stories(a), 1, "the marked story is left out");
+    assert_eq!(stories(b), 2, "B still sees it");
+    // B sees none of it, and cannot change or undo it.
+    assert_eq!(w.call(b, "GET", "/story-feedback", Value::Null)["body"], json!({"feedback":[]}));
+    assert_eq!(w.call(b, "PATCH", &format!("/story-feedback/{id}"), json!({"reason":"x"}))["status"], 404);
+    assert_eq!(w.call(b, "POST", &format!("/story-feedback/{id}/undo"), Value::Null)["status"], 404);
+    assert_eq!(w.call(a, "GET", "/story-feedback", Value::Null)["body"]["feedback"].as_array().unwrap().len(), 1);
+    // Row security: an admin reads none of A's rows, and the read leaks once it is removed.
+    let table = "app.news_story_feedback";
+    let seen: i64 = rows_as_news(&w.f, admin, &format!("SELECT count(*) FROM {table}"))[0].get(0);
+    assert_eq!(seen, 0, "an admin sees none of A's feedback");
+    w.f.rt.block_on(w.f.root.batch_execute(&format!("ALTER TABLE {table} DISABLE ROW LEVEL SECURITY"))).unwrap();
+    let open: i64 = rows_as_news(&w.f, admin, &format!("SELECT count(*) FROM {table}"))[0].get(0);
+    w.f.rt.block_on(w.f.root.batch_execute(&format!("ALTER TABLE {table} ENABLE ROW LEVEL SECURITY; ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))).unwrap();
+    assert!(open >= 1, "RED expected: feedback leaks with row security removed, got {open}");
+    println!("RED then GREEN: {table} leaks with row security removed and is closed again after");
+    // Deleting an account removes its feedback by cascade.
+    let cascade: i64 = w.f.rt.block_on(w.f.root.query_one("SELECT count(*) FROM pg_constraint WHERE conrelid='app.news_story_feedback'::regclass AND contype='f' AND confdeltype='c'", &[])).unwrap().get(0);
+    assert_eq!(cascade, 1, "the owner link cascades on account deletion");
+    // The reason reaches no queue table.
+    w.tool(a, "news.refreshNews", json!({}));
+    for queue_table in ["moss_queue.jobs", "moss_queue.schedules"] {
+        let text: String = w.f.rt.block_on(w.f.root.query_one(&format!("SELECT coalesce(string_agg(t::text, ' '), '') FROM {queue_table} t"), &[])).unwrap().get(0);
+        assert!(!text.contains("PLANTED-REASON-9c41"), "{queue_table}");
+    }
+    // Undo brings the story back.
+    assert_eq!(w.call(a, "POST", &format!("/story-feedback/{id}/undo"), Value::Null)["status"], 200);
+    assert_eq!(stories(a), 2);
 }

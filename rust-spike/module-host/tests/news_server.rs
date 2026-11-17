@@ -434,6 +434,67 @@ fn installed_news_package_serves_routes_from_the_real_server() {
     assert!(!overview["topStories"].as_array().unwrap().is_empty(), "{overview}");
     assert_eq!(overview["degraded"], json!(false), "{overview}");
     println!("news live: the queued refresh compiled {} real stories, first: {}", stories.len(), stories[0]["title"]);
+    // Pictures and icons come back from the real server as real bytes. The shell re-checks them.
+    let raw = |path: &str, cookie: &str| {
+        let response = client.get(format!("{origin}{path}")).header("origin", &origin).header("cookie", cookie).send().unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
+        let status = response.status().as_u16();
+        let kind = response.headers().get("content-type").and_then(|v| v.to_str().ok()).unwrap_or("").to_owned();
+        let cache = response.headers().get("cache-control").and_then(|v| v.to_str().ok()).unwrap_or("").to_owned();
+        (status, kind, cache, response.bytes().unwrap_or_default().to_vec())
+    };
+    let with_picture: Vec<&Value> = stories.iter().filter(|s| s["imageUrl"].is_string()).collect();
+    println!("news live: {} of {} real stories carry a picture address", with_picture.len(), stories.len());
+    let mut served = 0;
+    for story in with_picture.iter().take(6) {
+        let id = story["id"].as_str().unwrap();
+        let (status, kind, cache, bytes) = raw(&format!("/api/m/news/images/{id}"), &cookie);
+        println!("news live: picture for story -> {status} {kind} {} bytes ({cache})", bytes.len());
+        if status == 200 {
+            assert!(kind.starts_with("image/") && cache.starts_with("private, max-age="), "{kind} {cache}");
+            assert!(bytes.starts_with(&[0xff, 0xd8, 0xff]) || bytes.starts_with(b"\x89PNG") || bytes.starts_with(b"GIF8") || (bytes.len() > 12 && &bytes[8..12] == b"WEBP"), "bytes are a real picture");
+            // The other person may have compiled the same public story into their own page. They
+            // get a picture only for a story their own page holds.
+            let theirs = json_of(&call(Method::GET, "/overview", Some(&other), None).1);
+            let held = theirs["rankedStories"].as_array().is_some_and(|l| l.iter().any(|s| s["id"] == story["id"]));
+            let expect = if held { 200 } else { 404 };
+            assert_eq!(raw(&format!("/api/m/news/images/{id}"), &other).0, expect, "another person's picture follows their own page");
+            served += 1;
+        }
+    }
+    if let Some(story) = with_picture.first() {
+        assert!(served > 0, "no real picture could be served\n{}", log());
+        assert_eq!(raw(&format!("/api/news/images/{}", story["id"].as_str().unwrap()), &cookie).0, 200, "the old picture address still works");
+    }
+    assert_eq!(raw("/api/m/news/images/not-a-story", &cookie).0, 404);
+    let (icon_status, icon_kind, _, icon_bytes) = raw("/api/m/news/favicon/feeds.bbci.co.uk", &cookie);
+    println!("news live: icon for the saved publisher -> {icon_status} {icon_kind} {} bytes", icon_bytes.len());
+    // The feed host itself publishes no icon (the real site answers 404), so the saved feed has
+    // none. The catalog publisher's own site has one and it must arrive as a real icon.
+    assert_eq!(icon_status, 404, "the feed host has no icon, so none is served");
+    let (status, kind, _, bytes) = raw("/api/m/news/favicon/www.bbc.com", &cookie);
+    println!("news live: icon for the catalog publisher -> {status} {kind} {} bytes", bytes.len());
+    assert_eq!(status, 200, "the catalog publisher's icon is served");
+    assert!(kind.starts_with("image/") && bytes.len() > 100, "{kind}");
+    assert_eq!(raw("/api/m/news/favicon/www.bbc.com", &other).0, 200, "a catalog publisher is not private data");
+    assert_eq!(raw("/api/m/news/favicon/unsaved.example.org", &cookie).0, 404, "an unseen publisher is refused");
+    assert_eq!(raw("/api/m/news/favicon/feeds.bbci.co.uk", &other).0, 404, "another person has no such publisher");
+    // Story feedback on the real server. A story marked "less" leaves the owner's overview and
+    // stays on the other person's page.
+    let first = stories[0]["id"].as_str().unwrap().to_owned();
+    let (status, text) = call(Method::POST, "/story-feedback", Some(&cookie), Some(json!({"storyRef":first,"kind":"less_like_this","reason":"live check"})));
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let feedback_id = json_of(&text)["feedback"]["id"].as_str().unwrap().to_owned();
+    let (_, text) = call(Method::GET, "/overview", Some(&cookie), None);
+    let ids = |text: &str| -> Vec<String> { json_of(text)["rankedStories"].as_array().unwrap().iter().map(|s| s["id"].as_str().unwrap().to_owned()).collect() };
+    assert!(!ids(&text).contains(&first), "the marked story is left out of the owner's overview");
+    let (_, text) = call(Method::GET, "/story-feedback", Some(&other), None);
+    assert_eq!(json_of(&text)["feedback"], json!([]), "{text}");
+    assert_eq!(call(Method::PATCH, &format!("/story-feedback/{feedback_id}"), Some(&other), Some(json!({"reason":"x"}))).0, 404);
+    assert_eq!(call(Method::POST, &format!("/story-feedback/{feedback_id}/undo"), Some(&other), None).0, 404);
+    assert_eq!(call(Method::POST, &format!("/story-feedback/{feedback_id}/undo"), Some(&cookie), None).0, 200);
+    let (_, text) = call(Method::GET, "/overview", Some(&cookie), None);
+    assert!(ids(&text).contains(&first), "undo brings the story back");
+    println!("news live: story feedback hid the story for the owner only and undo brought it back");
     // The refresh left a success time and the other person has no refresh record of their own work.
     let rows = |sql: &'static str, who: uuid::Uuid| -> Vec<tokio_postgres::Row> {
         runtime.block_on(async {

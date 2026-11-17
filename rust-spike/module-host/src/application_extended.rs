@@ -46,6 +46,9 @@ impl Application {
         if let Some(dir) = config.browser_dir {
             services = services.with_browser(dir);
         }
+        if let Some(transport) = crate::network::test_transport() {
+            services = services.with_network(transport);
+        }
         let services = Arc::new(services);
         let deferred = Arc::new(crate::after_commit_jobs::AfterCommitJobs::new(adapter(
             services.clone(),

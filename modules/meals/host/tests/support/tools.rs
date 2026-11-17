@@ -1,7 +1,7 @@
 //! Tool proofs through the installed Wasm component and its host approval transport.
 use super::*;
 
-fn run(w: &World, actor: uuid::Uuid, tool: &str, parameters: Value, approve: bool) -> Value {
+pub(crate) fn run(w: &World, actor: uuid::Uuid, tool: &str, parameters: Value, approve: bool) -> Value {
     if approve {
         w.app
             .services
@@ -15,7 +15,7 @@ fn run(w: &World, actor: uuid::Uuid, tool: &str, parameters: Value, approve: boo
         json!({"tool":tool,"parameters":parameters}),
     )
 }
-fn compare(mut a: Value, mut b: Value) {
+pub(crate) fn compare(mut a: Value, mut b: Value) {
     replay::mask(&mut a);
     replay::mask(&mut b);
     assert_eq!(a, b);
@@ -242,4 +242,95 @@ fn tools_keep_both_tables_private_and_leave_no_text_behind() {
         assert!(!activity.contains(MARK));
     }
     println!("PASS privacy: planted household name and preference absent from jobs and host activity; other person and admin refused");
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn plans_are_private_and_their_jobs_carry_ids_only() {
+    let w = World::new();
+    let (a, b) = (w.f.a, w.f.b);
+    let created = run(
+        &w,
+        a,
+        "meals.plan.create",
+        json!({"startDate":"2026-11-20","days":2,"idempotencyKey":"plan-proof-1","requestText":MARK}),
+        true,
+    );
+    let plan = created["body"]["data"].clone();
+    assert!(plan["planId"].is_string(), "{created}");
+    assert_eq!(plan["days"].as_array().unwrap().len(), 2, "{created}");
+    let id = plan["planId"].as_str().unwrap().to_owned();
+    // The same key returns the same plan.
+    let again = run(
+        &w,
+        a,
+        "meals.plan.create",
+        json!({"startDate":"2026-11-20","days":2,"idempotencyKey":"plan-proof-1","requestText":MARK}),
+        true,
+    );
+    assert_eq!(again["body"]["data"]["planId"], json!(id), "{again}");
+    let count = |actor: uuid::Uuid| {
+        rows_as(&w.f, actor, "SELECT plan_id FROM app.meals_plans").len()
+    };
+    assert_eq!(count(a), 1);
+    // The second person and the admin cannot read or change it.
+    for actor in [b, w.f.admin] {
+        assert_eq!(count(actor), 0);
+        let got = run(&w, actor, "meals.plan.get", json!({"planId":id}), true);
+        assert!(!got.to_string().contains(MARK), "{got}");
+        assert_eq!(got["body"]["data"]["code"], "invalid_input", "{got}");
+        let stop = run(
+            &w,
+            actor,
+            "meals.plan.control",
+            json!({"planId":id,"action":"stop"}),
+            true,
+        );
+        assert_eq!(stop["body"]["data"]["code"], "invalid_input", "{stop}");
+    }
+    let mine = run(&w, a, "meals.plan.get", json!({"planId":id}), true);
+    assert_eq!(mine["body"]["data"]["planId"], json!(id), "{mine}");
+    // Negative control: without the owner rule the second person sees the plan.
+    for table in ["app.meals_plans", "app.meals_plan_days"] {
+        let weaken = format!("DROP POLICY moss_legacy_select ON {table}; CREATE POLICY moss_legacy_select ON {table} FOR SELECT TO jarvis_app_runtime, jarvis_worker_runtime USING (true)");
+        let restore = format!("DROP POLICY moss_legacy_select ON {table}; CREATE POLICY moss_legacy_select ON {table} FOR SELECT TO jarvis_app_runtime, jarvis_worker_runtime USING (owner_user_id=app.current_actor_user_id())");
+        let sql = format!("SELECT 1 FROM {table}");
+        assert!(rows_as(&w.f, b, &sql).is_empty());
+        w.f.rt.block_on(w.f.root.batch_execute(&weaken)).unwrap();
+        let seen = rows_as(&w.f, b, &sql).len();
+        w.f.rt.block_on(w.f.root.batch_execute(&restore)).unwrap();
+        assert!(seen > 0, "second person must see {table} without the rule");
+        assert!(rows_as(&w.f, b, &sql).is_empty());
+    }
+    // Jobs carry ids and counts only.
+    let payloads: Vec<String> = w
+        .f
+        .rt
+        .block_on(w.f.root.query(
+            "SELECT payload::text FROM moss_queue.jobs WHERE queue LIKE '%meals-plan-day'",
+            &[],
+        ))
+        .unwrap()
+        .iter()
+        .map(|r| r.get(0))
+        .collect();
+    assert!(!payloads.is_empty(), "creating a plan queues a day job");
+    for p in &payloads {
+        assert!(!p.contains(MARK), "{p}");
+    }
+    let everywhere: i64 = w
+        .f
+        .rt
+        .block_on(w.f.root.query_one(
+            "SELECT count(*) FROM moss_queue.jobs WHERE payload::text LIKE $1",
+            &[&format!("%{MARK}%")],
+        ))
+        .unwrap()
+        .get(0);
+    assert_eq!(everywhere, 0);
+    for actor in [a, b, w.f.admin] {
+        let activity = serde_json::to_string(&w.app.services.activity("meals", &w.f.access(actor)).unwrap()).unwrap();
+        assert!(!activity.contains(MARK));
+    }
+    println!("PASS plans: owner-only with negative control, same key gives one plan, job payloads carry ids only");
 }

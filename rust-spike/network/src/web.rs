@@ -161,14 +161,25 @@ async fn boundary(State(n): State<Arc<Network>>, mut request: Request, next: Nex
     };
     let response = guarded(&n, &mut request, next).await;
     let mut response = response;
+    // A checked module picture arrives with its own short private cache time; keep it.
+    let kept = response.status().is_success()
+        && response.headers().get(header::CACHE_CONTROL).is_some_and(|v| {
+            v.to_str().is_ok_and(|v| v.starts_with("private, max-age="))
+        })
+        && response
+            .headers()
+            .get(header::CONTENT_TYPE)
+            .is_some_and(|v| v.to_str().is_ok_and(|v| v.starts_with("image/")));
     let cache = if response.status().is_success() {
         cache
     } else {
         "no-store"
     };
-    response
-        .headers_mut()
-        .insert(header::CACHE_CONTROL, HeaderValue::from_static(cache));
+    if !kept {
+        response
+            .headers_mut()
+            .insert(header::CACHE_CONTROL, HeaderValue::from_static(cache));
+    }
     response
         .headers_mut()
         .insert("referrer-policy", HeaderValue::from_static("no-referrer"));

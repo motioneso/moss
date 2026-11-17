@@ -1,16 +1,27 @@
 //! The four kitchen and household tools. The trusted host runs `handle` only after applying the
 //! person's approval policy; `run` is the signed-in transport that asks the host to do so.
 use crate::input::{self, coded, invalid, Checked, Fields, InputError};
-use crate::{kitchen, util};
+use crate::{kitchen, plans, shopping, stock, util};
 use moss_module_sdk::{Host, Response, Result};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-pub const TOOLS: [&str; 4] = [
+pub const TOOLS: [&str; 15] = [
     "meals.kitchen.get",
     "meals.kitchen.save",
     "meals.household.save",
     "meals.household.remove",
+    "meals.plan.create",
+    "meals.plan.get",
+    "meals.plan.current",
+    "meals.plan.control",
+    "meals.list.get",
+    "meals.list.build",
+    "meals.list.edit",
+    "meals.list.bought",
+    "meals.list.clear",
+    "meals.pantry.get",
+    "meals.pantry.edit",
 ];
 
 #[derive(Deserialize)]
@@ -147,6 +158,17 @@ fn call<H: Host + ?Sized>(host: &H, tool: &str, parameters: &Value) -> Result<Ch
         "meals.kitchen.save" => save_kitchen(host, &input)?,
         "meals.household.save" => save_member(host, &input)?,
         "meals.household.remove" => remove_member(host, &input)?,
+        "meals.plan.create" => plans::create(host, &input)?,
+        "meals.plan.get" => plans::get(host, &input)?,
+        "meals.plan.current" => plans::current(host, &input)?,
+        "meals.plan.control" => plans::control(host, &input)?,
+        "meals.list.get" => shopping::list_get(host, &input)?,
+        "meals.list.build" => shopping::list_build(host, &input)?,
+        "meals.list.edit" => shopping::list_edit(host, &input)?,
+        "meals.list.bought" => shopping::list_bought(host, &input)?,
+        "meals.list.clear" => shopping::list_clear(host, &input)?,
+        "meals.pantry.get" => stock::get(host, &input)?,
+        "meals.pantry.edit" => stock::edit(host, &input)?,
         _ => return Err(moss_module_sdk::Error::new("Unknown Meals tool")),
     })
 }

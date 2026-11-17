@@ -44,7 +44,7 @@ fn a_job_is_refused_with_fixed_text() {
 #[test]
 fn the_package_builds_and_the_manifest_validates() {
     let files = moss_news_host::package::files(&root(), &component()).unwrap();
-    assert_eq!(files.keys().filter(|k| k.starts_with("sql/")).count(), 9);
+    assert_eq!(files.keys().filter(|k| k.starts_with("sql/")).count(), 10);
     for needed in ["moss.module.json", "code/module.wasm", "LICENSE", "NOTICE", "CHANGELOG.md"] {
         assert!(files.contains_key(needed), "{needed} missing");
     }
@@ -83,6 +83,12 @@ fn changing_one_byte_of_the_legacy_sql_stops_the_build() {
     for entry in std::fs::read_dir(from.join("sql")).unwrap() {
         let entry = entry.unwrap();
         std::fs::copy(entry.path(), to.join(entry.file_name())).unwrap();
+    }
+    let own = copy.join("modules/news/sql");
+    std::fs::create_dir_all(&own).unwrap();
+    for entry in std::fs::read_dir(root().join("modules/news/sql")).unwrap() {
+        let entry = entry.unwrap();
+        std::fs::copy(entry.path(), own.join(entry.file_name())).unwrap();
     }
     assert!(moss_news_host::package::files(copy, &component()).is_ok(), "untouched copy builds");
     let first = moss_news_host::package::manifest().unwrap().database.migrations[0].clone();

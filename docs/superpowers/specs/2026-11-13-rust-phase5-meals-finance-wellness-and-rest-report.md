@@ -992,6 +992,159 @@ Both are expected to finish with exit code 0.
 - **Route parity** applies only in that old Meals had no routes. There is nothing to compare.
 - **Release note** is not applicable.
 
+## Meals planning (part 29)
+
+### What existed before this part
+
+Part 28 gave Meals a package with the kitchen and household tools. Nothing for plans or
+recipes existed in Rust.
+
+### What was built
+
+- **Planning rules.** Date handling, the day and meal skeleton, portion sizes, the calorie band
+  and the recipe title key, ported from the old planning code.
+- **The safety rule.** The allergy and dietary check, the merge of the rule result with the
+  model's own safety answer, and the brand-name rule.
+- **Recipe answers read strictly.** The recipe and safety answers from the model are parsed
+  with fixed error text, and the prompts that ask for them are built in Rust.
+- **Pantry name matching.** Matching an ingredient to a pantry item by name, and finding
+  ingredients that are not in the pantry.
+- **The recipe drafting loop.** Draft, check safety, retry with the problem named, and give up
+  after a fixed number of tries. It runs against a stand-in model.
+- **Plan storage.** Plans, days, meals, eaters and recipes are read and written through the
+  host's typed queries. There are no transactions, so a repeated create with the same key
+  finishes a half-written plan, and day and meal changes use compare-and-set updates.
+- **Four plan tools.** Create, get, current and control (stop, resume, retry a day,
+  regenerate). Writes cross the host's one-use approval.
+- **The plan-day job.** Writes one day at a time through the drafting loop, reads the pantry
+  when the plan uses it, and chains the next pending day. A failed enqueue pauses the plan.
+- **Manifest, app map and changelog** carry the new tools, the job queue and the model and
+  jobs ports.
+- **Calories per serving stay empty.** The estimator is part 31. Pantry quantity maths is
+  part 30.
+
+### Proof
+
+- 23 native tests pass for the guest. The drafting loop is proven with a canned model
+  (clean draft, retry after a safety failure, retry after a malformed answer, giving up,
+  brand-name rejection).
+- The package gate passes: native tests, the WebAssembly build, package tests and the
+  installed-package tests.
+- One installed test proves plans are owner-only (a second person and the admin see nothing
+  and cannot stop a plan), that removing the owner rule on the plan and day tables makes the
+  second person see rows (so the check can fail), that the same key gives one plan, and that
+  a planted private marker is in no job payload and no activity row.
+
+### Not proven or not built
+
+- **Tools not built.** Meal edit, swap, servings and favourites edit, plan delete, meal get,
+  meal cooked, meal rate, day edit and re-plan are not built. Control rejects re-plan.
+- **The job has no native or installed test.** Only the drafting loop it calls is tested,
+  with a canned model. The store and plan code have no native unit tests of their own.
+- **No route parity run against the old handlers** for the plan tools, and no live run on the
+  real Rust server.
+- **Live model run.** The model dependency (JS-307) is not merged, so nothing has run against
+  a real model.
+- **Known gaps from review, not fixed.** A day or meal left in the writing state by a killed
+  job is never claimed again. A repeat create with the same key returns the plan as it is and
+  does not finish a half-written one (the store comment overstates this). A failed first
+  enqueue pauses the plan without telling the caller. Regenerate leaves the old recipe rows
+  behind. A regenerate across several days queues only the first day.
+- **Ratings vetoes** are not applied when drafting.
+- **Enqueue limits** are approximated. The host has no "limited" answer, so a failed enqueue
+  pauses the plan.
+- **Numeric columns** may come back as numbers or text from the host. The store accepts both.
+- **No tracking card** for JS-308 was found in Vikunja.
+- **Release note** is not applicable.
+
+## Meals lists and pantry (part 30)
+
+### What existed before this part
+
+Parts 28 and 29 gave Meals a package with the kitchen, household and plan tools and the
+plan-day job. There was no shopping list and no pantry in Rust. The pantry was read by the
+planner but could not be edited.
+
+### What was built
+
+- **Unit maths.** Unit names, conversion between compatible units, and the rounding and
+  display rules, ported from the old code.
+- **List build and reconcile rules.** A list is built from the ingredients of the plan's meals,
+  merged by name and unit, with pantry coverage marked. Reconcile keeps manual lines, keeps
+  ticked lines, keeps bought lines, and only adds or removes what the plan changed.
+- **Pantry coverage.** A line is covered when the pantry or the staples already hold it.
+- **Five list tools.** Get, build, edit (add, update, remove, tick, untick), bought and clear.
+- **Two pantry tools.** Get and edit, for stock items and for staples (add, update, remove).
+- **Hooks.** The plan-day job rebuilds the list after it finishes a day. A pantry edit
+  re-checks coverage on the list.
+- **Mark bought.** Moves each bought line into the pantry once, even when repeated.
+- **Undo records.** Removing a line or a pantry item and marking lines bought each write an
+  undo record before or after the change, as the old code did.
+- **Manifest, app map and changelog** carry the seven new tools, the three new table grants
+  and two chat features.
+
+### Differences from the old code (on purpose)
+
+- There are no database transactions in the host. Marking lines bought runs in a fixed order
+  (pantry rows, then the lines, then the undo record). The pantry rows get fixed ids built
+  from the line and its last-change time, so a repeat after a crash finishes the work and adds
+  no second row, unless a tick, untick or rebuild changed that line in between. A repeat after
+  full success is refused with the old "no shopping list line" message. A crash after the lines change loses only the undo record.
+- Sorting names uses a simple locale-style comparison. It matches the old order for plain
+  Latin names and may differ for rare accents.
+- Bought lines older than one day are deleted when the list is rebuilt after a plan or pantry
+  change, using the host clock. Reading the list does not sweep. The old code did the same.
+- A bought call that names the same line twice adds one pantry row. The old code added two.
+- Tick or untick with an empty line list gives "lineId is required" instead of the old
+  "lineIds must hold 1 to 100 line ids".
+- Staples have no changed-at column, so a rename writes the name directly.
+
+### Proof
+
+- Native guest tests pass: 33 unit tests, 8 list and pantry tests (empty read writes nothing,
+  manual line life cycle with undo, the old error messages, build from a plan with labels
+  such as "Mon dinner", bought once with undo, clear touches only the lines, pantry and
+  staple rules, a second person sees nothing), and the privacy test with the new tools.
+- The package gate passes: native tests, the WebAssembly build, package tests (6) and the
+  installed-package tests (5), all in one run.
+- Route parity against the old handlers: a 44-step script runs the old handlers and the new
+  package on the same fixtures and compares answers, with ids and timestamps masked.
+- Row-level security: a second person sees and changes nothing in the five new tables, and
+  removing the owner rule on each table makes the check fail, then it passes after restore.
+- Clearing a list changed only that list's lines. A digest of every other table, including
+  the second person's rows, is the same before and after.
+- A planted private word is in no job row and no activity row, and the privacy control that
+  plants it in a host call is seen failing.
+
+From the repo root, through the gate script:
+
+```
+scripts/run-gate.sh start --gate test:rust-meals
+```
+
+```
+scripts/run-gate.sh start --gate test:rust-meals-live
+```
+
+The live run passed on the real Rust server over real HTTPS on a non-loopback address, with no response rewriting and certificate checks on. It added a list and a pantry item, read them back, marked the line bought, cleared the list, and showed the pantry kept the item. A second person was refused (403) on clearing, and the list stayed. The private word was absent from activity and the server log. The same run showed an untrusted origin refused, which covers reaching Moss from another device.
+
+The first run of the package gate failed at once because the worktree had no installed web
+packages, and the second failed because the private Rust folder lacked the WebAssembly
+target. Neither was a code fault.
+
+### Not proven or not built
+
+- **Undo restore** is not built. The undo records are written but nothing reads them back,
+  and the tool descriptions now say so.
+- **Concurrent bought calls** may add a pantry row for a line another call already marked.
+- **No screens** were built.
+- **Plan delete hook** does not apply, because no plan delete tool exists. The hook runs
+  only after the day job.
+- **Name order** is an approximation, see above.
+- **Crash window** in mark bought is described above and was reasoned through, not forced.
+- **No tracking card** for JS-310 was found in Vikunja after three searches.
+- **Release note** is not applicable.
+
 ## Finance transactions (part 22)
 
 ### What was built
@@ -1050,4 +1203,56 @@ Both ended with exit code 0. The first run of the package gate failed because a 
 - Route parity with the old handlers is checked through ported messages, status codes and shapes in the guest tests. The old handlers were not run side by side with the new ones.
 - Row-level security for the two new tables (rules, imports) is proven through the live run (second person sees none and cannot write) and the guest-level check. It was not separately re-run in Postgres with the protection removed.
 - The stored-job-row search was not seen failing with protection off, because Finance queues no jobs. The control shows the search can find stored text.
+- No screens were built.
+
+## Finance budgets (part 23)
+
+### What was built
+
+- Setup: choose the budget currency once (it cannot change afterwards) and say whether old budget data may be left behind. Repeating the same setup changes nothing.
+- Status for a month: money left to assign, each category's assigned, spent and available amounts, with unspent money carried forward and overspending taken out of next month's pool. Transfers between a person's own accounts are left out, including a matched pair within three days.
+- Assign and move: set what a category gets for a month, move money between categories or from the unassigned pool, and apply up to 20 changes together. Each save carries the review the person was looking at.
+- Drafts: build a draft budget from the last three complete months of stored transactions (monthly average, planned amount rounded up to the next five dollars, steady charges grouped as Bills, income as the middle monthly figure). A draft can be read, edited line by line, and started once.
+- The assistant's writes use `/finance/chat/budget/...` routes, each needing the host's one-use approval. The screen routes sit under `/finance/budget/...`. Package version is 0.3.0, with the new tables, routes, tools, risk levels, features and errors in the manifest.
+
+### Proof
+
+| Check                                                                                     | Result                                                                                                                                        |
+| ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Native guest tests (40 unit, budget 19, plus the older suites)                            | passed                                                                                                                                        |
+| Package tests and the real component built as WebAssembly, run against the real host      | passed, including the four new table grants and the refused tables                                                                            |
+| Draft figures come from stored records                                                    | passed in the guest tests and against the real database: 30000, 31234 and 32000 became 31078 and 31500                                        |
+| An uncertain save saves nothing and says so                                               | a stale review gets a 409 with "Refresh and review"; rows and revision are unchanged. A draft start that fails part way rolls back everything |
+| Two people, real database: second person and an admin read and change none of the budget  | passed. With row security switched off the same check fails (RED), and passes with it back on                                                 |
+| Private text searched for in job rows, host call logs, activity rows and the queue tables | none found; a planted leak is caught by the same scan, and a control that puts amounts into budget activity makes the test fail               |
+| Live run: real server, real HTTPS on a non-loopback address, no response rewriting        | passed: setup, assign, a stale review refused (409), a draft from stored rows, chat route refused without approval, second person sees none   |
+| Moss reachable from another device                                                        | same live run: non-loopback address, certificate checked, untrusted origin refused, sign-in                                                   |
+
+From the repo root, through the gate script:
+
+```
+scripts/run-gate.sh start --gate test:rust-finance
+```
+
+```
+scripts/run-gate.sh start --gate test:rust-finance-live
+```
+
+Both ended with exit code 0. The first package gate run failed twice before it passed: the worktree had no dependencies installed, and then a test module lacked an import. Neither touched product behaviour.
+
+### Deliberate differences from the old code
+
+- The budget-apply queue is gone. Applying changes runs inside the request in one database transaction, so no job payload exists that could carry private content.
+- Budget activity rows hold the month and category ids only. They hold no amounts and no undo record, so undoing a budget change is not built.
+- The review check is a policy revision plus a fingerprint of the budget columns, computed by the module. A save runs one conditional update on the revision and refuses on zero rows.
+- A chat route answers with the refusal's own status (409, 404 or 400) instead of always 200.
+
+### Not proven or not built
+
+- A concurrent writer between the module's fingerprint read and the revision update is guarded by the update itself, but that narrow window was not exercised with two real simultaneous writers.
+- Flex pools, targets and target funding, card reserves and bills (part 24), shared accounts and reports (part 25), and category archiving are not built.
+- Draft build and start do not refuse while flex pools are active, because flex pools do not exist yet.
+- Bank balance history written by bank sync (part 21) is not used by the budget yet. Budget figures come from the ledger and the saved balance snapshots only.
+- Route parity with the old handlers is checked through ported messages, status codes and shapes in the guest tests. The old handlers were not run side by side with the new ones.
+- Review notes left as they are: starting a draft that was discarded after a new setup returns a host error instead of a plain refusal (nothing is saved); a draft edit from the screen is recorded as changed by Moss; a move that is refused has no test showing the stored rows stay unchanged; a refund posted to the income category lowers the pool twice; draft months are counted from all transactions, not only the budget currency.
 - No screens were built.

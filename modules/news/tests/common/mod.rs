@@ -173,6 +173,7 @@ fn clash(table: &str, a: &Value, b: &Value) -> bool {
         "app.news_prefs" => same("kind") && same("key"),
         "app.news_source_exclusions" | "app.news_custom_sources" => same("canonical_domain"),
         "app.news_policy_verdicts" => same("canonical_domain"),
+        "app.news_story_feedback" => same("story_ref"),
         "app.news_custom_topics" => {
             a["label"].as_str().map(str::to_lowercase) == b["label"].as_str().map(str::to_lowercase)
         }

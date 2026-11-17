@@ -35,6 +35,10 @@ name = "domain"
 path = "../tests/domain.rs"
 
 [[test]]
+name = "part7"
+path = "../tests/part7.rs"
+
+[[test]]
 name = "prefs"
 path = "../tests/prefs.rs"
 
