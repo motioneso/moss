@@ -257,3 +257,26 @@ fn a_reply_with_missing_keys_is_refused_without_panicking() {
         assert_eq!(preview(&f)["status"], "rejected");
     }
 }
+
+#[test]
+fn lean_html_drops_script_style_and_keeps_the_text_around_them() {
+    use moss_sports_module::source_web::lean_html;
+    let page = "<html><head><TITLE>T</TITLE><script>var a = '<a href=\"/x\">no</a>';</script><style>p{}</style></head>\
+                <body><svg><path/></svg><a href=\"/news/1\">Headline one</a><noscript>hidden</noscript><script src=x></script>\
+                <scripture>kept</scripture></body></html>";
+    let lean = lean_html(page);
+    assert!(lean.contains("<TITLE>T</TITLE>"));
+    assert!(lean.contains("<a href=\"/news/1\">Headline one</a>"));
+    assert!(lean.contains("<scripture>kept</scripture>"));
+    assert!(!lean.contains("var a"));
+    assert!(!lean.contains("p{}"));
+    assert!(!lean.contains("hidden"));
+    assert!(!lean.contains("<path/>"));
+    assert_eq!(lean_html("<p>é ü ok</p><script>unclosed"), "<p>é ü ok</p>");
+}
+
+#[test]
+fn anchor_hrefs_finds_links_without_parsing_and_skips_scripts() {
+    let page = "<a class=x href=\"/one\">1</a><script>var a='<a href=\"/no\">';</script><A HREF='/two'>2</A><abbr href=\"/no\"><a>none</a>";
+    assert_eq!(moss_sports_module::source_web::anchor_hrefs(page), vec!["/one".to_owned(), "/two".to_owned()]);
+}

@@ -1,7 +1,7 @@
 //! The declarative recipe for a site that publishes no feed. A recipe names one request shape
 //! and one way to pull headlines out of the answer. It never runs code. This file holds the strict
 //! check, the request expansion, the headline extraction and the fingerprint, all pure.
-use crate::source_web::{resolve, sha256_hex};
+use crate::source_web::{lean_html, resolve, sha256_hex};
 use chrono::{DateTime, SecondsFormat, TimeZone, Utc};
 use moss_news_reader::publisher_identity;
 use moss_news_reader::url::Url;
@@ -417,7 +417,7 @@ fn extract_html(recipe: &Recipe, body: &str, request_url: &str) -> Result<Vec<It
     if body.len() > MAX_HTML_BYTES {
         return Err(Reason::Unsupported);
     }
-    let document = Html::parse_document(body);
+    let document = Html::parse_document(&lean_html(body));
     if node_count(&document) > MAX_HTML_NODES {
         return Err(Reason::Unsupported);
     }

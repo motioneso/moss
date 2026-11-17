@@ -579,14 +579,12 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
     } else {
         false
     };
-    let site = std::env::var("SPORTS_LIVE_SITE").unwrap_or_else(|_| "https://www.premierleague.com/".into());
+    let site = std::env::var("SPORTS_LIVE_SITE").unwrap_or_else(|_| "https://www.thefa.com/news".into());
     let (status, text) = call(Method::POST, "/sources/preview", Some(&cookie), Some(json!({"url":site,"assignments":[{"target":{"kind":"sport","sportKey":"football"}}]})));
     assert_eq!(status, 200, "{text}\n{}", log());
     let proposed = json_of(&text);
     println!("sports live: recipe proposal for a site with no feed ({model_name}): {} {}", proposed["status"], proposed["reason"]);
-    if has_model && proposed["status"] == "unavailable" {
-        println!("sports live: NOT PROVEN: the real model did not answer inside the host's five-second call limit, so no recipe was proposed");
-    } else if has_model {
+    if has_model {
         assert_eq!(proposed["status"], "ok", "{text}\n{}", log());
         assert_eq!(proposed["candidate"]["retrievalMethod"], "scrape", "{text}");
         println!("sports live: real model recipe replayed through the real fetch: {} sample headlines {}", proposed["candidate"]["sampleHeadlines"].as_array().map_or(0, Vec::len), proposed["candidate"]["sampleHeadlines"]);
@@ -605,8 +603,10 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
         let source = json_of(&text)["source"].clone();
         println!("sports live: refresh of the model's recipe: health {} recipe {}", source["healthState"], source["recipeStatus"]);
         assert_eq!(source["healthState"], "healthy", "{text}");
-        call(Method::DELETE, &format!("/sources/{scrape_id}"), Some(&cookie), None);
+        let (status, text) = call(Method::DELETE, &format!("/sources/{scrape_id}"), Some(&cookie), None);
+        assert_eq!(status, 200, "{text}");
     } else {
+        assert!(["unavailable", "rejected", "ok"].contains(&proposed["status"].as_str().unwrap_or_default()), "{text}");
         println!("sports live: NOT PROVEN: no test endpoint key on this box, so no model was set up");
     }
     // Nothing the test sent reached the server log.

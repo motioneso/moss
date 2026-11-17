@@ -8,11 +8,12 @@ use crate::source_discovery::Wanted;
 use crate::source_web as web;
 use moss_module_sdk::{Host, Result};
 use moss_news_reader::url::Url;
-use scraper::{Html, Selector};
 use serde_json::{json, Value};
 
-const EVIDENCE_CAP: usize = 4000;
-const EVIDENCE_PIECES: usize = 5;
+const EVIDENCE_CAP: usize = 3000;
+const HOMEPAGE_CAP: usize = 16000;
+const EVIDENCE_PAGE_BYTES: u64 = 64_000;
+const EVIDENCE_PIECES: usize = 4;
 const CANDIDATE_LINKS: usize = 4;
 const REPLAY_CAP: usize = 10;
 const SAMPLE_CAP: usize = 10;
@@ -39,17 +40,16 @@ pub struct Replay {
     pub headlines: Vec<String>,
 }
 
-fn clean(text: &str) -> String {
-    text.chars().filter(|c| !c.is_control() || *c == '\n').take(EVIDENCE_CAP).collect()
+fn clean(text: &str, cap: usize) -> String {
+    web::lean_html(text).chars().filter(|c| !c.is_control() || *c == '\n').take(cap).collect()
 }
 
 /// A few same-publisher pages that might hold the headlines, taken from the homepage's links.
 fn candidate_links(homepage_url: &str, homepage_body: &str, allowed: &[String]) -> Vec<String> {
-    let (Some(base), Ok(anchors)) = (Url::parse(homepage_url), Selector::parse("a[href]")) else { return Vec::new() };
-    let document = Html::parse_document(homepage_body);
+    let Some(base) = Url::parse(homepage_url) else { return Vec::new() };
     let mut found: Vec<String> = Vec::new();
-    for anchor in document.select(&anchors) {
-        let Some(url) = anchor.value().attr("href").and_then(|h| web::resolve(h, &base)) else { continue };
+    for href in web::anchor_hrefs(homepage_body) {
+        let Some(url) = web::resolve(&href, &base) else { continue };
         if !url.https || !url.username.is_empty() || url.port.is_some() || !allowed.contains(&url.hostname.to_lowercase()) {
             continue;
         }
@@ -65,7 +65,7 @@ fn candidate_links(homepage_url: &str, homepage_body: &str, allowed: &[String]) 
 }
 
 fn evidence<H: Host + ?Sized>(host: &H, homepage_url: &str, homepage_body: &str, wanted: &[Wanted], allowed: &[String]) -> Result<Vec<Value>> {
-    let mut pieces = vec![json!({"url": homepage_url, "text": clean(homepage_body)})];
+    let mut pieces = vec![json!({"url": homepage_url, "text": clean(homepage_body, HOMEPAGE_CAP)})];
     let mut urls: Vec<String> = wanted.iter().filter_map(|w| w.exact_target_url.clone()).collect();
     urls.extend(candidate_links(homepage_url, homepage_body, allowed));
     for url in urls {
@@ -75,8 +75,8 @@ fn evidence<H: Host + ?Sized>(host: &H, homepage_url: &str, homepage_body: &str,
         if pieces.iter().any(|p| p["url"] == url.as_str()) {
             continue;
         }
-        if let Ok(page) = web::get(host, &url, Some(allowed))? {
-            pieces.push(json!({"url": page.final_url, "text": clean(&page.body)}));
+        if let Ok(page) = web::get_up_to(host, &url, Some(allowed), EVIDENCE_PAGE_BYTES, false)? {
+            pieces.push(json!({"url": page.final_url, "text": clean(&page.body, EVIDENCE_CAP)}));
         }
     }
     Ok(pieces)

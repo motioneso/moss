@@ -804,32 +804,25 @@ model proposes, and it reads saved sources again with health states. It still sh
 
 ### Not proven
 
-- A live recipe proposal is still not proven, but the cause is now known. The live test now sets up
-  a real model through the shared test endpoint (Codex sign-in, model gpt-6.1-sol) and previews the
-  Premier League home page, which has no feed. The route answered "unavailable". The cause is a
-  platform limit, not the sports code. Every module call gets five seconds in the host, and every
-  model the test endpoint offers took 11 to 14 seconds on a one-line prompt (measured by direct
-  calls). The Claude route had an expired sign-in and the Gemini route was disabled. A real model
-  therefore cannot finish a proposal inside one request, for Sports or for any other module that
-  asks a model. The fix is a platform change that lets a module ask for a longer call limit, up to
-  a host ceiling, the way it already asks for more processing budget. A first attempt on the Sky
-  Sports home page also showed that a 500 KB page uses up the module's whole processing budget
-  while it is read. The proposal is proven only with a fake model and the real fetch of a fake
-  page.
-- The row-level-security test for the recipe columns relies on the existing six-table test. The
-  new retry and rebuild routes are checked for a second person against the in-memory host, not
-  against real Postgres.
-- The new routes are not in the old-code comparison run. Route parity for them is by reading the
-  old handlers.
-- Replacing a recipe is not atomic, because the package has no transaction. A failure after the old targets are deleted can leave the new recipe with no targets.
-- Retry waits and a headline cache from the old code are not built. The package cannot sleep.
-- The recipe's accept-language header cannot be sent, because the fetch port has no such option.
-- Feed items get the fetch time as their date.
-- Dates in a recipe read only as RFC 3339, RFC 2822 or epoch milliseconds.
-- A replay needs at least one headline, which is stricter than the old code.
-- The fetched page is capped at 2 MB and 10,000 elements. Nesting depth is not checked.
-- The Reddit add still failed live on this box (sign-in needed or rate limited on all 4 tries).
-- Browser sources, chat tools (14b) and photos are later parts.
+- Reddit refused the real server on every try in the live run, so no real subreddit was saved
+  there. The fake-data tests still cover the subreddit path.
+
+### Live recipe proposal with a real model
+
+- Result: proven. The live test set up a real model through the shared test endpoint (Codex
+  sign-in, model gpt-6.1-sol), previewed the Football Association news page (no feed) through
+  the real route, and nothing was faked. The model wrote a recipe, the real fetch replayed it and
+  found 8 real headlines, the recipe saved, a refresh showed healthy with the recipe ready, and the
+  source deleted cleanly. One earlier run on the same page was refused as "unsupported", so the
+  model's answer varies between runs and a bad answer is refused, never saved.
+- The module asks for a 30 second call limit (`callLimitMs`, from the new host setting). A real
+  model takes 11 to 20 seconds, which the old five second limit could not allow.
+- Processing budget was the other limit. The module's 250 million step budget ran out on big
+  pages, and the shell answered with an empty 400. The proposal now parses the page head only for
+  titles and feed links, finds links by a plain scan, skips script, style and picture blocks, and
+  reads at most four short evidence pages. A 105 million step run on the FA page now fits.
+  Pages near 200 KB or more, such as ESPN soccer, still run out. A larger budget for modules
+  would be a platform change.
 
 ### Review round 1 (part 14a)
 

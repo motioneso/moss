@@ -26,6 +26,7 @@ const MAX_BYTES: u64 = 1_000_000;
 const TIMEOUT_MS: u64 = 10_000;
 const MAX_INPUT_LENGTH: usize = 2048;
 const MAX_HOSTNAME_LENGTH: usize = 253;
+const HEAD_FALLBACK_CHARS: usize = 30_000;
 const MAX_FEED_LINKS: usize = 3;
 
 /// One successful page read.
@@ -43,14 +44,19 @@ pub enum Fail {
 
 /// One GET through the host's public-web mode. `allowed_hosts` narrows redirects to exact hosts.
 pub fn get<H: Host + ?Sized>(host: &H, url: &str, allowed_hosts: Option<&[String]>) -> Result<std::result::Result<Fetched, Fail>> {
+    get_up_to(host, url, allowed_hosts, MAX_BYTES, true)
+}
+
+/// A read that keeps only the first `max_bytes` of the page when `reject_oversized` is false.
+pub fn get_up_to<H: Host + ?Sized>(host: &H, url: &str, allowed_hosts: Option<&[String]>, max_bytes: u64, reject_oversized: bool) -> Result<std::result::Result<Fetched, Fail>> {
     let mut parameters = json!({
         "url": url,
         "accept": ACCEPT,
-        "maxBytes": MAX_BYTES,
+        "maxBytes": max_bytes,
         "timeoutMs": TIMEOUT_MS,
         "userAgent": USER_AGENT,
         "allowedContentTypes": CONTENT_TYPES,
-        "rejectOversizedResponses": true,
+        "rejectOversizedResponses": reject_oversized,
     });
     if let Some(hosts) = allowed_hosts {
         parameters["allowedHosts"] = json!(hosts);
@@ -208,13 +214,81 @@ pub struct Metadata {
     pub canonical_url: Option<String>,
 }
 
+/// Drops script, style, svg and noscript blocks. Selectors never read them, and they make up
+/// most of a modern page, so parsing the rest costs far less of the module's compute budget.
+pub fn lean_html(html: &str) -> String {
+    const SKIPPED: [&str; 4] = ["script", "style", "svg", "noscript"];
+    let lower = html.to_ascii_lowercase();
+    let bytes = lower.as_bytes();
+    let mut out = String::with_capacity(html.len() / 2);
+    let mut copied = 0;
+    let mut at = 0;
+    while let Some(offset) = lower[at..].find('<') {
+        let start = at + offset;
+        at = start + 1;
+        let name = &lower[start + 1..];
+        let Some(tag) = SKIPPED.iter().find(|tag| {
+            name.starts_with(**tag) && matches!(bytes.get(start + 1 + tag.len()), Some(b'>' | b' ' | b'\t' | b'\n' | b'\r' | b'/'))
+        }) else {
+            continue;
+        };
+        out.push_str(&html[copied..start]);
+        let close = format!("</{tag}");
+        let end = match lower[start..].find(&close) {
+            Some(end) => match lower[start + end..].find('>') {
+                Some(gt) => start + end + gt + 1,
+                None => html.len(),
+            },
+            None => html.len(),
+        };
+        copied = end;
+        at = end;
+    }
+    out.push_str(&html[copied..]);
+    out
+}
+
+/// The part of a page before its body. Titles and link tags live there, so the body is never parsed for them.
+fn head_of(html: &str) -> String {
+    match html.to_ascii_lowercase().find("</head") {
+        Some(end) => lean_html(&html[..end]),
+        None => lean_html(&html.chars().take(HEAD_FALLBACK_CHARS).collect::<String>()),
+    }
+}
+
+/// The href of every anchor tag, in page order, found by a plain scan so the page is never parsed.
+pub fn anchor_hrefs(html: &str) -> Vec<String> {
+    let lean = lean_html(html);
+    let lower = lean.to_ascii_lowercase();
+    let mut out = Vec::new();
+    let mut at = 0;
+    while let Some(offset) = lower[at..].find("<a") {
+        let start = at + offset;
+        at = start + 2;
+        if !matches!(lower.as_bytes().get(at), Some(b' ' | b'\t' | b'\n' | b'\r')) {
+            continue;
+        }
+        let end = lower[at..].find('>').map_or(lower.len(), |gt| at + gt);
+        let tag = &lower[at..end];
+        let Some(key) = tag.find("href=") else { continue };
+        let value_start = at + key + 5;
+        let Some(quote) = lower[value_start..].chars().next().filter(|c| *c == '"' || *c == '\'') else { continue };
+        let value_start = value_start + 1;
+        if let Some(len) = lean[value_start..].find(quote) {
+            out.push(lean[value_start..value_start + len].to_owned());
+        }
+        at = end;
+    }
+    out
+}
+
 fn selector(css: &str) -> Selector {
     Selector::parse(css).expect("fixed selector")
 }
 
 /// Page title, description and canonical address, read the way the old reader read them.
 pub fn html_metadata(html: &str) -> Metadata {
-    let document = Html::parse_document(html);
+    let document = Html::parse_document(&head_of(html));
     let title = document
         .select(&selector("title"))
         .next()
@@ -250,7 +324,7 @@ pub fn html_metadata(html: &str) -> Metadata {
 /// Up to three same-publisher HTTPS feed links the page advertises, in page order.
 pub fn discover_feed_urls(html: &str, base_url: &str) -> Vec<String> {
     let Some(base) = Url::parse(base_url) else { return Vec::new() };
-    let document = Html::parse_document(html);
+    let document = Html::parse_document(&head_of(html));
     let mut urls: Vec<String> = Vec::new();
     for el in document.select(&selector("link")) {
         if urls.len() >= MAX_FEED_LINKS {
