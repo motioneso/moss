@@ -35,6 +35,8 @@
     "test:rust-news-live": "bash modules/news/tools/live.sh",
     "test:rust-goals": "tsx modules/goals/tools/gate.ts",
     "test:rust-goals-live": "bash modules/goals/tools/live.sh",
+    "test:rust-meals": "tsx modules/meals/tools/gate.ts",
+    "test:rust-meals-live": "bash modules/meals/tools/live.sh",
     "test:rust-commitments": "tsx modules/commitments/tools/gate.ts",
     "test:rust-commitments-live": "bash modules/commitments/tools/live.sh",
     "test:rust-wellness": "tsx modules/wellness/tools/gate.ts",

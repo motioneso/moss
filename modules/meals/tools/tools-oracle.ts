@@ -1,0 +1,44 @@
+/** Runs the old Meals kitchen and household handlers on rows in the disposable database. */
+import assert from "node:assert/strict";
+import pg from "pg";
+import { getMossDatabaseUrls } from "@moss/db";
+import { HANDLERS } from "../../../external-modules/meals/src/worker/registry.js";
+import { InputError } from "../../../external-modules/meals/src/tools/validate.js";
+
+assert.equal(process.env.JARVIS_GATE_RUN, "1", "Use verify-gate");
+let raw = "";
+for await (const chunk of process.stdin) raw += String(chunk);
+const { actor, role, tool, parameters } = JSON.parse(raw) as {
+  actor: string;
+  role: string;
+  tool: string;
+  parameters: Record<string, unknown>;
+};
+const handler = HANDLERS[tool.replace(/^meals\./, "")];
+assert.ok(handler, "Unknown legacy tool");
+const client = new pg.Client({ connectionString: getMossDatabaseUrls().bootstrap });
+await client.connect();
+try {
+  await client.query("BEGIN");
+  await client.query(`SET LOCAL ROLE ${role}`);
+  await client.query("SELECT set_config('app.actor_user_id', $1, true)", [actor]);
+  const db = {
+    query: async (text: string, params?: readonly unknown[]) => {
+      const result = await client.query(text, params as unknown[]);
+      return { rows: result.rows };
+    }
+  };
+  let reply: unknown;
+  try {
+    // The handlers read only ctx.input and ctx.db for these four tools.
+    const data = await handler({ input: parameters, db } as never);
+    reply = { data };
+  } catch (error) {
+    if (!(error instanceof InputError)) throw error;
+    reply = { data: { error: error.message, code: error.code } };
+  }
+  await client.query("COMMIT");
+  console.log(JSON.stringify(reply));
+} finally {
+  await client.end();
+}
