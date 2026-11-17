@@ -178,7 +178,10 @@ impl Host for Fake {
                 for order in query.order.iter().rev() {
                     found.sort_by(|a, b| {
                         let (x, y) = (&a[order.column.as_str()], &b[order.column.as_str()]);
-                        let ord = x.as_str().unwrap_or("").cmp(y.as_str().unwrap_or(""));
+                        let ord = match (x.as_bool(), y.as_bool()) {
+                            (Some(p), Some(q)) => p.cmp(&q),
+                            _ => x.as_str().unwrap_or("").cmp(y.as_str().unwrap_or("")),
+                        };
                         if order.descending { ord.reverse() } else { ord }
                     });
                 }
@@ -190,16 +193,38 @@ impl Host for Fake {
                 let n = self.ids.get();
                 // Moments rise one microsecond at a time, and two check-ins can share one moment.
                 let at = format!("2026-11-11T18:00:{:02}.123456Z", n / 2);
-                let mut row = json!({"id": id, "owner_user_id": actor, "checked_in_at": at, "created_at": at,
-                    "wheel_version": "v2", "feeling_secondary": null, "feeling_tertiary": null,
-                    "sensations": [], "intensity": null, "energy": null, "note": null,
-                    "identified_via": "wheel", "local_date": null, "timezone_offset": 0});
-                if resource.ends_with("therapy_notes") {
-                    row = json!({"id": row["id"], "owner_user_id": actor, "created_at": at, "updated_at": at,
-                        "linked_checkin_id": null, "linked_emotion": null});
-                }
+                let mut row = match resource {
+                    "app.medications" => json!({"id": id, "owner_user_id": actor, "created_at": format!("2026-11-11T18:00:{:02}.123456+00:00", n / 2),
+                        "updated_at": format!("2026-11-11T18:00:{:02}.123456+00:00", n / 2), "dosage": null, "form": null, "notes": null,
+                        "times_per_day": null, "interval_hours": null, "weekdays": null, "schedule_times": null,
+                        "cycle_days_on": null, "cycle_days_off": null, "cycle_anchor_date": null, "active": true,
+                        "schedule_start_date": null, "schedule_end_date": null, "time_zone": null, "interval_unit": null,
+                        "interval_count": null, "month_kind": null, "month_day": null, "month_day_is_last": false,
+                        "month_weekday_position": null, "month_weekday": null, "reminders_enabled": false}),
+                    "app.medication_logs" => {
+                        // One record per medicine and slot, as the unique index on the real table says.
+                        let slot = &query.values["scheduled_for"];
+                        let taken = !slot.is_null()
+                            && rows.iter().any(|r| r["medication_id"] == query.values["medication_id"] && &r["scheduled_for"] == slot);
+                        if taken {
+                            return Err(Error::new("duplicate key value violates unique constraint"));
+                        }
+                        json!({"id": id, "owner_user_id": actor, "dose": null, "prn_reason": null, "scheduled_for": null,
+                            "logged_at": format!("2026-11-11T18:00:{:02}.123456+00:00", n / 2)})
+                    }
+                    "app.wellness_therapy_notes" => json!({"id": id, "owner_user_id": actor, "created_at": at, "updated_at": at,
+                        "linked_checkin_id": null, "linked_emotion": null}),
+                    _ => json!({"id": id, "owner_user_id": actor, "checked_in_at": at, "created_at": at,
+                        "wheel_version": "v2", "feeling_secondary": null, "feeling_tertiary": null,
+                        "sensations": [], "intensity": null, "energy": null, "note": null,
+                        "identified_via": "wheel", "local_date": null, "timezone_offset": 0}),
+                };
                 for (k, v) in &query.values {
-                    row[k.as_str()] = v.clone();
+                    // The real column holds a time, which reads back with seconds.
+                    row[k.as_str()] = match (k.as_str(), v) {
+                        ("schedule_times", Value::Array(t)) => json!(t.iter().map(|x| format!("{}:00", x.as_str().unwrap_or(""))).collect::<Vec<_>>()),
+                        _ => v.clone(),
+                    };
                 }
                 rows.push(row.clone());
                 Ok(json!([row]))
@@ -208,7 +233,10 @@ impl Host for Fake {
                 let mut changed = vec![];
                 for row in rows.iter_mut().filter(|r| r["owner_user_id"] == actor && matches(r, &query.filter)) {
                     for (k, v) in &query.values {
-                        row[k.as_str()] = v.clone();
+                        row[k.as_str()] = match (k.as_str(), v) {
+                            ("schedule_times", Value::Array(t)) => json!(t.iter().map(|x| format!("{}:00", x.as_str().unwrap_or(""))).collect::<Vec<_>>()),
+                            _ => v.clone(),
+                        };
                     }
                     changed.push(row.clone());
                 }

@@ -475,6 +475,75 @@ fn installed_wellness_package_serves_routes_from_the_real_server() {
     assert_eq!(json_of(&text), json!({"effective":false,"explicit":false}), "{text}");
     let (_, text) = call(Method::GET, "/wellness/ai-consent", Some(&other), None);
     assert_eq!(json_of(&text), json!({"effective":true,"explicit":null}));
+    // Medicines: the owner adds two, takes a dose, reads the day and the summary. The other person
+    // sees none of it and cannot change it. Every call goes through the real server.
+    const MED_MARK: &str = "PLANTED-LIVE-MEDICINE-4b9c";
+    let (status, text) = call(
+        Method::POST,
+        "/wellness/medications",
+        Some(&cookie),
+        Some(json!({"name":MED_MARK,"dosage":MED_MARK,"notes":MED_MARK,"frequencyType":"times_per_day","timesPerDay":2,"scheduleTimes":["08:00","20:00"]})),
+    );
+    assert_eq!(status, 201, "{text}\n{}", log());
+    let med = json_of(&text)["medication"].clone();
+    let med_id = med["id"].as_str().unwrap().to_owned();
+    assert_eq!(med["ownerUserId"], owner.to_string());
+    let (status, text) = call(
+        Method::POST,
+        "/wellness/medications",
+        Some(&cookie),
+        Some(json!({"name":"Live as needed","frequencyType":"as_needed"})),
+    );
+    assert_eq!(status, 201, "{text}");
+    let prn_id = json_of(&text)["medication"]["id"].as_str().unwrap().to_owned();
+    let (status, text) = call(
+        Method::POST,
+        &format!("/wellness/medications/{med_id}/logs"),
+        Some(&cookie),
+        Some(json!({"status":"taken","scheduledFor":"2026-03-15T08:00:00.000Z","dose":MED_MARK})),
+    );
+    assert_eq!(status, 201, "{text}\n{}", log());
+    let (status, _) = call(
+        Method::POST,
+        &format!("/wellness/medications/{prn_id}/logs"),
+        Some(&cookie),
+        Some(json!({"status":"prn","prnReason":MED_MARK})),
+    );
+    assert_eq!(status, 201);
+    let (status, text) = call(Method::GET, "/wellness/medications/schedule?date=2026-03-15", Some(&cookie), None);
+    assert_eq!(status, 200, "{text}");
+    let slots = json_of(&text)["slots"].clone();
+    let statuses: Vec<(String, String)> = slots
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| (s["name"].as_str().unwrap().to_owned(), s["status"].as_str().unwrap().to_owned()))
+        .collect();
+    assert!(statuses.contains(&(MED_MARK.into(), "taken".into())), "{text}");
+    assert!(statuses.contains(&(MED_MARK.into(), "pending".into())), "{text}");
+    let (status, text) = call(Method::GET, "/wellness/medications/logs", Some(&cookie), None);
+    assert_eq!(status, 200, "{text}");
+    assert_eq!(json_of(&text)["days"].as_array().unwrap().len(), 30);
+    let (_, text) = call(Method::GET, "/wellness/medications", Some(&other), None);
+    assert_eq!(json_of(&text), json!({"medications":[]}), "{text}");
+    let (_, text) = call(Method::GET, "/wellness/medications/schedule?date=2026-03-15", Some(&other), None);
+    assert_eq!(json_of(&text)["slots"], json!([]), "{text}");
+    assert_eq!(
+        call(Method::PATCH, &format!("/wellness/medications/{med_id}"), Some(&other), Some(json!({"name":"stolen"}))).0,
+        404
+    );
+    assert_eq!(
+        call(
+            Method::POST,
+            &format!("/wellness/medications/{med_id}/logs"),
+            Some(&other),
+            Some(json!({"status":"taken","scheduledFor":"2026-03-16T08:00:00.000Z"}))
+        )
+        .0,
+        404
+    );
+    assert_eq!(call(Method::GET, "/wellness/medications", None, None).0, 401);
+    println!("PASS live medications: two medicines, a dose, the day and the summary worked over HTTPS, and the second person saw none of it");
     // Therapy notes and export on the real server. The worker runs inside the server process, so
     // the export is polled until it is ready.
     const NOTE: &str = "PLANTED-THERAPY-MARKER-91c3";
@@ -521,8 +590,9 @@ fn installed_wellness_package_serves_routes_from_the_real_server() {
     )
     .unwrap();
     let activity = serde_json::to_string(&services.activity("wellness", &access).unwrap()).unwrap();
-    assert!(!activity.contains(MARK) && !activity.contains(NOTE));
+    assert!(!activity.contains(MARK) && !activity.contains(MED_MARK) && !activity.contains(NOTE));
     assert!(!log().to_lowercase().contains(&MARK.to_lowercase()));
+    assert!(!log().to_lowercase().contains(&MED_MARK.to_lowercase()));
     assert!(!log().to_lowercase().contains(&NOTE.to_lowercase()), "therapy-note text reached the server log");
-    println!("wellness live: check-ins, history paging, change and consent for two people worked over HTTPS");
+    println!("wellness live: check-ins, history paging, change, consent, medicines and therapy notes for two people worked over HTTPS");
 }

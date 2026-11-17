@@ -25,6 +25,8 @@ pub struct Fake {
     pub model: RefCell<Vec<Result<String>>>,
     /// The person's key-value files, by (person, name).
     pub files: RefCell<BTreeMap<(String, String), Value>>,
+    /// Answers other modules give, by "module.name". A name not listed fails.
+    pub apis: RefCell<BTreeMap<String, Value>>,
     /// The host clock in milliseconds since the epoch.
     pub clock: Cell<i64>,
     ids: Cell<u32>,
@@ -40,6 +42,7 @@ impl Fake {
             pages: RefCell::new(BTreeMap::new()),
             model: RefCell::new(vec![]),
             files: RefCell::new(BTreeMap::new()),
+            apis: RefCell::new(BTreeMap::new()),
             clock: Cell::new(1_794_000_000_000),
             ids: Cell::new(0),
         }
@@ -102,6 +105,33 @@ impl Fake {
     pub fn model_says(&self, text: &str) {
         self.model.borrow_mut().push(Ok(text.into()));
     }
+    pub fn api_says(&self, name: &str, answer: Value) {
+        self.apis.borrow_mut().insert(name.into(), answer);
+    }
+    /// Every job request as (queue, parameters).
+    pub fn jobs_asked(&self) -> Vec<(String, Value)> {
+        self.calls
+            .borrow()
+            .iter()
+            .filter(|(p, _, _, _)| p == "jobs")
+            .map(|(_, _, queue, v)| (queue.clone(), v.clone()))
+            .collect()
+    }
+    pub fn job(&self, queue: &str, parameters: Value) -> std::result::Result<String, Error> {
+        moss_commitments_module::handle(self, "job", &json!({"queue":queue,"parameters":parameters}).to_string())
+    }
+    pub fn tool(&self, tool: &str, parameters: Value, approval: Option<&str>) -> Result<Value> {
+        let mut payload = json!({"tool":tool,"parameters":parameters});
+        if let Some(v) = approval {
+            payload["approvalVersion"] = json!(v);
+        }
+        let out = moss_commitments_module::handle(self, "tool", &payload.to_string())?;
+        Ok(serde_json::from_str(&out)?)
+    }
+    pub fn api(&self, name: &str, parameters: Value) -> Result<Value> {
+        let out = moss_commitments_module::handle(self, "api", &json!({"name":name,"parameters":parameters}).to_string())?;
+        Ok(serde_json::from_str(&out)?)
+    }
     pub fn model_calls(&self) -> usize {
         self.calls.borrow().iter().filter(|(p, _, _, _)| p == "ai").count()
     }
@@ -130,7 +160,10 @@ fn matches(row: &Value, filter: &Filter) -> bool {
             let instant = |v: &Value| v.as_str().and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok());
             let order = match (instant(cell), instant(value)) {
                 (Some(x), Some(y)) => Some(x.cmp(&y)),
-                _ => None,
+                _ => match (cell.as_str(), value.as_str()) {
+                    (Some(x), Some(y)) => Some(x.cmp(y)),
+                    _ => None,
+                },
             };
             match op {
                 Compare::Eq => cell == value,
@@ -151,8 +184,15 @@ fn clash(table: &str, a: &Value, b: &Value) -> bool {
     if !same("owner_user_id") {
         return false;
     }
-    let _ = table;
-    same("id")
+    match table {
+        "app.commitment_candidates" => same("id") || same("candidate_signature") || (!a["thread_ref"].is_null() && same("thread_ref")),
+        "app.commitment_candidate_sources" => {
+            same("id") || (same("candidate_id") && same("source_kind") && same("source_ref"))
+        }
+        "app.commitment_extraction_state" => same("source_kind"),
+        "app.commitment_email_thread_judgements" => same("thread_ref"),
+        _ => same("id"),
+    }
 }
 
 impl Host for Fake {
@@ -164,6 +204,19 @@ impl Host for Fake {
             ("context", "read") => {
                 let at = chrono::DateTime::from_timestamp_millis(self.clock.get()).unwrap();
                 return Ok(json!({"actorUserId": actor, "now": at.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)}));
+            }
+            ("context", "local-date") => {
+                let at = chrono::DateTime::parse_from_rfc3339(parameters["instant"].as_str().unwrap_or(""))
+                    .map_err(|_| Error::new("bad instant"))?;
+                let day = at.date_naive() + chrono::Duration::days(parameters["offsetDays"].as_i64().unwrap_or(0));
+                let next = (day + chrono::Duration::days(1)).and_hms_opt(0, 0, 0).unwrap().and_utc();
+                return Ok(json!({"timezone":"UTC","date":day.to_string(),
+                    "nextStart": next.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)}));
+            }
+            ("jobs", "enqueue-options") => return Ok(json!({"queued":true})),
+            ("api", "call") => {
+                let key = format!("{}.{}", resource, parameters["name"].as_str().unwrap_or(""));
+                return self.apis.borrow().get(&key).cloned().ok_or_else(|| Error::new("No such api"));
             }
             ("context", "uuid") => return Ok(json!({"id": self.next_id()})),
             ("kv", "get") => {

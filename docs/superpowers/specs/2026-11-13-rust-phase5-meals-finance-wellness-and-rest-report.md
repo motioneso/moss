@@ -461,6 +461,64 @@ scripts/run-gate.sh start --gate test:rust-wellness-live
 - **Two other gates fail on main for unrelated reasons.** The weather preferences gate and the
   briefings gate fail before and after this change.
 
+## Wellness package: medicines and dose logs (part 14)
+
+Task JS-297. Part of [issue 4027](https://github.com/motioneso/moss/issues/4027). Release note
+Category: N/A. No Vikunja card exists for this task, so there is no card line.
+
+### What was built
+
+The Wellness package now serves the medicine routes. There are 11 routes in all: add, list, read,
+change and remove a medicine, set up its schedule, read a day's doses, log a dose, and read the
+30-day adherence summary.
+
+- **Same schedule rules.** All eight schedule kinds work as in the old code, including the old
+  plain-calendar model, the one-minute match between a dose and its log, and the old way of
+  reading odd input (empty values, single values in place of lists, unknown fields dropped).
+- **Time zones.** Two kinds (every interval, monthly) use the medicine's own time zone. This needs
+  the `chrono-tz` crate. It is the one flagged addition to the approved list, and it was decided
+  before this part.
+- **Counts for Briefings.** A counts-only function gives scheduled, taken, skipped, as-needed and
+  the adherence rate. It holds no medicine names, and it needs the person's assistant-access choice
+  to be on.
+- **Reminder queue.** The manifest declares the queue. No worker runs it, as in the old code.
+- **App map.** The manifest lists the two new features, with plain error descriptions.
+
+### Differences from the old code (on purpose)
+
+Three inputs now answer 400 where the old server answered 500: a date that does not exist when
+reading a day's doses, a dose time that cannot be read, and a clock time that is not a real time
+in the schedule times. All three are listed in the package changelog.
+
+### Proof
+
+| Claim                                             | Evidence                                                                                                                                                                                                                            |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Routes match the old handlers                     | The old routes and the new package ran side by side on one test database. 25 create and list steps and 47 schedule, dose, summary and change steps match. A control run with protection removed was seen failing                    |
+| A second person cannot read or change medicines   | Real database test as two people through the installed package, seen failing with the owner rule removed                                                                                                                            |
+| Private text stays out of logs, jobs, activity    | Guest tests plus installed tests show medicine text only reaches the two medicine tables. A database failure never echoes it                                                                                                        |
+| Counts hold no medicine list                      | A native test reads the output and finds counts only                                                                                                                                                                                |
+| Native and WebAssembly builds                     | Native guest tests (13 behaviour, privacy) and the same code as a WebAssembly component in the package tests                                                                                                                        |
+| Works on the real Rust server from another device | Live test on the real server over https on a non-loopback address, with certificate checking. It now covers the medicine routes. Gate exit code 0 on the branch before it was moved onto the newest main; not rerun after that move |
+
+Commands (expected exit code 0, both through `scripts/run-gate.sh`):
+
+```bash
+scripts/run-gate.sh start --gate test:rust-wellness
+scripts/run-gate.sh start --gate test:rust-wellness-live
+```
+
+### Not proven or not built
+
+- **Golden 30-day counts.** The fixture checks for every-n-hours, every-interval and monthly were
+  not added. The old-route comparison covers those kinds, but not at a fixed clock.
+- **Briefings reading.** Briefings is shown to get counts only by a guest test and the manifest, not
+  by a run of Briefings itself.
+- **Daylight-saving cases** are covered by the comparison only, not by their own guest tests.
+- **Chat tools** for medicines are part 16. Therapy notes, insights, export and the screens are
+  later parts. No worker runs the reminder queue.
+- **No screens, so no click-through proof.**
+
 ## Commitments package skeleton (part 7)
 
 ### What was built
@@ -588,3 +646,75 @@ scripts/run-gate.sh start --gate test:rust-wellness-live
 - **Shared Rust toolchain folders.** Builds used the existing shared cargo and rustup folders
   unchanged, because offline builds need their cached crates. Only the build output folder was
   task-owned, and it is deleted when the task ends.
+
+## Commitments extraction (part 8)
+
+### What was built
+
+- Finding suggestions in text. A quick word check drops text that cannot hold a promise. What is
+  left goes to the person's configured model, and every answer is checked before it is kept. The
+  model only proposes. Each suggestion starts as "pending review" and reaches no task list until
+  the person accepts it.
+- Email judging. One job reads a mail thread and decides whether it holds something the person
+  owes. A thread is judged once per burst of new mail, after a three minute wait. A repeat request inside the same three minutes folds into the first, and the next window can queue again. A thread whose
+  last message is from the person is not sent to the model, and a suggestion the person rejected
+  stays rejected.
+- Two routes: start an extraction, and read the saved extraction state. Starting one answers 202
+  and queues a job.
+- Seven chat tools: the heartbeat source, list, thread judgements, open one, and accept, reject
+  and snooze. The last three need a current approval version, so a stale view of a suggestion
+  cannot change it.
+- A heartbeat source that lists accepted commitments due soon or overdue, with a revision that
+  changes when the list changes.
+- Two things offered to other packages: request a thread judgement, and prepare a chat action.
+- The app map entries are in the manifest. No screens, no new tables, no new migration.
+
+### Differences from the old code (on purpose)
+
+- Job requests carry a source kind or a message id and nothing else. The old payload carried the
+  person and a request key. The host now adds the person, and the request key is a stable id
+  made from the person and the source.
+- The guest has no log port, so warnings (for example an unreadable model answer) come back as
+  the job result. They name the problem and never include text.
+- The check that drops sign-in codes is a simple word check, and lengths count characters rather
+  than UTF-16 units.
+
+### Proof
+
+| Claim                                                  | Evidence                                                                                                                                                                                                                                         |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A canned model run                                     | Native tests with a canned model: a note becomes one pending suggestion with its evidence, text that fails the word check never reaches the model, and an unreadable answer gives a warning with no text. Run with a fake host, not the real one |
+| A proposal reaches no task list before it is confirmed | New suggestions are saved as pending review. Accept, reject and snooze fail without the current approval version, and pass with it                                                                                                               |
+| Job requests carry ids only                            | The queued row holds only the source kind, even when the request body includes text; asking twice queues one job. The live run checks the queue rows after a request that carried a planted marker                                               |
+| A second person sees nothing                           | Extraction state and thread judgements return nothing for them. With each owner rule removed they read the row (the check fails); with the rule restored, none                                                                                   |
+| Private text stays private                             | The marker reaches no job row and not the server log in the live run. Warnings carry no text                                                                                                                                                     |
+| Route parity                                           | 24 steps replayed against the old routes on the same database, including the new start and state routes with a valid, an invalid and an empty request; answers match                                                                             |
+| Native and WebAssembly builds                          | 28 native tests; the same code as a component passes 6 package tests (including the queue parameter checks) and 3 installed-package tests in the real host                                                                                       |
+| Live run, reachable from another device                | Real Rust server over HTTPS on this machine's network address, not loopback, with certificate checking. An untrusted origin gets 403, signed out gets 401, start gets 202, an invalid source gets 400, the other person's state is empty         |
+
+Commands, all through `scripts/run-gate.sh` (expected exit code 0). The task used its own build
+folder, builds ran offline against the shared package cache, and nothing was installed globally.
+
+```bash
+scripts/run-gate.sh start --gate test:rust-commitments
+scripts/run-gate.sh start --gate test:rust-commitments-live
+```
+
+### Not proven or not built
+
+- **The canned model run is not through the installed host.** The installed test world has only
+  Commitments in it, so no model or text source exists there. The run uses a fake host.
+- **Email does not ask for judgements yet.** The judging job and the request are built and
+  tested, but nothing in Email calls the request.
+- **Chat and notes have no text provider.** Extraction for those sources warns "source provider
+  missing" and stops.
+- **Nothing starts extraction or judging by itself.** There is no schedule, Email does not call the
+  request, and the app map says so.
+- **Judgement skips calendar and notes context**, and the "sender was ruled not an obligation"
+  rule is not built.
+- **No "no model configured" message.** A missing model shows as a generic warning.
+- **Chat sources ignore the person's time zone.**
+- **No leak-planted check on the job payload.** The privacy tests pass, but a leak was not added
+  to the code to watch them fail.
+- **The live run never ran a job.** It showed the job queued, not the worker finishing it, because
+  no model or text source exists on that server.

@@ -63,11 +63,15 @@ fn installed_commitments_package_serves_routes_from_the_real_server() {
     );
     assert!(!port.0.is_empty());
     let origin = format!("https://localhost:{}", port.0);
+    let address: std::net::IpAddr = std::env::var("JS299_PROOF_ADDRESS").unwrap().parse().unwrap();
+    assert!(!address.is_loopback() && address.is_ipv4());
+    let remote_origin = format!("https://{address}:{}", port.0);
     let cert = root.join("tls/certificate.pem");
     assert!(Command::new(std::env::var("JS170_CERTIFICATE").unwrap())
         .args(["local-certificate"])
         .arg(root.join("tls"))
         .arg(&origin)
+        .arg(&remote_origin)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
@@ -100,7 +104,7 @@ fn installed_commitments_package_serves_routes_from_the_real_server() {
     );
     private(
         &root.join("network.json"),
-        &json!({"listen":format!("127.0.0.1:{}",port.0),"origins":[origin],"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
+        &json!({"listen":format!("0.0.0.0:{}",port.0),"sharing":true,"origins":[origin,remote_origin],"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
     );
     let client = reqwest::blocking::Client::builder()
         .add_root_certificate(reqwest::Certificate::from_pem(&fs::read(&cert).unwrap()).unwrap())
@@ -295,14 +299,14 @@ fn installed_commitments_package_serves_routes_from_the_real_server() {
             db.execute("INSERT INTO app.users (id, name, email, email_verified, created_at, updated_at, is_instance_admin, status) VALUES ($1, 'Commitments other', 'commitments-other@example.test', false, now(), now(), false, 'active')", &[&id]).await.unwrap();
             db.execute("INSERT INTO app.auth_accounts (id, account_id, provider_id, user_id, password, created_at, updated_at) SELECT gen_random_uuid(), $1::uuid::text, 'credential', $1::uuid, password, now(), now() FROM app.auth_accounts WHERE user_id = $2::uuid AND provider_id = 'credential'", &[&id, &owner]).await.unwrap();
         });
-        let signed = client.post(format!("{origin}/api/auth/sign-in/email")).header("origin", &origin)
+        let signed = client.post(format!("{remote_origin}/api/auth/sign-in/email")).header("origin", &remote_origin)
             .json(&json!({"email":"commitments-other@example.test","password":"temporary-commitments-password-293-not-a-real-secret"})).send().unwrap();
         assert_eq!(signed.status(), 200, "second person sign-in");
         signed.headers()["set-cookie"].to_str().unwrap().split(';').next().unwrap().to_owned()
     };
     let log = || fs::read_to_string(root.join("server.log")).unwrap_or_default();
     let call = |method: reqwest::Method, path: &str, cookie: Option<&str>, body: Option<Value>| {
-        let mut request = client.request(method, format!("{origin}/api/m/commitments{path}")).header("origin", &origin);
+        let mut request = client.request(method, format!("{remote_origin}/api/m/commitments{path}")).header("origin", &remote_origin);
         if let Some(cookie) = cookie {
             request = request.header("cookie", cookie);
         }
@@ -323,8 +327,8 @@ fn installed_commitments_package_serves_routes_from_the_real_server() {
     let started = std::time::Instant::now();
     loop {
         let ready = client
-            .get(format!("{origin}/api/m/commitments/candidates"))
-            .header("origin", &origin)
+            .get(format!("{remote_origin}/api/m/commitments/candidates"))
+            .header("origin", &remote_origin)
             .header("cookie", &cookie)
             .send()
             .is_ok_and(|r| r.status().as_u16() != 503);
@@ -397,6 +401,26 @@ fn installed_commitments_package_serves_routes_from_the_real_server() {
     let (status, text) = call(Method::POST, &format!("/candidates/{first}/resolve"), Some(&cookie), Some(json!({"resolutionRef":"task:new"})));
     assert_eq!(status, 503, "{text}");
     assert_eq!(json_of(&text), json!({"error":"Resolution verifier unavailable"}));
+    // Extraction. The request queues a job and the answer carries no text.
+    assert_eq!(client.get(format!("{remote_origin}/api/m/commitments/candidates")).header("origin", "https://untrusted.example").header("cookie", &cookie).send().unwrap().status().as_u16(), 403);
+    assert_eq!(client.post(format!("{remote_origin}/api/m/commitments/extract")).header("origin", "https://untrusted.example").header("cookie", &cookie).json(&json!({"sourceKind":"notes"})).send().unwrap().status().as_u16(), 403);
+    let (status, text) = call(Method::POST, "/extract", Some(&cookie), Some(json!({"sourceKind":"notes","text":MARK})));
+    assert_eq!((status, json_of(&text)), (202, json!({"queued":true})), "{text}\n{}", log());
+    assert_eq!(call(Method::POST, "/extract", Some(&cookie), Some(json!({"sourceKind":"mail"}))).0, 400);
+    assert_eq!(call(Method::POST, "/extract", None, Some(json!({"sourceKind":"notes"}))).0, 401);
+    let (status, text) = call(Method::GET, "/extraction-state", Some(&cookie), None);
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let (_, text) = call(Method::GET, "/extraction-state", Some(&other), None);
+    assert_eq!(json_of(&text), json!([]), "{text}");
+    let payloads: Vec<String> = runtime.block_on(async {
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        db.query("SELECT payload::text FROM moss_queue.jobs WHERE queue LIKE '%commitments-extraction'", &[]).await.unwrap().iter().map(|r| r.get(0)).collect()
+    });
+    assert!(!payloads.is_empty() && payloads.iter().all(|p| !p.contains(MARK)), "{payloads:?}");
+    println!("PASS live extract: queued over HTTPS on a non-loopback address, job carries no text, untrusted origin refused");
     // Nothing the test sent reached the server log.
     assert!(!log().to_lowercase().contains(&MARK.to_lowercase()));
     println!("commitments live: list, read, status, suppress, refused resolve and two-person privacy worked over HTTPS");

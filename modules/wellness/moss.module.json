@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "wellness",
   "name": "Wellness",
-  "description": "Private mood check-ins, the choice of whether the assistant may use them, therapy notes, and a selective export of check-ins and therapy notes. Medications, insights, chat tools and the screens are not built yet.",
+  "description": "Private mood check-ins, medications with their schedules and dose records, therapy notes, a selective export of check-ins and therapy notes, and the choice of whether the assistant may use them. Insights, chat tools and the screens are not built yet.",
   "publisher": "Moss",
   "version": "0.1.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
@@ -104,6 +104,36 @@
     },
     {
       "method": "GET",
+      "path": "/wellness/medications",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/wellness/medications",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/wellness/medications/:id",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/wellness/medications/schedule",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/wellness/medications/logs",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/wellness/medications/:id/logs",
+      "signIn": true
+    },
+    {
+      "method": "GET",
       "path": "/wellness/therapy-notes",
       "signIn": true
     },
@@ -135,6 +165,7 @@
   ],
   "requires": {},
   "provides": {
+    "medicationAdherence": "1.0.0",
     "collectWellnessExportSection": "1.0.0",
     "deleteWellnessAccountData": "1.0.0"
   },
@@ -182,6 +213,27 @@
       ]
     },
     {
+      "id": "wellness.medications",
+      "description": "A person can keep a list of their medicines with dose, form and notes, and set a schedule of one of eight kinds (daily times, chosen weekdays, every few hours, repeating cycles, every few days, weeks or months, and monthly by date or by weekday). They see each day's doses with taken, skipped or pending, log a dose taken or skipped or an as-needed dose, and read thirty-day adherence counts. Each person sees only their own medicines. A reminder queue is declared but nothing sends reminders yet. The medication screens are not built yet.",
+      "errors": [
+        {
+          "code": "wellness_medication_invalid",
+          "class": "validation",
+          "description": "The medicine name, schedule, dose status or date was not accepted. Fix the value named in the message and try again."
+        },
+        {
+          "code": "wellness_medication_not_found",
+          "class": "validation",
+          "description": "The medicine does not exist or belongs to another person. Check the medicine and try again."
+        },
+        {
+          "code": "wellness_medications_unavailable",
+          "class": "transient",
+          "description": "Medicines or doses could not be read or saved. Try again in a moment."
+        }
+      ]
+    },
+    {
       "id": "wellness.ai-consent",
       "description": "A person can read and change whether the assistant may use their mood check-ins. With no saved choice, access is on while Wellness is installed. No assistant feature uses check-ins in this version, and no check-in text is sent to any model.",
       "errors": [
@@ -189,6 +241,17 @@
           "code": "wellness_consent_invalid",
           "class": "validation",
           "description": "The choice must be true or false. Send one of those and try again."
+        }
+      ]
+    },
+    {
+      "id": "wellness.medication-adherence",
+      "description": "Other parts of Moss can ask for a seven-day count of scheduled, taken, skipped and as-needed doses and an adherence rate. The answer holds counts only, never a medicine name or a list of medicines, and it is refused when the person has switched assistant access off.",
+      "errors": [
+        {
+          "code": "WELLNESS_CONSENT_REQUIRED",
+          "class": "validation",
+          "description": "The person has switched assistant access to Wellness off. Ask them to turn it on in Wellness settings first."
         }
       ]
     },
@@ -251,6 +314,7 @@
     }
   ],
   "jobs": {
+    "wellness-medication-reminder": {},
     "wellness-export": {
       "export-id": {
         "kind": "id"

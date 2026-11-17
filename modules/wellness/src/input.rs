@@ -13,11 +13,11 @@ fn js_number(number: &serde_json::Number) -> String {
     }
 }
 
-fn object(body: &Value) -> Result<&Map<String, Value>, String> {
+pub(crate) fn object(body: &Value) -> Result<&Map<String, Value>, String> {
     body.as_object().ok_or_else(|| "body must be object".to_owned())
 }
 
-fn required(map: &Map<String, Value>, name: &str) -> Result<(), String> {
+pub(crate) fn required(map: &Map<String, Value>, name: &str) -> Result<(), String> {
     if map.contains_key(name) {
         Ok(())
     } else {
@@ -26,7 +26,7 @@ fn required(map: &Map<String, Value>, name: &str) -> Result<(), String> {
 }
 
 /// A one-item list stands in for its item.
-fn unwrap_single(value: &Value) -> &Value {
+pub(crate) fn unwrap_single(value: &Value) -> &Value {
     match value.as_array() {
         Some(items) if items.len() == 1 && !items[0].is_array() && !items[0].is_object() => &items[0],
         _ => value,
@@ -34,7 +34,7 @@ fn unwrap_single(value: &Value) -> &Value {
 }
 
 /// Text from a text field. Numbers and booleans become their text, null becomes empty.
-fn coerce_text(value: &Value) -> Option<String> {
+pub(crate) fn coerce_text(value: &Value) -> Option<String> {
     match unwrap_single(value) {
         Value::String(t) => Some(t.clone()),
         Value::Number(n) => Some(js_number(n)),
@@ -44,14 +44,14 @@ fn coerce_text(value: &Value) -> Option<String> {
     }
 }
 
-fn union(at: &str, failures: &[&str]) -> String {
+pub(crate) fn union(at: &str, failures: &[&str]) -> String {
     let mut parts: Vec<String> = failures.iter().map(|f| format!("{at} must {f}")).collect();
     parts.push(format!("{at} must match a schema in anyOf"));
     parts.join(", ")
 }
 
 /// A text field that may also be null. Absent stays absent.
-fn nullable_text(map: &Map<String, Value>, name: &str) -> Result<Option<String>, String> {
+pub(crate) fn nullable_text(map: &Map<String, Value>, name: &str) -> Result<Option<String>, String> {
     match map.get(name) {
         None => Ok(None),
         Some(value) => coerce_text(value)
@@ -60,8 +60,14 @@ fn nullable_text(map: &Map<String, Value>, name: &str) -> Result<Option<String>,
     }
 }
 
-/// A whole number from 1 to 5, or null. Absent stays absent.
-fn rating(map: &Map<String, Value>, name: &str) -> Result<Option<Option<i64>>, String> {
+/// A whole number inside `min..=max`, or null. Absent stays absent. Zero, empty text, false
+/// and null all read as zero first, and zero then reads as null unless the range allows it.
+pub(crate) fn int_or_null(
+    map: &Map<String, Value>,
+    name: &str,
+    min: i64,
+    max: i64,
+) -> Result<Option<Option<i64>>, String> {
     let Some(value) = map.get(name) else { return Ok(None) };
     let at = format!("body/{name}");
     let value = unwrap_single(value);
@@ -78,17 +84,20 @@ fn rating(map: &Map<String, Value>, name: &str) -> Result<Option<Option<i64>>, S
         _ => None,
     };
     match whole {
-        Some(n) if (1..=5).contains(&n) => Ok(Some(Some(n))),
-        // Zero, empty text, false and null all read as null in the second branch.
+        Some(n) if (min..=max).contains(&n) => Ok(Some(Some(n))),
         Some(0) => Ok(Some(None)),
-        Some(n) if n < 1 => Err(union(&at, &["be >= 1", "be null"])),
-        Some(_) => Err(union(&at, &["be <= 5", "be null"])),
+        Some(n) if n < min => Err(union(&at, &[&format!("be >= {min}"), "be null"])),
+        Some(_) => Err(union(&at, &[&format!("be <= {max}"), "be null"])),
         None if matches!(value, Value::String(t) if t.is_empty()) => Ok(Some(None)),
         None => Err(union(&at, &["be integer", "be null"])),
     }
 }
 
-fn choice(map: &Map<String, Value>, name: &str, allowed: &[&str]) -> Result<Option<String>, String> {
+fn rating(map: &Map<String, Value>, name: &str) -> Result<Option<Option<i64>>, String> {
+    int_or_null(map, name, 1, 5)
+}
+
+pub(crate) fn choice(map: &Map<String, Value>, name: &str, allowed: &[&str]) -> Result<Option<String>, String> {
     let Some(value) = map.get(name) else { return Ok(None) };
     let at = format!("body/{name}");
     let text = coerce_text(value).ok_or_else(|| format!("{at} must be string"))?;
@@ -115,7 +124,7 @@ fn sensations(map: &Map<String, Value>) -> Result<Option<Vec<String>>, String> {
 }
 
 /// Empty text and null mean no selection. Other text is trimmed.
-fn trimmed(text: Option<String>) -> Option<Option<String>> {
+pub(crate) fn trimmed(text: Option<String>) -> Option<Option<String>> {
     text.map(|t| if t.is_empty() { None } else { Some(t.trim().to_owned()) })
 }
 

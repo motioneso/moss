@@ -1,8 +1,10 @@
-//! Wellness package: mood check-ins, the assistant-access choice, therapy notes, the selective
-//! export and the Wellness parts of account export and delete, all private to each owner. All
-//! effects cross the guest-safe SDK Host interface. No model port is used, and no check-in or
-//! note text is written to logs, jobs or activity.
+//! Wellness package, parts 13 to 15: mood check-ins, the assistant-access choice, medications,
+//! dose logs and adherence counts, therapy notes, the selective export and the Wellness parts of
+//! account export and delete, all private to each owner. All effects cross the guest-safe SDK
+//! Host interface. No model port is used, and no check-in, medication or note text is written to
+//! logs, jobs or activity.
 pub mod account;
+pub mod adherence;
 pub mod checkins;
 pub mod consent;
 pub mod cursor;
@@ -10,6 +12,10 @@ pub mod export;
 pub mod input;
 pub mod notes;
 pub mod render;
+pub mod medication_input;
+pub mod medications;
+pub mod occurrence;
+pub mod schedule;
 pub mod taxonomy;
 pub mod util;
 
@@ -34,6 +40,12 @@ pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
         ("POST", "/wellness/export") => export::create(host, &request),
         ("GET", "/wellness/export/:id") => export::status(host, &request),
         ("GET", "/wellness/export/:id/download") => export::download(host, &request),
+        ("GET", "/wellness/medications") => medications::list(host),
+        ("POST", "/wellness/medications") => medications::create(host, &request),
+        ("PATCH", "/wellness/medications/:id") => medications::change(host, &request),
+        ("GET", "/wellness/medications/schedule") => adherence::day(host, &request),
+        ("GET", "/wellness/medications/logs") => adherence::summary(host, &request),
+        ("POST", "/wellness/medications/:id/logs") => medications::log_dose(host, &request),
         _ => return Response::new(404, json!({"message":"Route not found"})),
     };
     result.unwrap_or_else(|_| Response::new(500, json!({"error":"Internal server error"})))
@@ -53,6 +65,10 @@ pub fn handle<H: Host + ?Sized>(
         }
         "job" => export::run(host, payload),
         "api" => {
+            let call: serde_json::Value = serde_json::from_str(payload)?;
+            if call["name"].as_str() == Some("medicationAdherence") {
+                return Ok(serde_json::to_string(&adherence::counts(host)?)?);
+            }
             let call = account::execute(host, serde_json::from_str(payload)?)
                 .map_err(|_| moss_module_sdk::Error::new("Wellness account operation failed"))?;
             Ok(serde_json::to_string(&call)?)
