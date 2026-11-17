@@ -18,6 +18,7 @@ impl Host for ComponentHost {
         )?;
         let response = match port {
             "context" => moss::module::context::call(&request),
+            "tools" => moss::module::tools::call(&request),
             "kv" => moss::module::kv::call(&request),
             _ => return Err(Error::new("Unsupported Scratchpad host port")),
         }

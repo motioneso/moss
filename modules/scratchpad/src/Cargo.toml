@@ -36,3 +36,7 @@ path = "../tests/routes.rs"
 [[test]]
 name = "privacy"
 path = "../tests/privacy.rs"
+
+[[test]]
+name = "tools"
+path = "../tests/tools.rs"

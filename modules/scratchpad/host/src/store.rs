@@ -8,22 +8,22 @@ pub const STORE: &str = "scratchpad.store";
 const DEFAULT_SHORTCUT: &str = "mod+shift+s";
 const TIME: &str = "to_char(updated_at AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"')";
 
-/// True when the person has connected a notes folder (a non-empty text preference).
-const NOTES_FOLDER: &str =
-    "SELECT COALESCE((SELECT jsonb_typeof(value_json)='string' AND value_json #>> '{}' <> '' \
-     FROM app.preferences WHERE owner_user_id=app.current_actor_user_id() AND key='notes-source-path'),false)";
-
 pub async fn get(cx: &DataContext) -> Result<Value> {
-    let folder: bool = cx.db().query_one(NOTES_FOLDER, &[]).await?.get(0);
+    let folder: bool = moss_module_host::account_preferences::notes_folder_configured(cx).await?;
     let row = cx
         .db()
-        .query_opt(&format!("SELECT body,revision,{TIME},sync_to_notes,shortcut FROM app.scratchpads"), &[])
+        .query_opt(
+            &format!("SELECT body,revision,{TIME},sync_to_notes,shortcut FROM app.scratchpads"),
+            &[],
+        )
         .await?;
     Ok(match row {
         None => json!({"body": "", "revision": 0, "updatedAt": null, "syncToNotes": false,
             "notesFolderConfigured": folder, "shortcut": DEFAULT_SHORTCUT}),
-        Some(r) => json!({"body": r.get::<_, String>(0), "revision": r.get::<_, i32>(1), "updatedAt": r.get::<_, String>(2),
-            "syncToNotes": r.get::<_, bool>(3), "notesFolderConfigured": folder, "shortcut": r.get::<_, String>(4)}),
+        Some(r) => {
+            json!({"body": r.get::<_, String>(0), "revision": r.get::<_, i32>(1), "updatedAt": r.get::<_, String>(2),
+            "syncToNotes": r.get::<_, bool>(3), "notesFolderConfigured": folder, "shortcut": r.get::<_, String>(4)})
+        }
     })
 }
 
@@ -35,8 +35,12 @@ async fn current(cx: &DataContext) -> Result<Value> {
 
 /// Compare-and-swap save. Revision 0 means no note exists yet. Another revision must match.
 pub async fn put(cx: &DataContext, p: &Value) -> Result<Value> {
-    let body = p["body"].as_str().ok_or_else(|| anyhow::anyhow!("body required"))?;
-    let revision = p["revision"].as_i64().ok_or_else(|| anyhow::anyhow!("revision required"))?;
+    let body = p["body"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("body required"))?;
+    let revision = p["revision"]
+        .as_i64()
+        .ok_or_else(|| anyhow::anyhow!("revision required"))?;
     let row = if revision == 0 {
         cx.db()
             .query_opt(
@@ -56,7 +60,9 @@ pub async fn put(cx: &DataContext, p: &Value) -> Result<Value> {
             .await?
     };
     Ok(match row {
-        Some(r) => json!({"ok": true, "revision": r.get::<_, i32>(0), "updatedAt": r.get::<_, String>(1)}),
+        Some(r) => {
+            json!({"ok": true, "revision": r.get::<_, i32>(0), "updatedAt": r.get::<_, String>(1)})
+        }
         None => json!({"ok": false, "current": current(cx).await?}),
     })
 }
@@ -64,7 +70,9 @@ pub async fn put(cx: &DataContext, p: &Value) -> Result<Value> {
 /// One statement, so two appends at once cannot overwrite each other. The size check is the
 /// database's own, and a violation is reported as too large.
 pub async fn append(cx: &DataContext, p: &Value) -> Result<Value> {
-    let text = p["text"].as_str().ok_or_else(|| anyhow::anyhow!("text required"))?;
+    let text = p["text"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("text required"))?;
     let row = cx
         .db()
         .query_one(
@@ -78,10 +86,18 @@ pub async fn append(cx: &DataContext, p: &Value) -> Result<Value> {
         .await;
     match row {
         Ok(r) => {
-            let appended = if r.get::<_, String>(0) == text { text.to_owned() } else { format!("\n{text}") };
-            Ok(json!({"revision": r.get::<_, i32>(1), "updatedAt": r.get::<_, String>(2), "appended": appended}))
+            let appended = if r.get::<_, String>(0) == text {
+                text.to_owned()
+            } else {
+                format!("\n{text}")
+            };
+            Ok(
+                json!({"revision": r.get::<_, i32>(1), "updatedAt": r.get::<_, String>(2), "appended": appended}),
+            )
         }
-        Err(e) if e.as_db_error().is_some_and(|d| d.code().code() == "23514") => Ok(json!({"tooLarge": true})),
+        Err(e) if e.as_db_error().is_some_and(|d| d.code().code() == "23514") => {
+            Ok(json!({"tooLarge": true}))
+        }
         Err(e) => Err(e.into()),
     }
 }
@@ -89,7 +105,9 @@ pub async fn append(cx: &DataContext, p: &Value) -> Result<Value> {
 pub async fn settings(cx: &DataContext, p: &Value) -> Result<Value> {
     let sync = p["syncToNotes"].as_bool();
     let shortcut = p["shortcut"].as_str();
-    if sync == Some(true) && !cx.db().query_one(NOTES_FOLDER, &[]).await?.get::<_, bool>(0) {
+    if sync == Some(true)
+        && !moss_module_host::account_preferences::notes_folder_configured(cx).await?
+    {
         return Ok(json!({"notesFolderMissing": true}));
     }
     // A change that names a field sets it. A field left out keeps its stored value.
@@ -104,4 +122,25 @@ pub async fn settings(cx: &DataContext, p: &Value) -> Result<Value> {
         )
         .await?;
     Ok(json!({"syncToNotes": row.get::<_, bool>(0), "shortcut": row.get::<_, String>(1)}))
+}
+
+/// A missing row stays absent in the export; reads never create one.
+pub async fn export(cx: &DataContext) -> Result<Value> {
+    let row = cx
+        .db()
+        .query_opt(
+            &format!("SELECT body,revision,{TIME},sync_to_notes,shortcut FROM app.scratchpads"),
+            &[],
+        )
+        .await?;
+    Ok(
+        json!({"scratchpad":row.map(|r| json!({"body":r.get::<_,String>(0),"revision":r.get::<_,i32>(1),
+        "updatedAt":r.get::<_,String>(2),"syncToNotes":r.get::<_,bool>(3),"shortcut":r.get::<_,String>(4)}))}),
+    )
+}
+
+/// RLS selects the account, including for an instance admin. Idempotent on absent data.
+pub async fn delete(cx: &DataContext) -> Result<Value> {
+    let count = cx.db().execute("DELETE FROM app.scratchpads", &[]).await?;
+    Ok(json!({"deleted":count}))
 }

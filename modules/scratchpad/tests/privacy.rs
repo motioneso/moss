@@ -32,12 +32,18 @@ fn a_failing_host_never_puts_note_text_in_the_response_or_the_error() {
     for (method, path, body) in [
         ("PUT", "/note", json!({"body": MARKER, "revision": 0})),
         ("POST", "/append", json!({"text": MARKER})),
-        ("PATCH", "/settings", json!({"shortcut": format!("mod+{MARKER}")})),
+        (
+            "PATCH",
+            "/settings",
+            json!({"shortcut": format!("mod+{MARKER}")}),
+        ),
     ] {
         let r = route(&Leaky, request(method, path, body.clone()));
         assert!(r.status == 500 || r.status == 400, "{method} {path}");
         assert!(!r.body.to_string().contains(MARKER), "{method} {path}");
-        let payload = json!({"method": method, "path": path, "params": {}, "query": {}, "body": body}).to_string();
+        let payload =
+            json!({"method": method, "path": path, "params": {}, "query": {}, "body": body})
+                .to_string();
         let out = handle(&Leaky, "route", &payload).unwrap();
         assert!(!out.contains(MARKER), "{method} {path}");
     }
@@ -48,8 +54,38 @@ fn a_failing_host_never_puts_note_text_in_the_response_or_the_error() {
 #[test]
 fn note_text_goes_only_to_the_store() {
     let spy = Spy(Fake::default(), RefCell::default());
-    route(&spy, request("PUT", "/note", json!({"body": MARKER, "revision": 0})));
+    route(
+        &spy,
+        request("PUT", "/note", json!({"body": MARKER, "revision": 0})),
+    );
     route(&spy, request("POST", "/append", json!({"text": MARKER})));
     route(&spy, request("GET", "/note", json!(null)));
-    assert!(spy.1.borrow().is_empty(), "a port other than the store was called");
+    assert!(
+        spy.1.borrow().is_empty(),
+        "a port other than the store was called"
+    );
+}
+
+#[test]
+fn tool_and_approval_failures_scrub_private_backend_messages() {
+    for (kind, input) in [
+        (
+            "tool",
+            json!({"tool":"scratchpad.append","parameters":{"text":MARKER}}),
+        ),
+        (
+            "api",
+            json!({"name":"prepareScratchpadAction","parameters":{"text":MARKER}}),
+        ),
+        (
+            "api",
+            json!({"name":"deleteScratchpadAccountData","parameters":{"account":MARKER}}),
+        ),
+    ] {
+        let error = handle(&Leaky, kind, &input.to_string()).unwrap_err();
+        assert!(
+            !error.to_string().contains(MARKER),
+            "private backend text escaped"
+        );
+    }
 }
