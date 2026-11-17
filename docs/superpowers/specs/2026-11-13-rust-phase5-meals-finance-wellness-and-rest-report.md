@@ -641,7 +641,10 @@ scripts/run-gate.sh start --gate test:rust-wellness-live
 - **Old status and download routes** were not replayed, because they live in the old settings
   routes. Their wording was read from source.
 - **The old export request** was replayed with a stand-in queue, so only its answers were compared.
-- **Medicines and insights export**, chat tools and screens are parts 14, 16 and later.
+- **Medicines and insights export** answer "not available yet". Chat tools and screens are part 16 and later.
+- **Delete during a build.** An export being built while the person deletes their account data can save one page after the delete. It can never be downloaded, and the next delete removes it.
+- **Many exports in a day.** All pages of one person share one stored value, so many exports inside 24 hours grow it. One at a time and the 24 hour expiry bound it.
+- **Note list size.** The therapy note list relies on the host's own row cap and has no warning when it is reached.
 - **The old energy-trend note** is still not written (see part 13).
 - **Shared Rust toolchain folders.** Builds used the existing shared cargo and rustup folders
   unchanged, because offline builds need their cached crates. Only the build output folder was
