@@ -317,7 +317,7 @@ fn a_time_skip_after_the_model_answered_records_no_relook_day() {
     let (src, stories) = stale_setup(&f);
     f.reply(RULE_REPLY);
     // The model reply uses up the time, so the checking downloads are skipped.
-    f.model_cost.set(20_000);
+    f.model_cost.set(28_000);
     run(&f, &src, &stories);
     assert_eq!(f.prompts().len(), 1);
     assert!(row(&f)["photo_relook_at"].is_null(), "a time skip is not a no from the model");
