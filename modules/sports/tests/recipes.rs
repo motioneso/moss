@@ -280,3 +280,9 @@ fn anchor_hrefs_finds_links_without_parsing_and_skips_scripts() {
     let page = "<a class=x href=\"/one\">1</a><script>var a='<a href=\"/no\">';</script><A HREF='/two'>2</A><abbr href=\"/no\"><a>none</a>";
     assert_eq!(moss_sports_module::source_web::anchor_hrefs(page), vec!["/one".to_owned(), "/two".to_owned()]);
 }
+
+#[test]
+fn lean_html_keeps_the_text_after_a_self_closing_svg() {
+    let page = "<p>one</p><svg class=\"i\"/><h3>Headline</h3><svg><path/></svg><p>two</p>";
+    assert_eq!(moss_sports_module::source_web::lean_html(page), "<p>one</p><h3>Headline</h3><p>two</p>");
+}

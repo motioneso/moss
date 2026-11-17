@@ -233,6 +233,12 @@ pub fn lean_html(html: &str) -> String {
             continue;
         };
         out.push_str(&html[copied..start]);
+        let open_end = lower[start..].find('>').map(|gt| start + gt + 1);
+        if open_end.is_some_and(|end| bytes[end - 2] == b'/') {
+            copied = open_end.unwrap_or(start);
+            at = copied;
+            continue;
+        }
         let close = format!("</{tag}");
         let end = match lower[start..].find(&close) {
             Some(end) => match lower[start + end..].find('>') {
@@ -250,7 +256,7 @@ pub fn lean_html(html: &str) -> String {
 
 /// The part of a page before its body. Titles and link tags live there, so the body is never parsed for them.
 fn head_of(html: &str) -> String {
-    match html.to_ascii_lowercase().find("</head") {
+    match html.to_ascii_lowercase().find("</head>") {
         Some(end) => lean_html(&html[..end]),
         None => lean_html(&html.chars().take(HEAD_FALLBACK_CHARS).collect::<String>()),
     }
