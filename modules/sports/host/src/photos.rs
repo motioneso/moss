@@ -15,6 +15,7 @@ pub const PHOTO_FILES: &str = "source-photo-files";
 const FOLDER: &str = "photos";
 const MAX_INPUT: usize = 2 * 1024 * 1024;
 const MAX_STORED: usize = 786_432;
+const MAX_TEXT: usize = 64 * 1024;
 const MAX_NAME: usize = 80;
 const MAX_SIDE: u32 = 8_000;
 const JPEG_QUALITY: u8 = 80;
@@ -23,6 +24,7 @@ const JPEG_QUALITY: u8 = 80;
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Params {
     name: Option<String>,
+    text: Option<String>,
     body_base64: Option<String>,
     max_width: Option<u32>,
     max_height: Option<u32>,
@@ -80,13 +82,22 @@ impl SportsPorts {
         match operation {
             "reencode" => reencode(&p),
             "put" => {
-                let bytes = decode(p.body_base64.as_deref(), MAX_STORED)?;
+                let bytes = match &p.text {
+                    Some(text) => {
+                        ensure!(text.len() <= MAX_TEXT, "The record is too large");
+                        text.clone().into_bytes()
+                    }
+                    None => decode(p.body_base64.as_deref(), MAX_STORED)?,
+                };
                 self.folder(access)?
                     .write(&path(p.name.as_deref())?, &bytes)?;
                 Ok(json!({"stored": true}))
             }
             "get" => match self.folder(access)?.read(&path(p.name.as_deref())?) {
-                Ok(bytes) => Ok(json!({"found": true, "bodyBase64": STANDARD.encode(bytes)})),
+                Ok(bytes) => {
+                    let text = std::str::from_utf8(&bytes).ok().filter(|_| bytes.len() <= MAX_TEXT);
+                    Ok(json!({"found": true, "bodyBase64": STANDARD.encode(&bytes), "text": text}))
+                }
                 Err(vault::VaultError::NotFound(_)) => Ok(json!({"found": false})),
                 Err(error) => Err(error.into()),
             },

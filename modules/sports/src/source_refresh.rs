@@ -1,6 +1,7 @@
 //! Reads the headlines of the person's added sources and writes what happened back as health.
 //! Every read is a plain public-web fetch of one address. Nothing is rendered, no article body is
 //! read, and a site source is read only through its saved, checked recipe.
+use crate::photo_pass::{self, Budget, Story};
 use crate::recipe;
 use crate::recipe_fetch::{self, Failure};
 use crate::source_discovery::{iso_now, REDDIT_DOMAIN};
@@ -24,6 +25,8 @@ pub struct Headline {
     pub headline: String,
     pub url: Option<String>,
     pub published_at: String,
+    /// The picture the feed names for the story, when it names one.
+    pub image_url: Option<String>,
 }
 
 struct Outcome {
@@ -72,9 +75,11 @@ fn read_feed<H: Host + ?Sized>(host: &H, url: &str, hosts: &[String], at: &str) 
     if !web::is_feed(&answer.body) {
         return Ok(Outcome::bad("unsupported", "unsupported_response", "The publisher did not return a supported RSS or Atom feed."));
     }
+    let art: std::collections::HashMap<String, String> =
+        moss_news_reader::parse_feed_xml(&answer.body).into_iter().filter(|r| !r.image_url.is_empty()).map(|r| (r.link.trim().to_owned(), r.image_url)).collect();
     let items = web::sample_feed_headlines(&answer.body, FEED_ITEMS)
         .into_iter()
-        .map(|s| Headline { headline: s.headline, url: Some(s.url), published_at: at.to_owned() })
+        .map(|s| Headline { image_url: art.get(&s.url).cloned(), headline: s.headline, url: Some(s.url), published_at: at.to_owned() })
         .collect();
     Ok(Outcome::healthy(items))
 }
@@ -89,7 +94,7 @@ fn read_reddit<H: Host + ?Sized>(host: &H, feed_url: &str, at: &str) -> Outcome 
     let options = RedditReaderOptions { publisher_domain: Some(&credited), ..Default::default() };
     match read_subreddit(|url, fetch| web::get_reddit(host, url, fetch), &name, &options) {
         ReadSubredditResult::Ok { headlines, .. } => Outcome::healthy(
-            headlines.into_iter().map(|h| Headline { headline: h.title, url: Some(h.url), published_at: h.published_at.unwrap_or_else(|| at.to_owned()) }).collect(),
+            headlines.into_iter().map(|h| Headline { headline: h.title, url: Some(h.url), published_at: h.published_at.unwrap_or_else(|| at.to_owned()), image_url: None }).collect(),
         ),
         ReadSubredditResult::Failed(reason) => match reason {
             RedditFailureReason::NotFound => Outcome::bad("unsupported", "unsupported_response", "Reddit did not return a readable post feed."),
@@ -127,7 +132,7 @@ fn read_recipe<H: Host + ?Sized>(host: &H, source: &Value, assignment: &Value, a
     };
     Ok(match recipe::extract(&parsed, &answer.body, answer.content_type.as_deref(), &answer.final_url) {
         Ok(items) => Outcome::healthy(
-            items.into_iter().map(|i| Headline { headline: i.headline, url: i.url, published_at: i.published_at.unwrap_or_else(|| at.to_owned()) }).collect(),
+            items.into_iter().map(|i| Headline { headline: i.headline, url: i.url, published_at: i.published_at.unwrap_or_else(|| at.to_owned()), image_url: None }).collect(),
         ),
         Err(recipe::Reason::Drift) => Outcome::bad("failing", "recipe_drift", "The publisher changed the structure used by this source."),
         Err(recipe::Reason::Unsupported) => Outcome::bad("unsupported", "unsupported_response", "The publisher returned an unsupported response."),
@@ -141,6 +146,7 @@ fn hosts_of(source: &Value) -> Vec<String> {
 /// Reads every verified target of every enabled source, or of one source, and records health.
 pub fn refresh<H: Host + ?Sized>(host: &H, only: Option<&str>) -> Result<Refreshed> {
     let at = iso_now(host)?;
+    let budget = Budget::open(host)?;
     let mut done = Refreshed { headlines: Vec::new(), requests: 0 };
     for (source, assignments) in sources::rows(host)? {
         let id = source["id"].as_str().unwrap_or_default().to_owned();
@@ -149,6 +155,7 @@ pub fn refresh<H: Host + ?Sized>(host: &H, only: Option<&str>) -> Result<Refresh
         }
         let method = source["retrieval_method"].as_str().unwrap_or_default().to_owned();
         let mut seen: Vec<(String, Outcome)> = Vec::new();
+        let mut stories: Vec<Story> = Vec::new();
         let mut drift = false;
         let mut missing = false;
         for assignment in assignments.iter().filter(|a| a["preview_status"] == "verified") {
@@ -178,6 +185,13 @@ pub fn refresh<H: Host + ?Sized>(host: &H, only: Option<&str>) -> Result<Refresh
             let assignment_id = assignment["id"].as_str().unwrap_or_default();
             sources::write_assignment_health(host, assignment_id, target_url, outcome.state, outcome.reason, outcome.message, &at)?;
             if outcome.state == "healthy" {
+                for item in &outcome.items {
+                    let Some(url) = &item.url else { continue };
+                    let id = headline_id(&id, item);
+                    if !stories.iter().any(|s| s.id == id) {
+                        stories.push(Story { id, url: url.clone(), feed_image: item.image_url.clone() });
+                    }
+                }
                 done.headlines.push((assignment_id.to_owned(), outcome.items.clone()));
             }
         }
@@ -186,6 +200,8 @@ pub fn refresh<H: Host + ?Sized>(host: &H, only: Option<&str>) -> Result<Refresh
         }
         let status = (method == "scrape").then_some(if drift { "drift" } else if missing { "missing" } else { "ready" });
         sources::recompute_health(host, &id, status)?;
+        // Photos never fail a refresh. A story that gets none simply has no picture.
+        let _ = photo_pass::run(host, &budget, &source, &stories);
     }
     Ok(done)
 }

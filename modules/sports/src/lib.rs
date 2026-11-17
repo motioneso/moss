@@ -15,6 +15,11 @@ pub mod identity;
 pub mod input;
 pub mod lifecycle;
 pub mod overview;
+pub mod photo;
+pub mod photo_discovery;
+pub mod photo_pass;
+pub mod photo_routes;
+pub mod photo_store;
 pub mod public_cache;
 pub mod public_routes;
 pub mod recipe;
@@ -72,6 +77,8 @@ pub fn route_with<H: Host + ?Sized>(host: &H, teams: &dyn TeamList, request: Rou
         ("POST", "/sources/:id/rebuild/preview") => source_rebuild::preview(host, teams, &request),
         ("PATCH", "/sources/:id/rebuild") => source_rebuild::confirm(host, &request),
         ("GET", "/sources/:id/icon") => source_icon::icon(host, &request),
+        ("GET", "/headlines/:headlineId/photo") => photo_routes::photo(host, &request),
+        ("DELETE", "/sources/:id/photos") => photo_routes::stop_photos(host, &request),
         ("DELETE", "/sources/:id") => source_routes::remove(host, &request),
         ("POST", "/tools/run") => source_tools::transport(host, &request.body),
         _ => return Response::new(404, json!({"message":"Route not found"})),
