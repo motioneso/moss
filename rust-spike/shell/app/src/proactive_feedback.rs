@@ -36,8 +36,8 @@ pub fn routes(state: Arc<Feedback>) -> Router {
         .route("/api/me/proactive-cards/refresh", post(refresh))
         .route("/api/me/usefulness-feedback", get(list).post(create))
         .route("/api/me/usefulness-feedback/signals", post(signal))
-        .route("/api/me/usefulness-feedback/:id/undo", post(undo))
-        .route("/api/me/usefulness-feedback/:id", patch(edit))
+        .route("/api/me/usefulness-feedback/{id}/undo", post(undo))
+        .route("/api/me/usefulness-feedback/{id}", patch(edit))
         .with_state(state)
 }
 
