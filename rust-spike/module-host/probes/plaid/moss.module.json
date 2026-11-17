@@ -11,25 +11,14 @@
   "capabilities": [
     {
       "port": "credentials",
-      "operations": [
-        "status",
-        "request",
-        "exchange",
-        "forget"
-      ],
-      "resources": [
-        "sandbox.plaid.com",
-        "production.plaid.com"
-      ]
+      "operations": ["status", "request", "exchange", "forget"],
+      "resources": ["sandbox.plaid.com", "production.plaid.com"]
     }
   ],
   "credentials": {
     "plaid-keys": {
       "scope": "instance",
-      "hosts": [
-        "sandbox.plaid.com",
-        "production.plaid.com"
-      ],
+      "hosts": ["sandbox.plaid.com", "production.plaid.com"],
       "attachment": {
         "kind": "fields",
         "name": {
@@ -37,26 +26,18 @@
           "secret": "clientSecret"
         }
       },
-      "exposeFields": [
-        "link_token",
-        "public_token"
-      ]
+      "exposeFields": ["link_token", "public_token"]
     },
     "plaid-item": {
       "scope": "account",
-      "hosts": [
-        "sandbox.plaid.com",
-        "production.plaid.com"
-      ],
+      "hosts": ["sandbox.plaid.com", "production.plaid.com"],
       "attachment": {
         "kind": "fields",
         "name": {
           "access_token": "accessToken"
         }
       },
-      "with": [
-        "plaid-keys"
-      ],
+      "with": ["plaid-keys"],
       "exchange": {
         "endpoint": "https://production.plaid.com/item/public_token/exchange",
         "grantType": "token_swap",
@@ -85,7 +66,7 @@
   "requires": {},
   "provides": {},
   "tools": {},
-  "icons": [],
+  "icons": ["icons/plaid-probe.svg"],
   "accounts": {
     "supportsUserDisable": true,
     "defaultEnabled": true

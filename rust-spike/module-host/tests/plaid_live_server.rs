@@ -225,6 +225,7 @@ fn the_installed_plaid_probe_talks_to_plaid_through_the_host_on_the_real_server(
             let bytes = moss_module_host::archive::pack(&BTreeMap::from([
                 ("moss.module.json".into(), serde_json::to_vec(&manifest).unwrap()),
                 ("code/module.wasm".into(), fs::read(std::env::var(variable).unwrap()).unwrap()),
+                ("icons/plaid-probe.svg".into(), b"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1 1\"/>".to_vec()),
                 ("LICENSE".into(), b"test only".to_vec()),
                 ("NOTICE".into(), b"test only".to_vec()),
                 ("CHANGELOG.md".into(), b"test only".to_vec()),
