@@ -17,7 +17,10 @@ pub struct Reject {
 
 impl Reject {
     pub fn new(status: u16, message: impl Into<String>) -> Self {
-        Reject { status, message: message.into() }
+        Reject {
+            status,
+            message: message.into(),
+        }
     }
 }
 

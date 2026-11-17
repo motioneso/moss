@@ -31,7 +31,12 @@ impl Drop for Port {
 fn private(path: &Path, value: &Value) {
     use std::io::Write;
     use std::os::unix::fs::OpenOptionsExt;
-    let mut file = fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(path).unwrap();
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(path)
+        .unwrap();
     file.write_all(value.to_string().as_bytes()).unwrap();
 }
 
@@ -44,7 +49,11 @@ fn two_people_use_cards_and_feedback_on_the_real_server() {
     let root = scratch.path();
     let port = Port(
         String::from_utf8(
-            Command::new("devports").args(["claim", &format!("js316-proactive-{}", std::process::id())]).output().unwrap().stdout,
+            Command::new("devports")
+                .args(["claim", &format!("js316-proactive-{}", std::process::id())])
+                .output()
+                .unwrap()
+                .stdout,
         )
         .unwrap()
         .trim()
@@ -63,7 +72,11 @@ fn two_people_use_cards_and_feedback_on_the_real_server() {
         .unwrap()
         .success());
     fs::create_dir(root.join("web")).unwrap();
-    fs::write(root.join("web/index.html"), "<!doctype html><title>x</title>").unwrap();
+    fs::write(
+        root.join("web/index.html"),
+        "<!doctype html><title>x</title>",
+    )
+    .unwrap();
     let app_url = std::env::var("JS43_APP_URL").unwrap();
     private(
         &root.join("credentials.json"),
@@ -93,7 +106,11 @@ fn two_people_use_cards_and_feedback_on_the_real_server() {
             .unwrap(),
     );
     let deadline = Instant::now() + Duration::from_secs(30);
-    while !client.get(format!("{origin}/api/hello")).send().is_ok_and(|r| r.status().is_success()) {
+    while !client
+        .get(format!("{origin}/api/hello"))
+        .send()
+        .is_ok_and(|r| r.status().is_success())
+    {
         assert!(
             Instant::now() < deadline,
             "server startup deadline\n{}",
@@ -112,12 +129,25 @@ fn two_people_use_cards_and_feedback_on_the_real_server() {
         .send()
         .unwrap();
     assert_eq!(response.status(), 200);
-    let ada_cookie = response.headers()["set-cookie"].to_str().unwrap().split(';').next().unwrap().to_owned();
-    let ada: Uuid = response.json::<Value>().unwrap()["user"]["id"].as_str().unwrap().parse().unwrap();
+    let ada_cookie = response.headers()["set-cookie"]
+        .to_str()
+        .unwrap()
+        .split(';')
+        .next()
+        .unwrap()
+        .to_owned();
+    let ada: Uuid = response.json::<Value>().unwrap()["user"]["id"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
     let bootstrap = rt.block_on(async {
-        let (db, conn) = tokio_postgres::connect(&std::env::var("JS43_BOOTSTRAP_URL").unwrap(), tokio_postgres::NoTls)
-            .await
-            .unwrap();
+        let (db, conn) = tokio_postgres::connect(
+            &std::env::var("JS43_BOOTSTRAP_URL").unwrap(),
+            tokio_postgres::NoTls,
+        )
+        .await
+        .unwrap();
         tokio::spawn(async move {
             let _ = conn.await;
         });
@@ -141,7 +171,13 @@ fn two_people_use_cards_and_feedback_on_the_real_server() {
         .send()
         .unwrap();
     assert_eq!(signed.status(), 200, "second person sign-in");
-    let bob_cookie = signed.headers()["set-cookie"].to_str().unwrap().split(';').next().unwrap().to_owned();
+    let bob_cookie = signed.headers()["set-cookie"]
+        .to_str()
+        .unwrap()
+        .split(';')
+        .next()
+        .unwrap()
+        .to_owned();
 
     // Cards come from the real placement code, as a scanner would place them.
     rt.block_on(bootstrap.execute(
@@ -150,13 +186,20 @@ fn two_people_use_cards_and_feedback_on_the_real_server() {
         &[],
     ))
     .unwrap();
-    let database = rt.block_on(Database::connect(&app_url, 4, RuntimeRole::App)).unwrap();
+    let database = rt
+        .block_on(Database::connect(&app_url, 4, RuntimeRole::App))
+        .unwrap();
     let now: String = rt
-        .block_on(bootstrap.query_one("SELECT to_char(now() AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"')", &[]))
+        .block_on(bootstrap.query_one(
+            "SELECT to_char(now() AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"')",
+            &[],
+        ))
         .unwrap()
         .get(0);
     let card_id = rt.block_on(async {
-        let cx = DataContext::open(&database, &AccessContext::new(ada, "proof")).await.unwrap();
+        let cx = DataContext::open(&database, &AccessContext::new(ada, "proof"))
+            .await
+            .unwrap();
         let placed = proactive_cards::place(
             &cx,
             &Candidate {
@@ -183,7 +226,9 @@ fn two_people_use_cards_and_feedback_on_the_real_server() {
     });
 
     let call = |cookie: Option<&str>, method: Method, path: &str, body: Option<Value>| {
-        let mut request = client.request(method, format!("{origin}{path}")).header("origin", &origin);
+        let mut request = client
+            .request(method, format!("{origin}{path}"))
+            .header("origin", &origin);
         if let Some(cookie) = cookie {
             request = request.header("cookie", cookie);
         }
@@ -191,47 +236,147 @@ fn two_people_use_cards_and_feedback_on_the_real_server() {
             request = request.json(&body);
         }
         let response = request.send().unwrap();
-        (response.status().as_u16(), response.json::<Value>().unwrap_or(Value::Null))
+        (
+            response.status().as_u16(),
+            response.json::<Value>().unwrap_or(Value::Null),
+        )
     };
     let log = || fs::read_to_string(root.join("server.log")).unwrap_or_default();
 
-    assert_eq!(call(None, Method::GET, "/api/me/proactive-cards", None).0, 401, "signed out");
-    let (status, mine) = call(Some(&ada_cookie), Method::GET, "/api/me/proactive-cards", None);
+    assert_eq!(
+        call(None, Method::GET, "/api/me/proactive-cards", None).0,
+        401,
+        "signed out"
+    );
+    let (status, mine) = call(
+        Some(&ada_cookie),
+        Method::GET,
+        "/api/me/proactive-cards",
+        None,
+    );
     assert_eq!(status, 200, "{mine}\n{}", log());
     assert_eq!(mine["cards"].as_array().unwrap().len(), 1);
     assert_eq!(mine["cards"][0]["id"], json!(card_id));
-    let (_, theirs) = call(Some(&bob_cookie), Method::GET, "/api/me/proactive-cards", None);
-    assert_eq!(theirs["cards"].as_array().unwrap().len(), 0, "Bob sees none of Ada's cards");
+    let (_, theirs) = call(
+        Some(&bob_cookie),
+        Method::GET,
+        "/api/me/proactive-cards",
+        None,
+    );
+    assert_eq!(
+        theirs["cards"].as_array().unwrap().len(),
+        0,
+        "Bob sees none of Ada's cards"
+    );
     println!("PASS cards: Ada sees her own card, Bob sees none, signed-out is refused");
 
     let dismiss = json!({"targetKind":"proactive_card","targetRef":card_id.to_string(),"surface":"proactive","kind":"dismiss"});
-    let (status, body) = call(Some(&bob_cookie), Method::POST, "/api/me/usefulness-feedback", Some(dismiss.clone()));
+    let (status, body) = call(
+        Some(&bob_cookie),
+        Method::POST,
+        "/api/me/usefulness-feedback",
+        Some(dismiss.clone()),
+    );
     assert_eq!(status, 404, "Bob cannot act on Ada's card: {body}");
-    let (status, body) = call(Some(&ada_cookie), Method::POST, "/api/me/usefulness-feedback", Some(dismiss));
+    let (status, body) = call(
+        Some(&ada_cookie),
+        Method::POST,
+        "/api/me/usefulness-feedback",
+        Some(dismiss),
+    );
     assert_eq!(status, 201, "{body}\n{}", log());
     let signal_id = body["feedback"]["id"].as_str().unwrap().to_owned();
-    let (_, after) = call(Some(&ada_cookie), Method::GET, "/api/me/proactive-cards", None);
-    assert_eq!(after["cards"].as_array().unwrap().len(), 0, "dismissed card is gone");
-    let (_, listed) = call(Some(&ada_cookie), Method::GET, "/api/me/usefulness-feedback", None);
+    let (_, after) = call(
+        Some(&ada_cookie),
+        Method::GET,
+        "/api/me/proactive-cards",
+        None,
+    );
+    assert_eq!(
+        after["cards"].as_array().unwrap().len(),
+        0,
+        "dismissed card is gone"
+    );
+    let (_, listed) = call(
+        Some(&ada_cookie),
+        Method::GET,
+        "/api/me/usefulness-feedback",
+        None,
+    );
     assert_eq!(listed["feedback"].as_array().unwrap().len(), 1);
-    let (_, bobs) = call(Some(&bob_cookie), Method::GET, "/api/me/usefulness-feedback", None);
-    assert_eq!(bobs["feedback"].as_array().unwrap().len(), 0, "Bob sees none of Ada's feedback");
-    let (status, _) = call(Some(&bob_cookie), Method::POST, &format!("/api/me/usefulness-feedback/{signal_id}/undo"), None);
+    let (_, bobs) = call(
+        Some(&bob_cookie),
+        Method::GET,
+        "/api/me/usefulness-feedback",
+        None,
+    );
+    assert_eq!(
+        bobs["feedback"].as_array().unwrap().len(),
+        0,
+        "Bob sees none of Ada's feedback"
+    );
+    let (status, _) = call(
+        Some(&bob_cookie),
+        Method::POST,
+        &format!("/api/me/usefulness-feedback/{signal_id}/undo"),
+        None,
+    );
     assert_eq!(status, 404, "Bob cannot undo Ada's feedback");
-    let (status, undone) = call(Some(&ada_cookie), Method::POST, &format!("/api/me/usefulness-feedback/{signal_id}/undo"), None);
-    assert_eq!((status, undone["feedback"]["status"].as_str()), (200, Some("undone")));
-    let (_, back) = call(Some(&ada_cookie), Method::GET, "/api/me/proactive-cards", None);
-    assert_eq!(back["cards"].as_array().unwrap().len(), 1, "undo brings the card back");
+    let (status, undone) = call(
+        Some(&ada_cookie),
+        Method::POST,
+        &format!("/api/me/usefulness-feedback/{signal_id}/undo"),
+        None,
+    );
+    assert_eq!(
+        (status, undone["feedback"]["status"].as_str()),
+        (200, Some("undone"))
+    );
+    let (_, back) = call(
+        Some(&ada_cookie),
+        Method::GET,
+        "/api/me/proactive-cards",
+        None,
+    );
+    assert_eq!(
+        back["cards"].as_array().unwrap().len(),
+        1,
+        "undo brings the card back"
+    );
     println!("PASS feedback: dismiss hides the card, undo restores it, Bob cannot see or touch Ada's feedback");
 
     let record = json!({"targetKind":"proactive_card","targetRef":card_id.to_string(),"surface":"proactive","kind":"too_much"});
-    let (status, _) = call(Some(&ada_cookie), Method::POST, "/api/me/usefulness-feedback/signals", Some(record));
+    let (status, _) = call(
+        Some(&ada_cookie),
+        Method::POST,
+        "/api/me/usefulness-feedback/signals",
+        Some(record),
+    );
     assert_eq!(status, 201);
-    let (_, still) = call(Some(&ada_cookie), Method::GET, "/api/me/proactive-cards", None);
-    assert_eq!(still["cards"].as_array().unwrap().len(), 1, "a signal changes no card");
-    let (status, refreshed) = call(Some(&ada_cookie), Method::POST, "/api/me/proactive-cards/refresh", None);
+    let (_, still) = call(
+        Some(&ada_cookie),
+        Method::GET,
+        "/api/me/proactive-cards",
+        None,
+    );
+    assert_eq!(
+        still["cards"].as_array().unwrap().len(),
+        1,
+        "a signal changes no card"
+    );
+    let (status, refreshed) = call(
+        Some(&ada_cookie),
+        Method::POST,
+        "/api/me/proactive-cards/refresh",
+        None,
+    );
     assert_eq!((status, refreshed["enqueued"].clone()), (202, json!(0)));
-    let (status, bad) = call(Some(&ada_cookie), Method::PATCH, "/api/me/usefulness-feedback/not-a-uuid", Some(json!({"reason":"x"})));
+    let (status, bad) = call(
+        Some(&ada_cookie),
+        Method::PATCH,
+        "/api/me/usefulness-feedback/not-a-uuid",
+        Some(json!({"reason":"x"})),
+    );
     assert_eq!(status, 400, "{bad}");
     println!("PASS signal changes no card; refresh answers 202; a bad id is refused with 400");
 

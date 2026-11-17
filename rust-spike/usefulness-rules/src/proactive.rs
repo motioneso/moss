@@ -53,7 +53,9 @@ fn local_time(value: Option<&Value>) -> bool {
 }
 
 fn within(value: Option<&Value>, low: f64, high: f64) -> bool {
-    value.and_then(Value::as_f64).is_some_and(|n| n >= low && n <= high)
+    value
+        .and_then(Value::as_f64)
+        .is_some_and(|n| n >= low && n <= high)
 }
 
 fn only_keys(map: &Map<String, Value>, allowed: &[&str]) -> bool {
@@ -64,7 +66,9 @@ fn valid(p: &Map<String, Value>) -> bool {
     if !only_keys(p, &PREF_KEYS) || p.get("version") != Some(&json!(1)) {
         return false;
     }
-    if p.get("automaticEmailAlerts").is_some_and(|v| !v.is_boolean()) {
+    if p.get("automaticEmailAlerts")
+        .is_some_and(|v| !v.is_boolean())
+    {
         return false;
     }
     if !p.get("enabled").is_some_and(Value::is_boolean)
@@ -73,12 +77,16 @@ fn valid(p: &Map<String, Value>) -> bool {
     {
         return false;
     }
-    let Some(sources) = p.get("sources").and_then(Value::as_object) else { return false };
+    let Some(sources) = p.get("sources").and_then(Value::as_object) else {
+        return false;
+    };
     if !only_keys(sources, &SOURCES) {
         return false;
     }
     for name in SOURCES {
-        let Some(s) = sources.get(name).and_then(Value::as_object) else { return false };
+        let Some(s) = sources.get(name).and_then(Value::as_object) else {
+            return false;
+        };
         if !only_keys(s, &["enabled", "dailyCardCap"])
             || !s.get("enabled").is_some_and(Value::is_boolean)
             || !within(s.get("dailyCardCap"), 1.0, 5.0)
@@ -86,7 +94,9 @@ fn valid(p: &Map<String, Value>) -> bool {
             return false;
         }
     }
-    let Some(q) = p.get("quietHours").and_then(Value::as_object) else { return false };
+    let Some(q) = p.get("quietHours").and_then(Value::as_object) else {
+        return false;
+    };
     only_keys(q, &["enabled", "startLocalTime", "endLocalTime"])
         && q.get("enabled").is_some_and(Value::is_boolean)
         && local_time(q.get("startLocalTime"))
@@ -108,7 +118,10 @@ pub fn parse_preference(raw: &Value) -> Option<Preference> {
     }
     let mut merged_sources = defaults["sources"].as_object()?.clone();
     for (name, value) in sources.and_then(Value::as_object).into_iter().flatten() {
-        let next = match (value.as_object(), merged_sources.get(name).and_then(Value::as_object)) {
+        let next = match (
+            value.as_object(),
+            merged_sources.get(name).and_then(Value::as_object),
+        ) {
             (Some(over), Some(base)) => {
                 let mut m = base.clone();
                 m.extend(over.clone());
@@ -119,7 +132,12 @@ pub fn parse_preference(raw: &Value) -> Option<Preference> {
         merged_sources.insert(name.clone(), next);
     }
     let mut merged_quiet = defaults["quietHours"].as_object()?.clone();
-    merged_quiet.extend(quiet.and_then(Value::as_object).cloned().unwrap_or_default());
+    merged_quiet.extend(
+        quiet
+            .and_then(Value::as_object)
+            .cloned()
+            .unwrap_or_default(),
+    );
     let mut merged = defaults.clone();
     merged.extend(p.clone());
     merged.insert("sources".into(), Value::Object(merged_sources));
@@ -128,8 +146,13 @@ pub fn parse_preference(raw: &Value) -> Option<Preference> {
         return None;
     }
     let has_legacy_email_choice = p.contains_key("enabled")
-        || sources.and_then(Value::as_object).is_some_and(|s| s.contains_key("email"));
-    Some(Preference { value: Value::Object(merged), has_legacy_email_choice })
+        || sources
+            .and_then(Value::as_object)
+            .is_some_and(|s| s.contains_key("email"));
+    Some(Preference {
+        value: Value::Object(merged),
+        has_legacy_email_choice,
+    })
 }
 
 pub fn saved_from(stored: Option<&Value>) -> Saved {
@@ -156,7 +179,8 @@ pub fn automatic_email_alerts(saved: &Saved) -> bool {
         Saved::Parsed(p) => match p.value.get("automaticEmailAlerts").and_then(Value::as_bool) {
             Some(flag) => flag,
             None if p.has_legacy_email_choice => {
-                p.value["enabled"] == json!(true) && p.value["sources"]["email"]["enabled"] == json!(true)
+                p.value["enabled"] == json!(true)
+                    && p.value["sources"]["email"]["enabled"] == json!(true)
             }
             None => true,
         },
@@ -207,7 +231,9 @@ pub fn parse_limit(raw: Option<&str>) -> i64 {
         Some(rest) => (-1, rest),
         None => (1, text.strip_prefix('+').unwrap_or(text)),
     };
-    let end = digits.find(|c: char| !c.is_ascii_digit()).unwrap_or(digits.len());
+    let end = digits
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(digits.len());
     let n = digits[..end].parse::<i64>().unwrap_or(0) * sign;
     if n < 1 {
         DEFAULT_LIMIT
@@ -230,7 +256,9 @@ pub fn placement_refusal(
     source: &str,
 ) -> Option<&'static str> {
     let global = pref["dailyCardCap"].as_f64().unwrap_or(8.0);
-    let per_source = pref["sources"][source]["dailyCardCap"].as_f64().unwrap_or(3.0);
+    let per_source = pref["sources"][source]["dailyCardCap"]
+        .as_f64()
+        .unwrap_or(3.0);
     if dismissed_recently {
         Some("dismissed_stable_key_suppressed")
     } else if counts.total_today as f64 >= global {

@@ -65,7 +65,10 @@ pub async fn list(cx: &DataContext, limit: Option<&str>) -> Result<(u16, Value),
             &[&actor, &limit],
         )
         .await?;
-    Ok((200, json!({ "cards": rows.iter().map(card).collect::<Vec<_>>() })))
+    Ok((
+        200,
+        json!({ "cards": rows.iter().map(card).collect::<Vec<_>>() }),
+    ))
 }
 
 async fn saved_preference(cx: &DataContext, actor: Uuid) -> Result<rules::Saved, ApiError> {
@@ -251,5 +254,8 @@ pub async fn place(cx: &DataContext, c: &Candidate, now: &str) -> Result<Placeme
             ],
         )
         .await?;
-    Ok(Placement::Placed { id: row.get(0), deferred: row.get(1) })
+    Ok(Placement::Placed {
+        id: row.get(0),
+        deferred: row.get(1),
+    })
 }

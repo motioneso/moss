@@ -22,7 +22,9 @@ fn filler(word: &str) -> bool {
 }
 
 fn add_term(terms: &mut Vec<String>, value: Option<&Value>) {
-    let Some(text) = value.and_then(Value::as_str) else { return };
+    let Some(text) = value.and_then(Value::as_str) else {
+        return;
+    };
     let term = text.trim().to_lowercase();
     let len = crate::js_len(&term);
     if len < MIN_TERM || len > MAX_TERM || terms.contains(&term) {
@@ -33,7 +35,11 @@ fn add_term(terms: &mut Vec<String>, value: Option<&Value>) {
 
 fn reason_terms(reason: Option<&str>) -> Vec<String> {
     let mut words: Vec<String> = Vec::new();
-    for raw in reason.unwrap_or("").to_lowercase().split(|c: char| !c.is_alphanumeric()) {
+    for raw in reason
+        .unwrap_or("")
+        .to_lowercase()
+        .split(|c: char| !c.is_alphanumeric())
+    {
         let len = crate::js_len(raw);
         if len < MIN_TERM || len > MAX_TERM || filler(raw) || words.iter().any(|w| w == raw) {
             continue;
@@ -83,11 +89,22 @@ pub fn needs_recompile(rule: &Value, version: Option<i64>) -> bool {
         Some(v) if v < RULE_VERSION => return true,
         _ => {}
     }
-    let Some(map) = rule.as_object() else { return true };
+    let Some(map) = rule.as_object() else {
+        return true;
+    };
     let valid = map.get("version").and_then(Value::as_f64).is_some()
-        && matches!(map.get("module").and_then(Value::as_str), Some("news" | "sports"))
-        && matches!(map.get("direction").and_then(Value::as_str), Some("less" | "more"))
-        && map.get("storyRef").and_then(Value::as_str).is_some_and(|s| !s.is_empty())
+        && matches!(
+            map.get("module").and_then(Value::as_str),
+            Some("news" | "sports")
+        )
+        && matches!(
+            map.get("direction").and_then(Value::as_str),
+            Some("less" | "more")
+        )
+        && map
+            .get("storyRef")
+            .and_then(Value::as_str)
+            .is_some_and(|s| !s.is_empty())
         && map
             .get("terms")
             .and_then(Value::as_array)

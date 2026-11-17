@@ -26,7 +26,10 @@ pub struct Feedback {
 
 impl Feedback {
     pub fn new(database: Database) -> Self {
-        Self { database, registered: Vec::new() }
+        Self {
+            database,
+            registered: Vec::new(),
+        }
     }
 }
 
@@ -74,21 +77,41 @@ async fn cards(
     Extension(access): Extension<AccessContext>,
     Query(query): Query<Vec<(String, String)>>,
 ) -> Response {
-    let limit = query.iter().find(|(k, _)| k == "limit").map(|(_, v)| v.clone());
-    run!(state, access, |cx| proactive_cards::list(cx, limit.as_deref()))
+    let limit = query
+        .iter()
+        .find(|(k, _)| k == "limit")
+        .map(|(_, v)| v.clone());
+    run!(state, access, |cx| proactive_cards::list(
+        cx,
+        limit.as_deref()
+    ))
 }
 
-async fn refresh(State(state): State<Arc<Feedback>>, Extension(access): Extension<AccessContext>) -> Response {
+async fn refresh(
+    State(state): State<Arc<Feedback>>,
+    Extension(access): Extension<AccessContext>,
+) -> Response {
     let registered = state.registered.clone();
-    run!(state, access, |cx| proactive_cards::refresh(cx, &registered))
+    run!(state, access, |cx| proactive_cards::refresh(
+        cx,
+        &registered
+    ))
 }
 
-async fn create(State(state): State<Arc<Feedback>>, Extension(access): Extension<AccessContext>, body: Bytes) -> Response {
+async fn create(
+    State(state): State<Arc<Feedback>>,
+    Extension(access): Extension<AccessContext>,
+    body: Bytes,
+) -> Response {
     let body = body_value(&body);
     run!(state, access, |cx| usefulness_feedback::create(cx, &body))
 }
 
-async fn signal(State(state): State<Arc<Feedback>>, Extension(access): Extension<AccessContext>, body: Bytes) -> Response {
+async fn signal(
+    State(state): State<Arc<Feedback>>,
+    Extension(access): Extension<AccessContext>,
+    body: Bytes,
+) -> Response {
     let body = body_value(&body);
     run!(state, access, |cx| usefulness_feedback::signal(cx, &body))
 }
@@ -116,5 +139,7 @@ async fn edit(
     body: Bytes,
 ) -> Response {
     let body = body_value(&body);
-    run!(state, access, |cx| usefulness_feedback::update_reason(cx, &id, &body))
+    run!(state, access, |cx| usefulness_feedback::update_reason(
+        cx, &id, &body
+    ))
 }

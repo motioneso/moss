@@ -25,7 +25,10 @@ const folder = mkdtempSync(join(tmpdir(), "proactive-feedback-"));
 const out = join(folder, "rust-output.json");
 let failed = false;
 const check = (name: string, ok: boolean, detail?: unknown) => {
-  console[ok ? "log" : "error"](`${ok ? "PASS" : "FAIL"}: ${name}`, ok ? "" : JSON.stringify(detail));
+  console[ok ? "log" : "error"](
+    `${ok ? "PASS" : "FAIL"}: ${name}`,
+    ok ? "" : JSON.stringify(detail)
+  );
   if (!ok) failed = true;
 };
 try {
@@ -115,12 +118,24 @@ try {
   if (run.status !== 0) failed = true;
   else {
     const rust = JSON.parse(readFileSync(out, "utf8"));
-    check("Rust lists the old card exactly as TypeScript serializes it", isDeepStrictEqual(rust.cards, expected.cards), { rust: rust.cards, expected: expected.cards });
-    check("Rust lists the old feedback exactly as TypeScript serializes it", isDeepStrictEqual(rust.feedback, expected.feedback), { rust: rust.feedback, expected: expected.feedback });
+    check(
+      "Rust lists the old card exactly as TypeScript serializes it",
+      isDeepStrictEqual(rust.cards, expected.cards),
+      { rust: rust.cards, expected: expected.cards }
+    );
+    check(
+      "Rust lists the old feedback exactly as TypeScript serializes it",
+      isDeepStrictEqual(rust.feedback, expected.feedback),
+      { rust: rust.feedback, expected: expected.feedback }
+    );
     await runner.withDataContext({ actorUserId: user }, async (scope) => {
       for (const created of [rust.createdStory, rust.createdDismiss]) {
         const row = await repository.findOwned(scope, user, created.id);
-        check(`TypeScript reads the Rust ${created.kind} row as Rust returned it`, row !== undefined && isDeepStrictEqual(serializeFeedback(row), created), { row, created });
+        check(
+          `TypeScript reads the Rust ${created.kind} row as Rust returned it`,
+          row !== undefined && isDeepStrictEqual(serializeFeedback(row), created),
+          { row, created }
+        );
         if (created.targetKind === "news_story" && row) {
           const rule = compileStoryRelevanceRule({
             moduleId: "news",
@@ -129,11 +144,19 @@ try {
             context: { topicRef: "topic-ts" },
             reasonText: "Fewer repeats of this please"
           });
-          check("the Rust rule equals the TypeScript rule", isDeepStrictEqual(row.rule_json, rule), { rule, stored: row.rule_json });
+          check(
+            "the Rust rule equals the TypeScript rule",
+            isDeepStrictEqual(row.rule_json, rule),
+            { rule, stored: row.rule_json }
+          );
         }
       }
       const dismissed = await cards.findById(scope, user, card.id);
-      check("the Rust dismissal is read by TypeScript as a dismissed card", dismissed?.status === "dismissed", dismissed);
+      check(
+        "the Rust dismissal is read by TypeScript as a dismissed card",
+        dismissed?.status === "dismissed",
+        dismissed
+      );
     });
     const exported = await runner.withDataContext({ actorUserId: user }, async (scope) => {
       const result = await usefulnessFeedbackSignalsQuery(user).execute(scope.db);

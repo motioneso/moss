@@ -10,7 +10,13 @@ fn the_webassembly_build_passes_every_fixture() {
     let module = Module::from_file(&engine, path).unwrap();
     let mut store = Store::new(&engine, ());
     let instance = Instance::new(&mut store, &module, &[]).unwrap();
-    let run = instance.get_typed_func::<(), u32>(&mut store, "run_fixtures").unwrap();
-    assert_eq!(run.call(&mut store, ()).unwrap(), 0, "fixtures failed in the WebAssembly build");
+    let run = instance
+        .get_typed_func::<(), u32>(&mut store, "run_fixtures")
+        .unwrap();
+    assert_eq!(
+        run.call(&mut store, ()).unwrap(),
+        0,
+        "fixtures failed in the WebAssembly build"
+    );
     println!("WebAssembly fixtures passed");
 }

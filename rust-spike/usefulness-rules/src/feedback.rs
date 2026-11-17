@@ -157,10 +157,12 @@ pub fn parse_create(body: &Value) -> Result<Create, Reject> {
             return Err(invalid());
         }
     }
-    if map
-        .keys()
-        .any(|k| !matches!(k.as_str(), "kind" | "surface" | "targetKind" | "targetRef" | "reason"))
-    {
+    if map.keys().any(|k| {
+        !matches!(
+            k.as_str(),
+            "kind" | "surface" | "targetKind" | "targetRef" | "reason"
+        )
+    }) {
         return Err(invalid());
     }
     let target_ref = match map.get("targetRef").and_then(Value::as_str) {
@@ -176,17 +178,29 @@ pub fn parse_create(body: &Value) -> Result<Create, Reject> {
             Some(raw) => Some(normalize_reason(raw)?),
         }
     } else if map.contains_key("reason") {
-        return Err(Reject::new(400, "This feedback action does not take a reason"));
+        return Err(Reject::new(
+            400,
+            "This feedback action does not take a reason",
+        ));
     } else {
         None
     };
-    Ok(Create { target_kind, target_ref, surface, kind, reason })
+    Ok(Create {
+        target_kind,
+        target_ref,
+        surface,
+        kind,
+        reason,
+    })
 }
 
 pub fn parse_signal(body: &Value) -> Result<Create, Reject> {
     let input = parse_create(body)?;
     if !record_only(&input.target_kind, &input.surface, &input.kind) {
-        return Err(Reject::new(400, "Feedback target/action pair is not record-only"));
+        return Err(Reject::new(
+            400,
+            "Feedback target/action pair is not record-only",
+        ));
     }
     Ok(input)
 }
@@ -230,8 +244,17 @@ pub fn parse_list_query(pairs: &[(String, String)]) -> Result<ListFilter, Reject
 const MAX_METADATA_BYTES: usize = 2048;
 const MAX_STRING: usize = 200;
 const UNSAFE_KEY_PARTS: [&str; 11] = [
-    "body", "excerpt", "external_id", "externalid", "prompt", "raw", "reason", "secret",
-    "source_id", "sourceid", "summary",
+    "body",
+    "excerpt",
+    "external_id",
+    "externalid",
+    "prompt",
+    "raw",
+    "reason",
+    "secret",
+    "source_id",
+    "sourceid",
+    "summary",
 ];
 
 fn unsafe_key(key: &str) -> bool {

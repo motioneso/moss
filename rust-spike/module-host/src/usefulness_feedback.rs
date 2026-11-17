@@ -74,7 +74,9 @@ async fn find_target(
 ) -> Result<Option<Verified>, ApiError> {
     let actor = cx.actor_user_id();
     if input.target_kind == "proactive_card" {
-        let Ok(card) = Uuid::parse_str(&input.target_ref) else { return Ok(None) };
+        let Ok(card) = Uuid::parse_str(&input.target_ref) else {
+            return Ok(None);
+        };
         let row = cx
             .db()
             .query_opt(
@@ -110,7 +112,12 @@ async fn find_target(
             "SELECT source_kind, source_label, priority_band, metadata_json
                FROM app.usefulness_feedback_targets
               WHERE owner_user_id = $1 AND target_kind = $2 AND target_ref = $3 AND surface = $4",
-            &[&actor, &input.target_kind, &input.target_ref, &input.surface],
+            &[
+                &actor,
+                &input.target_kind,
+                &input.target_ref,
+                &input.surface,
+            ],
         )
         .await?;
     Ok(row.map(|r| {
@@ -138,17 +145,28 @@ async fn clear_answers(cx: &DataContext, id: Uuid) -> Result<(), ApiError> {
     Ok(())
 }
 
-fn story_rule(kind: &str, target_kind: &str, target_ref: &str, context: &Value, reason: Option<&str>) -> Option<Value> {
+fn story_rule(
+    kind: &str,
+    target_kind: &str,
+    target_ref: &str,
+    context: &Value,
+    reason: Option<&str>,
+) -> Option<Value> {
     let module = rules::story_module(target_kind)?;
     let direction = rules::direction_for_kind(kind)?;
-    Some(rule::compile(module, direction, target_ref, context, reason))
+    Some(rule::compile(
+        module, direction, target_ref, context, reason,
+    ))
 }
 
 /// `POST /api/me/usefulness-feedback`.
 pub async fn create(cx: &DataContext, body: &Value) -> Result<(u16, Value), ApiError> {
     let input = rules::parse_create(body).map_err(reject)?;
     if !rules::pair_allowed(&input.target_kind, &input.surface, &input.kind) {
-        return Err(ApiError::http(400, "Feedback target/action pair is invalid"));
+        return Err(ApiError::http(
+            400,
+            "Feedback target/action pair is invalid",
+        ));
     }
     let actor = cx.actor_user_id();
     let story = rules::is_story_target(&input.target_kind);
@@ -324,10 +342,17 @@ pub async fn list(cx: &DataContext, query: &[(String, String)]) -> Result<(u16, 
                     AND ($3::text IS NULL OR status = $3)
                   ORDER BY created_at DESC, id LIMIT 100"
             ),
-            &[&actor, &filter.target_kind.as_ref().map(|k| vec![k.clone()]), &filter.status],
+            &[
+                &actor,
+                &filter.target_kind.as_ref().map(|k| vec![k.clone()]),
+                &filter.status,
+            ],
         )
         .await?;
-    Ok((200, json!({ "feedback": rows.iter().map(feedback).collect::<Vec<_>>() })))
+    Ok((
+        200,
+        json!({ "feedback": rows.iter().map(feedback).collect::<Vec<_>>() }),
+    ))
 }
 
 /// `POST /api/me/usefulness-feedback/:id/undo`. Taking back a dismissal also brings the card back.
@@ -348,7 +373,9 @@ pub async fn undo(cx: &DataContext, id: &str) -> Result<(u16, Value), ApiError> 
     if existing.get::<_, String>("status") != "active" {
         return Ok((200, json!({ "feedback": feedback(&existing) })));
     }
-    if existing.get::<_, Option<String>>("effect_kind").as_deref() == Some("proactive_card_dismissed") {
+    if existing.get::<_, Option<String>>("effect_kind").as_deref()
+        == Some("proactive_card_dismissed")
+    {
         if let Some(card) = existing
             .get::<_, Option<String>>("effect_ref")
             .and_then(|r| Uuid::parse_str(r.as_str()).ok())
@@ -381,7 +408,11 @@ pub async fn undo(cx: &DataContext, id: &str) -> Result<(u16, Value), ApiError> 
 }
 
 /// `PATCH /api/me/usefulness-feedback/:id`. Only a "Less like this" reason can be edited.
-pub async fn update_reason(cx: &DataContext, id: &str, body: &Value) -> Result<(u16, Value), ApiError> {
+pub async fn update_reason(
+    cx: &DataContext,
+    id: &str,
+    body: &Value,
+) -> Result<(u16, Value), ApiError> {
     let id = parse_id(id)?;
     let reason = rules::parse_reason_body(body).map_err(reject)?;
     let actor = cx.actor_user_id();
@@ -399,7 +430,10 @@ pub async fn update_reason(cx: &DataContext, id: &str, body: &Value) -> Result<(
         .ok_or_else(not_found)?;
     let kind: String = owned.get("kind");
     if kind != "less_like_this" {
-        return Err(ApiError::http(400, "Only a Less like this reason can be edited"));
+        return Err(ApiError::http(
+            400,
+            "Only a Less like this reason can be edited",
+        ));
     }
     // The rule is rebuilt from the row's own stored context and written in the same statement.
     let compiled = story_rule(
