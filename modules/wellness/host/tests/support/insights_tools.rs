@@ -19,7 +19,7 @@ fn fill(w: &World, actor: uuid::Uuid, note: &str) {
         w.f.rt
             .block_on(w.f.root.execute(
                 "INSERT INTO app.wellness_checkins(owner_user_id,checked_in_at,feeling_core,intensity,note,local_date) \
-                 VALUES($1, now() - ($2::int * interval '1 day'), $3, $4, $5, to_char((now() - ($2::int * interval '1 day')) AT TIME ZONE 'UTC','YYYY-MM-DD'))",
+                 VALUES($1, now() - ($2::int * interval '1 day'), $3::text::app.wellness_emotion_core, $4, $5, to_char((now() - ($2::int * interval '1 day')) AT TIME ZONE 'UTC','YYYY-MM-DD'))",
                 &[&actor, &day, &core, &intensity, &text],
             ))
             .unwrap();
