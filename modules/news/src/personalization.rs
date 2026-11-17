@@ -1,5 +1,5 @@
 //! Added sources, topics, excluded publishers and the read behind the personalization screen.
-//! Refresh state is read here and written only by the refresh job.
+//! Refresh state is read here. Writes that change the page ask the refresh module to queue a job.
 use crate::util::{bad_request, error, id_param, iso, iso_or_null, js_trim, values};
 use crate::{domain, input};
 use moss_module_sdk::{
@@ -80,6 +80,15 @@ fn snapshot_meta(row: Option<&Value>) -> Result<Value> {
     }))
 }
 
+/// A missing snapshot, one past its expiry, or one that fails the stored-page checks.
+fn snapshot_stale<H: Host + ?Sized>(row: Option<&Value>, host: &H) -> Result<bool> {
+    let Some(row) = row else { return Ok(true) };
+    let expires = chrono::DateTime::parse_from_rfc3339(text(row, "expires_at")?)
+        .map(|at| at.timestamp_millis())
+        .unwrap_or_default();
+    Ok(expires <= crate::util::now_ms(host)? || !crate::compile::snapshot_valid(&row["payload"]))
+}
+
 fn refresh_dto(row: Option<&Value>) -> Result<Value> {
     let Some(row) = row else {
         return Ok(json!({
@@ -112,6 +121,7 @@ pub fn get<H: Host + ?Sized>(host: &H) -> Result<Response> {
     let exclusions = list(host, EXCLUSIONS)?.iter().map(exclusion_dto).collect::<Result<Vec<_>>>()?;
     let snapshot = client.query(SNAPSHOTS, &Query::select(Filter::All))?;
     let refresh = client.query(REFRESH, &Query::select(Filter::All))?;
+    crate::refresh::ensure(host, snapshot_stale(snapshot.first(), host)?);
     Ok(Response::new(
         200,
         json!({
@@ -162,6 +172,7 @@ pub fn add_exclusion<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Resu
             exclusion_by_domain(host, &canonical)?.ok_or_else(|| Error::new("Exclusion could not be saved"))?
         }
     };
+    crate::refresh::request(host);
     Ok(Response::new(200, json!({"exclusion":exclusion_dto(&row)?})))
 }
 
@@ -172,6 +183,9 @@ pub fn remove_exclusion<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> R
         Err(refusal) => return Ok(refusal),
     };
     let removed = Client(host).query(EXCLUSIONS, &Query::delete(Filter::eq("id", id)))?;
+    if !removed.is_empty() {
+        crate::refresh::request(host);
+    }
     Ok(Response::new(200, json!({"ok":!removed.is_empty()})))
 }
 
@@ -219,6 +233,9 @@ pub fn remove_topic<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Resul
         Err(refusal) => return Ok(refusal),
     };
     let removed = Client(host).query(TOPICS, &Query::delete(Filter::eq("id", id)))?;
+    if !removed.is_empty() {
+        crate::refresh::request(host);
+    }
     Ok(Response::new(200, json!({"deleted":!removed.is_empty()})))
 }
 
@@ -230,5 +247,8 @@ pub fn remove_source<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Resu
     };
     let client = Client(host);
     let removed = client.query(SOURCES, &Query::delete(Filter::eq("id", id)))?;
+    if !removed.is_empty() {
+        crate::refresh::request(host);
+    }
     Ok(Response::new(200, json!({"deleted":!removed.is_empty()})))
 }

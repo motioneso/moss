@@ -62,6 +62,7 @@ pub fn create<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Resp
             find(host, &kind, &key)?.ok_or_else(|| Error::new("Pref could not be saved"))?
         }
     };
+    crate::refresh::request(host);
     Ok(Response::new(200, json!({"pref":dto(&row)?})))
 }
 
@@ -72,5 +73,8 @@ pub fn remove<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Resp
         Err(refusal) => return Ok(refusal),
     };
     let removed = Client(host).query(TABLE, &Query::delete(Filter::eq("id", id)))?;
+    if !removed.is_empty() {
+        crate::refresh::request(host);
+    }
     Ok(Response::new(200, json!({"ok":!removed.is_empty()})))
 }

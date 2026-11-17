@@ -565,6 +565,54 @@ scripts/run-gate.sh start --gate test:rust-news-live
 - A phone or second computer reaching the server was not re-checked in this part. The package adds no screen or listener; the live run used the local secure address.
 - The model ranking quality itself was not judged. Only its ordering effect and the fallback were checked.
 
+## Part 5b: refreshing the News page (JS-288)
+
+The News page now refreshes in the background, on a daily schedule, and keeps a health record for each added source. No screens.
+
+### What was built
+
+- Refresh record: each person has one record with the state (idle, queued, running, failed), the last request, attempt, success and failure, and the kind of failure (fetch, model or internal). A failed refresh keeps the last good page.
+- Refresh job: every change to choices, sources, topics or exclusions records a new request and queues one job unless one is already open. The job rebuilds the page. If a newer request arrives while it works, it starts over (up to three times) and only a run for the latest request stores its page.
+- Reading: the overview route now serves the stored page and queues one refresh when the page is missing or out of date, instead of building on the spot.
+- Daily check: a person who added a source or topic gets one check at 04:43 UTC. It is removed again when they have none. The check re-reads each added source and topic, sets its health (healthy, temporarily unavailable, needs a new check) and keeps a password failure as it is. One notice, "News sources need attention", is posted when something newly needs it, with no names or counts.
+- Drift: after a refresh stores a page, any approved source or topic checked under another model setting queues exactly one new check.
+- Job contents: a job carries only the queue name and one fixed word. The package refuses anything else.
+- A "Retry" route for the check, `POST /revalidation`, and `POST /refresh`, are declared in the package listing and the app map with a new "source health" entry.
+
+### Proof
+
+| Claim                                          | Evidence                                                                                                                                                                                                             |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Drift queues exactly one check                 | Real-database gate: a source and a topic checked under an old setting; after one refresh there is one queued check, it runs, both move to the current setting, and a second refresh queues none                      |
+| Job payloads are metadata only                 | Real-database gate and live run: every News job in the queue holds only the queue name and one fixed word; guest tests plant a marker in typed text and find it in no job, notice or schedule                        |
+| The schedule fires once per person             | Real-database gate: two people each get one schedule at 04:43 UTC; saving again changes nothing; made due, each person gets exactly one job, and a second worker pass adds none                                      |
+| Health comes from stored records               | Real-database gate and live run: the page shows the health stored on the source row; the live run saved the real BBC feed, ran the real check, and the page showed "healthy" matching the stored record              |
+| Refresh history is real                        | Real-database gate: after the worker ran, the state is idle with a success time and the built generation equals the requested one. Live run: the stored record shows a success                                       |
+| Row security can fail with a second person     | Real-database gate: with row security removed on the refresh table, the admin reads the first person's record; restored, the second person and the admin read none of the first person's state or jobs               |
+| Private text stays out of logs, jobs, activity | Real-database gate scans 61 tables including the queue for a planted topic text, found only in the topic row; the live run checks the server log                                                                     |
+| Native and WebAssembly builds                  | The gate builds the component and runs the guest tests natively (17 new ones for refresh, plus the earlier ones) and the package tests against the built component                                                   |
+| Live refresh on the real server                | The live gate starts the real Rust server over HTTPS, saves the real BBC feed, reads the overview (which queues a refresh), the server worker builds the page from 25 real stories, nothing intercepted or rewritten |
+
+### How to run
+
+```
+scripts/run-gate.sh start --gate test:rust-news
+```
+
+```
+scripts/run-gate.sh start --gate test:rust-news-live
+```
+
+### Not proven or not built
+
+- The host does not tell the package which model is configured or whether one exists. So the old "no model, skip the check" step is not possible, and the check label is a fixed word. Rows checked under the old app's labels get one automatic re-check after the move.
+- There is no logging port, so the old app's log lines for refresh and checks are not built. The record in the database is the only trace.
+- Subreddit sources are now judged with the community prompt. The old code judged them with the publisher prompt.
+- Chat tools that start a refresh (part 7) and the refresh after saving a keyed-publisher credential (part 6) are not built.
+- The overview route no longer builds a page on the spot. A first read returns an empty page marked out of date until the queued job runs.
+- A phone or second computer reaching the server was not re-checked. The package adds no screen or listener.
+- The model's ranking quality and the real daily firing at 04:43 were not observed; the schedule was made due by hand in the test.
+
 ## Part 15: host browser port
 
 Adds a host "browser" port. A route call hands it a page address the person confirmed and a list of

@@ -23,7 +23,8 @@ struct Approves(std::sync::Mutex<Vec<String>>);
 impl moss_module_host::ai::Intelligence for Approves {
     fn generate(&self, _: &CallScope, request: &Request) -> anyhow::Result<Value> {
         self.0.lock().unwrap().push(request.parameters.to_string());
-        Ok(json!({"text": "{\"allowed\":true,\"category\":\"news_publisher\"}"}))
+        let category = if request.parameters.to_string().contains("news TOPIC") { "news_topic" } else { "news_publisher" };
+        Ok(json!({"text": format!("{{\"allowed\":true,\"category\":\"{category}\"}}")}))
     }
     fn embed(&self, _: &CallScope, _: &Request) -> anyhow::Result<Value> {
         anyhow::bail!("News does not embed")
@@ -55,7 +56,10 @@ impl moss_module_host::runtime::Ports for Web {
             ),
             "https://daily.sample.test/feed.xml" => found(
                 "application/rss+xml",
-                "<rss><channel><title>x</title><item><title>First story here</title><link>https://daily.sample.test/1</link></item></channel></rss>",
+                &format!(
+                    "<rss><channel><title>x</title><item><title>First story here</title><link>https://daily.sample.test/1</link><pubDate>{}</pubDate></item></channel></rss>",
+                    (chrono::Utc::now() - chrono::Duration::hours(2)).to_rfc2822()
+                ),
             ),
             "https://news.example.com/" => found(
                 "text/html",
@@ -123,6 +127,8 @@ impl World {
         });
         // An earlier test in this database installed the package into a folder that is gone.
         f.rt.block_on(f.root.execute("DELETE FROM moss_modules.catalog", &[])).unwrap();
+        // Work queued by earlier tests belongs to packages that are gone.
+        f.rt.block_on(f.root.batch_execute("DELETE FROM moss_queue.jobs; DELETE FROM moss_queue.schedules")).unwrap();
         let dir = tempfile::tempdir().unwrap();
         let reg = tempfile::tempdir().unwrap();
         let bytes = moss_news_host::package::pack(&root(), &component()).unwrap();
@@ -182,6 +188,37 @@ impl World {
         let answer: Value = serde_json::from_str(&out.expect("the export finished")).unwrap();
         assert!(answer.get("error").is_none(), "{answer}");
         answer["ok"].clone()
+    }
+    /// Runs the worker until the queue has nothing due.
+    fn work(&self) {
+        let worker = Secret::new(std::env::var("JS48_WORKER_URL").unwrap());
+        for _ in 0..8 {
+            self.app.installer.run_job(&worker).unwrap();
+        }
+    }
+    fn make_schedules_due(&self) {
+        self.f
+            .rt
+            .block_on(self.f.root.execute("UPDATE moss_queue.schedules SET next_at=now()-interval '1 minute' WHERE queue LIKE '%.news-revalidate'", &[]))
+            .unwrap();
+    }
+    /// A saved site the test web answers for, validated under the given fingerprint.
+    fn plant_site(&self, who: uuid::Uuid, fingerprint: &str) -> String {
+        self.f.rt.block_on(async {
+            self.f.root.query_one(
+                "INSERT INTO app.news_custom_sources(owner_user_id,label,canonical_domain,homepage_url,feed_url,retrieval_method,validation_status,health_status,validation_fingerprint,validated_at,confirmed_fetch_hosts)
+                 VALUES($1,'Sample Daily','daily.sample.test','https://daily.sample.test/','https://daily.sample.test/feed.xml','feed','approved','healthy',$2,now(),ARRAY['daily.sample.test']) RETURNING id::text",
+                &[&who, &fingerprint],
+            ).await.unwrap().get(0)
+        })
+    }
+    fn queued(&self, who: uuid::Uuid, queue: &str) -> Vec<Value> {
+        self.f.rt.block_on(async {
+            self.f.root.query(
+                "SELECT payload FROM moss_queue.jobs WHERE actor_user_id=$1 AND queue LIKE $2",
+                &[&who, &format!("%.{queue}")],
+            ).await.unwrap().iter().map(|r| r.get::<_, Value>(0)).collect()
+        })
     }
     fn count(&self, table: &str, who: uuid::Uuid) -> i64 {
         self.f
@@ -284,11 +321,11 @@ fn choices_exclusions_and_removals_work_and_the_old_sql_rules_hold() {
     assert!(dup.is_err(), "the database must refuse a repeat exclusion");
     println!("PASS sql 0159: the database itself refuses a repeat exclusion");
 
-    // The guest never writes refresh state, so no row appears.
-    assert_eq!(w.count("app.news_refresh_state", a), 0);
+    // Each write that changes the page records one refresh request.
+    assert_eq!(w.count("app.news_refresh_state", a), 1);
     let read = w.call(a, "GET", "/personalization", Value::Null);
-    assert_eq!(read["body"]["refresh"]["state"], "idle", "{read}");
-    println!("PASS refresh: reads answer idle and nothing is written to refresh state");
+    assert_eq!(read["body"]["refresh"]["state"], "queued", "{read}");
+    println!("PASS refresh: a write leaves one queued refresh request");
 }
 
 #[test]
@@ -332,7 +369,7 @@ fn another_person_cannot_see_change_or_remove_news_data_and_the_check_fails_with
         let open: i64 = rows_as(&w.f, admin, &format!("SELECT count(*) FROM {table}"), &[])[0].get(0);
         w.f.rt.block_on(w.f.root.batch_execute(&format!("ALTER TABLE {table} ENABLE ROW LEVEL SECURITY; ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))).unwrap();
         assert!(open >= 1, "RED expected: {table} leaks with row security removed, got {open}");
-        let shut: i64 = rows_as(&w.f, admin, &format!("SELECT count(*) FROM {table}"), &[])[0].get(0);
+        let shut: i64 = rows_as(&w.f, admin, &format!("SELECT count(*) FROM {table} WHERE owner_user_id <> $1"), &[&admin])[0].get(0);
         assert_eq!(shut, 0, "{table} restored");
         println!("RED then GREEN: {table} leaks with row security removed and is closed again after");
     }
@@ -457,7 +494,7 @@ fn the_installed_routes_answer_like_the_old_routes_step_for_step() {
 
     // The old server queues a refresh after a write, so only the Rust shape is checked here.
     let read = w.call(w.f.a, "GET", "/personalization", Value::Null);
-    assert_eq!(read["body"]["refresh"]["state"], "idle", "{read}");
+    assert!(matches!(read["body"]["refresh"]["state"].as_str(), Some("idle" | "queued")), "{read}");
 }
 
 /// Compares two answer lists with ids and times masked. The refresh block and the saved feed article count differ on purpose.
@@ -588,4 +625,118 @@ fn text_typed_into_adding_a_source_reaches_no_job_or_log_table() {
         }
     }
     println!("PASS privacy: scanned {} tables, the typed address is only in the saved source row", tables.len());
+}
+
+const REFRESH_MARK: &str = "PLANTED-REFRESH-MARKER-5b27e1";
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn refresh_runs_through_the_real_queue_with_metadata_only_payloads_and_private_state() {
+    let w = World::new();
+    let (a, b, admin) = (w.f.a, w.f.b, w.f.admin);
+    w.plant_site(a, "fp-old");
+    w.f.rt.block_on(w.f.root.execute(
+        "INSERT INTO app.news_custom_topics(owner_user_id,label,guidance,validation_status,validation_fingerprint,validated_at) VALUES($1,'Space',$2,'approved','fp-old',now())",
+        &[&a, &REFRESH_MARK],
+    )).unwrap();
+    let asked = w.call(a, "POST", "/refresh", Value::Null);
+    assert_eq!((asked["status"].clone(), asked["body"]["queued"].clone()), (json!(200), json!(true)), "{asked}");
+    let again = w.call(a, "POST", "/refresh", Value::Null);
+    assert_eq!(again["body"]["queued"], json!(false), "one open job per person: {again}");
+    for payload in w.queued(a, "news-refresh") {
+        assert_eq!(payload["params"], json!({"kind":"user_refresh"}), "{payload}");
+        assert!(!payload.to_string().contains(REFRESH_MARK));
+    }
+    w.work();
+    let jobs: Vec<String> = w.f.rt.block_on(w.f.root.query("SELECT queue||' '||state||' '||coalesce(failure_code,'-') FROM moss_queue.jobs", &[])).unwrap().iter().map(|r| r.get(0)).collect();
+    println!("jobs after the worker ran: {jobs:?}");
+    let state = rows_as(&w.f, a, "SELECT state, compiled_generation = requested_generation, last_success_at IS NOT NULL FROM app.news_refresh_state", &[]);
+    assert_eq!((state[0].get::<_, String>(0), state[0].get::<_, bool>(1), state[0].get::<_, bool>(2)), ("idle".into(), true, true));
+    assert_eq!(w.count("app.news_compilation_snapshots", a), 1, "the real fetch path built a page");
+    // The stored page and the health a person reads come from stored rows.
+    let read = w.call(a, "GET", "/personalization", Value::Null)["body"].clone();
+    assert_eq!(read["refresh"]["state"], "idle", "{read}");
+    // Drift: the saved site and topic were checked under another fingerprint, so exactly one
+    // revalidation was queued, and it ran and moved both to the current one.
+    assert_eq!(w.queued(a, "news-revalidate").len(), 1, "one revalidation for the drift");
+    let fp: Vec<String> = rows_as(&w.f, a, "SELECT validation_fingerprint FROM app.news_custom_sources UNION ALL SELECT validation_fingerprint FROM app.news_custom_topics", &[])
+        .iter().map(|r| r.get(0)).collect();
+    assert_eq!(fp, vec!["host-ai-v1".to_owned(), "host-ai-v1".to_owned()]);
+    let health = w.call(a, "GET", "/personalization", Value::Null)["body"]["customSources"][0]["healthStatus"].clone();
+    assert_eq!(health, json!("healthy"));
+    w.call(a, "POST", "/refresh", Value::Null);
+    w.work();
+    assert_eq!(w.queued(a, "news-revalidate").len(), 1, "no new drift, so no second revalidation");
+    println!("PASS refresh: real queue, metadata-only payloads, one revalidation for drift, health from stored rows");
+
+    // Nobody else sees A's state or jobs, as the app role with row security on.
+    for who in [b, admin] {
+        for sql in ["SELECT count(*) FROM app.news_refresh_state", "SELECT count(*) FROM moss_queue.jobs WHERE queue LIKE '%.news-%'"] {
+            let seen: i64 = rows_as(&w.f, who, sql, &[])[0].get(0);
+            assert_eq!(seen, 0, "{sql}");
+        }
+    }
+    println!("GREEN: B and an admin see none of A's refresh state or jobs");
+    // With row security removed on the state table the admin reads A's row, so the check bites.
+    w.f.rt.block_on(w.f.root.batch_execute("ALTER TABLE app.news_refresh_state DISABLE ROW LEVEL SECURITY")).unwrap();
+    let open: i64 = rows_as(&w.f, admin, "SELECT count(*) FROM app.news_refresh_state", &[])[0].get(0);
+    w.f.rt.block_on(w.f.root.batch_execute("ALTER TABLE app.news_refresh_state ENABLE ROW LEVEL SECURITY; ALTER TABLE app.news_refresh_state FORCE ROW LEVEL SECURITY")).unwrap();
+    assert!(open >= 1, "RED expected: the state leaks with row security removed, got {open}");
+    println!("RED then GREEN: refresh state leaks with row security removed and is closed again after");
+
+    // The typed topic guidance reaches no table but the topic row, and no job or log table.
+    let tables: Vec<String> = w.f.rt.block_on(async {
+        w.f.root.query(
+            "SELECT table_schema||'.'||table_name FROM information_schema.tables WHERE table_schema IN ('moss_queue','moss_modules') \
+             OR table_name IN ('notifications','moss_activity_detail','moss_error_log','moss_action_audit_log','moss_model_activity_log') OR table_name LIKE 'news\\_%'",
+            &[],
+        ).await.unwrap().iter().map(|r| r.get(0)).collect()
+    });
+    for table in &tables {
+        let hits: i64 = w.f.rt.block_on(w.f.root.query_one(&format!("SELECT count(*) FROM {table} t WHERE lower(to_jsonb(t)::text) LIKE '%'||lower($1)||'%'"), &[&REFRESH_MARK])).unwrap().get(0);
+        assert_eq!(hits, i64::from(table == "app.news_custom_topics"), "{table}");
+    }
+    println!("PASS privacy: scanned {} tables, the topic guidance is only in the topic row", tables.len());
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn the_daily_check_fires_once_per_person() {
+    let w = World::new();
+    let (a, b) = (w.f.a, w.f.b);
+    let mut sites = vec![];
+    for who in [a, b] {
+        sites.push(w.plant_site(who, "host-ai-v1"));
+        w.call(who, "POST", "/prefs", json!({"kind":"topic","key":"technology"}));
+    }
+    for who in [a, b] {
+        let n: i64 = rows_as(&w.f, who, "SELECT count(*) FROM moss_queue.schedules WHERE queue LIKE '%.news-revalidate'", &[])[0].get(0);
+        assert_eq!(n, 1);
+        let plan = rows_as(&w.f, who, "SELECT cron, timezone FROM moss_queue.schedules WHERE queue LIKE '%.news-revalidate'", &[]);
+        assert_eq!((plan[0].get::<_, String>(0), plan[0].get::<_, String>(1)), ("43 4 * * *".to_owned(), "UTC".to_owned()));
+    }
+    // Setting it again changes nothing.
+    w.call(a, "POST", "/prefs", json!({"kind":"topic","key":"science"}));
+    let all: i64 = w.f.rt.block_on(w.f.root.query_one("SELECT count(*) FROM moss_queue.schedules WHERE queue LIKE '%.news-revalidate' AND actor_user_id IN ($1,$2)", &[&a, &b])).unwrap().get(0);
+    assert_eq!(all, 2, "one schedule per person");
+    w.work();
+    w.make_schedules_due();
+    w.work();
+    for who in [a, b] {
+        let fired = w.queued(who, "news-revalidate");
+        assert_eq!(fired.len(), 1, "one fire for each person");
+        assert_eq!(fired[0]["params"], json!({"kind":"revalidate"}));
+    }
+    w.work();
+    for who in [a, b] {
+        assert_eq!(w.queued(who, "news-revalidate").len(), 1, "not due again, so no second fire");
+    }
+    // Removing the last added source removes only that person's schedule.
+    w.call(a, "DELETE", &format!("/sources/{}", sites[0]), json!({}));
+    let left = |who: uuid::Uuid| -> i64 {
+        rows_as(&w.f, who, "SELECT count(*) FROM moss_queue.schedules WHERE queue LIKE '%.news-revalidate'", &[])[0].get(0)
+    };
+    assert_eq!(left(a), 0, "no added source or topic, so no daily check");
+    assert_eq!(left(b), 1, "the other person keeps theirs");
+    println!("PASS schedule: two people, one schedule each, one fire each, removal drops only the owner's");
 }

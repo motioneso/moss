@@ -8,3 +8,7 @@
 - Account export and deletion cover all eight tables.
 - Fetching articles, refreshing, setup of new sources, chat tools and the News screens are not part of this package yet.
 - The News page now compiles from the active sources. Stories are filtered, ranked by the person's model with a fixed-order fallback, stored as a snapshot for seven days, and served by the overview route. Refresh jobs and source health updates are not part of this package yet.
+- Refreshing now works in the background. A change to choices, sources, topics or exclusions records a new request, and one queued job rebuilds the page. A page that is missing or out of date also queues one job when it is read, instead of building on the spot.
+- Each person has a refresh record with the last success, the last failure and why. A failed refresh keeps the previous page.
+- People who added a source or topic get a daily check of those sources at 04:43 UTC. The check updates each source's health, and one notice says "News sources need attention" when something newly needs it.
+- Sources checked under another model setting are checked once more automatically.
