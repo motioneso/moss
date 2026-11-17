@@ -1,5 +1,6 @@
 /** Real Rust server over HTTPS with the installed Commitments package. Run through verify-gate. */
 import { spawnSync } from "node:child_process";
+import { networkInterfaces } from "node:os";
 import { join } from "node:path";
 import { getMossDatabaseUrls } from "@moss/db";
 
@@ -7,6 +8,10 @@ if (process.env.JARVIS_GATE_RUN !== "1") throw new Error("Use verify-gate");
 for (const name of ["CARGO_HOME", "RUSTUP_HOME", "CARGO_TARGET_DIR", "JS293_COMMITMENTS_PACKAGE"]) {
   if (!process.env[name]) throw new Error(`Set ${name}`);
 }
+const address = Object.values(networkInterfaces())
+  .flat()
+  .find((n) => n?.family === "IPv4" && !n.internal)?.address;
+if (!address) throw new Error("The live check needs a non-loopback network address");
 const urls = getMossDatabaseUrls();
 const target = process.env.CARGO_TARGET_DIR!;
 const sharedDir = join(target, "commitments-shared");
@@ -60,6 +65,7 @@ cargo(
     JS43_WORKER_URL: urls.worker,
     JS43_BOOTSTRAP_URL: urls.bootstrap,
     JS170_AUTH_URL: urls.auth,
+    JS299_PROOF_ADDRESS: address,
     JS170_SERVER: join(target, "debug/moss-shell"),
     JS170_CERTIFICATE: join(target, "debug/moss-network")
   }

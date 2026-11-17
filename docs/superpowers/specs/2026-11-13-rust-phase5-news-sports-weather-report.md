@@ -115,6 +115,10 @@ because its error reply is declared in a way that cannot carry the message. The 
 400 with the message the old code meant to send. This is the only place the new package answers
 differently from the old routes.
 
+### Full database run
+
+The full real-database Sports run (all eight tests in one database, through the gate) was red on three older tests in earlier runs on the branch and green on 2026-11-16 on the merged main, all eight passing. The earlier red runs are not explained.
+
 ### Not proven
 
 - Following a team on a live installed package. The team list comes from the sports data provider,
@@ -442,23 +446,19 @@ and manage them. It uses the shared reader and the plain public-web fetch. It st
 
 ### Proof
 
-| Claim                                | Check                                                                                                                                | Result                                                       |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
-| Each failure reason shows            | Fake web answering 404, 403, rate limit, no feed and unreachable, one test each                                                      | Each showed the right reason                                 |
-| Subreddit case is one source         | r/NFL and r/nfl previewed and saved                                                                                                  | One source, second save 409                                  |
-| Same answers as the old code         | The old source routes were run against the same real database for 34 steps and compared                                              | Matched, with the exceptions listed below                    |
-| Another person sees nothing          | Second person against real Postgres through the installed package, on each of the six tables, seen failing with row security removed | Failed without it, passed with it                            |
-| Private text stays out               | Planted text in a source searched for in the shared store, outgoing addresses and every host call that is not the person's own table | Not found                                                    |
-| Native and WebAssembly builds        | Guest tests native, package tests against the built component                                                                        | Passed                                                       |
-| Works on the real server             | Real server over HTTPS, two people: follows and standings choices                                                                    | Worked                                                       |
-| A real subreddit added on the server | Real server, real Reddit, nothing intercepted, 4 tries 30 seconds apart                                                              | Not proven: Reddit refused the server every time (see below) |
+| Claim                                | Check                                                                                                                                | Result                                                                           |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| Each failure reason shows            | Fake web answering 404, 403, rate limit, no feed and unreachable, one test each                                                      | Each showed the right reason                                                     |
+| Subreddit case is one source         | r/NFL and r/nfl previewed and saved                                                                                                  | One source, second save 409                                                      |
+| Same answers as the old code         | The old source routes were run against the same real database for 34 steps and compared                                              | Matched, with the exceptions listed below                                        |
+| Another person sees nothing          | Second person against real Postgres through the installed package, on each of the six tables, seen failing with row security removed | Failed without it, passed with it                                                |
+| Private text stays out               | Planted text in a source searched for in the shared store, outgoing addresses and every host call that is not the person's own table | Not found                                                                        |
+| Native and WebAssembly builds        | Guest tests native, package tests against the built component                                                                        | Passed                                                                           |
+| Works on the real server             | Real server over HTTPS, two people: follows and standings choices                                                                    | Worked                                                                           |
+| A real subreddit added on the server | Real server, real Reddit, nothing intercepted, 4 tries 30 seconds apart                                                              | Not proven: Reddit refused the server every time, and plain curl too (see below) |
 
 ### Not proven
 
-- The full real-database Sports run is not green on this box. When all eight tests run in one
-  database, three older tests (overview, privacy of typed text, repeat follow) fail. The same three
-  fail when the Sports package is replaced with the code on main, so the cause is not part 13. Run
-  in smaller groups, every test passes, including all four new ones. The cause is not found.
 - Two saves of one person's coverage at the same instant are not serialized. The old code takes a
   per-person lock first. The new code reads and deletes first, so two simultaneous saves can leave
   both choices, or one can fail. The same gap lets two simultaneous confirmations of one preview
@@ -467,10 +467,13 @@ and manage them. It uses the shared reader and the plain public-web fetch. It st
 - A preview is not strictly single-use under simultaneous calls. Taking one reads and rewrites the
   person's whole preview list in separate steps, so a used preview can come back or a new one can
   be lost. Closing this needs an atomic store change in the host.
-- The live add of a real subreddit did not happen. Reddit answered the real server "sign-in needed"
-  or "rate limited" on all 4 tries, and the same box gets 200, 403 and 429 from Reddit in turn when
-  asked with curl. The test reports this as not proven instead of failing. The News parts read
-  r/nfl on this box earlier, but that does not stand in for this add.
+- The live add of a real subreddit has still not happened. It was retried on 2026-11-16 after
+  the merge, 4 more tries on the real server, and Reddit answered "sign-in needed" or "rate
+  limited" every time. A plain curl from the same box to the same feed address also gets 429 with a
+  rate-limit header showing nothing left, so Reddit is refusing this machine's address, not the
+  Moss server. Nothing can be done in the code to get past that, and faking the answer is not
+  allowed. The live test reports this as not proven instead of failing. It needs a run from a
+  machine Reddit accepts.
 - The icon route answers JSON with the picture encoded and has no cache header or hit cache.
 - Recipe, browser and AI sources, retry, rebuild and photos are later parts and are not built.
 - The old recipe staleness check does not apply.

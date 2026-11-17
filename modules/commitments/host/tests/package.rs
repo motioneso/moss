@@ -63,6 +63,28 @@ fn the_package_asks_only_for_its_own_resources() {
     };
     assert!(ask("db", "query", "app.commitment_candidates").is_ok());
     assert!(ask("db", "query", "app.commitment_candidate_sources").is_ok());
+    assert!(ask("db", "query", "app.commitment_extraction_state").is_ok());
+    assert!(ask("db", "query", "app.commitment_email_thread_judgements").is_ok());
+    assert!(ask("ai", "generate", "summarization").is_ok());
+    assert!(ask("ai", "generate", "structured").is_ok());
+    assert!(ask("ai", "generate", "chat").is_err());
+    assert!(ask("ai", "embed", "summarization").is_err());
+    let queue = |queue: &str, params: serde_json::Value| {
+        authorize(&manifest, "jobs", &Request {
+            operation: "enqueue-options".into(),
+            resource: queue.into(),
+            parameters: json!({"params": params, "idempotencyKey": "6f1d7a52-4a4f-4d0e-9d57-0c3f0a1b2c3d",
+                               "availableAt": "2026-11-16T00:00:00.000Z"}),
+        })
+    };
+    assert!(queue("commitments-extraction", json!({"source-kind":"notes"})).is_ok());
+    assert!(queue("commitments-extraction", json!({"source-kind":"mail"})).is_err());
+    assert!(queue("commitments-extraction", json!({"source-kind":"notes","text":"hello"})).is_err());
+    assert!(queue("commitments-email-judgement", json!({"message-id":"6f1d7a52-4a4f-4d0e-9d57-0c3f0a1b2c3d"})).is_ok());
+    assert!(queue("commitments-email-judgement", json!({"message-id":"not an id"})).is_err());
+    assert!(queue("other-queue", json!({})).is_err());
+    assert!(ask("api", "call", "email").is_ok());
+    assert!(ask("api", "call", "connectors").is_err());
     assert!(ask("db", "query", "app.users").is_err());
     assert!(ask("db", "query", "app.tasks").is_err());
     assert!(ask("jobs", "enqueue-after-commit", "commitments-memory-sync").is_err());
