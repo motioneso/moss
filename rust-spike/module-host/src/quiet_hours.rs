@@ -157,6 +157,7 @@ pub(crate) fn resolve(
 }
 
 /// The window alerts are held back in, or `None` when nothing is deferred.
+#[cfg(test)]
 pub(crate) fn classify(
     profile: Option<&Value>,
     alerts: Option<&Value>,
@@ -178,6 +179,17 @@ pub struct Saved {
 }
 
 impl Saved {
+    /// The owner's own zone, used for "today" even when no quiet window applies.
+    pub fn owner_zone(&self) -> String {
+        self.locale
+            .as_ref()
+            .and_then(|v| v.get("timezone"))
+            .and_then(Value::as_str)
+            .filter(|z| z.len() <= 100 && self.known.iter().any(|k| k == z))
+            .unwrap_or(DEFAULT_ZONE)
+            .to_owned()
+    }
+
     pub fn resolve(&self) -> Resolved {
         resolve(
             self.profile.as_ref(),
