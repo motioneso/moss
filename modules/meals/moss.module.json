@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "meals",
   "name": "Meals",
-  "description": "Private kitchen and household for meal planning, with four chat tools under the host's approval rules. Plans, recipes, lists, pantry and the food log are not part of this package yet. No screens.",
+  "description": "Private kitchen and household for meal planning, with meal plans written day by day in the background, under the host's approval rules. Recipes beyond plans, lists, pantry maths and the food log are not part of this package yet. No screens.",
   "publisher": "Moss",
   "version": "0.1.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
@@ -16,7 +16,15 @@
         "app.meals_kitchens",
         "app.meals_household_members",
         "app.meals_meal_slot_rules",
-        "app.meals_favourites"
+        "app.meals_favourites",
+        "app.meals_plans",
+        "app.meals_plan_days",
+        "app.meals_planned_meals",
+        "app.meals_planned_meal_eaters",
+        "app.meals_recipes",
+        "app.meals_recipe_ingredients",
+        "app.meals_pantry_items",
+        "app.meals_staples"
       ]
     },
     {
@@ -31,8 +39,22 @@
         "meals.kitchen.get",
         "meals.kitchen.save",
         "meals.household.save",
-        "meals.household.remove"
+        "meals.household.remove",
+        "meals.plan.create",
+        "meals.plan.get",
+        "meals.plan.current",
+        "meals.plan.control"
       ]
+    },
+    {
+      "port": "ai",
+      "operations": ["generate"],
+      "resources": ["structured"]
+    },
+    {
+      "port": "jobs",
+      "operations": ["enqueue-options"],
+      "resources": ["meals-plan-day"]
     }
   ],
   "database": {
@@ -208,6 +230,22 @@
           "description": "The member is you, and your own member cannot be removed. Choose another member."
         }
       ]
+    },
+    {
+      "id": "meals.chat-plan",
+      "description": "Chat can start a meal plan of 1 to 28 days, read it, and stop, resume, retry or regenerate it. Each day is written by a background job that checks every meal against each eater's never-serve list and calorie target. Each person sees only their own plans. Starting or changing a plan needs the host's one-use approval.",
+      "errors": [
+        {
+          "code": "invalid_input",
+          "class": "validation",
+          "description": "The plan or day was not found, belongs to another person, or a field is missing or out of range. Read the current plan and try again with corrected input."
+        },
+        {
+          "code": "approval_required",
+          "class": "validation",
+          "description": "The tool cannot run without approval. Ask for approval for these exact inputs and try again."
+        }
+      ]
     }
   ],
   "tools": {
@@ -226,6 +264,35 @@
     "meals.household.remove": {
       "description": "Remove a household member. The self member cannot be removed.",
       "risk": "destructive"
+    },
+    "meals.plan.create": {
+      "description": "Start a meal plan of 1 to 28 days from a start date. Moss writes the days one at a time in the background, checking every meal against each eater's Never serve list and calorie target, and returns the plan at once with its days pending. Call meals.plan.get to follow progress.",
+      "risk": "write"
+    },
+    "meals.plan.get": {
+      "description": "Read a meal plan by its id, or the newest plan that covers a date: each day's status, its meals, who eats them, safety results and calorie fit.",
+      "risk": "read"
+    },
+    "meals.plan.current": {
+      "description": "Read the meal plan the Plan tab shows for a date: the plan that covers it, else the next one to start, else the newest. Returns plan null when nothing is planned.",
+      "risk": "read"
+    },
+    "meals.plan.control": {
+      "description": "Stop a plan that is being written, resume a stopped or paused plan, retry one day that failed, or regenerate the plan, one day or one meal. Locked, cooked and text meals are never replaced.",
+      "risk": "write"
+    }
+  },
+  "jobs": {
+    "meals-plan-day": {
+      "plan-id": {
+        "kind": "id"
+      },
+      "day-id": {
+        "kind": "id"
+      },
+      "generation": {
+        "kind": "count"
+      }
     }
   }
 }
