@@ -1463,6 +1463,82 @@ Both ended with exit code 0. The first package gate run failed twice before it p
 - Review notes left as they are: starting a draft that was discarded after a new setup returns a host error instead of a plain refusal (nothing is saved); a draft edit from the screen is recorded as changed by Moss; a move that is refused has no test showing the stored rows stay unchanged; a refund posted to the income category lowers the pool twice; draft months are counted from all transactions, not only the budget currency.
 - No screens were built.
 
+## Host proactive cards and usefulness feedback (part 38)
+
+Task JS-316. Release note Category: N/A.
+
+### What was built
+
+Both features stay in the host, as the plan requires, and are not packages. The Rust server now
+answers the same seven requests as the old server:
+
+- `GET /api/me/proactive-cards` lists the active cards, newest priority first, up to the limit.
+- `POST /api/me/proactive-cards/refresh` answers 202 with how many scans it queued.
+- `GET` and `POST /api/me/usefulness-feedback`, `POST .../signals`, `POST .../{id}/undo` and
+  `PATCH .../{id}` record, list, undo and edit feedback.
+
+A new pure crate holds the rules: the feedback shapes and allowed pairs, the story preference
+rule, the card limits and the refresh plan. It builds natively and for WebAssembly and runs the
+same fixtures in both. The host code runs every query as the signed-in person, so the existing
+owner-only row rules apply to all five tables.
+
+Cards follow the one saved quiet-hours schedule in the person's own time zone. When that
+schedule cannot be read because it conflicts with the older alert schedule, cards keep following
+the older one, as the old server does. A card found inside quiet hours is held until the window
+ends. It stays off the list until then. A card is refused when its key was dismissed in the last
+30 days, or when it would pass the daily limit, the per-source limit or one per source per hour.
+
+Dismissing a card through feedback hides it, and undo brings it back. A signal that only
+records "too much" changes no other table.
+
+### Differences and limits
+
+- Remembering a signal as a memory is refused with a plain 400. Memory candidates are not ported.
+- Feedback on a chat message or a briefing answers 404, because those checks have not moved.
+- A refresh queues scans only for sources whose scanners exist. None are installed in the Rust
+  server, so it answers 202 with zero. Scans use the stand-in queue table, not the real queue.
+- A negative limit takes the default of 5 instead of failing. Stored story rule metadata lists
+  its keys in alphabetical order.
+- Calendar follow-through removal on dismiss is not ported.
+- The Today screen in the Rust app still shows sample data. This part adds no screen.
+
+### Proof
+
+- The old TypeScript repositories write cards and feedback rows. Rust lists them and the JSON
+  equals what the old server sends. Rust-created rows are read back by the old code, the story
+  rule equals the one the old compiler makes, and the old export query lists the Rust rows.
+- Eight fixed-time quiet-hours cases cover the New York zone, a clock change, start included,
+  end excluded, schedule off, nothing saved and the conflict fallback. A held card stays off the
+  list and a card outside the window is listed.
+- A signal changes no other table. A table digest before and after is identical.
+- Both feedback tables and the three card tables hide one person's rows from another. The check
+  fails with the row rules switched off and passes when they are back. An administrator gets no
+  private rows either.
+- Planted private text is absent from the server log, job payloads and stored rows outside the
+  owner's own tables. The scan is shown to fail when a leak is planted.
+- Account delete removes every owned row in all five tables. The old export already lists the
+  feedback rows. Cards, monitor state and answer cache are covered by the delete cascade only,
+  as the old manifests declare nothing more.
+- The WebAssembly build runs its fixtures inside the host's engine.
+- The live gate starts the real Rust HTTPS server, signs up two people, and calls the routes.
+  Ada sees her card and Bob sees none. Bob cannot dismiss or undo Ada's feedback. Signed-out
+  calls are refused. No response is intercepted or rewritten.
+
+Commands run from `~/Jarv1s` with task-owned Rust folders in scratch storage:
+
+```bash
+scripts/run-gate.sh start --gate test:rust-proactive-feedback
+scripts/run-gate.sh start --gate test:rust-proactive-server
+```
+
+### Not proven or not built
+
+- No native screen and no second device, so Today does not show these cards.
+- No scanner places cards in the Rust server. The live gate places cards through the same
+  placement code a scanner would call.
+- The real job queue, memory candidates, chat message and briefing checks, and calendar
+  follow-through are not built. No new Rust crate was added.
+
 ## Finance bills, targets, flexible pool and card reserves (part 24)
 
 ### What was built

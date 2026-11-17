@@ -26,6 +26,8 @@ pub mod browser;
 pub mod public_web;
 pub mod route_image;
 pub mod robots;
+pub mod proactive_cards;
+pub mod usefulness_feedback;
 pub mod services;
 
 pub mod legacy;
@@ -74,5 +76,5 @@ pub mod memory_vault;
 
 mod notifications;
 mod producer_queue;
-mod quiet_hours;
+pub mod quiet_hours;
 pub mod worker;

@@ -30,6 +30,7 @@ mod module_ai;
 mod module_embedding;
 mod module_install;
 mod modules;
+mod proactive_feedback;
 mod runner_data;
 
 type Data = Arc<dyn ShellData>;
@@ -288,6 +289,10 @@ fn main() {
             },
             None => private,
         };
+        let private = private.merge(proactive_feedback::routes(Arc::new(
+            proactive_feedback::Feedback::new(platform.app.clone()),
+        )));
+
         let private = match modules_path
             .as_deref()
             .and_then(|path| modules::read_settings(path).ok())

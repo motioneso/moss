@@ -14,7 +14,7 @@ const LOCALE_KEY: &str = "locale";
 const DEFAULT_ZONE: &str = "America/Los_Angeles";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct Window {
+pub struct Window {
     pub start: String,
     pub end: String,
     pub zone: String,
@@ -95,32 +95,44 @@ fn alerts_side(value: Option<&Value>) -> Side {
     })
 }
 
-/// The window alerts are held back in, or `None` when nothing is deferred.
-pub(crate) fn classify(
+/// What the account's saved schedules say about quiet hours.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Resolved {
+    /// One schedule governs and is on.
+    Window(Window),
+    /// One schedule governs and is off, or nothing is saved.
+    Off,
+    /// The schedules conflict or one is malformed, so no single schedule governs. The zone is the
+    /// owner's, for callers that keep following an older alert schedule.
+    Unresolved { zone: String },
+}
+
+pub(crate) fn resolve(
     profile: Option<&Value>,
     alerts: Option<&Value>,
     locale: Option<&Value>,
     zone_ok: &dyn Fn(&str) -> bool,
-) -> Option<Window> {
+) -> Resolved {
     let owner = locale
         .and_then(|v| v.get("timezone"))
         .and_then(Value::as_str)
         .filter(|z| z.len() <= 100 && zone_ok(z))
         .unwrap_or(DEFAULT_ZONE)
         .to_owned();
+    let unresolved = || Resolved::Unresolved { zone: owner.clone() };
     let marker = match profile.and_then(Value::as_object).and_then(|m| m.get("authority")) {
         None => None,
         Some(Value::String(s)) if s == "canonical" || s == "unresolved" => Some(s.as_str()),
-        Some(_) => return None,
+        Some(_) => return unresolved(),
     };
     let profile = profile_side(profile, zone_ok);
     let alerts = alerts_side(alerts);
     let chosen = match (marker, profile, alerts) {
-        (_, Side::Malformed, _) => return None,
+        (_, Side::Malformed, _) => return unresolved(),
         (Some("canonical"), Side::Present(p), _) => p,
-        (Some("unresolved"), ..) => return None,
-        (_, _, Side::Malformed) => return None,
-        (_, Side::Absent, Side::Absent) => return None,
+        (Some("unresolved"), ..) => return unresolved(),
+        (_, _, Side::Malformed) => return unresolved(),
+        (_, Side::Absent, Side::Absent) => return Resolved::Off,
         (_, Side::Absent, Side::Present(a)) => a,
         (_, Side::Present(p), Side::Absent) => p,
         (_, Side::Present(p), Side::Present(a)) => {
@@ -129,20 +141,67 @@ pub(crate) fn classify(
                 && p.end == a.end
                 && p.zone.as_deref().unwrap_or(&owner) == owner;
             if !same {
-                return None;
+                return unresolved();
             }
             p
         }
     };
-    chosen.enabled.then(|| Window {
+    if !chosen.enabled {
+        return Resolved::Off;
+    }
+    Resolved::Window(Window {
         zone: chosen.zone.unwrap_or(owner),
         start: chosen.start,
         end: chosen.end,
     })
 }
 
-/// Reads the actor's three preference rows and returns their quiet window.
-pub(crate) async fn window(cx: &DataContext, actor: Uuid) -> Result<Option<Window>> {
+/// The window alerts are held back in, or `None` when nothing is deferred.
+#[cfg(test)]
+pub(crate) fn classify(
+    profile: Option<&Value>,
+    alerts: Option<&Value>,
+    locale: Option<&Value>,
+    zone_ok: &dyn Fn(&str) -> bool,
+) -> Option<Window> {
+    match resolve(profile, alerts, locale, zone_ok) {
+        Resolved::Window(w) => Some(w),
+        _ => None,
+    }
+}
+
+/// The three saved rows and the zones the database knows, read as the actor.
+pub struct Saved {
+    pub profile: Option<Value>,
+    pub alerts: Option<Value>,
+    pub locale: Option<Value>,
+    known: Vec<String>,
+}
+
+impl Saved {
+    /// The owner's own zone, used for "today" even when no quiet window applies.
+    pub fn owner_zone(&self) -> String {
+        self.locale
+            .as_ref()
+            .and_then(|v| v.get("timezone"))
+            .and_then(Value::as_str)
+            .filter(|z| z.len() <= 100 && self.known.iter().any(|k| k == z))
+            .unwrap_or(DEFAULT_ZONE)
+            .to_owned()
+    }
+
+    pub fn resolve(&self) -> Resolved {
+        resolve(
+            self.profile.as_ref(),
+            self.alerts.as_ref(),
+            self.locale.as_ref(),
+            &|zone| self.known.iter().any(|k| k == zone),
+        )
+    }
+}
+
+/// Reads the actor's three preference rows.
+pub async fn saved(cx: &DataContext, actor: Uuid) -> Result<Saved> {
     let rows = cx
         .db()
         .query(
@@ -169,12 +228,15 @@ pub(crate) async fn window(cx: &DataContext, actor: Uuid) -> Result<Option<Windo
         .iter()
         .map(|r| r.get(0))
         .collect();
-    Ok(classify(
-        profile.as_ref(),
-        alerts.as_ref(),
-        locale.as_ref(),
-        &|zone| known.iter().any(|k| k == zone),
-    ))
+    Ok(Saved { profile, alerts, locale, known })
+}
+
+/// Reads the actor's three preference rows and returns their quiet window.
+pub(crate) async fn window(cx: &DataContext, actor: Uuid) -> Result<Option<Window>> {
+    Ok(match saved(cx, actor).await?.resolve() {
+        Resolved::Window(w) => Some(w),
+        _ => None,
+    })
 }
 
 #[cfg(test)]
