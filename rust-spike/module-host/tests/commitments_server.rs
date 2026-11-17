@@ -403,6 +403,7 @@ fn installed_commitments_package_serves_routes_from_the_real_server() {
     assert_eq!(json_of(&text), json!({"error":"Resolution verifier unavailable"}));
     // Extraction. The request queues a job and the answer carries no text.
     assert_eq!(client.get(format!("{remote_origin}/api/m/commitments/candidates")).header("origin", "https://untrusted.example").header("cookie", &cookie).send().unwrap().status().as_u16(), 403);
+    assert_eq!(client.post(format!("{remote_origin}/api/m/commitments/extract")).header("origin", "https://untrusted.example").header("cookie", &cookie).json(&json!({"sourceKind":"notes"})).send().unwrap().status().as_u16(), 403);
     let (status, text) = call(Method::POST, "/extract", Some(&cookie), Some(json!({"sourceKind":"notes","text":MARK})));
     assert_eq!((status, json_of(&text)), (202, json!({"queued":true})), "{text}\n{}", log());
     assert_eq!(call(Method::POST, "/extract", Some(&cookie), Some(json!({"sourceKind":"mail"}))).0, 400);

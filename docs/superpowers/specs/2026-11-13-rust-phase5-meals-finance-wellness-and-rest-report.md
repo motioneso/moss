@@ -525,7 +525,7 @@ scripts/run-gate.sh start --gate test:rust-commitments-live
   model only proposes. Each suggestion starts as "pending review" and reaches no task list until
   the person accepts it.
 - Email judging. One job reads a mail thread and decides whether it holds something the person
-  owes. A thread is judged once per burst of new mail, after a three minute wait. A thread whose
+  owes. A thread is judged once per burst of new mail, after a three minute wait. A repeat request inside the same three minutes folds into the first, and the next window can queue again. A thread whose
   last message is from the person is not sent to the model, and a suggestion the person rejected
   stays rejected.
 - Two routes: start an extraction, and read the saved extraction state. Starting one answers 202
@@ -550,16 +550,16 @@ scripts/run-gate.sh start --gate test:rust-commitments-live
 
 ### Proof
 
-| Claim                                                  | Evidence                                                                                                                                                                                                                                            |
-| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A canned model run                                     | 15 native tests with a canned model: a note becomes one pending suggestion with its evidence, text that fails the word check never reaches the model, and an unreadable answer gives a warning with no text. Run with a fake host, not the real one |
-| A proposal reaches no task list before it is confirmed | New suggestions are saved as pending review. Accept, reject and snooze fail without the current approval version, and pass with it                                                                                                                  |
-| Job requests carry ids only                            | The queued row holds only the source kind, even when the request body includes text; asking twice queues one job. The live run checks the queue rows after a request that carried a planted marker                                                  |
-| A second person sees nothing                           | Extraction state and thread judgements return nothing for them. With each owner rule removed they read the row (the check fails); with the rule restored, none                                                                                      |
-| Private text stays private                             | The marker reaches no job row and not the server log in the live run. Warnings carry no text                                                                                                                                                        |
-| Route parity                                           | 24 steps replayed against the old routes on the same database, including the new start and state routes with a valid, an invalid and an empty request; answers match                                                                                |
-| Native and WebAssembly builds                          | 26 native tests; the same code as a component passes 6 package tests (including the queue parameter checks) and 3 installed-package tests in the real host                                                                                          |
-| Live run, reachable from another device                | Real Rust server over HTTPS on this machine's network address, not loopback, with certificate checking. An untrusted origin gets 403, signed out gets 401, start gets 202, an invalid source gets 400, the other person's state is empty            |
+| Claim                                                  | Evidence                                                                                                                                                                                                                                         |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A canned model run                                     | Native tests with a canned model: a note becomes one pending suggestion with its evidence, text that fails the word check never reaches the model, and an unreadable answer gives a warning with no text. Run with a fake host, not the real one |
+| A proposal reaches no task list before it is confirmed | New suggestions are saved as pending review. Accept, reject and snooze fail without the current approval version, and pass with it                                                                                                               |
+| Job requests carry ids only                            | The queued row holds only the source kind, even when the request body includes text; asking twice queues one job. The live run checks the queue rows after a request that carried a planted marker                                               |
+| A second person sees nothing                           | Extraction state and thread judgements return nothing for them. With each owner rule removed they read the row (the check fails); with the rule restored, none                                                                                   |
+| Private text stays private                             | The marker reaches no job row and not the server log in the live run. Warnings carry no text                                                                                                                                                     |
+| Route parity                                           | 24 steps replayed against the old routes on the same database, including the new start and state routes with a valid, an invalid and an empty request; answers match                                                                             |
+| Native and WebAssembly builds                          | 28 native tests; the same code as a component passes 6 package tests (including the queue parameter checks) and 3 installed-package tests in the real host                                                                                       |
+| Live run, reachable from another device                | Real Rust server over HTTPS on this machine's network address, not loopback, with certificate checking. An untrusted origin gets 403, signed out gets 401, start gets 202, an invalid source gets 400, the other person's state is empty         |
 
 Commands, all through `scripts/run-gate.sh` (expected exit code 0). The task used its own build
 folder, builds ran offline against the shared package cache, and nothing was installed globally.
@@ -577,6 +577,8 @@ scripts/run-gate.sh start --gate test:rust-commitments-live
   tested, but nothing in Email calls the request.
 - **Chat and notes have no text provider.** Extraction for those sources warns "source provider
   missing" and stops.
+- **Nothing starts extraction or judging by itself.** There is no schedule, Email does not call the
+  request, and the app map says so.
 - **Judgement skips calendar and notes context**, and the "sender was ruled not an obligation"
   rule is not built.
 - **No "no model configured" message.** A missing model shows as a generic warning.

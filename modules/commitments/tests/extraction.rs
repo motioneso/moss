@@ -266,3 +266,31 @@ fn thread_judgements_report_outcomes_for_the_owner_only() {
     let out = f.tool("commitments.threadJudgements", json!({"threadRefs":["t1","t2"]}), None).unwrap();
     assert_eq!(out["data"]["threads"], json!([{"threadRef":"t1","judgedAt":"2026-11-09T10:00:00.000Z","outcome":"item"}]));
 }
+
+#[test]
+fn asking_again_after_the_window_queues_a_new_job() {
+    let f = fake();
+    for _ in 0..2 {
+        assert_eq!(f.route("POST", "/extract", &[], json!({"sourceKind":"notes"})).0, 202);
+    }
+    f.clock.set(1_794_312_000_000 + 181_000);
+    assert_eq!(f.route("POST", "/extract", &[], json!({"sourceKind":"notes"})).0, 202);
+    let keys: Vec<String> = f.jobs_asked().iter().map(|j| j.1["idempotencyKey"].as_str().unwrap().to_owned()).collect();
+    assert_eq!(keys.len(), 3);
+    assert_eq!(keys[0], keys[1], "inside one window the request folds into one");
+    assert_ne!(keys[1], keys[2], "the next window can queue again");
+}
+
+#[test]
+fn the_chat_list_counts_a_finished_snooze_as_pending_review() {
+    let f = fake();
+    let id = accepted(&f, A, "Send budget", "2026-11-11", Value::Null);
+    for row in f.tables.borrow_mut().get_mut(CAND).unwrap() {
+        row["status"] = json!("snoozed");
+        row["snoozed_until"] = json!("2026-11-09T00:00:00.000Z");
+    }
+    let listed = f.tool("commitments.list", json!({}), None).unwrap();
+    assert_eq!(listed["data"]["items"][0]["id"], id.as_str());
+    let snoozed = f.tool("commitments.list", json!({"status":"snoozed"}), None).unwrap();
+    assert_eq!(snoozed["data"]["items"], json!([]));
+}

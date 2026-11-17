@@ -66,6 +66,7 @@ fn the_package_asks_only_for_its_own_resources() {
     assert!(ask("db", "query", "app.commitment_extraction_state").is_ok());
     assert!(ask("db", "query", "app.commitment_email_thread_judgements").is_ok());
     assert!(ask("ai", "generate", "summarization").is_ok());
+    assert!(ask("ai", "generate", "structured").is_ok());
     assert!(ask("ai", "generate", "chat").is_err());
     assert!(ask("ai", "embed", "summarization").is_err());
     let queue = |queue: &str, params: serde_json::Value| {

@@ -82,14 +82,9 @@ fn not_found() -> Response {
     error(404, "Candidate not found")
 }
 
-/// `GET /candidates`. A snooze past its end date counts as pending review again, as before.
-pub fn list<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Response> {
-    let status = match input::list_filter(request.query.get("status")) {
-        Ok(status) => status,
-        Err(message) => return Ok(error(400, message)),
-    };
-    let clock = now(host)?;
-    let filter = match status.as_deref() {
+/// The row filter for a status. A snooze past its end date counts as pending review.
+pub(crate) fn status_filter(status: Option<&str>, clock: &str) -> Filter {
+    match status {
         None => Filter::All,
         Some("pending_review") => Filter::Or {
             filters: vec![
@@ -97,7 +92,7 @@ pub fn list<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Respon
                 Filter::And {
                     filters: vec![
                         compare("status", Compare::Eq, "snoozed"),
-                        compare("snoozed_until", Compare::Le, clock.as_str()),
+                        compare("snoozed_until", Compare::Le, clock),
                     ],
                 },
             ],
@@ -108,13 +103,23 @@ pub fn list<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Respon
                 Filter::Or {
                     filters: vec![
                         Filter::Null { column: "snoozed_until".into(), not: false },
-                        compare("snoozed_until", Compare::Gt, clock.as_str()),
+                        compare("snoozed_until", Compare::Gt, clock),
                     ],
                 },
             ],
         },
         Some(other) => compare("status", Compare::Eq, other),
+    }
+}
+
+/// `GET /candidates`. A snooze past its end date counts as pending review again, as before.
+pub fn list<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Response> {
+    let status = match input::list_filter(request.query.get("status")) {
+        Ok(status) => status,
+        Err(message) => return Ok(error(400, message)),
     };
+    let clock = now(host)?;
+    let filter = status_filter(status.as_deref(), &clock);
     let mut query = Query::select(filter);
     query.order = vec![Order { column: "last_seen_at".into(), descending: true }];
     let rows = Client(host).query(CANDIDATES, &query)?;

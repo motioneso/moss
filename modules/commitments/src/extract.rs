@@ -116,7 +116,7 @@ fn boundaries<H: Host + ?Sized>(host: &H, module: &str, since: Option<&str>) -> 
     answer["boundaries"]
         .as_array()?
         .iter()
-        .map(|b| {
+        .filter_map(|b| {
             Some(Boundary {
                 text: b["text"].as_str()?.to_owned(),
                 occurred_at: b["occurredAt"].as_str()?.to_owned(),
@@ -124,7 +124,8 @@ fn boundaries<H: Host + ?Sized>(host: &H, module: &str, since: Option<&str>) -> 
                 source_version: b["sourceVersion"].as_i64().unwrap_or(0),
             })
         })
-        .collect()
+        .collect::<Vec<_>>()
+        .into()
 }
 
 /// One extraction run for one source. The job carries only the source kind. The text comes

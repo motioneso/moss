@@ -39,9 +39,16 @@ fn actor<H: Host + ?Sized>(host: &H) -> Result<String> {
     context["actorUserId"].as_str().map(str::to_owned).ok_or_else(|| Error::new("Host actor unavailable"))
 }
 
-/// `POST /extract`. One waiting request per person and source.
+/// The current window. A request key repeats inside one window and changes in the next, because
+/// the queue keeps finished jobs and refuses a key it has already seen.
+fn window<H: Host + ?Sized>(host: &H) -> Result<String> {
+    let now = DateTime::parse_from_rfc3339(&crate::store::now(host)?).map_err(|_| Error::new("Host clock unavailable"))?;
+    Ok((now.timestamp() / DEBOUNCE_SECONDS).to_string())
+}
+
+/// `POST /extract`. One request per person and source in each window.
 pub fn enqueue_extraction<H: Host + ?Sized>(host: &H, source_kind: &str) -> Result<()> {
-    let key = request_key(&["extract", &actor(host)?, source_kind]);
+    let key = request_key(&["extract", &actor(host)?, source_kind, &window(host)?]);
     host.call(
         "jobs",
         "enqueue-options",
@@ -60,7 +67,7 @@ pub fn request_thread_judgement<H: Host + ?Sized>(host: &H, input: &Value) -> Re
     let Some(thread) = reply["threadId"].as_str().filter(|t| !t.is_empty()) else {
         return Ok(json!({"queued": false}));
     };
-    let key = request_key(&["email-thread", &actor(host)?, thread]);
+    let key = request_key(&["email-thread", &actor(host)?, thread, &window(host)?]);
     let now = DateTime::parse_from_rfc3339(&crate::store::now(host)?).map_err(|_| Error::new("Host clock unavailable"))?;
     let at = (now + Duration::seconds(DEBOUNCE_SECONDS)).to_rfc3339_opts(SecondsFormat::Millis, true);
     host.call(

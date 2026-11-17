@@ -30,7 +30,8 @@ fn list<H: Host + ?Sized>(host: &H, input: &Value) -> Result<Value> {
         None | Some(Value::Null) => "pending_review",
         Some(v) => v.as_str().filter(|s| LIST_STATUSES.contains(s)).ok_or_else(bad)?,
     };
-    let mut query = Query::select(compare("status", Compare::Eq, status));
+    let clock = now(host)?;
+    let mut query = Query::select(crate::candidates::status_filter(Some(status), &clock));
     query.order = vec![Order { column: "last_seen_at".into(), descending: true }];
     let items = Client(host)
         .query(CANDIDATES, &query)?
@@ -101,7 +102,9 @@ fn change<H: Host + ?Sized>(host: &H, input: &Value, status: &str, approval: Opt
     let updated = Client(host).query(
         CANDIDATES,
         &Query::update(
-            Filter::eq("id", id),
+            Filter::And {
+                filters: vec![Filter::eq("id", id), compare("updated_at", Compare::Eq, current["updated_at"].clone())],
+            },
             values(vec![
                 ("status", json!(status)),
                 ("snoozed_until", until.clone().map_or(Value::Null, Value::String)),
@@ -109,7 +112,7 @@ fn change<H: Host + ?Sized>(host: &H, input: &Value, status: &str, approval: Opt
             ]),
         ),
     )?;
-    let row = updated.into_iter().next().ok_or_else(|| Error::new("Candidate not found"))?;
+    let row = updated.into_iter().next().ok_or_else(|| Error::new("The candidate changed since approval"))?;
     let mut data = json!({"id": row["id"], "status": row["status"]});
     if let Some(until) = until {
         data["snoozedUntil"] = json!(until);

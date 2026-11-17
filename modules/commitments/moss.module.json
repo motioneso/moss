@@ -180,7 +180,7 @@
     },
     {
       "id": "commitments.where-to-find",
-      "description": "Commitments has no screen, navigation entry or settings pane. Moss finds commitment suggestions from your chats, notes and email in the background."
+      "description": "Commitments has no screen, navigation entry or settings pane. Commitment suggestions are found when an extraction is started, and an email thread is judged when another module asks for it. Moss does not yet start either one on its own."
     },
     {
       "id": "commitments.review-in-chat",
@@ -246,7 +246,7 @@
       "risk": "read"
     },
     "commitments.list": {
-      "description": "List commitment suggestions found in your chats, notes and email.",
+      "description": "List the commitment suggestions that have been found so far.",
       "risk": "read"
     },
     "commitments.threadJudgements": {
