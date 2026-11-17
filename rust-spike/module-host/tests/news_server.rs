@@ -471,8 +471,24 @@ fn installed_news_package_serves_routes_from_the_real_server() {
         });
         db.query_one("SELECT id FROM app.users WHERE email='news-other@example.test'", &[]).await.unwrap().get(0)
     });
-    let theirs = rows("SELECT 1 FROM moss_queue.jobs WHERE actor_user_id=$1 AND queue LIKE '%.news-%'", other_id);
-    assert!(theirs.is_empty(), "the other person has no refresh jobs");
+    // The other person's own reads queue their own jobs. Every job in the queue, theirs and the
+    // owner's, carries only the queue name and one fixed word.
+    let jobs = runtime.block_on(async {
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        db.query("SELECT payload::text FROM moss_queue.jobs WHERE queue LIKE '%.news-%'", &[]).await.unwrap()
+    });
+    assert!(!jobs.is_empty());
+    for row in &jobs {
+        let text: String = row.get(0);
+        assert!(!text.to_lowercase().contains(&MARK.to_lowercase()) && !text.contains("bbci"), "job payload {text}");
+        let payload: Value = serde_json::from_str(&text).unwrap();
+        assert!(matches!(payload["params"], Value::Object(ref m) if m.len() == 1 && m.contains_key("kind")), "{text}");
+    }
+    let _ = other_id;
+    println!("news live: {} queued News jobs, all metadata only", jobs.len());
 
     // Nothing the test sent reached the server log.
     assert!(!log().to_lowercase().contains(&MARK.to_lowercase()));
