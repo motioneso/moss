@@ -991,3 +991,45 @@ Both are expected to finish with exit code 0.
   proof is the database test.
 - **Route parity** applies only in that old Meals had no routes. There is nothing to compare.
 - **Release note** is not applicable.
+
+## Meals planning (part 29)
+
+### What existed before this part
+
+Part 28 gave Meals a package with the kitchen and household tools. Nothing for plans or
+recipes existed in Rust.
+
+### What was built
+
+- **Planning rules.** Date handling, the day and meal skeleton, portion sizes, the calorie band
+  and the recipe title key, ported from the old planning code.
+- **The safety rule.** The allergy and dietary check, the merge of the rule result with the
+  model's own safety answer, and the brand-name rule.
+- **Recipe answers read strictly.** The recipe and safety answers from the model are parsed
+  with fixed error text, and the prompts that ask for them are built in Rust.
+- **Pantry name matching.** Matching an ingredient to a pantry item by name, and finding
+  ingredients that are not in the pantry.
+- **The recipe drafting loop.** Draft, check safety, retry with the problem named, and give up
+  after a fixed number of tries. It runs against a stand-in model.
+- **Calories per serving stay empty.** The estimator is part 31. Pantry quantity maths is
+  part 30.
+
+### Proof
+
+23 native tests pass for the guest. The drafting loop is proven with a canned model that
+returns scripted answers, covering a clean first draft, a retry after a safety failure, a
+retry after a malformed answer, giving up, and a brand-name rejection.
+
+### Not proven or not built
+
+- **No storage layer.** Plans, days, meals, eaters, recipes, ingredients and swap choices are
+  not read or written yet.
+- **No tools.** Plan create, get, current, control, meal edit, swap, servings and favourites
+  edit are not built, nor are plan delete, meal get, meal cooked, meal rate and day edit.
+- **No background jobs, manifest entries, app map entries or changelog entry** for planning.
+- **No host tests.** The second-person and admin isolation check, the private-text check,
+  route parity and the live run on the real Rust server have not been done.
+- **Live model run.** The model dependency (JS-307) is not merged, so the drafting loop has
+  only run against the canned model.
+- **No tracking card** for JS-308 was found in Vikunja.
+- **Release note** is not applicable.
