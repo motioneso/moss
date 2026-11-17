@@ -113,6 +113,7 @@ impl World {
                 version: "0.1.0".parse().unwrap(),
                 compiled_cache: None,
                 fuel_ceiling: Some(250_000_000),
+                browser_dir: None,
             },
             move |next| Ok(Arc::new(preferences(prefs_db, next)?)),
         )
