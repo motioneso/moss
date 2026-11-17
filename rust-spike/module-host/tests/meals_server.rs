@@ -504,7 +504,7 @@ fn installed_meals_package_serves_routes_from_the_real_server() {
             &[&provider, &owner, &format!("http://127.0.0.1:{}", proxy_port.trim()), &sealed],
         ).await.unwrap();
         db.execute(
-            "INSERT INTO app.ai_configured_models(id,provider_config_id,owner_user_id,provider_model_id,display_name,capabilities) VALUES($1,$2,$3,'claude-haiku-5-5','Cheapest model',ARRAY['chat','json'])",
+            "INSERT INTO app.ai_configured_models(id,provider_config_id,owner_user_id,provider_model_id,display_name,capabilities) VALUES($1,$2,$3,'gpt-5.6-luna','Small model',ARRAY['chat','json'])",
             &[&model, &provider, &owner],
         ).await.unwrap();
     });
@@ -535,6 +535,6 @@ fn installed_meals_package_serves_routes_from_the_real_server() {
     let (_, theirs) = call(Method::POST, "/meals/tools/run", Some(&other), Some(json!({"tool":"meals.log.list","parameters":{}})));
     assert!(!theirs.contains("scrambled"), "the second person sees no entries");
     assert!(!log().contains(&model_key), "the model key never reaches the server log");
-    println!("PASS live model: claude-haiku-5-5 estimated a real entry in {:?}: {kcal} kcal, shown as an estimate; key absent from the log", waited.elapsed());
+    println!("PASS live model: gpt-5.6-luna estimated a real entry in {:?}: {kcal} kcal, shown as an estimate; key absent from the log", waited.elapsed());
     println!("PASS live HTTPS: kitchen, household, list and pantry tools, one-use approval, second person refused, private text absent from activity and the server log");
 }
