@@ -31,6 +31,21 @@ pub fn install(
     let tasks =
         std::fs::read(std::env::var("JS182_TASKS_PACKAGE").expect("Build JS182_TASKS_PACKAGE"))
             .unwrap();
+    // JS307_CALL_LIMIT_MS gives the packaged manifest a longer call limit, to prove the grant.
+    let tasks = match std::env::var("JS307_CALL_LIMIT_MS") {
+        Ok(ms) => {
+            let digest = trust::digest(&tasks);
+            let mut files = Package::read(&tasks, &digest, &"0.1.0".parse().unwrap())
+                .unwrap()
+                .files;
+            let mut manifest: serde_json::Value =
+                serde_json::from_slice(&files["moss.module.json"]).unwrap();
+            manifest["callLimitMs"] = ms.parse::<u64>().unwrap().into();
+            files.insert("moss.module.json".into(), serde_json::to_vec(&manifest).unwrap());
+            moss_module_host::archive::pack(&files).unwrap()
+        }
+        Err(_) => tasks,
+    };
     let artifacts: Vec<_> = [tasks]
         .into_iter()
         .map(|bytes| {

@@ -852,3 +852,202 @@ scripts/run-gate.sh start --gate test:rust-plaid-live
 - **Link and public tokens reach the module** on purpose. Only keys and bank tokens are hidden.
 - **No App Map entries,** because no screen, setting or route was added.
 - **Route parity** does not apply, since no route was added.
+
+## Finance package skeleton (part 20)
+
+### What was built
+
+- The Finance package: manifest with App Map entries, the old ledger kept as a module-legacy
+  ledger (42 SQL files, 24 tables), the account list, manual account create and manual entries.
+- Six routes and four tools. The old code had no HTTP routes, so the routes exist for the live
+  proof and for later screens. Tools and routes share one code path.
+- Old rules kept: operation id must be a UUID v4 and is stored as `manual:<uuid>`, 12 currencies,
+  6 account types and their stored kinds, no future dates, trimmed names, note and amount limits,
+  the ordered-JSON digest, the balance direction per account type, and the old result codes.
+- Host change 1: legacy-ledger tables get owner-only row-level security and grants at install,
+  because the old SQL has none. Tables that already have policies are left alone.
+- Host change 2: a typed insert may name a column called `actor` (the old activity table has
+  one). Only column names inside `values` are exempt. Identity keys anywhere else, or nested in
+  a value, are still refused. One host unit test covers it.
+
+### Proof
+
+| Check                                                                                     | Result                                                                                                            |
+| ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Native guest tests (`finance.rs` 18, `privacy.rs` 4)                                      | passed                                                                                                            |
+| Package tests (6) and the real component built as WebAssembly                             | passed, component loads in the real host                                                                          |
+| Installed package, two people plus an admin, row-level security                           | passed; with security removed the admin saw rows and the second person listed A's account (RED), restored (GREEN) |
+| Same operation id from two people makes one account each                                  | passed                                                                                                            |
+| Chat writes need an exact, one-use approval tied to the account                           | passed                                                                                                            |
+| Planted name, note and amounts searched in 14 tables, job payloads and activity rows      | found only in ledger rows                                                                                         |
+| Put the amount into the activity row                                                      | host scan failed, restored                                                                                        |
+| Let a host failure echo its text                                                          | guest test failed, restored                                                                                       |
+| Live run: real server, real HTTPS on a non-loopback address, untrusted origin, signed out | passed: 403 for untrusted origin, 401 signed out, account and entry worked, second person saw none                |
+| Moss reachable from another device                                                        | passed, same live run                                                                                             |
+
+From the repo root, through the gate script:
+
+```
+scripts/run-gate.sh start --gate test:rust-finance
+```
+
+```
+scripts/run-gate.sh start --gate test:rust-finance-live
+```
+
+### Deliberate differences from the old code
+
+- Activity rows hold ids only. The old rows could hold more.
+- Refusals come back as `{"status":"error","code","message"}` data from tools and as HTTP 4xx
+  from routes.
+- The category list is the 16 seeded defaults, or the saved list once the budget policy says
+  categories are ready. The old key-value fallback is not built.
+- Two writers on one account use a revision check, not a row lock. The loser rereads once, so
+  a repeated operation answers unchanged. A second loss fails the call with no balance change.
+- The account list sorts by account id in the database, so mixed manual and bank ids may order
+  differently from the old list.
+- A missing time zone and an unavailable old storage upgrade show as a generic tool failure, not
+  the old named errors.
+
+### Not proven or not built
+
+- **Parity against the running old code.** The old Finance had no routes. Rules, codes and
+  digests are checked by table-driven cases copied from the old handlers, and the digest was
+  checked equal to node's earlier. The old handlers were not run side by side.
+- **Shared accounts.** The shared-accounts mirror is not built, so the list shows own accounts.
+- **Bank link, sync, budgets, screens** belong to later parts.
+- **The wasm run is the packaged component loaded by the installed and live tests.** The guest
+  unit tests themselves run native only.
+- **Rollback after a late failure** is not shown by a test. The host rolls the whole call back,
+  but no test forces a failure after the balance moves.
+- **The privacy scan reads database tables and the server log,** not the chat approval record.
+- **The two negative controls** cover the leak routes that were wired. Other fields were not
+  each given a control.
+
+## Meals package, kitchen and household (part 28)
+
+### What existed before this part
+
+Nothing for Meals existed before this part. Part 19 only built the bank token exchange through
+the host, so nothing was reused.
+
+### What was built
+
+- **The Meals package.** A manifest, a changelog, an icon, and a WebAssembly guest that
+  serves the kitchen and household tools. The package carries all 27 old SQL files untouched,
+  so all 20 Meals tables exist after install. A changed byte in any file stops the build.
+- **Four tools.** Read the kitchen, save the kitchen, save a household member, remove a
+  household member. They use the same wording for bad input as the old tools. The
+  guest never writes SQL. It asks the host for typed queries on four tables.
+- **The first read never writes.** A new person sees a default kitchen with their own "You"
+  member. The same ids are stored on the first save.
+- **App map entries** for the tools are in the manifest.
+- **No host change.** Meals tables are in the host's frozen list of old tables, so the host
+  already gives them the owner-only rules and runs queries as the shared app role.
+- **Nothing more.** Plans, recipes, lists, pantry and log tools are later parts.
+
+### Differences from the old code (on purpose)
+
+- Old Meals had no web routes. The new package has one route, used by chat to run a tool.
+  Every write goes through the host's one-use approval, which the old tools did not need.
+- The guest hand-writes MD5 so the default kitchen ids match the database's own. No new
+  crate was added.
+
+### Proof
+
+Native tests for the guest (13 pass) and WebAssembly package tests against the real host (6
+pass), then the database tests through the gate, which finished with exit code 0. This part changes no host code.
+
+- **Tool parity.** 15 steps run on the old handlers and on the installed package, with ids and
+  times masked. Every reply matched, including the bad-input replies.
+- **Two people.** A second person and an admin cannot read, change or remove the first
+  person's kitchen or household. The check was seen failing with the generated privacy rule
+  removed from each table, then passing when it was put back.
+- **Private text.** A planted household name never reached stored jobs, host activity or the
+  live server log.
+- **Two protections removed.** The fixed error text and the activity record were each removed
+  and the matching test failed.
+- **Live run.** The real Rust server, over HTTPS on a real network address, installed the
+  package and ran the tools. It finished with exit code 0, including a refused untrusted origin,
+  a refused second person and no marker text in the activity record or server log.
+
+Commands, from the repo root, through the gate script:
+
+```
+scripts/run-gate.sh start --gate test:rust-meals
+```
+
+```
+scripts/run-gate.sh start --gate test:rust-meals-live
+```
+
+Both are expected to finish with exit code 0.
+
+### Not proven or not built
+
+- **No screens.** None were asked for.
+- **Only four tools of the old set.** The rest come in later parts.
+- **The second person in the live run** is only shown being refused. The strong isolation
+  proof is the database test.
+- **Route parity** applies only in that old Meals had no routes. There is nothing to compare.
+- **Release note** is not applicable.
+
+## Finance transactions (part 22)
+
+### What was built
+
+- Transactions: month query with filters, search, notes and splits; set a category; confirm what Moss sorted; bulk categorize and bulk confirm; save and read a note; split across up to 20 categories.
+- Payee rules: set a rule, list, preview what a rule would change, turn rules on or off.
+- Categories: add or rename inside a group.
+- Sorting: rule first, then the bank's own category, then an AI guess (the AI step is a stand-in, see below). The tiers are the old ones. A rule always confirms. A guess under 0.6 confidence needs a look. Otherwise a known payee follows the "sorting" tier (trusted by default) and a new payee follows "sorting_new" (asks each time by default). Only the trusted tier confirms without asking. The tiers are read live from the host's action policy and fall back to those defaults.
+- CSV import: parse, preview with duplicate choices, and apply. Caps stay at 1 MiB, 200 rows, 500 KiB per row, 50 columns. `csv` 1.4.0 is pinned (`=1.4.0`), the one approved new crate.
+- Routes (module-relative, all sign-in): screen routes for each action above, and chat routes under `/finance/chat/...` for the assistant's writes. Every route is declared in the manifest, with tools, risk, features, errors and policy routes. Package version is 0.2.0.
+
+### Proof
+
+| Check                                                                                         | Result                                                                                       |
+| --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Native guest tests (25 unit, finance 18, import 5, isolation 4, privacy 6, transactions 14)   | passed                                                                                       |
+| Package tests (6) and the real component built as WebAssembly, run against the real host      | passed, including the new table and action-policy grants                                     |
+| CSV fixture at both caps (1 MiB, 200 rows) read back from a real file; one step over each cap | passed; both over-cap files refused with the old messages                                    |
+| An import saved twice by replay                                                               | stays one set of rows, one balance move, one receipt, one activity row                       |
+| Sorting tiers, including the trusted tier that applies without asking                         | passed; a second sort run changes nothing                                                    |
+| Two people, guest level: second person reads and writes A's transactions, rules and notes     | nothing seen, nothing changed. With the owner filter switched off the same check fails (RED) |
+| Planted payee, note and amount searched in activity rows and every non-database host call     | none found; a planted leak is caught by the same scan (control)                              |
+| Live run: real server, real HTTPS on a non-loopback address, no response rewriting            | passed: query, category, note, import, replay stays 3 rows, sorting, second person sees none |
+| Stored job rows searched for the planted text in the live run                                 | none found; the same search finds the text in the transactions table (control)               |
+| Moss reachable from another device                                                            | passed, same live run (non-loopback address, certificate checked, untrusted origin refused)  |
+
+From the repo root, through the gate script:
+
+```
+scripts/run-gate.sh start --gate test:rust-finance
+```
+
+```
+scripts/run-gate.sh start --gate test:rust-finance-live
+```
+
+Both ended with exit code 0. The first run of the package gate failed because a test still expected the imports table to be refused. The test was updated because the table is now granted.
+
+### Deliberate differences from the old code
+
+- The old write version (row id plus the database's hidden change counter) is replaced by a hash of the fields a writer can change. Writes still refuse a stale version.
+- The old queue jobs for categorize, review and split run as part of the request, in one database transaction. No job is queued, so no job payload can carry private text.
+- A new `/finance/import/parse` route reads the file on the server. The old code parsed in the browser.
+- A batch review checks every row before it writes the first, because a chat tool call commits whatever it wrote before a refusal. A chat route now answers with the refusal's status (409, 404 or 400) instead of always 200.
+- Bulk categorize writes one activity row with the count. The old code wrote none.
+- The CSV reader is the `csv` crate, 1.4.0 pinned, with extra checks for stray quotes. A one-column file with blank lines is refused.
+- Letters in payee keys follow Rust's definition of a letter, not the old pattern for Unicode letters. Rare scripts may group differently.
+
+### Not proven or not built
+
+- The AI guess step has a trait and a fake only. The host-backed version is not built, so sorting here never asks a model.
+- Archiving a category is not built (it needs budget data from part 23).
+- Transactions export and reports, and the shared household mirror, belong to part 25.
+- The host stores tiers but does not enforce tool approval by tier. Enforcement is in the sorting code and the one-use approval on chat writes.
+- The unreachable error code for an over-long rule payee exists but cannot fire, because the 200-byte cap is hit first.
+- Route parity with the old handlers is checked through ported messages, status codes and shapes in the guest tests. The old handlers were not run side by side with the new ones.
+- Row-level security for the two new tables (rules, imports) is proven through the live run (second person sees none and cannot write) and the guest-level check. It was not separately re-run in Postgres with the protection removed.
+- The stored-job-row search was not seen failing with protection off, because Finance queues no jobs. The control shows the search can find stored text.
+- No screens were built.

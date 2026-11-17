@@ -2,7 +2,7 @@ use crate::manifest::{Manifest, PORTS};
 use access_context::AccessContext;
 use anyhow::{bail, ensure, Context, Result};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant},
@@ -19,6 +19,8 @@ pub struct Limits {
     /// Host-wide cap on a manifest's requested fuel. Never below `fuel`.
     pub fuel_ceiling: u64,
     pub deadline: Duration,
+    /// Host-wide cap on a manifest's requested call limit. Never below `deadline`.
+    pub deadline_ceiling: Duration,
     pub message_bytes: usize,
 }
 impl Default for Limits {
@@ -28,6 +30,7 @@ impl Default for Limits {
             fuel: 10_000_000,
             fuel_ceiling: 10_000_000,
             deadline: Duration::from_secs(5),
+            deadline_ceiling: Duration::from_secs(30),
             message_bytes: 1024 * 1024,
         }
     }
@@ -36,6 +39,12 @@ impl Limits {
     /// A manifest may raise its budget above the default, never above the host ceiling.
     pub fn effective_fuel(&self, requested: Option<u64>) -> u64 {
         requested.map_or(self.fuel, |r| r.clamp(self.fuel, self.fuel_ceiling))
+    }
+    /// A manifest may lengthen the call limit above the default, never above the host ceiling.
+    pub fn effective_deadline(&self, requested_ms: Option<u64>) -> Duration {
+        requested_ms.map_or(self.deadline, |ms| {
+            Duration::from_millis(ms).clamp(self.deadline, self.deadline_ceiling)
+        })
     }
 }
 #[derive(Clone)]
@@ -129,7 +138,8 @@ impl Host {
             limits.fuel > 0
                 && limits.fuel_ceiling >= limits.fuel
                 && limits.memory_bytes > 0
-                && !limits.deadline.is_zero(),
+                && !limits.deadline.is_zero()
+                && limits.deadline_ceiling >= limits.deadline,
             "Host limits must be positive"
         );
         let mut config = Config::new();
@@ -271,11 +281,12 @@ impl Host {
             )?;
         }
         let fuel = self.limits.effective_fuel(manifest.fuel_limit);
+        let deadline = self.limits.effective_deadline(manifest.call_limit_ms);
         let scope = CallScope {
             call_id: uuid::Uuid::new_v4(),
             access,
             module: manifest,
-            deadline: Instant::now() + self.limits.deadline,
+            deadline: Instant::now() + deadline,
             kind: kind.to_owned(),
         };
         let mut completion = Completion {
@@ -300,7 +311,7 @@ impl Host {
         );
         store.limiter(|state| &mut state.limits);
         store.set_fuel(fuel)?;
-        store.set_epoch_deadline((self.limits.deadline.as_millis().div_ceil(10) as u64) + 1);
+        store.set_epoch_deadline((deadline.as_millis().div_ceil(10) as u64) + 1);
         let instance = linker.instantiate(&mut store, &component)?;
         let handle = instance
             .get_typed_func::<(String, String), (std::result::Result<String, String>,)>(
@@ -335,7 +346,11 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
             || (port == "attachments" && cap.resources.contains("handed")),
         "This resource was not approved"
     );
-    reject_context(&request.parameters)?;
+    if port == "db" && request.operation == "query" {
+        reject_context_outside_columns(&request.parameters)?;
+    } else {
+        reject_context(&request.parameters)?;
+    }
     match port {
         "attachments" => ensure!(
             request.operation == "read" && uuid::Uuid::parse_str(&request.resource).is_ok(),
@@ -548,6 +563,23 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
     }
     Ok(())
 }
+/// A typed query may write a column named like an identity field (the old Finance activity log
+/// has an `actor` column). Column names in `values` are data, so only what they hold is checked.
+fn reject_context_outside_columns(parameters: &Value) -> Result<()> {
+    let Value::Object(fields) = parameters else {
+        return reject_context(parameters);
+    };
+    for (name, v) in fields {
+        if name == "values" {
+            if let Value::Object(columns) = v {
+                columns.values().try_for_each(reject_context)?;
+                continue;
+            }
+        }
+        reject_context(&json!({ name.as_str(): v }))?;
+    }
+    Ok(())
+}
 fn reject_context(value: &Value) -> Result<()> {
     match value {
         Value::Object(fields) => {
@@ -617,4 +649,21 @@ fn validate_job_parameters(manifest: &Manifest, resource: &str, parameters: &Val
         );
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod column_name_tests {
+    use super::*;
+
+    #[test]
+    fn a_typed_insert_may_name_an_actor_column_but_not_carry_identity() {
+        let ok = json!({"values":{"actor":"user","kind":"x"}});
+        assert!(reject_context_outside_columns(&ok).is_ok());
+        let nested = json!({"values":{"params":{"actorUserId":"u"}}});
+        assert!(reject_context_outside_columns(&nested).is_err());
+        let top = json!({"actor":"user","values":{}});
+        assert!(reject_context_outside_columns(&top).is_err());
+        let sql = json!({"values":{"a":1},"sql":"select 1"});
+        assert!(reject_context_outside_columns(&sql).is_err());
+    }
 }

@@ -24,6 +24,7 @@ pub mod grants;
 pub mod health;
 pub mod mail_sync;
 pub mod refresh;
+pub mod work_mail;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod testing;
 
@@ -125,6 +126,7 @@ fn api(host: &impl Host, name: &str, input: &Value) -> Result<Value> {
         "deleteCalendarEvent" => calendar_writes::delete(host, input),
         "rescheduleCalendarEvent" => calendar_writes::reschedule(host, input),
         "connectionDiagnostics" => accounts::diagnostics(host, input["limit"].as_i64().unwrap_or(10)),
+        "captureWorkMail" => work_mail::capture(host, input),
         _ => Err(Error::new(404, "Connectors operation not found")),
     }
 }

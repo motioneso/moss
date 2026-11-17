@@ -1,0 +1,231 @@
+{
+  "schemaVersion": 2,
+  "id": "meals",
+  "name": "Meals",
+  "description": "Private kitchen and household for meal planning, with four chat tools under the host's approval rules. Plans, recipes, lists, pantry and the food log are not part of this package yet. No screens.",
+  "publisher": "Moss",
+  "version": "0.1.0",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "fuelLimit": 200000000,
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "db",
+      "operations": ["query"],
+      "resources": [
+        "app.meals_kitchens",
+        "app.meals_household_members",
+        "app.meals_meal_slot_rules",
+        "app.meals_favourites"
+      ]
+    },
+    {
+      "port": "context",
+      "operations": ["read", "uuid"],
+      "resources": ["call", "new"]
+    },
+    {
+      "port": "tools",
+      "operations": ["offer", "run"],
+      "resources": [
+        "meals.kitchen.get",
+        "meals.kitchen.save",
+        "meals.household.save",
+        "meals.household.remove"
+      ]
+    }
+  ],
+  "database": {
+    "migrations": [
+      "sql/0001_create_meals_kitchens.sql",
+      "sql/0002_create_meals_household_members.sql",
+      "sql/0003_index_meals_household_members_one_self.sql",
+      "sql/0004_create_meals_meal_slot_rules.sql",
+      "sql/0005_create_meals_plans.sql",
+      "sql/0006_create_meals_plan_days.sql",
+      "sql/0007_create_meals_recipes.sql",
+      "sql/0008_index_meals_recipes_title_key.sql",
+      "sql/0009_create_meals_recipe_ingredients.sql",
+      "sql/0010_create_meals_planned_meals.sql",
+      "sql/0011_create_meals_planned_meal_eaters.sql",
+      "sql/0012_create_meals_shopping_lists.sql",
+      "sql/0013_create_meals_shopping_list_items.sql",
+      "sql/0014_index_meals_shopping_list_items_line_key.sql",
+      "sql/0015_create_meals_pantry_items.sql",
+      "sql/0016_index_meals_pantry_items_name_key.sql",
+      "sql/0017_create_meals_undo_actions.sql",
+      "sql/0018_create_meals_staples.sql",
+      "sql/0019_create_meals_log_entries.sql",
+      "sql/0020_create_meals_log_estimates.sql",
+      "sql/0021_index_meals_log_entries_owner_local_date.sql",
+      "sql/0022_create_meals_log_estimate_items.sql",
+      "sql/0023_create_meals_swap_choices.sql",
+      "sql/0024_add_meals_planned_meals_job_generation.sql",
+      "sql/0025_create_meals_ratings.sql",
+      "sql/0026_create_meals_favourites.sql",
+      "sql/0027_add_meals_planned_meals_quick_max_minutes.sql"
+    ],
+    "ownedTables": [
+      "app.meals_favourites",
+      "app.meals_household_members",
+      "app.meals_kitchens",
+      "app.meals_log_entries",
+      "app.meals_log_estimate_items",
+      "app.meals_log_estimates",
+      "app.meals_meal_slot_rules",
+      "app.meals_pantry_items",
+      "app.meals_plan_days",
+      "app.meals_planned_meal_eaters",
+      "app.meals_planned_meals",
+      "app.meals_plans",
+      "app.meals_ratings",
+      "app.meals_recipe_ingredients",
+      "app.meals_recipes",
+      "app.meals_shopping_list_items",
+      "app.meals_shopping_lists",
+      "app.meals_staples",
+      "app.meals_swap_choices",
+      "app.meals_undo_actions"
+    ],
+    "ledger": "module-legacy",
+    "access": {
+      "app.meals_favourites": {
+        "access": "owner-only"
+      },
+      "app.meals_household_members": {
+        "access": "owner-only"
+      },
+      "app.meals_kitchens": {
+        "access": "owner-only"
+      },
+      "app.meals_log_entries": {
+        "access": "owner-only"
+      },
+      "app.meals_log_estimate_items": {
+        "access": "owner-only"
+      },
+      "app.meals_log_estimates": {
+        "access": "owner-only"
+      },
+      "app.meals_meal_slot_rules": {
+        "access": "owner-only"
+      },
+      "app.meals_pantry_items": {
+        "access": "owner-only"
+      },
+      "app.meals_plan_days": {
+        "access": "owner-only"
+      },
+      "app.meals_planned_meal_eaters": {
+        "access": "owner-only"
+      },
+      "app.meals_planned_meals": {
+        "access": "owner-only"
+      },
+      "app.meals_plans": {
+        "access": "owner-only"
+      },
+      "app.meals_ratings": {
+        "access": "owner-only"
+      },
+      "app.meals_recipe_ingredients": {
+        "access": "owner-only"
+      },
+      "app.meals_recipes": {
+        "access": "owner-only"
+      },
+      "app.meals_shopping_list_items": {
+        "access": "owner-only"
+      },
+      "app.meals_shopping_lists": {
+        "access": "owner-only"
+      },
+      "app.meals_staples": {
+        "access": "owner-only"
+      },
+      "app.meals_swap_choices": {
+        "access": "owner-only"
+      },
+      "app.meals_undo_actions": {
+        "access": "owner-only"
+      }
+    }
+  },
+  "routes": [
+    {
+      "method": "POST",
+      "path": "/meals/tools/run",
+      "signIn": true
+    }
+  ],
+  "requires": {},
+  "provides": {},
+  "icons": ["icons/meals.svg"],
+  "accounts": {
+    "supportsUserDisable": true,
+    "defaultEnabled": true
+  },
+  "lifecycle": {
+    "required": false,
+    "bundled": true,
+    "removable": true
+  },
+  "screens": {},
+  "navigation": [],
+  "settings": [
+    {
+      "id": "meals.module-settings",
+      "label": "Meals",
+      "path": "/settings?section=modules&module=meals",
+      "scope": "user",
+      "description": "Kitchen units, the default pantry mode and the shared or solo rule for each meal are read and saved through chat. The settings screen is not built yet."
+    }
+  ],
+  "features": [
+    {
+      "id": "meals.chat-kitchen",
+      "description": "Chat can read the kitchen and change its units, default pantry mode and the shared or solo rule for each meal. A new account shows one member named You and the default settings. Reading never saves anything. Changes need the host's one-use approval for the same person and exact inputs.",
+      "errors": [
+        {
+          "code": "approval_required",
+          "class": "validation",
+          "description": "The tool cannot run without approval. Ask for approval for these exact inputs and try again."
+        }
+      ]
+    },
+    {
+      "id": "meals.chat-household",
+      "description": "Add or change household members through Moss, including their targets, meals of the day, never-serve list and preferences. Removing a member needs approval each time. Each person sees only their own household.",
+      "errors": [
+        {
+          "code": "member_not_found",
+          "class": "validation",
+          "description": "The member does not exist or belongs to another person. Read the kitchen to see the members and try again."
+        },
+        {
+          "code": "self_member",
+          "class": "validation",
+          "description": "The member is you, and your own member cannot be removed. Choose another member."
+        }
+      ]
+    }
+  ],
+  "tools": {
+    "meals.kitchen.get": {
+      "description": "Read the kitchen: units, default pantry mode, every household member and the shared or solo rule for each meal.",
+      "risk": "read"
+    },
+    "meals.kitchen.save": {
+      "description": "Change kitchen settings: units, the default pantry mode and shared or solo rules per meal.",
+      "risk": "write"
+    },
+    "meals.household.save": {
+      "description": "Add or change a household member. Leave memberId out to add someone.",
+      "risk": "write"
+    },
+    "meals.household.remove": {
+      "description": "Remove a household member. The self member cannot be removed.",
+      "risk": "destructive"
+    }
+  }
+}
