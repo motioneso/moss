@@ -645,3 +645,72 @@ scripts/run-gate.sh start --gate test:rust-commitments-live
   to the code to watch them fail.
 - **The live run never ran a job.** It showed the job queued, not the worker finishing it, because
   no model or text source exists on that server.
+
+## Finance platform probe (part 19)
+
+### Answer to plan section 5.3
+
+The module host can hold Plaid's keys and bank tokens itself, so Finance does not need the
+`credentials.read` exception. Four gaps stopped the old broker from doing Plaid. Each got a
+small, general extension, and no package ever sees a key or a bank token.
+
+| Gap in the old broker                                    | Extension                                                                 |
+| -------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Plaid wants its keys in the body of every call           | A credential can attach named fields to the body; the host sets them last |
+| The bank token swap sends a one-time public token        | A new token swap kind sends companion keys plus that one input field      |
+| Finance keeps one token per bank, the broker kept one    | Optional per-bank slots, with a forget operation                          |
+| Replies carrying `link_token` or `public_token` were cut | A credential may list reply fields that stay visible by design            |
+
+A failed swap returns `connected: false` and only Plaid's upper-case error code. Nothing is
+stored and earlier banks are untouched.
+
+### What was built
+
+- Broker changes in the module host (manifest, credentials, runtime).
+- A fake Plaid for tests that copies Plaid's rules: keys in every body, a public token works
+  once, a bank token works only for its own bank, Plaid's error codes, every call recorded.
+- Five host tests and four fake-Plaid contract tests.
+
+### Proof
+
+| Check                                                                                  | Result                                                                                                                                                                                                                                                                                                                     |
+| -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bank link through the real component host and encrypted store (`plaid_probe`, 5 tests) | passed                                                                                                                                                                                                                                                                                                                     |
+| Fake Plaid contract tests (`standins/tests/plaid.rs`, 4 tests)                         | passed                                                                                                                                                                                                                                                                                                                     |
+| Whole module host native suite                                                         | passed                                                                                                                                                                                                                                                                                                                     |
+| Planted client id, secret and bank token searched in replies and on disk               | never found                                                                                                                                                                                                                                                                                                                |
+| Remove the name-based reply stripping                                                  | leak test failed, restored                                                                                                                                                                                                                                                                                                 |
+| Remove per-person separation                                                           | second-person test failed, restored                                                                                                                                                                                                                                                                                        |
+| Let the module's own fields win over the host's                                        | override test failed, restored                                                                                                                                                                                                                                                                                             |
+| Live run: real server, real Plaid host, marker keys                                    | passed: Plaid answered INVALID_FIELD, the package saw only that code; signed out got 401; second person saw no bank (trivially, since nobody linked one; person-to-person separation is proven against the fake Plaid only); key scan of log, tables, data folder and package found nothing, and a planted leak was caught |
+| Old broker shapes against the fake Plaid                                               | refused with INVALID_API_KEYS                                                                                                                                                                                                                                                                                              |
+
+Commands, from `rust-spike`:
+
+```
+cargo +1.95.0 test --locked --offline --manifest-path module-host/Cargo.toml --test plaid_probe
+```
+
+```
+cargo +1.95.0 test --locked --offline --manifest-path standins/Cargo.toml --test plaid
+```
+
+From the repo root, through the gate script:
+
+```
+scripts/run-gate.sh start --gate test:rust-plaid-live
+```
+
+### Not proven or not built
+
+- **WebAssembly.** The host and the fake Plaid are native test code. The host tests run a real
+  WebAssembly sample, and the live run uses a small probe package built as real WebAssembly.
+- **Live run used marker keys, not a real bank.** The real server called the real Plaid host
+  and Plaid refused the keys, so the success path was proven only against the fake Plaid.
+- **A real Plaid account** is part 36. Real Plaid replies may differ from the fake.
+- **Package declarations are checked.** A bank swap must be per person, only link and public
+  tokens can be exposed in replies, and a shared credential cannot be forgotten by one person.
+  A test tries each and was seen failing with the check removed.
+- **Link and public tokens reach the module** on purpose. Only keys and bank tokens are hidden.
+- **No App Map entries,** because no screen, setting or route was added.
+- **Route parity** does not apply, since no route was added.
