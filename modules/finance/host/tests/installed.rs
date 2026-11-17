@@ -682,7 +682,9 @@ fn the_budget_is_private_drafts_use_stored_records_and_an_uncertain_save_saves_n
     println!("PASS privacy: scanned {} tables, budget activity rows {kinds:?} hold ids only", tables.len());
 }
 
-const PART24_TABLES: [&str; 5] = [
+const PART24_TABLES: [&str; 7] = [
+    "app.finance_bill_occurrences",
+    "app.finance_bill_adjustments",
     "app.finance_targets",
     "app.finance_bill_plans",
     "app.finance_flex_policies",
@@ -714,7 +716,8 @@ fn bills_targets_flex_and_card_reserves_are_private_and_leave_no_private_text() 
         body
     };
 
-    let bill = review(json!({"id":Uuid::new_v4().to_string(),"name":BILL,"accountId":account,"categoryId":"groceries",
+    let bill_id = Uuid::new_v4().to_string();
+    let bill = review(json!({"id":bill_id,"name":BILL,"accountId":account,"categoryId":"groceries",
         "amountCents":CENTS,"anchorDate":format!("{current}-20"),"cadence":"monthly"}));
     let made = w.call(a, "POST", "/finance/bills", bill.clone());
     assert_eq!(made["status"], 200, "{made}");
@@ -725,10 +728,17 @@ fn bills_targets_flex_and_card_reserves_are_private_and_leave_no_private_text() 
     assert_eq!(target["status"], 200, "{target}");
     let enrolled = w.call(a, "POST", "/finance/cards/save", review(json!({"accountId":card,"action":"enroll","availableCents":0})));
     assert_eq!(enrolled["status"], 200, "{enrolled}");
+    let pool = w.call(a, "POST", "/finance/flex/configure", review(json!({"mode":"flex","flexIds":["groceries","transport"],"nonMonthlyIds":[]})));
+    assert_eq!(pool["status"], 200, "{pool}");
+    let due = format!("{current}-20");
+    let moved = w.call(a, "POST", "/finance/bills/adjust", review(json!({"planId":bill_id,"dueDate":due,"plannedDate":format!("{current}-21"),"amountCents":CENTS+1})));
+    assert_eq!(moved["status"], 200, "{moved}");
+    let skipped = w.call(a, "POST", "/finance/bills/decide", review(json!({"planId":bill_id,"dueDate":due,"state":"skipped"})));
+    assert_eq!(skipped["status"], 200, "{skipped}");
     let listed = w.call(a, "GET", &format!("/finance/bills?from={current}-01&to={current}-28"), Value::Null);
     assert!(listed.to_string().contains(BILL), "{listed}");
     let counts: Vec<i64> = PART24_TABLES.iter().map(|t| w.visible(a, t)).collect();
-    assert!(counts.iter().all(|n| *n >= 1) || counts.iter().filter(|n| **n >= 1).count() >= 3, "{counts:?}");
+    assert_eq!(counts, vec![1; PART24_TABLES.len()], "exact rows per table for the owner");
     println!("PASS bills: a bill, a target and a card reserve were saved, and a repeated save with a stale review was refused with a 409");
 
     for other in [b, w.f.admin] {
@@ -747,7 +757,7 @@ fn bills_targets_flex_and_card_reserves_are_private_and_leave_no_private_text() 
     w.f.rt.block_on(w.f.root.batch_execute(&off)).unwrap();
     let open: Vec<i64> = PART24_TABLES.iter().map(|t| w.visible(w.f.admin, t)).collect();
     w.f.rt.block_on(w.f.root.batch_execute(&on)).unwrap();
-    assert!(open.iter().filter(|n| **n >= 1).count() >= 3, "RED expected: the admin sees rows without the rule, saw {open:?}");
+    assert_eq!(open, vec![1; PART24_TABLES.len()], "RED expected: the admin sees rows without the rule, saw {open:?}");
     println!("RED: with row security removed the admin saw {open:?} part 24 rows");
     for table in PART24_TABLES {
         assert_eq!(w.visible(w.f.admin, table), 0, "{table}");
