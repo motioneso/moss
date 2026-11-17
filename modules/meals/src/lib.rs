@@ -4,6 +4,7 @@ pub mod draft;
 pub mod input;
 pub mod jobs;
 pub mod kitchen;
+pub mod list;
 pub mod md5;
 pub mod pantry;
 pub mod plans;
@@ -13,6 +14,7 @@ pub mod safety;
 pub mod safety_terms;
 pub mod store;
 pub mod tools;
+pub mod units;
 pub mod util;
 pub mod view;
 

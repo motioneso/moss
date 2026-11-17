@@ -1,6 +1,7 @@
 //! Pantry name matching for the plan: whether a Pantry item or Staple covers an ingredient.
-//! Shopping-list quantity maths belongs to the shopping part and is not here.
+//! Coverage of a shopping need by the Pantry stock.
 use crate::rules::title_key;
+use crate::units::{convert, normalise_unit};
 
 pub struct Stock {
     pub name: String,
@@ -80,6 +81,45 @@ pub fn off_pantry<'a>(names: impl Iterator<Item = &'a str>, input: &Input) -> Ve
         .collect()
 }
 
+/// How the Pantry stock covers a need.
+#[derive(Debug, PartialEq)]
+pub enum Coverage {
+    /// All of it, or some with no amount recorded.
+    Covered,
+    /// Part of it. The value is what is still missing, in the line's unit.
+    Partial(f64),
+    None,
+}
+
+pub fn coverage(name: &str, quantity: Option<f64>, unit: Option<&str>, stock: &[Stock]) -> Coverage {
+    let matches: Vec<&Stock> = stock.iter().filter(|s| names_match(&s.name, name)).collect();
+    if matches.is_empty() {
+        return Coverage::None;
+    }
+    let Some(need) = quantity else { return Coverage::Covered };
+    if matches.iter().any(|s| s.quantity.is_none()) {
+        return Coverage::Covered;
+    }
+    let target = normalise_unit(unit);
+    let mut have = 0.0;
+    for row in matches {
+        let from = normalise_unit(row.unit.as_deref());
+        let q = row.quantity.unwrap_or(0.0);
+        if from == target {
+            have += q;
+        } else if let (Some(f), Some(t)) = (&from, &target) {
+            have += convert(q, f, t).unwrap_or(0.0);
+        }
+    }
+    if have <= 0.0 {
+        Coverage::None
+    } else if have >= need - 1e-9 {
+        Coverage::Covered
+    } else {
+        Coverage::Partial(((need - have) * 1000.0).round() / 1000.0)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -108,5 +148,15 @@ mod tests {
         };
         let names = ["Water", "olive oil", "rice", "saffron"];
         assert_eq!(off_pantry(names.into_iter(), &input), vec!["saffron"]);
+    }
+
+    #[test]
+    fn coverage_converts_and_reports_the_gap() {
+        let stock = |q: Option<f64>, u: &str| vec![Stock { name: "flour".into(), quantity: q, unit: Some(u.into()) }];
+        assert_eq!(coverage("Flour", Some(500.0), Some("g"), &stock(Some(1.0), "kg")), Coverage::Covered);
+        assert_eq!(coverage("flour", Some(500.0), Some("g"), &stock(Some(200.0), "g")), Coverage::Partial(300.0));
+        assert_eq!(coverage("flour", Some(500.0), Some("g"), &stock(Some(2.0), "cup")), Coverage::None);
+        assert_eq!(coverage("flour", Some(5.0), None, &stock(None, "g")), Coverage::Covered);
+        assert_eq!(coverage("salt", Some(1.0), None, &stock(None, "g")), Coverage::None);
     }
 }
