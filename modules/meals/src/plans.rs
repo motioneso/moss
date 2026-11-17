@@ -68,6 +68,7 @@ fn load_view<H: Host + ?Sized>(host: &H, plan: &Value) -> Result<Value> {
         &meals,
         &recipes,
         &kitchen::view(host)?,
+        &crate::cooking::read_marks(host)?,
     ))
 }
 
