@@ -59,3 +59,85 @@ scripts/run-gate.sh start --gate test:rust-goals-live
   part yet, so it is listed here as not built.
 - Nothing was checked from a phone or a second device. This part has no screen, so there
   was nothing to look at from another device.
+
+## Goals chat tools and Today data (part 5)
+
+Task JS-290, Card 604. Release note Category: N/A.
+
+### What was built
+
+Part 4 already supplied the signed registry package, both owner-only tables, the three unchanged
+legacy SQL files and the five goal routes. This part reuses those route handlers and adds:
+
+- The five existing tools: list goals, read one goal, create a goal, change a goal and add
+  evidence. Replies retain the old `data` envelope. Reading a goal returns its ten newest
+  evidence summaries, with only the kind, source label and summary in each entry.
+- A signed-in tool transport at `POST /api/m/goals/goals/tools/run`. It crosses the existing
+  trusted host tool service before running the handler. Writes require a one-use approval for
+  the same person, tool and exact inputs. Read tools follow the host's saved approval policy.
+  Nothing supplied in the request can grant approval.
+- A signed-in Today data call at `GET /api/m/goals/goals/today`. It filters the existing ordered
+  goal list to active goals, matching the old Today section. It returns an empty list when no
+  active goal belongs to the person. This part adds no screen.
+- Package feature entries describing the tools, approval refusal and Today data.
+
+The first installed tool and live-server runs refused even approved inputs. The host preserves
+JSON field order when it fingerprints approval; the guest had sorted those fields. Enabling
+`serde_json`'s existing `preserve_order` feature keeps the incoming order across the component
+boundary. The same installed test failed before this change and passed after it. No crate or
+crate version was added; the lock file only connects existing dependencies to this feature.
+
+The evidence-on-closed-goal refusal introduced in part 4 also applies through the tools. This is
+the same documented difference from the old handlers, rather than a new write path.
+
+### Proof
+
+- Native guest tests exercise tool writes and reads, the ten-evidence limit, active-state
+  filtering, second-person refusal, validation and fixed error wording. The WebAssembly
+  component runs through the real host against fixture rows, rather than a native substitute.
+- The installed component's five tool replies are compared with the existing TypeScript tool
+  handlers on a disposable database. Generated ids and timestamps are masked; all other fields
+  are compared. Tool writes are then read through the real routes. The earlier fourteen-step
+  route replay remains in the same gate.
+- Both table owner rules are checked with a second person. The same privacy assertion fails
+  when each policy is replaced with an open rule, and passes after the owner rule is restored.
+  A separate administrator also gets no private goal or evidence through tools or Today.
+- Planted goal and evidence text is absent from stored job payloads and real host activity.
+  The error-text assertion is run with its fixed-message protection removed, and the activity
+  assertion with request logging deliberately added. Each fails with the protection removed;
+  each passes again after restoration. The control script restores source even if a control
+  fails. The manifest allows no job, model or network capability.
+- The live gate installs the signed package and calls all five tools and Today through the
+  real Rust HTTPS server. It uses real fixture account sign-in, verifies the certificate and
+  origin, refuses an untrusted origin, checks missing sign-in and approval, reads tool-created goals through routes, checks
+  consumed approval, and verifies a second account cannot read them. No response is intercepted
+  or rewritten. The planted text is absent from the server log.
+
+Commands run from `~/Jarv1s`, with task-owned `CARGO_HOME`, `RUSTUP_HOME` and
+`CARGO_TARGET_DIR` in scratch storage. All commands below expect exit code **0**:
+
+```bash
+scripts/run-gate.sh start --gate test:rust-goals
+scripts/run-gate.sh start --gate test:rust-goals-live
+pnpm typecheck
+pnpm check:file-size
+```
+
+The Goals gate includes the native tests, component build, package tests, installed tests and
+source-removal privacy controls. Both builds execute tool tests: native fixture tests and real
+installed-component database tests. Changed TypeScript files also pass ESLint; changed supported
+files pass Prettier and changed Rust files pass rustfmt checks. The proof artifact records the
+actual command output and the independent review.
+
+### Not proven or not built
+
+- No Today screen or chat approval screen. The Today screen is part 6; this part supplies only
+  its data. A full chat conversation is not exercised; tools are called through the real host
+  service and HTTPS transport using a fixture's trusted approval grant.
+- No Memory sync or reconcile jobs. The task explicitly limits this part to tools and Today
+  data, despite the broader plan's background-job row mentioning part 5. The package declares
+  no queues. Account export and deletion remain as listed in the part 4 report.
+- No physical phone, laptop or tailnet check. The live gate uses the real HTTPS server through this machine's
+  non-loopback network address, with sharing enabled only on its disposable fixture. This part has no screen and does not establish second-device acceptance.
+- No private user records or production database are used. No Workshop or Food work, global
+  install, or new Rust crate is included.

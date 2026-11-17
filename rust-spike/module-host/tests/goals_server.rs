@@ -82,11 +82,18 @@ fn installed_goals_package_serves_routes_from_the_real_server() {
     );
     assert!(!port.0.is_empty());
     let origin = format!("https://localhost:{}", port.0);
+    let address: std::net::IpAddr = std::env::var("JS290_PROOF_ADDRESS")
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert!(!address.is_loopback() && address.is_ipv4());
+    let remote_origin = format!("https://{address}:{}", port.0);
     let cert = root.join("tls/certificate.pem");
     assert!(Command::new(std::env::var("JS170_CERTIFICATE").unwrap())
         .args(["local-certificate"])
         .arg(root.join("tls"))
         .arg(&origin)
+        .arg(&remote_origin)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
@@ -119,7 +126,7 @@ fn installed_goals_package_serves_routes_from_the_real_server() {
     );
     private(
         &root.join("network.json"),
-        &json!({"listen":format!("127.0.0.1:{}",port.0),"origins":[origin],"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
+        &json!({"listen":format!("0.0.0.0:{}",port.0),"sharing":true,"origins":[origin,remote_origin],"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
     );
     let client = reqwest::blocking::Client::builder()
         .add_root_certificate(reqwest::Certificate::from_pem(&fs::read(&cert).unwrap()).unwrap())
@@ -333,7 +340,7 @@ fn installed_goals_package_serves_routes_from_the_real_server() {
             db.execute("INSERT INTO app.users (id, name, email, email_verified, created_at, updated_at, is_instance_admin, status) VALUES ($1, 'Goals other', 'goals-other@example.test', false, now(), now(), false, 'active')", &[&id]).await.unwrap();
             db.execute("INSERT INTO app.auth_accounts (id, account_id, provider_id, user_id, password, created_at, updated_at) SELECT gen_random_uuid(), $1::uuid::text, 'credential', $1::uuid, password, now(), now() FROM app.auth_accounts WHERE user_id = $2::uuid AND provider_id = 'credential'", &[&id, &owner]).await.unwrap();
         });
-        let signed = client.post(format!("{origin}/api/auth/sign-in/email")).header("origin", &origin)
+        let signed = client.post(format!("{remote_origin}/api/auth/sign-in/email")).header("origin", &remote_origin)
             .json(&json!({"email":"goals-other@example.test","password":"temporary-goals-password-287-not-a-real-secret"})).send().unwrap();
         assert_eq!(signed.status(), 200, "second person sign-in");
         signed.headers()["set-cookie"]
@@ -347,8 +354,8 @@ fn installed_goals_package_serves_routes_from_the_real_server() {
     let log = || fs::read_to_string(root.join("server.log")).unwrap_or_default();
     let call = |method: reqwest::Method, path: &str, cookie: Option<&str>, body: Option<Value>| {
         let mut request = client
-            .request(method, format!("{origin}/api/m/goals{path}"))
-            .header("origin", &origin);
+            .request(method, format!("{remote_origin}/api/m/goals{path}"))
+            .header("origin", &remote_origin);
         if let Some(cookie) = cookie {
             request = request.header("cookie", cookie);
         }
@@ -366,6 +373,19 @@ fn installed_goals_package_serves_routes_from_the_real_server() {
     let json_of = |text: &str| serde_json::from_str::<Value>(text).unwrap_or(Value::Null);
     use reqwest::Method;
     const MARK: &str = "PLANTED-LIVE-MARKER-7d2e";
+    assert_eq!(
+        client
+            .post(format!("{remote_origin}/api/m/goals/goals/tools/run"))
+            .header("origin", "https://untrusted.example")
+            .header("cookie", &cookie)
+            .json(&json!({"tool":"goals.list","parameters":{}}))
+            .send()
+            .unwrap()
+            .status()
+            .as_u16(),
+        403
+    );
+    println!("PASS live network: real non-loopback HTTPS with certificate verification; untrusted origin refused");
     assert_eq!(call(Method::GET, "/goals", None, None).0, 401);
     // The server answers 503, or holds the request, until its module host has finished starting.
     let started = std::time::Instant::now();
