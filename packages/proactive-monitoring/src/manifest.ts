@@ -43,7 +43,7 @@ export const proactiveMonitoringModuleManifest = {
     {
       id: "proactive-monitoring.rust-server",
       description:
-        "The Rust server lists cards and accepts a refresh with the same answers as this server. A refresh queues no scan there yet because no scanners are installed, and the Rust app's Today still shows sample data."
+        "The Rust server lists cards and accepts refresh like this one. It scans nothing yet because no scanners are installed there, and the Rust app's Today still shows sample data."
     }
   ],
   permissions: [

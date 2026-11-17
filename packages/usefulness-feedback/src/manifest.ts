@@ -54,7 +54,7 @@ export const usefulnessFeedbackModuleManifest = {
     {
       id: "usefulness-feedback.rust-server",
       description:
-        "The Rust server records, lists, undoes and edits usefulness feedback with the same answers as this server. Dismissing a card there hides it and undo brings it back. It cannot yet turn a Remember this signal into a memory, and chat message and briefing signals are refused until their checks move over."
+        "The Rust server records, lists, undoes and edits feedback like this one. Dismiss hides a card and undo restores it. Remember this and chat or briefing signals are not supported there yet."
     },
     {
       id: "usefulness-feedback.record-only",
