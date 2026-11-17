@@ -57,7 +57,7 @@ fn private(path: &Path, value: &Value) {
 
 #[test]
 #[ignore = "Only through verify-gate and the Plaid probe live gate"]
-fn installed_web_research_package_serves_status_from_the_real_server() {
+fn the_installed_plaid_probe_talks_to_plaid_through_the_host_on_the_real_server() {
     assert_eq!(std::env::var("JARVIS_GATE_RUN").as_deref(), Ok("1"));
     let scratch = tempfile::tempdir().unwrap();
     let root = scratch.path();
@@ -220,7 +220,7 @@ fn installed_web_research_package_serves_status_from_the_real_server() {
     let artifacts: Vec<Artifact> = [("JS295_PLAID_WASM", "plaidprobe")]
         .iter()
         .map(|(variable, id)| {
-            let manifest: moss_module_host::manifest::Manifest = serde_json::from_slice(&fs::read("rust-spike/module-host/probes/plaid/moss.module.json").unwrap()).unwrap();
+            let manifest: moss_module_host::manifest::Manifest = serde_json::from_slice(&fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/probes/plaid/moss.module.json")).unwrap()).unwrap();
             manifest.validate(&"0.1.0".parse().unwrap()).unwrap();
             let bytes = moss_module_host::archive::pack(&BTreeMap::from([
                 ("moss.module.json".into(), serde_json::to_vec(&manifest).unwrap()),
