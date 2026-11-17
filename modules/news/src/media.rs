@@ -54,7 +54,10 @@ pub fn image_article<H: Host + ?Sized>(host: &H, id: &str) -> Result<Option<Valu
             && parse_ms(article["publishedAt"].as_str().unwrap_or_default()).unwrap_or_default() >= cutoff
     });
     let found = matches.next().cloned();
-    Ok(if matches.next().is_some() { None } else { found })
+    if matches.next().is_some() || crate::feedback::dismissed(host)?.iter().any(|hidden| hidden == id) {
+        return Ok(None);
+    }
+    Ok(found)
 }
 
 /// The first bytes of a base64 string, enough to read a picture's signature.

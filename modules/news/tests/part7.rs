@@ -227,12 +227,16 @@ fn story_feedback_refuses_bad_input() {
 #[test]
 fn a_story_marked_less_is_hidden_from_every_read_until_undone() {
     let f = Fake::new();
-    store_page(&f, A, vec![article(1, None), article(2, None)], FUTURE);
+    store_page(&f, A, vec![article(1, Some("https://img.example.com/1.png")), article(2, None)], FUTURE);
+    f.page("https://img.example.com/1.png", 200, "image/png", PNG_B64);
     assert_eq!(heads(&f), vec!["a1", "a2"]);
+    assert_eq!(image_route(&f, "/images/:article_id", "article_id", "a1").status, 200, "the picture loads before the mark");
     let id = mark(&f, "a1", "less_like_this", None).1["feedback"]["id"].as_str().unwrap().to_owned();
     assert_eq!(heads(&f), vec!["a2"]);
     let beat = tool(&f, "news.heartbeatHeadlines", json!({})).unwrap();
     assert_eq!(beat["data"]["items"].as_array().unwrap().len(), 1);
+    let hidden_pic = |f: &Fake| image_route(f, "/images/:article_id", "article_id", "a1").status;
+    assert_eq!(hidden_pic(&f), 404, "a hidden story serves no picture");
     f.route("POST", "/story-feedback/:id/undo", &[("id", &id)], Value::Null);
     assert_eq!(heads(&f), vec!["a1", "a2"]);
 }

@@ -11,6 +11,8 @@ use serde_json::{json, Map, Value};
 pub const TABLE: &str = "app.news_story_feedback";
 const LESS: &str = "less_like_this";
 const REASON_MAX: usize = 500;
+/// The host returns at most this many rows. The newest marks win past it.
+const HIDDEN_MAX: u32 = 1000;
 
 fn dto(row: &Value) -> Result<Value> {
     let bad = || Error::new("Invalid news row");
@@ -28,7 +30,10 @@ fn dto(row: &Value) -> Result<Value> {
 /// Story references the person marked "less like this". Read on every page read, so a page
 /// stored before the mark still hides the story.
 pub fn dismissed<H: Host + ?Sized>(host: &H) -> Result<Vec<String>> {
-    let rows = Client(host).query(TABLE, &Query::select(Filter::eq("kind", LESS)))?;
+    let mut query = Query::select(Filter::eq("kind", LESS));
+    query.order = vec![Order { column: "updated_at".into(), descending: true }];
+    query.limit = Some(HIDDEN_MAX);
+    let rows = Client(host).query(TABLE, &query)?;
     Ok(rows.iter().filter_map(|row| row["story_ref"].as_str().map(str::to_owned)).collect())
 }
 

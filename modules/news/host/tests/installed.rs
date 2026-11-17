@@ -876,6 +876,9 @@ fn story_feedback_belongs_to_the_person_hides_the_story_and_leaks_no_text() {
     w.f.rt.block_on(w.f.root.batch_execute(&format!("ALTER TABLE {table} ENABLE ROW LEVEL SECURITY; ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))).unwrap();
     assert!(open >= 1, "RED expected: feedback leaks with row security removed, got {open}");
     println!("RED then GREEN: {table} leaks with row security removed and is closed again after");
+    // Deleting an account removes its feedback by cascade.
+    let cascade: i64 = w.f.rt.block_on(w.f.root.query_one("SELECT count(*) FROM pg_constraint WHERE conrelid='app.news_story_feedback'::regclass AND contype='f' AND confdeltype='c'", &[])).unwrap().get(0);
+    assert_eq!(cascade, 1, "the owner link cascades on account deletion");
     // The reason reaches no queue table.
     w.tool(a, "news.refreshNews", json!({}));
     for queue_table in ["moss_queue.jobs", "moss_queue.schedules"] {
