@@ -424,7 +424,7 @@ fn installed_finance_package_serves_routes_from_the_real_server() {
         Method::POST,
         "/finance/manual/entries",
         Some(&cookie),
-        Some(json!({"operationId":uuid::Uuid::new_v4().to_string(),"accountId":account,"name":NAME,"date":"2026-11-10","amountCents":-500,"isoCurrency":"USD","note":NOTE,"cleared":true})),
+        Some(json!({"operationId":uuid::Uuid::new_v4().to_string(),"accountId":account,"name":NAME,"date":"2026-11-10","amountCents":-500,"isoCurrency":"USD","notes":NOTE,"cleared":true})),
     );
     assert_eq!(status, 200, "{text}\n{}", log());
     let (_, text) = call(Method::GET, "/finance/accounts", Some(&cookie), None);

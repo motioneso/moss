@@ -53,6 +53,12 @@ impl World {
             }
         });
         f.rt.block_on(f.root.execute("DELETE FROM moss_modules.catalog", &[])).unwrap();
+        // Rows left by an earlier run in this throwaway database must not reach the marker scan.
+        f.rt.block_on(f.root.batch_execute(
+            "DO $$ BEGIN IF to_regclass('app.finance_activity') IS NOT NULL THEN \
+             TRUNCATE app.finance_activity, app.finance_transactions, app.finance_accounts CASCADE; END IF; END $$",
+        ))
+        .unwrap();
         let dir = tempfile::tempdir().unwrap();
         let reg = tempfile::tempdir().unwrap();
         let wasm = std::fs::read(std::env::var("FINANCE_COMPONENT_WASM").expect("Run modules/finance/tools/check.sh")).unwrap();
@@ -104,7 +110,7 @@ impl World {
             actor,
             "POST",
             "/finance/manual/accounts",
-            json!({"operationId":op.to_string(),"name":name,"accountType":"checking","isoCurrency":"USD","openingDate":"2026-01-01","openingBalanceCents":cents}),
+            json!({"operationId":op.to_string(),"name":name,"accountType":"checking","isoCurrency":"USD","cleared":true,"openingDate":"2026-01-01","openingBalanceCents":cents}),
         )
     }
 }
@@ -122,7 +128,7 @@ fn a_second_person_and_an_admin_cannot_see_or_change_another_persons_ledger() {
         a,
         "POST",
         "/finance/manual/entries",
-        json!({"operationId":Uuid::new_v4().to_string(),"accountId":account,"name":"Coffee","date":"2026-11-10","amountCents":-500,"isoCurrency":"USD","note":NOTE,"cleared":true}),
+        json!({"operationId":Uuid::new_v4().to_string(),"accountId":account,"name":"Coffee","date":"2026-11-10","amountCents":-500,"isoCurrency":"USD","cleared":true,"notes":NOTE,"cleared":true}),
     );
     assert_eq!(entry["status"], 200, "{entry}");
 
@@ -138,7 +144,7 @@ fn a_second_person_and_an_admin_cannot_see_or_change_another_persons_ledger() {
         b,
         "POST",
         "/finance/manual/entries",
-        json!({"operationId":Uuid::new_v4().to_string(),"accountId":account,"name":"Stolen","date":"2026-11-10","amountCents":-1,"isoCurrency":"USD"}),
+        json!({"operationId":Uuid::new_v4().to_string(),"accountId":account,"name":"Stolen","date":"2026-11-10","amountCents":-1,"isoCurrency":"USD","cleared":true}),
     );
     assert_eq!((theirs["status"].clone(), theirs["body"]["code"].clone()), (json!(404), json!("manual_unavailable")), "{theirs}");
     assert!(!theirs.to_string().contains(NAME), "a refusal must not show another person's account");
@@ -183,7 +189,7 @@ fn the_chat_routes_need_an_approval_that_is_exact_and_used_once() {
     let w = World::new();
     let a = w.f.a;
     let op = Uuid::new_v4();
-    let input = json!({"operationId":op.to_string(),"name":"Chat","accountType":"cash","isoCurrency":"USD","openingDate":"2026-01-01","openingBalanceCents":5});
+    let input = json!({"operationId":op.to_string(),"name":"Chat","accountType":"cash","isoCurrency":"USD","cleared":true,"openingDate":"2026-01-01","openingBalanceCents":5});
     let refused = w.call(a, "POST", "/finance/chat/manual/account-create", input.clone());
     assert_eq!(refused["status"], 500, "no approval means no write: {refused}");
     assert_eq!(w.visible(a, "app.finance_accounts"), 0);
@@ -209,12 +215,12 @@ fn names_notes_and_amounts_never_reach_job_payloads_activity_rows_or_logs() {
             w.f.a,
             "POST",
             "/finance/manual/entries",
-            json!({"operationId":Uuid::new_v4().to_string(),"accountId":account,"name":NAME,"date":"2026-11-10","amountCents":amount,"isoCurrency":"USD","note":NOTE}),
+            json!({"operationId":Uuid::new_v4().to_string(),"accountId":account,"name":NAME,"date":"2026-11-10","amountCents":amount,"isoCurrency":"USD","cleared":true,"notes":NOTE}),
         )
     };
     assert_eq!(entry(-AMOUNT / 2)["status"], 200);
     assert_eq!(entry(i64::MAX)["status"], 400, "an overflowing entry is refused");
-    w.call(w.f.b, "POST", "/finance/manual/entries", json!({"operationId":Uuid::new_v4().to_string(),"accountId":account,"name":NAME,"date":"2026-11-10","amountCents":1,"isoCurrency":"USD","note":NOTE}));
+    w.call(w.f.b, "POST", "/finance/manual/entries", json!({"operationId":Uuid::new_v4().to_string(),"accountId":account,"name":NAME,"date":"2026-11-10","amountCents":1,"isoCurrency":"USD","cleared":true,"notes":NOTE}));
     let tables: Vec<String> = w.f.rt.block_on(async {
         w.f.root
             .query(
@@ -241,7 +247,7 @@ fn names_notes_and_amounts_never_reach_job_payloads_activity_rows_or_logs() {
         assert!(stored >= 1, "{text} must be stored in the ledger");
     }
     let activity: i64 = w.f.rt.block_on(w.f.root.query_one("SELECT count(*) FROM app.finance_activity WHERE owner_user_id=$1", &[&w.f.a])).unwrap().get(0);
-    assert!(activity >= 3, "every change is logged, saw {activity}");
+    assert_eq!(activity, 2, "every change (account, one entry; the refusals write none) is logged, saw {activity}");
     for actor in [w.f.a, w.f.b, w.f.admin] {
         let seen = serde_json::to_string(&w.app.services.activity("finance", &w.f.access(actor)).unwrap()).unwrap();
         assert!(!seen.contains(NAME) && !seen.contains(NOTE) && !seen.contains(&AMOUNT.to_string()));

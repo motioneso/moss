@@ -2,7 +2,7 @@ use crate::manifest::{Manifest, PORTS};
 use access_context::AccessContext;
 use anyhow::{bail, ensure, Context, Result};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant},
@@ -335,7 +335,11 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
             || (port == "attachments" && cap.resources.contains("handed")),
         "This resource was not approved"
     );
-    reject_context(&request.parameters)?;
+    if port == "db" && request.operation == "query" {
+        reject_context_outside_columns(&request.parameters)?;
+    } else {
+        reject_context(&request.parameters)?;
+    }
     match port {
         "attachments" => ensure!(
             request.operation == "read" && uuid::Uuid::parse_str(&request.resource).is_ok(),
@@ -548,6 +552,23 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
     }
     Ok(())
 }
+/// A typed query may write a column named like an identity field (the old Finance activity log
+/// has an `actor` column). Column names in `values` are data, so only what they hold is checked.
+fn reject_context_outside_columns(parameters: &Value) -> Result<()> {
+    let Value::Object(fields) = parameters else {
+        return reject_context(parameters);
+    };
+    for (name, v) in fields {
+        if name == "values" {
+            if let Value::Object(columns) = v {
+                columns.values().try_for_each(reject_context)?;
+                continue;
+            }
+        }
+        reject_context(&json!({ name.as_str(): v }))?;
+    }
+    Ok(())
+}
 fn reject_context(value: &Value) -> Result<()> {
     match value {
         Value::Object(fields) => {
@@ -617,4 +638,21 @@ fn validate_job_parameters(manifest: &Manifest, resource: &str, parameters: &Val
         );
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod column_name_tests {
+    use super::*;
+
+    #[test]
+    fn a_typed_insert_may_name_an_actor_column_but_not_carry_identity() {
+        let ok = json!({"values":{"actor":"user","kind":"x"}});
+        assert!(reject_context_outside_columns(&ok).is_ok());
+        let nested = json!({"values":{"params":{"actorUserId":"u"}}});
+        assert!(reject_context_outside_columns(&nested).is_err());
+        let top = json!({"actor":"user","values":{}});
+        assert!(reject_context_outside_columns(&top).is_err());
+        let sql = json!({"values":{"a":1},"sql":"select 1"});
+        assert!(reject_context_outside_columns(&sql).is_err());
+    }
 }
