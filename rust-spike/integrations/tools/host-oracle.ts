@@ -167,6 +167,6 @@ if (process.argv[2] === "check") {
   console.log("host oracle: fixtures match the old code");
 } else {
   writeFileSync(manifestFile, JSON.stringify(result.manifest, null, 2) + "\n");
-  writeFileSync(casesFile, JSON.stringify(result.cases, null, 1) + "\n");
+  writeFileSync(casesFile, JSON.stringify(result.cases) + "\n");
   console.log(`wrote manifest and ${result.cases.length} view cases`);
 }

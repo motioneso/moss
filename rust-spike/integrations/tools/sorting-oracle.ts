@@ -554,6 +554,6 @@ if (process.argv[2] === "check") {
   );
   console.log("sorting fixtures match the old code");
 } else {
-  writeFileSync(file, `${JSON.stringify(plain(built), null, 1)}\n`);
+  writeFileSync(file, `${JSON.stringify(plain(built))}\n`);
   console.log("wrote", file.pathname);
 }
