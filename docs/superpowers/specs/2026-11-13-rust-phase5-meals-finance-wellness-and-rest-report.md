@@ -161,6 +161,10 @@ scripts/run-gate.sh start --gate test:rust-web-research-live
 
 - A status change on a missing suggestion answers "Candidate not found" (404), and a malformed
   id answers 400. The old code answered with a server error for both.
+- A malformed id now answers 400 on read and on resolve (the old resolve answered 503 without
+  looking at the id). A suppress that names a malformed driving id answers 404 "Suppressor not
+  found". The old code answered 500 for the read and suppress cases. None of these is replayed
+  against the old routes.
 - Marking a suggestion as not owed never saved which suggestion drove it, in the old code or here.
 
 ### Proof
@@ -183,6 +187,9 @@ scripts/run-gate.sh start --gate test:rust-commitments-live
 
 ### Not proven or not built
 
+- **Expired snoozes are not replayed against the old routes.** The "pending review" and
+  "snoozed" filters treat a past snooze as pending review, checked only in native tests. The new
+  code reads the host clock where the old code used the database clock.
 - **No way to create suggestions.** Finding them in email and chat (extraction, its start route
   and its state route) is part 8. The tests and the live run put rows in the table directly.
 - **Resolve does nothing.** The real checker that confirms a linked task or draft exists is not

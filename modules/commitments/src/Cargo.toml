@@ -3,7 +3,7 @@ name = "moss-commitments-module"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "Guest-safe Commitments: long-running commitments and their evidence"
+description = "Guest-safe Commitments: commitment suggestions and their evidence"
 
 [workspace]
 
