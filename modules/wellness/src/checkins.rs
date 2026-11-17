@@ -12,7 +12,7 @@ use serde_json::{json, Value};
 
 pub const CHECKINS: &str = "app.wellness_checkins";
 
-fn dto(row: &Value) -> Result<Value> {
+pub(crate) fn dto(row: &Value) -> Result<Value> {
     let bad = || Error::new("Invalid check-in row");
     let text = |key: &str| row[key].as_str().ok_or_else(bad);
     Ok(json!({

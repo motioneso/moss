@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "wellness",
   "name": "Wellness",
-  "description": "Private mood check-ins, medications with their schedules and dose records, therapy notes, a selective export of check-ins and therapy notes, and the choice of whether the assistant may use them. Insights, chat tools and the screens are not built yet.",
+  "description": "Private mood check-ins, medications with their schedules and dose records, therapy notes, a selective export of check-ins and therapy notes, and the choice of whether the assistant may use them. Insights worked out in code, two assistant tools that answer only while assistant access is on, and the choice of whether the assistant may use them. The screens are not built yet.",
   "publisher": "Moss",
   "version": "0.1.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
@@ -33,6 +33,11 @@
       "port": "jobs",
       "operations": ["enqueue-options"],
       "resources": ["wellness-export"]
+    },
+    {
+      "port": "tools",
+      "operations": ["offer", "run"],
+      "resources": ["wellness.recentCheckIns", "wellness.medicationAdherence"]
     }
   ],
   "database": {
@@ -134,6 +139,16 @@
     },
     {
       "method": "GET",
+      "path": "/wellness/insights",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/wellness/tools/run",
+      "signIn": true
+    },
+    {
+      "method": "GET",
       "path": "/wellness/therapy-notes",
       "signIn": true
     },
@@ -187,7 +202,7 @@
       "label": "Wellness",
       "path": "/settings?section=modules&module=wellness",
       "scope": "user",
-      "description": "Whether the assistant may use mood check-ins is read and saved through the Wellness routes. Until you choose, access stays on while Wellness is installed. The settings screen is not built yet."
+      "description": "Whether the assistant may use mood check-ins and medication counts is read and saved through the Wellness routes. Until you choose, access stays on while Wellness is installed. The settings screen is not built yet."
     }
   ],
   "features": [
@@ -235,7 +250,7 @@
     },
     {
       "id": "wellness.ai-consent",
-      "description": "A person can read and change whether the assistant may use their mood check-ins. With no saved choice, access is on while Wellness is installed. No assistant feature uses check-ins in this version, and no check-in text is sent to any model.",
+      "description": "A person can read and change whether the assistant may use their mood check-ins. With no saved choice, access is on while Wellness is installed. The assistant tools below answer only while it is on. No check-in text is sent to any model, and no Wellness job or log carries it.",
       "errors": [
         {
           "code": "wellness_consent_invalid",
@@ -252,6 +267,27 @@
           "code": "WELLNESS_CONSENT_REQUIRED",
           "class": "validation",
           "description": "The person has switched assistant access to Wellness off. Ask them to turn it on in Wellness settings first."
+        }
+      ]
+    },
+    {
+      "id": "wellness.insights",
+      "description": "A person can read insight lines worked out from their own last 30 days: the most-logged feeling, the hardest and strongest weekday, how many sad or angry check-ins carry a note, and medication adherence. Nothing shows until there are at least seven check-ins and the first is a week old. Every figure comes from stored records and fixed wording, and no model is involved. Each person sees only their own insights. The insights screen is not built yet.",
+      "errors": []
+    },
+    {
+      "id": "wellness.chat-tools",
+      "description": "Chat can list the person's 20 most recent check-ins (feeling, intensity, mood index and note) and read seven-day medication counts (scheduled, taken, skipped, as-needed, rate). The counts never name a medicine. Both tools return nothing private and answer WELLNESS_CONSENT_REQUIRED while the person has assistant access switched off, and both follow the host's approval rules. The old energy-trend note in chat memory is not written, and therapy notes and medicine names are never offered.",
+      "errors": [
+        {
+          "code": "WELLNESS_CONSENT_REQUIRED",
+          "class": "validation",
+          "description": "The person has switched assistant access to Wellness off. Ask them to turn it on in Wellness settings first."
+        },
+        {
+          "code": "approval_required",
+          "class": "validation",
+          "description": "The tool cannot run without approval. Ask for approval for this tool and try again."
         }
       ]
     },
@@ -313,6 +349,16 @@
       "errors": []
     }
   ],
+  "tools": {
+    "wellness.recentCheckIns": {
+      "description": "List the actor's 20 most recent check-ins, newest first: time, core feeling, secondary feeling, intensity, mood index and note.",
+      "risk": "read"
+    },
+    "wellness.medicationAdherence": {
+      "description": "Summarize the last seven days of medication as counts and an adherence rate. Never a medicine list.",
+      "risk": "read"
+    }
+  },
   "jobs": {
     "wellness-medication-reminder": {},
     "wellness-export": {

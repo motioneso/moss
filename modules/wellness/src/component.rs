@@ -21,6 +21,7 @@ impl Host for ComponentHost {
             "kv" => moss::module::kv::call(&request),
             "context" => moss::module::context::call(&request),
             "jobs" => moss::module::jobs::call(&request),
+            "tools" => moss::module::tools::call(&request),
             _ => return Err(Error::new("Unsupported Wellness host port")),
         }
         .map_err(|_| Error::new("Wellness host call failed"))?;

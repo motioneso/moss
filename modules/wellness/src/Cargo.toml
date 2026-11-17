@@ -43,3 +43,7 @@ path = "../tests/medications.rs"
 [[test]]
 name = "therapy_export"
 path = "../tests/therapy_export.rs"
+
+[[test]]
+name = "insights_tools"
+path = "../tests/insights_tools.rs"
