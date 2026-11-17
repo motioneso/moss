@@ -54,7 +54,7 @@ fn bad_note_bodies_get_the_old_wording() {
     let f = Fake::new();
     let cases = [
         (json!([]), "Expected JSON object body"),
-        (json!({}), "body is required"),
+        (json!({}), "body must have required property 'body'"),
         (json!({"body":"   "}), "body is required"),
         (json!({"body":"a","linkedCheckinId":5}), "linkedCheckinId must be a UUID string or null"),
         (json!({"body":"a","linkedEmotion":"glad"}), "linkedEmotion must be one of happy, sad, fear, anger, disgust, surprise"),

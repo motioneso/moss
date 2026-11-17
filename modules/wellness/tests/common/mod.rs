@@ -182,6 +182,7 @@ impl Host for Fake {
                         if order.descending { ord.reverse() } else { ord }
                     });
                 }
+                assert!(query.limit.is_none_or(|n| (1..=1000).contains(&n)), "the host refuses a limit over 1000");
                 Ok(json!(found.into_iter().take(query.limit.unwrap_or(1000) as usize).collect::<Vec<_>>()))
             }
             Kind::Insert => {

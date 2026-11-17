@@ -47,6 +47,9 @@ struct Draft {
 
 fn parse(body: &Value) -> std::result::Result<Draft, String> {
     let map = body.as_object().ok_or("Expected JSON object body")?;
+    if !map.contains_key("body") {
+        return Err("body must have required property 'body'".into());
+    }
     let text = match map.get("body") {
         Some(Value::String(t)) if !t.trim().is_empty() => t.trim().to_owned(),
         _ => return Err("body is required".into()),

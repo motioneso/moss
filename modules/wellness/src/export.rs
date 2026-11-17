@@ -21,6 +21,8 @@ pub const FILES: &str = "wellness.export-files";
 const KEEP: i64 = 24;
 const STALE_MINUTES: i64 = 15;
 const PRUNE_DAYS: i64 = 7;
+/// The most rows the host returns for one query.
+const ROW_CAP: u32 = 1000;
 const MAX_PAGE_BYTES: usize = 2 * 1024 * 1024;
 const MAX_RANGE_DAYS: f64 = 366.0;
 const FAILED: &str = "The export could not be built. Start it again.";
@@ -239,8 +241,13 @@ fn range_rows<H: Host + ?Sized>(host: &H, table: &str, column: &str, window: &Wi
         Order { column: column.into(), descending: false },
         Order { column: "id".into(), descending: false },
     ];
-    query.limit = Some(5000);
-    Client(host).query(table, &query)
+    query.limit = Some(ROW_CAP);
+    let rows = Client(host).query(table, &query)?;
+    // A full page may hide more rows, so the person is asked for a shorter range.
+    if rows.len() as u32 >= ROW_CAP {
+        return Err(Error::new("too large"));
+    }
+    Ok(rows)
 }
 
 fn checkin_item(row: &Value) -> Result<Value> {
