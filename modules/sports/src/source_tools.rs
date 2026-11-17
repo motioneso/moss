@@ -90,7 +90,7 @@ pub fn run<H: Host + ?Sized>(host: &H, teams: &dyn TeamList, payload: &str) -> R
     };
     let id = source.as_deref();
     Ok(match tool {
-        "sports.listSources" => json!({"data":{"sources":sources::list(host)?}}),
+        "sports.listSources" => reply(routes::list(host)?),
         "sports.previewSource" => reply(routes::preview_new(host, teams, &request("POST", "/sources/preview", None, body()))?),
         "sports.previewSourceAssignments" => {
             reply(routes::preview_assignments(host, teams, &request("POST", "/sources/:id/assignments/preview", id, body()))?)
