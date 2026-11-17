@@ -583,8 +583,15 @@ None added.
   seen failing with the row protection switched off, then passing again with
   it restored.
 - Native and WebAssembly builds with tests in both, through the module gates.
-- Live run on the real Rust server with the stand-in Google and mail servers:
-  (filled in after the run).
+- Live run on the real Rust server with the stand-in Google and mail servers
+  (the Connectors live command, which installs Tasks, Calendar, Email and
+  Connectors together): passed.
+- Gate results after the final change: Email gate passed (22 of 22 database
+  tests, plus the registry test). Connectors gate passed except the old Google
+  limiter test that already failed before this part. One Connectors writes
+  test failed once because earlier tests had left revoked accounts behind. The
+  test now skips revoked accounts, and the writes and database suites passed
+  on rerun.
 
 ## Differences from the old app
 
@@ -605,4 +612,7 @@ None added.
 - The two settings screen tests in the Notes package that were already
   failing before this part (settings_input). They fail the same way without
   these changes.
-- (live run outcome filled in after the run)
+- The separate Email live command. It installs Connectors but not Calendar,
+  which Email now requires, so it stops with "calendar missing". This
+  predates part 13 and was left alone. The Connectors live command covers
+  the same ground.
