@@ -111,6 +111,16 @@
       "signIn": true
     },
     {
+      "method": "GET",
+      "path": "/images/:articleId",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/favicon/:domain",
+      "signIn": true
+    },
+    {
       "method": "POST",
       "path": "/refresh",
       "signIn": true
