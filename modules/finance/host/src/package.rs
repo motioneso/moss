@@ -34,6 +34,12 @@ pub fn files(root: &Path, component: &[u8]) -> Result<BTreeMap<String, Vec<u8>>>
                 "sql/0369_finance_link_sessions.sql" => {
                     "90878a1e9d96baa12b9596f76cb3393145d7c7eaedade0b0f4a6b97f0412e38a"
                 }
+                "sql/0371_finance_shared_accounts.sql" => {
+                    "c0f3796f4f3eb2ed3072b473bdf9db624bf121a06d22c6d90a11fc459ebfcf2e"
+                }
+                "sql/0372_finance_shared_transactions.sql" => {
+                    "0e59098faa58612b45a26f6df2184de89a5e14c485af5ad41e2bf011d49decbd"
+                }
                 _ => "",
             };
             anyhow::ensure!(
