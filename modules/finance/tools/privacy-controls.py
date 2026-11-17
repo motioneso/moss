@@ -7,7 +7,7 @@ from pathlib import Path
 import subprocess
 
 assert os.environ.get("JARVIS_GATE_RUN") == "1", "Use verify-gate"
-target = Path(os.environ["CARGO_TARGET_DIR"])
+target = Path(os.environ.get("CARGO_TARGET_DIR", "/tmp/moss-finance-host"))
 
 
 def run(manifest, test, case, extra, output, env=None):
@@ -70,6 +70,13 @@ control("connect activity", "modules/finance/src/connect.rs",
         '"bank.connect" }, json!({"itemId":item_id,"name":listing.accounts[0].name}), None)',
         "modules/finance/host/Cargo.toml", "installed", BANK, ["--ignored", "--test-threads=1"], target,
         rebuild=True)
+# A bill activity row holds the plan id only. Put the bill name into it and the part 24 scan must fail.
+PART24 = "bills_targets_flex_and_card_reserves_are_private_and_leave_no_private_text"
+control("bill activity", "modules/finance/src/bills.rs",
+        'log_as(host, "user", "bill.create", json!({"planId":id}), None)?;',
+        'log_as(host, "user", "bill.create", json!({"planId":id,"name":name}), None)?;',
+        "modules/finance/host/Cargo.toml", "installed", PART24, ["--ignored", "--test-threads=1"], target,
+        rebuild=True)
 # Re-run the assertions after restoring their guards; a negative control alone is not proof.
 # The control build reused the guest output folder, so rebuild the shipped component from restored source.
 subprocess.run(["modules/finance/tools/build-component.sh", str(target / "module.wasm")], check=True,
@@ -79,6 +86,7 @@ for manifest, test, case, extra, output in [
     ("modules/finance/host/Cargo.toml", "installed", HOST, ["--ignored", "--test-threads=1"], target),
     ("modules/finance/host/Cargo.toml", "installed", BUDGET, ["--ignored", "--test-threads=1"], target),
     ("modules/finance/host/Cargo.toml", "installed", BANK, ["--ignored", "--test-threads=1"], target),
+    ("modules/finance/host/Cargo.toml", "installed", PART24, ["--ignored", "--test-threads=1"], target),
 ]:
     subprocess.run(["cargo", "+1.95.0", "test", "--locked", "--offline", "--manifest-path",
                     manifest, "--test", test, case, "--", *extra],
