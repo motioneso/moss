@@ -323,9 +323,48 @@ fn installed_finance_package_serves_routes_from_the_real_server() {
     }
     drop(installer);
 
+    // The stand-in bank runs as its own process. The server reaches it only through its debug-only
+    // bank address setting, so the whole route path is the real one.
+    const BANK_TOKEN: &str = "LIVETOKEN-4f2a";
+    const BANK_TEXT: &str = "LIVEBANKTEXT-77c1";
+    const BANK_CLIENT: &str = "live-client-id";
+    const BANK_SECRET: &str = "live-client-secret-9e";
+    let mut bank = Command::new(std::env::var("JS305_FAKE_PLAID").unwrap())
+        .env("FAKE_PLAID_CLIENT_ID", BANK_CLIENT)
+        .env("FAKE_PLAID_SECRET", BANK_SECRET)
+        .env("FAKE_PLAID_MARKER", BANK_TOKEN)
+        .env("FAKE_PLAID_PRIVATE_MARKER", BANK_TEXT)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut bank_in = bank.stdin.take().unwrap();
+    let mut first = String::new();
+    std::io::BufRead::read_line(&mut std::io::BufReader::new(bank.stdout.take().unwrap()), &mut first).unwrap();
+    let _bank = Server(bank);
+    let bank_url = first.trim().strip_prefix("endpoint ").unwrap().to_owned();
+    let services = moss_module_host::services::ServicePorts::new(
+        &root.join("data"),
+        std::sync::Arc::new(
+            safety_core::secret::SecretCipher::connectors(&[("JARVIS_CONNECTOR_SECRET_KEY".into(), connector_key.clone())].into()).unwrap(),
+        ),
+        std::sync::Arc::new(NoModel),
+        std::sync::Arc::new(moss_module_host::runtime::DenyPorts),
+    )
+    .unwrap();
+    services
+        .set_credential(
+            &AccessContext::new(uuid::Uuid::nil(), "configure"),
+            "finance",
+            "plaid-keys",
+            &safety_core::secret::SecretFields::new()
+                .with("clientId", safety_core::secret::Secret::new(BANK_CLIENT))
+                .with("clientSecret", safety_core::secret::Secret::new(BANK_SECRET)),
+        )
+        .unwrap();
     private(
         &root.join("modules.json"),
-        &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"ai_key":ai_key}),
+        &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"ai_key":ai_key,"test_only_plaid_url":bank_url}),
     );
     let _server = start(true);
     // Setup allows one owner over HTTP, so the second person is made in the database with the
@@ -553,6 +592,78 @@ fn installed_finance_package_serves_routes_from_the_real_server() {
         db.query_one("SELECT count(*) FROM app.finance_activity", &[]).await.unwrap().get(0)
     });
     assert!(stored >= 2, "the changes are logged");
+    // Bank connect and sync through the real routes. The person finishes the stand-in's bank page
+    // by a command to the stand-in, as they would in a browser.
+    let finish = |bank_in: &mut std::process::ChildStdin, line: &str| {
+        use std::io::Write;
+        writeln!(bank_in, "{line}").unwrap();
+        bank_in.flush().unwrap();
+    };
+    let names = |who: &str| -> Vec<String> {
+        let (_, text) = call(Method::GET, "/finance/accounts", Some(who), None);
+        json_of(&text)["accounts"].as_array().unwrap().iter().map(|a| a["name"].as_str().unwrap_or_default().to_owned()).collect()
+    };
+    let (status, text) = call(Method::POST, "/finance/connect/start", Some(&cookie), Some(json!({})));
+    assert_eq!(status, 200, "{text}\n{}", log());
+    assert_eq!(json_of(&text)["status"], "pending");
+    assert!(json_of(&text)["hostedLinkUrl"].as_str().unwrap().starts_with("https://"));
+    let (_, text) = call(Method::POST, "/finance/connect/poll", Some(&cookie), Some(json!({})));
+    assert_eq!(json_of(&text)["pending"], 1, "{text}");
+    finish(&mut bank_in, "finish");
+    let (status, text) = call(Method::POST, "/finance/connect/poll", Some(&cookie), Some(json!({})));
+    assert_eq!((status, json_of(&text)["completed"].clone()), (200, json!(1)), "{text}\n{}", log());
+    let owned = names(&cookie);
+    assert_eq!(owned.iter().filter(|n| n.contains(BANK_TEXT)).count(), 2, "{owned:?}");
+    assert_eq!(names(&other).len(), 0);
+    let (_, text) = call(Method::POST, "/finance/sync/run-now", Some(&other), Some(json!({})));
+    assert_eq!(json_of(&text)["items"], json!([]), "{text}");
+    let (_, text) = call(Method::POST, "/finance/sync/run-now", Some(&cookie), Some(json!({})));
+    assert_eq!(json_of(&text)["items"][0]["status"], "connected", "{text}");
+    println!("PASS live bank: connected, synced and kept private from the second person");
+    finish(&mut bank_in, "fail 0 ITEM_LOGIN_REQUIRED");
+    let (_, text) = call(Method::POST, "/finance/sync/run-now", Some(&cookie), Some(json!({})));
+    assert_eq!(json_of(&text)["items"][0]["status"], "reauth-required", "{text}");
+    assert_eq!(names(&cookie).len(), owned.len(), "a failed bank keeps its data");
+    println!("PASS live bank: a failing bank is marked as needing a reconnect and keeps its data");
+    let (status, text) = call(Method::POST, "/finance/connect/start", Some(&cookie), Some(json!({})));
+    assert_eq!(status, 200, "{text}\n{}", log());
+    finish(&mut bank_in, "finish");
+    let (_, text) = call(Method::POST, "/finance/connect/poll", Some(&cookie), Some(json!({})));
+    assert_eq!(json_of(&text)["completed"], 1, "{text}");
+    let (_, text) = call(Method::POST, "/finance/sync/run-now", Some(&cookie), Some(json!({})));
+    assert_eq!(json_of(&text)["items"][0]["status"], "connected", "{text}");
+    assert_eq!(names(&cookie).len(), owned.len(), "a reconnect adds no second bank");
+    println!("PASS live bank: reconnected, one bank, sync works again");
+    // Activity rows, job rows and the server log hold no bank token, key or bank text.
+    let activity = serde_json::to_string(&services.activity("finance", &access).unwrap()).unwrap();
+    runtime.block_on(async {
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let tables: Vec<String> = db
+            .query("SELECT table_schema||'.'||table_name FROM information_schema.tables WHERE table_schema='moss_queue' OR table_name LIKE 'finance\\_%'", &[])
+            .await
+            .unwrap()
+            .iter()
+            .map(|r| r.get(0))
+            .collect();
+        for table in &tables {
+            for marker in [BANK_TOKEN, BANK_SECRET, BANK_CLIENT, "access-sandbox", "public-sandbox"] {
+                let hits: i64 = db.query_one(&format!("SELECT count(*) FROM {table} t WHERE to_jsonb(t)::text LIKE '%'||$1||'%'"), &[&marker]).await.unwrap().get(0);
+                assert_eq!(hits, 0, "{table} holds {marker}");
+            }
+            if table.starts_with("moss_queue.") || table.ends_with("finance_activity") {
+                let hits: i64 = db.query_one(&format!("SELECT count(*) FROM {table} t WHERE to_jsonb(t)::text LIKE '%'||$1||'%'"), &[&BANK_TEXT]).await.unwrap().get(0);
+                assert_eq!(hits, 0, "{table} holds bank text");
+            }
+        }
+    });
+    for marker in [BANK_TOKEN, BANK_TEXT, BANK_SECRET, "access-sandbox"] {
+        assert!(!activity.contains(marker));
+        assert!(!log().contains(marker), "the server log holds {marker}");
+    }
+    println!("PASS live bank: no token, key or bank text in jobs, activity rows or the server log");
     for marker in [NAME, NOTE, PAYEE, IMPORT_NOTE, &CENTS.to_string()] {
         assert!(!activity.contains(marker));
         assert!(!log().contains(marker), "the server log holds {marker}");

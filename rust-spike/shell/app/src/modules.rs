@@ -88,6 +88,10 @@ pub struct Settings {
     /// Never set in a real install.
     #[serde(default)]
     pub(crate) test_only_mail: Option<TestOnlyMail>,
+    /// TEST ONLY. An http loopback address of a stand-in Plaid. Bank calls go there instead of
+    /// to Plaid. Refused in a release build.
+    #[serde(default)]
+    pub(crate) test_only_plaid_url: Option<String>,
     /// The helper browser for one person's Outlook calendar. Absent means no Outlook calendar
     /// reader. The address must be plain http on this machine.
     #[serde(default)]
@@ -360,6 +364,16 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
     let connectors_key = settings.connector_key.clone();
     let connectors_worker_url = settings.worker_url.clone();
     let google_test_url = settings.test_only_google_token_url.clone();
+    if let Some(url) = &settings.test_only_plaid_url {
+        anyhow::ensure!(
+            cfg!(debug_assertions),
+            "test_only_plaid_url is only allowed in a debug build"
+        );
+        eprintln!("WARNING: test_only_plaid_url is set. Bank calls go to {url}, not to Plaid.");
+        moss_module_host::network::set_test_transport(Some(Arc::new(
+            moss_module_host::network::LoopbackRedirect::new(url)?,
+        )));
+    }
     let mail_test = settings.test_only_mail;
     let outlook = settings
         .outlook_browser

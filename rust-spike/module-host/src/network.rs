@@ -167,3 +167,59 @@ impl Transport for Network {
         )
     }
 }
+
+/// TEST ONLY. In a debug build a test can place a stand-in for every outbound service call.
+/// A release build ignores it, so a real install can never be redirected this way.
+static TEST_TRANSPORT: std::sync::Mutex<Option<std::sync::Arc<dyn Transport>>> =
+    std::sync::Mutex::new(None);
+
+pub fn set_test_transport(transport: Option<std::sync::Arc<dyn Transport>>) {
+    if cfg!(debug_assertions) {
+        *TEST_TRANSPORT.lock().unwrap() = transport;
+    }
+}
+
+pub fn test_transport() -> Option<std::sync::Arc<dyn Transport>> {
+    if cfg!(debug_assertions) {
+        TEST_TRANSPORT.lock().unwrap().clone()
+    } else {
+        None
+    }
+}
+
+/// TEST ONLY. Sends each call to a plain http server on this machine, with the original host
+/// as the first path segment. Used to point a live run at a stand-in service.
+pub struct LoopbackRedirect {
+    base: Url,
+}
+impl LoopbackRedirect {
+    pub fn new(base: &str) -> Result<Self> {
+        let base = Url::parse(base)?;
+        ensure!(base.scheme() == "http", "The stand-in address must be plain http");
+        let local = match base.host() {
+            Some(url::Host::Ipv4(a)) => a.is_loopback(),
+            Some(url::Host::Domain(d)) => d == "localhost",
+            _ => false,
+        };
+        ensure!(local, "The stand-in address must be on this machine");
+        Ok(Self { base })
+    }
+}
+impl Transport for LoopbackRedirect {
+    fn send(&self, r: Outbound<'_>) -> Result<Response> {
+        let host = r.url.host_str().context("No host")?;
+        let target = format!(
+            "{}/{host}{}",
+            self.base.as_str().trim_end_matches('/'),
+            r.url.path()
+        );
+        let client = Client::builder().timeout(r.timeout).build()?;
+        let mut call = client.request(r.method, target).headers(r.headers);
+        if let Some(body) = r.body {
+            call = call.json(&body);
+        }
+        let reply = call.send()?;
+        let status = reply.status().as_u16();
+        Ok(Response { status, body: reply.bytes()?.to_vec() })
+    }
+}

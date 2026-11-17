@@ -1,6 +1,6 @@
 //! Assistant tools. The host enforces the account's approval policy before a write tool arrives.
 use crate::transactions::Merchant;
-use crate::{accounts, categories, csv_import, input::Refusal, ledger, rules, sort_run, splits, transactions};
+use crate::{accounts, categories, connect, csv_import, input::Refusal, ledger, rules, sort_run, splits, sync, transactions};
 use moss_module_sdk::{Error, Host, Response, Result};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -26,6 +26,7 @@ fn status_code(code: &str) -> u16 {
         | "stale_rules" | "duplicate_name" | "split_transaction" | "linked_transfer" | "amount_mismatch"
         | "new_merchant" | "merchant_seen" => 409,
         "manual_unavailable" | "not_found" => 404,
+        "bank_unavailable" => 502,
         _ => 400,
     }
 }
@@ -43,6 +44,9 @@ pub fn execute<H: Host + ?Sized>(host: &H, request: Request) -> Result<Value> {
         "finance.manual.context" => accounts::context(host),
         "finance.manual.account-create" => Ok(settle(ledger::create_account(host, &request.parameters)?)),
         "finance.manual.entry-create" => Ok(settle(ledger::create_entry(host, &request.parameters)?)),
+        "finance.connect.start" => Ok(settle(connect::start(host)?)),
+        "finance.connect.poll" => connect::poll(host, false),
+        "finance.sync.run-now" => sync::run(host),
         "finance.transactions.query" => Ok(settle(transactions::query(host, &request.parameters)?)),
         "finance.transactions.categorize" => Ok(settle(transactions::categorize(host, &request.parameters, Merchant::Seen)?)),
         "finance.transactions.categorize-new" => Ok(settle(transactions::categorize(host, &request.parameters, Merchant::New)?)),

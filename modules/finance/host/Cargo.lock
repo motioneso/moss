@@ -1298,6 +1298,8 @@ dependencies = [
  "chrono",
  "moss-module-host",
  "moss-platform-jobs",
+ "moss-standins",
+ "reqwest",
  "ring",
  "safety-core",
  "serde_json",
@@ -1396,6 +1398,18 @@ dependencies = [
  "serde",
  "serde_json",
  "uuid",
+]
+
+[[package]]
+name = "moss-standins"
+version = "0.0.0"
+dependencies = [
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "serde_json",
+ "tokio",
+ "tokio-rustls",
 ]
 
 [[package]]

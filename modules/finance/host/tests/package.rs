@@ -44,7 +44,7 @@ fn an_unsupported_invocation_leaks_no_request_text() {
 #[test]
 fn the_package_builds_and_the_manifest_validates() {
     let files = moss_finance_host::package::files(&root(), &component()).unwrap();
-    assert_eq!(files.keys().filter(|k| k.starts_with("sql/")).count(), 42);
+    assert_eq!(files.keys().filter(|k| k.starts_with("sql/")).count(), 44);
     for needed in ["moss.module.json", "code/module.wasm", "LICENSE", "NOTICE", "CHANGELOG.md"] {
         assert!(files.contains_key(needed), "{needed} missing");
     }

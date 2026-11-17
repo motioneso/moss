@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "finance",
   "name": "Finance",
-  "description": "Private money accounts and transactions. You can list your accounts, add manual accounts and transactions, sort and review transactions, set rules, split, add notes and import a CSV bank file. Bank links, budgets, bills, targets and the screens are not built yet.",
+  "description": "Private money accounts and transactions. You can list your accounts, add manual accounts and transactions, connect a bank and pull its balances and transactions every six hours or on demand, sort and review transactions, set rules, split, add notes and import a CSV bank file. Budgets, bills, targets and the screens are not built yet.",
   "publisher": "Moss",
   "version": "0.2.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
@@ -20,7 +20,10 @@
         "app.finance_categories",
         "app.finance_budget_policy",
         "app.finance_merchant_rules",
-        "app.finance_imports"
+        "app.finance_imports",
+        "app.finance_bank_links",
+        "app.finance_link_sessions",
+        "app.finance_balance_snapshots"
       ]
     },
     {
@@ -42,8 +45,21 @@
         "finance.transactions.notes.save",
         "finance.transactions.splits",
         "finance.rule.set",
-        "finance.import.apply"
+        "finance.import.apply",
+        "finance.connect.start",
+        "finance.connect.poll",
+        "finance.sync.run-now"
       ]
+    },
+    {
+      "port": "credentials",
+      "operations": ["status", "request", "exchange", "forget"],
+      "resources": ["sandbox.plaid.com", "production.plaid.com"]
+    },
+    {
+      "port": "jobs",
+      "operations": ["schedule", "enqueue-after-commit", "enqueue-options"],
+      "resources": ["finance.sync-run", "finance.connect-poll"]
     },
     {
       "port": "action-policy",
@@ -94,7 +110,9 @@
       "sql/0039_create_finance_provider_handoffs.sql",
       "sql/0040_create_finance_card_policies.sql",
       "sql/0041_create_finance_card_assignments.sql",
-      "sql/0042_create_finance_bill_suggestion_dismissals.sql"
+      "sql/0042_create_finance_bill_suggestion_dismissals.sql",
+      "sql/0368_finance_bank_links.sql",
+      "sql/0369_finance_link_sessions.sql"
     ],
     "ownedTables": [
       "app.finance_accounts",
@@ -120,7 +138,9 @@
       "app.finance_reconciliations",
       "app.finance_targets",
       "app.finance_transactions",
-      "app.finance_transfer_corrections"
+      "app.finance_transfer_corrections",
+      "app.finance_bank_links",
+      "app.finance_link_sessions"
     ],
     "ledger": "module-legacy",
     "access": {
@@ -194,6 +214,12 @@
         "access": "owner-only"
       },
       "app.finance_transfer_corrections": {
+        "access": "owner-only"
+      },
+      "app.finance_bank_links": {
+        "access": "owner-only"
+      },
+      "app.finance_link_sessions": {
         "access": "owner-only"
       }
     }
@@ -353,6 +379,36 @@
       "method": "POST",
       "path": "/finance/chat/import/apply",
       "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/connect/start",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/connect/poll",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/sync/run-now",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/connect/start",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/connect/poll",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/sync/run-now",
+      "signIn": true
     }
   ],
   "tools": {
@@ -426,6 +482,18 @@
     },
     "finance.import.apply": {
       "description": "Import rows from a bank file into a manual account. Manual records only; no bank money is moved.",
+      "risk": "write"
+    },
+    "finance.connect.start": {
+      "description": "Start linking a bank, or reconnect one that needs a new sign-in. Returns a page address for the person to open. Needs approval.",
+      "risk": "write"
+    },
+    "finance.connect.poll": {
+      "description": "Check whether the person has finished the bank page and, if so, save the bank and pull its first data.",
+      "risk": "write"
+    },
+    "finance.sync.run-now": {
+      "description": "Pull the latest balances and transactions from every connected bank now.",
       "risk": "write"
     }
   },
@@ -581,6 +649,27 @@
           "description": "The account changed since the preview. Preview again and import."
         }
       ]
+    },
+    {
+      "id": "finance.bank-connect",
+      "description": "A person can link a bank. Starting returns a page address to open, the person signs in there, and a check then saves the bank and pulls its first accounts and transactions. Starting again for a bank that needs a new sign-in reconnects it without a second copy. The assistant's version of starting needs a one-use approval. The bank's sign-in token never leaves the host.",
+      "errors": [
+        {
+          "code": "bank_unavailable",
+          "class": "transient",
+          "description": "The bank service is not set up or could not start the link. Check the bank service keys in settings, then try again."
+        },
+        {
+          "code": "token_read_failed",
+          "class": "transient",
+          "description": "The saved bank sign-in could not be read. Try again, or reconnect the bank."
+        }
+      ]
+    },
+    {
+      "id": "finance.bank-sync",
+      "description": "Balances and transactions for every connected bank are pulled every six hours and on request. Each bank is handled on its own, so one failing bank never stops the others. A bank that needs a new sign-in is marked as needing a reconnect and keeps its saved data. A person's own category and note on a bank transaction are kept, and manual entries are never overwritten. Categorizing new transactions is not built yet.",
+      "errors": []
     }
   ],
   "policyRoutes": {
@@ -590,5 +679,45 @@
     "sorting_new": {
       "installTier": "ask_each_time"
     }
+  },
+  "credentials": {
+    "plaid-keys": {
+      "scope": "instance",
+      "hosts": ["sandbox.plaid.com", "production.plaid.com"],
+      "attachment": {
+        "kind": "fields",
+        "name": {
+          "client_id": "clientId",
+          "secret": "clientSecret"
+        }
+      },
+      "exposeFields": ["link_token", "public_token", "hosted_link_url", "expiration"]
+    },
+    "plaid-item": {
+      "scope": "account",
+      "hosts": ["sandbox.plaid.com", "production.plaid.com"],
+      "attachment": {
+        "kind": "fields",
+        "name": {
+          "access_token": "accessToken"
+        }
+      },
+      "with": ["plaid-keys"],
+      "exchange": {
+        "endpoint": "https://production.plaid.com/item/public_token/exchange",
+        "grantType": "token_swap",
+        "format": "json",
+        "input": "public_token"
+      },
+      "exposeFields": ["link_token", "hosted_link_url", "expiration"]
+    }
+  },
+  "jobRetries": {
+    "finance.sync-run": 3,
+    "finance.connect-poll": 5
+  },
+  "jobs": {
+    "finance.sync-run": {},
+    "finance.connect-poll": {}
   }
 }

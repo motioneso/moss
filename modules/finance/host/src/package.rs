@@ -18,13 +18,30 @@ pub fn files(root: &Path, component: &[u8]) -> Result<BTreeMap<String, Vec<u8>>>
         ("CHANGELOG.md".into(), include_bytes!("../../CHANGELOG.md").to_vec()),
     ]);
     for path in &manifest.database.migrations {
-        let frozen = moss_module_host::legacy::entry("finance", path)
-            .ok_or_else(|| anyhow::anyhow!("Finance SQL is not in the legacy inventory"))?;
-        let bytes = std::fs::read(root.join("external-modules/finance").join(path))?;
-        anyhow::ensure!(
-            frozen.raw == moss_module_host::trust::digest(&bytes),
-            "Legacy Finance SQL changed"
-        );
+        let bytes = if let Some(frozen) = moss_module_host::legacy::entry("finance", path) {
+            let bytes = std::fs::read(root.join("external-modules/finance").join(path))?;
+            anyhow::ensure!(
+                frozen.raw == moss_module_host::trust::digest(&bytes),
+                "Legacy Finance SQL changed"
+            );
+            bytes
+        } else {
+            let bytes = std::fs::read(root.join("modules/finance").join(path))?;
+            let pinned = match path.as_str() {
+                "sql/0368_finance_bank_links.sql" => {
+                    "57e32269ccd56454cd560e4fafcbbe38d24886c130743ea085c17d7f9d54a875"
+                }
+                "sql/0369_finance_link_sessions.sql" => {
+                    "90878a1e9d96baa12b9596f76cb3393145d7c7eaedade0b0f4a6b97f0412e38a"
+                }
+                _ => "",
+            };
+            anyhow::ensure!(
+                moss_module_host::trust::digest(&bytes) == pinned,
+                "Finance migration bytes changed: {path}"
+            );
+            bytes
+        };
         files.insert(path.clone(), bytes);
     }
     Ok(files)

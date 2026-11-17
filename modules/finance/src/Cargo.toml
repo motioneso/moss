@@ -38,6 +38,10 @@ name = "privacy"
 path = "../tests/privacy.rs"
 
 [[test]]
+name = "bank"
+path = "../tests/bank.rs"
+
+[[test]]
 name = "transactions"
 path = "../tests/transactions.rs"
 
