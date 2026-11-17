@@ -227,7 +227,6 @@ fn another_person_cannot_unfollow_your_team_and_the_test_fails_without_the_owner
     host.follows.rls_off.set(true);
     assert_eq!(call(&host, "sports.unfollowTeam", input, None)["data"]["removed"], true);
     assert!(rows(&host).is_empty());
-    let _ = A;
 }
 
 #[test]
