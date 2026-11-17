@@ -14,6 +14,7 @@ moss-calendar-host = { path = "../../../modules/calendar/host" }
 moss-connectors-host = { path = "../../../modules/connectors/host" }
 moss-email-host = { path = "../../../modules/email/host" }
 moss-backtrack-host = { path = "../../../modules/backtrack/host" }
+moss-scratchpad-host = { path = "../../../modules/scratchpad/host" }
 moss-meetings-host = { path = "../../../modules/meetings/host" }
 moss-memory-host = { path = "../../../modules/memory/host" }
 anyhow = "1"

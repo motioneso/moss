@@ -1,0 +1,20 @@
+package moss:module@1.0.0;
+
+interface db { call: func(request: string) -> result<string, string>; }
+interface context { call: func(request: string) -> result<string, string>; }
+interface kv { call: func(request: string) -> result<string, string>; }
+interface ai { call: func(request: string) -> result<string, string>; }
+interface transcribe { call: func(request: string) -> result<string, string>; }
+interface jobs { call: func(request: string) -> result<string, string>; }
+interface api { call: func(request: string) -> result<string, string>; }
+
+world scratchpad {
+  import db;
+  import context;
+  import kv;
+  import ai;
+  import transcribe;
+  import jobs;
+  import api;
+  export handle: func(kind: string, payload: string) -> result<string, string>;
+}

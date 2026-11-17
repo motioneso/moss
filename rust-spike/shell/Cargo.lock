@@ -3287,6 +3287,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "moss-scratchpad-host"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "moss-module-host",
+ "safety-core",
+ "serde_json",
+ "tokio",
+ "tokio-postgres",
+]
+
+[[package]]
 name = "moss-shell"
 version = "0.0.0"
 dependencies = [
@@ -3305,6 +3317,7 @@ dependencies = [
  "moss-platform-adapters",
  "moss-platform-contracts",
  "moss-platform-routing",
+ "moss-scratchpad-host",
  "moss-shell-contract",
  "safety-core",
  "serde",
