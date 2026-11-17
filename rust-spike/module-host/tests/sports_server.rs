@@ -330,9 +330,19 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
     use reqwest::Method;
     const MARK: &str = "PLANTED-LIVE-MARKER-7d2e";
     assert_eq!(call(Method::GET, "/follows", None, None).0, 401);
-    // The server answers 503 until its module host has finished starting.
+    // The server answers 503, or holds the request, until its module host has finished starting.
     let started = std::time::Instant::now();
-    while call(Method::GET, "/follows", Some(&cookie), None).0 == 503 && started.elapsed() < std::time::Duration::from_secs(60) {
+    loop {
+        let ready = client
+            .get(format!("{origin}/api/m/sports/follows"))
+            .header("origin", &origin)
+            .header("cookie", &cookie)
+            .send()
+            .is_ok_and(|r| r.status().as_u16() != 503);
+        if ready {
+            break;
+        }
+        assert!(started.elapsed() < std::time::Duration::from_secs(240), "module host start deadline\n{}", log());
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
     for who in [&cookie, &other] {
