@@ -544,7 +544,7 @@ fn installed_meals_package_serves_routes_from_the_real_server() {
         let (status, text) = call(Method::POST, "/meals/tools/run", Some(&other), Some(json!({"tool":name,"parameters":params})));
         assert!(status == 403 && !text.contains(MARK), "{name}: {text}");
     }
-    let (status, text) = tool("meals.meal.get", json!({"mealId":meal_id}), false);
+    let (status, text) = tool("meals.meal.get", json!({"mealId":meal_id}), true);
     assert_eq!(status, 200, "{text}\n{}", log());
     assert_eq!(json_of(&text)["data"]["meal"]["title"], "Live", "{text}");
     let (status, text) = tool("meals.meal.servings", json!({"mealId":meal_id,"servings":3}), true);
@@ -563,7 +563,7 @@ fn installed_meals_package_serves_routes_from_the_real_server() {
     assert_eq!(json_of(&text)["data"]["swapChoices"].as_array().unwrap().len(), 3, "{text}");
     let (status, text) = tool("meals.day.edit", json!({"action":"set_text","mealId":meal_id,"text":MARK}), true);
     assert_eq!(status, 200, "{text}");
-    let (_, still) = tool("meals.plan.get", json!({"planId":plan_id}), false);
+    let (_, still) = tool("meals.plan.get", json!({"planId":plan_id}), true);
     assert!(still.contains(&day_id), "the other person deleted nothing: {still}");
     let (status, text) = tool("meals.plan.delete", json!({"planId":plan_id}), true);
     assert_eq!(status, 200, "{text}\n{}", log());
