@@ -236,36 +236,37 @@ pub fn sort_map_json(map: &SortMap) -> Value {
             Status::Failed => "failed",
             Status::NeverTried => "never_tried",
         };
-        let mut out = json!({"status": status});
-        let o = out.as_object_mut().unwrap();
-        if e.status != Status::NeverTried {
-            o.insert("sortFingerprint".into(), json!(e.fingerprint));
-            o.insert("sortedAt".into(), json!(e.sorted_at));
-        }
-        if let Some(r) = e.risk {
-            o.insert("risk".into(), json!(r.name()));
-        }
-        if let Some(n) = &e.readable_name {
-            o.insert("readableName".into(), json!(n));
-        }
-        if let Some(b) = &e.sorted_by {
-            o.insert("sortedBy".into(), json!({"model": b.model, "provider": b.provider}));
-        }
-        if let Some(m) = e.sort_method {
-            o.insert("sortMethod".into(), json!(m.name()));
-        }
-        if let Some(f) = e.failure {
-            o.insert("failure".into(), json!(f.name()));
-        }
-        if e.send_without_asking {
-            o.insert("sendWithoutAsking".into(), json!(true));
-        }
-        if let Some(f) = e.legacy_risk_floor {
-            o.insert("legacyRiskFloor".into(), json!(f.name()));
-        }
-        entries.insert(name.clone(), out);
+        entries.insert(
+            name.clone(),
+            json!({
+                "status": status,
+                "risk": e.risk.map(Risk::name),
+                "readableName": e.readable_name,
+                "sortedBy": e.sorted_by.as_ref().map(|b| json!({"model": b.model, "provider": b.provider})),
+                "sortMethod": e.sort_method.map(SortMethod::name),
+                "sortFingerprint": e.fingerprint,
+                "sortedAt": e.sorted_at,
+                "failure": e.failure.map(SortFailure::name),
+                "sendWithoutAsking": e.send_without_asking,
+                "legacyRiskFloor": e.legacy_risk_floor.map(Risk::name),
+            }),
+        );
     }
     json!({"version": VERSION, "entries": entries})
+}
+
+/// The state as the old code's plain object.
+pub fn tool_sort_state_json(state: &ToolSort) -> Value {
+    match state {
+        ToolSort::Current { risk, readable_name, sorted_at, sorted_by, sort_method, send_without_asking } => json!({
+            "status": "current", "risk": risk.name(), "readableName": readable_name, "sortedAt": sorted_at,
+            "sortedBy": sorted_by.as_ref().map(|b| json!({"model": b.model, "provider": b.provider})),
+            "sortMethod": sort_method.map(SortMethod::name), "sendWithoutAsking": send_without_asking,
+        }),
+        ToolSort::Stale => json!({"status": "stale"}),
+        ToolSort::Failed { failure, failed_at } => json!({"status": "failed", "failure": failure.name(), "failedAt": failed_at}),
+        ToolSort::NeverTried => json!({"status": "never_tried"}),
+    }
 }
 
 pub fn tool_sort_state(map: &SortMap, tool: &Tool) -> ToolSort {
