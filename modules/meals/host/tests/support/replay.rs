@@ -10,7 +10,9 @@ pub fn mask(value: &mut Value) {
     match value {
         Value::String(text) => {
             let id = text.len() == 36 && text.matches('-').count() == 4;
-            let time = text.len() >= 20 && text.as_bytes()[10] == b'T' && text.ends_with('Z');
+            let time = text.len() >= 20
+                && text.as_bytes()[10] == b'T'
+                && (text.ends_with('Z') || text.ends_with("+00:00"));
             if id {
                 *text = "<id>".into();
             } else if time {

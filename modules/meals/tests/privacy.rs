@@ -5,7 +5,7 @@ use serde_json::json;
 const MARK: &str = "PLANTED-MARKER-7d2e41";
 
 #[test]
-fn private_text_reaches_no_host_call_beyond_the_kitchen_tables() {
+fn private_text_reaches_no_host_call_beyond_the_meals_tables() {
     let f = Fake::new();
     let ana = f.ok(
         "meals.household.save",
@@ -23,7 +23,12 @@ fn private_text_reaches_no_host_call_beyond_the_kitchen_tables() {
         "meals.household.remove",
         json!({"memberId":ana["memberId"]}),
     );
-    // Every host call is a database query on the four kitchen tables, a clock read or an id.
+    // The list and pantry tools write private text too. Their host calls stay on their own tables.
+    f.ok("meals.list.edit", json!({"action":"add","name":MARK,"quantity":1,"unit":MARK}));
+    f.ok("meals.pantry.edit", json!({"action":"add","name":MARK}));
+    f.ok("meals.pantry.edit", json!({"target":"staple","action":"add","name":MARK}));
+    f.ok("meals.list.get", json!({}));
+    // Every host call is a database query on a Meals table, a clock read or an id.
     // There are no job, log, model, network or file calls in this package at all.
     for (port, _, resource, _) in f.calls.borrow().iter() {
         assert!(port == "db" || port == "context", "unexpected port {port}");
@@ -33,7 +38,12 @@ fn private_text_reaches_no_host_call_beyond_the_kitchen_tables() {
                     "app.meals_kitchens",
                     "app.meals_household_members",
                     "app.meals_meal_slot_rules",
-                    "app.meals_favourites"
+                    "app.meals_favourites",
+                    "app.meals_shopping_lists",
+                    "app.meals_shopping_list_items",
+                    "app.meals_pantry_items",
+                    "app.meals_staples",
+                    "app.meals_undo_actions"
                 ]
                 .contains(&resource.as_str()),
                 "{resource}"

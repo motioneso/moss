@@ -1,7 +1,7 @@
 //! Tool proofs through the installed Wasm component and its host approval transport.
 use super::*;
 
-fn run(w: &World, actor: uuid::Uuid, tool: &str, parameters: Value, approve: bool) -> Value {
+pub(crate) fn run(w: &World, actor: uuid::Uuid, tool: &str, parameters: Value, approve: bool) -> Value {
     if approve {
         w.app
             .services
@@ -15,7 +15,7 @@ fn run(w: &World, actor: uuid::Uuid, tool: &str, parameters: Value, approve: boo
         json!({"tool":tool,"parameters":parameters}),
     )
 }
-fn compare(mut a: Value, mut b: Value) {
+pub(crate) fn compare(mut a: Value, mut b: Value) {
     replay::mask(&mut a);
     replay::mask(&mut b);
     assert_eq!(a, b);

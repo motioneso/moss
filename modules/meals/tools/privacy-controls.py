@@ -36,20 +36,29 @@ def control(name, path, old, new, manifest, test, case, extra):
 control("tool error", "modules/meals/src/lib.rs",
         '.map_err(|_| moss_module_sdk::Error::new("Meals tool failed"))?',
         '.map_err(|error| error)?', "modules/meals/src/Cargo.toml", "privacy",
-        "private_text_reaches_no_host_call_beyond_the_kitchen_tables", [])
+        "private_text_reaches_no_host_call_beyond_the_meals_tables", [])
 control("host activity", "rust-spike/module-host/src/services.rs",
         '"success":result.is_ok(),"at":chrono::Utc::now()',
         '"success":result.is_ok(),"parameters":r.parameters,"at":chrono::Utc::now()',
         "modules/meals/host/Cargo.toml", "installed",
         "tools_keep_both_tables_private_and_leave_no_text_behind",
         ["--ignored", "--test-threads=1"])
+control("host activity lists", "rust-spike/module-host/src/services.rs",
+        '"success":result.is_ok(),"at":chrono::Utc::now()',
+        '"success":result.is_ok(),"parameters":r.parameters,"at":chrono::Utc::now()',
+        "modules/meals/host/Cargo.toml", "installed",
+        "lists_and_pantry_are_private_and_clearing_a_list_touches_nothing_else",
+        ["--ignored", "--test-threads=1"])
 
 # Re-run both assertions after restoring their guards; a negative control alone is not proof.
 for manifest, test, case, extra, output in [
     ("modules/meals/src/Cargo.toml", "privacy",
-     "private_text_reaches_no_host_call_beyond_the_kitchen_tables", [], target / "guest"),
+     "private_text_reaches_no_host_call_beyond_the_meals_tables", [], target / "guest"),
     ("modules/meals/host/Cargo.toml", "installed",
      "tools_keep_both_tables_private_and_leave_no_text_behind",
+     ["--ignored", "--test-threads=1"], target),
+    ("modules/meals/host/Cargo.toml", "installed",
+     "lists_and_pantry_are_private_and_clearing_a_list_touches_nothing_else",
      ["--ignored", "--test-threads=1"], target),
 ]:
     subprocess.run(["cargo", "+1.95.0", "test", "--locked", "--offline", "--manifest-path",
