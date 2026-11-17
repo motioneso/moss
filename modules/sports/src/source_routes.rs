@@ -18,18 +18,18 @@ use std::collections::HashMap;
 pub const ACKNOWLEDGEMENT: &str =
     "I confirm I am authorized to fetch this publisher's public, unauthenticated sports news.";
 
-fn error(status: u16, message: &str) -> Response {
+pub(crate) fn error(status: u16, message: &str) -> Response {
     Response::new(status, json!({"error":message}))
 }
 
-fn rejected(reason: &str) -> Response {
+pub(crate) fn rejected(reason: &str) -> Response {
     if reason == "unavailable" {
         return Response::new(200, json!({"status":"unavailable"}));
     }
     Response::new(200, json!({"status":"rejected","reason":reason}))
 }
 
-fn source_id(request: &RouteRequest) -> std::result::Result<String, Response> {
+pub(crate) fn source_id(request: &RouteRequest) -> std::result::Result<String, Response> {
     let id = request.params.get("id").map(String::as_str).unwrap_or_default();
     if is_uuid(id) {
         Ok(id.to_owned())
@@ -38,12 +38,12 @@ fn source_id(request: &RouteRequest) -> std::result::Result<String, Response> {
     }
 }
 
-fn follow_rows<H: Host + ?Sized>(host: &H) -> Result<Vec<Value>> {
+pub(crate) fn follow_rows<H: Host + ?Sized>(host: &H) -> Result<Vec<Value>> {
     Client(host).query(follows::TABLE, &Query::select(Filter::All))
 }
 
 /// The target as the screen names it, or nothing when the person no longer has the follow.
-fn wanted<H: Host + ?Sized>(
+pub(crate) fn wanted<H: Host + ?Sized>(
     host_teams: &dyn TeamList,
     target: &Target,
     follows: &[Value],
@@ -68,7 +68,7 @@ fn wanted<H: Host + ?Sized>(
     Some(Wanted { target: target.clone(), label, scope, exact_target_url: None })
 }
 
-fn candidate_response(candidate: &Candidate) -> Value {
+pub(crate) fn candidate_response(candidate: &Candidate) -> Value {
     let head = |items: &[String]| items.iter().take(10).cloned().collect::<Vec<_>>();
     json!({
         "label": candidate.label,
@@ -155,7 +155,7 @@ pub fn preview_new<H: Host + ?Sized>(host: &H, teams: &dyn TeamList, request: &R
     Ok(Response::new(200, body))
 }
 
-fn same_identity(confirm: &Confirm, candidate: &Candidate) -> bool {
+pub(crate) fn same_identity(confirm: &Confirm, candidate: &Candidate) -> bool {
     confirm.acknowledgement == ACKNOWLEDGEMENT
         && confirm.canonical_domain == candidate.canonical_domain
         && confirm.confirmed_fetch_hosts == candidate.confirmed_fetch_hosts
@@ -202,7 +202,7 @@ fn verified_from(target: &Target, label: String, scope: &str, url: &str, paramet
     }
 }
 
-fn text(value: &Value) -> String {
+pub(crate) fn text(value: &Value) -> String {
     value.as_str().unwrap_or_default().to_owned()
 }
 
@@ -358,7 +358,7 @@ fn wanted_in_order<H: Host + ?Sized>(
 }
 
 /// The parts of a source a confirm compares to see whether it moved after the preview.
-fn baseline_core(baseline: &Value) -> Value {
+pub(crate) fn baseline_core(baseline: &Value) -> Value {
     json!({
         "updatedAt": baseline["updatedAt"],
         "validationFingerprint": baseline["validationFingerprint"],

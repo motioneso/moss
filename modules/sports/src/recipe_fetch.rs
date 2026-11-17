@@ -24,10 +24,21 @@ pub struct Failure {
 }
 
 pub fn get<H: Host + ?Sized>(host: &H, recipe: &Recipe, url: &str) -> Result<std::result::Result<Answer, Failure>> {
-    let (accept, types): (&str, Vec<&str>) = match recipe.kind {
-        Kind::Json => ("application/json", vec!["application/json", "text/json"]),
-        Kind::Html => ("text/html,application/xhtml+xml", vec!["text/html", "application/xhtml+xml"]),
+    let (accept, types): (&str, &[&str]) = match recipe.kind {
+        Kind::Json => ("application/json", &["application/json", "text/json"]),
+        Kind::Html => ("text/html,application/xhtml+xml", &["text/html", "application/xhtml+xml"]),
     };
+    read(host, url, accept, types, &recipe.fetch_hosts)
+}
+
+/// The same read for any address, with the caller's accept header and host list.
+pub fn read<H: Host + ?Sized>(
+    host: &H,
+    url: &str,
+    accept: &str,
+    types: &[&str],
+    hosts: &[String],
+) -> Result<std::result::Result<Answer, Failure>> {
     let answer = host.call(
         "fetch",
         "get",
@@ -39,7 +50,7 @@ pub fn get<H: Host + ?Sized>(host: &H, recipe: &Recipe, url: &str) -> Result<std
             "timeoutMs": TIMEOUT_MS,
             "userAgent": USER_AGENT,
             "allowedContentTypes": types,
-            "allowedHosts": recipe.fetch_hosts,
+            "allowedHosts": hosts,
             "rejectOversizedResponses": true,
         }),
     );
@@ -54,7 +65,7 @@ pub fn get<H: Host + ?Sized>(host: &H, recipe: &Recipe, url: &str) -> Result<std
         return Ok(Err(Failure { reason: "network".into(), status: None }));
     };
     let final_host = Url::parse(final_url).map(|u| u.hostname.to_lowercase()).unwrap_or_default();
-    if !recipe.fetch_hosts.contains(&final_host) {
+    if !hosts.contains(&final_host) {
         return Ok(Err(Failure { reason: "blocked".into(), status: None }));
     }
     Ok(Ok(Answer { final_url: final_url.to_owned(), body: body.to_owned(), content_type: answer["contentType"].as_str().map(str::to_owned) }))

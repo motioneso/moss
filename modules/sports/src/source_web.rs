@@ -12,8 +12,8 @@ use scraper::{Html, Selector};
 use serde_json::json;
 
 const USER_AGENT: &str = "Moss/1.0 (self-hosted personal dashboard)";
-const ACCEPT: &str = "text/html, application/xhtml+xml, application/atom+xml, application/rss+xml, application/xml;q=0.9, text/xml;q=0.8";
-const CONTENT_TYPES: [&str; 7] = [
+pub const ACCEPT: &str = "text/html, application/xhtml+xml, application/atom+xml, application/rss+xml, application/xml;q=0.9, text/xml;q=0.8";
+pub const CONTENT_TYPES: [&str; 7] = [
     "text/html",
     "application/xhtml+xml",
     "application/atom+xml",
