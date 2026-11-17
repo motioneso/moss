@@ -34,7 +34,7 @@ The insights route and the two chat tools. No screens.
   which this package cannot do (no model port, plan section 5.4). Part 13 left this to part 16.
 - **No "outside content" mark on tool answers.** The host's tool declaration has no way to say it.
 - **The insights route is not gated by consent**, matching the old route.
-- **Insights read at most 1000 check-ins** in the 30-day window, the host's row cap.
+- **Insights read at most 1000 check-ins** in the 30-day window, the host's row cap. Rows come oldest first, so a person with more than 1000 in 30 days loses the newest from the insights.
 
 ### Proof
 
