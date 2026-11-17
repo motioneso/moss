@@ -69,5 +69,9 @@ name = "browser_discovery"
 path = "../tests/browser_discovery.rs"
 
 [[test]]
+name = "photos"
+path = "../tests/photos.rs"
+
+[[test]]
 name = "stories"
 path = "../tests/stories.rs"

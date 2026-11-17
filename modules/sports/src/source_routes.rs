@@ -405,5 +405,11 @@ pub fn remove<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Resp
         Ok(id) => id,
         Err(response) => return Ok(response),
     };
-    Ok(Response::new(200, json!({"deleted":sources::remove(host, &id)?})))
+    let deleted = sources::remove(host, &id)?;
+    // The copies are private files, so they go with the source. If removal fails, no route can
+    // reach the leftover copy. The retention sweep removes it at the next photo pass.
+    if deleted {
+        let _ = crate::photo_store::remove_source(host, &id);
+    }
+    Ok(Response::new(200, json!({"deleted":deleted})))
 }

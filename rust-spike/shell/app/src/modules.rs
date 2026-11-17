@@ -498,6 +498,11 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
             }
             }?;
             let services = module_preferences(preferences_database_sports, services)?;
+            // Sports source photos: the host re-encodes pictures and keeps the private copies.
+            let services = Arc::new(
+                moss_sports_host::SportsPorts::new(services)
+                    .with_files(&settings.data.join("modules/files"))?,
+            ) as Arc<dyn Ports>;
             // Meetings answers only its own capture-preference calls, as the signed-in person.
             let authority_database = meetings_database.clone();
             let services = Arc::new(

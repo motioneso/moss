@@ -9,3 +9,4 @@ CARGO_TARGET_DIR="$CARGO_TARGET_DIR/guest" cargo +1.95.0 test --locked --offline
 modules/sports/tools/build-component.sh "$CARGO_TARGET_DIR/module.wasm"
 export SPORTS_COMPONENT_WASM="$CARGO_TARGET_DIR/module.wasm"
 cargo +1.95.0 test --locked --offline --manifest-path modules/sports/host/Cargo.toml --test package
+cargo +1.95.0 test --locked --offline --manifest-path modules/sports/host/Cargo.toml --test photos

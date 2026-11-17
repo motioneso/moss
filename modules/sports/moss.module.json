@@ -4,7 +4,7 @@
   "name": "Sports",
   "publisher": "Moss",
   "version": "0.1.0",
-  "description": "Keeps each person's followed leagues and teams, private to the owner. A whole league can be followed once, and following it again returns the saved follow. A followed team is tied to the provider's permanent team number. The standings picker remembers the leagues a person chose and the standings view they last opened, under the same saved settings as before. Account export and deletion cover all six Sports tables. The package reads ESPN's public data for the league catalog, each league's team list and club search, and keeps a shared copy so one person's lookup serves everyone. The copy holds only public sports data, never a person's follows or searches. Following a team checks the live team list and is refused, with the same fail-closed messages the old app gave, when ESPN is down. Scoreboard, standings and news reading are built but not yet offered as routes. A person can add news sources of their own, up to ten, each a website with a news feed or a subreddit, and choose which sports and followed teams each one covers, up to twenty choices in all. Adding a source shows a preview first, which names the reason when a site cannot be used, and a source saves only after the person confirms it. Two subreddits that differ only by letter case are one source. The package reads those public sites itself, and keeps unconfirmed previews for ten minutes under the person's own saved settings. A site with no feed can get a recipe that the person's chosen AI model proposes. The recipe is a strict description of one public address and where the headlines sit in it, it may only name sites the person already confirmed, and it is saved only after a real replay finds headlines. Sources are read again on a schedule without a browser or article text, each source shows whether it is healthy, drifted or missing its recipe, and a person can retry a source or rebuild its recipe after confirming a preview. Nine chat tools list, preview, confirm, retry, rebuild and remove sources. Every change asks the person first, showing a card built from the saved source and the stored preview, and removing a source asks before it deletes. When a site shows no headlines until its scripts run, adding or rebuilding a source from the screen can open the page in a sandboxed browser, and the AI model proposes the recipe from what the browser saw. A machine that cannot run the browser safely, or a chat tool, keeps the plain reading. Headline photos, the followed-team chat tools and the screens are not part of this package yet.",
+  "description": "Keeps each person's followed leagues and teams, private to the owner. A whole league can be followed once, and following it again returns the saved follow. A followed team is tied to the provider's permanent team number. The standings picker remembers the leagues a person chose and the standings view they last opened, under the same saved settings as before. Account export and deletion cover all six Sports tables. The package reads ESPN's public data for the league catalog, each league's team list and club search, and keeps a shared copy so one person's lookup serves everyone. The copy holds only public sports data, never a person's follows or searches. Following a team checks the live team list and is refused, with the same fail-closed messages the old app gave, when ESPN is down. Scoreboard, standings and news reading are built but not yet offered as routes. A person can add news sources of their own, up to ten, each a website with a news feed or a subreddit, and choose which sports and followed teams each one covers, up to twenty choices in all. Adding a source shows a preview first, which names the reason when a site cannot be used, and a source saves only after the person confirms it. Two subreddits that differ only by letter case are one source. The package reads those public sites itself, and keeps unconfirmed previews for ten minutes under the person's own saved settings. A site with no feed can get a recipe that the person's chosen AI model proposes. The recipe is a strict description of one public address and where the headlines sit in it, it may only name sites the person already confirmed, and it is saved only after a real replay finds headlines. Sources are read again on a schedule without a browser or article text, each source shows whether it is healthy, drifted or missing its recipe, and a person can retry a source or rebuild its recipe after confirming a preview. Nine chat tools list, preview, confirm, retry, rebuild and remove sources. Every change asks the person first, showing a card built from the saved source and the stored preview, and removing a source asks before it deletes. When a site shows no headlines until its scripts run, adding or rebuilding a source from the screen can open the page in a sandboxed browser, and the AI model proposes the recipe from what the browser saw. A machine that cannot run the browser safely, or a chat tool, keeps the plain reading. Each refresh also looks for a photo for the newest stories of every source, from the feed, then from a saved page rule, then from the page's share picture. Pictures are re-encoded as plain JPEG with no hidden camera or location data and kept in the person's own private folder for fourteen days after they were last shown. A person can stop photos for a source, which forgets its page rule and clears its saved pictures (feed and share pictures come back at the next refresh), and deleting the source deletes them for good. The followed-team chat tools and the screens are not part of this package yet.",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 250000000,
   "callLimitMs": 30000,
@@ -29,7 +29,16 @@
     },
     {
       "port": "kv",
-      "operations": ["preference.read", "preference.write", "get", "set"],
+      "operations": [
+        "preference.read",
+        "preference.write",
+        "get",
+        "set",
+        "put",
+        "list",
+        "delete",
+        "reencode"
+      ],
       "resources": [
         "espn-headlines",
         "espn-scoreboard",
@@ -41,7 +50,9 @@
         "standings-competitions",
         "standings-last-viewed",
         "source-previews",
-        "source-icon-misses"
+        "source-icon-misses",
+        "source-photo-files",
+        "source-photo-links"
       ]
     },
     {
@@ -242,7 +253,17 @@
     },
     {
       "method": "DELETE",
+      "path": "/sources/:id/photos",
+      "signIn": true
+    },
+    {
+      "method": "DELETE",
       "path": "/sources/:id",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/headlines/:headline_id/photo",
       "signIn": true
     },
     {
@@ -281,7 +302,7 @@
       "label": "News sources",
       "path": "/settings?section=modules&module=sports",
       "scope": "user",
-      "description": "Added news sources and the sports each one covers can be managed through the Sports routes. The Settings page for them is not part of this package yet."
+      "description": "Added news sources and the sports each one covers can be managed through the Sports routes, including stopping Moss's photos for a source. The Settings page for them is not part of this package yet."
     }
   ],
   "features": [
@@ -302,6 +323,10 @@
           "path": "/settings?section=modules&module=sports"
         }
       ]
+    },
+    {
+      "id": "sports.source_photos",
+      "description": "While sources refresh, Sports looks for a photo for each of a source's newest stories. It tries the picture the feed names, then a saved page rule, then the page's share picture, and only uses pictures from the story's own site or hosts the person confirmed. Each picture is re-encoded as a JPEG no larger than 1280 by 720, which removes any camera or location data, and is stored in the person's own private folder. Copies unused for fourteen days are removed, and the folder is capped at 200 pictures and 40 MB. A source whose page rule stops finding photos three refreshes in a row is marked stale and is looked at again at most once a day, and only when an AI model is set up. No picture is fetched in the last three seconds of the thirty second call limit, and a story left undone for that reason is tried again at the next refresh. Pictures over 768 KB are not used. Stopping photos for a source forgets its page rule and clears its saved pictures, and feed and share pictures come back at the next refresh. Deleting the source deletes them for good."
     },
     {
       "id": "sports.team_identity",

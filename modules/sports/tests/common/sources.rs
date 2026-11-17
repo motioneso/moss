@@ -33,6 +33,14 @@ pub struct Src {
     pub clock: Cell<i64>,
     /// Canned model replies, used oldest first. With none left the model is "not set up".
     pub replies: RefCell<Vec<String>>,
+    /// The host's private photo folder, per person: name to {bodyBase64} or {text}.
+    pub vault: RefCell<BTreeMap<(String, String), Value>>,
+    /// How many milliseconds every fetch takes.
+    pub fetch_cost: Cell<i64>,
+    /// Makes every photo save fail.
+    pub put_fails: Cell<bool>,
+    /// How many milliseconds a model reply takes.
+    pub model_cost: Cell<i64>,
     ids: Cell<u32>,
 }
 
@@ -48,8 +56,46 @@ impl Src {
             no_browser: Cell::new(false),
             clock: Cell::new(1_794_000_000_000),
             replies: RefCell::new(vec![]),
+            vault: RefCell::new(BTreeMap::new()),
+            fetch_cost: Cell::new(0),
+            put_fails: Cell::new(false),
+            model_cost: Cell::new(0),
             ids: Cell::new(1),
         }
+    }
+    /// The host's photo folder. A picture body of "TINY" is too small and "BAD" will not decode.
+    fn vault_call(&self, actor: &str, operation: &str, p: &Value) -> Result<Value> {
+        let key = |name: &str| (actor.to_owned(), name.to_owned());
+        let name = p["name"].as_str().unwrap_or("");
+        let mut vault = self.vault.borrow_mut();
+        Ok(match operation {
+            "reencode" => match p["bodyBase64"].as_str().unwrap_or("") {
+                "TINY" => json!({"ok":false,"reason":"too-small"}),
+                "BAD" => json!({"ok":false,"reason":"undecodable"}),
+                "HUGE" => json!({"ok":false,"reason":"too-large"}),
+                body => json!({"ok":true,"contentType":"image/jpeg","bodyBase64":format!("JPEG:{body}"),"width":640,"height":360,"originalWidth":1600,"originalHeight":900,"bytes":2048}),
+            },
+            "put" => {
+                if self.put_fails.get() {
+                    return Err(Error::new("Sports host call failed"));
+                }
+                vault.insert(key(name), p.clone());
+                json!({})
+            }
+            "get" => match vault.get(&key(name)) {
+                Some(v) => json!({"found":true,"bodyBase64":v["bodyBase64"],"text":v["text"]}),
+                None => json!({"found":false}),
+            },
+            "list" => json!({"names": vault.keys().filter(|(a, _)| a == actor).map(|(_, n)| n.clone()).collect::<Vec<_>>()}),
+            "delete" => {
+                vault.remove(&key(name));
+                json!({})
+            }
+            _ => return Err(Error::new("Unexpected host call")),
+        })
+    }
+    pub fn vault_names(&self, person: &str) -> Vec<String> {
+        self.vault.borrow().keys().filter(|(a, _)| a == person).map(|(_, n)| n.clone()).collect()
     }
     pub fn as_actor(&self, actor: &'static str) {
         self.actor.set(actor);
@@ -213,6 +259,7 @@ impl Host for Src {
                 return Ok(json!({"actorUserId": actor, "now": at.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)}));
             }
             ("context", "uuid") => return Ok(json!({"id": self.next_id()})),
+            ("kv", _) if resource == "source-photo-files" => return self.vault_call(actor, operation, &parameters),
             ("kv", "get") => {
                 return Ok(self.files.borrow().get(&(actor.to_owned(), resource.to_owned())).cloned().unwrap_or(Value::Null))
             }
@@ -221,6 +268,7 @@ impl Host for Src {
                 return Ok(json!({}));
             }
             ("fetch", "get") => {
+                self.advance(self.fetch_cost.get());
                 let url = parameters["url"].as_str().unwrap_or("");
                 return Ok(self.pages.borrow().get(url).cloned().unwrap_or_else(|| json!({"ok":false,"reason":"network"})));
             }
@@ -238,6 +286,7 @@ impl Host for Src {
                 if replies.is_empty() {
                     return Err(Error::new("needs_config"));
                 }
+                self.advance(self.model_cost.get());
                 return Ok(json!({"text": replies.remove(0)}));
             }
             _ => return Err(Error::new("Unexpected host call")),

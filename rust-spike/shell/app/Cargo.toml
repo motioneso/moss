@@ -20,6 +20,7 @@ moss-memory-host = { path = "../../../modules/memory/host" }
 moss-integrations = { path = "../../integrations" }
 moss-integrations-host = { path = "../../integrations/host" }
 moss-platform-jobs = { path = "../../module-host/bridges/jobs" }
+moss-sports-host = { path = "../../../modules/sports/host" }
 anyhow = "1"
 safety-core = { path = "../../safety-core" }
 uuid = "1"
