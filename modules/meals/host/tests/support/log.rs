@@ -2,6 +2,9 @@
 use super::tools::run;
 use super::*;
 
+// The three tests share one job queue, so any of them can pick up another's job. They take turns.
+static TURN: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 const LOG_TABLES: [&str; 3] = [
     "app.meals_log_entries",
     "app.meals_log_estimates",
@@ -30,6 +33,7 @@ fn fill(params: &Value, entry: &str) -> Value {
 #[test]
 #[ignore = "Only through verify-gate"]
 fn installed_log_tools_match_the_old_handlers_step_for_step() {
+    let _turn = TURN.lock().unwrap_or_else(|e| e.into_inner());
     let w = World::new();
     let (new_actor, old_actor) = (w.f.a, w.add_user());
     let setup = json!({"unitsSystem":"metric"});
@@ -131,6 +135,7 @@ fn digest(w: &World, table: &str, owner: uuid::Uuid) -> String {
 #[test]
 #[ignore = "Only through verify-gate"]
 fn the_log_is_private_and_the_job_and_estimate_carry_no_text_beyond_the_meal() {
+    let _turn = TURN.lock().unwrap_or_else(|e| e.into_inner());
     let w = World::new();
     let (a, b) = (w.f.a, w.f.b);
     let added = run(&w, a, "meals.log.add", json!({"description":MARK,"idempotencyKey":"mark-1","consumedAt":"2026-11-10T12:00:00-08:00"}), true);
@@ -140,7 +145,7 @@ fn the_log_is_private_and_the_job_and_estimate_carry_no_text_beyond_the_meal() {
     assert!(entry["nutrients"].is_null(), "{added}");
     // The queued job names the entry and its revision and holds no meal text.
     let payloads: Vec<String> = w.f.rt
-        .block_on(w.f.root.query("SELECT payload::text FROM moss_queue.jobs WHERE queue LIKE '%meals-log-estimate'", &[]))
+        .block_on(w.f.root.query("SELECT payload::text FROM moss_queue.jobs WHERE queue LIKE '%meals-log-estimate' AND payload::text LIKE '%' || $1 || '%'", &[&entry["entryId"].as_str().unwrap()]))
         .unwrap().iter().map(|r| r.get(0)).collect();
     assert_eq!(payloads.len(), 1, "adding a meal queues one estimate job");
     assert!(!payloads[0].contains(MARK), "{}", payloads[0]);
@@ -206,6 +211,7 @@ fn the_log_is_private_and_the_job_and_estimate_carry_no_text_beyond_the_meal() {
 #[test]
 #[ignore = "Only through verify-gate"]
 fn the_estimate_in_the_real_table_is_the_sum_of_its_foods_and_unknown_stays_null() {
+    let _turn = TURN.lock().unwrap_or_else(|e| e.into_inner());
     let w = World::new();
     let a = w.f.a;
     run(&w, a, "meals.log.add", json!({"description":"wings and coke","idempotencyKey":"sum-1","consumedAt":"2026-11-10T12:00:00-08:00"}), true);
