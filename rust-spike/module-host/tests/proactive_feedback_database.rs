@@ -281,6 +281,7 @@ fn cards_and_feedback_follow_the_rules_privately() {
     println!("signal changed only the signals table");
 
     // A refresh queues a job that carries ids and a hashed key, never private text.
+    sql(include_str!("../../tasks/sql/0001_spike_job_queue.sql"));
     set_pref(owner, "proactive.monitoring.v1", Some(proactive(quiet_off.clone())));
     let (status, queued) = call!(rt, database, owner, |cx| proactive_cards::refresh(cx, &["tasks".to_string()]));
     assert_eq!((status, queued["enqueued"].clone()), (202, json!(1)));
