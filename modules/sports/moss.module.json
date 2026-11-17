@@ -29,7 +29,16 @@
     },
     {
       "port": "kv",
-      "operations": ["preference.read", "preference.write", "get", "set"],
+      "operations": [
+        "preference.read",
+        "preference.write",
+        "get",
+        "set",
+        "put",
+        "list",
+        "delete",
+        "reencode"
+      ],
       "resources": [
         "espn-headlines",
         "espn-scoreboard",
@@ -40,7 +49,9 @@
         "standings-competitions",
         "standings-last-viewed",
         "source-previews",
-        "source-icon-misses"
+        "source-icon-misses",
+        "source-photo-files",
+        "source-photo-links"
       ]
     },
     {
