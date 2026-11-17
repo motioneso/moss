@@ -22,6 +22,15 @@ pub const TEN_MINUTES_MS: i64 = 10 * 60 * 1000;
 /// Most entries one namespace keeps. A full catalog of rosters fits, and day-keyed data prunes itself.
 const MAX_ENTRIES: usize = 200;
 
+/// News feeds and article bodies are read whole on every request, so their namespaces stay small.
+fn max_entries(namespace: &str) -> usize {
+    match namespace {
+        HEADLINES => 40,
+        ARTICLE_BODY => 60,
+        _ => MAX_ENTRIES,
+    }
+}
+
 /// The host's clock in milliseconds. Only the time is read from the context, never the actor.
 pub fn now_ms<H: Host + ?Sized>(host: &H) -> Result<i64> {
     let context = host.call("context", "read", "call", json!({}))?;
@@ -55,10 +64,11 @@ impl Store {
 
     pub fn put(&mut self, key: &str, value: Value, ttl_ms: i64, now: i64) {
         self.entries.insert(key.to_owned(), json!({"e": now + ttl_ms, "v": value}));
-        if self.entries.len() > MAX_ENTRIES {
+        let max = max_entries(self.namespace);
+        if self.entries.len() > max {
             self.entries.retain(|_, e| e["e"].as_i64().is_some_and(|x| x > now));
         }
-        while self.entries.len() > MAX_ENTRIES {
+        while self.entries.len() > max {
             let soonest = self
                 .entries
                 .iter()
