@@ -3,16 +3,21 @@
 //! recorded fixtures, so the overview runs on its real read path with only the network replaced.
 use super::{espn::EspnHost, Fake};
 use moss_module_sdk::{Host, Result, RouteRequest};
-use serde_json::Value;
+use serde_json::{json, Value};
+use std::cell::{Cell, RefCell};
 
 pub struct Both {
     pub follows: Fake,
     pub espn: EspnHost,
+    /// The person's headline setting. Off means no ESPN headline is read.
+    pub headlines_on: Cell<bool>,
+    /// Coverage rows, each with a `sport_key` or a `follow_id`. None means the default coverage.
+    pub coverage_rows: RefCell<Vec<Value>>,
 }
 
 impl Both {
     pub fn new() -> Self {
-        let both = Self { follows: Fake::new(), espn: EspnHost::new() };
+        let both = Self { follows: Fake::new(), espn: EspnHost::new(), headlines_on: Cell::new(true), coverage_rows: RefCell::new(vec![]) };
         both.follows.as_actor(super::espn::ACTOR);
         both
     }
@@ -44,6 +49,12 @@ impl Both {
 
 impl Host for Both {
     fn call(&self, port: &str, operation: &str, resource: &str, parameters: Value) -> Result<Value> {
+        if port == "db" && resource == "app.sports_headline_prefs" {
+            return Ok(if self.headlines_on.get() { json!([]) } else { json!([{"espn_headlines_enabled": false}]) });
+        }
+        if port == "db" && resource == "app.sports_espn_source_assignments" {
+            return Ok(Value::Array(self.coverage_rows.borrow().clone()));
+        }
         if port == "db" || operation.starts_with("preference.") {
             return self.follows.call(port, operation, resource, parameters);
         }
