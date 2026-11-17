@@ -56,15 +56,23 @@ control("activity amounts", "modules/finance/src/ledger.rs",
         'json!({"accountId":account_id,"transactionId":id,"amountCents":amount})',
         "modules/finance/host/Cargo.toml", "installed", HOST, ["--ignored", "--test-threads=1"], target,
         rebuild=True)
-# Re-run both assertions after restoring their guards; a negative control alone is not proof.
+# A queued poll must hold ids only. Put the link seed into its payload and the bank scan must fail.
+BANK = "bank_tokens_and_private_text_never_reach_job_rows_activity_rows_or_finance_tables"
+control("poll payload", "modules/finance/src/bank.rs",
+        'json!({"params": {}, "idempotencyKey": job_key(seed)',
+        'json!({"params": {"seed": seed}, "idempotencyKey": job_key(seed)',
+        "modules/finance/host/Cargo.toml", "installed", BANK, ["--ignored", "--test-threads=1"], target,
+        rebuild=True)
+# Re-run the assertions after restoring their guards; a negative control alone is not proof.
 # The control build reused the guest output folder, so rebuild the shipped component from restored source.
 subprocess.run(["modules/finance/tools/build-component.sh", str(target / "module.wasm")], check=True,
                env={**os.environ, "CARGO_TARGET_DIR": str(target)})
 for manifest, test, case, extra, output in [
     ("modules/finance/src/Cargo.toml", "privacy", GUEST, [], guest_target),
     ("modules/finance/host/Cargo.toml", "installed", HOST, ["--ignored", "--test-threads=1"], target),
+    ("modules/finance/host/Cargo.toml", "installed", BANK, ["--ignored", "--test-threads=1"], target),
 ]:
     subprocess.run(["cargo", "+1.95.0", "test", "--locked", "--offline", "--manifest-path",
                     manifest, "--test", test, case, "--", *extra],
                    env={**os.environ, "CARGO_TARGET_DIR": str(output)}, check=True)
-print("PASS privacy assertions after restoring both guards", flush=True)
+print("PASS privacy assertions after restoring all guards", flush=True)
