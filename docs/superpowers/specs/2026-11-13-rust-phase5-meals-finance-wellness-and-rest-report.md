@@ -1271,7 +1271,7 @@ Both ended with exit code 0. The first package gate run failed twice before it p
 
 | Check                                                                                      | Result                                                                                                                                                              |
 | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Native guest tests (67 unit tests, 15 new route tests, plus the older suites)              | passed                                                                                                                                                              |
+| Native guest tests (67 unit tests, 21 new route tests, plus the older suites)              | passed                                                                                                                                                              |
 | Package tests and the real component built as WebAssembly, run against the real host       | passed, including the new table grants and a refused table                                                                                                          |
 | Target, weekday, bill and card figures                                                     | checked with fixtures taken from the old code's tests; the old handlers were not run side by side                                                                   |
 | An old review saves nothing                                                                | a repeated bill save with the old review gets a 409 and writes no row, in the guest tests, the real database and the live run                                       |
@@ -1308,6 +1308,8 @@ Both ended with exit code 0. Earlier runs failed on setup problems only (no depe
 - Route parity with the old handlers is checked through ported messages, status codes and shapes in the guest tests. The old handlers were not run side by side with the new ones.
 - Weekly, refill and balance target progress is covered by the ported unit fixtures, not by a live run.
 - Flex configure, flex assign, card enroll and card funding were exercised in the guest tests against an in-memory host. The real database proof covers card enrolment rows only. The full flexible pool set-up was not run through the live server.
+- Bill suggestions built from real charges, and dismissing one, are covered by the ported unit fixtures but not by a route test.
+- Stopping a bill accepts an end date before its start date, and plan ids with capital letters behave differently between record and the other bill routes. Neither is fixed.
 - Suggestion dismissals are not in the real-database privacy test. Dismissing a bill suggestion saves without a review check, as the old code did. The review check also ignores bill names and dismissals, so a rename in another tab does not make a review stale.
 - Recording a bill payment makes three writes (balance, transaction, occurrence). They are atomic because the host runs a whole request in one database transaction (proved for part 23). The in-memory test host has no such rollback.
 - Funding targets, bill entry record and bill suggestions beyond a read were not exercised live.

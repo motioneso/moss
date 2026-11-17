@@ -1200,6 +1200,11 @@
           "code": "invalid_date",
           "class": "validation",
           "description": "Choose a valid planned date."
+        },
+        {
+          "code": "invalid_category",
+          "class": "validation",
+          "description": "Choose a current category for the payment."
         }
       ]
     },
@@ -1272,6 +1277,11 @@
           "code": "open_draft",
           "class": "validation",
           "description": "Finish the open draft first."
+        },
+        {
+          "code": "current_month_required",
+          "class": "validation",
+          "description": "This works on the current month only."
         }
       ]
     },
@@ -1288,6 +1298,11 @@
           "code": "insufficient_ready",
           "class": "validation",
           "description": "Choose less payment cash or release other assignments before saving."
+        },
+        {
+          "code": "current_month_required",
+          "class": "validation",
+          "description": "This works on the current month only."
         }
       ]
     }

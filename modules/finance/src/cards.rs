@@ -340,7 +340,6 @@ pub fn save<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Outcome> {
     let expected = ask!(read_review(input));
     let reviewed = ask!(check(host, &expected)?);
     let plan = ask!(prepare(host, &reviewed, input)?);
-    let _ = &plan.before;
     if !gate(host, &reviewed)? {
         return Ok(Err(stale()));
     }

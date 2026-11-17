@@ -3,7 +3,7 @@
 //!
 //! The preview and the record share one set of checks. The record also replays by operation
 //! identity, so repeating a save answers unchanged and a different one conflicts. The activity
-//! row holds ids and the date only.
+//! row holds ids only.
 use crate::bills::{plans_of, Plan};
 use crate::budget::{check, gate, read_review, stale, Book, OCCURRENCES};
 use crate::budget_write::live_ids;

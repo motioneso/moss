@@ -359,8 +359,10 @@ fn the_flexible_pool_is_set_up_assigned_and_an_old_review_writes_nothing() {
     let (s, b) = f.route("POST", "/finance/flex/assign", assign(review(&f, "2026-11")));
     assert_eq!(s, 200, "{b}");
     let leave = with(review(&f, "2026-11"), json!({"mode":"envelopes"}));
+    let kept = rows_snapshot(&f);
     let (s, b) = f.route("POST", "/finance/flex/configure", leave);
-    assert!(s == 200 || s == 400, "{b}");
+    assert_eq!((s, b["message"].clone()), (400, json!("Choose destinations for all available pool money before leaving")), "{b}");
+    assert_eq!(rows_snapshot(&f), kept);
     assert!(!f.rows(ACTIVITY).iter().any(|r| r.to_string().contains("30000")));
 }
 
@@ -378,4 +380,8 @@ fn funding_a_card_reserve_needs_an_enrolled_card_and_an_old_review_writes_nothin
     let (s, b) = f.route("POST", "/finance/cards/save", fund(stale_of(&f, &review(&f, "2026-11")), 10_000));
     assert_eq!((s, b["code"].clone()), (409, json!("stale_budget")), "{b}");
     assert_eq!(rows_snapshot(&f), before);
+    let (s, b) = f.route("POST", "/finance/cards/save", fund(review(&f, "2026-11"), 10_000));
+    assert_eq!(s, 200, "{b}");
+    let moved: i64 = f.rows("app.finance_card_assignments").iter().map(|r| r["assigned_cents"].as_i64().unwrap_or(0)).sum();
+    assert_eq!(moved, 10_000, "{:?}", f.rows("app.finance_card_assignments"));
 }
