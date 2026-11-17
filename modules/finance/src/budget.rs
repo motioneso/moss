@@ -6,8 +6,10 @@
 //! save. The fingerprint is a change detector and never grants anything.
 use crate::accounts::iso;
 use crate::envelope::{self, Assignments, Month, Row};
+use crate::flex::{self, Policy as FlexPolicy};
 use crate::input::{self, refuse, Refusal, CURRENCIES, MAX_SAFE};
 use crate::ledger::{first, today, values, Outcome, ACCOUNTS, TRANSACTIONS};
+use crate::targets;
 use crate::text::{hash32, is_calendar_month, is_hash32, month_window};
 use crate::transactions::splits_of;
 use moss_module_sdk::{
@@ -180,13 +182,22 @@ pub struct Reviewed {
     pub fingerprint: String,
 }
 
-pub fn check<H: Host + ?Sized>(host: &H, expected: &Review) -> Result<std::result::Result<Reviewed, Refusal>> {
+/// The budget as it stands now, with no review to compare against.
+pub fn current<H: Host + ?Sized>(host: &H) -> Result<std::result::Result<Reviewed, Refusal>> {
     let policy = match require(host)? {
         Ok(p) => p,
         Err(r) => return Ok(Err(r)),
     };
     let book = load(host)?;
     let fingerprint = fingerprint(&book);
+    Ok(Ok(Reviewed { policy, book, fingerprint }))
+}
+
+pub fn check<H: Host + ?Sized>(host: &H, expected: &Review) -> Result<std::result::Result<Reviewed, Refusal>> {
+    let Reviewed { policy, book, fingerprint } = match current(host)? {
+        Ok(r) => r,
+        Err(r) => return Ok(Err(r)),
+    };
     if policy.revision != expected.revision || fingerprint != expected.fingerprint {
         return Ok(Err(stale()));
     }
@@ -306,6 +317,9 @@ pub struct Context {
     pub excluded_accounts: usize,
     pub pending: usize,
     pub needs_look: usize,
+    pub flex: Option<FlexPolicy>,
+    pub flex_detail: Vec<Value>,
+    pub card_overspent: bool,
 }
 
 fn funding_balance(book: &Book, account: &Value, month: &str, current: &str, cutoff: &str) -> Option<(i64, Value)> {
@@ -336,11 +350,17 @@ fn funding_balance(book: &Book, account: &Value, month: &str, current: &str, cut
 }
 
 pub fn context<H: Host + ?Sized>(host: &H, book: &Book, iso: &str, month: &str, date: &str) -> Result<Context> {
+    context_with(host, book, iso, month, date, None)
+}
+
+/// As `context`, with one month's flex policy swapped for a proposed one.
+pub fn context_with<H: Host + ?Sized>(host: &H, book: &Book, iso: &str, month: &str, date: &str, flex_override: Option<&FlexPolicy>) -> Result<Context> {
     let rows = budget_rows(book, iso, date);
     let excluded = envelope::transfer_ids(&rows);
     let mut ledgers = ledgers(book);
     ledgers.entry(month.to_owned()).or_default();
-    let mut months = envelope::derive(&ledgers, &rows, &excluded)?;
+    let flex_policies = flex::with_override(&flex::policies(book), flex_override);
+    let mut months = envelope::derive(&ledgers, &rows, &excluded, &flex_policies)?;
     let state = months.remove(month).ok_or_else(|| Error::new("Month missing"))?;
 
     let current = &date[..7];
@@ -394,6 +414,24 @@ pub fn context<H: Host + ?Sized>(host: &H, book: &Book, iso: &str, month: &str, 
         .iter()
         .filter(|t| in_month(t) && t["review_state"] == "needs_look" && t["id"].as_str().is_some_and(|i| counted.contains(i)))
         .count();
+    let flex = flex::for_month(&flex_policies, month).cloned();
+    let flex_detail = match flex.as_ref().filter(|p| p.active) {
+        Some(p) => p
+            .flex_ids
+            .iter()
+            .map(|id| {
+                let activity: i128 = rows
+                    .iter()
+                    .filter(|r| !excluded.contains(&r.id) && r.date.starts_with(month))
+                    .flat_map(envelope::allocations)
+                    .filter(|(c, _)| c.as_deref() == Some(id.as_str()))
+                    .map(|(_, a)| i128::from(a))
+                    .sum();
+                json!({"id": id, "guidanceCents": ledgers.get(month).and_then(|l| l.get(id)).copied().unwrap_or(0), "activityCents": activity as i64})
+            })
+            .collect(),
+        None => Vec::new(),
+    };
     Ok(Context {
         month: state,
         ready,
@@ -403,6 +441,9 @@ pub fn context<H: Host + ?Sized>(host: &H, book: &Book, iso: &str, month: &str, 
         excluded_accounts: book.accounts.len() - funding_accounts.len(),
         pending,
         needs_look,
+        flex,
+        flex_detail,
+        card_overspent: false,
     })
 }
 
@@ -412,7 +453,7 @@ pub fn status<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Outcome> {
     let month = ask!(read_month(input));
     let date = today(host)?;
     let book = load(host)?;
-    let categories = category_views(&book);
+    let mut categories = category_views(&book);
     let Some(row) = policy_row(host)? else {
         let ledgers = ledgers(&book);
         let legacy: Vec<Value> = ledgers
@@ -449,14 +490,37 @@ pub fn status<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Outcome> {
         .filter(|c| c["archived"] == false && c["id"] != "income" && c["id"] != "transfers")
         .map(|c| json!({"id":c["id"],"name":c["name"],"group":c["group"]}))
         .collect();
+    if let Some(p) = ctx.flex.as_ref().filter(|p| p.active) {
+        categories.retain(|c| !c["id"].as_str().is_some_and(|id| p.flex_ids.iter().any(|f| f == id)));
+        for c in &mut categories {
+            let non_monthly = c["id"].as_str().is_some_and(|id| p.non_monthly_ids.iter().any(|f| f == id));
+            c["tableGroup"] = json!(if non_monthly { "Non-monthly" } else { "Fixed" });
+        }
+        categories.push(json!({"id":flex::FLEX_POOL,"name":"Flexible spending","group":"everyday","archived":false,"tableGroup":"Flexible"}));
+    }
+    let name_of = |id: &str| book.categories.iter().find(|c| c["id"] == id).and_then(|c| c["name"].as_str()).unwrap_or(id).to_owned();
+    let flex_detail: Vec<Value> = ctx
+        .flex_detail
+        .iter()
+        .map(|row| {
+            let mut row = row.clone();
+            row["name"] = json!(name_of(row["id"].as_str().unwrap_or("")));
+            row
+        })
+        .collect();
+    let flex_json = ctx.flex.as_ref().map_or(Value::Null, |p| json!({"month":p.month,"active":p.active,"flexIds":p.flex_ids,"nonMonthlyIds":p.non_monthly_ids}));
+    let progress = targets::progress_all(&book, &ctx.month.categories, &month, &date);
+    let pooled = flex::pooled_ids_of(ctx.flex.as_ref());
+    let funding: Vec<Value> = targets::lines(&progress, &ctx.month.categories, &book, &pooled).iter().map(targets::Line::json).collect();
     Ok(Ok(json!({
-        "month": month, "setupRequired": false, "flex": null, "cardPayments": [], "cardChoices": [], "cardStorageReady": false,
-        "flexDetail": [], "isoCurrency": iso, "revision": revision, "fingerprint": fingerprint(&book), "currentMonth": &date[..7],
+        "month": month, "setupRequired": false, "flex": flex_json, "cardPayments": [], "cardChoices": [], "cardStorageReady": false,
+        "flexDetail": flex_detail, "isoCurrency": iso, "revision": revision, "fingerprint": fingerprint(&book), "currentMonth": &date[..7],
         "hasBank": !book.accounts.is_empty(), "hasBudget": !book.assignments.is_empty(),
         "state": {"computedAt": computed_at, "tbbCents": ctx.month.tbb, "categories": cats},
         "readyToAssignCents": ctx.ready, "readyUnavailable": ctx.unavailable, "futureReservedCents": ctx.future_reserved,
         "excludedAccountCount": ctx.excluded_accounts, "pendingCount": ctx.pending, "needsLookCount": ctx.needs_look,
-        "accounts": ctx.funding, "categories": categories, "targets": [], "targetFundingOverspent": false,
-        "targetFunding": [], "flexChoices": choices,
+        "accounts": ctx.funding, "categories": categories, "targets": progress.iter().map(targets::Progress::json).collect::<Vec<_>>(),
+        "targetFundingOverspent": targets::overspent(&ctx.month.categories) || ctx.card_overspent,
+        "targetFunding": funding, "flexChoices": choices,
     })))
 }

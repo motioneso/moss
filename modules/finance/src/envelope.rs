@@ -6,6 +6,7 @@
 //! carry(C, m)     = max(available(C, m), 0)
 //! tbb(M)          = sum(income, m <= M) - sum(assigned, m <= M) + sum(overspend, m < M)
 //! ```
+use crate::flex::{for_month, route, Policy, FLEX_POOL};
 use crate::input::MAX_SAFE;
 use moss_module_sdk::{Error, Result};
 use std::collections::{BTreeMap, BTreeSet};
@@ -109,28 +110,43 @@ pub fn allocations(row: &Row) -> Vec<(Option<String>, i64)> {
 }
 
 /// Every month that has an assignment or a counted row, in order, carrying balances forward.
-pub fn derive(assignments: &Assignments, rows: &[Row], excluded: &BTreeSet<String>) -> Result<BTreeMap<String, Month>> {
+pub fn derive(assignments: &Assignments, rows: &[Row], excluded: &BTreeSet<String>, flex: &[Policy]) -> Result<BTreeMap<String, Month>> {
     let mut activity: BTreeMap<String, BTreeMap<String, i128>> = BTreeMap::new();
     let mut income: BTreeMap<String, i128> = BTreeMap::new();
     for row in rows.iter().filter(|r| !excluded.contains(&r.id)) {
         let month = row.date[..7].to_owned();
+        let pooled = for_month(flex, &month).filter(|p| p.active);
         activity.entry(month.clone()).or_default();
         for (category, amount) in allocations(row) {
             let Some(category) = category.filter(|c| c != "transfers") else { continue };
+            let was_income = category == "income";
+            let category = match pooled {
+                Some(p) if p.flex_ids.contains(&category) => FLEX_POOL.to_owned(),
+                _ => category,
+            };
             *activity.entry(month.clone()).or_default().entry(category.clone()).or_default() += i128::from(amount);
-            if category == "income" {
+            if was_income {
                 *income.entry(month.clone()).or_default() -= i128::from(amount);
             }
         }
     }
-    let months: BTreeSet<&String> = assignments.keys().chain(activity.keys()).collect();
+    let months: BTreeSet<&String> = assignments.keys().chain(activity.keys()).chain(flex.iter().map(|p| &p.month)).collect();
     let mut out = BTreeMap::new();
     let mut carry: BTreeMap<String, i128> = BTreeMap::new();
     let (mut cum_income, mut cum_assigned, mut cum_overspend) = (0i128, 0i128, 0i128);
     for month in months {
         let no_plan: BTreeMap<String, i64> = BTreeMap::new();
         let no_spend: BTreeMap<String, i128> = BTreeMap::new();
-        let assigned = assignments.get(month).unwrap_or(&no_plan);
+        let policy = for_month(flex, month).filter(|p| p.active);
+        if let Some(p) = policy {
+            for id in &p.flex_ids {
+                if let Some(held) = carry.remove(id) {
+                    *carry.entry(FLEX_POOL.to_owned()).or_default() += held;
+                }
+            }
+        }
+        let routed = route(assignments.get(month).unwrap_or(&no_plan), policy)?;
+        let assigned = &routed;
         let spent = activity.get(month).unwrap_or(&no_spend);
         let ids: BTreeSet<String> = carry.keys().chain(assigned.keys()).chain(spent.keys()).cloned().collect();
         let (mut categories, mut total, mut overspend) = (BTreeMap::new(), 0i128, 0i128);
@@ -181,7 +197,7 @@ mod tests {
             row("g1", "a", "2026-10-05", 12_000, Some("groceries")),
             row("g2", "a", "2026-11-05", 1_000, Some("groceries")),
         ];
-        let months = derive(&assigned, &rows, &BTreeSet::new()).unwrap();
+        let months = derive(&assigned, &rows, &BTreeSet::new(), &[]).unwrap();
         assert_eq!(months["2026-10"].categories["groceries"], Cat { assigned: 10_000, activity: 12_000, available: -2_000 });
         assert_eq!(months["2026-10"].tbb, 40_000);
         // The overspend is not carried, but it lowers the pool from the next month on.
@@ -193,7 +209,7 @@ mod tests {
     fn unspent_money_carries_forward() {
         let assigned = plan("2026-09", "dining", 5_000);
         let rows = vec![row("d", "a", "2026-10-02", 1_500, Some("dining"))];
-        let months = derive(&assigned, &rows, &BTreeSet::new()).unwrap();
+        let months = derive(&assigned, &rows, &BTreeSet::new(), &[]).unwrap();
         assert_eq!(months["2026-10"].categories["dining"].available, 3_500);
     }
 
@@ -201,10 +217,10 @@ mod tests {
     fn a_balanced_split_counts_by_part_and_an_unbalanced_one_counts_whole() {
         let mut split = row("s", "a", "2026-10-02", 3_000, Some("groceries"));
         split.splits = vec![("groceries".into(), 2_000), ("dining".into(), 1_000)];
-        let months = derive(&Assignments::new(), &[split.clone()], &BTreeSet::new()).unwrap();
+        let months = derive(&Assignments::new(), &[split.clone()], &BTreeSet::new(), &[]).unwrap();
         assert_eq!(months["2026-10"].categories["dining"].activity, 1_000);
         split.splits = vec![("groceries".into(), 2_000), ("dining".into(), 500)];
-        let months = derive(&Assignments::new(), &[split], &BTreeSet::new()).unwrap();
+        let months = derive(&Assignments::new(), &[split], &BTreeSet::new(), &[]).unwrap();
         assert_eq!(months["2026-10"].categories["groceries"].activity, 3_000);
     }
 
@@ -217,7 +233,7 @@ mod tests {
         ];
         let excluded = transfer_ids(&rows);
         assert!(excluded.contains("out") && excluded.contains("in") && !excluded.contains("none"));
-        let months = derive(&Assignments::new(), &rows, &excluded).unwrap();
+        let months = derive(&Assignments::new(), &rows, &excluded, &[]).unwrap();
         assert!(months["2026-10"].categories.is_empty());
     }
 
@@ -235,7 +251,7 @@ mod tests {
 
     #[test]
     fn ready_is_balances_minus_envelope_money() {
-        let months = derive(&plan("2026-10", "groceries", 10_000), &[], &BTreeSet::new()).unwrap();
+        let months = derive(&plan("2026-10", "groceries", 10_000), &[], &BTreeSet::new(), &[]).unwrap();
         assert_eq!(ready(60_000, &months["2026-10"].categories).unwrap(), 50_000);
     }
 
