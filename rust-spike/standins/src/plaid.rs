@@ -12,7 +12,7 @@ use std::{collections::HashMap, sync::Mutex};
 pub struct PlaidConfig {
     pub client_id: String,
     pub secret: String,
-    /// Put into every minted token, so a test can search for it.
+    /// Put into every minted access token, so a test can search for it.
     pub marker: String,
     /// Put into the invented merchant and account names.
     pub private_marker: String,
