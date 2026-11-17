@@ -112,6 +112,19 @@ fn defaults(table: &str, at: &str) -> Value {
             json!({"solo_weekdays":[],"usual_time":null,"created_at":at,"updated_at":at})
         }
         "app.meals_favourites" => json!({"created_at":at}),
+        "app.meals_shopping_lists" => json!({"plan_id":null,"created_at":at,"updated_at":at}),
+        "app.meals_shopping_list_items" => json!({"line_key":null,"quantity":null,"unit":null,
+            "purchase_quantity":null,"purchase_unit":null,"store_section":"other","manual":false,
+            "covered_by_pantry":false,"not_in_plan":false,"converted_from":[],"source_meal_ids":[],
+            "checked_at":null,"bought_at":null,"created_at":at,"updated_at":at}),
+        "app.meals_pantry_items" => {
+            json!({"quantity":null,"unit":null,"source":"manual","created_at":at,"updated_at":at})
+        }
+        "app.meals_staples" => json!({"created_at":at}),
+        "app.meals_undo_actions" => json!({"undone_at":null,"created_at":at}),
+        "app.meals_plans" | "app.meals_plan_days" | "app.meals_planned_meals"
+        | "app.meals_planned_meal_eaters" | "app.meals_recipes"
+        | "app.meals_recipe_ingredients" => json!({"created_at":at}),
         other => panic!("fake host does not know {other}"),
     }
 }
@@ -144,7 +157,20 @@ fn clash(table: &str, a: &Value, b: &Value) -> bool {
                 || (same("kitchen_id") && a["is_self"] == true && b["is_self"] == true)
         }
         "app.meals_meal_slot_rules" => same("kitchen_id") && same("slot_name"),
-        _ => same("member_id") && same("recipe_id"),
+        "app.meals_favourites" => same("member_id") && same("recipe_id"),
+        "app.meals_shopping_lists" => same("list_id"),
+        "app.meals_shopping_list_items" => {
+            same("line_id")
+                || (same("list_id")
+                    && !a["line_key"].is_null()
+                    && same("line_key")
+                    && a["bought_at"].is_null()
+                    && b["bought_at"].is_null())
+        }
+        "app.meals_pantry_items" => same("item_id"),
+        "app.meals_staples" => same("staple_id") || (same("kitchen_id") && same("name_key")),
+        "app.meals_undo_actions" => same("action_id"),
+        _ => false,
     }
 }
 
