@@ -527,7 +527,7 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
     // Part 14a. A real feed source is saved and read again through the real fetch path, with
     // nothing rewritten. A site with no feed asks the person's model for a recipe when one is set
     // up, and the answer is printed either way.
-    let (status, text) = call(Method::POST, "/sources/preview", Some(&cookie), Some(json!({"url":"https://feeds.bbci.co.uk/sport/rss.xml","assignments":[{"target":{"kind":"sport","sportKey":"football"}}]})));
+    let (status, text) = call(Method::POST, "/sources/preview", Some(&cookie), Some(json!({"url":"https://www.telegraph.co.uk/sport/rss.xml","assignments":[{"target":{"kind":"sport","sportKey":"football"}}]})));
     assert_eq!(status, 200, "{text}\n{}", log());
     let shown = json_of(&text);
     println!("sports live: real feed preview: {} {}", shown["status"], shown["reason"]);
@@ -565,7 +565,7 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
             println!("sports live: NOT PROVEN: the real feed gave no photo that passed the checks");
         } else {
             use sha2::{Digest, Sha256};
-            let feed = client.get("https://feeds.bbci.co.uk/sport/rss.xml").send().unwrap().text().unwrap();
+            let feed = client.get("https://www.telegraph.co.uk/sport/rss.xml").header("user-agent", "Mozilla/5.0").send().unwrap().text().unwrap();
             let between = |text: &str, open: &str, close: &str| -> Option<String> {
                 let start = text.find(open)? + open.len();
                 let end = text[start..].find(close)? + start;
