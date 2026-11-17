@@ -453,6 +453,69 @@ fn installed_finance_package_serves_routes_from_the_real_server() {
     assert_eq!(json_of(&text)["code"], "manual_unavailable");
     assert_eq!(call(Method::GET, "/finance/accounts", None, None).0, 401);
     println!("PASS live finance: an account and an entry worked over HTTPS, and the second person saw none of it");
+    // Transactions: query, categorize, note, rule, sort, CSV import with a replay, two people.
+    const PAYEE: &str = "PLANTED-LIVE-PAYEE-77c2";
+    const IMPORT_NOTE: &str = "PLANTED-LIVE-IMPORT-NOTE-1e44";
+    let (status, text) = call(Method::GET, "/finance/transactions?month=2026-11", Some(&cookie), None);
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let listed = json_of(&text);
+    let first = listed["transactions"][0].clone();
+    assert_eq!(first["name"], NAME, "{text}");
+    let tx_id = first["id"].as_str().unwrap().to_owned();
+    let (status, text) = call(
+        Method::POST,
+        "/finance/transactions/category",
+        Some(&cookie),
+        Some(json!({"transactionId":tx_id,"accountId":account,"month":"2026-11","categoryId":"groceries","writeRevision":first["writeRevision"]})),
+    );
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let (_, text) = call(Method::GET, &format!("/finance/transactions?month=2026-11&transactionId={tx_id}"), Some(&cookie), None);
+    let revision_now = json_of(&text)["transactions"][0]["writeRevision"].as_str().unwrap().to_owned();
+    let (status, text) = call(
+        Method::POST,
+        "/finance/transactions/notes",
+        Some(&cookie),
+        Some(json!({"transactionId":tx_id,"accountId":account,"month":"2026-11","writeRevision":revision_now,"notes":IMPORT_NOTE})),
+    );
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let (status, text) = call(Method::GET, &format!("/finance/transactions/notes?transactionId={tx_id}&accountId={account}&month=2026-11"), Some(&cookie), None);
+    assert_eq!(status, 200, "{text}");
+    assert!(text.contains(IMPORT_NOTE), "{text}");
+    let csv = format!("date,name,amount,notes\n2026-11-11,{PAYEE},12.34,{IMPORT_NOTE}\n2026-11-12,{PAYEE} Two,5.00,\n");
+    let map = json!({"csv":csv,"isoCurrency":"USD","date":0,"name":1,"amount":2,"notes":3,"dateFormat":"iso","amountMode":"positive-out"});
+    let (status, text) = call(Method::POST, "/finance/import/parse", Some(&cookie), Some(map));
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let rows = json_of(&text)["rows"].clone();
+    assert_eq!(rows.as_array().unwrap().len(), 2);
+    let (_, text) = call(Method::GET, "/finance/accounts", Some(&cookie), None);
+    let revision = json_of(&text)["accounts"][0]["ledgerRevision"].as_i64().unwrap_or(1);
+    let import_op = uuid::Uuid::new_v4().to_string();
+    let apply = json!({"operationId":import_op,"accountId":account,"isoCurrency":"USD","expectedRevision":revision,"rows":rows,"cleared":true});
+    let (status, text) = call(Method::POST, "/finance/import/apply", Some(&cookie), Some(apply.clone()));
+    assert_eq!(status, 200, "{text}\n{}", log());
+    assert_eq!(json_of(&text)["entryCount"], 2);
+    let (status, text) = call(Method::POST, "/finance/import/apply", Some(&cookie), Some(apply));
+    assert_eq!(status, 200, "{text}");
+    assert_eq!(json_of(&text)["unchanged"], true, "{text}");
+    let (_, text) = call(Method::GET, "/finance/transactions?month=2026-11", Some(&cookie), None);
+    assert_eq!(json_of(&text)["transactions"].as_array().unwrap().len(), 3, "a replay added rows: {text}");
+    let (status, text) = call(Method::POST, "/finance/sorting/run", Some(&cookie), Some(json!({})));
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let (status, text) = call(Method::GET, "/finance/rules", Some(&cookie), None);
+    assert_eq!(status, 200, "{text}");
+    for who_path in ["/finance/transactions?month=2026-11", "/finance/rules"] {
+        let (status, text) = call(Method::GET, who_path, Some(&other), None);
+        assert_eq!(status, 200, "{text}");
+        assert!(!text.contains(PAYEE) && !text.contains(NAME) && !text.contains(IMPORT_NOTE), "the other person saw private text: {text}");
+    }
+    let (status, text) = call(
+        Method::POST,
+        "/finance/transactions/notes",
+        Some(&other),
+        Some(json!({"transactionId":tx_id,"accountId":account,"month":"2026-11","writeRevision":"0".repeat(32),"notes":"stolen"})),
+    );
+    assert_ne!(status, 200, "{text}");
+    println!("PASS live finance transactions: query, category, note, import, replay and sorting worked over HTTPS, and the second person saw none of it");
     // Activity rows and the server log hold none of the text the test sent.
     let services = moss_module_host::services::ServicePorts::new(
         &root.join("data"),
@@ -467,7 +530,19 @@ fn installed_finance_package_serves_routes_from_the_real_server() {
         tokio::spawn(async move {
             let _ = connection.await;
         });
-        for marker in [NAME, NOTE, &CENTS.to_string()] {
+        let control: i64 = db
+            .query_one("SELECT count(*) FROM app.finance_transactions t WHERE to_jsonb(t)::text LIKE '%'||$1||'%'", &[&NAME])
+            .await
+            .unwrap()
+            .get(0);
+        assert!(control > 0, "the marker search cannot find text that is stored");
+        for marker in [NAME, NOTE, PAYEE, IMPORT_NOTE, &CENTS.to_string()] {
+            let jobs: i64 = db
+                .query_one("SELECT count(*) FROM pgboss.job j WHERE to_jsonb(j)::text LIKE '%'||$1||'%'", &[&marker])
+                .await
+                .unwrap()
+                .get(0);
+            assert_eq!(jobs, 0, "a stored job row holds {marker}");
             let hits: i64 = db
                 .query_one("SELECT count(*) FROM app.finance_activity t WHERE to_jsonb(t)::text LIKE '%'||$1||'%'", &[&marker])
                 .await
@@ -478,7 +553,7 @@ fn installed_finance_package_serves_routes_from_the_real_server() {
         db.query_one("SELECT count(*) FROM app.finance_activity", &[]).await.unwrap().get(0)
     });
     assert!(stored >= 2, "the changes are logged");
-    for marker in [NAME, NOTE, &CENTS.to_string()] {
+    for marker in [NAME, NOTE, PAYEE, IMPORT_NOTE, &CENTS.to_string()] {
         assert!(!activity.contains(marker));
         assert!(!log().contains(marker), "the server log holds {marker}");
     }
