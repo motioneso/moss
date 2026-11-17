@@ -965,7 +965,7 @@
       "errors": [
         {
           "code": "report_scope_changed",
-          "class": "conflict",
+          "class": "validation",
           "description": "The report changed since you opened it. Reload and try again."
         }
       ]
@@ -992,7 +992,7 @@
         },
         {
           "code": "changed_since",
-          "class": "conflict",
+          "class": "validation",
           "description": "Something changed since, so this cannot be undone safely."
         },
         {
@@ -1013,7 +1013,7 @@
         },
         {
           "code": "has_assignments",
-          "class": "conflict",
+          "class": "validation",
           "description": "Move the budget money out of this category first."
         }
       ]
