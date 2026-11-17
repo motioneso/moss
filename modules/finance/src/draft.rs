@@ -511,6 +511,7 @@ fn budget_set<H: Host + ?Sized>(host: &H, month: &str, category: &str, cents: i6
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::budget::row_of;
 
     fn row(id: &str, date: &str, cents: i64, category: &str, payee: &str) -> Row {
         Row { id: id.into(), account_id: "a".into(), date: date.into(), amount: cents, category: Some(category.into()), splits: vec![], linked: false, payee: payee.into() }
