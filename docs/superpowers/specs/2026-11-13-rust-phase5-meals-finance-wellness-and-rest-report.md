@@ -923,3 +923,72 @@ scripts/run-gate.sh start --gate test:rust-finance-live
 - **The privacy scan reads database tables and the server log,** not the chat approval record.
 - **The two negative controls** cover the leak routes that were wired. Other fields were not
   each given a control.
+
+## Meals package, kitchen and household (part 28)
+
+### What part 19 already had
+
+Part 19 only built the bank token exchange through the host. It had nothing for Meals, so
+nothing was reused or rebuilt here.
+
+### What was built
+
+- **The Meals package.** A manifest, a changelog, an icon, and a WebAssembly guest that
+  serves the kitchen and household tools. The package carries all 27 old SQL files untouched,
+  so all 20 Meals tables exist after install. A changed byte in any file stops the build.
+- **Four tools.** Read the kitchen, save the kitchen, save a household member, remove a
+  household member. They use the same wording for bad input as the old tools. The
+  guest never writes SQL. It asks the host for typed queries on four tables.
+- **The first read never writes.** A new person sees a default kitchen with their own "You"
+  member. The same ids are stored on the first save.
+- **App map entries** for the tools are in the manifest.
+- **Two host fixes.** Old module SQL carries no grants and no privacy rules, so the host now
+  generates them for this kind of package. The host also now runs these packages as
+  their own database role instead of the shared app role, which had no grants on the tables.
+  Core-legacy packages (Goals, Wellness) are unchanged.
+- **Nothing more.** Plans, recipes, lists, pantry and log tools are later parts.
+
+### Differences from the old code (on purpose)
+
+- Old Meals had no web routes. The new package has one route, used by chat to run a tool.
+  Every write goes through the host's one-use approval, which the old tools did not need.
+- The guest hand-writes MD5 so the default kitchen ids match the database's own. No new
+  crate was added.
+
+### Proof
+
+Native tests for the guest (11 pass) and WebAssembly package tests against the real host (6
+pass), then the database tests through the gate, which finished with exit code 0:
+
+- **Tool parity.** 15 steps run on the old handlers and on the installed package, with ids and
+  times masked. Every reply matched, including the bad-input replies.
+- **Two people.** A second person and an admin cannot read, change or remove the first
+  person's kitchen or household. The check was seen failing with the generated privacy rule
+  removed from each table, then passing when it was put back.
+- **Private text.** A planted household name never reached stored jobs, host activity or the
+  live server log.
+- **Two protections removed.** The fixed error text and the activity record were each removed
+  and the matching test failed.
+- **Live run.** The real Rust server, over HTTPS on a real network address, installed the
+  package and ran the tools. See the live line in the notes below.
+
+Commands, from the repo root, through the gate script:
+
+```
+scripts/run-gate.sh start --gate test:rust-meals
+```
+
+```
+scripts/run-gate.sh start --gate test:rust-meals-live
+```
+
+Both are expected to finish with exit code 0.
+
+### Not proven or not built
+
+- **No screens.** None were asked for.
+- **Only four tools of the old set.** The rest come in later parts.
+- **The second person in the live run** is only shown being refused. The strong isolation
+  proof is the database test.
+- **Route parity** applies only in that old Meals had no routes. There is nothing to compare.
+- **Release note** is not applicable.

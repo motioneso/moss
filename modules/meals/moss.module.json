@@ -11,9 +11,7 @@
   "capabilities": [
     {
       "port": "db",
-      "operations": [
-        "query"
-      ],
+      "operations": ["query"],
       "resources": [
         "app.meals_kitchens",
         "app.meals_household_members",
@@ -23,21 +21,12 @@
     },
     {
       "port": "context",
-      "operations": [
-        "read",
-        "uuid"
-      ],
-      "resources": [
-        "call",
-        "new"
-      ]
+      "operations": ["read", "uuid"],
+      "resources": ["call", "new"]
     },
     {
       "port": "tools",
-      "operations": [
-        "offer",
-        "run"
-      ],
+      "operations": ["offer", "run"],
       "resources": [
         "meals.kitchen.get",
         "meals.kitchen.save",
@@ -171,9 +160,7 @@
   ],
   "requires": {},
   "provides": {},
-  "icons": [
-    "icons/meals.svg"
-  ],
+  "icons": ["icons/meals.svg"],
   "accounts": {
     "supportsUserDisable": true,
     "defaultEnabled": true
