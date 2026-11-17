@@ -48,3 +48,7 @@ path = "../tests/import.rs"
 [[test]]
 name = "isolation"
 path = "../tests/isolation.rs"
+
+[[test]]
+name = "budget"
+path = "../tests/budget.rs"

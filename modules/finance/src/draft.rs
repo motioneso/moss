@@ -2,7 +2,7 @@
 //!
 //! Every figure is a function of stored transactions and categories. No model is called and no
 //! clock is read here. The pure part builds the lines. The tools save them through the review gate.
-use crate::budget::{self, check, gate, ledgers, read_review, row_of, stale, CATEGORIES, DRAFTS, LINES};
+use crate::budget::{self, check, gate, ledgers, read_review, stale, CATEGORIES, DRAFTS, LINES};
 use crate::envelope::{self, Row};
 use crate::input::{self, refuse};
 use crate::ledger::{log_as, text, today, values, Outcome};

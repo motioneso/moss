@@ -128,6 +128,12 @@ fn keys(table: &str) -> &'static [&'static str] {
         "app.finance_accounts" => &["account_id"],
         "app.finance_transactions" | "app.finance_activity" | "app.finance_merchant_rules" | "app.finance_categories" => &["id"],
         "app.finance_imports" => &["id"],
+        "app.finance_budget_assignments" => &["month", "category_id"],
+        "app.finance_budget_drafts" => &["id"],
+        "app.finance_budget_draft_lines" => &["draft_id", "category_key"],
+        "app.finance_balance_snapshots" => &["account_id", "day"],
+        // One policy row per owner.
+        "app.finance_budget_policy" => &["owner_user_id"],
         _ => &[],
     }
 }
@@ -180,7 +186,7 @@ impl Host for Fake {
                         if order.descending { ord.reverse() } else { ord }
                     });
                 }
-                Ok(json!(found.into_iter().take(query.limit.unwrap_or(1000) as usize).collect::<Vec<_>>()))
+                Ok(json!(found.into_iter().skip(query.offset as usize).take(query.limit.unwrap_or(1000) as usize).collect::<Vec<_>>()))
             }
             Kind::Insert => {
                 let mut row = match resource {
@@ -191,6 +197,9 @@ impl Host for Fake {
                         "categorized_by":null,"pending_transaction_id":null,"review_state":"confirmed","pending":false}),
                     "app.finance_merchant_rules" => json!({"enabled":true}),
                     "app.finance_categories" => json!({"archived_at":null,"is_income":false}),
+                    "app.finance_budget_policy" => json!({"revision":0,"taxonomy_ready":false}),
+                    "app.finance_budget_drafts" => json!({"started_at":null}),
+                    "app.finance_budget_draft_lines" => json!({"adjusted_cents":null,"adjusted_by":null,"dropped":false}),
                     _ => json!({}),
                 };
                 row["owner_user_id"] = json!(actor);
@@ -198,10 +207,24 @@ impl Host for Fake {
                     row[k.as_str()] = v.clone();
                 }
                 let key = keys(resource);
-                if rows.iter().any(|r| !key.is_empty() && r["owner_user_id"] == actor && key.iter().all(|k| r[*k] == row[*k])) {
+                let hit = rows.iter().position(|r| !key.is_empty() && r["owner_user_id"] == actor && key.iter().all(|k| r[*k] == row[*k]));
+                if let Some(at) = hit {
                     return match query.conflict {
                         Conflict::Ignore => Ok(json!([])),
-                        _ => Err(Error::new("duplicate key value violates unique constraint")),
+                        Conflict::Update { columns, values } => {
+                            // The conflict target must be the table's key, as Postgres requires.
+                            let mut target: Vec<&str> = columns.iter().map(String::as_str).filter(|c| *c != "owner_user_id").collect();
+                            let mut expected: Vec<&str> = key.iter().copied().filter(|c| *c != "owner_user_id").collect();
+                            target.sort();
+                            expected.sort();
+                            assert_eq!(target, expected, "conflict target is not the primary key of {resource}");
+                            assert!(!values.contains_key("owner_user_id"), "an upsert may not change the owner");
+                            for (k, v) in &values {
+                                rows[at][k.as_str()] = v.clone();
+                            }
+                            Ok(json!([rows[at].clone()]))
+                        }
+                        Conflict::Error => Err(Error::new("duplicate key value violates unique constraint")),
                     };
                 }
                 rows.push(row.clone());
