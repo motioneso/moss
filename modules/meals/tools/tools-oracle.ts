@@ -34,8 +34,14 @@ try {
     reply = { data };
   } catch (error) {
     const failure = error as { message?: string; code?: unknown };
-    if (typeof failure.code !== "string") throw error;
-    reply = { data: { error: failure.message, code: failure.code } };
+    // The plan tools signal a refused input with an error that has no code; the platform reports it as invalid input.
+    const code =
+      failure.code ??
+      (error instanceof Error && error.constructor.name === "PlanInputError"
+        ? "invalid_input"
+        : undefined);
+    if (typeof code !== "string") throw error;
+    reply = { data: { error: failure.message, code } };
   }
   await client.query("COMMIT");
   console.log(JSON.stringify(reply));
