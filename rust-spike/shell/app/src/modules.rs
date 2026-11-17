@@ -547,6 +547,8 @@ pub fn routes(slot: Slot, web: PathBuf) -> Router {
         .route("/api/me/weather-location", any(dispatch))
         .route("/api/me/weather-location/{leaf}", any(dispatch))
         .route("/api/me/weather-unit", any(dispatch))
+        .route("/api/news/images/{id}", any(dispatch))
+        .route("/api/news/favicon/{domain}", any(dispatch))
         .route("/api/modules/navigation", get(navigation))
         .route("/api/modules/{module}/screen", get(screen))
         .route("/module-ui/{module}/{digest}/{*path}", get(ui_asset))
@@ -805,15 +807,17 @@ async fn dispatch(
     }
 }
 
-/// Old Settings paths for the weather place and unit, served by the Weather package for the
-/// support window. Every other path passes through unchanged.
+/// Old Settings paths for the weather place and unit, and the old News picture and icon paths,
+/// served by the packages for the support window. Every other path passes through unchanged.
 fn alias(target: &str) -> String {
     for (old, new) in [
         ("/api/me/weather-location", "/api/m/weather/location"),
         ("/api/me/weather-unit", "/api/m/weather/unit"),
+        ("/api/news/images/", "/api/m/news/images/"),
+        ("/api/news/favicon/", "/api/m/news/favicon/"),
     ] {
         if let Some(rest) = target.strip_prefix(old) {
-            if rest.is_empty() || rest.starts_with(['/', '?']) {
+            if rest.is_empty() || rest.starts_with(['/', '?']) || old.ends_with('/') {
                 return format!("{new}{rest}");
             }
         }
@@ -823,11 +827,38 @@ fn alias(target: &str) -> String {
 
 fn module_response(output: &str) -> Response {
     #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Picture {
+        content_type: String,
+        base64: String,
+        max_age: u32,
+    }
+    #[derive(Deserialize)]
     struct Reply {
         status: u16,
         body: Value,
+        image: Option<Picture>,
     }
     match serde_json::from_str::<Reply>(output) {
+        Ok(Reply { status: 200, image: Some(picture), .. }) => {
+            // A package cannot choose the type or the cache time freely, and a body that does not
+            // match its declared type is never sent.
+            let Some(bytes) = moss_module_host::route_image::decode(&picture.content_type, &picture.base64) else {
+                return StatusCode::BAD_GATEWAY.into_response();
+            };
+            let max_age = picture.max_age.min(moss_module_host::route_image::MAX_AGE_LIMIT);
+            (
+                StatusCode::OK,
+                [
+                    (header::CONTENT_TYPE, picture.content_type),
+                    (header::CACHE_CONTROL, format!("private, max-age={max_age}")),
+                    (header::X_CONTENT_TYPE_OPTIONS, "nosniff".to_owned()),
+                ],
+                bytes,
+            )
+                .into_response()
+        }
+        Ok(Reply { image: Some(_), .. }) => StatusCode::BAD_GATEWAY.into_response(),
         Ok(reply) if (200..600).contains(&reply.status) => (
             StatusCode::from_u16(reply.status).unwrap(),
             [
@@ -876,5 +907,34 @@ mod tests {
             module_response(r#"{"status":101,"body":null}"#).status(),
             StatusCode::BAD_GATEWAY
         );
+    }
+
+    #[test]
+    fn a_route_picture_is_sent_as_the_body_with_safe_headers() {
+        // "GIF89a" then two bytes.
+        let reply = r#"{"status":200,"body":null,"image":{"contentType":"image/gif","base64":"R0lGODlhAAA=","maxAge":999999}}"#;
+        let response = module_response(reply);
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()[header::CONTENT_TYPE], "image/gif");
+        assert_eq!(response.headers()[header::X_CONTENT_TYPE_OPTIONS], "nosniff");
+        // The browser cache time is clamped to a day.
+        assert_eq!(response.headers()[header::CACHE_CONTROL], "private, max-age=86400");
+    }
+
+    #[test]
+    fn a_route_picture_that_breaks_the_rules_is_refused() {
+        let wrong_type = r#"{"status":200,"body":null,"image":{"contentType":"text/html","base64":"R0lGODlhAAA=","maxAge":60}}"#;
+        let not_matching = r#"{"status":200,"body":null,"image":{"contentType":"image/png","base64":"R0lGODlhAAA=","maxAge":60}}"#;
+        let error_status = r#"{"status":404,"body":null,"image":{"contentType":"image/gif","base64":"R0lGODlhAAA=","maxAge":60}}"#;
+        for reply in [wrong_type, not_matching, error_status] {
+            assert_eq!(module_response(reply).status(), StatusCode::BAD_GATEWAY);
+        }
+    }
+
+    #[test]
+    fn old_news_picture_paths_reach_the_news_package() {
+        assert_eq!(alias("/api/news/images/abc"), "/api/m/news/images/abc");
+        assert_eq!(alias("/api/news/favicon/bbc.com"), "/api/m/news/favicon/bbc.com");
+        assert_eq!(alias("/api/news/overview"), "/api/news/overview");
     }
 }

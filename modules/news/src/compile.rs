@@ -32,7 +32,7 @@ const SNAPSHOT_MAX_BYTES: usize = 256 * 1024;
 const LIFETIME_DAYS: i64 = 7;
 const FUTURE_TOLERANCE_MS: i64 = 15 * 60 * 1000;
 const PREFERRED_AGE_MS: i64 = 48 * 60 * 60 * 1000;
-const MAX_AGE_MS: i64 = 7 * 24 * 60 * 60 * 1000;
+pub(crate) const MAX_AGE_MS: i64 = 7 * 24 * 60 * 60 * 1000;
 const MAX_PROMPT_CHARS: usize = 50_000;
 const GATHER_BUDGET_MS: i64 = 3_500;
 const TOP_STORIES_CAP: usize = 6;
@@ -64,7 +64,7 @@ fn text<'a>(row: &'a Value, key: &str) -> &'a str {
     row[key].as_str().unwrap_or_default()
 }
 
-fn parse_ms(value: &str) -> Option<i64> {
+pub(crate) fn parse_ms(value: &str) -> Option<i64> {
     DateTime::parse_from_rfc3339(value).ok().map(|at| at.timestamp_millis())
 }
 
@@ -183,6 +183,7 @@ struct Saved {
     sources: Vec<Value>,
     topics: Vec<Value>,
     exclusions: Vec<String>,
+    hidden: Vec<String>,
 }
 
 fn read_saved<H: Host + ?Sized>(host: &H) -> Result<Saved> {
@@ -196,7 +197,8 @@ fn read_saved<H: Host + ?Sized>(host: &H) -> Result<Saved> {
         .iter()
         .map(|row| text(row, "canonical_domain").to_owned())
         .collect();
-    Ok(Saved { prefs, sources, topics, exclusions })
+    let hidden = crate::feedback::dismissed(host)?;
+    Ok(Saved { prefs, sources, topics, exclusions, hidden })
 }
 
 fn active_custom(source: &Value, exclusions: &[String]) -> bool {
@@ -848,7 +850,10 @@ fn compose(snapshot: &Value, saved: &Saved, now_ms: i64, degraded: bool) -> Valu
             rows.iter()
                 .filter(|article| {
                     let published = parse_ms(text(article, "publishedAt")).unwrap_or_default();
-                    if published < cutoff || excluded(&saved.exclusions, text(article, "canonicalDomain")) {
+                    if published < cutoff
+                        || excluded(&saved.exclusions, text(article, "canonicalDomain"))
+                        || saved.hidden.iter().any(|hidden| hidden == text(article, "id"))
+                    {
                         return false;
                     }
                     if seen.contains(&text(article, "url").to_owned()) {
@@ -904,17 +909,36 @@ fn compose(snapshot: &Value, saved: &Saved, now_ms: i64, degraded: bool) -> Valu
     })
 }
 
-/// `GET /overview`. Serves the stored page. A missing or out-of-date page is served as it
-/// stands (or empty) and marked degraded, and one refresh is queued to replace it.
-pub fn overview<H: Host + ?Sized>(host: &H) -> Result<Response> {
+/// Whether the stored page is usable. `Unknown` means nothing has been stored yet.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Freshness {
+    Unknown,
+    Stale,
+    Fresh,
+}
+
+/// The page the person sees from what is stored, and how current it is. It never fetches.
+/// A missing or invalid snapshot reads as an empty page, and an expired one is shown as it
+/// stands, marked degraded.
+pub fn stored_page<H: Host + ?Sized>(host: &H) -> Result<(Value, Freshness)> {
     let now_ms = now(host)?.timestamp_millis();
     let saved = read_saved(host)?;
     let rows = Client(host).query(SNAPSHOTS, &Query::select(Filter::All))?;
-    let stored = rows.into_iter().next().filter(|row| snapshot_valid(&row["payload"]));
-    let fresh = stored.as_ref().is_some_and(|row| parse_ms(text(row, "expires_at")).unwrap_or_default() > now_ms);
-    crate::refresh::ensure(host, !fresh);
-    Ok(match stored {
-        Some(row) => Response::new(200, compose(&row, &saved, now_ms, !fresh)),
-        None => Response::new(200, compose(&json!({"payload":{"articles":[]}}), &saved, now_ms, true)),
-    })
+    let Some(row) = rows.into_iter().next() else {
+        return Ok((compose(&json!({"payload":{"articles":[]}}), &saved, now_ms, true), Freshness::Unknown));
+    };
+    if !snapshot_valid(&row["payload"]) {
+        return Ok((compose(&json!({"payload":{"articles":[]}}), &saved, now_ms, true), Freshness::Stale));
+    }
+    let fresh = parse_ms(text(&row, "expires_at")).unwrap_or_default() > now_ms;
+    let page = compose(&row, &saved, now_ms, !fresh);
+    Ok((page, if fresh { Freshness::Fresh } else { Freshness::Stale }))
+}
+
+/// `GET /overview`. Serves the stored page. A missing or out-of-date page is served as it
+/// stands (or empty) and marked degraded, and one refresh is queued to replace it.
+pub fn overview<H: Host + ?Sized>(host: &H) -> Result<Response> {
+    let (page, freshness) = stored_page(host)?;
+    crate::refresh::ensure(host, freshness != Freshness::Fresh);
+    Ok(Response::new(200, page))
 }

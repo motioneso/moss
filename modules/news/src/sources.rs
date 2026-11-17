@@ -14,7 +14,7 @@ const MAX_CUSTOM_SOURCES: usize = 10;
 
 /// A saved source already covers this candidate. Every subreddit shares one domain, so
 /// subreddits match on their feed address, ignoring case, and sites match on their domain.
-fn duplicate_of<'a>(existing: &'a [Value], candidate: &Candidate) -> Option<&'a Value> {
+pub(crate) fn duplicate_of<'a>(existing: &'a [Value], candidate: &Candidate) -> Option<&'a Value> {
     if candidate.retrieval_method == "reddit" {
         let feed = candidate.feed_url.as_deref()?.to_lowercase();
         return existing.iter().find(|row| {
