@@ -167,10 +167,29 @@ pub fn enqueue_revalidation<H: Host + ?Sized>(host: &H) -> Result<bool> {
 
 /// The daily check runs only for a person who has added a source or topic.
 pub fn reconcile_schedule<H: Host + ?Sized>(host: &H) -> Result<()> {
+    let registered = register_schedule(host)?;
+    if wanted(host)? {
+        return Ok(());
+    }
+    if let Some(id) = registered["id"].as_str() {
+        host.call("jobs", "unschedule", REVALIDATE_QUEUE, json!({"id": id}))?;
+    }
+    // A source added between the read and the removal would otherwise lose its daily check.
+    if wanted(host)? {
+        register_schedule(host)?;
+    }
+    Ok(())
+}
+
+fn wanted<H: Host + ?Sized>(host: &H) -> Result<bool> {
     let client = Client(host);
     let mut one = Query::select(Filter::All);
     one.limit = Some(1);
-    let registered = host.call(
+    Ok(!client.query(SOURCES, &one)?.is_empty() || !client.query(TOPICS, &one)?.is_empty())
+}
+
+fn register_schedule<H: Host + ?Sized>(host: &H) -> Result<Value> {
+    host.call(
         "jobs",
         "schedule",
         REVALIDATE_QUEUE,
@@ -178,15 +197,7 @@ pub fn reconcile_schedule<H: Host + ?Sized>(host: &H) -> Result<()> {
             "cron": SCHEDULE_CRON, "timezone": SCHEDULE_ZONE, "key": SCHEDULE_KEY,
             "params": {"kind": "revalidate"}, "keepExisting": true,
         }),
-    )?;
-    // Read after registering so a source removed in the meantime is not missed.
-    let wanted = !client.query(SOURCES, &one)?.is_empty() || !client.query(TOPICS, &one)?.is_empty();
-    if !wanted {
-        if let Some(id) = registered["id"].as_str() {
-            host.call("jobs", "unschedule", REVALIDATE_QUEUE, json!({"id": id}))?;
-        }
-    }
-    Ok(())
+    )
 }
 
 /// Called after every write that changes the page. It never fails the write.
