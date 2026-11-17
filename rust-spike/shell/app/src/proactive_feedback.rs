@@ -16,7 +16,7 @@ use safety_core::{
     error::{json_reply, ApiError},
 };
 use serde_json::Value;
-use std::{future::Future, sync::Arc};
+use std::sync::Arc;
 
 /// Scanner sources this server can run. None are wired yet, so a refresh enqueues nothing.
 pub struct Feedback {
