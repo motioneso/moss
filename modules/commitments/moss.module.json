@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 2,
+  "id": "commitments",
+  "name": "Commitments",
+  "description": "Moss reads your email and chats and suggests things you said you would do. You review each suggestion and mark it done or dismiss it.",
+  "publisher": "Moss",
+  "version": "0.1.0",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "fuelLimit": 200000000,
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "db",
+      "operations": ["query"],
+      "resources": ["app.commitment_candidates", "app.commitment_candidate_sources"]
+    },
+    { "port": "context", "operations": ["read"], "resources": ["call"] }
+  ],
+  "database": {
+    "migrations": ["sql/0125_commitment_candidates.sql", "sql/0220_commitment_email_items.sql"],
+    "ownedTables": [
+      "app.commitment_candidates",
+      "app.commitment_candidate_sources",
+      "app.commitment_candidate_events",
+      "app.commitment_extraction_state",
+      "app.commitment_email_thread_judgements"
+    ],
+    "ledger": "core-legacy",
+    "access": {
+      "app.commitment_candidates": { "access": "owner-only" },
+      "app.commitment_candidate_sources": { "access": "owner-only" },
+      "app.commitment_candidate_events": { "access": "owner-only" },
+      "app.commitment_extraction_state": { "access": "owner-only" },
+      "app.commitment_email_thread_judgements": { "access": "owner-only" }
+    }
+  },
+  "routes": [
+    { "method": "GET", "path": "/candidates", "signIn": true },
+    { "method": "GET", "path": "/candidates/:id", "signIn": true },
+    { "method": "PATCH", "path": "/candidates/:id/status", "signIn": true },
+    { "method": "POST", "path": "/candidates/:id/resolve", "signIn": true },
+    { "method": "POST", "path": "/candidates/:id/suppress", "signIn": true }
+  ],
+  "requires": {},
+  "provides": {},
+  "icons": ["icons/commitments.svg"],
+  "accounts": { "supportsUserDisable": false, "defaultEnabled": true },
+  "lifecycle": { "required": true, "bundled": true, "removable": false },
+  "screens": {},
+  "navigation": [],
+  "settings": [
+    {
+      "id": "commitments.module-settings",
+      "label": "Commitments",
+      "path": "/settings?section=modules&module=commitments",
+      "scope": "user",
+      "description": "Commitments has no settings page. Review suggestions through the Commitments routes until the review screen arrives."
+    }
+  ],
+  "features": [
+    {
+      "id": "commitments.review-candidates",
+      "description": "A person can list the commitment suggestions Moss found, filter them by status, open one with its saved evidence, and accept it, reject it, snooze it or mark it as not owed. Each person sees only their own suggestions.",
+      "errors": [
+        {
+          "code": "candidate_not_found",
+          "class": "validation",
+          "description": "The suggestion does not exist or belongs to another person. Check the suggestion and try again."
+        }
+      ]
+    },
+    {
+      "id": "commitments.suppress",
+      "description": "A suggestion can be dismissed as not owed when another suggestion that is already marked not owed is named as the reason.",
+      "errors": [
+        {
+          "code": "suppressor_not_explicit_non_action",
+          "class": "validation",
+          "description": "The suggestion named as the reason is not marked as not owed. Mark it first, then try again."
+        }
+      ]
+    },
+    {
+      "id": "commitments.resolve",
+      "description": "Marking a suggestion as resolved needs a check that the linked task or draft exists. That check is not connected yet, so every resolve request is refused as unavailable and nothing is saved.",
+      "errors": [
+        {
+          "code": "resolution_verifier_unavailable",
+          "class": "transient",
+          "description": "Resolving suggestions is not available yet. Nothing was changed."
+        }
+      ]
+    }
+  ]
+}

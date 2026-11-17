@@ -460,3 +460,58 @@ scripts/run-gate.sh start --gate test:rust-wellness-live
   run here, so it was not rerun. The Wellness gates use the new field against a real database.
 - **Two other gates fail on main for unrelated reasons.** The weather preferences gate and the
   briefings gate fail before and after this change.
+
+## Commitments package skeleton (part 7)
+
+### What was built
+
+- A Commitments package under `modules/commitments`. Its tables and saved data stay exactly as
+  they were, because the old SQL files are used byte for byte (ledger "core-legacy"). It owns five
+  tables and asks the host for two of them, plus the clock.
+- Five routes: list suggestions (with a status filter), open one with its saved evidence, change
+  its status, mark it as not owed (suppress), and resolve.
+- The app map entries (feature descriptions and their errors) are in the manifest. No screens.
+- Resolving is refused with "unavailable" and saves nothing. The old server does the same for
+  every request, because no checker is ever connected to it.
+
+### Differences from the old code (on purpose)
+
+- A status change on a missing suggestion answers "Candidate not found" (404), and a malformed
+  id answers 400. The old code answered with a server error for both.
+- A malformed id now answers 400 on read and on resolve (the old resolve answered 503 without
+  looking at the id). A suppress that names a malformed driving id answers 404 "Suppressor not
+  found". The old code answered 500 for the read and suppress cases. None of these is replayed
+  against the old routes.
+- Marking a suggestion as not owed never saved which suggestion drove it, in the old code or here.
+
+### Proof
+
+| Claim                                    | Evidence                                                                                                                                                                                                                  |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Route parity                             | 18 steps replayed against the old routes on the same database (list, filter, bad filter, read, status changes and refusals, resolve, suppress cases); answers match, ids and times masked                                 |
+| A resolved suggestion stays resolved     | A suggestion with a saved resolution keeps it, as a database read confirms, through a status change and a suppress; the answer says it is resolved without exposing the reference                                         |
+| A second person sees and changes nothing | Routes and direct database reads return nothing for them. With the owner rule removed they read all three rows (test fails the protection); with the rule restored, none                                                  |
+| Private text stays private               | The marker title reaches no job row, no activity row and no second-person answer, and not the server log in the live run. A leak planted in the code was not tried                                                        |
+| Native and WebAssembly builds            | 8 native tests; the same code as a component passes 6 package tests and 2 installed-package tests in the real host                                                                                                        |
+| Live run                                 | Real Rust server over HTTPS, package installed from a signed test registry: signed out gets 401; owner lists, filters, reads, changes status and suppresses; resolve gets 503; the other person gets empty lists and 404s |
+
+Commands, all through `scripts/run-gate.sh` (expected exit code 0):
+
+```bash
+scripts/run-gate.sh start --gate test:rust-commitments
+scripts/run-gate.sh start --gate test:rust-commitments-live
+```
+
+### Not proven or not built
+
+- **Expired snoozes are not replayed against the old routes.** The "pending review" and
+  "snoozed" filters treat a past snooze as pending review, checked only in native tests. The new
+  code reads the host clock where the old code used the database clock.
+- **No way to create suggestions.** Finding them in email and chat (extraction, its start route
+  and its state route) is part 8. The tests and the live run put rows in the table directly.
+- **Resolve does nothing.** The real checker that confirms a linked task or draft exists is not
+  built, in the old code or here.
+- **No chat tools, background jobs, heartbeat, account export or delete, and no screen.**
+- **No leak-planted check for private text.** The privacy test passes, but it was not seen failing
+  with a leak added.
+- **Other devices.** The live run was on the same machine.
