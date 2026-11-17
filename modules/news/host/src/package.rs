@@ -28,7 +28,7 @@ pub fn files(root: &Path, component: &[u8]) -> Result<BTreeMap<String, Vec<u8>>>
         } else {
             let bytes = std::fs::read(root.join("modules/news").join(path))?;
             let pinned = match path.as_str() {
-                "sql/0368_news_story_feedback.sql" => "e02522e4628762b106a14c17b0ae8567497d2016d0f7a09af375115dc931d34e",
+                "sql/0370_news_story_feedback.sql" => "e02522e4628762b106a14c17b0ae8567497d2016d0f7a09af375115dc931d34e",
                 _ => "",
             };
             anyhow::ensure!(

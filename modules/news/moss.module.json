@@ -66,7 +66,7 @@
       "sql/0204_news_source_health_states.sql",
       "sql/0205_news_credential_status_worker_grant.sql",
       "sql/0218_news_source_kinds.sql",
-      "sql/0368_news_story_feedback.sql"
+      "sql/0370_news_story_feedback.sql"
     ],
     "ownedTables": [
       "app.news_compilation_snapshots",
