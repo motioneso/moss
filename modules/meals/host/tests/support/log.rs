@@ -101,21 +101,28 @@ fn installed_log_tools_match_the_old_handlers_step_for_step() {
                 assert_eq!(a, b, "step {n} {tool} {params}");
             }
             Step::Estimate(answer) => {
-                // The job runs on the entry the last add made. Its revision is read from each side.
-                let revision = |actor: uuid::Uuid, id: &str| -> i64 {
-                    rows_as(&w.f, actor, &format!("SELECT estimate_revision FROM app.meals_log_entries WHERE entry_id = '{id}'"))
-                        .first()
-                        .map_or(1, |r| i64::from(r.get::<_, i32>(0)))
-                };
-                w.answer(answer.clone());
-                w.run_jobs();
-                replay::old_log(
+                // Every waiting entry has a queued job, and the worker runs them oldest first. Each
+                // side gives all of them the same answer, so the order cannot change the outcome.
+                let waiting = rows_as(
+                    &w.f,
                     old_actor,
-                    &role(),
-                    "job",
-                    json!({"entryId":old_entry,"revision":revision(old_actor, &old_entry)}),
-                    answer.as_deref(),
+                    "SELECT entry_id::text, estimate_revision FROM app.meals_log_entries WHERE estimate_state = 'pending' ORDER BY created_at",
                 );
+                w.answers.lock().unwrap().clear();
+                for _ in 0..waiting.len() {
+                    w.answer(answer.clone());
+                }
+                w.run_jobs();
+                w.answers.lock().unwrap().clear();
+                for row in &waiting {
+                    replay::old_log(
+                        old_actor,
+                        &role(),
+                        "job",
+                        json!({"entryId":row.get::<_, String>(0),"revision":i64::from(row.get::<_, i32>(1))}),
+                        answer.as_deref(),
+                    );
+                }
             }
         }
     }
