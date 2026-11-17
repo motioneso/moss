@@ -163,6 +163,7 @@ pub fn baseline<H: Host + ?Sized>(host: &H, id: &str) -> Result<Option<Value>> {
         "source": source_dto(&source, &own)?,
         "validationFingerprint": source["validation_fingerprint"],
         "recipeFingerprint": source["recipe_fingerprint"],
+        "recipeJson": source["recipe_json"],
         "confirmedFetchHosts": source["confirmed_fetch_hosts"],
         "updatedAt": iso(&source["updated_at"])?,
         "assignments": assignments,
@@ -223,18 +224,22 @@ pub fn create<H: Host + ?Sized>(host: &H, candidate: &Candidate, now: &str) -> R
         return Err(Error::new("Sports source preview contains an unavailable follow"));
     }
     let reddit = candidate.retrieval_method == "reddit";
+    let scrape = candidate.retrieval_method == "scrape";
+    if scrape && (candidate.recipe.is_none() || candidate.recipe_fingerprint.is_none()) {
+        return Err(Error::new("Sports source preview is missing its recipe"));
+    }
     let mut insert = Query::insert(values(vec![
         ("label", json!(candidate.label)),
         ("canonical_domain", json!(candidate.canonical_domain)),
         ("homepage_url", json!(candidate.homepage_url)),
-        ("feed_url", json!(candidate.feed_url)),
+        ("feed_url", if scrape { Value::Null } else { json!(candidate.feed_url) }),
         ("retrieval_method", json!(candidate.retrieval_method)),
         ("validation_fingerprint", json!(candidate.validation_fingerprint)),
         ("validated_at", json!(now)),
-        ("recipe_json", Value::Null),
-        ("recipe_schema_version", Value::Null),
-        ("recipe_fingerprint", Value::Null),
-        ("recipe_status", json!("feed")),
+        ("recipe_json", if scrape { candidate.recipe.clone().unwrap_or(Value::Null) } else { Value::Null }),
+        ("recipe_schema_version", if scrape { json!(1) } else { Value::Null }),
+        ("recipe_fingerprint", if scrape { json!(candidate.recipe_fingerprint) } else { Value::Null }),
+        ("recipe_status", json!(if scrape { "ready" } else { "feed" })),
         ("icon_url", if reddit { json!(candidate.icon_url) } else { Value::Null }),
         ("confirmed_fetch_hosts", json!(candidate.confirmed_fetch_hosts)),
         ("authorization_confirmed_at", json!(now)),

@@ -23,6 +23,9 @@ fn error(status: u16, message: &str) -> Response {
 }
 
 fn rejected(reason: &str) -> Response {
+    if reason == "unavailable" {
+        return Response::new(200, json!({"status":"unavailable"}));
+    }
     Response::new(200, json!({"status":"rejected","reason":reason}))
 }
 
@@ -276,6 +279,7 @@ pub fn preview_assignments<H: Host + ?Sized>(host: &H, teams: &dyn TeamList, req
                     .as_array()
                     .map(|hosts| hosts.iter().map(text).collect())
                     .unwrap_or_default(),
+                recipe: baseline["recipeJson"].as_object().map(|_| baseline["recipeJson"].clone()),
             };
             let address = source["feedUrl"].as_str().unwrap_or_else(|| source["homepageUrl"].as_str().unwrap_or_default());
             let resolved = match discovery::resolve(host, address, &requested, Some(&authority))? {
@@ -318,6 +322,8 @@ pub fn preview_assignments<H: Host + ?Sized>(host: &H, teams: &dyn TeamList, req
         sample_count,
         sample_headlines,
         targets: all,
+        recipe: baseline["recipeJson"].as_object().map(|_| baseline["recipeJson"].clone()),
+        recipe_fingerprint: baseline["recipeFingerprint"].as_str().map(str::to_owned),
     };
     let kept: Vec<Value> = reused.iter().map(|(_, a)| a["id"].clone()).collect();
     let stored = json!({
