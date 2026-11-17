@@ -18,7 +18,7 @@ use axum::{
     Extension, Json, Router,
 };
 use moss_module_host::{
-    account_preferences::{weather_bindings, AccountPreferencesPorts, Binding, JsonShape},
+    account_preferences::{weather_bindings, wellness_bindings, AccountPreferencesPorts, Binding, JsonShape},
     ai::{
         EmbeddingsOnly, FixedEmbeddings, Intelligence, IntelligenceEmbeddings,
         DEFAULT_EMBEDDING_MODEL,
@@ -225,6 +225,7 @@ impl Intelligence for SplitIntelligence {
 /// preference keys. Weather's keys are the ones the old Settings routes wrote.
 fn module_preferences(database: Database, next: Arc<dyn Ports>) -> Result<Arc<dyn Ports>> {
     let mut bindings = weather_bindings();
+    bindings.extend(wellness_bindings());
     bindings.extend([
             (
                 ("sports".into(), "standings-competitions".into()),
