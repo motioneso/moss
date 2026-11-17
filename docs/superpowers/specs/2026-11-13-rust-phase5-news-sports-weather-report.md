@@ -694,14 +694,15 @@ News now has its chat tools, serves story pictures and publisher icons, builds t
 
 ### Proof
 
-| Claim                                      | Evidence                                                                                                                                                                                   |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Briefings shows news instead of a gap      | Briefings unit tests: stories become lines, no stored page or a failed read is a gap; the gather test no longer expects the "not built" gap                                                |
-| Only checked pictures are served           | Guest tests: wrong signature, wrong type and missing story are refused; shell tests: bad pictures give 502, good ones carry the type, cache limit and no-sniff header                      |
-| A second person sees none of it            | Guest tests and a real-database gate test: another person gets no picture, headline or heartbeat item. With row security removed the real-database test shows the leak, restored it closes |
-| Private text stays out of jobs and logs    | Guest and real-database tests plant a marker in a headline and find it in no job, queue table or notice. The guest test was seen failing when a leak was added on purpose                  |
-| Approval card comes from the stored record | Guest test: the card for a picture takes its target from the stored story, and another person gets none                                                                                    |
-| Native and WebAssembly builds              | The gate runs the guest tests natively, builds the component and runs the package tests against it                                                                                         |
+| Claim                                      | Evidence                                                                                                                                                                                                                                                                                   |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Briefings shows news instead of a gap      | Briefings unit tests: stories become lines, no stored page or a failed read is a gap; the gather test no longer expects the "not built" gap                                                                                                                                                |
+| Only checked pictures are served           | Guest tests: wrong signature, wrong type and missing story are refused; shell tests: bad pictures give 502, good ones carry the type, cache limit and no-sniff header                                                                                                                      |
+| A second person sees none of it            | Guest tests and a real-database gate test: another person gets no picture, headline or heartbeat item. With row security removed the real-database test shows the leak, restored it closes                                                                                                 |
+| Private text stays out of jobs and logs    | Guest and real-database tests plant a marker in a headline and find it in no job, queue table or notice. The guest test was seen failing when a leak was added on purpose                                                                                                                  |
+| Approval card comes from the stored record | Guest test: the card for a picture takes its target from the stored story, and another person gets none                                                                                                                                                                                    |
+| Pictures work on the real server           | Live run on the real Rust server with real BBC stories: 24 of 25 had a picture address, six were fetched and served as real jpegs with a short private cache time. The old picture address works. A missing story is 404. Another person gets a picture only for a story on their own page |
+| Native and WebAssembly builds              | The gate runs the guest tests natively, builds the component and runs the package tests against it                                                                                                                                                                                         |
 
 ### How to run
 
@@ -716,7 +717,9 @@ scripts/run-gate.sh start --gate test:rust-news
 - The key status tool reads whole credential rows inside the package. The sealed text reaches the package's memory but is never returned or logged.
 - Nothing consumes the approval cards yet, as with Tasks and Notes. They are proven through the package interface only.
 - The old "custom sources need a model" message is not separate. A source lookup that cannot run says discovery is unavailable.
-- The base64 picture fetch through the real host was exercised with a stand-in web in the database test, not a live remote site.
+- The live run fetched real pictures from the real web. The publisher icon for the saved BBC feed answered 404 in that run, so a real icon was not served end to end. Icons are proven only with stand-in data.
+- No live briefing was generated, because that needs a model. The briefing news section is proven by unit tests and the real host's top headlines call.
+- The live run needed two fixes found by running it: the server was replacing the picture's cache time with no-store, and the old picture and icon addresses were not registered on the server.
 - No card number was given for this task, so none is recorded.
 - A phone or second computer reaching the server was not re-checked. The package adds no screen or listener.
 
