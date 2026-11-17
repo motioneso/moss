@@ -77,7 +77,7 @@ pub fn route_with<H: Host + ?Sized>(host: &H, teams: &dyn TeamList, request: Rou
         ("POST", "/sources/:id/rebuild/preview") => source_rebuild::preview(host, teams, &request),
         ("PATCH", "/sources/:id/rebuild") => source_rebuild::confirm(host, &request),
         ("GET", "/sources/:id/icon") => source_icon::icon(host, &request),
-        ("GET", "/headlines/:headlineId/photo") => photo_routes::photo(host, &request),
+        ("GET", "/headlines/:headline_id/photo") => photo_routes::photo(host, &request),
         ("DELETE", "/sources/:id/photos") => photo_routes::stop_photos(host, &request),
         ("DELETE", "/sources/:id") => source_routes::remove(host, &request),
         ("POST", "/tools/run") => source_tools::transport(host, &request.body),

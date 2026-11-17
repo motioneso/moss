@@ -1,4 +1,4 @@
-//! `GET /headlines/:headlineId/photo` and `DELETE /sources/:id/photos`.
+//! `GET /headlines/:headline_id/photo` and `DELETE /sources/:id/photos`.
 use crate::photo_store as store;
 use crate::public_cache::now_ms;
 use crate::source_routes::source_id;
@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 /// no raw image channel. Row level security hides another person's source, so it answers the
 /// same as a story with no photo.
 pub fn photo<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Response> {
-    let id = request.params.get("headlineId").map(String::as_str).unwrap_or_default();
+    let id = request.params.get("headline_id").map(String::as_str).unwrap_or_default();
     let not_found = || Response::new(404, json!({"error": "Sports headline photo not found"}));
     let Some((source, _)) = id.split_once(':') else { return Ok(not_found()) };
     if !is_uuid(source) || sources::find(host, source)?.is_none() {

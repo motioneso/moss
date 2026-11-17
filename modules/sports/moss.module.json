@@ -261,7 +261,7 @@
     },
     {
       "method": "GET",
-      "path": "/headlines/:headlineId/photo",
+      "path": "/headlines/:headline_id/photo",
       "signIn": true
     },
     {

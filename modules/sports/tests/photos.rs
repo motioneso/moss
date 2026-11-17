@@ -67,7 +67,7 @@ fn a_feed_photo_is_stored_privately_and_served() {
     assert!(f.vault_names(B).is_empty());
     assert_eq!(row(&f)["photo_last_outcome"], "working");
     let id = format!("{SRC}:{:024x}", 1);
-    let (status, body) = f.route("GET", "/headlines/:headlineId/photo", &[("headlineId", &id)], Value::Null);
+    let (status, body) = f.route("GET", "/headlines/:headline_id/photo", &[("headline_id", &id)], Value::Null);
     assert_eq!(status, 200);
     assert_eq!(body["contentType"], "image/jpeg");
     assert_eq!(body["bodyBase64"], "JPEG:PIXELS-ONE");
@@ -81,7 +81,7 @@ fn another_person_cannot_read_the_photo() {
     run(&f, &src, &[story(1, Some("https://news.example.com/one.png"))]);
     let id = format!("{SRC}:{:024x}", 1);
     f.as_actor(B);
-    let (status, _) = f.route("GET", "/headlines/:headlineId/photo", &[("headlineId", &id)], Value::Null);
+    let (status, _) = f.route("GET", "/headlines/:headline_id/photo", &[("headline_id", &id)], Value::Null);
     assert_eq!(status, 404);
     let (status, _) = f.route("DELETE", "/sources/:id/photos", &[("id", SRC)], Value::Null);
     assert_eq!(status, 404);
@@ -199,7 +199,7 @@ fn stopping_photos_clears_the_rule_and_deletes_the_files() {
     assert!(f.vault_names(A).is_empty());
     assert_eq!(row(&f)["photo_rule_state"], "none");
     let id = format!("{SRC}:{:024x}", 1);
-    let (status, _) = f.route("GET", "/headlines/:headlineId/photo", &[("headlineId", &id)], Value::Null);
+    let (status, _) = f.route("GET", "/headlines/:headline_id/photo", &[("headline_id", &id)], Value::Null);
     assert_eq!(status, 404);
 }
 
