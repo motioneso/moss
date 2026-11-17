@@ -1,5 +1,15 @@
 # Finance package
 
+## 0.3.0
+
+- You can choose your budget currency once. It cannot be changed afterwards.
+- You can see a month of your budget: what each category was given, spent and still holds, and how much is ready to assign.
+- You can set the amount for one category or up to 20 at once, and move money between categories or from ready to assign.
+- You can ask for a first budget built from your last three full months of spending, change or drop its lines, and start it.
+- Every budget save checks that nothing changed since you looked. If something did, nothing is saved and you are told to review again.
+- The activity record of a budget change holds the month and category only. It no longer stores amounts.
+- Flexible pools, targets, card payments, bills, shared accounts, reports and undoing a budget change are not part of this package yet.
+
 ## 0.2.0
 
 - You can list your transactions for a month, search and filter them, and save a note on any one.

@@ -45,6 +45,7 @@ def control(name, path, old, new, manifest, test, case, extra, output, rebuild=F
 
 GUEST = "a_host_failure_never_echoes_names_notes_or_amounts"
 HOST = "names_notes_and_amounts_never_reach_job_payloads_activity_rows_or_logs"
+BUDGET = "the_budget_is_private_drafts_use_stored_records_and_an_uncertain_save_saves_nothing"
 guest_target = target / "guest"
 control("error body", "modules/finance/src/lib.rs",
         '|_| Response::new(500, json!({"error":"Internal server error"}))',
@@ -56,6 +57,12 @@ control("activity amounts", "modules/finance/src/ledger.rs",
         'json!({"accountId":account_id,"transactionId":id,"amountCents":amount})',
         "modules/finance/host/Cargo.toml", "installed", HOST, ["--ignored", "--test-threads=1"], target,
         rebuild=True)
+# A budget activity row holds the month and category only. Put the amount back in and the budget scan must fail.
+control("budget activity amounts", "modules/finance/src/budget_write.rs",
+        'json!({"month":month,"categoryId":item.category})',
+        'json!({"month":month,"categoryId":item.category,"amountCents":item.amount})',
+        "modules/finance/host/Cargo.toml", "installed", BUDGET, ["--ignored", "--test-threads=1"], target,
+        rebuild=True)
 # Re-run both assertions after restoring their guards; a negative control alone is not proof.
 # The control build reused the guest output folder, so rebuild the shipped component from restored source.
 subprocess.run(["modules/finance/tools/build-component.sh", str(target / "module.wasm")], check=True,
@@ -63,6 +70,7 @@ subprocess.run(["modules/finance/tools/build-component.sh", str(target / "module
 for manifest, test, case, extra, output in [
     ("modules/finance/src/Cargo.toml", "privacy", GUEST, [], guest_target),
     ("modules/finance/host/Cargo.toml", "installed", HOST, ["--ignored", "--test-threads=1"], target),
+    ("modules/finance/host/Cargo.toml", "installed", BUDGET, ["--ignored", "--test-threads=1"], target),
 ]:
     subprocess.run(["cargo", "+1.95.0", "test", "--locked", "--offline", "--manifest-path",
                     manifest, "--test", test, case, "--", *extra],

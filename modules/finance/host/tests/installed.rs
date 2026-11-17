@@ -56,7 +56,7 @@ impl World {
         // Rows left by an earlier run in this throwaway database must not reach the marker scan.
         f.rt.block_on(f.root.batch_execute(
             "DO $$ BEGIN IF to_regclass('app.finance_activity') IS NOT NULL THEN \
-             TRUNCATE app.finance_activity, app.finance_transactions, app.finance_accounts CASCADE; END IF; END $$",
+             TRUNCATE app.finance_activity, app.finance_transactions, app.finance_accounts, app.finance_budget_policy, app.finance_budget_assignments, app.finance_budget_drafts, app.finance_budget_draft_lines CASCADE; END IF; END $$",
         ))
         .unwrap();
         let dir = tempfile::tempdir().unwrap();
@@ -94,6 +94,13 @@ impl World {
             .dispatch_extended(self.f.access(actor), method, &format!("/api/m/finance{path}"), &body.to_string())
             .unwrap_or_else(|e| panic!("{method} {path}: {e:?}"));
         serde_json::from_str(&text).unwrap()
+    }
+    /// Like `call`, but a host failure comes back as an error value.
+    fn call_raw(&self, actor: Uuid, method: &str, path: &str, body: Value) -> Result<Value, String> {
+        self.app
+            .dispatch_extended(self.f.access(actor), method, &format!("/api/m/finance{path}"), &body.to_string())
+            .map(|t| serde_json::from_str(&t).unwrap())
+            .map_err(|e| format!("{e:?}"))
     }
     /// Rows `actor` can read straight from a table through their own policies.
     fn visible(&self, actor: Uuid, table: &str) -> i64 {
@@ -277,4 +284,136 @@ fn names_notes_and_amounts_never_reach_job_payloads_activity_rows_or_logs() {
         assert!(!seen.contains(NAME) && !seen.contains(NOTE) && !seen.contains(&AMOUNT.to_string()));
     }
     println!("PASS privacy: scanned {} tables, the markers appear only in the ledger rows", tables.len());
+}
+
+const BUDGET_TABLES: [&str; 4] = [
+    "app.finance_budget_policy",
+    "app.finance_budget_assignments",
+    "app.finance_budget_drafts",
+    "app.finance_budget_draft_lines",
+];
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn the_budget_is_private_drafts_use_stored_records_and_an_uncertain_save_saves_nothing() {
+    const PAYEE: &str = "PLANTED-PAYEE-MARKER-41ac90";
+    let w = World::new();
+    let (a, b) = (w.f.a, w.f.b);
+    let account = w.account(a, Uuid::new_v4(), NAME, 5_000_000)["body"]["id"].as_str().unwrap().to_owned();
+    let configured = w.call(a, "POST", "/finance/budget/configure", json!({"isoCurrency":"USD","acknowledgeLegacy":false}));
+    assert_eq!(configured["status"], 200, "{configured}");
+    let spend = |month: &str, cents: i64, name: &str| {
+        let made = w.call(
+            a,
+            "POST",
+            "/finance/manual/entries",
+            json!({"operationId":Uuid::new_v4().to_string(),"accountId":account,"name":name,"date":format!("{month}-10"),
+                "amountCents":cents,"isoCurrency":"USD","cleared":true,"categoryId":"groceries"}),
+        );
+        assert_eq!(made["status"], 200, "{made}");
+    };
+    for (month, cents) in [("2026-06", 30_000), ("2026-07", 31_234), ("2026-08", 32_000)] {
+        spend(month, cents, PAYEE);
+    }
+
+    // The draft's figures come from those stored rows.
+    let built = w.call(a, "POST", "/finance/budget/draft/build", json!({}));
+    assert_eq!((built["status"].clone(), built["body"]["built"].clone()), (json!(200), json!(true)), "{built}");
+    let draft = w.call(a, "GET", "/finance/budget/draft", Value::Null)["body"].clone();
+    let line = &draft["draft"]["groups"][0]["lines"][0];
+    assert_eq!((line["categoryKey"].clone(), line["basisMonthlyCents"].clone(), line["planCents"].clone()), (json!("groceries"), json!(31_078), json!(31_500)));
+    println!("PASS draft: three stored months of 30000, 31234 and 32000 gave a monthly basis of 31078 and a plan of 31500");
+
+    // A review taken now goes stale when the ledger changes, and the save then writes nothing.
+    let status = w.call(a, "GET", "/finance/budget/status?month=2026-11", Value::Null);
+    let current = status["body"]["currentMonth"].as_str().unwrap().to_owned();
+    let status = w.call(a, "GET", &format!("/finance/budget/status?month={current}"), Value::Null)["body"].clone();
+    let assign = |expected: &Value, cents: i64, previous: i64| {
+        json!({"month":current,"categoryId":"dining","amountCents":cents,"previousCents":previous,
+            "expectedRevision":expected["revision"],"expectedFingerprint":expected["fingerprint"]})
+    };
+    let first = assign(&status, 10_731, 0);
+    spend("2026-08", 700, "Another");
+    let counts = || (w.f.rt.block_on(w.f.root.query_one("SELECT count(*) FROM app.finance_budget_assignments", &[])).unwrap().get::<_, i64>(0),
+        w.f.rt.block_on(w.f.root.query_one("SELECT max(revision) FROM app.finance_budget_policy", &[])).unwrap().get::<_, i64>(0));
+    let before = counts();
+    let stale = w.call(a, "POST", "/finance/budget/assign", first.clone());
+    assert_eq!((stale["status"].clone(), stale["body"]["code"].clone()), (json!(409), json!("stale_budget")), "{stale}");
+    assert_eq!(before, counts(), "a refused save must change no row and not move the revision");
+    println!("PASS uncertain save: the stale review was refused with a 409 and the stored rows and revision stayed as they were");
+
+    // A fresh review saves, and a second save holding the same review is refused.
+    let fresh = w.call(a, "GET", &format!("/finance/budget/status?month={current}"), Value::Null)["body"].clone();
+    let one = assign(&fresh, 10_731, 0);
+    let two = json!({"month":current,"categoryId":"fuel","amountCents":5_000,"previousCents":0,
+        "expectedRevision":fresh["revision"],"expectedFingerprint":fresh["fingerprint"]});
+    assert_eq!(w.call(a, "POST", "/finance/budget/assign", one)["status"], 200);
+    assert_eq!(w.call(a, "POST", "/finance/budget/assign", two)["body"]["code"], "stale_budget");
+    assert_eq!(counts().0, 1);
+
+    // A host failure part way through a start rolls every earlier write back.
+    let draft_id = draft["draft"]["id"].clone();
+    let latest = w.call(a, "GET", "/finance/budget/draft", Value::Null)["body"].clone();
+    w.f.rt.block_on(w.f.root.batch_execute("ALTER TABLE app.finance_budget_assignments ADD CONSTRAINT js309_block CHECK (category_id <> 'groceries') NOT VALID")).unwrap();
+    let before = counts();
+    let broken = w.call_raw(a, "POST", "/finance/budget/draft/start", json!({"draftId":draft_id,"expectedRevision":latest["revision"],"expectedFingerprint":latest["fingerprint"]}));
+    w.f.rt.block_on(w.f.root.batch_execute("ALTER TABLE app.finance_budget_assignments DROP CONSTRAINT js309_block")).unwrap();
+    assert!(broken.is_err() || broken.as_ref().unwrap()["status"] != 200, "the failing start must not succeed: {broken:?}");
+    assert_eq!(before, counts(), "a start that fails part way saves nothing, not even the revision bump");
+    let status: String = w.f.rt.block_on(w.f.root.query_one("SELECT status FROM app.finance_budget_drafts LIMIT 1", &[])).unwrap().get(0);
+    assert_eq!(status, "open");
+    println!("PASS uncertain save: a failure part way through starting the draft left no assignment, no revision change and the draft open");
+
+    // The second person and the admin see none of it.
+    for other in [b, w.f.admin] {
+        for table in BUDGET_TABLES {
+            assert_eq!(w.visible(other, table), 0, "{table}");
+        }
+    }
+    let theirs = w.call(b, "GET", &format!("/finance/budget/status?month={current}"), Value::Null);
+    assert_eq!(theirs["body"]["setupRequired"], true, "{theirs}");
+    assert!(!theirs.to_string().contains("31500") && !theirs.to_string().contains("10731"));
+    let stolen = w.call(b, "POST", "/finance/budget/assign", assign(&fresh, 1, 0));
+    assert!(stolen["status"].as_i64().unwrap() >= 400, "{stolen}");
+    assert_eq!(counts().0, 1);
+    println!("PASS rls: the second person and the admin read no budget rows, see no budget and cannot save into it");
+
+    // With the owner rule removed the same reads fail.
+    let off: String = BUDGET_TABLES.iter().map(|t| format!("ALTER TABLE {t} DISABLE ROW LEVEL SECURITY;")).collect();
+    let on: String = BUDGET_TABLES.iter().map(|t| format!("ALTER TABLE {t} ENABLE ROW LEVEL SECURITY; ALTER TABLE {t} FORCE ROW LEVEL SECURITY;")).collect();
+    w.f.rt.block_on(w.f.root.batch_execute(&off)).unwrap();
+    let open: Vec<i64> = BUDGET_TABLES.iter().map(|t| w.visible(w.f.admin, t)).collect();
+    w.f.rt.block_on(w.f.root.batch_execute(&on)).unwrap();
+    assert!(open.iter().all(|n| *n >= 1), "RED expected: the admin sees budget rows without the rule, saw {open:?}");
+    println!("RED: with row security removed the admin saw {open:?} budget rows");
+    for table in BUDGET_TABLES {
+        assert_eq!(w.visible(w.f.admin, table), 0, "{table}");
+    }
+    println!("GREEN: row security restored, the admin sees 0 budget rows");
+
+    // Private text never reaches the queue, the activity rows, the logs or the activity feed.
+    let tables: Vec<String> = w.f.rt.block_on(async {
+        w.f.root
+            .query(
+                "SELECT table_schema||'.'||table_name FROM information_schema.tables WHERE table_schema IN ('moss_queue','moss_modules') \
+                 OR table_name IN ('moss_activity_detail','moss_error_log','moss_action_audit_log','moss_model_activity_log') OR table_name='finance_activity'",
+                &[],
+            )
+            .await
+            .unwrap()
+            .iter()
+            .map(|r| r.get(0))
+            .collect()
+    });
+    for table in &tables {
+        for text in [PAYEE.to_owned(), NAME.to_owned(), "31078".to_owned(), "31500".to_owned(), "10731".to_owned()] {
+            let hits: i64 = w.f.rt.block_on(w.f.root.query_one(&format!("SELECT count(*) FROM {table} t WHERE to_jsonb(t)::text LIKE '%'||$1||'%'"), &[&text])).unwrap().get(0);
+            assert_eq!(hits, 0, "{table} holds {text}");
+        }
+    }
+    let stored: i64 = w.f.rt.block_on(w.f.root.query_one("SELECT count(*) FROM app.finance_transactions t WHERE to_jsonb(t)::text LIKE '%'||$1||'%'", &[&PAYEE])).unwrap().get(0);
+    assert!(stored >= 3, "the payee marker must be stored in the ledger so the scan can see it");
+    let kinds: Vec<String> = w.f.rt.block_on(w.f.root.query("SELECT DISTINCT kind FROM app.finance_activity WHERE kind LIKE 'budget.%'", &[])).unwrap().iter().map(|r| r.get(0)).collect();
+    assert!(kinds.contains(&"budget.assign".to_owned()) && kinds.contains(&"budget.configure".to_owned()), "{kinds:?}");
+    println!("PASS privacy: scanned {} tables, budget activity rows {kinds:?} hold ids only", tables.len());
 }
