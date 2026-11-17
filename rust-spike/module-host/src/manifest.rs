@@ -75,6 +75,10 @@ pub struct Manifest {
     /// Requested per-invocation fuel; the host clamps it to its own ceiling.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fuel_limit: Option<u64>,
+    /// Requested per-call time limit in milliseconds; the host clamps it between its default
+    /// limit and its own ceiling.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub call_limit_ms: Option<u64>,
     /// Retry count per declared job; jobs not listed use the host default.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub job_retries: BTreeMap<String, u32>,
@@ -226,6 +230,8 @@ pub fn relative_path(path: &str) -> bool {
 pub const MAX_JOB_RETRIES: u32 = 10;
 /// Largest compute budget any manifest may request.
 pub const MAX_FUEL_REQUEST: u64 = 2_000_000_000;
+/// Longest call limit any manifest may request, in milliseconds.
+pub const MAX_CALL_LIMIT_REQUEST_MS: u64 = 120_000;
 
 impl Manifest {
     pub fn validate(&self, moss: &Version) -> Result<()> {
@@ -234,6 +240,12 @@ impl Manifest {
             ensure!(
                 (1..=MAX_FUEL_REQUEST).contains(&fuel),
                 "The module asks for an unsupported compute budget"
+            );
+        }
+        if let Some(ms) = self.call_limit_ms {
+            ensure!(
+                (1..=MAX_CALL_LIMIT_REQUEST_MS).contains(&ms),
+                "The module asks for an unsupported call time limit"
             );
         }
         for (job, retries) in &self.job_retries {

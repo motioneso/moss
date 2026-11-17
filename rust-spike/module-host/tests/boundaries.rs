@@ -397,6 +397,79 @@ fn manifest_fuel_request_is_clamped_to_the_host_ceiling() {
 }
 
 #[test]
+fn manifest_call_limit_defaults_grants_and_clamps() {
+    use std::time::Duration;
+    let limits = Limits {
+        deadline: Duration::from_secs(5),
+        deadline_ceiling: Duration::from_secs(30),
+        ..Limits::default()
+    };
+    assert_eq!(limits.effective_deadline(None), Duration::from_secs(5));
+    assert_eq!(limits.effective_deadline(Some(20_000)), Duration::from_secs(20));
+    assert_eq!(limits.effective_deadline(Some(100_000)), Duration::from_secs(30));
+    assert_eq!(limits.effective_deadline(Some(1_000)), Duration::from_secs(5));
+    assert!(Host::new(Limits {
+        deadline: Duration::from_secs(5),
+        deadline_ceiling: Duration::from_secs(1),
+        ..Limits::default()
+    })
+    .is_err());
+    let mut manifest = common::manifest("1.0.0");
+    manifest.call_limit_ms = Some(0);
+    assert!(manifest.validate(&"0.1.0".parse().unwrap()).is_err());
+    manifest.call_limit_ms = Some(moss_module_host::manifest::MAX_CALL_LIMIT_REQUEST_MS + 1);
+    assert!(manifest.validate(&"0.1.0".parse().unwrap()).is_err());
+    manifest.call_limit_ms = Some(15_000);
+    manifest.validate(&"0.1.0".parse().unwrap()).unwrap();
+}
+
+/// A host service that takes 6 seconds, like a slow AI model, but gives up at the call limit.
+struct SlowPort;
+impl moss_module_host::runtime::Ports for SlowPort {
+    fn invoke(
+        &self,
+        scope: &moss_module_host::runtime::CallScope,
+        _: &str,
+        _: &moss_module_host::runtime::Request,
+    ) -> anyhow::Result<serde_json::Value> {
+        let wanted = std::time::Duration::from_secs(6);
+        if scope.remaining() < wanted {
+            std::thread::sleep(scope.remaining());
+            anyhow::bail!("deadline exceeded");
+        }
+        std::thread::sleep(wanted);
+        Ok(json!("done"))
+    }
+}
+
+#[test]
+fn a_call_slower_than_five_seconds_needs_the_module_to_ask_for_more() {
+    let run = |request: Option<u64>| {
+        let mut manifest = common::manifest("1.0.0");
+        manifest.call_limit_ms = request;
+        let started = std::time::Instant::now();
+        let result = Host::new(Limits::default()).unwrap().call(
+            &common::wasm(),
+            Arc::new(manifest),
+            AccessContext::new(uuid::Uuid::new_v4(), "slow"),
+            Arc::new(SlowPort),
+            "route",
+            r#"{"operation":"get","resource":"counter","parameters":{}}"#,
+        );
+        (result.is_ok(), started.elapsed())
+    };
+    let (ok, took) = run(None);
+    assert!(!ok);
+    assert!(took < std::time::Duration::from_millis(5_900), "{took:?}");
+    let (ok, took) = run(Some(15_000));
+    assert!(ok);
+    assert!(took >= std::time::Duration::from_secs(6), "{took:?}");
+    // A request above the manifest maximum fails validation; one above the ceiling is clamped to it.
+    let (ok, _) = run(Some(120_000));
+    assert!(ok);
+}
+
+#[test]
 fn manifest_job_retries_reach_the_queue_spec_and_are_bounded() {
     let mut manifest = common::manifest("1.0.0");
     let job = manifest.jobs.keys().next().cloned();

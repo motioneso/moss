@@ -246,6 +246,10 @@ fn modules_ask_the_router_and_fail_closed_until_a_provider_exists() {
                     auth,
                     serde_json::from_slice(&body).unwrap_or(Value::Null),
                 ));
+                // JS307_PROVIDER_DELAY_MS makes the provider as slow as a real model.
+                if let Ok(ms) = std::env::var("JS307_PROVIDER_DELAY_MS") {
+                    std::thread::sleep(Duration::from_millis(ms.parse().unwrap()));
+                }
                 let answer = json!({"choices":[{"message":{"content":"{\"text\":\"stretch\",\"status\":\"done\",\"listIds\":[],\"tagNames\":[]}"}}]}).to_string();
                 let mut stream = stream;
                 let _ = write!(
@@ -298,6 +302,25 @@ fn modules_ask_the_router_and_fail_closed_until_a_provider_exists() {
             &[&model, &provider, &owner],
         ).await.unwrap();
     });
+    if let Ok(expected) = std::env::var("JS307_EXPECT") {
+        let started = Instant::now();
+        let (status, body) = interpret();
+        let took = started.elapsed();
+        println!("slow provider: status {status} after {took:?}");
+        if expected == "refused" {
+            assert_eq!(status, 503, "no longer call limit asked for: {body}");
+            assert!(took < Duration::from_secs(8), "refused at the 5 second limit: {took:?}");
+        } else {
+            assert_eq!(status, 200, "a longer call limit was granted: {body}");
+            assert!(took >= Duration::from_secs(6), "the call really was slow: {took:?}");
+            assert_eq!(body["intent"]["status"], "done", "{body}");
+        }
+        let log = fs::read_to_string(root.join("server.log")).unwrap_or_default();
+        assert!(!log.contains("TEST-NOT-A-REAL-KEY-189"));
+        assert!(!log.contains("finished stretch tasks"));
+        println!("PASS slow provider over HTTPS: {expected}");
+        return;
+    }
     let (status, body) = interpret();
     assert_eq!(status, 200, "{body}\n{}", fs::read_to_string(root.join("server.log")).unwrap_or_default());
     assert_eq!(body["intent"]["status"], "done", "{body}");
