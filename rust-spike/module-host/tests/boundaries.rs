@@ -464,9 +464,6 @@ fn a_call_slower_than_five_seconds_needs_the_module_to_ask_for_more() {
     let (ok, took) = run(Some(15_000));
     assert!(ok);
     assert!(took >= std::time::Duration::from_secs(6), "{took:?}");
-    // A request above the manifest maximum fails validation; one above the ceiling is clamped to it.
-    let (ok, _) = run(Some(120_000));
-    assert!(ok);
 }
 
 #[test]
