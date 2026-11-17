@@ -64,3 +64,6 @@ scripts/run-gate.sh start --gate test:rust-finance-live
 - **Parity against the running old code.** Shapes and statuses were checked against the old
   handlers' source, not run side by side.
 - **Crates.** No new crates were needed.
+- **Pending link token.** A connection that has not finished keeps its one-use link token in
+  the link sessions table so it can be polled. The privacy scan skips that one table. The
+  claim of no tokens in logs, jobs and activity rows holds; the table is the deliberate exception.
