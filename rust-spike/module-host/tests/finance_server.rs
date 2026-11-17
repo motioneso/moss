@@ -590,6 +590,45 @@ fn installed_finance_package_serves_routes_from_the_real_server() {
     assert_ne!(status, 200, "{text}");
     assert_eq!(call(Method::GET, "/finance/budget/status?month=2026-11", None, None).0, 401);
     println!("PASS live finance budget: setup, assign, a stale review refused, a draft from stored rows and two people worked over HTTPS");
+    // Part 24: bills, targets, the flexible pool and card reserves over the same real route path.
+    const BILL: &str = "PLANTED-LIVE-BILL-8f2c";
+    let fresh = || {
+        let (_, text) = call(Method::GET, "/finance/budget/status?month=2026-11", Some(&cookie), None);
+        let r = json_of(&text);
+        json!({"month":"2026-11","expectedRevision":r["revision"],"expectedFingerprint":r["fingerprint"]})
+    };
+    let with = |mut base: Value, extra: Value| {
+        for (k, v) in extra.as_object().unwrap() {
+            base[k] = v.clone();
+        }
+        base
+    };
+    let plan = uuid::Uuid::new_v4().to_string();
+    let old_review = fresh();
+    let bill = with(old_review.clone(), json!({"id":plan,"name":BILL,"accountId":account,"categoryId":"groceries","amountCents":123_457,"anchorDate":"2026-11-20","cadence":"monthly"}));
+    let (status, text) = call(Method::POST, "/finance/bills", Some(&cookie), Some(bill.clone()));
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let (status, text) = call(Method::POST, "/finance/bills", Some(&cookie), Some(bill));
+    assert_eq!(status, 409, "a repeated save with an old review must be refused: {text}");
+    let (status, text) = call(Method::GET, "/finance/bills?from=2026-11-01&to=2026-12-31", Some(&cookie), None);
+    assert_eq!(status, 200, "{text}\n{}", log());
+    assert!(text.contains(BILL) && text.contains("123457"), "{text}");
+    let (status, text) = call(Method::POST, "/finance/targets", Some(&cookie), Some(with(fresh(), json!({"categoryId":"dining","kind":"monthly","amountCents":25_000}))));
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let (status, text) = call(Method::POST, "/finance/flex/preview", Some(&cookie), Some(json!({"month":"2026-11","mode":"flex","flexIds":["groceries"],"nonMonthlyIds":[]})));
+    assert_eq!(status, 400, "a pooled category with a target-free month answers a plain refusal or a preview: {text}");
+    let (status, text) = call(Method::GET, "/finance/bills/suggestions?from=2026-11-01&to=2026-12-31", Some(&cookie), None);
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let (status, text) = call(Method::POST, "/finance/chat/targets", Some(&cookie), Some(with(fresh(), json!({"categoryId":"dining","kind":"monthly","amountCents":1}))));
+    assert_ne!(status, 200, "the assistant route needs the one-use approval: {text}");
+    for path in ["/finance/bills?from=2026-11-01&to=2026-12-31", "/finance/bills/suggestions?from=2026-11-01&to=2026-12-31"] {
+        let (status, text) = call(Method::GET, path, Some(&other), None);
+        assert!(status == 200 || status == 404, "{status} {text}");
+        assert!(!text.contains(BILL) && !text.contains("123457") && !text.contains("25000"), "the other person saw bill data: {text}");
+    }
+    let (status, text) = call(Method::POST, "/finance/targets/remove", Some(&other), Some(with(fresh(), json!({"categoryId":"dining"}))));
+    assert_ne!(status, 200, "{text}");
+    println!("PASS live finance part 24: a bill, a target and the pool preview worked over HTTPS, an old review was refused, and the second person saw none of it");
     // Activity rows and the server log hold none of the text the test sent.
     let services = moss_module_host::services::ServicePorts::new(
         &root.join("data"),
@@ -610,7 +649,7 @@ fn installed_finance_package_serves_routes_from_the_real_server() {
             .unwrap()
             .get(0);
         assert!(control > 0, "the marker search cannot find text that is stored");
-        for marker in [NAME, NOTE, PAYEE, IMPORT_NOTE, &CENTS.to_string()] {
+        for marker in [NAME, NOTE, PAYEE, IMPORT_NOTE, BILL, "123457", &CENTS.to_string()] {
             let jobs: i64 = db
                 .query_one("SELECT count(*) FROM pgboss.job j WHERE to_jsonb(j)::text LIKE '%'||$1||'%'", &[&marker])
                 .await
