@@ -12,6 +12,7 @@ pub const PLANS: &str = "app.meals_plans";
 pub const DAYS: &str = "app.meals_plan_days";
 pub const MEALS: &str = "app.meals_planned_meals";
 pub const EATERS: &str = "app.meals_planned_meal_eaters";
+pub const SWAP_CHOICES: &str = "app.meals_swap_choices";
 pub const RECIPES: &str = "app.meals_recipes";
 pub const INGREDIENTS: &str = "app.meals_recipe_ingredients";
 
@@ -446,7 +447,7 @@ pub struct NewRecipe {
     pub ingredients: Vec<crate::recipe::Ingredient>,
 }
 
-fn store_recipe<H: Host + ?Sized>(host: &H, kitchen_id: &str, r: &NewRecipe) -> Result<()> {
+pub(crate) fn store_recipe<H: Host + ?Sized>(host: &H, kitchen_id: &str, r: &NewRecipe) -> Result<()> {
     insert_ignore(
         host,
         RECIPES,
@@ -483,7 +484,7 @@ fn store_recipe<H: Host + ?Sized>(host: &H, kitchen_id: &str, r: &NewRecipe) -> 
     Ok(())
 }
 
-fn write_eaters<H: Host + ?Sized>(host: &H, meal_id: &str, eaters: &[EaterRow]) -> Result<()> {
+pub(crate) fn write_eaters<H: Host + ?Sized>(host: &H, meal_id: &str, eaters: &[EaterRow]) -> Result<()> {
     for eater in eaters {
         update(
             host,
@@ -651,4 +652,11 @@ pub fn recent_titles<H: Host + ?Sized>(
         .iter()
         .map(|r| (text(r, "title"), text(r, "title_key")))
         .collect())
+}
+
+/// The swap choices stored for a meal, by position.
+pub fn list_swap_choices<H: Host + ?Sized>(host: &H, meal_id: &str) -> Result<Vec<Value>> {
+    let mut query = Query::select(Filter::eq("meal_id", meal_id));
+    query.order = vec![asc("position")];
+    select(host, SWAP_CHOICES, query)
 }

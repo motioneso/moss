@@ -13,7 +13,8 @@ const INGREDIENTS: [(&str, &str, &str, &str, &str); 5] = [
 
 /// One ready Monday dinner for a person, with ids that differ per person so runs can be paired.
 pub(super) fn seed_plan(w: &World, actor: uuid::Uuid, salt: &str) -> [String; 4] {
-    let id = |n: &str| format!("md5('{salt}-{n}')::uuid");
+    // Valid version-4 ids, because the job queue refuses any other shape.
+    let id = |n: &str| format!("overlay(overlay(md5('{salt}-{n}') placing '4' from 13) placing '8' from 17)::uuid");
     let mut sql = format!(
         "INSERT INTO app.meals_plans(owner_user_id,kitchen_id,plan_id,start_date,day_count,pantry_mode,idempotency_key)
            SELECT '{actor}',kitchen_id,{plan},DATE '2026-11-09',1,'prefer','{salt}' FROM app.meals_kitchens WHERE owner_user_id='{actor}';

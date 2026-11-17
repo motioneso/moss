@@ -1298,6 +1298,105 @@ shared gate database, and a live-run expectation that used the wrong cup count.
 - **No screens** were built.
 - **Release note** is not applicable.
 
+## Meals remainder tools and data lifecycle (part 33)
+
+### What existed before this part
+
+Parts 28 to 32 ported 24 of the 31 assistant tools. Nothing could delete a plan, open a meal,
+change servings, lock or move a meal, edit a day, swap a recipe or place a favourite, and the
+account export and delete had no Meals section.
+
+### What was built
+
+- **Seven tools.** Delete a plan, open a meal, set servings, edit a meal (lock, unlock, move,
+  change who eats it), edit a day (text, clear text, one-off, cook limit, sharing), swap a meal
+  and edit favourites (add, remove, place in a meal).
+- **Swap.** Asking for choices queues one background job that writes three recipe choices, each
+  with a safety check and a calorie estimate per serving. Choosing one replaces the recipe.
+  Quick swap replaces it inside a time limit. A job queued before a newer change saves nothing.
+  The job carries only ids, a generation number and the mode.
+- **Eaters.** Changing who eats a meal marks its safety as pending and queues a recheck job. A
+  solo slot splits into one meal per eater and a shared slot joins them again.
+- **Placing a favourite** runs the safety check first and refuses a locked meal, a recipe that is
+  not that person's favourite, and a check that cannot run.
+- **Re-plan** is a new action on the plan control tool. It resets only the meals still to come.
+- **Account data.** The account export gets a Meals section with every table the person owns,
+  and the account delete removes all of it, children first. Both only touch the caller's rows.
+- **Manifest and changelog** carry the new tools, the swap job, the two account entries and two
+  chat features. The app map comes from the manifest.
+
+### Tool by tool parity list (31 of 31, signed off)
+
+The old list in the old module's manifest has 31 tools. The new list has the same 31 names, with
+none missing and none extra, checked by a script. Ported in earlier parts: kitchen get and save,
+household save and remove, plan create, get, current and control, list get, build, edit, bought
+and clear, pantry get and edit, log list, summarize, add, reestimate, correct and delete, mark
+cooked, rate and undo. Ported here: plan delete, meal get, meal servings, meal edit, meal swap,
+day edit and favourites edit.
+
+Compared step by step against the old handlers on a real database: 15 kitchen and plan steps, 44
+list and pantry steps, 31 log steps, 50 cooking steps and 20 new steps (open, servings, lock,
+unlock, day text and clear, cook limit, plan delete, and refusals). Swap, favourites placement,
+eaters, quick swap and the account sections have no step by step comparison because the old
+versions need a live model and the platform's queue, so they are proven by the native tests
+below instead.
+
+### Differences from the old code (on purpose)
+
+- There are no database transactions. Multi-row writes add harmless rows first, flip the one
+  guarded row last and remove leftovers on failure. Day sharing overrides are a read then a
+  write, so two edits at the same instant can lose one.
+- The time zone for re-plan comes from the host, and the time zone in the input is ignored.
+- Swap has no fast model hint, because the Rust model port has no tier choice. The manifest
+  description no longer promises one.
+- Day jobs written in part 29 still do not apply the one-star veto or the recipe calorie value.
+  The meal job does both. Changing the day job would have broken merged comparison tests.
+- The old module reported a refused input with an error that has no code. The new one reports
+  invalid input, and the comparison harness maps the old error to the same code.
+
+### Proof
+
+- Native guest tests: 15 new tests for each new tool, refusals, a second person, stale jobs, the
+  swap job writing three choices with 200 kcal per serving, eaters and recheck, quick swap, solo
+  split and shared merge, and account export and delete for the caller only.
+- Real database, second person: the new tools refuse the second person and the admin. The owner
+  rule on the meals and plans tables was seen failing when removed. A planted word is in no job
+  row and no activity row, and the control that leaks it into activity was seen failing the test.
+- Live run on the real server over real HTTPS from a non-loopback address: another person was
+  refused for lock, swap, day edit and plan delete. The owner opened a meal, set servings,
+  locked and unlocked it, asked for swap choices and got three, set a cook limit and deleted the
+  plan. The earlier kitchen, list, pantry, cooking and food log live checks still pass.
+- Both builds: native tests and the WebAssembly component build and package test ran in the same
+  gate.
+
+From the repo root, through the gate script:
+
+```
+scripts/run-gate.sh start --gate test:rust-meals
+```
+
+```
+scripts/run-gate.sh start --gate test:rust-meals-live
+```
+
+Both ended with exit code 0. Earlier runs failed for test faults, none in the module: missing
+installed web packages in the worktree, a route test that used a now real tool as its example of
+an unknown tool, test ids that were not valid version 4 ids and so were refused by the queue,
+and a live step order that asked to swap a meal still writing.
+
+### Not proven or not built
+
+- **Swap, placing a favourite, eaters and the account sections** have no step by step comparison
+  with the old code (see above).
+- **Swap and recheck jobs** were run against a stand-in model in tests. The live run did not run
+  the swap job to the end with a real model.
+- **The account export and delete** were not run through the real account screens.
+- **Fast model tier** for quick swap is not built.
+- **Plan rows in the live run** were written straight into the database, because writing a plan
+  needs a model.
+- **No screens** were built.
+- **Release note** is not applicable.
+
 ## Finance transactions (part 22)
 
 ### What was built

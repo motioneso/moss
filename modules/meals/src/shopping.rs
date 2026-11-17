@@ -332,6 +332,16 @@ pub fn on_plan_change<H: Host + ?Sized>(host: &H, plan_id: &str) -> Result<()> {
     rebuild(host, &stored, &kitchen_id, false)
 }
 
+/// Plan-deleted hook. Empties a list tied to the deleted plan.
+pub fn on_plan_deleted<H: Host + ?Sized>(host: &H, plan_id: &str) -> Result<()> {
+    let stored = read_list(host)?;
+    if !stored.exists || stored.plan_id.as_deref() != Some(plan_id) {
+        return Ok(());
+    }
+    let kitchen_id = kitchen::view(host)?["kitchenId"].as_str().unwrap_or_default().to_owned();
+    rebuild(host, &stored, &kitchen_id, true)
+}
+
 /// Pantry hook. Rebuilds a list tied to a plan, so its covered lines follow the Pantry.
 pub fn on_pantry_change<H: Host + ?Sized>(host: &H) -> Result<()> {
     let stored = read_list(host)?;

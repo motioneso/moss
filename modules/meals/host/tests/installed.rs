@@ -198,3 +198,5 @@ mod lists;
 mod log;
 #[path = "support/cooking.rs"]
 mod cooking;
+#[path = "support/arrange.rs"]
+mod arrange;

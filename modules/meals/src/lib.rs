@@ -1,9 +1,12 @@
 //! Meals package, part 28: the kitchen and household, with their four chat tools. Each
 //! person's rows are private to them. All effects cross the guest-safe SDK Host interface.
+pub mod account;
+pub mod arrange;
 pub mod cooking;
 pub mod diary;
 pub mod draft;
 pub mod estimate;
+pub mod favourites;
 pub mod input;
 pub mod jobs;
 pub mod kitchen;
@@ -20,6 +23,7 @@ pub mod rules;
 pub mod safety;
 pub mod safety_terms;
 pub mod stock;
+pub mod swap;
 pub mod store;
 pub mod tools;
 pub mod undo;
@@ -61,6 +65,11 @@ pub fn handle<H: Host + ?Sized>(
             Ok(serde_json::to_string(&result)?)
         }
         "job" => jobs::handle(host, payload),
+        "api" => {
+            let call = account::execute(host, serde_json::from_str(payload)?)
+                .map_err(|_| moss_module_sdk::Error::new("Meals account operation failed"))?;
+            Ok(serde_json::to_string(&call)?)
+        }
         "route" => {
             let request: RouteRequest = serde_json::from_str(payload)?;
             Ok(serde_json::to_string(&route(host, request))?)

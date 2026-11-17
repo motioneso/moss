@@ -1,6 +1,6 @@
 //! Builds the plan view from stored rows and the kitchen view. Pure, so it reads the same
 //! wherever the rows came from.
-use crate::rules::calorie_band;
+use crate::rules::{calorie_band, portion_for};
 use crate::store::{num, text};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
@@ -45,7 +45,7 @@ fn fit(target: i64, estimated: i64) -> Value {
     json!({"targetKcal":target,"estimatedKcal":estimated,"band":band,"differenceKcal":difference})
 }
 
-fn eater_view(
+pub(crate) fn eater_view(
     eater: &Value,
     slot: &str,
     recipe_id: Option<&str>,
@@ -107,6 +107,29 @@ pub fn meal_view(
         "cookedAt": meal["cooked_at"],
         "quickMaxMinutes": meal["quick_max_minutes"]
     })
+}
+
+/// A meal's eaters sized for another recipe, each marked as passing Safety. A swap choice is
+/// shown only after it passed Safety for these eaters, so the rows carry a pass.
+pub fn choice_eaters(meal: &Value, recipe: &Value, members: &HashMap<String, &Value>) -> Vec<Value> {
+    let slot = meal["slot_name"].as_str().unwrap_or_default();
+    let kcal = num(&recipe["kcal_per_serving"]);
+    meal["eaters"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|e| {
+            let share = e["member_id"].as_str().and_then(|id| members.get(id)).and_then(|p| share_kcal(p, slot));
+            let portion = portion_for(share, kcal);
+            json!({
+                "member_id": e["member_id"],
+                "portion": portion,
+                "estimated_kcal": kcal.map(|k| (k * portion).round() as i64),
+                "safety": "pass",
+                "safety_reason": Value::Null
+            })
+        })
+        .collect()
 }
 
 /// A member's day total against their target, once every meal they eat that day has an estimate.
