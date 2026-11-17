@@ -461,6 +461,64 @@ scripts/run-gate.sh start --gate test:rust-wellness-live
 - **Two other gates fail on main for unrelated reasons.** The weather preferences gate and the
   briefings gate fail before and after this change.
 
+## Wellness package: medicines and dose logs (part 14)
+
+Task JS-297. Part of [issue 4027](https://github.com/motioneso/moss/issues/4027). Release note
+Category: N/A. No Vikunja card exists for this task, so there is no card line.
+
+### What was built
+
+The Wellness package now serves the medicine routes. There are 11 routes in all: add, list, read,
+change and remove a medicine, set up its schedule, read a day's doses, log a dose, and read the
+30-day adherence summary.
+
+- **Same schedule rules.** All eight schedule kinds work as in the old code, including the old
+  plain-calendar model, the one-minute match between a dose and its log, and the old way of
+  reading odd input (empty values, single values in place of lists, unknown fields dropped).
+- **Time zones.** Two kinds (every interval, monthly) use the medicine's own time zone. This needs
+  the `chrono-tz` crate. It is the one flagged addition to the approved list, and it was decided
+  before this part.
+- **Counts for Briefings.** A counts-only function gives scheduled, taken, skipped, as-needed and
+  the adherence rate. It holds no medicine names, and it needs the person's assistant-access choice
+  to be on.
+- **Reminder queue.** The manifest declares the queue. No worker runs it, as in the old code.
+- **App map.** The manifest lists the two new features, with plain error descriptions.
+
+### Differences from the old code (on purpose)
+
+Three inputs now answer 400 where the old server answered 500: a date that does not exist when
+reading a day's doses, a dose time that cannot be read, and a clock time that is not a real time
+in the schedule times. All three are listed in the package changelog.
+
+### Proof
+
+| Claim                                             | Evidence                                                                                                                                                                    |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Routes match the old handlers                     | The old routes and the new package ran side by side on one test database. 47 steps without ids and 7 with ids match. A control run with protection removed was seen failing |
+| A second person cannot read or change medicines   | Real database test as two people through the installed package, seen failing with the owner rule removed                                                                    |
+| Private text stays out of logs, jobs, activity    | Guest tests plus installed tests show medicine text only reaches the two medicine tables. A database failure never echoes it                                                |
+| Counts hold no medicine list                      | A native test reads the output and finds counts only                                                                                                                        |
+| Native and WebAssembly builds                     | Native guest tests (13 behaviour, privacy) and the same code as a WebAssembly component in the package tests                                                                |
+| Works on the real Rust server from another device | Live test on the real server over https on a non-loopback address, with certificate checking. It now covers the medicine routes. Gate exit code 0                           |
+
+Commands (expected exit code 0, both through `scripts/run-gate.sh`):
+
+```bash
+scripts/run-gate.sh start --gate test:rust-wellness
+scripts/run-gate.sh start --gate test:rust-wellness-live
+```
+
+### Not proven or not built
+
+- **Golden 30-day counts.** The fixture checks for every-n-hours, every-interval and monthly were
+  not added. The old-route comparison covers those kinds, but not at a fixed clock.
+- **Briefings reading.** Briefings is shown to get counts only by a guest test and the manifest, not
+  by a run of Briefings itself.
+- **Daylight-saving cases** are covered by the comparison only, not by their own guest tests.
+- **Chat tools** for medicines are part 16. Therapy notes, insights, export and the screens are
+  later parts. No worker runs the reminder queue.
+- **No screens, so no click-through proof.**
+
 ## Commitments package skeleton (part 7)
 
 ### What was built
