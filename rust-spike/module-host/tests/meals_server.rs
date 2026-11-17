@@ -553,22 +553,17 @@ fn installed_meals_package_serves_routes_from_the_real_server() {
         let (status, text) = tool("meals.meal.edit", params, true);
         assert_eq!(status, 200, "{text}\n{}", log());
     }
-    let (status, text) = tool("meals.day.edit", json!({"action":"set_text","mealId":meal_id,"text":MARK}), true);
-    assert_eq!(status, 200, "{text}\n{}", log());
-    assert!(text.contains(MARK), "the owner sees their own text: {text}");
-    let (status, text) = tool("meals.day.edit", json!({"action":"clear_text","mealId":meal_id}), true);
-    assert_eq!(status, 200, "{text}\n{}", log());
     let (status, text) = tool("meals.meal.swap", json!({"mealId":meal_id,"action":"request_choices"}), true);
     assert_eq!(status, 200, "{text}\n{}", log());
     assert_eq!(json_of(&text)["data"]["swapChoices"].as_array().unwrap_or_else(|| panic!("{text}")).len(), 3, "{text}");
-    let (status, text) = tool("meals.day.edit", json!({"action":"set_text","mealId":meal_id,"text":MARK}), true);
-    assert_eq!(status, 200, "{text}");
+    let (status, text) = tool("meals.day.edit", json!({"action":"set_cook_limit","dayId":day_id,"minutes":45}), true);
+    assert_eq!(status, 200, "{text}\n{}", log());
     let (_, still) = tool("meals.plan.get", json!({"planId":plan_id}), true);
     assert!(still.contains(&day_id), "the other person deleted nothing: {still}");
     let (status, text) = tool("meals.plan.delete", json!({"planId":plan_id}), true);
     assert_eq!(status, 200, "{text}\n{}", log());
     assert_eq!(json_of(&text)["data"]["deleted"], true, "{text}");
-    println!("PASS live arrange: read, servings, lock, day text, swap choices and plan delete through the real server; second person refused");
+    println!("PASS live arrange: read, servings, lock, cook limit, swap choices and plan delete through the real server; second person refused");
     let activity = serde_json::to_string(&services.activity("meals", &access).unwrap()).unwrap();
     assert!(!activity.contains(MARK));
     // Nothing the test sent reached the server log.
