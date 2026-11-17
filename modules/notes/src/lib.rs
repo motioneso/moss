@@ -16,6 +16,7 @@ pub mod sync;
 mod sync_recovery;
 #[cfg(feature = "write-tools")]
 pub mod sync_worker;
+pub mod work_mail;
 pub mod write_tools;
 
 #[cfg(target_arch = "wasm32")]

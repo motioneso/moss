@@ -26,6 +26,10 @@ enum ApiRequest {
     #[cfg(feature = "write-tools")]
     #[serde(rename = "recoverNotesSync")]
     RecoverSync(crate::sync_recovery::Recovery),
+    #[serde(rename = "listWorkMailCandidates")]
+    WorkMailCandidates(crate::work_mail::CandidatesRequest),
+    #[serde(rename = "appendWorkMailNote")]
+    WorkMailAppend(crate::work_mail::AppendRequest),
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -70,6 +74,8 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> Result<String> {
                 ApiRequest::DailyArchive(input) => crate::daily_archive::write(host, &input)?,
                 #[cfg(feature = "write-tools")]
                 ApiRequest::RecoverSync(input) => crate::sync_recovery::recover(host, input)?,
+                ApiRequest::WorkMailCandidates(input) => crate::work_mail::candidates(host, &input)?,
+                ApiRequest::WorkMailAppend(input) => crate::work_mail::append(host, &input)?,
                 ApiRequest::Prepare(request) => {
                     match crate::write_tools::prepare_json(host, &request.tool, &request.input_json)
                     {

@@ -264,7 +264,7 @@ fn a_second_person_cannot_send_or_draft_through_another_persons_account() {
     assert!(f.google.sent().is_empty() && f.google.drafts().is_empty());
     // With row-level security off the same call reaches the account, so the refusal above is the protection.
     // Other tests leave accounts behind, and the token lookup takes the only visible active one.
-    f.rt.block_on(f.root.execute("UPDATE app.connector_accounts SET status='error' WHERE id <> $1", &[&id])).unwrap();
+    f.rt.block_on(f.root.execute("UPDATE app.connector_accounts SET status='error' WHERE id <> $1 AND status <> 'revoked'", &[&id])).unwrap();
     f.rt.block_on(f.root.batch_execute("ALTER TABLE app.connector_accounts NO FORCE ROW LEVEL SECURITY; ALTER TABLE app.connector_accounts DISABLE ROW LEVEL SECURITY")).unwrap();
     let open = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f.reply_approved_by(f.a, f.b, "email.sendReply")));
     f.rt.block_on(f.root.batch_execute("ALTER TABLE app.connector_accounts ENABLE ROW LEVEL SECURITY; ALTER TABLE app.connector_accounts FORCE ROW LEVEL SECURITY")).unwrap();
