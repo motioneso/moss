@@ -12,7 +12,7 @@ use moss_module_sdk::{
 };
 use serde_json::{json, Value};
 
-const DAY_MS: i64 = 86_400_000;
+pub(crate) const DAY_MS: i64 = 86_400_000;
 
 fn query_text(request: &RouteRequest, name: &str) -> Option<String> {
     match request.query.get(name)? {
@@ -22,7 +22,7 @@ fn query_text(request: &RouteRequest, name: &str) -> Option<String> {
     }
 }
 
-fn meds<H: Host + ?Sized>(host: &H) -> Result<Vec<Med>> {
+pub(crate) fn meds<H: Host + ?Sized>(host: &H) -> Result<Vec<Med>> {
     medications::all(host)?.iter().map(schedule::med_from_row).collect()
 }
 
@@ -55,7 +55,7 @@ fn logs_for_date<H: Host + ?Sized>(host: &H, day: NaiveDate, zone: &str) -> Resu
 }
 
 /// Logs over a rolling window. A scheduled log goes by its slot, any other by when it was logged.
-fn logs_since<H: Host + ?Sized>(host: &H, since_ms: i64) -> Result<Vec<Log>> {
+pub(crate) fn logs_since<H: Host + ?Sized>(host: &H, since_ms: i64) -> Result<Vec<Log>> {
     let scheduled = Filter::And { filters: vec![Filter::Null { column: "scheduled_for".into(), not: true }, at_least("scheduled_for", since_ms)] };
     let unscheduled = Filter::And { filters: vec![Filter::Null { column: "scheduled_for".into(), not: false }, at_least("logged_at", since_ms)] };
     logs_where(host, Filter::Or { filters: vec![scheduled, unscheduled] })
@@ -83,12 +83,12 @@ fn since_days(request: &RouteRequest) -> Option<i64> {
 }
 
 /// One day's slots and counts, from the logs that belong to that day.
-fn day_slots(meds: &[Med], logs: &[Log], date: NaiveDate, zone: &str) -> Vec<Value> {
+pub(crate) fn day_slots(meds: &[Med], logs: &[Log], date: NaiveDate, zone: &str) -> Vec<Value> {
     let todays: Vec<Log> = logs.iter().filter(|l| schedule::log_in_day(l, date, zone)).cloned().collect();
     schedule::compute(meds, &todays, date)
 }
 
-fn scheduled(slots: &[Value]) -> impl Iterator<Item = &Value> {
+pub(crate) fn scheduled(slots: &[Value]) -> impl Iterator<Item = &Value> {
     slots.iter().filter(|s| s["asNeeded"] == false)
 }
 
@@ -114,17 +114,12 @@ pub fn summary<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Res
     Ok(Response::new(200, json!({"days": days})))
 }
 
-fn consent<H: Host + ?Sized>(host: &H) -> Result<bool> {
-    let read = host.call("kv", "preference.read", "ai-consent", json!({}))?;
-    Ok(read["value"].as_bool().unwrap_or(true))
-}
-
 const WINDOW_DAYS: i64 = 7;
 
 /// The seven-day counts another module may read, and only while the person allows assistant
 /// access. The answer holds numbers and no medication name, id, dose or reason.
 pub fn counts<H: Host + ?Sized>(host: &H) -> Result<Value> {
-    if !consent(host)? {
+    if !crate::consent::effective(host)? {
         return Ok(json!({"error":"Consent not granted","code":"WELLNESS_CONSENT_REQUIRED"}));
     }
     let context = medications::today(host)?;
@@ -141,6 +136,12 @@ pub fn counts<H: Host + ?Sized>(host: &H) -> Result<Value> {
         expected += scheduled(&day_slots(&meds, &logged, schedule::previous_day(today, back), zone)).count() as i64;
     }
     let total = expected.max(taken + skipped);
-    let rate = if total > 0 { json!(((taken as f64 / total as f64) * 100.0).round() / 100.0) } else { Value::Null };
+    let rate = if total > 0 {
+        let share = ((taken as f64 / total as f64) * 100.0).round() / 100.0;
+        // 0 and 1 are written without a decimal point, as the old server wrote them.
+        if share.fract() == 0.0 { json!(share as i64) } else { json!(share) }
+    } else {
+        Value::Null
+    };
     Ok(json!({"windowDays": WINDOW_DAYS, "scheduled": total, "taken": taken, "skipped": skipped, "prn": prn, "adherenceRate": rate}))
 }

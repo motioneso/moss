@@ -589,6 +589,37 @@ fn installed_wellness_package_serves_routes_from_the_real_server() {
         std::sync::Arc::new(moss_module_host::runtime::DenyPorts),
     )
     .unwrap();
+    // Chat tools over the real server. The owner's assistant access is still off from above.
+    let tool = |name: &str, who: &str| {
+        if who == cookie {
+            services.approve_tool(&access, "wellness", name, &json!({})).unwrap();
+        }
+        call(Method::POST, "/wellness/tools/run", Some(who), Some(json!({"tool":name,"parameters":{}})))
+    };
+    let refusal = json!({"data":{"error":"Consent not granted","code":"WELLNESS_CONSENT_REQUIRED"}});
+    for name in ["wellness.recentCheckIns", "wellness.medicationAdherence"] {
+        let (status, text) = tool(name, &cookie);
+        assert_eq!(status, 200, "{text}\n{}", log());
+        assert_eq!(json_of(&text), refusal, "{name} must refuse with consent off");
+        assert!(!text.contains(MARK) && !text.contains(MED_MARK));
+    }
+    assert_eq!(call(Method::POST, "/wellness/tools/run", None, Some(json!({"tool":"wellness.recentCheckIns","parameters":{}}))).0, 401);
+    assert_eq!(call(Method::POST, "/wellness/tools/run", Some(&cookie), Some(json!({"tool":"wellness.recentCheckIns","parameters":{"limit":3}}))).0, 400);
+    let (_, text) = call(Method::PUT, "/wellness/ai-consent", Some(&cookie), Some(json!({"granted":true})));
+    assert_eq!(json_of(&text), json!({"effective":true,"explicit":true}), "{text}");
+    let (status, text) = tool("wellness.recentCheckIns", &cookie);
+    assert_eq!(status, 200, "{text}\n{}", log());
+    assert!(!json_of(&text)["data"]["items"].as_array().unwrap().is_empty(), "{text}");
+    let (status, text) = tool("wellness.medicationAdherence", &cookie);
+    assert_eq!(status, 200, "{text}");
+    assert_eq!(json_of(&text)["data"]["windowDays"], 7);
+    assert!(!text.contains(MED_MARK), "adherence counts must hold no medicine text");
+    let (status, text) = call(Method::GET, "/wellness/insights", Some(&cookie), None);
+    assert_eq!(status, 200, "{text}");
+    assert!(json_of(&text)["insights"].is_array());
+    let (_, text) = call(Method::GET, "/wellness/insights", Some(&other), None);
+    assert_eq!(json_of(&text), json!({"insights":[]}), "{text}");
+    println!("PASS live tools: both chat tools refused with consent off, answered with it on, and insights worked over HTTPS for two people");
     let activity = serde_json::to_string(&services.activity("wellness", &access).unwrap()).unwrap();
     assert!(!activity.contains(MARK) && !activity.contains(MED_MARK) && !activity.contains(NOTE));
     assert!(!log().to_lowercase().contains(&MARK.to_lowercase()));

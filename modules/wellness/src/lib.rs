@@ -1,6 +1,6 @@
-//! Wellness package, parts 13 to 15: mood check-ins, the assistant-access choice, medications,
+//! Wellness package, parts 13 to 16: mood check-ins, the assistant-access choice, medications,
 //! dose logs and adherence counts, therapy notes, the selective export and the Wellness parts of
-//! account export and delete, all private to each owner. All effects cross the guest-safe SDK
+//! account export and delete, insights worked out in code and two assistant tools, all private to each owner. All effects cross the guest-safe SDK
 //! Host interface. No model port is used, and no check-in, medication or note text is written to
 //! logs, jobs or activity.
 pub mod account;
@@ -10,6 +10,7 @@ pub mod consent;
 pub mod cursor;
 pub mod export;
 pub mod input;
+pub mod insights;
 pub mod notes;
 pub mod render;
 pub mod medication_input;
@@ -17,6 +18,7 @@ pub mod medications;
 pub mod occurrence;
 pub mod schedule;
 pub mod taxonomy;
+pub mod tools;
 pub mod util;
 
 #[cfg(target_arch = "wasm32")]
@@ -34,6 +36,8 @@ pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
         ("POST", "/wellness/checkins") => checkins::create(host, &request),
         ("GET", "/wellness/checkins") => checkins::list(host, &request),
         ("PATCH", "/wellness/checkins/:id") => checkins::change(host, &request),
+        ("GET", "/wellness/insights") => insights::route(host),
+        ("POST", "/wellness/tools/run") => tools::run(host, &request.body),
         ("GET", "/wellness/therapy-notes") => notes::list(host),
         ("POST", "/wellness/therapy-notes") => notes::create(host, &request),
         ("DELETE", "/wellness/therapy-notes/:id") => notes::remove(host, &request),
@@ -64,6 +68,13 @@ pub fn handle<H: Host + ?Sized>(
             Ok(serde_json::to_string(&route(host, request))?)
         }
         "job" => export::run(host, payload),
+        "tool" => {
+            let result = serde_json::from_str(payload)
+                .map_err(|_| moss_module_sdk::Error::new("Invalid Wellness tool request"))
+                .and_then(|request| tools::handle(host, request))
+                .map_err(|_| moss_module_sdk::Error::new("Wellness tool failed"))?;
+            Ok(serde_json::to_string(&result)?)
+        }
         "api" => {
             let call: serde_json::Value = serde_json::from_str(payload)?;
             if call["name"].as_str() == Some("medicationAdherence") {
