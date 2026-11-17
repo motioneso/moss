@@ -519,6 +519,42 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
         assert_eq!((status, json_of(&text)), (200, json!({"deleted":true})), "{text}");
         println!("sports live: the real subreddit was saved once, hidden from the other person and removed");
     }
+    // Part 14a. A real feed source is saved and read again through the real fetch path, with
+    // nothing rewritten. A site with no feed asks the person's model for a recipe when one is set
+    // up, and the answer is printed either way.
+    let (status, text) = call(Method::POST, "/sources/preview", Some(&cookie), Some(json!({"url":"https://feeds.bbci.co.uk/sport/rss.xml","assignments":[{"target":{"kind":"sport","sportKey":"football"}}]})));
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let shown = json_of(&text);
+    println!("sports live: real feed preview: {} {}", shown["status"], shown["reason"]);
+    if shown["status"] == "ok" {
+        let candidate = &shown["candidate"];
+        let confirm = json!({
+            "confirmationId": shown["confirmationId"],
+            "authorizationAcknowledgement": shown["authorizationAcknowledgement"],
+            "canonicalDomain": candidate["canonicalDomain"],
+            "confirmedFetchHosts": candidate["confirmedFetchHosts"],
+            "targets": candidate["targets"].as_array().unwrap().iter().map(|t| json!({"target":t["target"],"targetUrl":t["targetUrl"]})).collect::<Vec<_>>(),
+        });
+        let (status, text) = call(Method::POST, "/sources", Some(&cookie), Some(confirm));
+        assert_eq!(status, 201, "{text}\n{}", log());
+        let feed_id = json_of(&text)["source"]["id"].as_str().unwrap().to_owned();
+        let (status, text) = call(Method::POST, &format!("/sources/{feed_id}/retry"), Some(&cookie), None);
+        assert_eq!(status, 200, "{text}\n{}", log());
+        let source = &json_of(&text)["source"];
+        println!("sports live: retry of the real feed: health {} checked {}", source["healthState"], source["lastCheckedAt"]);
+        assert_eq!(source["healthState"], "healthy", "{text}");
+        assert_eq!(call(Method::POST, &format!("/sources/{feed_id}/retry"), Some(&other), None).0, 404);
+        let (status, text) = call(Method::POST, &format!("/sources/{feed_id}/rebuild/preview"), Some(&cookie), None);
+        println!("sports live: rebuild preview of a feed source: {status} {}", text.chars().take(120).collect::<String>());
+        call(Method::DELETE, &format!("/sources/{feed_id}"), Some(&cookie), None);
+    } else {
+        println!("sports live: NOT PROVEN: the real feed preview answered {} {}", shown["status"], shown["reason"]);
+    }
+    let (status, text) = call(Method::POST, "/sources/preview", Some(&cookie), Some(json!({"url":"https://example.com/","assignments":[{"target":{"kind":"sport","sportKey":"football"}}]})));
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let proposed = json_of(&text);
+    println!("sports live: recipe proposal for a site with no feed: {} {}", proposed["status"], proposed["reason"]);
+    assert!(matches!(proposed["status"].as_str(), Some("unavailable" | "rejected")) || proposed["candidate"]["retrievalMethod"] == "scrape", "{text}");
     // Nothing the test sent reached the server log.
     assert!(!log().contains(MARK));
     println!("sports live: follows and standings choices for two people worked over HTTPS");
