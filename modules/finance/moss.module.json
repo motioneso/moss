@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "finance",
   "name": "Finance",
-  "description": "Private money accounts and transactions. You can list your accounts, add manual accounts and transactions, sort and review transactions, set rules, split, add notes and import a CSV bank file. Bank links, budgets, bills, targets and the screens are not built yet.",
+  "description": "Private money accounts and transactions. You can list your accounts, add manual accounts and transactions, sort and review transactions, set rules, split, add notes and import a CSV bank file, and plan a monthly budget with drafts. Bank links, bills, targets and the screens are not built yet.",
   "publisher": "Moss",
   "version": "0.3.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
