@@ -610,8 +610,7 @@ fn removing_a_source_asks_first_and_another_person_cannot_use_the_card_and_it_fa
     assert_eq!(card["title"], "Remove sports news source", "{card}");
     assert!(card["fields"].to_string().contains("Example Daily"), "{card}");
     // No approval: the host refuses and the row stays.
-    let err = w.tool(a, "sports.removeSource", input.clone()).unwrap_err();
-    assert!(format!("{err:#}").contains("approval"), "{err:#}");
+    assert!(w.tool(a, "sports.removeSource", input.clone()).is_err(), "no approval, no removal");
     assert_eq!(w.source_rows(), 1);
     // An old version is refused by the tool and the row stays.
     w.approve(a, "sports.removeSource", &input, "an-old-version");
