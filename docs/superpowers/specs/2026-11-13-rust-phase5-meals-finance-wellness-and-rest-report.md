@@ -1045,6 +1045,11 @@ recipes existed in Rust.
   real Rust server.
 - **Live model run.** The model dependency (JS-307) is not merged, so nothing has run against
   a real model.
+- **Known gaps from review, not fixed.** A day or meal left in the writing state by a killed
+  job is never claimed again. A repeat create with the same key returns the plan as it is and
+  does not finish a half-written one (the store comment overstates this). A failed first
+  enqueue pauses the plan without telling the caller. Regenerate leaves the old recipe rows
+  behind. A regenerate across several days queues only the first day.
 - **Ratings vetoes** are not applied when drafting.
 - **Enqueue limits** are approximated. The host has no "limited" answer, so a failed enqueue
   pauses the plan.

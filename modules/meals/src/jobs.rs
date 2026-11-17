@@ -230,6 +230,7 @@ pub fn run_plan_day<H: Host + ?Sized>(host: &H, params: &Value) -> Result<DayOut
         return Ok(DayOutcome::Stopped);
     }
     let mut ready = true;
+    let mut provider_down = false;
     if day["status"] != "ready" {
         if !store::claim_day(host, &day, generation)? {
             return Ok(DayOutcome::Stale);
@@ -270,12 +271,14 @@ pub fn run_plan_day<H: Host + ?Sized>(host: &H, params: &Value) -> Result<DayOut
             }
             DayWrite::Done(failure) => {
                 ready = failure.is_none();
+                provider_down = failure == Some("provider_error");
                 store::finish_day(host, day_id, generation, if ready { "ready" } else { "failed" }, failure)?;
             }
         }
     }
     let active = store::get_plan(host, plan_id)?.is_some_and(|p| p["state"] == "active");
-    if active {
+    // A provider outage would fail every later day too, so the chain waits for a retry.
+    if active && !provider_down {
         let days = store::list_days(host, plan_id)?;
         if let Some(next) = days.iter().find(|d| d["status"] == "pending") {
             enqueue_day(host, plan_id, &text(next, "day_id"))?;

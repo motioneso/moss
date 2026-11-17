@@ -177,6 +177,7 @@ pub fn draft_safe_recipe(model: &mut dyn Model, ask: &Ask) -> Outcome {
         }
         let key = title_key(&draft.title);
         if !ask.allow_repeats && ask.recent_keys.contains(&key) {
+            last_rejection = "repeat";
             continue;
         }
         if ask.vetoed_keys.contains(&key) {
