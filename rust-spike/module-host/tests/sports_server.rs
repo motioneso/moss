@@ -324,6 +324,9 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
         let status = response.status().as_u16();
         let text = response.text().unwrap_or_default();
         println!("{method_path} -> {status}", method_path = path);
+        if status >= 400 {
+            println!("  body: {}", text.chars().take(400).collect::<String>());
+        }
         (status, text)
     };
     let json_of = |text: &str| serde_json::from_str::<Value>(text).unwrap_or(Value::Null);
@@ -518,6 +521,93 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
         let (status, text) = call(Method::DELETE, &format!("/sources/{source_id}"), Some(&cookie), None);
         assert_eq!((status, json_of(&text)), (200, json!({"deleted":true})), "{text}");
         println!("sports live: the real subreddit was saved once, hidden from the other person and removed");
+    }
+    // Part 14a. A real feed source is saved and read again through the real fetch path, with
+    // nothing rewritten. A site with no feed asks the person's model for a recipe when one is set
+    // up, and the answer is printed either way.
+    let (status, text) = call(Method::POST, "/sources/preview", Some(&cookie), Some(json!({"url":"https://feeds.bbci.co.uk/sport/rss.xml","assignments":[{"target":{"kind":"sport","sportKey":"football"}}]})));
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let shown = json_of(&text);
+    println!("sports live: real feed preview: {} {}", shown["status"], shown["reason"]);
+    if shown["status"] == "ok" {
+        let candidate = &shown["candidate"];
+        let confirm = json!({
+            "confirmationId": shown["confirmationId"],
+            "authorizationAcknowledgement": shown["authorizationAcknowledgement"],
+            "canonicalDomain": candidate["canonicalDomain"],
+            "confirmedFetchHosts": candidate["confirmedFetchHosts"],
+            "targets": candidate["targets"].as_array().unwrap().iter().map(|t| json!({"target":t["target"],"targetUrl":t["targetUrl"]})).collect::<Vec<_>>(),
+        });
+        let (status, text) = call(Method::POST, "/sources", Some(&cookie), Some(confirm));
+        assert_eq!(status, 201, "{text}\n{}", log());
+        let feed_id = json_of(&text)["source"]["id"].as_str().unwrap().to_owned();
+        let (status, text) = call(Method::POST, &format!("/sources/{feed_id}/retry"), Some(&cookie), None);
+        assert_eq!(status, 200, "{text}\n{}", log());
+        let source = &json_of(&text)["source"];
+        println!("sports live: retry of the real feed: health {} checked {}", source["healthState"], source["lastCheckedAt"]);
+        assert_eq!(source["healthState"], "healthy", "{text}");
+        assert_eq!(call(Method::POST, &format!("/sources/{feed_id}/retry"), Some(&other), None).0, 404);
+        let (status, text) = call(Method::POST, &format!("/sources/{feed_id}/rebuild/preview"), Some(&cookie), None);
+        println!("sports live: rebuild preview of a feed source: {status} {}", text.chars().take(120).collect::<String>());
+        call(Method::DELETE, &format!("/sources/{feed_id}"), Some(&cookie), None);
+    } else {
+        println!("sports live: NOT PROVEN: the real feed preview answered {} {}", shown["status"], shown["reason"]);
+    }
+    // A real model through the local test endpoint, with the person's own stored provider. The
+    // key is read from its config file and never printed. The cheapest model is used.
+    let key_path = std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".config/cliproxyapi/client-key");
+    let model_name = std::env::var("SPORTS_LIVE_MODEL").unwrap_or_else(|_| "gpt-6.1-sol".into());
+    let has_model = if let Ok(key) = fs::read_to_string(&key_path) {
+        let sealed = safety_core::secret::SecretCipher::ai(&[("JARVIS_AI_SECRET_KEY".into(), ai_key.clone())].into())
+            .unwrap()
+            .seal(&safety_core::secret::SecretFields::new().with("apiKey", safety_core::secret::Secret::new(key.trim())));
+        let provider: uuid::Uuid = uuid::Uuid::new_v4();
+        let model: uuid::Uuid = uuid::Uuid::new_v4();
+        runtime.block_on(async {
+            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+            tokio::spawn(async move { let _ = connection.await; });
+            db.execute(
+                "INSERT INTO app.ai_provider_configs(id,owner_user_id,provider_kind,display_name,base_url,encrypted_credential,is_instance_default) VALUES($1,$2,'openai-compatible','Test endpoint','http://127.0.0.1:5190',$3,true)",
+                &[&provider, &owner, &sealed],
+            ).await.unwrap();
+            db.execute(
+                "INSERT INTO app.ai_configured_models(id,provider_config_id,owner_user_id,provider_model_id,display_name,capabilities) VALUES($1,$2,$3,$4,'Test model',ARRAY['chat','json'])",
+                &[&model, &provider, &owner, &model_name],
+            ).await.unwrap();
+        });
+        true
+    } else {
+        false
+    };
+    let site = std::env::var("SPORTS_LIVE_SITE").unwrap_or_else(|_| "https://www.thefa.com/news".into());
+    let (status, text) = call(Method::POST, "/sources/preview", Some(&cookie), Some(json!({"url":site,"assignments":[{"target":{"kind":"sport","sportKey":"football"}}]})));
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let proposed = json_of(&text);
+    println!("sports live: recipe proposal for a site with no feed ({model_name}): {} {}", proposed["status"], proposed["reason"]);
+    if has_model {
+        assert_eq!(proposed["status"], "ok", "{text}\n{}", log());
+        assert_eq!(proposed["candidate"]["retrievalMethod"], "scrape", "{text}");
+        println!("sports live: real model recipe replayed through the real fetch: {} sample headlines {}", proposed["candidate"]["sampleHeadlines"].as_array().map_or(0, Vec::len), proposed["candidate"]["sampleHeadlines"]);
+        let confirm = json!({
+            "confirmationId": proposed["confirmationId"],
+            "authorizationAcknowledgement": proposed["authorizationAcknowledgement"],
+            "canonicalDomain": proposed["candidate"]["canonicalDomain"],
+            "confirmedFetchHosts": proposed["candidate"]["confirmedFetchHosts"],
+            "targets": proposed["candidate"]["targets"].as_array().unwrap().iter().map(|t| json!({"target":t["target"],"targetUrl":t["targetUrl"]})).collect::<Vec<_>>(),
+        });
+        let (status, text) = call(Method::POST, "/sources", Some(&cookie), Some(confirm));
+        assert_eq!(status, 201, "{text}\n{}", log());
+        let scrape_id = json_of(&text)["source"]["id"].as_str().unwrap().to_owned();
+        let (status, text) = call(Method::POST, &format!("/sources/{scrape_id}/retry"), Some(&cookie), None);
+        assert_eq!(status, 200, "{text}");
+        let source = json_of(&text)["source"].clone();
+        println!("sports live: refresh of the model's recipe: health {} recipe {}", source["healthState"], source["recipeStatus"]);
+        assert_eq!(source["healthState"], "healthy", "{text}");
+        let (status, text) = call(Method::DELETE, &format!("/sources/{scrape_id}"), Some(&cookie), None);
+        assert_eq!(status, 200, "{text}");
+    } else {
+        assert!(["unavailable", "rejected", "ok"].contains(&proposed["status"].as_str().unwrap_or_default()), "{text}");
+        println!("sports live: NOT PROVEN: no test endpoint key on this box, so no model was set up");
     }
     // Nothing the test sent reached the server log.
     assert!(!log().contains(MARK));

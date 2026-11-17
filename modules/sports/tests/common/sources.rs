@@ -27,6 +27,8 @@ pub struct Src {
     pub pages: RefCell<BTreeMap<String, Value>>,
     pub files: RefCell<BTreeMap<(String, String), Value>>,
     pub clock: Cell<i64>,
+    /// Canned model replies, used oldest first. With none left the model is "not set up".
+    pub replies: RefCell<Vec<String>>,
     ids: Cell<u32>,
 }
 
@@ -39,6 +41,7 @@ impl Src {
             pages: RefCell::new(BTreeMap::new()),
             files: RefCell::new(BTreeMap::new()),
             clock: Cell::new(1_794_000_000_000),
+            replies: RefCell::new(vec![]),
             ids: Cell::new(1),
         }
     }
@@ -105,6 +108,13 @@ impl Src {
             page["status"] = json!(status);
         }
         self.pages.borrow_mut().insert(url.into(), page);
+    }
+    pub fn reply(&self, text: &str) {
+        self.replies.borrow_mut().push(text.to_owned());
+    }
+    /// Every prompt the model was sent.
+    pub fn prompts(&self) -> Vec<String> {
+        self.calls.borrow().iter().filter(|(p, _, _, _)| p == "ai").map(|(_, _, _, v)| v["prompt"].as_str().unwrap_or("").to_owned()).collect()
     }
     pub fn fetched(&self) -> Vec<String> {
         self.calls
@@ -184,6 +194,14 @@ impl Host for Src {
             ("fetch", "get") => {
                 let url = parameters["url"].as_str().unwrap_or("");
                 return Ok(self.pages.borrow().get(url).cloned().unwrap_or_else(|| json!({"ok":false,"reason":"network"})));
+            }
+            ("ai", "generate") => {
+                assert_eq!(resource, "structured", "recipes ask for structured output");
+                let mut replies = self.replies.borrow_mut();
+                if replies.is_empty() {
+                    return Err(Error::new("needs_config"));
+                }
+                return Ok(json!({"text": replies.remove(0)}));
             }
             _ => return Err(Error::new("Unexpected host call")),
         }

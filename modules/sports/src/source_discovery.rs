@@ -57,6 +57,11 @@ pub struct Candidate {
     pub sample_count: usize,
     pub sample_headlines: Vec<String>,
     pub targets: Vec<Verified>,
+    /// The accepted recipe of a site that publishes no feed.
+    #[serde(default)]
+    pub recipe: Option<serde_json::Value>,
+    #[serde(default)]
+    pub recipe_fingerprint: Option<String>,
 }
 
 pub enum Resolution {
@@ -68,6 +73,8 @@ pub enum Resolution {
 pub struct Authority {
     pub canonical_domain: String,
     pub confirmed_fetch_hosts: Vec<String>,
+    /// The saved recipe, when targets are re-checked against it instead of a new proposal.
+    pub recipe: Option<serde_json::Value>,
 }
 
 pub fn iso_now<H: Host + ?Sized>(host: &H) -> Result<String> {
@@ -154,6 +161,8 @@ fn resolve_subreddit<H: Host + ?Sized>(host: &H, name: &str, wanted: &[Wanted], 
         checked_at,
         retrieval_method: "reddit".into(),
         feed_url,
+        recipe: None,
+        recipe_fingerprint: None,
     })))
 }
 
@@ -239,7 +248,14 @@ fn resolve_site<H: Host + ?Sized>(host: &H, raw: &str, wanted: &[Wanted], author
             break;
         }
     }
-    let Some((feed_url, samples)) = found else { return Ok(Resolution::Rejected("unsupported")) };
+    let Some((feed_url, samples)) = found else {
+        let Ok(domain) = web::normalize_publisher_domain(&homepage_url) else { return Ok(Resolution::Rejected("invalid_input")) };
+        let hosts = match authority {
+            Some(a) => a.confirmed_fetch_hosts.clone(),
+            None => dedupe([start.href.as_str(), fetched.final_url.as_str(), homepage_url.as_str()].map(exact_host)),
+        };
+        return scrape_candidate(host, &homepage_url, &homepage_body, wanted, authority, domain, hosts);
+    };
     let Ok(domain) = web::normalize_publisher_domain(&homepage_url) else { return Ok(Resolution::Rejected("invalid_input")) };
     let metadata = web::html_metadata(&homepage_body);
     let hosts = match authority {
@@ -261,5 +277,69 @@ fn resolve_site<H: Host + ?Sized>(host: &H, raw: &str, wanted: &[Wanted], author
         checked_at,
         retrieval_method: "feed".into(),
         feed_url,
+        recipe: None,
+        recipe_fingerprint: None,
+    })))
+}
+
+/// A site with no feed: the model proposes a recipe (or fills a saved one), and the recipe is kept
+/// only after a replay through the real fetch path returns headlines.
+fn scrape_candidate<H: Host + ?Sized>(
+    host: &H,
+    homepage_url: &str,
+    homepage_body: &str,
+    wanted: &[Wanted],
+    authority: Option<&Authority>,
+    domain: String,
+    hosts: Vec<String>,
+) -> Result<Resolution> {
+    use crate::recipe_propose::{propose, Outcome};
+    let fixed = match authority.and_then(|a| a.recipe.as_ref()) {
+        Some(value) => match crate::recipe::validate(value) {
+            Some(recipe) => Some(recipe),
+            None => return Ok(Resolution::Rejected("unsupported")),
+        },
+        None => None,
+    };
+    let proposed = match propose(host, homepage_url, homepage_body, wanted, &hosts, fixed.as_ref())? {
+        Outcome::Recipe(proposed) => proposed,
+        Outcome::Unavailable => return Ok(Resolution::Rejected("unavailable")),
+        Outcome::Rejected => return Ok(Resolution::Rejected("unsupported")),
+    };
+    let title = web::html_metadata(homepage_body).title;
+    let checked_at = iso_now(host)?;
+    let samples = proposed.replays.first().map(|r| r.headlines.clone()).unwrap_or_default();
+    let targets = if wanted.is_empty() {
+        Vec::new()
+    } else {
+        wanted
+            .iter()
+            .zip(&proposed.replays)
+            .map(|(w, r)| Verified {
+                target: w.target.to_json(),
+                label: w.label.clone(),
+                scope: w.scope.to_owned(),
+                target_url: r.url.clone(),
+                parameters: r.parameters.clone(),
+                sample_headlines: r.headlines.clone(),
+                checked_at: checked_at.clone(),
+            })
+            .collect()
+    };
+    Ok(Resolution::Ok(Box::new(Candidate {
+        label: if title.is_empty() { domain.clone() } else { title },
+        canonical_domain: authority.map(|a| a.canonical_domain.clone()).unwrap_or(domain),
+        homepage_url: homepage_url.to_owned(),
+        feed_url: String::new(),
+        retrieval_method: "scrape".into(),
+        validation_fingerprint: proposed.fingerprint.clone(),
+        icon_url: None,
+        confirmed_fetch_hosts: hosts,
+        checked_at,
+        sample_count: samples.len(),
+        sample_headlines: samples,
+        targets,
+        recipe: Some(proposed.recipe.value.clone()),
+        recipe_fingerprint: Some(proposed.fingerprint),
     })))
 }

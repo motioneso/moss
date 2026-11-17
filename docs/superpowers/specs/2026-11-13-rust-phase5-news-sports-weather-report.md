@@ -811,3 +811,70 @@ fallback was found in either round.
 Codex found no blocker, no cross-person leak and no secret exposure. It found one major point
 (coverage and stale-check saves are not serialized) and one minor point (preview store is not
 atomic). Neither is fixed here. Both need a host-side change and are listed in the not-proven list.
+
+## Sports recipes and refresh (part 14a)
+
+### What was built
+
+The Sports package can now read a site that has no news feed, using a recipe the person's own AI
+model proposes, and it reads saved sources again with health states. It still shows no screen.
+
+- A site with no feed asks the model for a recipe. The recipe is a strict description of one
+  public address and where the headlines sit in it. A reply that names any site the person has not
+  already confirmed is refused whole, and nothing is saved or fetched from it.
+- A recipe is saved only after it is replayed once through the real fetch and finds at least one
+  headline. A reply with extra fields, a bad shape or no headlines is refused.
+- With no model set up, or none answering, the preview says "unavailable" instead of "unsupported".
+- Reading a saved source again never opens a browser and never fetches article text. It uses the
+  fetch port only, at most 30 requests a run.
+- Each source shows healthy, a named failure, drifted (the page changed shape) or missing (no
+  usable recipe).
+- Three routes: retry a source now, preview a rebuilt recipe, and confirm the rebuild. A rebuild is
+  refused if the source changed after the preview, keeps the source's own site, and works once.
+- The manifest gains the model port, the three routes, a features entry, errors and a fix path.
+
+### Proof
+
+| Claim                            | Check                                                                                                          | Result                                                      |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| A new host in a reply is refused | Fake model names another site that serves headlines; the source list and the call log checked                  | Refused, never fetched, nothing saved                       |
+| Refresh never renders            | Every host call during a retry listed                                                                          | Only the public web fetch, one recipe address               |
+| Bad recipes are refused          | Extra field, no headlines, no model                                                                            | Refused or "unavailable"                                    |
+| Drift and missing                | Page changed shape, then recipe removed                                                                        | Marked drift, then missing                                  |
+| Rebuild                          | Preview, confirm, confirm again, wrong kind of preview                                                         | Replaced once, second confirm 409                           |
+| Another person sees nothing      | Second person tries retry, rebuild preview and a rebuild confirm                                               | 404 and 409                                                 |
+| Private text stays out           | Planted headline text; saved rows, other person, and every host call that is not a fetch or the person's store | Not found. Seen failing when a health row held the headline |
+| Same answers as the old code     | 34 source steps against the old routes on the real database                                                    | Matched (the new routes are not in this run)                |
+| Native and WebAssembly builds    | Guest tests native, package tests and 8 real-Postgres tests against the built component                        | Passed, all 8                                               |
+| Real server, real fetch          | Real BBC sports feed saved and retried by two people on the real server, nothing rewritten                     | Healthy; the other person got 404                           |
+
+### Not proven
+
+- Reddit refused the real server on every try in the live run, so no real subreddit was saved
+  there. The fake-data tests still cover the subreddit path.
+
+### Live recipe proposal with a real model
+
+- Result: proven. The live test set up a real model through the shared test endpoint (Codex
+  sign-in, model gpt-6.1-sol), previewed the Football Association news page (no feed) through
+  the real route, and nothing was faked. The model wrote a recipe, the real fetch replayed it and
+  found 8 real headlines, the recipe saved, a refresh showed healthy with the recipe ready, and the
+  source deleted cleanly. One earlier run on the same page was refused as "unsupported", so the
+  model's answer varies between runs and a bad answer is refused, never saved.
+- The module asks for a 30 second call limit (`callLimitMs`, from the new host setting). A real
+  model takes 11 to 20 seconds, which the old five second limit could not allow.
+- Processing budget was the other limit. The module's 250 million step budget ran out on big
+  pages, and the shell answered with an empty 400. The proposal now parses the page head only for
+  titles and feed links, finds links by a plain scan, skips script, style and picture blocks, and
+  reads at most four short evidence pages. A 105 million step run on the FA page now fits.
+  Pages near 200 KB or more, such as ESPN soccer, still run out. A larger budget for modules
+  would be a platform change.
+
+### Review round 1 (part 14a)
+
+- Blocker, fixed: a model reply missing a key (no address template, an empty slot, a field with no
+  selector) made the recipe check panic. The check now refuses it, with a test for three cases.
+- Major, not fixed: the rebuild is not atomic. Fixing it needs a host transaction and is listed
+  above. Round 2 rated the leftover risk minor.
+- Minor, fixed: a slot value made only of dots is refused, and refresh re-checks that a recipe's
+  address is on one of its own sites.

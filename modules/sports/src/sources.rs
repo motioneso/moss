@@ -137,7 +137,7 @@ pub fn count_assignments<H: Host + ?Sized>(host: &H) -> Result<usize> {
     Ok(Client(host).query(ASSIGNMENTS, &Query::select(Filter::All))?.len())
 }
 
-fn find<H: Host + ?Sized>(host: &H, id: &str) -> Result<Option<(Value, Vec<Value>)>> {
+pub fn find<H: Host + ?Sized>(host: &H, id: &str) -> Result<Option<(Value, Vec<Value>)>> {
     let client = Client(host);
     let mut one = Query::select(Filter::eq("id", id));
     one.limit = Some(1);
@@ -163,6 +163,7 @@ pub fn baseline<H: Host + ?Sized>(host: &H, id: &str) -> Result<Option<Value>> {
         "source": source_dto(&source, &own)?,
         "validationFingerprint": source["validation_fingerprint"],
         "recipeFingerprint": source["recipe_fingerprint"],
+        "recipeJson": source["recipe_json"],
         "confirmedFetchHosts": source["confirmed_fetch_hosts"],
         "updatedAt": iso(&source["updated_at"])?,
         "assignments": assignments,
@@ -223,18 +224,22 @@ pub fn create<H: Host + ?Sized>(host: &H, candidate: &Candidate, now: &str) -> R
         return Err(Error::new("Sports source preview contains an unavailable follow"));
     }
     let reddit = candidate.retrieval_method == "reddit";
+    let scrape = candidate.retrieval_method == "scrape";
+    if scrape && (candidate.recipe.is_none() || candidate.recipe_fingerprint.is_none()) {
+        return Err(Error::new("Sports source preview is missing its recipe"));
+    }
     let mut insert = Query::insert(values(vec![
         ("label", json!(candidate.label)),
         ("canonical_domain", json!(candidate.canonical_domain)),
         ("homepage_url", json!(candidate.homepage_url)),
-        ("feed_url", json!(candidate.feed_url)),
+        ("feed_url", if scrape { Value::Null } else { json!(candidate.feed_url) }),
         ("retrieval_method", json!(candidate.retrieval_method)),
         ("validation_fingerprint", json!(candidate.validation_fingerprint)),
         ("validated_at", json!(now)),
-        ("recipe_json", Value::Null),
-        ("recipe_schema_version", Value::Null),
-        ("recipe_fingerprint", Value::Null),
-        ("recipe_status", json!("feed")),
+        ("recipe_json", if scrape { candidate.recipe.clone().unwrap_or(Value::Null) } else { Value::Null }),
+        ("recipe_schema_version", if scrape { json!(1) } else { Value::Null }),
+        ("recipe_fingerprint", if scrape { json!(candidate.recipe_fingerprint) } else { Value::Null }),
+        ("recipe_status", json!(if scrape { "ready" } else { "feed" })),
         ("icon_url", if reddit { json!(candidate.icon_url) } else { Value::Null }),
         ("confirmed_fetch_hosts", json!(candidate.confirmed_fetch_hosts)),
         ("authorization_confirmed_at", json!(now)),
@@ -268,7 +273,7 @@ pub fn create<H: Host + ?Sized>(host: &H, candidate: &Candidate, now: &str) -> R
 
 /// The state a source shows once its targets change: the newest check across the targets, and
 /// one health that summarises them.
-fn aggregate_health(enabled: bool, assignments: &[Value]) -> Value {
+pub fn aggregate_health(enabled: bool, assignments: &[Value]) -> Value {
     let state = |a: &Value| a["health_state"].as_str().unwrap_or("pending").to_owned();
     let none = json!({"health_state": if enabled { "healthy" } else { "disabled" }, "health_reason_code": null, "health_message": null});
     if !enabled {
@@ -291,7 +296,7 @@ fn aggregate_health(enabled: bool, assignments: &[Value]) -> Value {
     json!({"health_state":"failing","health_reason_code":"partial_target_failure","health_message":"Some source targets could not be refreshed."})
 }
 
-fn newest(assignments: &[Value], key: &str) -> Value {
+pub fn newest(assignments: &[Value], key: &str) -> Value {
     assignments.iter().filter_map(|a| a[key].as_str()).max().map(|t| json!(t)).unwrap_or(Value::Null)
 }
 
@@ -346,4 +351,97 @@ pub fn icon_record<H: Host + ?Sized>(host: &H, id: &str) -> Result<Option<(Strin
     let Some((source, _)) = find(host, id)? else { return Ok(None) };
     let domain = source["canonical_domain"].as_str().ok_or_else(bad)?.to_owned();
     Ok(Some((domain, source["icon_url"].as_str().map(str::to_owned))))
+}
+
+/// Writes one target's health after a refresh. Only a row that still holds the address that was
+/// read is touched, so a target replaced meanwhile keeps its own state.
+pub fn write_assignment_health<H: Host + ?Sized>(
+    host: &H,
+    id: &str,
+    target_url: &str,
+    state: &str,
+    reason: Option<&str>,
+    message: Option<&str>,
+    checked_at: &str,
+) -> Result<()> {
+    let mut changes = vec![
+        ("health_state", json!(state)),
+        ("health_reason_code", json!(reason)),
+        ("health_message", json!(message)),
+        ("last_checked_at", json!(checked_at)),
+    ];
+    if state == "healthy" {
+        changes.push(("last_success_at", json!(checked_at)));
+    }
+    let filter = Filter::And { filters: vec![Filter::eq("id", id), Filter::eq("target_url", target_url)] };
+    Client(host).query(ASSIGNMENTS, &Query::update(filter, values(changes)))?;
+    Ok(())
+}
+
+/// Recomputes a source's health from its targets. `recipe_status` moves only for a site source.
+pub fn recompute_health<H: Host + ?Sized>(host: &H, source_id: &str, recipe_status: Option<&str>) -> Result<()> {
+    let Some((source, assignments)) = find(host, source_id)? else { return Ok(()) };
+    if assignments.is_empty() {
+        return Ok(());
+    }
+    let health = aggregate_health(source["enabled"].as_bool().unwrap_or(true), &assignments);
+    let mut changes = vec![
+        ("health_state", health["health_state"].clone()),
+        ("health_reason_code", health["health_reason_code"].clone()),
+        ("health_message", health["health_message"].clone()),
+        ("last_checked_at", newest(&assignments, "last_checked_at")),
+        ("last_success_at", newest(&assignments, "last_success_at")),
+    ];
+    if let Some(status) = recipe_status {
+        changes.push(("recipe_status", json!(status)));
+    }
+    Client(host).query(SOURCES, &Query::update(Filter::eq("id", source_id), values(changes)))?;
+    Ok(())
+}
+
+/// Replaces a source's recipe and targets with a rebuilt, replayed candidate.
+pub fn replace_recipe<H: Host + ?Sized>(host: &H, id: &str, candidate: &Candidate, now: &str) -> Result<Option<Value>> {
+    let targets: Vec<Target> = candidate.targets.iter().filter_map(|t| Target::from_json(&t.target)).collect();
+    if targets.len() != candidate.targets.len() || !crate::source_scope::has_valid_targets(&targets) {
+        return Err(Error::new("Sports source preview contains invalid targets"));
+    }
+    let Some((_, current)) = find(host, id)? else { return Ok(None) };
+    let follows = follow_ids(&targets);
+    if owned_follow_count(host, &follows)? != follows.len() {
+        return Err(Error::new("Sports source preview contains an unavailable follow"));
+    }
+    let scrape = candidate.retrieval_method == "scrape";
+    let client = Client(host);
+    let update = values(vec![
+        ("label", json!(candidate.label)),
+        ("canonical_domain", json!(candidate.canonical_domain)),
+        ("homepage_url", json!(candidate.homepage_url)),
+        ("feed_url", if scrape { Value::Null } else { json!(candidate.feed_url) }),
+        ("retrieval_method", json!(candidate.retrieval_method)),
+        ("validation_fingerprint", json!(candidate.validation_fingerprint)),
+        ("validated_at", json!(now)),
+        ("recipe_json", if scrape { candidate.recipe.clone().unwrap_or(Value::Null) } else { Value::Null }),
+        ("recipe_schema_version", if scrape { json!(1) } else { Value::Null }),
+        ("recipe_fingerprint", if scrape { json!(candidate.recipe_fingerprint) } else { Value::Null }),
+        ("recipe_status", json!(if scrape { "ready" } else { "feed" })),
+        ("confirmed_fetch_hosts", json!(candidate.confirmed_fetch_hosts)),
+        ("authorization_confirmed_at", json!(now)),
+        ("health_state", json!("healthy")),
+        ("health_reason_code", Value::Null),
+        ("health_message", Value::Null),
+        ("last_checked_at", json!(candidate.checked_at)),
+        ("last_success_at", json!(candidate.checked_at)),
+    ]);
+    // Not atomic. The host offers no transaction to this package, so a failure after the delete
+    // can leave the new recipe with no targets.
+    let updated = client.query(SOURCES, &Query::update(Filter::eq("id", id), update))?;
+    let row = updated.into_iter().next().ok_or_else(bad)?;
+    for old in &current {
+        client.query(ASSIGNMENTS, &Query::delete(Filter::eq("id", old["id"].as_str().ok_or_else(bad)?)))?;
+    }
+    for item in &candidate.targets {
+        client.query(ASSIGNMENTS, &Query::insert(assignment_row(id, item)?))?;
+    }
+    let own = find(host, id)?.map(|(_, a)| a).unwrap_or_default();
+    Ok(Some(source_dto(&row, &own)?))
 }
