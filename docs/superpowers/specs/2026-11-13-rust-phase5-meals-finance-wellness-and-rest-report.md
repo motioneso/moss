@@ -1290,6 +1290,11 @@ shared gate database, and a live-run expectation that used the wrong cup count.
   needs a model. Every call after that went through the real server.
 - **The second person in the live run** is stopped by the approval rule before the tool runs.
   The owner-only refusal itself is proven in the database test.
+- **A crash between marking a meal cooked and updating the pantry** leaves the meal cooked with
+  the pantry unchanged and no undo token, and a retry is refused as already cooked. The other
+  order would leave a reduced pantry for an uncooked meal, which is worse. Found in review, kept.
+- **A pantry edit made between the read and the write** of a cook is overwritten. The old code
+  had the same gap.
 - **No screens** were built.
 - **Release note** is not applicable.
 
