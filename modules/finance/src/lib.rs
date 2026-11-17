@@ -28,6 +28,7 @@ pub mod plaid;
 pub mod sort_run;
 pub mod splits;
 pub mod sorting;
+pub mod shared;
 pub mod sync;
 pub mod text;
 pub mod tools;
