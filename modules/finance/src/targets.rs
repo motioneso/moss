@@ -301,6 +301,7 @@ pub fn fund<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Outcome> {
     let expected = ask!(read_review(input));
     let reviewed = ask!(check(host, &expected)?);
     let ctx = budget::context(host, &reviewed.book, &reviewed.policy.iso, &month, &date)?;
+    ask!(ctx.blocked());
     if overspent(&ctx.month.categories) || ctx.card_overspent {
         return Ok(Err(refuse("cover_overspending", "Cover category and card-payment overspending before funding targets")));
     }

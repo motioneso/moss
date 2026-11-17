@@ -172,6 +172,9 @@ fn prepare<H: Host + ?Sized>(host: &H, reviewed: &Reviewed, input: &Map<String, 
     let book = &reviewed.book;
     let iso = &reviewed.policy.iso;
     let before = budget::context(host, book, iso, &month, &date)?;
+    if let Err(r) = before.blocked() {
+        return Ok(Err(r));
+    }
     if before.ready.is_none() {
         return Ok(Err(input::invalid("Review your currency and account balances before changing mode")));
     }
@@ -294,6 +297,7 @@ pub fn assign<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Outcome> {
     };
     let date = today(host)?;
     let ctx = budget::context(host, &reviewed.book, &reviewed.policy.iso, &month, &date)?;
+    ask!(ctx.blocked());
     if ctx.month.categories.get(FLEX_POOL).map_or(0, |c| c.assigned) != previous {
         return Ok(Err(stale()));
     }

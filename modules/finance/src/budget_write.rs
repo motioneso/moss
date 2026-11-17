@@ -237,6 +237,7 @@ pub fn move_money<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Outcome> {
     };
     let date = today(host)?;
     let ctx = budget::context(host, &reviewed.book, &reviewed.policy.iso, &month, &date)?;
+    ask!(ctx.blocked());
     let mut live = live_ids(&reviewed.book);
     let flex = crate::flex::active_for(&reviewed.book, &month);
     if let Some(p) = &flex {

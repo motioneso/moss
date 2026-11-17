@@ -20,6 +20,7 @@ pub mod bill_suggest;
 pub mod bills;
 pub mod budget_write;
 pub mod bank;
+pub mod cards;
 pub mod categories;
 pub mod connect;
 pub mod csv_import;
