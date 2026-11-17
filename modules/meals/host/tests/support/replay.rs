@@ -19,6 +19,12 @@ pub fn mask(value: &mut Value) {
                 *text = "<time>".into();
             }
         }
+        // A browser reads 3.0 and 3 as the same number, so whole numbers compare as integers.
+        Value::Number(number) => {
+            if let Some(float) = number.as_f64().filter(|f| f.fract() == 0.0 && f.abs() < 1e15) {
+                *value = json!(float as i64);
+            }
+        }
         Value::Array(items) => items.iter_mut().for_each(mask),
         Value::Object(fields) => fields.values_mut().for_each(mask),
         _ => {}
