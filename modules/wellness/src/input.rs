@@ -165,3 +165,52 @@ pub fn consent(body: &Value) -> Result<bool, String> {
         _ => Err("body/granted must be boolean".into()),
     }
 }
+
+pub const EXPORT_CATEGORIES: [&str; 4] = ["checkins", "medications", "therapyNotes", "insights"];
+
+pub struct ExportInput {
+    pub from: String,
+    pub to: String,
+    pub categories: Vec<String>,
+}
+
+fn date_text(map: &Map<String, Value>, name: &str) -> Result<String, String> {
+    let at = format!("body/{name}");
+    let text = coerce_text(&map[name]).ok_or_else(|| format!("{at} must be string"))?;
+    let shaped = text.len() == 10
+        && text.bytes().enumerate().all(|(i, b)| if i == 4 || i == 7 { b == b'-' } else { b.is_ascii_digit() });
+    if shaped {
+        Ok(text)
+    } else {
+        Err(format!("{at} must match pattern \"^\\d{{4}}-\\d{{2}}-\\d{{2}}$\""))
+    }
+}
+
+/// An export request as the old route schema read it. A single category stands for a one-item
+/// list, and unknown fields are dropped.
+pub fn export_request(body: &Value) -> Result<ExportInput, String> {
+    let map = object(body)?;
+    for name in ["from", "to", "categories"] {
+        required(map, name)?;
+    }
+    let from = date_text(map, "from")?;
+    let to = date_text(map, "to")?;
+    let items: Vec<&Value> = match &map["categories"] {
+        Value::Array(items) => items.iter().collect(),
+        Value::Object(_) => return Err("body/categories must be array".into()),
+        scalar => vec![scalar],
+    };
+    let mut categories = Vec::new();
+    for (i, item) in items.iter().enumerate() {
+        let at = format!("body/categories/{i}");
+        let text = coerce_text(item).ok_or_else(|| format!("{at} must be string"))?;
+        if !EXPORT_CATEGORIES.contains(&text.as_str()) {
+            return Err(format!("{at} must be equal to one of the allowed values"));
+        }
+        categories.push(text);
+    }
+    if categories.is_empty() {
+        return Err("body/categories must NOT have fewer than 1 items".into());
+    }
+    Ok(ExportInput { from, to, categories })
+}

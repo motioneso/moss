@@ -21,6 +21,13 @@ pub struct Fake {
     pub db_failure: RefCell<Option<String>>,
     /// Saved account choices, by (person, name).
     pub preferences: RefCell<BTreeMap<(String, String), Value>>,
+    /// The package's saved values, by (person, namespace).
+    pub stored: RefCell<BTreeMap<(String, String), Value>>,
+    /// Queued jobs as (queue, request).
+    pub queued: RefCell<Vec<(String, Value)>>,
+    /// What the host clock reads. Tests move it.
+    pub clock: RefCell<String>,
+    pub queue_failure: Cell<bool>,
     ids: Cell<u32>,
 }
 
@@ -32,6 +39,10 @@ impl Fake {
             calls: RefCell::new(vec![]),
             db_failure: RefCell::new(None),
             preferences: RefCell::new(BTreeMap::new()),
+            stored: RefCell::new(BTreeMap::new()),
+            queued: RefCell::new(vec![]),
+            clock: RefCell::new("2026-11-11T18:00:00.000Z".into()),
+            queue_failure: Cell::new(false),
             ids: Cell::new(0),
         }
     }
@@ -63,6 +74,17 @@ impl Fake {
         let n = self.ids.get();
         self.ids.set(n + 1);
         format!("00000000-0000-4000-8000-{n:012x}")
+    }
+    pub fn set_clock(&self, now: &str) {
+        *self.clock.borrow_mut() = now.into();
+    }
+    /// Runs the queue worker for every queued export, as the real worker would.
+    pub fn run_queued(&self) {
+        let jobs: Vec<(String, Value)> = self.queued.borrow_mut().drain(..).collect();
+        for (queue, request) in jobs {
+            let payload = json!({"queue": queue, "parameters": request["params"]});
+            moss_wellness_module::handle(self, "job", &payload.to_string()).expect("job runs");
+        }
     }
     pub fn rows(&self, table: &str) -> Vec<Value> {
         self.tables.borrow().get(table).cloned().unwrap_or_default()
@@ -98,6 +120,32 @@ impl Host for Fake {
         let actor = self.actor.get();
         match (port, operation) {
             ("db", "query") => {}
+            ("context", "read") => return Ok(json!({"actorUserId": actor, "now": *self.clock.borrow()})),
+            ("context", "uuid") => return Ok(json!({"id": self.next_id()})),
+            ("kv", "get") => {
+                let saved = self.stored.borrow().get(&(actor.to_owned(), resource.to_owned())).cloned();
+                return Ok(saved.unwrap_or(Value::Null));
+            }
+            ("kv", "set") => {
+                let mut all = self.stored.borrow_mut();
+                all.insert((actor.to_owned(), resource.to_owned()), parameters);
+                let size: usize = all.iter().filter(|((who, _), _)| who == actor).map(|(_, v)| v.to_string().len()).sum();
+                if size > 8 * 1024 * 1024 {
+                    return Err(Error::new("The module's key-value store is full"));
+                }
+                return Ok(json!({"saved": true}));
+            }
+            ("kv", "delete") => {
+                self.stored.borrow_mut().remove(&(actor.to_owned(), resource.to_owned()));
+                return Ok(json!({"removed": true}));
+            }
+            ("jobs", "enqueue-options") => {
+                if self.queue_failure.get() {
+                    return Err(Error::new("queue down"));
+                }
+                self.queued.borrow_mut().push((resource.to_owned(), parameters));
+                return Ok(json!({"queued": true}));
+            }
             ("context", "local-date") => {
                 return Ok(json!({"timezone":"America/Los_Angeles","date":"2026-11-11","offsetMinutes":-480,
                     "start":"2026-11-11T08:00:00.000Z","nextStart":"2026-11-12T08:00:00.000Z","now":"2026-11-11T18:00:00.000Z"}))
@@ -145,6 +193,10 @@ impl Host for Fake {
                     "wheel_version": "v2", "feeling_secondary": null, "feeling_tertiary": null,
                     "sensations": [], "intensity": null, "energy": null, "note": null,
                     "identified_via": "wheel", "local_date": null, "timezone_offset": 0});
+                if resource.ends_with("therapy_notes") {
+                    row = json!({"id": row["id"], "owner_user_id": actor, "created_at": at, "updated_at": at,
+                        "linked_checkin_id": null, "linked_emotion": null});
+                }
                 for (k, v) in &query.values {
                     row[k.as_str()] = v.clone();
                 }
@@ -161,7 +213,12 @@ impl Host for Fake {
                 }
                 Ok(json!(changed))
             }
-            Kind::Delete => panic!("Wellness check-ins are never deleted by this package"),
+            Kind::Delete => {
+                let (gone, kept): (Vec<Value>, Vec<Value>) =
+                    rows.drain(..).partition(|r| r["owner_user_id"] == actor && matches(r, &query.filter));
+                *rows = kept;
+                Ok(json!(gone))
+            }
         }
     }
 }

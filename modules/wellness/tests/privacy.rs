@@ -32,8 +32,8 @@ fn check_in_text_reaches_no_host_call_beyond_the_check_in_table() {
 fn the_manifest_declares_no_model_port() {
     let manifest: Value = serde_json::from_str(include_str!("../moss.module.json")).unwrap();
     let ports: Vec<&str> = manifest["capabilities"].as_array().unwrap().iter().map(|c| c["port"].as_str().unwrap()).collect();
-    assert_eq!(ports, ["db", "context", "kv"]);
-    for banned in ["ai", "model", "fetch", "network", "jobs", "memory", "tools"] {
+    assert_eq!(ports, ["db", "context", "kv", "jobs"]);
+    for banned in ["ai", "model", "fetch", "network", "memory", "tools"] {
         assert!(!ports.contains(&banned), "{banned}");
     }
     assert!(!include_str!("../moss.module.json").contains("\"ai\""));
