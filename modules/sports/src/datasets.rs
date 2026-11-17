@@ -96,3 +96,37 @@ pub fn results<H: Host + ?Sized>(
         fetched_at: answer.data["fetchedAt"].as_i64().unwrap_or(now),
     })
 }
+
+/// The news cache read once for a whole request and written back once. Many feeds in one
+/// overview would otherwise each load and rewrite the entire namespace.
+pub struct Feeds {
+    store: Store,
+    now: i64,
+}
+
+impl Feeds {
+    pub fn open<H: Host + ?Sized>(host: &H) -> Result<Self> {
+        Ok(Self { store: Store::load(host, cache::HEADLINES)?, now: cache::now_ms(host)? })
+    }
+
+    pub fn headlines<H: Host + ?Sized>(&mut self, host: &H, competition_key: &str, team: Option<&str>) -> Result<Answer> {
+        let key = format!("{competition_key}|{}", team.unwrap_or(""));
+        if let Some(hit) = self.store.get(&key, self.now) {
+            return Ok(Answer { data: hit.clone(), degraded: false });
+        }
+        let loaded = espn::fetch_json(host, &espn::headlines_url(competition_key, team)?)
+            .and_then(|data| espn::parse_headlines(&data, competition_key));
+        match loaded {
+            Ok(list) => {
+                let data = Value::Array(list);
+                self.store.put(&key, data.clone(), cache::TEN_MINUTES_MS, self.now);
+                Ok(Answer { data, degraded: false })
+            }
+            Err(_) => Ok(Answer { data: json!([]), degraded: true }),
+        }
+    }
+
+    pub fn save<H: Host + ?Sized>(&mut self, host: &H) {
+        self.store.save(host);
+    }
+}

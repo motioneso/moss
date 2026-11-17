@@ -1,5 +1,6 @@
 //! Sports package: followed leagues and teams, the standings picker's saved choices, and
 //! account export. All effects cross the guest-safe SDK Host interface.
+pub mod article;
 pub mod catalog;
 mod catalog_table;
 pub mod datasets;
@@ -10,10 +11,12 @@ pub mod espn_games;
 pub mod espn_schedule;
 pub mod espn_standings;
 pub mod followed;
+pub mod gameday;
 pub mod follows;
 pub mod identity;
 pub mod input;
 pub mod lifecycle;
+pub mod news_scope;
 pub mod overview;
 pub mod photo;
 pub mod photo_discovery;
@@ -40,6 +43,7 @@ pub mod source_tools;
 pub mod source_web;
 pub mod sources;
 pub mod standings;
+pub mod story;
 pub mod standings_views;
 pub mod teams;
 pub mod util;

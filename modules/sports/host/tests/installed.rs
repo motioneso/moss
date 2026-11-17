@@ -312,6 +312,9 @@ fn another_person_cannot_see_change_or_remove_a_follow_and_the_check_fails_witho
 fn the_overview_shows_each_person_only_their_own_clubs_and_leaks_without_row_security() {
     let w = World::new();
     let (a, b) = (w.f.a, w.f.b);
+    // Earlier tests leave follows behind. With row security off the overview would read them all,
+    // and the leak check only needs A and B.
+    w.f.rt.block_on(w.f.root.execute("DELETE FROM app.sports_follows WHERE owner_user_id NOT IN ($1,$2)", &[&a, &b])).unwrap();
     let add = |who: uuid::Uuid, competition: &str, key: &str, id: &str| {
         w.f.rt
             .block_on(w.f.root.execute(

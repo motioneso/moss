@@ -43,6 +43,7 @@
         "espn-headlines",
         "espn-scoreboard",
         "espn-results",
+        "espn-article-body",
         "espn-schedule",
         "espn-standings",
         "espn-teams",
@@ -86,6 +87,7 @@
     }
   ],
   "installWideKv": [
+    "espn-article-body",
     "espn-headlines",
     "espn-results",
     "espn-schedule",
@@ -347,7 +349,7 @@
     },
     {
       "id": "sports.overview",
-      "description": "The Sports overview lists a person's followed clubs as cards, one card per club even when the club is followed in several competitions, with live or finished game, last five results, next match and league standing. It also lists each followed competition's recent games and standings. Games on ESPN's evening slate land on the right day because days are counted in US Eastern time. With nothing followed it shows a default slate of major leagues. A follow saved without a permanent team id is listed for the person to resolve and never gets a score. Headlines, the gameday hero and the featured story are not part of this package yet.",
+      "description": "The Sports overview lists a person's followed clubs as cards, one card per club even when the club is followed in several competitions, with live or finished game, last five results, next match and league standing. It also lists each followed competition's recent games and standings. Games on ESPN's evening slate land on the right day because days are counted in US Eastern time. With nothing followed it shows a default slate of major leagues. A follow saved without a permanent team id is listed for the person to resolve and never gets a score. Headlines come from ESPN's league and club news, limited to the sports and teams the person's coverage allows. The top stories lead with each league's first story and then stories about followed clubs, up to six, and a story already on a club card is not repeated. The hero shows gameday slides, live games first, from fifteen minutes before a game starts until it ends, and shows the lead story when no followed game is on. The featured story is the heaviest story with art, a summary and a followed club, and its body is read from ESPN's article page as the first three paragraphs in plain text, at most 900 characters, or falls back to the summary when ESPN cannot be read. Stories from custom sources and the less-of-this filter are not part of the overview yet.",
       "errors": [
         {
           "code": "sports_provider_unavailable",

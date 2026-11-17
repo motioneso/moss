@@ -440,6 +440,21 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
     let mine = json_of(&text);
     assert_eq!(mine["followed"], json!([]), "A follows no club, so A has no card");
     assert_eq!(mine["followedLeagues"][0]["competitionKey"], "nfl", "{text}");
+    // Part 12b. The stories come from real ESPN, and the featured story's body from ESPN's real
+    // article page, with nothing rewritten on the way.
+    let hero_mode = mine["hero"]["mode"].as_str().unwrap_or("").to_owned();
+    let band: Vec<&Value> = mine["leagueNews"].as_array().unwrap().iter().flat_map(|g| g["headlines"].as_array().unwrap()).collect();
+    let top = mine["topStories"].as_array().unwrap();
+    println!("sports live: hero {hero_mode}, {} top stories, {} band stories", top.len(), band.len());
+    assert!(!top.is_empty() && !band.is_empty(), "real NFL stories expected: {text}");
+    let featured: Vec<&&Value> = band.iter().filter(|h| h["body"].as_str().is_some_and(|b| !b.is_empty())).collect();
+    assert_eq!(featured.len(), 1, "exactly one featured story with a real body: {text}\n{}", log());
+    let body = featured[0]["body"].as_str().unwrap();
+    println!("sports live: featured story {:?} body {} characters: {:?}", featured[0]["title"], body.chars().count(), body.chars().take(160).collect::<String>());
+    assert!(body.encode_utf16().count() <= 901 && !body.contains('<') && !body.contains("&amp;"), "{body}");
+    assert!(body != featured[0]["summary"].as_str().unwrap_or(""), "the body is the article text, not the summary");
+    let (_, again) = call(Method::GET, "/overview", Some(&cookie), None);
+    assert_eq!(json_of(&again)["degraded"], json!(false), "a second read is served from the shared copy");
     let (status, text) = call(Method::GET, "/standings?competitionKey=nfl", Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
     assert!(json_of(&text)["group"]["sections"].as_array().is_some_and(|s| !s.is_empty()), "{text}");

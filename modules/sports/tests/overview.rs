@@ -159,20 +159,6 @@ fn the_schedule_dataset_is_public_and_keyed_by_club() {
     let _ = json!(null);
 }
 
-fn strip_story_parts(body: &mut Value) {
-    // Headlines, the gameday hero and story bodies are a later part, so parity leaves them out.
-    if let Some(map) = body.as_object_mut() {
-        for key in ["hero", "topStories", "leagueNews"] {
-            map.remove(key);
-        }
-        for list in ["followed", "followedLeagueCards"] {
-            for card in map.get_mut(list).and_then(Value::as_array_mut).into_iter().flatten() {
-                card["stories"] = json!([]);
-            }
-        }
-    }
-}
-
 /// The first place two answers differ, as a path, so a failure points at one field.
 fn first_difference(a: &Value, b: &Value, path: &str) -> Option<String> {
     match (a, b) {
@@ -219,12 +205,8 @@ fn routes_match_the_old_handlers_on_recorded_answers() {
         let url = step["url"].as_str().unwrap().strip_prefix("/api/sports").unwrap();
         let (path, query) = url.split_once('?').unwrap_or((url, ""));
         let pairs: Vec<(&str, &str)> = query.split('&').filter(|p| !p.is_empty()).map(|p| p.split_once('=').unwrap()).collect();
-        let (status, mut body) = host.get(path, &pairs);
+        let (status, body) = host.get(path, &pairs);
         let mut want = step["body"].clone();
-        if path == "/overview" {
-            strip_story_parts(&mut body);
-            strip_story_parts(&mut want);
-        }
         // The old server stamps the read with its own wall clock. The new one uses the host clock.
         if path == "/results/latest" && want["retrievedAt"].is_string() {
             assert_eq!(body["retrievedAt"], "2026-11-13T03:00:00.000Z");
