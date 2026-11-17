@@ -55,6 +55,12 @@ control("host activity cooking", "rust-spike/module-host/src/services.rs",
         "modules/meals/host/Cargo.toml", "installed",
         "ratings_and_undo_records_are_private_and_keep_text_out_of_jobs_and_activity",
         ["--ignored", "--test-threads=1"])
+control("host activity arrange", "rust-spike/module-host/src/services.rs",
+        '"success":result.is_ok(),"at":chrono::Utc::now()',
+        '"success":result.is_ok(),"parameters":r.parameters,"at":chrono::Utc::now()',
+        "modules/meals/host/Cargo.toml", "installed",
+        "arrangement_tools_are_private_and_keep_text_out_of_jobs_and_activity",
+        ["--ignored", "--test-threads=1"])
 
 # Re-run both assertions after restoring their guards; a negative control alone is not proof.
 for manifest, test, case, extra, output in [
@@ -68,6 +74,9 @@ for manifest, test, case, extra, output in [
      ["--ignored", "--test-threads=1"], target),
     ("modules/meals/host/Cargo.toml", "installed",
      "ratings_and_undo_records_are_private_and_keep_text_out_of_jobs_and_activity",
+     ["--ignored", "--test-threads=1"], target),
+    ("modules/meals/host/Cargo.toml", "installed",
+     "arrangement_tools_are_private_and_keep_text_out_of_jobs_and_activity",
      ["--ignored", "--test-threads=1"], target),
 ]:
     subprocess.run(["cargo", "+1.95.0", "test", "--locked", "--offline", "--manifest-path",
