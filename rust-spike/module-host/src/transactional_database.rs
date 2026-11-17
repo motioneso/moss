@@ -37,11 +37,7 @@ fn registry() -> &'static Mutex<BTreeMap<Uuid, SharedSession>> {
     SESSIONS.get_or_init(|| Mutex::new(BTreeMap::new()))
 }
 
-fn open_session(
-    database: &Database,
-    runtime: &Runtime,
-    scope: &CallScope,
-) -> Result<SharedSession> {
+fn open_session(database: &Database, runtime: &Runtime, scope: &CallScope) -> Result<SharedSession> {
     let busy = || anyhow::anyhow!("Database sessions busy");
     if let Some(session) = registry().lock().map_err(|_| busy())?.get(&scope.call_id()) {
         return Ok(session.clone());
@@ -49,11 +45,7 @@ fn open_session(
     // The registry lock is not held while waiting for a connection, so finishing calls can
     // still commit and release theirs.
     let context = runtime
-        .block_on(DataContext::open_bounded(
-            database,
-            scope.access(),
-            scope.remaining(),
-        ))
+        .block_on(DataContext::open_bounded(database, scope.access(), scope.remaining()))
         .map_err(|_| anyhow::anyhow!("Could not open the module data context"))?;
     let mut sessions = registry().lock().map_err(|_| busy())?;
     if let Some(session) = sessions.get(&scope.call_id()) {

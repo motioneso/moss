@@ -21,11 +21,7 @@ pub struct MailConfig {
 
 impl Default for MailConfig {
     fn default() -> Self {
-        Self {
-            username: "bob@example.com".into(),
-            password: "correct-horse-battery".into(),
-            tls: None,
-        }
+        Self { username: "bob@example.com".into(), password: "correct-horse-battery".into(), tls: None }
     }
 }
 
@@ -114,26 +110,15 @@ impl MailStandIn {
             imap_logins_seen: 0,
             smtp_auth_seen: 0,
         }));
-        let acceptor = config
-            .tls
-            .map(|id| TlsAcceptor::from(tls::server_config(id)));
+        let acceptor = config.tls.map(|id| TlsAcceptor::from(tls::server_config(id)));
         let imap_l = TcpListener::bind("127.0.0.1:0").await.expect("bind imap");
         let smtp_l = TcpListener::bind("127.0.0.1:0").await.expect("bind smtp");
         let (imap_addr, smtp_addr) = (imap_l.local_addr().unwrap(), smtp_l.local_addr().unwrap());
         let tasks = vec![
-            spawn_listener(imap_l, acceptor.clone(), state.clone(), |io, st| {
-                Box::pin(imap::serve(io, st))
-            }),
-            spawn_listener(smtp_l, acceptor, state.clone(), |io, st| {
-                Box::pin(smtp::serve(io, st))
-            }),
+            spawn_listener(imap_l, acceptor.clone(), state.clone(), |io, st| Box::pin(imap::serve(io, st))),
+            spawn_listener(smtp_l, acceptor, state.clone(), |io, st| Box::pin(smtp::serve(io, st))),
         ];
-        Self {
-            imap_addr,
-            smtp_addr,
-            state,
-            tasks,
-        }
+        Self { imap_addr, smtp_addr, state, tasks }
     }
 
     fn with<R>(&self, f: impl FnOnce(&mut State) -> R) -> R {
@@ -143,11 +128,7 @@ impl MailStandIn {
     /// Adds a message to a folder and returns its UID.
     pub fn add_message(&self, folder: &str, raw: &str) -> u32 {
         self.with(|s| {
-            let f = s
-                .folders
-                .iter_mut()
-                .find(|f| f.name == folder)
-                .expect("folder exists");
+            let f = s.folders.iter_mut().find(|f| f.name == folder).expect("folder exists");
             let uid = f.next_uid;
             f.next_uid += 1;
             s.modseq += 1;
@@ -167,16 +148,9 @@ impl MailStandIn {
     pub fn add_message_dated(&self, folder: &str, raw: &str, internal_date: &str) -> u32 {
         let uid = self.add_message(folder, raw);
         self.with(|s| {
-            let f = s
-                .folders
-                .iter_mut()
-                .find(|f| f.name == folder)
-                .expect("folder exists");
-            f.messages
-                .iter_mut()
-                .find(|m| m.uid == uid)
-                .expect("message exists")
-                .internal_date = internal_date.into();
+            let f = s.folders.iter_mut().find(|f| f.name == folder).expect("folder exists");
+            f.messages.iter_mut().find(|m| m.uid == uid).expect("message exists").internal_date =
+                internal_date.into();
         });
         uid
     }
@@ -190,12 +164,7 @@ impl MailStandIn {
                 .map(|f| {
                     f.messages
                         .iter()
-                        .map(|m| {
-                            (
-                                String::from_utf8_lossy(&m.body).into_owned(),
-                                m.flags.iter().cloned().collect(),
-                            )
-                        })
+                        .map(|m| (String::from_utf8_lossy(&m.body).into_owned(), m.flags.iter().cloned().collect()))
                         .collect()
                 })
                 .unwrap_or_default()
@@ -205,16 +174,9 @@ impl MailStandIn {
     /// Changes a message's content in place, keeping its UID, as a server-side edit would.
     pub fn replace_body(&self, folder: &str, uid: u32, raw: &str) {
         self.with(|s| {
-            let f = s
-                .folders
-                .iter_mut()
-                .find(|f| f.name == folder)
-                .expect("folder exists");
-            f.messages
-                .iter_mut()
-                .find(|m| m.uid == uid)
-                .expect("message exists")
-                .body = raw.as_bytes().to_vec();
+            let f = s.folders.iter_mut().find(|f| f.name == folder).expect("folder exists");
+            f.messages.iter_mut().find(|m| m.uid == uid).expect("message exists").body =
+                raw.as_bytes().to_vec();
         })
     }
 
@@ -223,16 +185,8 @@ impl MailStandIn {
         self.with(|s| {
             s.modseq += 1;
             let modseq = s.modseq;
-            let f = s
-                .folders
-                .iter_mut()
-                .find(|f| f.name == folder)
-                .expect("folder exists");
-            let m = f
-                .messages
-                .iter_mut()
-                .find(|m| m.uid == uid)
-                .expect("message exists");
+            let f = s.folders.iter_mut().find(|f| f.name == folder).expect("folder exists");
+            let m = f.messages.iter_mut().find(|m| m.uid == uid).expect("message exists");
             m.flags = flags.iter().map(|x| x.to_string()).collect();
             m.modseq = modseq;
         })
@@ -242,11 +196,7 @@ impl MailStandIn {
     pub fn delete_message(&self, folder: &str, uid: u32) {
         self.with(|s| {
             s.modseq += 1;
-            let f = s
-                .folders
-                .iter_mut()
-                .find(|f| f.name == folder)
-                .expect("folder exists");
+            let f = s.folders.iter_mut().find(|f| f.name == folder).expect("folder exists");
             f.messages.retain(|m| m.uid != uid);
         })
     }
@@ -254,11 +204,7 @@ impl MailStandIn {
     /// Makes clients drop their cache of the folder, as a server rebuild would.
     pub fn bump_uid_validity(&self, folder: &str) {
         self.with(|s| {
-            let f = s
-                .folders
-                .iter_mut()
-                .find(|f| f.name == folder)
-                .expect("folder exists");
+            let f = s.folders.iter_mut().find(|f| f.name == folder).expect("folder exists");
             f.uid_validity += 1;
         })
     }
@@ -284,8 +230,7 @@ impl MailStandIn {
     }
 }
 
-type Handler =
-    fn(Box<dyn Io>, Shared) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>;
+type Handler = fn(Box<dyn Io>, Shared) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>;
 
 fn spawn_listener(
     listener: TcpListener,
@@ -295,9 +240,7 @@ fn spawn_listener(
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         loop {
-            let Ok((tcp, _)) = listener.accept().await else {
-                return;
-            };
+            let Ok((tcp, _)) = listener.accept().await else { return };
             let (acceptor, state) = (acceptor.clone(), state.clone());
             tokio::spawn(async move {
                 let io: Box<dyn Io> = match acceptor {

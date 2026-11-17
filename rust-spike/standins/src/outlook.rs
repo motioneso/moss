@@ -20,10 +20,7 @@ pub struct OutlookConfig {
 
 impl Default for OutlookConfig {
     fn default() -> Self {
-        Self {
-            address: "person@example.invalid".into(),
-            time_zone: "(UTC-08:00) Pacific Time (US & Canada)".into(),
-        }
+        Self { address: "person@example.invalid".into(), time_zone: "(UTC-08:00) Pacific Time (US & Canada)".into() }
     }
 }
 
@@ -55,20 +52,9 @@ fn name(day: NaiveDate) -> String {
 fn header(start: NaiveDate) -> String {
     let end = start + Duration::days(6);
     if start.year() == end.year() {
-        format!(
-            "{} \u{2013} {}, {}{TAIL}",
-            name(start),
-            name(end),
-            end.year()
-        )
+        format!("{} \u{2013} {}, {}{TAIL}", name(start), name(end), end.year())
     } else {
-        format!(
-            "{}, {} \u{2013} {}, {}{TAIL}",
-            name(start),
-            start.year(),
-            name(end),
-            end.year()
-        )
+        format!("{}, {} \u{2013} {}, {}{TAIL}", name(start), start.year(), name(end), end.year())
     }
 }
 
@@ -100,11 +86,7 @@ async fn answer(State(state): State<Shared>, Json(body): Json<Value>) -> Json<Va
             json!({"value":rows})
         }
         "step-week" => {
-            let step = if body["args"]["forward"] == true {
-                7
-            } else {
-                -7
-            };
+            let step = if body["args"]["forward"] == true { 7 } else { -7 };
             page.week += Duration::days(step);
             json!({"value":null})
         }
@@ -124,9 +106,7 @@ impl OutlookStandIn {
             signed_out: false,
             ops: vec![],
         }));
-        let app = Router::new()
-            .route("/", post(answer))
-            .with_state(state.clone());
+        let app = Router::new().route("/", post(answer)).with_state(state.clone());
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         let task = tokio::spawn(async move {
@@ -142,11 +122,7 @@ impl OutlookStandIn {
     /// Adds a timed event `days` from today.
     pub fn add_event(&self, id: &str, title: &str, times: &str, days: i64) {
         let day = Utc::now().date_naive() + Duration::days(days);
-        self.state
-            .lock()
-            .unwrap()
-            .items
-            .push((id.into(), label(title, times, day), day));
+        self.state.lock().unwrap().items.push((id.into(), label(title, times, day), day));
     }
 
     pub fn sign_out(&self) {

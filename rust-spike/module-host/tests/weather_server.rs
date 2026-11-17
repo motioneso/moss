@@ -2,16 +2,16 @@
 mod common;
 #[path = "people_routes/installed.rs"]
 mod installed;
-use access_context::AccessContext;
 use common::Keys;
 use moss_module_host::{
     archive::Package,
     registry::{Artifact, Channel, Index, Source},
     trust::{self, Publisher, RegistryIdentity},
 };
+use std::collections::{BTreeMap, BTreeSet};
+use access_context::AccessContext;
 use safety_core::db::{Database, RuntimeRole};
 use serde_json::{json, Value};
-use std::collections::{BTreeMap, BTreeSet};
 use std::{
     fs,
     path::Path,
@@ -153,10 +153,7 @@ fn installed_weather_package_serves_routes_from_the_real_server() {
         let response = client.post(format!("{origin}/api/auth/sign-up/email")).header("origin", &origin).json(&json!({"name":name,"email":email,"password":"temporary-weather-password-278-not-a-real-secret"})).send().unwrap();
         let status = response.status();
         if status != 200 {
-            panic!(
-                "sign-up answered {status}: {}",
-                response.text().unwrap_or_default()
-            );
+            panic!("sign-up answered {status}: {}", response.text().unwrap_or_default());
         }
         response.headers()["set-cookie"]
             .to_str()
@@ -206,36 +203,32 @@ fn installed_weather_package_serves_routes_from_the_real_server() {
     let keys = Keys::new();
     fs::create_dir_all(root.join("registry/packages")).unwrap();
     let artifacts: Vec<Artifact> = [("JS235_WEATHER_PACKAGE", "weather")]
-        .iter()
-        .map(|(variable, id)| {
-            let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
-            let digest = trust::digest(&bytes);
-            let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
-            let manifest = &package.manifest;
-            assert_eq!(manifest.id, *id);
-            fs::write(
-                root.join(format!("registry/packages/{digest}.mosspkg")),
-                &bytes,
-            )
-            .unwrap();
-            Artifact {
-                id: manifest.id.clone(),
-                version: manifest.version.clone(),
-                digest: digest.clone(),
-                size: bytes.len() as u64,
-                publisher_key: "weather-test".into(),
-                signature: Keys::sign(&keys.publisher, digest.as_bytes()),
-                requires_moss: manifest.requires_moss.clone(),
-                abi: manifest.abi.clone(),
-                capabilities: manifest.capabilities.clone(),
-                migrations: manifest.database.migrations.clone(),
-                requires: manifest.requires.clone(),
-                changelog: "Weather live gate".into(),
-                channel: Channel::Stable,
-                urgent: false,
-            }
-        })
-        .collect();
+    .iter()
+    .map(|(variable, id)| {
+        let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
+        let digest = trust::digest(&bytes);
+        let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
+        let manifest = &package.manifest;
+        assert_eq!(manifest.id, *id);
+        fs::write(root.join(format!("registry/packages/{digest}.mosspkg")), &bytes).unwrap();
+        Artifact {
+            id: manifest.id.clone(),
+            version: manifest.version.clone(),
+            digest: digest.clone(),
+            size: bytes.len() as u64,
+            publisher_key: "weather-test".into(),
+            signature: Keys::sign(&keys.publisher, digest.as_bytes()),
+            requires_moss: manifest.requires_moss.clone(),
+            abi: manifest.abi.clone(),
+            capabilities: manifest.capabilities.clone(),
+            migrations: manifest.database.migrations.clone(),
+            requires: manifest.requires.clone(),
+            changelog: "Weather live gate".into(),
+            channel: Channel::Stable,
+            urgent: false,
+        }
+    })
+    .collect();
     let identity = RegistryIdentity {
         id: "weather-test-registry".into(),
         name: "Weather test registry".into(),
@@ -259,23 +252,11 @@ fn installed_weather_package_serves_routes_from_the_real_server() {
         revoked: vec![],
     };
     for (name, data, key) in [
-        (
-            "registry.json",
-            serde_json::to_vec(&identity).unwrap(),
-            &keys.root,
-        ),
-        (
-            "index.json",
-            serde_json::to_vec(&index).unwrap(),
-            &keys.index,
-        ),
+        ("registry.json", serde_json::to_vec(&identity).unwrap(), &keys.root),
+        ("index.json", serde_json::to_vec(&index).unwrap(), &keys.index),
     ] {
         fs::write(root.join("registry").join(name), &data).unwrap();
-        fs::write(
-            root.join("registry").join(format!("{name}.sig")),
-            Keys::sign(key, &data),
-        )
-        .unwrap();
+        fs::write(root.join("registry").join(format!("{name}.sig")), Keys::sign(key, &data)).unwrap();
     }
     let installer = installed::reopen(
         &root.join("data"),
@@ -317,28 +298,18 @@ fn installed_weather_package_serves_routes_from_the_real_server() {
         let signed = client.post(format!("{origin}/api/auth/sign-in/email")).header("origin", &origin)
             .json(&json!({"email":"weather-other@example.test","password":"temporary-weather-password-278-not-a-real-secret"})).send().unwrap();
         assert_eq!(signed.status(), 200, "second person sign-in");
-        signed.headers()["set-cookie"]
-            .to_str()
-            .unwrap()
-            .split(';')
-            .next()
-            .unwrap()
-            .to_owned()
+        signed.headers()["set-cookie"].to_str().unwrap().split(';').next().unwrap().to_owned()
     };
     let log = || fs::read_to_string(root.join("server.log")).unwrap_or_default();
     let call = |method: reqwest::Method, path: &str, cookie: Option<&str>, body: Option<Value>| {
-        let mut request = client
-            .request(method, format!("{origin}/api/m/weather{path}"))
-            .header("origin", &origin);
+        let mut request = client.request(method, format!("{origin}/api/m/weather{path}")).header("origin", &origin);
         if let Some(cookie) = cookie {
             request = request.header("cookie", cookie);
         }
         if let Some(body) = body {
             request = request.json(&body);
         }
-        let response = request
-            .send()
-            .unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
+        let response = request.send().unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
         let status = response.status().as_u16();
         let text = response.text().unwrap_or_default();
         println!("{method_path} -> {status}", method_path = path);
@@ -352,158 +323,58 @@ fn installed_weather_package_serves_routes_from_the_real_server() {
     assert_eq!(call(Method::GET, "/today", None, None).0, 401);
     // The server answers 503 until its module host has finished starting.
     let started = std::time::Instant::now();
-    while call(Method::GET, "/unit", Some(&cookie), None).0 == 503
-        && started.elapsed() < std::time::Duration::from_secs(60)
-    {
+    while call(Method::GET, "/unit", Some(&cookie), None).0 == 503 && started.elapsed() < std::time::Duration::from_secs(60) {
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
     for who in [&cookie, &other] {
         let (status, text) = call(Method::GET, "/unit", Some(who), None);
-        assert_eq!(
-            (status, json_of(&text)),
-            (200, json!({"unit":"imperial"})),
-            "{text}\n{}",
-            log()
-        );
-        assert_eq!(
-            json_of(&call(Method::GET, "/location", Some(who), None).1),
-            json!({"location":null})
-        );
+        assert_eq!((status, json_of(&text)), (200, json!({"unit":"imperial"})), "{text}\n{}", log());
+        assert_eq!(json_of(&call(Method::GET, "/location", Some(who), None).1), json!({"location":null}));
     }
     // The old Settings paths reach the same package.
-    for (path, key) in [
-        ("/api/me/weather-unit", "unit"),
-        ("/api/me/weather-location", "location"),
-    ] {
-        let old = client
-            .get(format!("{origin}{path}"))
-            .header("origin", &origin)
-            .header("cookie", &other)
-            .send()
-            .unwrap();
+    for (path, key) in [("/api/me/weather-unit", "unit"), ("/api/me/weather-location", "location")] {
+        let old = client.get(format!("{origin}{path}")).header("origin", &origin).header("cookie", &other).send().unwrap();
         assert_eq!(old.status().as_u16(), 200, "{path}");
         assert!(json_of(&old.text().unwrap()).get(key).is_some(), "{path}");
     }
-    let old = client
-        .get(format!(
-            "{origin}/api/me/weather-location/search?query=Seattle"
-        ))
-        .header("origin", &origin)
-        .header("cookie", &cookie)
-        .send()
-        .unwrap();
+    let old = client.get(format!("{origin}/api/me/weather-location/search?query=Seattle")).header("origin", &origin).header("cookie", &cookie).send().unwrap();
     assert_eq!(old.status().as_u16(), 200);
     // Real place search through the real fetch path.
-    let (status, text) = call(
-        Method::GET,
-        "/location/search?query=Seattle",
-        Some(&cookie),
-        None,
-    );
+    let (status, text) = call(Method::GET, "/location/search?query=Seattle", Some(&cookie), None);
     assert_eq!(status, 200, "{text}\n{}", log());
     let first = json_of(&text)["candidates"][0].clone();
-    assert!(
-        first["label"].as_str().unwrap().starts_with("Seattle"),
-        "{text}"
-    );
+    assert!(first["label"].as_str().unwrap().starts_with("Seattle"), "{text}");
     // The owner saves Seattle and the metric unit. The other person is untouched.
     let (status, text) = call(Method::PUT, "/location", Some(&cookie), Some(first.clone()));
     assert_eq!(status, 200, "{text}");
-    assert_eq!(
-        call(
-            Method::PUT,
-            "/unit",
-            Some(&cookie),
-            Some(json!({"unit":"metric"}))
-        )
-        .0,
-        200
-    );
-    assert_eq!(
-        json_of(&call(Method::GET, "/location", Some(&cookie), None).1)["location"]["label"],
-        first["label"]
-    );
-    assert_eq!(
-        json_of(&call(Method::GET, "/location", Some(&other), None).1),
-        json!({"location":null})
-    );
-    assert_eq!(
-        json_of(&call(Method::GET, "/unit", Some(&other), None).1),
-        json!({"unit":"imperial"})
-    );
+    assert_eq!(call(Method::PUT, "/unit", Some(&cookie), Some(json!({"unit":"metric"}))).0, 200);
+    assert_eq!(json_of(&call(Method::GET, "/location", Some(&cookie), None).1)["location"]["label"], first["label"]);
+    assert_eq!(json_of(&call(Method::GET, "/location", Some(&other), None).1), json!({"location":null}));
+    assert_eq!(json_of(&call(Method::GET, "/unit", Some(&other), None).1), json!({"unit":"imperial"}));
     // Real Open-Meteo reading and hourly window for the saved place.
     let (status, text) = call(Method::GET, "/today", Some(&cookie), None);
     assert_eq!(status, 200, "{text}\n{}", log());
     let today = json_of(&text);
-    assert!(
-        today["data"]["temp"].is_number() && today["data"]["unit"] == "metric",
-        "{text}"
-    );
+    assert!(today["data"]["temp"].is_number() && today["data"]["unit"] == "metric", "{text}");
     assert_eq!(today["data"]["location"], first["label"]);
-    let (status, text) = call(
-        Method::GET,
-        "/forecast?startHour=8&endHour=20",
-        Some(&cookie),
-        None,
-    );
+    let (status, text) = call(Method::GET, "/forecast?startHour=8&endHour=20", Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
     let forecast = json_of(&text);
     assert_eq!(forecast["status"], "forecast", "{text}");
-    assert!(
-        !forecast["forecast"]["intervals"]
-            .as_array()
-            .unwrap()
-            .is_empty(),
-        "{text}"
-    );
+    assert!(!forecast["forecast"]["intervals"].as_array().unwrap().is_empty(), "{text}");
     // The other person has no place, and this test connects from loopback, which is skipped,
     // so there is nothing to guess and no reading.
-    assert_eq!(
-        json_of(&call(Method::GET, "/today", Some(&other), None).1),
-        json!({"data":null})
-    );
+    assert_eq!(json_of(&call(Method::GET, "/today", Some(&other), None).1), json!({"data":null}));
     // Bad input is refused with fixed words.
-    assert_eq!(
-        call(
-            Method::PUT,
-            "/unit",
-            Some(&cookie),
-            Some(json!({"unit":"kelvin"}))
-        )
-        .0,
-        400
-    );
-    assert_eq!(
-        call(
-            Method::PUT,
-            "/location",
-            Some(&cookie),
-            Some(json!({"lat":MARK_LAT,"lon":999,"label":MARK}))
-        )
-        .0,
-        400
-    );
+    assert_eq!(call(Method::PUT, "/unit", Some(&cookie), Some(json!({"unit":"kelvin"}))).0, 400);
+    assert_eq!(call(Method::PUT, "/location", Some(&cookie), Some(json!({"lat":MARK_LAT,"lon":999,"label":MARK}))).0, 400);
     // A private name is saved and read back, and appears nowhere in the server log.
-    let (status, _) = call(
-        Method::PUT,
-        "/location",
-        Some(&other),
-        Some(json!({"lat":MARK_LAT,"lon":45.0,"label":MARK})),
-    );
+    let (status, _) = call(Method::PUT, "/location", Some(&other), Some(json!({"lat":MARK_LAT,"lon":45.0,"label":MARK})));
     assert_eq!(status, 200);
-    assert_eq!(
-        json_of(&call(Method::GET, "/location", Some(&other), None).1)["location"]["label"],
-        MARK
-    );
-    assert_eq!(
-        json_of(&call(Method::GET, "/location", Some(&cookie), None).1)["location"]["label"],
-        first["label"]
-    );
+    assert_eq!(json_of(&call(Method::GET, "/location", Some(&other), None).1)["location"]["label"], MARK);
+    assert_eq!(json_of(&call(Method::GET, "/location", Some(&cookie), None).1)["location"]["label"], first["label"]);
     let text = log();
-    assert!(
-        !text.contains(MARK) && !text.contains("12.345678"),
-        "private place reached the server log"
-    );
+    assert!(!text.contains(MARK) && !text.contains("12.345678"), "private place reached the server log");
     // The planted text is in no table other than the saved-setting row: not jobs, not activity,
     // not the shared forecast cache. A planted leak in another table must make the scan fail.
     let scan = || {
@@ -521,42 +392,25 @@ fn installed_weather_package_serves_routes_from_the_real_server() {
         })
     };
     runtime.block_on(async {
-        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
-            .await
-            .unwrap();
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
         tokio::spawn(async move {
             let _ = connection.await;
         });
-        db.execute(
-            "UPDATE app.users SET name=$1 WHERE email='weather-other@example.test'",
-            &[&MARK],
-        )
-        .await
-        .unwrap();
+        db.execute("UPDATE app.users SET name=$1 WHERE email='weather-other@example.test'", &[&MARK]).await.unwrap();
     });
     let leak = std::panic::catch_unwind(std::panic::AssertUnwindSafe(&scan));
     runtime.block_on(async {
-        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
-            .await
-            .unwrap();
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
         tokio::spawn(async move {
             let _ = connection.await;
         });
-        db.execute(
-            "UPDATE app.users SET name='Weather other' WHERE email='weather-other@example.test'",
-            &[],
-        )
-        .await
-        .unwrap();
+        db.execute("UPDATE app.users SET name='Weather other' WHERE email='weather-other@example.test'", &[]).await.unwrap();
     });
     assert!(leak.is_err(), "the scan must catch a planted leak");
     println!("privacy scan FAILED with a leak planted");
     scan();
     println!("privacy scan PASSED with no leak");
     // The owner clears the place.
-    assert_eq!(
-        json_of(&call(Method::PUT, "/location", Some(&cookie), Some(Value::Null)).1),
-        json!({"location":null})
-    );
+    assert_eq!(json_of(&call(Method::PUT, "/location", Some(&cookie), Some(Value::Null)).1), json!({"location":null}));
     println!("weather live: place, unit and real forecasts for two people worked over HTTPS");
 }

@@ -10,7 +10,11 @@ use anyhow::{ensure, Context, Result};
 use safety_core::db::{DataContext, Database};
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::{collections::BTreeSet, path::PathBuf, sync::Arc};
+use std::{
+    collections::BTreeSet,
+    path::PathBuf,
+    sync::Arc,
+};
 use uuid::Uuid;
 use vault::{AllowedRoots, EntryKind, VaultContext};
 
@@ -154,17 +158,11 @@ impl MemoryVaultPorts {
     }
 
     fn folder(&self, scope: &CallScope) -> Result<VaultContext> {
-        let roots = crate::account_preferences::account_base_root(
-            &self.base,
-            scope.access().actor_user_id(),
-        )?;
+        let roots =
+            crate::account_preferences::account_base_root(&self.base, scope.access().actor_user_id())?;
         let allowed = AllowedRoots::for_account(scope.access(), roots.clone());
         let root = roots.first().context("The private vault is unavailable")?;
-        Ok(VaultContext::at_allowed_root(
-            scope.access(),
-            root,
-            &allowed,
-        )?)
+        Ok(VaultContext::at_allowed_root(scope.access(), root, &allowed)?)
     }
 
     async fn open(&self, scope: &CallScope) -> Result<DataContext> {
@@ -192,10 +190,7 @@ impl MemoryVaultPorts {
                 .await?;
             for row in rows {
                 let value: Value = row.get(0);
-                if let Some(saved) = value
-                    .as_str()
-                    .filter(|s| !s.is_empty() && !s.starts_with('/'))
-                {
+                if let Some(saved) = value.as_str().filter(|s| !s.is_empty() && !s.starts_with('/')) {
                     candidates.push(saved.to_owned());
                 }
             }
@@ -205,24 +200,13 @@ impl MemoryVaultPorts {
     }
 
     /// Every ingestable note under the account's roots, relative to the vault.
-    fn walk(
-        &self,
-        scope: &CallScope,
-        folder: &VaultContext,
-        roots: &[String],
-    ) -> Result<Vec<String>> {
+    fn walk(&self, scope: &CallScope, folder: &VaultContext, roots: &[String]) -> Result<Vec<String>> {
         let mut files = BTreeSet::new();
         for root in roots {
             if root.ends_with(".md") {
                 files.insert(root.clone());
             } else {
-                walk_dir(
-                    folder,
-                    root.trim_end_matches('/'),
-                    &mut files,
-                    scope,
-                    &mut 0,
-                )?;
+                walk_dir(folder, root.trim_end_matches('/'), &mut files, scope, &mut 0)?;
             }
         }
         ensure!(files.len() <= MAX_ENTRIES, "The vault is too large");
@@ -442,10 +426,7 @@ impl MemoryVaultPorts {
 }
 
 fn folder_missing(folder: &VaultContext, path: &str) -> bool {
-    match folder.list_limited(
-        path.rsplit_once('/').map_or("", |(dir, _)| dir),
-        MAX_ENTRIES,
-    ) {
+    match folder.list_limited(path.rsplit_once('/').map_or("", |(dir, _)| dir), MAX_ENTRIES) {
         Ok(entries) => {
             let name = path.rsplit('/').next().unwrap_or(path);
             !entries.iter().any(|entry| entry.name == name)
@@ -472,11 +453,7 @@ fn walk_dir(
         // A root that does not exist yet simply has nothing to index.
         Err(error) => {
             let error = anyhow::Error::new(error);
-            return if error_code(&error) == "ENOENT" {
-                Ok(())
-            } else {
-                Err(error)
-            };
+            return if error_code(&error) == "ENOENT" { Ok(()) } else { Err(error) };
         }
     };
     for entry in entries {
@@ -559,10 +536,7 @@ async fn capture(
     let share = if lock { " FOR SHARE" } else { "" };
     let sources_share = if lock { "FOR SHARE OF s" } else { "" };
     let available: bool = db
-        .query_one(
-            "SELECT app.notes_destination_available($1)",
-            &[&destination],
-        )
+        .query_one("SELECT app.notes_destination_available($1)", &[&destination])
         .await?
         .get(0);
     if !available {
@@ -575,10 +549,7 @@ async fn capture(
         )
         .await?;
     let actor_row = actor_row.map(|row| (row.get::<_, i32>(0), row.get::<_, String>(1)));
-    if actor_row
-        .as_ref()
-        .is_some_and(|(_, state)| state != "active")
-    {
+    if actor_row.as_ref().is_some_and(|(_, state)| state != "active") {
         return Ok(None);
     }
     let binding = db
@@ -624,11 +595,7 @@ async fn capture(
             return Ok(None);
         }
         if !sources.iter().any(|s| s.module == module && s.id == id) {
-            sources.push(Source {
-                module,
-                id,
-                generation,
-            });
+            sources.push(Source { module, id, generation });
         }
     }
     if lock {
@@ -707,10 +674,7 @@ mod tests {
         assert!(checked_roots(roots(&["../outside"])).is_err());
         assert!(checked_roots(roots(&["a/../../b"])).is_err());
         assert!(!is_path_ingestable("../x.md", &roots(&["notes"])));
-        assert_eq!(
-            checked_roots(roots(&["people/.."])).unwrap(),
-            Vec::<String>::new()
-        );
+        assert_eq!(checked_roots(roots(&["people/.."])).unwrap(), Vec::<String>::new());
     }
 
     #[test]

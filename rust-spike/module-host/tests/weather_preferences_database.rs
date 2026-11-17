@@ -38,25 +38,20 @@ fn weather_place_and_unit_are_validated_private_and_shared_with_typescript() {
         }
         db
     });
-    let database = rt
-        .block_on(Database::connect(
-            &std::env::var("JS43_APP_URL").unwrap(),
-            4,
-            RuntimeRole::App,
-        ))
-        .unwrap();
+    let database = rt.block_on(Database::connect(&std::env::var("JS43_APP_URL").unwrap(), 4, RuntimeRole::App)).unwrap();
     let ports = Arc::new(
-        AccountPreferencesPorts::new(database, weather_bindings(), Arc::new(DenyPorts)).unwrap(),
+        AccountPreferencesPorts::new(
+            database,
+            weather_bindings(),
+            Arc::new(DenyPorts),
+        )
+        .unwrap(),
     );
     // The checked-in declaration the Weather manifest will carry: the two resources and
     // the two operations. Every declared resource must have a binding in the shell's map.
-    let declared: Capability =
-        serde_json::from_str(include_str!("data/weather-preferences-capability.json")).unwrap();
+    let declared: Capability = serde_json::from_str(include_str!("data/weather-preferences-capability.json")).unwrap();
     for resource in &declared.resources {
-        assert!(
-            weather_bindings().contains_key(&("weather".to_string(), resource.clone())),
-            "{resource}"
-        );
+        assert!(weather_bindings().contains_key(&("weather".to_string(), resource.clone())), "{resource}");
     }
     assert_eq!(declared.resources.len(), weather_bindings().len());
     let mut manifest = common::manifest("1.0.0");
@@ -76,31 +71,16 @@ fn weather_place_and_unit_are_validated_private_and_shared_with_typescript() {
         )
         .map(|reply| serde_json::from_str::<Value>(&reply).unwrap())
     };
-    let read = |actor, resource: &str| {
-        call(actor, "preference.read", resource, json!({})).unwrap()["value"].clone()
-    };
-    let write = |actor, resource: &str, value: Value| {
-        call(actor, "preference.write", resource, json!({"value":value}))
-    };
+    let read = |actor, resource: &str| call(actor, "preference.read", resource, json!({})).unwrap()["value"].clone();
+    let write = |actor, resource: &str, value: Value| call(actor, "preference.write", resource, json!({"value":value}));
     let stored = |actor: Uuid, key: &str| -> Option<Value> {
-        rt.block_on(bootstrap.query_opt(
-            "SELECT value_json FROM app.preferences WHERE owner_user_id=$1 AND key=$2",
-            &[&actor, &key],
-        ))
-        .unwrap()
-        .map(|r| r.get(0))
+        rt.block_on(bootstrap.query_opt("SELECT value_json FROM app.preferences WHERE owner_user_id=$1 AND key=$2", &[&actor, &key])).unwrap().map(|r| r.get(0))
     };
     let place = json!({"lat":51.5074,"lon":-0.1278,"label":"London, UK"});
 
     // A valid place and unit are saved under the legacy keys, exactly as given.
-    assert_eq!(
-        write(owner, "location", place.clone()).unwrap(),
-        json!({"value":place})
-    );
-    assert_eq!(
-        write(owner, "unit", json!("metric")).unwrap(),
-        json!({"value":"metric"})
-    );
+    assert_eq!(write(owner, "location", place.clone()).unwrap(), json!({"value":place}));
+    assert_eq!(write(owner, "unit", json!("metric")).unwrap(), json!({"value":"metric"}));
     assert_eq!(stored(owner, LOCATION), Some(place.clone()));
     assert_eq!(stored(owner, UNIT), Some(json!("metric")));
     assert_eq!(read(owner, "location"), place);
@@ -122,66 +102,36 @@ fn weather_place_and_unit_are_validated_private_and_shared_with_typescript() {
     for bad in bad_places {
         assert!(write(owner, "location", bad.clone()).is_err(), "{bad}");
     }
-    for bad in [
-        json!("kelvin"),
-        json!("Metric"),
-        json!(""),
-        json!(7),
-        json!({"unit":"metric"}),
-    ] {
+    for bad in [json!("kelvin"), json!("Metric"), json!(""), json!(7), json!({"unit":"metric"})] {
         assert!(write(owner, "unit", bad.clone()).is_err(), "{bad}");
     }
     assert_eq!(stored(owner, LOCATION), Some(place.clone()));
     assert_eq!(stored(owner, UNIT), Some(json!("metric")));
     // Only the two declared resources exist, and the host picks the keys.
     assert!(call(owner, "preference.read", "other", json!({})).is_err());
-    assert!(call(
-        owner,
-        "preference.write",
-        "location",
-        json!({"value":place,"key":"weather-unit"})
-    )
-    .is_err());
-    assert!(call(
-        owner,
-        "preference.write",
-        "location",
-        json!({"owner":other.to_string(),"value":place})
-    )
-    .is_err());
+    assert!(call(owner, "preference.write", "location", json!({"value":place,"key":"weather-unit"})).is_err());
+    assert!(call(owner, "preference.write", "location", json!({"owner":other.to_string(),"value":place})).is_err());
 
     // One person's write never touches another's, and an admin has no special view.
     let other_place = json!({"lat":-33.9,"lon":151.2,"label":"Sydney"});
-    assert_eq!(
-        write(other, "location", other_place.clone()).unwrap(),
-        json!({"value":other_place})
-    );
+    assert_eq!(write(other, "location", other_place.clone()).unwrap(), json!({"value":other_place}));
     assert_eq!(read(owner, "location"), place);
     assert_eq!(stored(owner, LOCATION), Some(place.clone()));
     assert_eq!(stored(other, LOCATION), Some(other_place.clone()));
     assert_eq!(read(other, "unit"), Value::Null);
     let isolation = || {
         for stranger in [other, admin] {
-            assert_ne!(
-                read(stranger, "location"),
-                place,
-                "another account must not read the owner's place"
-            );
+            assert_ne!(read(stranger, "location"), place, "another account must not read the owner's place");
             assert_eq!(read(stranger, "unit"), Value::Null);
         }
         assert_eq!(read(admin, "location"), Value::Null);
     };
     // Negative control: with row security off in this throwaway database, the same
     // assertion must fail. Restore before the protected run.
-    rt.block_on(bootstrap.batch_execute("ALTER TABLE app.preferences DISABLE ROW LEVEL SECURITY"))
-        .unwrap();
+    rt.block_on(bootstrap.batch_execute("ALTER TABLE app.preferences DISABLE ROW LEVEL SECURITY")).unwrap();
     let red = catch_unwind(AssertUnwindSafe(isolation));
-    rt.block_on(bootstrap.batch_execute("ALTER TABLE app.preferences ENABLE ROW LEVEL SECURITY"))
-        .unwrap();
-    assert!(
-        red.is_err(),
-        "the isolation check must fail with row security removed"
-    );
+    rt.block_on(bootstrap.batch_execute("ALTER TABLE app.preferences ENABLE ROW LEVEL SECURITY")).unwrap();
+    assert!(red.is_err(), "the isolation check must fail with row security removed");
     println!("isolation assertion FAILED with row security removed");
     isolation();
     println!("isolation assertion PASSED with row security restored");
@@ -189,67 +139,35 @@ fn weather_place_and_unit_are_validated_private_and_shared_with_typescript() {
     // A malformed value stored behind the host's back reads as unset.
     rt.block_on(bootstrap.execute("UPDATE app.preferences SET value_json='\"kelvin\"'::jsonb WHERE owner_user_id=$1 AND key=$2", &[&owner, &UNIT])).unwrap();
     assert_eq!(read(owner, "unit"), Value::Null);
-    rt.block_on(bootstrap.execute(
-        "UPDATE app.preferences SET value_json=$3 WHERE owner_user_id=$1 AND key=$2",
-        &[&owner, &LOCATION, &json!({"lat":95,"lon":0,"label":MARKER})],
-    ))
-    .unwrap();
+    rt.block_on(bootstrap.execute("UPDATE app.preferences SET value_json=$3 WHERE owner_user_id=$1 AND key=$2", &[&owner, &LOCATION, &json!({"lat":95,"lon":0,"label":MARKER})])).unwrap();
     assert_eq!(read(owner, "location"), Value::Null);
 
     // Values the TypeScript repository wrote read back unchanged, and a Rust write is
     // what the TypeScript side reads afterward.
-    assert_eq!(
-        read(ts_user, "location"),
-        json!({"lat":48.8566,"lon":2.3522,"label":"Paris, France"})
-    );
+    assert_eq!(read(ts_user, "location"), json!({"lat":48.8566,"lon":2.3522,"label":"Paris, France"}));
     assert_eq!(read(ts_user, "unit"), json!("imperial"));
     let rust_place = json!({"lat":35.6762,"lon":139.6503,"label":"Tokyo"});
     write(ts_user, "location", rust_place.clone()).unwrap();
     write(ts_user, "unit", json!("metric")).unwrap();
-    println!(
-        "RUST_WROTE {}",
-        json!({"location":rust_place,"unit":"metric"})
-    );
+    println!("RUST_WROTE {}", json!({"location":rust_place,"unit":"metric"}));
 
     // Private text appears only in the preference row it was saved to: not in any other
     // table (activity rows, job payloads), and not in the refusal message.
-    let refusal = format!(
-        "{:?}",
-        write(
-            owner,
-            "location",
-            json!({"lat":0,"lon":0,"label":MARKER,"note":"extra"})
-        )
-        .unwrap_err()
-    );
+    let refusal = format!("{:?}", write(owner, "location", json!({"lat":0,"lon":0,"label":MARKER,"note":"extra"})).unwrap_err());
     assert!(!refusal.contains(MARKER), "{refusal}");
     write(owner, "location", json!({"lat":1,"lon":2,"label":MARKER})).unwrap();
     let scan = || {
         let tables = rt.block_on(bootstrap.query("SELECT table_schema||'.'||table_name FROM information_schema.tables WHERE table_type='BASE TABLE' AND table_schema IN ('app','moss_queue','moss_modules') AND table_name<>'preferences'", &[])).unwrap();
         for table in tables {
             let name: String = table.get(0);
-            let count: i64 = rt
-                .block_on(bootstrap.query_one(
-                    &format!("SELECT count(*) FROM {name} t WHERE t::text LIKE '%'||$1||'%'"),
-                    &[&MARKER],
-                ))
-                .unwrap()
-                .get(0);
+            let count: i64 = rt.block_on(bootstrap.query_one(&format!("SELECT count(*) FROM {name} t WHERE t::text LIKE '%'||$1||'%'"), &[&MARKER])).unwrap().get(0);
             assert_eq!(count, 0, "the planted place text reached {name}");
         }
     };
     // Negative control: a planted leak in another table must make the scan fail.
-    rt.block_on(bootstrap.execute(
-        "UPDATE app.users SET name=$2 WHERE id=$1",
-        &[&other, &MARKER],
-    ))
-    .unwrap();
+    rt.block_on(bootstrap.execute("UPDATE app.users SET name=$2 WHERE id=$1", &[&other, &MARKER])).unwrap();
     let leak = catch_unwind(AssertUnwindSafe(scan));
-    rt.block_on(bootstrap.execute(
-        "UPDATE app.users SET name='Weather proof' WHERE id=$1",
-        &[&other],
-    ))
-    .unwrap();
+    rt.block_on(bootstrap.execute("UPDATE app.users SET name='Weather proof' WHERE id=$1", &[&other])).unwrap();
     assert!(leak.is_err(), "the scan must catch a planted leak");
     println!("privacy scan FAILED with a leak planted");
     scan();

@@ -191,11 +191,7 @@ fn documents_and_queries_carry_their_prefix() {
     let reply = f.embed(json!({"text":"alpha","kind":"query"})).unwrap();
     assert_eq!(
         *fake.received.lock().unwrap(),
-        [
-            "search_document: alpha",
-            "search_document: alpha",
-            "search_query: alpha"
-        ]
+        ["search_document: alpha", "search_document: alpha", "search_query: alpha"]
     );
     // The hand-made vector answers for the text without its prefix.
     assert_eq!(reply["embedding"][0], 1.0);
@@ -206,20 +202,8 @@ fn documents_and_queries_carry_their_prefix() {
 fn only_exactly_768_finite_numbers_are_accepted() {
     let fake = start();
     let f = fixture(model_store(&fake));
-    assert_eq!(
-        f.embed(json!({"text":"ok"})).unwrap()["embedding"]
-            .as_array()
-            .unwrap()
-            .len(),
-        768
-    );
-    for mode in [
-        Mode::WrongSize,
-        Mode::Empty,
-        Mode::NullValue,
-        Mode::Oversize,
-        Mode::ServerError,
-    ] {
+    assert_eq!(f.embed(json!({"text":"ok"})).unwrap()["embedding"].as_array().unwrap().len(), 768);
+    for mode in [Mode::WrongSize, Mode::Empty, Mode::NullValue, Mode::Oversize, Mode::ServerError] {
         fake.set_mode(mode);
         assert!(f.embed(json!({"text":"ok"})).is_err());
     }
@@ -245,18 +229,8 @@ fn text_and_credential_never_reach_activity_or_answers() {
     seen.extend(f.rows.0.lock().unwrap().iter().cloned());
     assert_eq!(f.rows.0.lock().unwrap().len(), 4);
     // The fake did receive the marker and the credential, so the checks below can fail.
-    assert!(fake
-        .received
-        .lock()
-        .unwrap()
-        .iter()
-        .all(|t| t.contains(MARKER)));
-    assert!(fake
-        .tokens
-        .lock()
-        .unwrap()
-        .iter()
-        .all(|t| t.contains(CREDENTIAL)));
+    assert!(fake.received.lock().unwrap().iter().all(|t| t.contains(MARKER)));
+    assert!(fake.tokens.lock().unwrap().iter().all(|t| t.contains(CREDENTIAL)));
     for text in &seen {
         assert!(!text.contains(MARKER), "{text}");
         assert!(!text.contains(CREDENTIAL), "{text}");
@@ -269,18 +243,11 @@ fn model_name_and_version_follow_configuration() {
     let scope_free = |store: Store| {
         let f = fixture(store);
         let reply = f.embed(json!({"text":"a"})).unwrap();
-        (
-            reply["model"].as_str().unwrap().to_owned(),
-            reply["version"].as_str().unwrap().to_owned(),
-            f,
-        )
+        (reply["model"].as_str().unwrap().to_owned(), reply["version"].as_str().unwrap().to_owned(), f)
     };
     let (m, v, f) = scope_free(model_store(&fake));
     assert_eq!((m.as_str(), v.as_str()), (DEFAULT_EMBEDDING_MODEL, "1.5"));
-    assert_eq!(
-        f.rows.0.lock().unwrap()[0],
-        format!("{DEFAULT_EMBEDDING_MODEL}|embed document|ok|")
-    );
+    assert_eq!(f.rows.0.lock().unwrap()[0], format!("{DEFAULT_EMBEDDING_MODEL}|embed document|ok|"));
     let other = |version: Option<&str>| Store {
         url: Some(fake.url.parse().unwrap()),
         model: "bge-small".into(),
@@ -305,10 +272,7 @@ fn an_unset_endpoint_refuses_and_records_nothing() {
     let error = f.embed(json!({"text":"a"})).unwrap_err();
     // A guest only ever sees the generic refusal. The plain wording is checked where the
     // settings screen reads it.
-    assert_eq!(
-        error.to_string(),
-        "The module could not finish this request"
-    );
+    assert_eq!(error.to_string(), "The module could not finish this request");
     assert!(f.rows.0.lock().unwrap().is_empty());
 }
 
@@ -337,32 +301,19 @@ fn the_on_device_model_needs_no_endpoint_and_keeps_text_out_of_rows() {
     let reply = f.embed(json!({"text":MARKER,"kind":"query"})).unwrap();
     assert_eq!(reply["embedding"].as_array().unwrap().len(), 768);
     assert_eq!(reply["embedding"][3], 1.0);
-    assert_eq!(
-        (
-            reply["model"].as_str().unwrap(),
-            reply["version"].as_str().unwrap()
-        ),
-        (DEFAULT_EMBEDDING_MODEL, "1.5")
-    );
+    assert_eq!((reply["model"].as_str().unwrap(), reply["version"].as_str().unwrap()), (DEFAULT_EMBEDDING_MODEL, "1.5"));
     // The same prefixes as the endpoint path.
     f.embed(json!({"text":"b"})).unwrap();
     assert_eq!(
         *device.received.lock().unwrap(),
-        [
-            format!("search_query: {MARKER}"),
-            "search_document: b".to_owned()
-        ]
+        [format!("search_query: {MARKER}"), "search_document: b".to_owned()]
     );
     // A failure reaches the activity row as fixed words only, and the text appears nowhere.
     *device.fail.lock().unwrap() = Some("The search model is still downloading (40%)".into());
     let failed = format!("{:?}", f.embed(json!({"text":MARKER})));
     let rows = f.rows.0.lock().unwrap().clone();
     assert_eq!(rows.len(), 3);
-    assert!(
-        rows[2].ends_with("|error|The search model is still downloading (40%)"),
-        "{}",
-        rows[2]
-    );
+    assert!(rows[2].ends_with("|error|The search model is still downloading (40%)"), "{}", rows[2]);
     for text in rows.iter().chain([&failed, &reply.to_string()]) {
         assert!(!text.contains(MARKER), "{text}");
     }

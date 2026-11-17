@@ -8,11 +8,7 @@ use moss_module_host::{
 use serde_json::json;
 
 fn call(resource: &str) -> Request {
-    Request {
-        operation: "call".into(),
-        resource: resource.into(),
-        parameters: json!({}),
-    }
+    Request { operation: "call".into(), resource: resource.into(), parameters: json!({}) }
 }
 
 fn module() -> moss_module_host::manifest::Manifest {
@@ -23,10 +19,8 @@ fn module() -> moss_module_host::manifest::Manifest {
         resources: ["tasks".into(), "connectors".into(), "other".into()].into(),
         allow_private: false,
     });
-    m.requires
-        .insert("tasks".into(), ">=1.0.0".parse().unwrap());
-    m.optional_requires
-        .insert("connectors".into(), ">=0.5.0, <1.0.0".parse().unwrap());
+    m.requires.insert("tasks".into(), ">=1.0.0".parse().unwrap());
+    m.optional_requires.insert("connectors".into(), ">=0.5.0, <1.0.0".parse().unwrap());
     m
 }
 

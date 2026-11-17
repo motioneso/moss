@@ -52,10 +52,7 @@ pub trait OnDeviceEmbedder: Send + Sync {
     fn embed(&self, text: &str, timeout: std::time::Duration) -> Result<Vec<f32>, String>;
 }
 /// Model name and version written beside every vector, from the endpoint or the on-device model.
-async fn provenance_for<E: EmbeddingStore>(
-    embeddings: &E,
-    actor: Actor,
-) -> Result<(String, String)> {
+async fn provenance_for<E: EmbeddingStore>(embeddings: &E, actor: Actor) -> Result<(String, String)> {
     if embeddings.on_device(actor.clone()).await?.is_some() {
         return Ok((
             DEFAULT_EMBEDDING_MODEL.to_owned(),
@@ -87,10 +84,7 @@ impl<S: ConfigurationStore, T: CapabilityTransport, E: EmbeddingStore> RouterInt
         self
     }
     /// Serves the `transcribe` port from the person's configured speech route.
-    pub fn with_transcription(
-        mut self,
-        store: Arc<dyn crate::transcribe::TranscriptionStore>,
-    ) -> Self {
+    pub fn with_transcription(mut self, store: Arc<dyn crate::transcribe::TranscriptionStore>) -> Self {
         self.transcription = Some(store);
         self
     }
@@ -138,13 +132,7 @@ impl<S: ConfigurationStore, T: CapabilityTransport, E: EmbeddingStore> Intellige
         Ok(json!({"text":text}))
     }
     fn embed(&self, scope: &CallScope, r: &Request) -> Result<Value> {
-        embed_via(
-            &self.runtime,
-            &self.embeddings,
-            self.activity.as_ref(),
-            scope,
-            r,
-        )
+        embed_via(&self.runtime, &self.embeddings, self.activity.as_ref(), scope, r)
     }
     fn transcribe(&self, scope: &CallScope, r: &Request) -> Result<Value> {
         let store = self
@@ -154,8 +142,10 @@ impl<S: ConfigurationStore, T: CapabilityTransport, E: EmbeddingStore> Intellige
         crate::transcribe::handle(&self.runtime, store, self.activity.as_ref(), scope, r)
     }
     fn embedding_model(&self, scope: &CallScope) -> Result<(String, String)> {
-        let actor =
-            Actor::from_authenticated_session(scope.access().actor_user_id(), uuid::Uuid::new_v4());
+        let actor = Actor::from_authenticated_session(
+            scope.access().actor_user_id(),
+            uuid::Uuid::new_v4(),
+        );
         self.runtime
             .block_on(provenance_for(&self.embeddings, actor))
     }
@@ -333,30 +323,31 @@ fn embed_via<E: EmbeddingStore>(
     runtime.block_on(async {
         tokio::time::timeout(scope.remaining(), async {
             let input = format!("{}{text}", kind.prefix());
-            let (model, version, outcome) =
-                if let Some(device) = embeddings.on_device(actor.clone()).await? {
-                    let wait = scope.remaining();
-                    let vector = tokio::task::spawn_blocking(move || {
-                        device.embed(&input, wait).map_err(|e| anyhow::anyhow!(e))
-                    })
-                    .await
-                    .map_err(|_| anyhow::anyhow!("Embedding service unavailable"))
-                    .and_then(|r| r)
-                    .and_then(|v| {
-                        let numbers: Vec<Value> = v.iter().map(|n| json!(f64::from(*n))).collect();
-                        check_vector(&numbers)
-                    });
-                    (
-                        DEFAULT_EMBEDDING_MODEL.to_owned(),
-                        DEFAULT_EMBEDDING_VERSION.to_owned(),
-                        vector,
-                    )
-                } else {
-                    let endpoint = embeddings.for_actor(actor).await?;
-                    let (model, version) = endpoint.provenance();
-                    let outcome = request_vector(&endpoint, &input, scope.remaining()).await;
-                    (model, version, outcome)
-                };
+            let (model, version, outcome) = if let Some(device) =
+                embeddings.on_device(actor.clone()).await?
+            {
+                let wait = scope.remaining();
+                let vector = tokio::task::spawn_blocking(move || {
+                    device.embed(&input, wait).map_err(|e| anyhow::anyhow!(e))
+                })
+                .await
+                .map_err(|_| anyhow::anyhow!("Embedding service unavailable"))
+                .and_then(|r| r)
+                .and_then(|v| {
+                    let numbers: Vec<Value> = v.iter().map(|n| json!(f64::from(*n))).collect();
+                    check_vector(&numbers)
+                });
+                (
+                    DEFAULT_EMBEDDING_MODEL.to_owned(),
+                    DEFAULT_EMBEDDING_VERSION.to_owned(),
+                    vector,
+                )
+            } else {
+                let endpoint = embeddings.for_actor(actor).await?;
+                let (model, version) = endpoint.provenance();
+                let outcome = request_vector(&endpoint, &input, scope.remaining()).await;
+                (model, version, outcome)
+            };
             if let Some(activity) = activity {
                 activity
                     .record(EmbeddingCall {
@@ -374,7 +365,9 @@ fn embed_via<E: EmbeddingStore>(
                     })
                     .await;
             }
-            Ok::<_, anyhow::Error>(json!({"embedding":outcome?,"model":model,"version":version}))
+            Ok::<_, anyhow::Error>(
+                json!({"embedding":outcome?,"model":model,"version":version}),
+            )
         })
         .await
         .context("Embedding deadline exceeded")?
@@ -406,17 +399,13 @@ impl<E: EmbeddingStore> Intelligence for EmbeddingsOnly<E> {
         anyhow::bail!("Module AI is not configured on this server")
     }
     fn embed(&self, scope: &CallScope, r: &Request) -> Result<Value> {
-        embed_via(
-            &self.runtime,
-            &self.embeddings,
-            self.activity.as_ref(),
-            scope,
-            r,
-        )
+        embed_via(&self.runtime, &self.embeddings, self.activity.as_ref(), scope, r)
     }
     fn embedding_model(&self, scope: &CallScope) -> Result<(String, String)> {
-        let actor =
-            Actor::from_authenticated_session(scope.access().actor_user_id(), uuid::Uuid::new_v4());
+        let actor = Actor::from_authenticated_session(
+            scope.access().actor_user_id(),
+            uuid::Uuid::new_v4(),
+        );
         self.runtime
             .block_on(provenance_for(&self.embeddings, actor))
     }

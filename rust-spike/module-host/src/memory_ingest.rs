@@ -25,10 +25,7 @@ pub trait DocumentEmbeddings: Send + Sync {
     fn embed_document(&self, scope: &CallScope, text: &str) -> Result<Vec<f64>>;
     /// Name and version recorded with every vector this call writes.
     fn model(&self, _scope: &CallScope) -> Result<(String, String)> {
-        Ok((
-            self.model_name().to_owned(),
-            self.model_version().to_owned(),
-        ))
+        Ok((self.model_name().to_owned(), self.model_version().to_owned()))
     }
 }
 
@@ -502,7 +499,10 @@ impl MemoryIngestPorts {
                 // Legacy also requires the saved snapshot key to match the
                 // current one, which is always none here. A managed row is
                 // therefore read again instead of skipped.
-                if *hash == file_hash && *model == model_name && snapshot.is_none() {
+                if *hash == file_hash
+                    && *model == model_name
+                    && snapshot.is_none()
+                {
                     return Ok(json!({"status": "skipped", "chunksProcessed": 0}));
                 }
             }

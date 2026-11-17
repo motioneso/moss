@@ -153,11 +153,9 @@ impl crate::store::Installer {
         let mut request = resolve(&module.manifest.routes, method, &format!("/{target}"))?;
         request.body = serde_json::from_str(body)?;
         let mut envelope = serde_json::to_value(&request)?;
-        let wants_client = module
-            .manifest
-            .capabilities
-            .iter()
-            .any(|c| c.port == "context" && c.resources.contains(CLIENT_ADDRESS));
+        let wants_client = module.manifest.capabilities.iter().any(|c| {
+            c.port == "context" && c.resources.contains(CLIENT_ADDRESS)
+        });
         if let (true, Some(address)) = (wants_client, client) {
             envelope["client"] = json!(address.to_string());
         }

@@ -106,10 +106,7 @@ impl Listener {
         Self { port, tcp, udp }
     }
     fn hits(&self) -> (usize, usize) {
-        (
-            self.tcp.load(Ordering::SeqCst),
-            self.udp.load(Ordering::SeqCst),
-        )
+        (self.tcp.load(Ordering::SeqCst), self.udp.load(Ordering::SeqCst))
     }
 }
 
@@ -132,19 +129,8 @@ impl Site {
         let names: Vec<_> = NAMES.iter().map(|(n, _)| format!("DNS:{n}")).collect();
         let made = Command::new("openssl")
             .args([
-                "req",
-                "-x509",
-                "-newkey",
-                "ec",
-                "-pkeyopt",
-                "ec_paramgen_curve:prime256v1",
-                "-nodes",
-                "-days",
-                "2",
-                "-subj",
-                "/CN=ok.test",
-                "-addext",
-                "basicConstraints=critical,CA:FALSE",
+                "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1", "-nodes",
+                "-days", "2", "-subj", "/CN=ok.test", "-addext", "basicConstraints=critical,CA:FALSE",
                 "-addext",
             ])
             .arg(format!("subjectAltName={}", names.join(",")))
@@ -155,11 +141,7 @@ impl Site {
             .output()
             .unwrap();
         assert!(made.status.success(), "openssl failed");
-        let port = TcpListener::bind("127.0.0.1:0")
-            .unwrap()
-            .local_addr()
-            .unwrap()
-            .port();
+        let port = TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
         let ready = dir.path().join("ready");
         let child = Command::new("python3")
             .arg("-I")
@@ -184,12 +166,7 @@ impl Site {
         }
         assert!(ready.exists(), "fixture site did not start");
         let pem = std::fs::read_to_string(&cert).unwrap();
-        Self {
-            child,
-            dir,
-            port,
-            pem,
-        }
+        Self { child, dir, port, pem }
     }
     fn log(&self) -> String {
         std::fs::read_to_string(self.dir.path().join("log")).unwrap_or_default()
@@ -232,15 +209,16 @@ impl World {
         if private_ok {
             web = web.with_private_destinations_allowed();
         }
-        let mut services = ServicePorts::new(
-            data.path(),
-            Arc::new(SecretCipher::connectors(&Default::default()).unwrap()),
-            Arc::new(NoAi),
-            Arc::new(LocalPorts::new(data.path()).unwrap()),
-        )
-        .unwrap()
-        .with_public_web(web)
-        .with_weakened_browser(launcher, weakened);
+        let mut services =
+            ServicePorts::new(
+                data.path(),
+                Arc::new(SecretCipher::connectors(&Default::default()).unwrap()),
+                Arc::new(NoAi),
+                Arc::new(LocalPorts::new(data.path()).unwrap()),
+            )
+            .unwrap()
+            .with_public_web(web)
+            .with_weakened_browser(launcher, weakened);
         if pooled {
             services = services.with_pooled_people();
         }
@@ -268,8 +246,8 @@ impl World {
     /// One call from a guest. `kind` is the handler kind, `who` the signed-in person.
     fn call(&self, who: uuid::Uuid, kind: &str, parameters: Value) -> Result<Value> {
         // The sample guest calls its port only for a route. Byte 106 makes it do so for a job.
-        let mut text =
-            include_str!("../sample/module.wat").replace("moss:module/kv@", "moss:module/browser@");
+        let mut text = include_str!("../sample/module.wat")
+            .replace("moss:module/kv@", "moss:module/browser@");
         if kind == "job" {
             text = text.replace("i32.const 114 i32.eq", "i32.const 106 i32.eq");
         }
@@ -279,8 +257,7 @@ impl World {
             AccessContext::new(who, "browser"),
             self.services.clone(),
             kind,
-            &json!({"operation":"render","resource":"public-web","parameters":parameters})
-                .to_string(),
+            &json!({"operation":"render","resource":"public-web","parameters":parameters}).to_string(),
         )?;
         Ok(serde_json::from_str(&out)?)
     }
@@ -301,48 +278,24 @@ fn a_page_built_by_scripts_gives_bounded_evidence() {
     let v = w.render("/news", &["ok.test"]);
     assert_eq!(v["ok"], true, "{v}");
     assert_eq!(v["title"], "Fixture Sports");
-    assert!(v["text"]
-        .as_str()
-        .unwrap()
-        .contains("Zebra-marker headline number 0"));
-    let urls: Vec<_> = v["candidates"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|c| c["url"].as_str().unwrap())
-        .collect();
+    assert!(v["text"].as_str().unwrap().contains("Zebra-marker headline number 0"));
+    let urls: Vec<_> = v["candidates"].as_array().unwrap().iter().map(|c| c["url"].as_str().unwrap()).collect();
     assert_eq!(urls.len(), 5, "{urls:?}");
-    assert!(
-        urls.iter().all(|u| u.starts_with("https://ok.test/story/")),
-        "{urls:?}"
-    );
+    assert!(urls.iter().all(|u| u.starts_with("https://ok.test/story/")), "{urls:?}");
     let log = w.site.log();
     assert!(log.contains("ok.test /api/headlines"), "{log}");
     assert!(!log.contains("other.test"), "{log}");
 }
 
 /// Every way a page can try to reach the network without a plain request.
-const PROBES: &[&str] = &[
-    "ws",
-    "rtc",
-    "sw",
-    "prefetch",
-    "preconnect",
-    "dns",
-    "fetch",
-    "img",
-];
+const PROBES: &[&str] = &["ws", "rtc", "sw", "prefetch", "preconnect", "dns", "fetch", "img"];
 
 /// Renders one probe and waits for any late connection to arrive. Returns what the listener saw.
 fn probe(w: &World, which: &str) -> (usize, usize) {
     let v = w.render(&format!("/probe?only={which}"), &["ok.test"]);
     assert_eq!(v["ok"], true, "{v}");
     std::thread::sleep(Duration::from_millis(700));
-    println!(
-        "probe {which}: page said {} listener saw {:?}",
-        v["text"],
-        w.listener.hits()
-    );
+    println!("probe {which}: page said {} listener saw {:?}", v["text"], w.listener.hits());
     w.listener.hits()
 }
 
@@ -370,12 +323,10 @@ fn control_without_the_namespace_the_probes_reach_the_listener() {
     }
     println!("reached the listener without the namespace: {reached:?}");
     for needed in ["ws", "rtc"] {
-        assert!(
-            reached.contains(&needed),
-            "{needed} was not seen reaching the listener"
-        );
+        assert!(reached.contains(&needed), "{needed} was not seen reaching the listener");
     }
 }
+
 
 #[test]
 #[ignore = "Needs the pinned browser (MOSS_BROWSER_DIR) and bubblewrap"]
@@ -399,14 +350,8 @@ fn off_list_and_private_requests_are_refused_and_each_guard_is_seen_failing_with
     let w = World::new();
     assert_eq!(w.render("/guards", &hosts)["ok"], true);
     let log = w.site.log();
-    assert!(
-        !log.contains("other.test"),
-        "off-list host reached the site: {log}"
-    );
-    assert!(
-        !log.contains("private.test"),
-        "private address reached the site: {log}"
-    );
+    assert!(!log.contains("other.test"), "off-list host reached the site: {log}");
+    assert!(!log.contains("private.test"), "private address reached the site: {log}");
     drop(w);
 
     // Without the host list the off-list script is fetched.
@@ -417,44 +362,22 @@ fn off_list_and_private_requests_are_refused_and_each_guard_is_seen_failing_with
         false,
     );
     assert_eq!(w.render("/guards", &hosts)["ok"], true);
-    assert!(
-        w.site.log().contains("other.test /off-list.js"),
-        "{}",
-        w.site.log()
-    );
+    assert!(w.site.log().contains("other.test /off-list.js"), "{}", w.site.log());
     drop(w);
 
     // Without the private-address check the private name is fetched.
-    let w = World::build(
-        Launcher::new(chrome_dir()),
-        Weakened::default(),
-        true,
-        false,
-    );
+    let w = World::build(Launcher::new(chrome_dir()), Weakened::default(), true, false);
     assert_eq!(w.render("/guards", &hosts)["ok"], true);
-    assert!(
-        w.site.log().contains("private.test /private.js"),
-        "{}",
-        w.site.log()
-    );
+    assert!(w.site.log().contains("private.test /private.js"), "{}", w.site.log());
 }
 
 #[test]
 #[ignore = "Needs the pinned browser (MOSS_BROWSER_DIR) and bubblewrap"]
 fn a_document_off_the_list_or_off_https_is_refused_before_a_browser_starts() {
     let w = World::new();
-    for url in [
-        "https://other.test/news",
-        "http://ok.test/news",
-        "https://ok.test:8443/news",
-        "ftp://ok.test/",
-    ] {
+    for url in ["https://other.test/news", "http://ok.test/news", "https://ok.test:8443/news", "ftp://ok.test/"] {
         let v = w
-            .call(
-                uuid::Uuid::new_v4(),
-                "route",
-                json!({"url":url,"allowedHosts":["ok.test"]}),
-            )
+            .call(uuid::Uuid::new_v4(), "route", json!({"url":url,"allowedHosts":["ok.test"]}))
             .unwrap();
         assert_eq!(v, json!({"ok":false,"reason":"blocked"}), "{url}");
     }
@@ -510,22 +433,10 @@ fn caps_on_requests_response_size_total_bytes_and_time_hold() {
     assert_eq!(v["ok"], true, "{v}");
     let text = v["text"].as_str().unwrap();
     assert!(text.matches('L').count() <= 5, "{text}");
-    assert_eq!(
-        text.matches('L').count() + text.matches('R').count(),
-        8,
-        "{text}"
-    );
+    assert_eq!(text.matches('L').count() + text.matches('R').count(), 8, "{text}");
     // The host stops downloading once the total is spent, not only once the page stops loading.
-    let downloaded = w
-        .site
-        .log()
-        .lines()
-        .filter(|l| l.contains("/chunk/"))
-        .count();
-    assert!(
-        downloaded <= 6,
-        "{downloaded} of 8 large responses were downloaded"
-    );
+    let downloaded = w.site.log().lines().filter(|l| l.contains("/chunk/")).count();
+    assert!(downloaded <= 6, "{downloaded} of 8 large responses were downloaded");
     // A page whose script never answers ends at the call's deadline.
     CALL_SECONDS.store(4, Ordering::SeqCst);
     let w = World::new();
@@ -533,11 +444,7 @@ fn caps_on_requests_response_size_total_bytes_and_time_hold() {
     let v = w.render("/hangpage", &["ok.test"]);
     CALL_SECONDS.store(30, Ordering::SeqCst);
     assert_eq!(v, json!({"ok":false,"reason":"timeout"}), "{v}");
-    assert!(
-        started.elapsed() < Duration::from_secs(8),
-        "{:?}",
-        started.elapsed()
-    );
+    assert!(started.elapsed() < Duration::from_secs(8), "{:?}", started.elapsed());
 }
 
 #[test]
@@ -546,53 +453,24 @@ fn private_text_stays_out_of_activity_and_one_person_never_sees_anothers() {
     let w = World::new();
     let (a, b) = (uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
     let v = w
-        .call(
-            a,
-            "route",
-            json!({"url":"https://ok.test/news","allowedHosts":["ok.test"]}),
-        )
+        .call(a, "route", json!({"url":"https://ok.test/news","allowedHosts":["ok.test"]}))
         .unwrap();
     assert_eq!(v["ok"], true);
     assert!(v["text"].as_str().unwrap().contains("Zebra-marker"));
-    let mine = w
-        .services
-        .activity(&w.manifest.id, &AccessContext::new(a, "read"))
-        .unwrap();
-    let theirs = w
-        .services
-        .activity(&w.manifest.id, &AccessContext::new(b, "read"))
-        .unwrap();
+    let mine = w.services.activity(&w.manifest.id, &AccessContext::new(a, "read")).unwrap();
+    let theirs = w.services.activity(&w.manifest.id, &AccessContext::new(b, "read")).unwrap();
     let text = json!(mine).to_string();
     assert!(text.contains("\"browser\""), "{text}");
     for planted in ["Zebra-marker", "ok.test", "headlines", "Fixture Sports"] {
-        assert!(
-            !text.contains(planted),
-            "activity recorded {planted}: {text}"
-        );
+        assert!(!text.contains(planted), "activity recorded {planted}: {text}");
     }
-    assert!(
-        theirs.is_empty(),
-        "A second person saw activity: {theirs:?}"
-    );
+    assert!(theirs.is_empty(), "A second person saw activity: {theirs:?}");
     drop(w);
 
     // Control: with every person's data pooled, the second person sees the first's row.
-    let w = World::build(
-        Launcher::new(chrome_dir()),
-        Weakened::default(),
-        false,
-        true,
-    );
-    w.call(
-        a,
-        "route",
-        json!({"url":"https://ok.test/news","allowedHosts":["ok.test"]}),
-    )
-    .unwrap();
-    let theirs = w
-        .services
-        .activity(&w.manifest.id, &AccessContext::new(b, "read"))
-        .unwrap();
+    let w = World::build(Launcher::new(chrome_dir()), Weakened::default(), false, true);
+    w.call(a, "route", json!({"url":"https://ok.test/news","allowedHosts":["ok.test"]})).unwrap();
+    let theirs = w.services.activity(&w.manifest.id, &AccessContext::new(b, "read")).unwrap();
     assert!(!theirs.is_empty(), "the control did not expose the row");
 }
 

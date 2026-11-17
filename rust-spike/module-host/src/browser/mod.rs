@@ -146,10 +146,8 @@ impl BrowserPort {
             skip_host_list: self.weakened.host_list,
         };
         let rendered = render::render(&self.launcher, &self.web, &page)?;
-        Ok(rendered.evidence.to_json(
-            &rendered.final_url,
-            scope.access().request_id(),
-            rendered.requests,
-        ))
+        Ok(rendered
+            .evidence
+            .to_json(&rendered.final_url, scope.access().request_id(), rendered.requests))
     }
 }

@@ -233,10 +233,7 @@ fn installed_tasks_package_serves_routes_and_nightly_job_from_the_real_server() 
             request = request.header("cookie", cookie);
         }
         let response = request.send().unwrap();
-        (
-            response.status().as_u16(),
-            response.json::<Value>().unwrap_or(Value::Null),
-        )
+        (response.status().as_u16(), response.json::<Value>().unwrap_or(Value::Null))
     };
     assert_eq!(navigation(None).0, 401);
     let (status, nav) = navigation(Some(&cookie));
@@ -249,31 +246,16 @@ fn installed_tasks_package_serves_routes_and_nightly_job_from_the_real_server() 
         Method::POST,
         "/tasks",
         Some(&cookie),
-        Some(
-            json!({"title":"Daily stretch","recurrence":{"freq":"daily","interval":1,"occurrence_date":"2020-01-01"}}),
-        ),
+        Some(json!({"title":"Daily stretch","recurrence":{"freq":"daily","interval":1,"occurrence_date":"2020-01-01"}})),
     );
-    assert_eq!(
-        created.0,
-        201,
-        "{}\n{}",
-        created.1,
-        fs::read_to_string(root.join("server.log")).unwrap_or_default()
-    );
+    assert_eq!(created.0, 201, "{}\n{}", created.1, fs::read_to_string(root.join("server.log")).unwrap_or_default());
     let id: uuid::Uuid = created.1["task"]["id"].as_str().unwrap().parse().unwrap();
     // Raw reads here bypass the route's lazy roll-forward, so any change must come from the job.
     let (db, occurrence) = runtime.block_on(async {
-        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
-            .await
-            .unwrap();
-        tokio::spawn(async move {
-            let _ = connection.await;
-        });
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(async move { let _ = connection.await; });
         let first: String = db
-            .query_one(
-                "SELECT recurrence->>'occurrence_date' FROM app.tasks WHERE id=$1",
-                &[&id],
-            )
+            .query_one("SELECT recurrence->>'occurrence_date' FROM app.tasks WHERE id=$1", &[&id])
             .await
             .unwrap()
             .get(0);
@@ -284,18 +266,13 @@ fn installed_tasks_package_serves_routes_and_nightly_job_from_the_real_server() 
         .block_on(db.query_one("SELECT count(*) FROM moss_queue.schedules WHERE actor_user_id=$1 AND queue LIKE '%.tasks-recurrence'", &[&owner]))
         .unwrap()
         .get(0);
-    assert_eq!(
-        schedules, 1,
-        "creating a recurring task must schedule one nightly roll-forward"
-    );
+    assert_eq!(schedules, 1, "creating a recurring task must schedule one nightly roll-forward");
     // A second recurring task replaces the schedule instead of adding another.
     let second = call(
         Method::POST,
         "/tasks",
         Some(&cookie),
-        Some(
-            json!({"title":"Water plants","recurrence":{"freq":"daily","interval":1,"occurrence_date":"2020-01-02"}}),
-        ),
+        Some(json!({"title":"Water plants","recurrence":{"freq":"daily","interval":1,"occurrence_date":"2020-01-02"}})),
     );
     assert_eq!(second.0, 201);
     let schedules: i64 = runtime
@@ -310,20 +287,13 @@ fn installed_tasks_package_serves_routes_and_nightly_job_from_the_real_server() 
     let deadline = Instant::now() + Duration::from_secs(60);
     let rolled = loop {
         let now: String = runtime
-            .block_on(db.query_one(
-                "SELECT recurrence->>'occurrence_date' FROM app.tasks WHERE id=$1",
-                &[&id],
-            ))
+            .block_on(db.query_one("SELECT recurrence->>'occurrence_date' FROM app.tasks WHERE id=$1", &[&id]))
             .unwrap()
             .get(0);
         if now.as_str() > "2026-01-01" {
             break now;
         }
-        assert!(
-            Instant::now() < deadline,
-            "the nightly job never rolled the series forward\n{}",
-            fs::read_to_string(root.join("server.log")).unwrap_or_default()
-        );
+        assert!(Instant::now() < deadline, "the nightly job never rolled the series forward\n{}", fs::read_to_string(root.join("server.log")).unwrap_or_default());
         std::thread::sleep(Duration::from_millis(500));
     };
     // The fired job carries the manifest's retry count (legacy value 0), not the host default of 3.
@@ -334,16 +304,8 @@ fn installed_tasks_package_serves_routes_and_nightly_job_from_the_real_server() 
     assert_eq!(retries, 0, "the nightly job should not retry");
     let (status, list) = call(Method::GET, "/tasks", Some(&cookie), None);
     assert_eq!(status, 200, "{list}");
-    let titles: Vec<_> = list["tasks"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|t| t["title"].as_str().unwrap().to_owned())
-        .collect();
-    assert!(
-        titles.contains(&"Daily stretch".to_owned()) && titles.contains(&"Water plants".to_owned()),
-        "{list}"
-    );
+    let titles: Vec<_> = list["tasks"].as_array().unwrap().iter().map(|t| t["title"].as_str().unwrap().to_owned()).collect();
+    assert!(titles.contains(&"Daily stretch".to_owned()) && titles.contains(&"Water plants".to_owned()), "{list}");
     println!("PASS installed Tasks package over HTTPS: sign-in required, recurring create makes one nightly schedule, the server's own worker ran it and moved 2020-01-01 to {rolled}, and the queued job has retry limit 0 as declared");
     if let Ok(seconds) = std::env::var("MOSS_TASKS_HOLD_SECONDS") {
         println!("HOLDING {origin} for {seconds}s (sign in as tasks-owner@example.test)");

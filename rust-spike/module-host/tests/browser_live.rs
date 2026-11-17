@@ -203,10 +203,8 @@ fn installed_package_renders_a_real_page_in_the_sandboxed_browser() {
         intelligence: Arc::new(NoAi),
         version: "0.1.0".parse().unwrap(),
         compiled_cache: None,
-        fuel_ceiling: None,
-        browser_dir: Some(std::path::PathBuf::from(
-            std::env::var("MOSS_BROWSER_DIR").unwrap(),
-        )),
+            fuel_ceiling: None,
+            browser_dir: Some(std::path::PathBuf::from(std::env::var("MOSS_BROWSER_DIR").unwrap())),
     };
     let application =
         Application::open_extended(&root.join("data"), app.clone(), access.clone(), config)
@@ -267,29 +265,12 @@ fn installed_package_renders_a_real_page_in_the_sandboxed_browser() {
     let page = render("https://example.com/", json!(["example.com"]));
     println!(
         "LIVE example.com -> ok={} title={} requests={} text_chars={}",
-        page["ok"],
-        page["title"],
-        page["requests"],
-        page["text"].as_str().map_or(0, |t| t.chars().count())
+        page["ok"], page["title"], page["requests"], page["text"].as_str().map_or(0, |t| t.chars().count())
     );
     assert_eq!(page["ok"], true, "{page}");
     assert_eq!(page["title"], "Example Domain");
-    println!(
-        "LIVE text -> {}",
-        page["text"]
-            .as_str()
-            .unwrap()
-            .chars()
-            .take(160)
-            .collect::<String>()
-    );
-    assert!(
-        page["text"]
-            .as_str()
-            .unwrap()
-            .contains("documentation examples"),
-        "{page}"
-    );
+    println!("LIVE text -> {}", page["text"].as_str().unwrap().chars().take(160).collect::<String>());
+    assert!(page["text"].as_str().unwrap().contains("documentation examples"), "{page}");
     // Listed private hosts pass the list but the safe fetch refuses them, so nothing is fetched.
     // Unlisted hosts, http and other ports are refused before any browser starts.
     for (url, hosts, want) in [
@@ -298,20 +279,12 @@ fn installed_package_renders_a_real_page_in_the_sandboxed_browser() {
         ("https://localhost/", json!(["localhost"]), "render_failed"),
         ("https://[::1]/", json!(["::1"]), "blocked"),
         ("http://example.com/", json!(["example.com"]), "blocked"),
-        (
-            "https://example.com:8443/",
-            json!(["example.com"]),
-            "blocked",
-        ),
+        ("https://example.com:8443/", json!(["example.com"]), "blocked"),
         ("https://example.com/", json!(["other.example"]), "blocked"),
     ] {
         let v = render(url, hosts);
         println!("LIVE {url} -> {v}");
-        assert_eq!(
-            (v["ok"].as_bool(), v["reason"].as_str()),
-            (Some(false), Some(want)),
-            "{url}: {v}"
-        );
+        assert_eq!((v["ok"].as_bool(), v["reason"].as_str()), (Some(false), Some(want)), "{url}: {v}");
     }
     // The real server process starts with the installed package and stays reachable over HTTPS.
     private(

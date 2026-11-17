@@ -101,10 +101,7 @@ fn owner_installs_a_module_from_the_app_endpoints() {
     let supervisor = root.join("supervisor.sh");
     fs::write(
         &supervisor,
-        format!(
-            "#!/bin/sh\necho '{}'\n",
-            json!({"install_url": bootstrap_url})
-        ),
+        format!("#!/bin/sh\necho '{}'\n", json!({"install_url": bootstrap_url})),
     )
     .unwrap();
     {
@@ -178,9 +175,7 @@ fn owner_installs_a_module_from_the_app_endpoints() {
         "nothing installed yet"
     );
     let api = |method: reqwest::Method, path: &str, body: Option<Value>, cookie: Option<&str>| {
-        let mut request = client
-            .request(method, format!("{origin}{path}"))
-            .header("origin", &origin);
+        let mut request = client.request(method, format!("{origin}{path}")).header("origin", &origin);
         if let Some(cookie) = cookie {
             request = request.header("cookie", cookie);
         }
@@ -188,144 +183,60 @@ fn owner_installs_a_module_from_the_app_endpoints() {
             request = request.json(&body);
         }
         let response = request.send().unwrap();
-        (
-            response.status().as_u16(),
-            response.json::<Value>().unwrap_or(Value::Null),
-        )
+        (response.status().as_u16(), response.json::<Value>().unwrap_or(Value::Null))
     };
     // The owner has no module tables yet, so the first request has to create them.
     assert_eq!(api(Method::GET, "/api/modules", None, None).0, 401);
     let (status, listed) = api(Method::GET, "/api/modules", None, Some(&cookie));
     assert_eq!(status, 200, "{listed}\n{}", log("server.log"));
-    let people = listed["modules"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|m| m["id"] == "people")
-        .expect("people offered")
-        .clone();
+    let people = listed["modules"].as_array().unwrap().iter().find(|m| m["id"] == "people").expect("people offered").clone();
     assert_eq!(people["installed"], false);
-    let (status, plan) = api(
-        Method::POST,
-        "/api/modules/plan",
-        Some(json!({"module":"people"})),
-        Some(&cookie),
-    );
+    let (status, plan) = api(Method::POST, "/api/modules/plan", Some(json!({"module":"people"})), Some(&cookie));
     assert_eq!(status, 200, "{plan}\n{}", log("server.log"));
     println!("PLAN {plan}");
     assert!(
         plan["permissions"].as_array().is_some_and(|p| {
             !p.is_empty()
                 && p.iter().all(|x| {
-                    ["group", "headline"]
-                        .iter()
-                        .all(|k| x[*k].as_str().is_some_and(|t| !t.is_empty()))
+                    ["group", "headline"].iter().all(|k| x[*k].as_str().is_some_and(|t| !t.is_empty()))
                 })
         }),
         "the prompt shows what people asks for: {plan}"
     );
-    let people_version = plan["version"]
-        .as_str()
-        .expect("plan names a version")
-        .to_owned();
+    let people_version = plan["version"].as_str().expect("plan names a version").to_owned();
     // Providers first: People depends on them.
     for module in ["person-providers"] {
-        let (status, reviewed) = api(
-            Method::POST,
-            "/api/modules/plan",
-            Some(json!({"module":module})),
-            Some(&cookie),
-        );
+        let (status, reviewed) = api(Method::POST, "/api/modules/plan", Some(json!({"module":module})), Some(&cookie));
         assert_eq!(status, 200, "{reviewed}");
-        let (status, body) = api(
-            Method::POST,
-            "/api/modules/install",
-            Some(json!({"module":module,"approve":true,"version":reviewed["version"]})),
-            Some(&cookie),
-        );
+        let (status, body) = api(Method::POST, "/api/modules/install", Some(json!({"module":module,"approve":true,"version":reviewed["version"]})), Some(&cookie));
         assert_eq!(status, 200, "{body}\n{}", log("server.log"));
     }
-    let (status, refused) = api(
-        Method::POST,
-        "/api/modules/install",
-        Some(json!({"module":"people"})),
-        Some(&cookie),
-    );
-    assert_eq!(
-        status, 422,
-        "without approval the installer refuses: {refused}"
-    );
-    let (status, no_version) = api(
-        Method::POST,
-        "/api/modules/install",
-        Some(json!({"module":"people","approve":true})),
-        Some(&cookie),
-    );
-    assert_eq!(
-        status, 400,
-        "approval must name the reviewed version: {no_version}"
-    );
-    let (status, stale) = api(
-        Method::POST,
-        "/api/modules/install",
-        Some(json!({"module":"people","approve":true,"version":"0.0.1-stale"})),
-        Some(&cookie),
-    );
-    assert_eq!(
-        status, 422,
-        "approval of a different version is refused: {stale}"
-    );
-    let (status, body) = api(
-        Method::POST,
-        "/api/modules/install",
-        Some(json!({"module":"people","approve":true,"version":people_version})),
-        Some(&cookie),
-    );
+    let (status, refused) = api(Method::POST, "/api/modules/install", Some(json!({"module":"people"})), Some(&cookie));
+    assert_eq!(status, 422, "without approval the installer refuses: {refused}");
+    let (status, no_version) = api(Method::POST, "/api/modules/install", Some(json!({"module":"people","approve":true})), Some(&cookie));
+    assert_eq!(status, 400, "approval must name the reviewed version: {no_version}");
+    let (status, stale) = api(Method::POST, "/api/modules/install", Some(json!({"module":"people","approve":true,"version":"0.0.1-stale"})), Some(&cookie));
+    assert_eq!(status, 422, "approval of a different version is refused: {stale}");
+    let (status, body) = api(Method::POST, "/api/modules/install", Some(json!({"module":"people","approve":true,"version":people_version})), Some(&cookie));
     assert_eq!(status, 200, "{body}\n{}", log("server.log"));
-    let (status, bad) = api(
-        Method::POST,
-        "/api/modules/install",
-        Some(json!({"module":"--approve","approve":true,"version":"1.0.0"})),
-        Some(&cookie),
-    );
+    let (status, bad) = api(Method::POST, "/api/modules/install", Some(json!({"module":"--approve","approve":true,"version":"1.0.0"})), Some(&cookie));
     assert_eq!(status, 400, "{bad}");
     let (_, after) = api(Method::GET, "/api/modules", None, Some(&cookie));
-    assert!(
-        after["modules"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|m| m["id"] == "people" && m["installed"] == true),
-        "{after}"
-    );
+    assert!(after["modules"].as_array().unwrap().iter().any(|m| m["id"] == "people" && m["installed"] == true), "{after}");
     let owner_folder = {
-        let stored: Value =
-            serde_json::from_slice(&fs::read(root.join("modules.json")).unwrap()).unwrap();
-        root.join("notes")
-            .join(stored["admin_user_id"].as_str().expect("owner recorded"))
+        let stored: Value = serde_json::from_slice(&fs::read(root.join("modules.json")).unwrap()).unwrap();
+        root.join("notes").join(stored["admin_user_id"].as_str().expect("owner recorded"))
     };
     let deadline = Instant::now() + Duration::from_secs(30);
     let (mut status, mut list) = call(Method::GET, "/people", None);
     while status != 200 {
-        assert!(
-            Instant::now() < deadline,
-            "not served after install: {status} {list}\n{}",
-            log("server.log")
-        );
+        assert!(Instant::now() < deadline, "not served after install: {status} {list}\n{}", log("server.log"));
         std::thread::sleep(Duration::from_millis(500));
         (status, list) = call(Method::GET, "/people", None);
     }
-    let saved = call(
-        Method::PUT,
-        "/people/notes-settings",
-        Some(json!({"folder": owner_folder})),
-    );
+    let saved = call(Method::PUT, "/people/notes-settings", Some(json!({"folder": owner_folder})));
     assert_eq!(saved.0, 200, "{}\n{}", saved.1, log("server.log"));
-    let created = call(
-        Method::POST,
-        "/people",
-        Some(json!({"displayName":"Ada Lovelace"})),
-    );
+    let created = call(Method::POST, "/people", Some(json!({"displayName":"Ada Lovelace"})));
     assert_eq!(created.0, 200, "{}\n{}", created.1, log("server.log"));
     println!("PASS owner installed People through the app endpoints: prompt shown, unapproved install refused, approved install served by the running server");
     println!("NOT PROVEN: a non-owner account refused over HTTP, native UI, remote registry");

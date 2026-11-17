@@ -166,12 +166,7 @@ mod tests {
         }
         let mut c = Connection::new(Shared(sink.clone()), Cursor::new(incoming.to_vec()));
         let answer = c
-            .call(
-                "X.y",
-                json!({"a":1}),
-                Some("s1"),
-                Instant::now() + Duration::from_secs(2),
-            )
+            .call("X.y", json!({"a":1}), Some("s1"), Instant::now() + Duration::from_secs(2))
             .unwrap();
         assert_eq!(answer, json!({"x":2}));
         let sent = sink.lock().unwrap().clone();
@@ -179,14 +174,8 @@ mod tests {
         let sent: Value = serde_json::from_slice(&sent[..sent.len() - 1]).unwrap();
         assert_eq!(sent["method"], "X.y");
         assert_eq!(sent["sessionId"], "s1");
-        assert_eq!(
-            c.next_event(Duration::from_secs(1)).unwrap().unwrap()["method"],
-            "A"
-        );
-        assert_eq!(
-            c.next_event(Duration::from_secs(1)).unwrap().unwrap()["method"],
-            "B"
-        );
+        assert_eq!(c.next_event(Duration::from_secs(1)).unwrap().unwrap()["method"], "A");
+        assert_eq!(c.next_event(Duration::from_secs(1)).unwrap().unwrap()["method"], "B");
     }
 
     #[test]

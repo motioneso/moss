@@ -114,18 +114,10 @@ impl GoogleStandIn {
             .route("/gmail/v1/users/me/messages/{id}", get(get_message))
             .route("/gmail/v1/users/me/history", get(history))
             .route("/calendar/v3/users/me/calendarList", get(calendar_list))
-            .route(
-                "/calendar/v3/calendars/{cal}/events",
-                get(list_events).post(insert_event),
-            )
-            .route(
-                "/calendar/v3/calendars/{cal}/events/{id}",
-                delete(delete_event).patch(patch_event),
-            )
+            .route("/calendar/v3/calendars/{cal}/events", get(list_events).post(insert_event))
+            .route("/calendar/v3/calendars/{cal}/events/{id}", delete(delete_event).patch(patch_event))
             .with_state(state.clone());
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-            .await
-            .expect("bind google");
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("bind google");
         let addr = listener.local_addr().unwrap();
         let task = tokio::spawn(async move {
             let _ = axum::serve(listener, app).await;
@@ -207,8 +199,7 @@ impl GoogleStandIn {
             }
             s.history_id += 1;
             let hid = s.history_id;
-            s.changes
-                .push((hid, Change::LabelsAdded(id.into(), vec![label.into()])));
+            s.changes.push((hid, Change::LabelsAdded(id.into(), vec![label.into()])));
         })
     }
 
@@ -271,12 +262,7 @@ impl GoogleStandIn {
 }
 
 fn json_response(status: u16, body: String) -> Response {
-    (
-        StatusCode::from_u16(status).unwrap(),
-        [(header::CONTENT_TYPE, "application/json; charset=UTF-8")],
-        body,
-    )
-        .into_response()
+    (StatusCode::from_u16(status).unwrap(), [(header::CONTENT_TYPE, "application/json; charset=UTF-8")], body).into_response()
 }
 
 fn api_error(status: u16, body: &str, extra: &[(&'static str, &str)]) -> Response {
@@ -295,20 +281,10 @@ fn guard(st: &Shared, method: &str, path: &str, headers: &HeaderMap) -> Result<(
         s.rate_limit_left -= 1;
         return Err(api_error(429, fx::ERROR_429, &[("retry-after", "7")]));
     }
-    let token = headers
-        .get(header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "));
+    let token = headers.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()).and_then(|v| v.strip_prefix("Bearer "));
     match token {
         Some(t) if s.access_tokens.get(t) == Some(&true) => Ok(()),
-        _ => Err(api_error(
-            401,
-            fx::ERROR_401,
-            &[(
-                "www-authenticate",
-                "Bearer realm=\"https://accounts.google.com/\", error=invalid_token",
-            )],
-        )),
+        _ => Err(api_error(401, fx::ERROR_401, &[("www-authenticate", "Bearer realm=\"https://accounts.google.com/\", error=invalid_token")])),
     }
 }
 
@@ -331,14 +307,7 @@ async fn token(State(st): State<Shared>, body: Bytes) -> Response {
     let mut s = st.lock().unwrap();
     let get = |k: &str| form.get(k).cloned().unwrap_or_default();
     if get("client_id") != s.cfg.client_id || get("client_secret") != s.cfg.client_secret {
-        return api_error(
-            401,
-            fx::ERROR_TOKEN_BAD_CLIENT,
-            &[(
-                "www-authenticate",
-                "Bearer realm=\"https://accounts.google.com/\"",
-            )],
-        );
+        return api_error(401, fx::ERROR_TOKEN_BAD_CLIENT, &[("www-authenticate", "Bearer realm=\"https://accounts.google.com/\"")]);
     }
     match get("grant_type").as_str() {
         "authorization_code" => {
@@ -346,19 +315,10 @@ async fn token(State(st): State<Shared>, body: Bytes) -> Response {
                 return json_response(400, fx::ERROR_TOKEN_BAD_CODE.into());
             }
             s.counter += 1;
-            let (access, refresh) = (
-                format!("ya29.fake-access-{}", s.counter),
-                format!("1//fake-refresh-{}", s.counter),
-            );
+            let (access, refresh) = (format!("ya29.fake-access-{}", s.counter), format!("1//fake-refresh-{}", s.counter));
             s.access_tokens.insert(access.clone(), true);
             s.refresh_tokens.insert(refresh.clone(), false);
-            json_response(
-                200,
-                fill(
-                    fx::TOKEN_AUTHORIZATION_CODE,
-                    &[("ACCESS_TOKEN", &access), ("REFRESH_TOKEN", &refresh)],
-                ),
-            )
+            json_response(200, fill(fx::TOKEN_AUTHORIZATION_CODE, &[("ACCESS_TOKEN", &access), ("REFRESH_TOKEN", &refresh)]))
         }
         "refresh_token" => match s.refresh_tokens.get(&get("refresh_token")) {
             Some(false) => {
@@ -370,10 +330,7 @@ async fn token(State(st): State<Shared>, body: Bytes) -> Response {
             Some(true) => json_response(400, fx::ERROR_TOKEN_REVOKED.into()),
             None => json_response(400, fx::ERROR_TOKEN_BAD_CODE.into()),
         },
-        other => json_response(
-            400,
-            fill(fx::ERROR_UNSUPPORTED_GRANT, &[("GRANT_TYPE", other)]),
-        ),
+        other => json_response(400, fill(fx::ERROR_UNSUPPORTED_GRANT, &[("GRANT_TYPE", other)])),
     }
 }
 
@@ -383,9 +340,7 @@ fn url_decode(s: &str) -> String {
     let mut i = 0;
     while i < b.len() {
         if b[i] == b'%' && i + 2 < b.len() {
-            if let Ok(v) =
-                u8::from_str_radix(std::str::from_utf8(&b[i + 1..i + 3]).unwrap_or("zz"), 16)
-            {
+            if let Ok(v) = u8::from_str_radix(std::str::from_utf8(&b[i + 1..i + 3]).unwrap_or("zz"), 16) {
                 out.push(v);
                 i += 3;
                 continue;
@@ -408,32 +363,15 @@ async fn profile(State(st): State<Shared>, h: HeaderMap) -> Response {
     )
 }
 
-async fn list_messages(
-    State(st): State<Shared>,
-    h: HeaderMap,
-    Query(q): Query<HashMap<String, String>>,
-) -> Response {
+async fn list_messages(State(st): State<Shared>, h: HeaderMap, Query(q): Query<HashMap<String, String>>) -> Response {
     guarded!(st, "GET", "/gmail/v1/users/me/messages", h);
     let s = st.lock().unwrap();
-    let max: usize = q
-        .get("maxResults")
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(100);
+    let max: usize = q.get("maxResults").and_then(|v| v.parse().ok()).unwrap_or(100);
     let start: usize = q.get("pageToken").and_then(|v| v.parse().ok()).unwrap_or(0);
     let label = q.get("labelIds");
     // Newest first, like Gmail.
-    let all: Vec<&GMessage> = s
-        .messages
-        .iter()
-        .rev()
-        .filter(|m| label.is_none_or(|l| m.labels.contains(l)))
-        .collect();
-    let page: Vec<Value> = all
-        .iter()
-        .skip(start)
-        .take(max)
-        .map(|m| json!({"id": m.id, "threadId": m.thread_id}))
-        .collect();
+    let all: Vec<&GMessage> = s.messages.iter().rev().filter(|m| label.is_none_or(|l| m.labels.contains(l))).collect();
+    let page: Vec<Value> = all.iter().skip(start).take(max).map(|m| json!({"id": m.id, "threadId": m.thread_id})).collect();
     let mut body = json!({"resultSizeEstimate": all.len()});
     if !page.is_empty() {
         body["messages"] = Value::Array(page);
@@ -444,12 +382,7 @@ async fn list_messages(
     json_response(200, body.to_string())
 }
 
-async fn get_message(
-    State(st): State<Shared>,
-    h: HeaderMap,
-    Path(id): Path<String>,
-    Query(q): Query<HashMap<String, String>>,
-) -> Response {
+async fn get_message(State(st): State<Shared>, h: HeaderMap, Path(id): Path<String>, Query(q): Query<HashMap<String, String>>) -> Response {
     guarded!(st, "GET", "/gmail/v1/users/me/messages/{id}", h);
     let s = st.lock().unwrap();
     let Some(m) = s.messages.iter().find(|m| m.id == id) else {
@@ -471,27 +404,10 @@ fn message_json(m: &GMessage, format: &str, history_id: u64) -> Value {
             headers.push((k.trim().into(), v.trim().into()));
         }
     }
-    let ctype = headers
-        .iter()
-        .find(|(k, _)| k.eq_ignore_ascii_case("content-type"))
-        .map(|(_, v)| v.clone())
-        .unwrap_or_else(|| "text/plain".into());
-    let header_json: Vec<Value> = headers
-        .iter()
-        .map(|(k, v)| json!({"name": k, "value": v}))
-        .collect();
-    let text_body = if ctype.starts_with("multipart/") {
-        first_text_part(&ctype, body)
-    } else {
-        body.to_string()
-    };
-    let snippet: String = text_body
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .chars()
-        .take(100)
-        .collect();
+    let ctype = headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("content-type")).map(|(_, v)| v.clone()).unwrap_or_else(|| "text/plain".into());
+    let header_json: Vec<Value> = headers.iter().map(|(k, v)| json!({"name": k, "value": v})).collect();
+    let text_body = if ctype.starts_with("multipart/") { first_text_part(&ctype, body) } else { body.to_string() };
+    let snippet: String = text_body.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(100).collect();
     let mut out = json!({
         "id": m.id, "threadId": m.thread_id, "labelIds": m.labels,
         "snippet": snippet, "sizeEstimate": m.raw.len(),
@@ -527,22 +443,11 @@ fn message_json(m: &GMessage, format: &str, history_id: u64) -> Value {
 }
 
 fn mime_of(content_type: &str) -> String {
-    content_type
-        .split(';')
-        .next()
-        .unwrap_or("text/plain")
-        .trim()
-        .to_string()
+    content_type.split(';').next().unwrap_or("text/plain").trim().to_string()
 }
 
 fn split_parts(ctype: &str, body: &str) -> Vec<(String, String)> {
-    let Some(boundary) = ctype
-        .split("boundary=")
-        .nth(1)
-        .map(|b| b.trim_matches(['"', ' ', ';']))
-    else {
-        return vec![];
-    };
+    let Some(boundary) = ctype.split("boundary=").nth(1).map(|b| b.trim_matches(['"', ' ', ';'])) else { return vec![] };
     let marker = format!("--{boundary}");
     body.split(&marker)
         .skip(1)
@@ -550,28 +455,17 @@ fn split_parts(ctype: &str, body: &str) -> Vec<(String, String)> {
         .filter_map(|p| {
             let p = p.trim_start_matches("\r\n");
             let (ph, pb) = p.split_once("\r\n\r\n")?;
-            let ct = ph
-                .lines()
-                .find_map(|l| l.strip_prefix("Content-Type: "))?
-                .to_string();
+            let ct = ph.lines().find_map(|l| l.strip_prefix("Content-Type: "))?.to_string();
             Some((ct, pb.trim_end_matches("\r\n").to_string()))
         })
         .collect()
 }
 
 fn first_text_part(ctype: &str, body: &str) -> String {
-    split_parts(ctype, body)
-        .into_iter()
-        .find(|(c, _)| c.starts_with("text/plain"))
-        .map(|(_, b)| b)
-        .unwrap_or_default()
+    split_parts(ctype, body).into_iter().find(|(c, _)| c.starts_with("text/plain")).map(|(_, b)| b).unwrap_or_default()
 }
 
-async fn history(
-    State(st): State<Shared>,
-    h: HeaderMap,
-    Query(q): Query<HashMap<String, String>>,
-) -> Response {
+async fn history(State(st): State<Shared>, h: HeaderMap, Query(q): Query<HashMap<String, String>>) -> Response {
     guarded!(st, "GET", "/gmail/v1/users/me/history", h);
     let s = st.lock().unwrap();
     let Some(start) = q.get("startHistoryId").and_then(|v| v.parse::<u64>().ok()) else {
@@ -583,24 +477,13 @@ async fn history(
     let mut records: Vec<Value> = Vec::new();
     for (hid, change) in s.changes.iter().filter(|(hid, _)| *hid > start) {
         let msg_ref = |id: &str| {
-            let labels = s
-                .messages
-                .iter()
-                .find(|m| m.id == id)
-                .map(|m| m.labels.clone())
-                .unwrap_or_default();
+            let labels = s.messages.iter().find(|m| m.id == id).map(|m| m.labels.clone()).unwrap_or_default();
             json!({"id": id, "threadId": id, "labelIds": labels})
         };
         let rec = match change {
-            Change::Added(id) => {
-                json!({"id": hid.to_string(), "messages": [{"id": id, "threadId": id}], "messagesAdded": [{"message": msg_ref(id)}]})
-            }
-            Change::Deleted(id) => {
-                json!({"id": hid.to_string(), "messages": [{"id": id, "threadId": id}], "messagesDeleted": [{"message": {"id": id, "threadId": id}}]})
-            }
-            Change::LabelsAdded(id, l) => {
-                json!({"id": hid.to_string(), "messages": [{"id": id, "threadId": id}], "labelsAdded": [{"message": msg_ref(id), "labelIds": l}]})
-            }
+            Change::Added(id) => json!({"id": hid.to_string(), "messages": [{"id": id, "threadId": id}], "messagesAdded": [{"message": msg_ref(id)}]}),
+            Change::Deleted(id) => json!({"id": hid.to_string(), "messages": [{"id": id, "threadId": id}], "messagesDeleted": [{"message": {"id": id, "threadId": id}}]}),
+            Change::LabelsAdded(id, l) => json!({"id": hid.to_string(), "messages": [{"id": id, "threadId": id}], "labelsAdded": [{"message": msg_ref(id), "labelIds": l}]}),
         };
         records.push(rec);
     }
@@ -617,19 +500,12 @@ async fn send(State(st): State<Shared>, h: HeaderMap, body: Bytes) -> Response {
     let raw = parsed
         .as_ref()
         .and_then(|v| v.get("raw")?.as_str())
-        .and_then(|r| {
-            URL_SAFE_NO_PAD
-                .decode(r.trim_end_matches('='))
-                .ok()
-                .or_else(|| STANDARD.decode(r).ok())
-        })
+        .and_then(|r| URL_SAFE_NO_PAD.decode(r.trim_end_matches('=')).ok().or_else(|| STANDARD.decode(r).ok()))
         .and_then(|b| String::from_utf8(b).ok());
     let Some(raw) = raw else {
         return json_response(400, fx::ERROR_400_INVALID_RAW.into());
     };
-    let thread = parsed
-        .as_ref()
-        .and_then(|v| v.get("threadId")?.as_str().map(String::from));
+    let thread = parsed.as_ref().and_then(|v| v.get("threadId")?.as_str().map(String::from));
     let mut s = st.lock().unwrap();
     s.counter += 1;
     let id = format!("18c3f2a1b4d5e{:03x}", 0x6f7 + s.counter);
@@ -638,18 +514,9 @@ async fn send(State(st): State<Shared>, h: HeaderMap, body: Bytes) -> Response {
     let hid = s.history_id;
     s.changes.push((hid, Change::Added(id.clone())));
     let internal_ms = 1_772_442_900_000 + s.counter * 60_000;
-    s.messages.push(GMessage {
-        id: id.clone(),
-        thread_id: thread.clone(),
-        labels: vec!["SENT".into()],
-        raw: raw.clone(),
-        internal_ms,
-    });
+    s.messages.push(GMessage { id: id.clone(), thread_id: thread.clone(), labels: vec!["SENT".into()], raw: raw.clone(), internal_ms });
     s.sent.push(raw);
-    json_response(
-        200,
-        json!({"id": id, "threadId": thread, "labelIds": ["SENT"]}).to_string(),
-    )
+    json_response(200, json!({"id": id, "threadId": thread, "labelIds": ["SENT"]}).to_string())
 }
 
 async fn create_draft(State(st): State<Shared>, h: HeaderMap, body: Bytes) -> Response {
@@ -672,8 +539,7 @@ async fn create_draft(State(st): State<Shared>, h: HeaderMap, body: Bytes) -> Re
     let thread = thread.unwrap_or_else(|| message_id.clone());
     json_response(
         200,
-        json!({"id": id, "message": {"id": message_id, "threadId": thread, "labelIds": ["DRAFT"]}})
-            .to_string(),
+        json!({"id": id, "message": {"id": message_id, "threadId": thread, "labelIds": ["DRAFT"]}}).to_string(),
     )
 }
 
@@ -681,31 +547,16 @@ async fn create_draft(State(st): State<Shared>, h: HeaderMap, body: Bytes) -> Re
 async fn free_busy(State(st): State<Shared>, h: HeaderMap, body: Bytes) -> Response {
     guarded!(st, "POST", "/calendar/v3/freeBusy", h);
     let input: Value = serde_json::from_slice(&body).unwrap_or(Value::Null);
-    let (min, max) = (
-        input["timeMin"].as_str().unwrap_or(""),
-        input["timeMax"].as_str().unwrap_or(""),
-    );
-    let id = input["items"][0]["id"]
-        .as_str()
-        .unwrap_or("primary")
-        .to_string();
+    let (min, max) = (input["timeMin"].as_str().unwrap_or(""), input["timeMax"].as_str().unwrap_or(""));
+    let id = input["items"][0]["id"].as_str().unwrap_or("primary").to_string();
     let s = st.lock().unwrap();
     let busy: Vec<Value> = s
         .events
         .iter()
         .filter_map(|e| {
-            let (a, b) = (
-                e["start"]["dateTime"].as_str()?,
-                e["end"]["dateTime"].as_str()?,
-            );
-            let (pa, pb) = (
-                chrono::DateTime::parse_from_rfc3339(a).ok()?,
-                chrono::DateTime::parse_from_rfc3339(b).ok()?,
-            );
-            let (lo, hi) = (
-                chrono::DateTime::parse_from_rfc3339(min).ok()?,
-                chrono::DateTime::parse_from_rfc3339(max).ok()?,
-            );
+            let (a, b) = (e["start"]["dateTime"].as_str()?, e["end"]["dateTime"].as_str()?);
+            let (pa, pb) = (chrono::DateTime::parse_from_rfc3339(a).ok()?, chrono::DateTime::parse_from_rfc3339(b).ok()?);
+            let (lo, hi) = (chrono::DateTime::parse_from_rfc3339(min).ok()?, chrono::DateTime::parse_from_rfc3339(max).ok()?);
             (pa < hi && pb > lo).then(|| json!({"start": a, "end": b}))
         })
         .collect();
@@ -723,18 +574,10 @@ async fn calendar_list(State(st): State<Shared>, h: HeaderMap) -> Response {
     json_response(200, fx::CALENDAR_LIST.replace("bob@example.com", &email))
 }
 
-async fn list_events(
-    State(st): State<Shared>,
-    h: HeaderMap,
-    Path(_cal): Path<String>,
-    Query(q): Query<HashMap<String, String>>,
-) -> Response {
+async fn list_events(State(st): State<Shared>, h: HeaderMap, Path(_cal): Path<String>, Query(q): Query<HashMap<String, String>>) -> Response {
     guarded!(st, "GET", "/calendar/v3/calendars/{cal}/events", h);
     let s = st.lock().unwrap();
-    let max: usize = q
-        .get("maxResults")
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(250);
+    let max: usize = q.get("maxResults").and_then(|v| v.parse().ok()).unwrap_or(250);
     let start: usize = q.get("pageToken").and_then(|v| v.parse().ok()).unwrap_or(0);
     let mut body: Value = serde_json::from_str(fx::CALENDAR_EVENTS_LIST).unwrap();
     body["summary"] = json!(s.cfg.email);
@@ -747,12 +590,7 @@ async fn list_events(
     json_response(200, body.to_string())
 }
 
-async fn insert_event(
-    State(st): State<Shared>,
-    h: HeaderMap,
-    Path(_cal): Path<String>,
-    body: Bytes,
-) -> Response {
+async fn insert_event(State(st): State<Shared>, h: HeaderMap, Path(_cal): Path<String>, body: Bytes) -> Response {
     guarded!(st, "POST", "/calendar/v3/calendars/{cal}/events", h);
     let Ok(input) = serde_json::from_slice::<Value>(&body) else {
         return json_response(400, fx::ERROR_400_INVALID_RAW.into());
@@ -769,10 +607,7 @@ async fn insert_event(
     let id = format!("fakeevent{:04}", s.counter);
     ev["id"] = json!(id);
     ev["iCalUID"] = json!(format!("{id}@google.com"));
-    ev["htmlLink"] = json!(format!(
-        "https://www.google.com/calendar/event?eid={}",
-        URL_SAFE_NO_PAD.encode(&id)
-    ));
+    ev["htmlLink"] = json!(format!("https://www.google.com/calendar/event?eid={}", URL_SAFE_NO_PAD.encode(&id)));
     ev["creator"]["email"] = json!(s.cfg.email);
     ev["organizer"]["email"] = json!(s.cfg.email);
     for (k, v) in input.as_object().cloned().unwrap_or_default() {
@@ -782,12 +617,7 @@ async fn insert_event(
     json_response(200, ev.to_string())
 }
 
-async fn patch_event(
-    State(st): State<Shared>,
-    h: HeaderMap,
-    Path((_cal, id)): Path<(String, String)>,
-    body: Bytes,
-) -> Response {
+async fn patch_event(State(st): State<Shared>, h: HeaderMap, Path((_cal, id)): Path<(String, String)>, body: Bytes) -> Response {
     guarded!(st, "PATCH", "/calendar/v3/calendars/{cal}/events/{id}", h);
     let mut s = st.lock().unwrap();
     if s.deleted_events.contains(&id) {
@@ -805,11 +635,7 @@ async fn patch_event(
     json_response(200, ev.to_string())
 }
 
-async fn delete_event(
-    State(st): State<Shared>,
-    h: HeaderMap,
-    Path((_cal, id)): Path<(String, String)>,
-) -> Response {
+async fn delete_event(State(st): State<Shared>, h: HeaderMap, Path((_cal, id)): Path<(String, String)>) -> Response {
     guarded!(st, "DELETE", "/calendar/v3/calendars/{cal}/events/{id}", h);
     let mut s = st.lock().unwrap();
     if s.deleted_events.contains(&id) {

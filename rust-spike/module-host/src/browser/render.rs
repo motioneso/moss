@@ -128,20 +128,11 @@ impl Shared {
         if list {
             params["allowedHosts"] = json!(self.allowed);
         }
-        if let Some(accept) = job
-            .accept
-            .as_ref()
-            .filter(|a| a.len() <= 200 && a.is_ascii())
-        {
+        if let Some(accept) = job.accept.as_ref().filter(|a| a.len() <= 200 && a.is_ascii()) {
             params["accept"] = json!(accept);
         }
         let answer = self.web.fetch_for_browser(&params, remaining);
-        trace!(
-            "served {} ok={} reason={}",
-            job.url,
-            answer["ok"],
-            answer["reason"]
-        );
+        trace!("served {} ok={} reason={}", job.url, answer["ok"], answer["reason"]);
         let good = answer["ok"] == true;
         // A download that was thrown away or cut short counts at full size, because how much
         // arrived is unknown. Refusals made before any download and HTTP error answers count zero.
@@ -150,19 +141,13 @@ impl Shared {
             Some("response_too_large" | "invalid_response" | "unsupported_content_type")
         ) || matches!(answer["reason"].as_str(), Some("network" | "timeout"));
         let used = if good {
-            answer
-                .get("body")
-                .and_then(Value::as_str)
-                .map_or(0, |b| b.len() / 4 * 3)
+            answer.get("body").and_then(Value::as_str).map_or(0, |b| b.len() / 4 * 3)
         } else if dropped {
             MAX_RESPONSE_BYTES
         } else {
             0
         };
-        self.bytes.fetch_sub(
-            MAX_RESPONSE_BYTES - used.min(MAX_RESPONSE_BYTES),
-            Ordering::SeqCst,
-        );
+        self.bytes.fetch_sub(MAX_RESPONSE_BYTES - used.min(MAX_RESPONSE_BYTES), Ordering::SeqCst);
         self.finish(job, &answer, good);
     }
 
@@ -184,14 +169,11 @@ impl Shared {
         }
         if good {
             let body = answer.get("body").and_then(Value::as_str).unwrap_or("");
-            let content_type =
-                answer["contentType"]
-                    .as_str()
-                    .unwrap_or(if job.kind == "Document" {
-                        "text/html"
-                    } else {
-                        "application/octet-stream"
-                    });
+            let content_type = answer["contentType"].as_str().unwrap_or(if job.kind == "Document" {
+                "text/html"
+            } else {
+                "application/octet-stream"
+            });
             let _ = self.writer.send(
                 "Fetch.fulfillRequest",
                 json!({
@@ -291,17 +273,9 @@ fn drive(
     )
     .map_err(failed)?;
     let target = conn
-        .call(
-            "Target.createTarget",
-            json!({"url":"about:blank"}),
-            None,
-            deadline,
-        )
+        .call("Target.createTarget", json!({"url":"about:blank"}), None, deadline)
         .map_err(failed)?;
-    let target_id = target["targetId"]
-        .as_str()
-        .ok_or(Reason::RenderFailed)?
-        .to_owned();
+    let target_id = target["targetId"].as_str().ok_or(Reason::RenderFailed)?.to_owned();
     let attached = conn
         .call(
             "Target.attachToTarget",
@@ -341,17 +315,12 @@ fn drive(
         if now >= deadline {
             return Err(Reason::Timeout);
         }
-        if matches!(
-            *shared.document.lock().expect("document slot"),
-            Some((_, Err(())))
-        ) {
+        if matches!(*shared.document.lock().expect("document slot"), Some((_, Err(())))) {
             return Err(Reason::RenderFailed);
         }
         let quiet_for = now
             .duration_since(shared.started)
-            .saturating_sub(Duration::from_millis(
-                shared.last_activity_ms.load(Ordering::SeqCst),
-            ));
+            .saturating_sub(Duration::from_millis(shared.last_activity_ms.load(Ordering::SeqCst)));
         if loaded
             && ((shared.inflight.load(Ordering::SeqCst) == 0 && quiet_for >= QUIET)
                 || now >= settle_by)
@@ -361,15 +330,7 @@ fn drive(
         let Some(event) = conn.next_event(Duration::from_millis(50)).map_err(failed)? else {
             continue;
         };
-        trace!(
-            "event {} {}",
-            event["method"],
-            event["params"]
-                .to_string()
-                .chars()
-                .take(300)
-                .collect::<String>()
-        );
+        trace!("event {} {}", event["method"], event["params"].to_string().chars().take(300).collect::<String>());
         let event_session = event["sessionId"].as_str().map(str::to_owned);
         let params = &event["params"];
         match event["method"].as_str().unwrap_or("") {
@@ -422,11 +383,7 @@ fn drive(
                             json!({"patterns":[{"urlPattern":"*"}]}),
                             Some(child),
                         );
-                        let _ = conn.writer.send(
-                            "Runtime.runIfWaitingForDebugger",
-                            json!({}),
-                            Some(child),
-                        );
+                        let _ = conn.writer.send("Runtime.runIfWaitingForDebugger", json!({}), Some(child));
                     }
                 }
             }
@@ -437,9 +394,7 @@ fn drive(
     let tree = conn
         .call("Page.getFrameTree", json!({}), s, deadline)
         .map_err(timed)?;
-    let frame = tree["frameTree"]["frame"]["id"]
-        .as_str()
-        .ok_or(Reason::RenderFailed)?;
+    let frame = tree["frameTree"]["frame"]["id"].as_str().ok_or(Reason::RenderFailed)?;
     let world = conn
         .call(
             "Page.createIsolatedWorld",
@@ -461,9 +416,7 @@ fn drive(
             deadline,
         )
         .map_err(timed)?;
-    let raw = read["result"]["value"]
-        .as_str()
-        .ok_or(Reason::RenderFailed)?;
+    let raw = read["result"]["value"].as_str().ok_or(Reason::RenderFailed)?;
     let evidence = evidence::parse(raw, &page.allowed_hosts).ok_or(Reason::RenderFailed)?;
     let final_url = match shared.document.lock().expect("document slot").clone() {
         Some((_, Ok(url))) if approved(&url, &page.allowed_hosts) => url,

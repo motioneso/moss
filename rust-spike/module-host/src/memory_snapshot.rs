@@ -88,10 +88,7 @@ pub(crate) fn managed(
     actor_generation: i32,
     sources: Vec<Source>,
 ) -> Result<Snapshot> {
-    anyhow::ensure!(
-        matches!(side, "personal" | "work"),
-        "Invalid managed snapshot side"
-    );
+    anyhow::ensure!(matches!(side, "personal" | "work"), "Invalid managed snapshot side");
     anyhow::ensure!(sources.len() <= 2048, "Too many represented sources");
     let owner = owner.to_string().to_ascii_lowercase();
     let mut keyed = BTreeMap::new();
@@ -154,10 +151,7 @@ mod tests {
     #[test]
     fn identities_match_the_typescript_values() {
         let owner = Uuid::parse_str(OWNER).unwrap();
-        assert_eq!(
-            destination_id("/vault/notes/generated/a/v1.md"),
-            DESTINATION
-        );
+        assert_eq!(destination_id("/vault/notes/generated/a/v1.md"), DESTINATION);
         assert_eq!(digest("", "hello"), CONTENT);
         let plain = unmanaged(owner, DESTINATION.into(), CONTENT.into());
         assert_eq!(
@@ -170,16 +164,8 @@ mod tests {
             id: Uuid::nil().to_string(),
             generation: 1,
         };
-        let labelled = managed(
-            owner,
-            DESTINATION.into(),
-            CONTENT.into(),
-            2,
-            "work",
-            3,
-            vec![source],
-        )
-        .unwrap();
+        let labelled =
+            managed(owner, DESTINATION.into(), CONTENT.into(), 2, "work", 3, vec![source]).unwrap();
         assert_eq!(
             labelled.key,
             "84800718ec1f1f659b63843325818e419d4e2a98748a50a418c74da997603f36"
@@ -194,36 +180,12 @@ mod tests {
             id: Uuid::nil().to_string(),
             generation: 1,
         };
-        let base = managed(
-            owner,
-            "a".repeat(64),
-            "b".repeat(64),
-            1,
-            "work",
-            3,
-            vec![source.clone()],
-        )
-        .unwrap();
-        let moved = managed(
-            owner,
-            "a".repeat(64),
-            "b".repeat(64),
-            2,
-            "work",
-            3,
-            vec![source.clone()],
-        )
-        .unwrap();
-        let flipped = managed(
-            owner,
-            "a".repeat(64),
-            "b".repeat(64),
-            1,
-            "personal",
-            3,
-            vec![source],
-        )
-        .unwrap();
+        let base = managed(owner, "a".repeat(64), "b".repeat(64), 1, "work", 3, vec![source.clone()])
+            .unwrap();
+        let moved = managed(owner, "a".repeat(64), "b".repeat(64), 2, "work", 3, vec![source.clone()])
+            .unwrap();
+        let flipped = managed(owner, "a".repeat(64), "b".repeat(64), 1, "personal", 3, vec![source])
+            .unwrap();
         assert_ne!(base.key, moved.key);
         assert_ne!(base.key, flipped.key);
     }
@@ -231,9 +193,7 @@ mod tests {
     #[test]
     fn block_check_requires_one_intact_pair() {
         let id = "c".repeat(64);
-        let bytes = format!(
-            "\n<!-- moss-recording:v1:{id}:begin -->\nhi\n<!-- moss-recording:v1:{id}:end -->\n"
-        );
+        let bytes = format!("\n<!-- moss-recording:v1:{id}:begin -->\nhi\n<!-- moss-recording:v1:{id}:end -->\n");
         assert!(block_unchanged(&bytes, &id, &bytes));
         assert!(!block_unchanged("nothing", &id, &bytes));
         let doubled = format!("{bytes}{bytes}");

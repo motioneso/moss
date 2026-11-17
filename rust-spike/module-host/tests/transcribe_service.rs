@@ -52,23 +52,13 @@ impl EmbeddingStore for NoEmbeddings {
 struct NoAi;
 #[async_trait::async_trait]
 impl moss_platform_routing::ConfigurationStore for NoAi {
-    async fn for_actor(
-        &self,
-        _: Actor,
-    ) -> std::result::Result<moss_platform_routing::Configuration, moss_platform_contracts::Error>
-    {
+    async fn for_actor(&self, _: Actor) -> std::result::Result<moss_platform_routing::Configuration, moss_platform_contracts::Error> {
         Ok(Default::default())
     }
 }
 #[async_trait::async_trait]
 impl moss_platform_routing::CapabilityTransport for NoAi {
-    async fn generate(
-        &self,
-        _: Actor,
-        _: &moss_platform_routing::Model,
-        _: &[moss_platform_routing::Turn],
-        _: u32,
-    ) -> std::result::Result<String, moss_platform_contracts::Error> {
+    async fn generate(&self, _: Actor, _: &moss_platform_routing::Model, _: &[moss_platform_routing::Turn], _: u32) -> std::result::Result<String, moss_platform_contracts::Error> {
         Err(moss_platform_contracts::Error::Unavailable)
     }
 }
@@ -77,10 +67,7 @@ struct Rows(Mutex<Vec<String>>);
 #[async_trait::async_trait]
 impl EmbeddingActivity for Rows {
     async fn record(&self, call: EmbeddingCall) {
-        self.0.lock().unwrap().push(format!(
-            "{}|{}|{}|{}",
-            call.model, call.action, call.outcome, call.result
-        ));
+        self.0.lock().unwrap().push(format!("{}|{}|{}|{}", call.model, call.action, call.outcome, call.result));
     }
 }
 
@@ -120,21 +107,11 @@ fn fixture(base: Option<&str>) -> Fixture {
         resources: ["audio".into()].into(),
         allow_private: false,
     });
-    Fixture {
-        _data: data,
-        services,
-        manifest,
-        host: Host::new(Limits::default()).unwrap(),
-        rows,
-        route,
-    }
+    Fixture { _data: data, services, manifest, host: Host::new(Limits::default()).unwrap(), rows, route }
 }
 impl Fixture {
     fn call(&self, operation: &str, parameters: Value) -> Result<Value> {
-        let wasm = wat::parse_str(
-            include_str!("../sample/module.wat")
-                .replace("moss:module/kv@", "moss:module/transcribe@"),
-        )?;
+        let wasm = wat::parse_str(include_str!("../sample/module.wat").replace("moss:module/kv@", "moss:module/transcribe@"))?;
         let request = json!({"operation":operation,"resource":"audio","parameters":parameters});
         let out = self.host.call(
             &wasm,
@@ -147,14 +124,10 @@ impl Fixture {
         Ok(serde_json::from_str(&out)?)
     }
     fn route_digest(&self) -> String {
-        self.call("availability", json!({})).unwrap()["route"]
-            .as_str()
-            .unwrap()
-            .to_owned()
+        self.call("availability", json!({})).unwrap()["route"].as_str().unwrap().to_owned()
     }
     fn create(&self, audio: &[u8], extra: Value) -> Value {
-        let mut parameters =
-            json!({"audioBase64":STANDARD.encode(audio),"expectedRoute":self.route_digest()});
+        let mut parameters = json!({"audioBase64":STANDARD.encode(audio),"expectedRoute":self.route_digest()});
         for (k, v) in extra.as_object().unwrap() {
             parameters[k] = v.clone();
         }
@@ -179,10 +152,7 @@ fn the_fake_gets_the_exact_bytes_and_the_answer_is_repeatable() {
     assert_eq!(got[0].audio, audio);
     assert_eq!(got[0].sha256, hex(&Sha256::digest(&audio)));
     assert_eq!(got[0].path, "/v1/audio/transcriptions");
-    assert_eq!(
-        got[0].authorization.to_ascii_lowercase(),
-        format!("authorization: bearer {}", CREDENTIAL.to_ascii_lowercase())
-    );
+    assert_eq!(got[0].authorization.to_ascii_lowercase(), format!("authorization: bearer {}", CREDENTIAL.to_ascii_lowercase()));
     let fields = &got[0].fields;
     assert_eq!(fields["model"], "whisper-one");
     assert_eq!(fields["language"], "en");
@@ -200,9 +170,7 @@ fn the_fake_gets_the_exact_bytes_and_the_answer_is_repeatable() {
     assert_eq!(again["segments"], reply["segments"]);
     assert_eq!(fake.received.lock().unwrap().len(), 2);
     // Language and prompt are left out of the form when the package sends none.
-    assert!(!fake.received.lock().unwrap()[1]
-        .fields
-        .contains_key("language"));
+    assert!(!fake.received.lock().unwrap()[1].fields.contains_key("language"));
 }
 
 #[test]
@@ -212,20 +180,10 @@ fn a_moved_route_sends_nothing() {
     let params = json!({"audioBase64":STANDARD.encode(wav(2)),"expectedRoute":f.route_digest()});
     *f.route.model.lock().unwrap() = "whisper-two".into();
     let reply = f.call("create", params.clone()).unwrap();
-    assert_eq!(
-        (
-            reply["ok"].clone(),
-            reply["reason"].clone(),
-            reply["stage"].clone()
-        ),
-        (json!(false), json!("route-changed"), json!("configuration"))
-    );
+    assert_eq!((reply["ok"].clone(), reply["reason"].clone(), reply["stage"].clone()), (json!(false), json!("route-changed"), json!("configuration")));
     *f.route.model.lock().unwrap() = "whisper-one".into();
     *f.route.credential.lock().unwrap() = "another-key".into();
-    assert_eq!(
-        f.call("create", params.clone()).unwrap()["reason"],
-        "route-changed"
-    );
+    assert_eq!(f.call("create", params.clone()).unwrap()["reason"], "route-changed");
     *f.route.credential.lock().unwrap() = CREDENTIAL.into();
     // Same model, provider and key, but the endpoint moved to another address.
     *f.route.base.lock().unwrap() = Some("http://127.0.0.1:9".parse().unwrap());
@@ -238,18 +196,9 @@ fn a_route_that_moves_during_the_request_is_refused_after_the_answer() {
     let fake = FakeSpeechServer::start();
     let f = fixture(Some(&fake.url));
     let route = f.route.clone();
-    *fake.on_request.lock().unwrap() = Some(Box::new(move || {
-        *route.model.lock().unwrap() = "whisper-two".into()
-    }));
+    *fake.on_request.lock().unwrap() = Some(Box::new(move || *route.model.lock().unwrap() = "whisper-two".into()));
     let reply = f.create(&wav(3), json!({}));
-    assert_eq!(
-        (
-            reply["reason"].clone(),
-            reply["stage"].clone(),
-            reply["retryable"].clone()
-        ),
-        (json!("route-changed"), json!("response"), json!(false))
-    );
+    assert_eq!((reply["reason"].clone(), reply["stage"].clone(), reply["retryable"].clone()), (json!("route-changed"), json!("response"), json!(false)));
     assert!(reply.get("segments").is_none());
     assert_eq!(fake.received.lock().unwrap().len(), 1);
 }
@@ -259,101 +208,30 @@ fn every_refusal_has_its_reason_stage_and_retry_flag() {
     let fake = FakeSpeechServer::start();
     let f = fixture(Some(&fake.url));
     let cases = [
-        (
-            Mode::Status(401),
-            "provider-authentication",
-            "response",
-            false,
-        ),
-        (
-            Mode::Status(403),
-            "provider-authentication",
-            "response",
-            false,
-        ),
+        (Mode::Status(401), "provider-authentication", "response", false),
+        (Mode::Status(403), "provider-authentication", "response", false),
         (Mode::Status(429), "provider-rate-limited", "response", true),
         (Mode::Status(408), "provider-timeout", "response", true),
         (Mode::Status(500), "provider-unavailable", "response", true),
         (Mode::Status(503), "provider-unavailable", "response", true),
-        (
-            Mode::Status(404),
-            "provider-response-invalid",
-            "response",
-            false,
-        ),
-        (
-            Mode::Status(400),
-            "provider-response-invalid",
-            "response",
-            false,
-        ),
-        (
-            Mode::NotJson,
-            "provider-response-invalid",
-            "validation",
-            false,
-        ),
-        (
-            Mode::NoSegments,
-            "provider-response-invalid",
-            "validation",
-            false,
-        ),
-        (
-            Mode::BadSegment,
-            "provider-response-invalid",
-            "validation",
-            false,
-        ),
-        (
-            Mode::BackwardsSegment,
-            "provider-response-invalid",
-            "validation",
-            false,
-        ),
-        (
-            Mode::TooManySegments,
-            "provider-response-invalid",
-            "validation",
-            false,
-        ),
-        (
-            Mode::TooMuchText,
-            "provider-response-invalid",
-            "response",
-            false,
-        ),
-        (
-            Mode::Oversize,
-            "provider-response-invalid",
-            "response",
-            false,
-        ),
+        (Mode::Status(404), "provider-response-invalid", "response", false),
+        (Mode::Status(400), "provider-response-invalid", "response", false),
+        (Mode::NotJson, "provider-response-invalid", "validation", false),
+        (Mode::NoSegments, "provider-response-invalid", "validation", false),
+        (Mode::BadSegment, "provider-response-invalid", "validation", false),
+        (Mode::BackwardsSegment, "provider-response-invalid", "validation", false),
+        (Mode::TooManySegments, "provider-response-invalid", "validation", false),
+        (Mode::TooMuchText, "provider-response-invalid", "response", false),
+        (Mode::Oversize, "provider-response-invalid", "response", false),
     ];
     for (mode, reason, stage, retry) in cases {
         fake.set_mode(mode.clone());
         let reply = f.create(&wav(4), json!({}));
-        let shown = (
-            reply["reason"].as_str().unwrap_or_default().to_owned(),
-            reply["stage"].as_str().unwrap_or_default().to_owned(),
-            reply["retryable"].as_bool(),
-        );
-        let status = if let Mode::Status(code) = mode {
-            code.to_string()
-        } else {
-            String::new()
-        };
+        let shown = (reply["reason"].as_str().unwrap_or_default().to_owned(), reply["stage"].as_str().unwrap_or_default().to_owned(), reply["retryable"].as_bool());
+        let status = if let Mode::Status(code) = mode { code.to_string() } else { String::new() };
         // A body over the text limit is over the 2 MiB limit too, so it stops at the response.
-        let stage = if matches!(mode, Mode::TooMuchText) && shown.1 == "validation" {
-            "validation"
-        } else {
-            stage
-        };
-        assert_eq!(
-            shown,
-            (reason.to_owned(), stage.to_owned(), Some(retry)),
-            "status {status} {reply}"
-        );
+        let stage = if matches!(mode, Mode::TooMuchText) && shown.1 == "validation" { "validation" } else { stage };
+        assert_eq!(shown, (reason.to_owned(), stage.to_owned(), Some(retry)), "status {status} {reply}");
         assert_eq!(reply["ok"], false);
     }
 }
@@ -364,50 +242,20 @@ fn a_bad_clip_or_missing_setup_is_refused_before_anything_is_sent() {
     let f = fixture(Some(&fake.url));
     let digest = f.route_digest();
     for audio in [String::new(), "not base64 !!".to_owned()] {
-        let reply = f
-            .call(
-                "create",
-                json!({"audioBase64":audio,"expectedRoute":digest}),
-            )
-            .unwrap();
-        assert_eq!(
-            (reply["reason"].clone(), reply["stage"].clone()),
-            (json!("invalid-audio"), json!("validation")),
-            "{reply}"
-        );
+        let reply = f.call("create", json!({"audioBase64":audio,"expectedRoute":digest})).unwrap();
+        assert_eq!((reply["reason"].clone(), reply["stage"].clone()), (json!("invalid-audio"), json!("validation")), "{reply}");
     }
     // A clip over the old 3.8 MB limit is stopped by the 1 MiB module message limit before the port sees it.
     let huge = STANDARD.encode(vec![0u8; MAX_AUDIO_BYTES + 1]);
-    let refused = f
-        .call("create", json!({"audioBase64":huge,"expectedRoute":digest}))
-        .unwrap_err()
-        .to_string();
+    let refused = f.call("create", json!({"audioBase64":huge,"expectedRoute":digest})).unwrap_err().to_string();
     assert!(refused.contains("too large"), "{refused}");
     // A large clip that fits the test guest goes through.
-    assert_eq!(
-        f.call(
-            "create",
-            json!({"audioBase64":STANDARD.encode(vec![7u8; 30_000]),"expectedRoute":digest})
-        )
-        .unwrap()["ok"],
-        true
-    );
+    assert_eq!(f.call("create", json!({"audioBase64":STANDARD.encode(vec![7u8; 30_000]),"expectedRoute":digest})).unwrap()["ok"], true);
     assert_eq!(fake.received.lock().unwrap().len(), 1);
     let none = fixture(None);
-    assert_eq!(
-        none.call("availability", json!({})).unwrap(),
-        json!({"available":false})
-    );
-    let reply = none
-        .call(
-            "create",
-            json!({"audioBase64":STANDARD.encode(wav(5)),"expectedRoute":digest}),
-        )
-        .unwrap();
-    assert_eq!(
-        (reply["reason"].clone(), reply["stage"].clone()),
-        (json!("configuration-unavailable"), json!("configuration"))
-    );
+    assert_eq!(none.call("availability", json!({})).unwrap(), json!({"available":false}));
+    let reply = none.call("create", json!({"audioBase64":STANDARD.encode(wav(5)),"expectedRoute":digest})).unwrap();
+    assert_eq!((reply["reason"].clone(), reply["stage"].clone()), (json!("configuration-unavailable"), json!("configuration")));
 }
 
 #[test]
@@ -443,23 +291,12 @@ fn activity_rows_and_answers_never_carry_audio_text_or_the_credential() {
     f.create(&wav(8), json!({}));
     let rows = f.rows.0.lock().unwrap().join("\n");
     assert_eq!(rows.lines().count(), 2, "{rows}");
-    assert!(
-        rows.contains("whisper-one|transcribe|ok|4020 bytes")
-            || rows.contains("whisper-one|transcribe|ok|"),
-        "{rows}"
-    );
-    assert!(
-        rows.contains("whisper-one|transcribe|error|provider-unavailable"),
-        "{rows}"
-    );
+    assert!(rows.contains("whisper-one|transcribe|ok|4020 bytes") || rows.contains("whisper-one|transcribe|ok|"), "{rows}");
+    assert!(rows.contains("whisper-one|transcribe|error|provider-unavailable"), "{rows}");
     let segment_text = reply["segments"][0]["text"].as_str().unwrap();
     for secret in [CREDENTIAL, "private-vocabulary-marker", segment_text] {
         assert!(!rows.contains(secret), "{secret} reached activity");
     }
     assert!(!reply.to_string().contains(CREDENTIAL));
-    assert!(!f
-        .call("availability", json!({}))
-        .unwrap()
-        .to_string()
-        .contains(CREDENTIAL));
+    assert!(!f.call("availability", json!({})).unwrap().to_string().contains(CREDENTIAL));
 }

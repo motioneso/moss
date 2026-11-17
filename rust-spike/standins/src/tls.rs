@@ -29,10 +29,9 @@ fn provider() -> Arc<tokio_rustls::rustls::crypto::CryptoProvider> {
 }
 
 pub fn server_config(id: &Identity) -> Arc<ServerConfig> {
-    let certs: Vec<CertificateDer<'static>> =
-        CertificateDer::pem_slice_iter(id.cert_pem.as_bytes())
-            .collect::<Result<_, _>>()
-            .expect("test certificate parses");
+    let certs: Vec<CertificateDer<'static>> = CertificateDer::pem_slice_iter(id.cert_pem.as_bytes())
+        .collect::<Result<_, _>>()
+        .expect("test certificate parses");
     let key = PrivateKeyDer::from_pem_slice(id.key_pem.as_bytes()).expect("test key parses");
     Arc::new(
         ServerConfig::builder_with_provider(provider())
@@ -48,9 +47,7 @@ pub fn server_config(id: &Identity) -> Arc<ServerConfig> {
 pub fn client_trusting(id: &Identity) -> Arc<ClientConfig> {
     let mut roots = RootCertStore::empty();
     for cert in CertificateDer::pem_slice_iter(id.cert_pem.as_bytes()) {
-        roots
-            .add(cert.expect("test certificate parses"))
-            .expect("root accepted");
+        roots.add(cert.expect("test certificate parses")).expect("root accepted");
     }
     client_with(roots)
 }

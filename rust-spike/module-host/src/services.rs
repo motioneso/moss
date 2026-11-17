@@ -78,8 +78,7 @@ impl ServicePorts {
         launcher: crate::browser::launch::Launcher,
         weakened: crate::browser::Weakened,
     ) -> Self {
-        let mut port =
-            crate::browser::BrowserPort::with_launcher(launcher, self.public_web.clone());
+        let mut port = crate::browser::BrowserPort::with_launcher(launcher, self.public_web.clone());
         port.weakened = weakened;
         self.browser = Some(port);
         self
