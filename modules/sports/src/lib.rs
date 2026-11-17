@@ -73,6 +73,7 @@ pub fn route_with<H: Host + ?Sized>(host: &H, teams: &dyn TeamList, request: Rou
         ("PATCH", "/sources/:id/rebuild") => source_rebuild::confirm(host, &request),
         ("GET", "/sources/:id/icon") => source_icon::icon(host, &request),
         ("DELETE", "/sources/:id") => source_routes::remove(host, &request),
+        ("POST", "/tools/run") => source_tools::transport(host, &request.body),
         _ => return Response::new(404, json!({"message":"Route not found"})),
     };
     result.unwrap_or_else(|_| Response::new(500, json!({"message":"Internal server error"})))

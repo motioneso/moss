@@ -5,6 +5,7 @@ interface context { call: func(request: string) -> result<string, string>; }
 interface kv { call: func(request: string) -> result<string, string>; }
 interface fetch { call: func(request: string) -> result<string, string>; }
 interface ai { call: func(request: string) -> result<string, string>; }
+interface tools { call: func(request: string) -> result<string, string>; }
 
 world sports {
   import db;
@@ -12,5 +13,6 @@ world sports {
   import kv;
   import fetch;
   import ai;
+  import tools;
   export handle: func(kind: string, payload: string) -> result<string, string>;
 }

@@ -111,3 +111,18 @@ pub fn run<H: Host + ?Sized>(host: &H, teams: &dyn TeamList, payload: &str) -> R
         }
     })
 }
+
+/// Signed-in transport for chat hosts. The call crosses the host's one-use, exact-input approval
+/// check, and the caller cannot supply an approval flag.
+pub fn transport<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Response> {
+    let (Some(tool), Some(parameters)) = (body["tool"].as_str(), body.get("parameters").filter(|p| p.is_object())) else {
+        return Ok(crate::util::bad_request("Invalid sports tool request"));
+    };
+    if allowed(tool).is_none() {
+        return Ok(crate::util::bad_request("Invalid sports tool request"));
+    }
+    match host.call("tools", "run", tool, json!({"parameters":parameters})) {
+        Ok(result) => Ok(Response::new(200, result)),
+        Err(_) => Ok(Response::new(403, json!({"error":"Sports tool unavailable or approval required"}))),
+    }
+}

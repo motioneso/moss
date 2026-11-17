@@ -200,6 +200,11 @@
     },
     {
       "method": "POST",
+      "path": "/tools/run",
+      "signIn": true
+    },
+    {
+      "method": "POST",
       "path": "/sources",
       "signIn": true
     },
