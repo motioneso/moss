@@ -453,10 +453,21 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
     // Adding a real subreddit. The feed is read from the real internet through the server's own
     // public-web fetch, with nothing rewritten on the way. Two spellings that differ only by case
     // are one source.
-    let (status, text) = call(Method::POST, "/sources/preview", Some(&cookie), Some(json!({"url":"r/nfl","assignments":[{"target":{"kind":"sport","sportKey":"football"}}]})));
-    assert_eq!(status, 200, "{text}\n{}", log());
-    let shown = json_of(&text);
-    assert_eq!(shown["status"], "ok", "{text}");
+    // Reddit turns this machine away now and then with a rate limit or a refusal, so a refusal is
+    // retried after a pause. Every answer is the real one and is printed.
+    let mut shown = Value::Null;
+    for attempt in 1..=6 {
+        let (status, text) = call(Method::POST, "/sources/preview", Some(&cookie), Some(json!({"url":"r/nfl","assignments":[{"target":{"kind":"sport","sportKey":"football"}}]})));
+        assert_eq!(status, 200, "{text}\n{}", log());
+        shown = json_of(&text);
+        println!("sports live: r/nfl preview attempt {attempt}: {} {}", shown["status"], shown["reason"]);
+        let retry = matches!(shown["reason"].as_str(), Some("rate_limited" | "auth_required" | "unreachable"));
+        if shown["status"] == "ok" || !retry {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_secs(30));
+    }
+    assert_eq!(shown["status"], "ok", "{shown}");
     let candidate = &shown["candidate"];
     println!("sports live: real subreddit previewed: {} ({} sample headlines)", candidate["label"], candidate["samples"].as_array().map_or(0, Vec::len));
     let confirm = json!({
@@ -476,9 +487,19 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
     assert_eq!(json_of(&text)["sources"].as_array().unwrap().len(), 2, "ESPN plus the subreddit: {text}");
     let (_, text) = call(Method::GET, "/sources", Some(&other), None);
     assert_eq!(json_of(&text)["sources"].as_array().unwrap().len(), 1, "the other person sees only ESPN: {text}");
-    let (status, text) = call(Method::POST, "/sources/preview", Some(&cookie), Some(json!({"url":"r/NFL"})));
-    assert_eq!(status, 200, "{text}");
-    let again = json_of(&text);
+    let mut again = Value::Null;
+    let mut text = String::new();
+    for _ in 0..6 {
+        let (status, body) = call(Method::POST, "/sources/preview", Some(&cookie), Some(json!({"url":"r/NFL"})));
+        assert_eq!(status, 200, "{body}");
+        again = json_of(&body);
+        text = body;
+        if again["status"] == "ok" {
+            break;
+        }
+        println!("sports live: r/NFL preview answered {} {}", again["status"], again["reason"]);
+        std::thread::sleep(std::time::Duration::from_secs(30));
+    }
     assert_eq!(again["duplicateOfSourceId"], json!(source_id), "r/NFL is the same source as r/nfl: {text}");
     let (status, text) = call(Method::POST, "/sources", Some(&cookie), Some(json!({
         "confirmationId": again["confirmationId"],
