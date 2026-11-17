@@ -151,11 +151,19 @@ fn quiet_window(saved: &quiet_hours::Saved, pref: &Value) -> Option<(String, Str
             if quiet["enabled"] != json!(true) {
                 return None;
             }
-            Some((
-                zone,
-                quiet["startLocalTime"].as_str()?.to_owned(),
-                quiet["endLocalTime"].as_str()?.to_owned(),
-            ))
+            let valid = |t: &str| {
+                let (h, m) = (t[..2].parse::<u8>().ok(), t[3..].parse::<u8>().ok());
+                h.is_some_and(|h| h < 24) && m.is_some_and(|m| m < 60)
+            };
+            let (start, end) = (
+                quiet["startLocalTime"].as_str()?,
+                quiet["endLocalTime"].as_str()?,
+            );
+            // An impossible time such as 99:99 means no deferral, as on the old server.
+            if !(valid(start) && valid(end)) {
+                return None;
+            }
+            Some((zone, start.to_owned(), end.to_owned()))
         }
     }
 }

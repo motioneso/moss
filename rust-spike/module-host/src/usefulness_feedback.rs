@@ -210,7 +210,8 @@ pub async fn create(cx: &DataContext, body: &Value) -> Result<(u16, Value), ApiE
     let (mut effect_kind, mut effect_ref): (Option<&str>, Option<String>) = (None, None);
     if input.kind == "dismiss" && input.target_kind == "proactive_card" {
         if let Ok(card) = Uuid::parse_str(&input.target_ref) {
-            cx.db()
+            let changed = cx
+                .db()
                 .execute(
                     "UPDATE app.proactive_cards SET status='dismissed', dismissed_at=now(),
                             updated_at=now()
@@ -218,9 +219,12 @@ pub async fn create(cx: &DataContext, body: &Value) -> Result<(u16, Value), ApiE
                     &[&actor, &card],
                 )
                 .await?;
+            // Only a dismissal that hid a card is undone by restoring it.
+            if changed > 0 {
+                effect_kind = Some("proactive_card_dismissed");
+                effect_ref = Some(input.target_ref.clone());
+            }
         }
-        effect_kind = Some("proactive_card_dismissed");
-        effect_ref = Some(input.target_ref.clone());
     }
     // The opposite direction is retired, not deleted, so history stays readable.
     if let Some(row) = &existing {
