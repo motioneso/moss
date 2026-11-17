@@ -11,8 +11,9 @@ pub const STANDINGS: &str = "espn-standings";
 pub const HEADLINES: &str = "espn-headlines";
 pub const SCHEDULE: &str = "espn-schedule";
 pub const RESULTS: &str = "espn-results";
+pub const ARTICLE_BODY: &str = "espn-article-body";
 /// Every namespace the manifest lists as install-wide.
-pub const NAMESPACES: [&str; 6] = [TEAMS, SCOREBOARD, STANDINGS, HEADLINES, SCHEDULE, RESULTS];
+pub const NAMESPACES: [&str; 7] = [TEAMS, SCOREBOARD, STANDINGS, HEADLINES, SCHEDULE, RESULTS, ARTICLE_BODY];
 
 pub const TEAMS_TTL_MS: i64 = 24 * 60 * 60 * 1000;
 pub const SCOREBOARD_TTL_MS: i64 = 3 * 60 * 1000;

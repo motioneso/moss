@@ -34,6 +34,8 @@ pub struct Bundle {
     pub scoreboard: Vec<Value>,
     pub standings: Vec<Value>,
     pub schedule: Vec<Value>,
+    /// The league feed plus this club's own feed, every story tagged with today's club keys.
+    pub headlines: Vec<Value>,
 }
 
 pub struct Group {
@@ -383,7 +385,12 @@ pub fn build_card(group: &Group, bundles: &HashMap<String, Bundle>, now_ms: i64,
     card.insert("crestUrl".into(), json!(crest));
     card.insert("status".into(), json!(status));
     card.insert("primary".into(), json!(line));
-    card.insert("stories".into(), json!([]));
+    let pool: Vec<&Value> = ordered
+        .iter()
+        .filter_map(|b| b.team.as_ref().map(|t| crate::story::about_team(&b.headlines, &t.team_key)))
+        .flatten()
+        .collect();
+    card.insert("stories".into(), Value::Array(crate::story::team_stories(&pool)));
     card.insert("form".into(), json!(form.iter().map(|f| f["result"].clone()).collect::<Vec<_>>()));
     card.insert("formDetail".into(), Value::Array(form));
     card.insert("standing".into(), standing_line(&primary.standings, &primary.match_id).map(Value::String).unwrap_or(Value::Null));

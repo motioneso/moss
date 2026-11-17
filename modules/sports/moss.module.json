@@ -34,6 +34,7 @@
         "espn-headlines",
         "espn-scoreboard",
         "espn-results",
+        "espn-article-body",
         "espn-schedule",
         "espn-standings",
         "espn-teams",
@@ -75,6 +76,7 @@
     }
   ],
   "installWideKv": [
+    "espn-article-body",
     "espn-headlines",
     "espn-results",
     "espn-schedule",
