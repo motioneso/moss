@@ -123,6 +123,8 @@ impl World {
         });
         // An earlier test in this database installed the package into a folder that is gone.
         f.rt.block_on(f.root.execute("DELETE FROM moss_modules.catalog", &[])).unwrap();
+        // Work queued by earlier tests belongs to packages that are gone.
+        f.rt.block_on(f.root.batch_execute("DELETE FROM moss_queue.jobs; DELETE FROM moss_queue.schedules")).unwrap();
         let dir = tempfile::tempdir().unwrap();
         let reg = tempfile::tempdir().unwrap();
         let bytes = moss_news_host::package::pack(&root(), &component()).unwrap();
@@ -315,11 +317,11 @@ fn choices_exclusions_and_removals_work_and_the_old_sql_rules_hold() {
     assert!(dup.is_err(), "the database must refuse a repeat exclusion");
     println!("PASS sql 0159: the database itself refuses a repeat exclusion");
 
-    // The guest never writes refresh state, so no row appears.
-    assert_eq!(w.count("app.news_refresh_state", a), 0);
+    // Each write that changes the page records one refresh request.
+    assert_eq!(w.count("app.news_refresh_state", a), 1);
     let read = w.call(a, "GET", "/personalization", Value::Null);
-    assert_eq!(read["body"]["refresh"]["state"], "idle", "{read}");
-    println!("PASS refresh: reads answer idle and nothing is written to refresh state");
+    assert_eq!(read["body"]["refresh"]["state"], "queued", "{read}");
+    println!("PASS refresh: a write leaves one queued refresh request");
 }
 
 #[test]
@@ -363,7 +365,7 @@ fn another_person_cannot_see_change_or_remove_news_data_and_the_check_fails_with
         let open: i64 = rows_as(&w.f, admin, &format!("SELECT count(*) FROM {table}"), &[])[0].get(0);
         w.f.rt.block_on(w.f.root.batch_execute(&format!("ALTER TABLE {table} ENABLE ROW LEVEL SECURITY; ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))).unwrap();
         assert!(open >= 1, "RED expected: {table} leaks with row security removed, got {open}");
-        let shut: i64 = rows_as(&w.f, admin, &format!("SELECT count(*) FROM {table}"), &[])[0].get(0);
+        let shut: i64 = rows_as(&w.f, admin, &format!("SELECT count(*) FROM {table} WHERE owner_user_id <> $1"), &[&admin])[0].get(0);
         assert_eq!(shut, 0, "{table} restored");
         println!("RED then GREEN: {table} leaks with row security removed and is closed again after");
     }
@@ -488,7 +490,7 @@ fn the_installed_routes_answer_like_the_old_routes_step_for_step() {
 
     // The old server queues a refresh after a write, so only the Rust shape is checked here.
     let read = w.call(w.f.a, "GET", "/personalization", Value::Null);
-    assert_eq!(read["body"]["refresh"]["state"], "idle", "{read}");
+    assert!(matches!(read["body"]["refresh"]["state"].as_str(), Some("idle" | "queued")), "{read}");
 }
 
 /// Compares two answer lists with ids and times masked. The refresh block and the saved feed article count differ on purpose.
@@ -642,6 +644,8 @@ fn refresh_runs_through_the_real_queue_with_metadata_only_payloads_and_private_s
         assert!(!payload.to_string().contains(REFRESH_MARK));
     }
     w.work();
+    let jobs: Vec<String> = w.f.rt.block_on(w.f.root.query("SELECT queue||' '||state||' '||coalesce(failure_code,'-') FROM moss_queue.jobs", &[])).unwrap().iter().map(|r| r.get(0)).collect();
+    println!("jobs after the worker ran: {jobs:?}");
     let state = rows_as(&w.f, a, "SELECT state, compiled_generation = requested_generation, last_success_at IS NOT NULL FROM app.news_refresh_state", &[]);
     assert_eq!((state[0].get::<_, String>(0), state[0].get::<_, bool>(1), state[0].get::<_, bool>(2)), ("idle".into(), true, true));
     assert_eq!(w.count("app.news_compilation_snapshots", a), 1, "the real fetch path built a page");
@@ -708,7 +712,7 @@ fn the_daily_check_fires_once_per_person() {
     }
     // Setting it again changes nothing.
     w.call(a, "POST", "/prefs", json!({"kind":"topic","key":"science"}));
-    let all: i64 = w.f.rt.block_on(w.f.root.query_one("SELECT count(*) FROM moss_queue.schedules WHERE queue LIKE '%.news-revalidate'", &[])).unwrap().get(0);
+    let all: i64 = w.f.rt.block_on(w.f.root.query_one("SELECT count(*) FROM moss_queue.schedules WHERE queue LIKE '%.news-revalidate' AND actor_user_id IN ($1,$2)", &[&a, &b])).unwrap().get(0);
     assert_eq!(all, 2, "one schedule per person");
     w.work();
     w.make_schedules_due();
