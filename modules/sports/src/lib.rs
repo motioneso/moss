@@ -22,6 +22,7 @@ pub mod recipe_fetch;
 pub mod recipe_propose;
 pub mod results;
 pub mod roster;
+pub mod source_approval;
 pub mod source_discovery;
 pub mod source_icon;
 pub mod source_input;
@@ -30,6 +31,7 @@ pub mod source_rebuild;
 pub mod source_refresh;
 pub mod source_routes;
 pub mod source_scope;
+pub mod source_tools;
 pub mod source_web;
 pub mod sources;
 pub mod standings;
@@ -71,6 +73,7 @@ pub fn route_with<H: Host + ?Sized>(host: &H, teams: &dyn TeamList, request: Rou
         ("PATCH", "/sources/:id/rebuild") => source_rebuild::confirm(host, &request),
         ("GET", "/sources/:id/icon") => source_icon::icon(host, &request),
         ("DELETE", "/sources/:id") => source_routes::remove(host, &request),
+        ("POST", "/tools/run") => source_tools::transport(host, &request.body),
         _ => return Response::new(404, json!({"message":"Route not found"})),
     };
     result.unwrap_or_else(|_| Response::new(500, json!({"message":"Internal server error"})))
@@ -89,6 +92,10 @@ pub fn handle<H: Host + ?Sized>(host: &H, kind: &str, payload: &str) -> moss_mod
             let request: RouteRequest = serde_json::from_str(payload)?;
             Ok(serde_json::to_string(&route(host, request))?)
         }
+        "tool" => Ok(serde_json::to_string(
+            &source_tools::run(host, &roster::EspnTeams(host), payload)
+                .map_err(|_| moss_module_sdk::Error::new("Sports tool failed"))?,
+        )?),
         "api" => api(host, payload),
         _ => Err(moss_module_sdk::Error::new("Unsupported Sports invocation")),
     }
@@ -101,9 +108,19 @@ fn api<H: Host + ?Sized>(host: &H, payload: &str) -> moss_module_sdk::Result<Str
     enum Api {
         #[serde(rename = "collectSportsSourcesExportSection")]
         Export(#[allow(dead_code)] Value),
+        #[serde(rename = "prepareSportsSourceAction")]
+        Prepare(Prepare),
+    }
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase", deny_unknown_fields)]
+    struct Prepare {
+        tool: String,
+        // A JSON string keeps the field order the card was asked for.
+        input_json: String,
     }
     Ok(match serde_json::from_str(payload)? {
         Api::Export(_) => json!({"ok":lifecycle::collect(host)?}),
+        Api::Prepare(p) => source_approval::prepare(host, &roster::EspnTeams(host), &p.tool, &p.input_json),
     }
     .to_string())
 }
