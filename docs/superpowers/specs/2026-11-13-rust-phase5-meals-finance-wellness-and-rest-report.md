@@ -492,14 +492,14 @@ in the schedule times. All three are listed in the package changelog.
 
 ### Proof
 
-| Claim                                             | Evidence                                                                                                                                                                    |
-| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Routes match the old handlers                     | The old routes and the new package ran side by side on one test database. 47 steps without ids and 7 with ids match. A control run with protection removed was seen failing |
-| A second person cannot read or change medicines   | Real database test as two people through the installed package, seen failing with the owner rule removed                                                                    |
-| Private text stays out of logs, jobs, activity    | Guest tests plus installed tests show medicine text only reaches the two medicine tables. A database failure never echoes it                                                |
-| Counts hold no medicine list                      | A native test reads the output and finds counts only                                                                                                                        |
-| Native and WebAssembly builds                     | Native guest tests (13 behaviour, privacy) and the same code as a WebAssembly component in the package tests                                                                |
-| Works on the real Rust server from another device | Live test on the real server over https on a non-loopback address, with certificate checking. It now covers the medicine routes. Gate exit code 0                           |
+| Claim                                             | Evidence                                                                                                                                                                                                                            |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Routes match the old handlers                     | The old routes and the new package ran side by side on one test database. 47 steps without ids and 7 with ids match. A control run with protection removed was seen failing                                                         |
+| A second person cannot read or change medicines   | Real database test as two people through the installed package, seen failing with the owner rule removed                                                                                                                            |
+| Private text stays out of logs, jobs, activity    | Guest tests plus installed tests show medicine text only reaches the two medicine tables. A database failure never echoes it                                                                                                        |
+| Counts hold no medicine list                      | A native test reads the output and finds counts only                                                                                                                                                                                |
+| Native and WebAssembly builds                     | Native guest tests (13 behaviour, privacy) and the same code as a WebAssembly component in the package tests                                                                                                                        |
+| Works on the real Rust server from another device | Live test on the real server over https on a non-loopback address, with certificate checking. It now covers the medicine routes. Gate exit code 0 on the branch before it was moved onto the newest main; not rerun after that move |
 
 Commands (expected exit code 0, both through `scripts/run-gate.sh`):
 
