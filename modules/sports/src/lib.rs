@@ -135,20 +135,8 @@ fn api<H: Host + ?Sized>(host: &H, payload: &str) -> moss_module_sdk::Result<Str
     }
     Ok(match serde_json::from_str(payload)? {
         Api::Export(_) => json!({"ok":lifecycle::collect(host)?}),
-        Api::Prepare(p) => prepare(host, &p.tool, &p.input_json),
+        Api::Prepare(p) => source_approval::prepare(host, &roster::EspnTeams(host), &p.tool, &p.input_json),
         Api::Facts(f) => briefing::today(host, f.time_zone.as_deref().unwrap_or("UTC")),
     }
     .to_string())
-}
-
-fn prepare<H: Host + ?Sized>(host: &H, tool: &str, input_json: &str) -> Value {
-    let teams = roster::EspnTeams(host);
-    if !(tool == follow_tools::FOLLOW || tool == follow_tools::UNFOLLOW) {
-        return source_approval::prepare(host, &teams, tool, input_json);
-    }
-    let Ok(input) = serde_json::from_str::<Value>(input_json) else { return json!({"ok":null}) };
-    match follow_tools::card(host, &teams, tool, &input) {
-        Ok(card) => json!({"ok":card}),
-        Err(_) => json!({"error":{"statusCode":503,"error":"Sports service is unavailable"}}),
-    }
 }

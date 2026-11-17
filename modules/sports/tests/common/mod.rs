@@ -199,7 +199,7 @@ impl Host for Fake {
                     Kind::Delete => {
                         let (gone, kept): (Vec<Value>, Vec<Value>) = follows
                             .drain(..)
-                            .partition(|r| r["owner_user_id"] == actor && matches(r, &query.filter));
+                            .partition(|r| (self.rls_off.get() || r["owner_user_id"] == actor) && matches(r, &query.filter));
                         *follows = kept;
                         Ok(json!(gone))
                     }

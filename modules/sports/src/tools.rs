@@ -1,5 +1,6 @@
 //! The Sports chat tools. The five followed-team tools live here and the nine source tools stay in
 //! `source_tools`. Each tool calls the code its route calls.
+use crate::follow_tools::{FOLLOW, UNFOLLOW};
 use crate::teams::TeamList;
 use crate::{briefing, follow_tools, heartbeat, results, source_tools};
 use moss_module_sdk::{Host, Response, Result, RouteRequest};
@@ -11,7 +12,7 @@ pub const LATEST: &str = "sports.latestResult";
 
 /// The tools handled here.
 pub fn owns(tool: &str) -> bool {
-    matches!(tool, FACTS | HEARTBEAT | LATEST | follow_tools::FOLLOW | follow_tools::UNFOLLOW)
+    matches!(tool, FACTS | HEARTBEAT | LATEST | FOLLOW | UNFOLLOW)
 }
 
 fn failure(message: &str) -> Value {
@@ -51,18 +52,7 @@ pub fn run<H: Host + ?Sized>(host: &H, teams: &dyn TeamList, payload: &str) -> R
             None => Ok(failure("Invalid Sports tool input")),
         },
         LATEST => latest(host, input),
-        _ => {
-            // A change runs only against the card the person approved.
-            let current = follow_tools::card(host, teams, tool, &call["parameters"])?;
-            let shown = current.as_ref().and_then(|card| card["version"].as_str());
-            if shown.is_none() || shown != call["approvalVersion"].as_str() {
-                return Ok(failure("The approval no longer matches this follow. Ask again to review the current details."));
-            }
-            if tool == follow_tools::FOLLOW {
-                follow_tools::follow(host, teams, input)
-            } else {
-                follow_tools::unfollow(host, teams, input)
-            }
-        }
+        FOLLOW => follow_tools::follow(host, teams, input),
+        _ => follow_tools::unfollow(host, teams, input),
     }
 }

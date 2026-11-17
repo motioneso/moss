@@ -293,7 +293,7 @@
   "features": [
     {
       "id": "sports.follows",
-      "description": "Each person keeps private follows of whole leagues and of single teams. Following a whole league twice returns the first follow, so a league never appears twice. Removing a follow deletes only the person's own row. Following a team, or changing which team a saved follow means, is checked against ESPN's team list for that league, and is refused while ESPN cannot be reached. Chat can also follow or unfollow a league or team after the person approves a card showing exactly what changes, and unfollowing something not followed changes nothing.",
+      "description": "Each person keeps private follows of whole leagues and of single teams. Following a whole league twice returns the first follow, so a league never appears twice. Removing a follow deletes only the person's own row. Following a team, or changing which team a saved follow means, is checked against ESPN's team list for that league, and is refused while ESPN cannot be reached. Chat can also follow or unfollow a league or team for the person, and unfollowing something not followed changes nothing.",
       "errors": [
         {
           "code": "sports_team_list_unavailable",
@@ -507,13 +507,11 @@
     },
     "sports.followTeam": {
       "description": "Follow a league, or one team in a league, for the active actor. Checked against the provider's team list.",
-      "risk": "write",
-      "approvalVersion": true
+      "risk": "write"
     },
     "sports.unfollowTeam": {
       "description": "Stop following a league or team for the active actor. Does nothing if it is not followed.",
-      "risk": "write",
-      "approvalVersion": true
+      "risk": "write"
     }
   }
 }

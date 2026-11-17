@@ -70,11 +70,13 @@ pub fn run<H: Host + ?Sized>(host: &H, horizon_hours: i64, limit: usize) -> Resu
             }
             let mut board: Vec<Value> = vec![];
             for day in &days {
-                reads += 1;
+                // Only today's board sets the freshness, because later days are read when cached.
+                let counted = *day == today;
+                reads += usize::from(counted);
                 match store.peek(&format!("{key}|{day}"), now_ms) {
-                    None => missing += 1,
+                    None => missing += usize::from(counted),
                     Some((value, live)) => {
-                        stale += usize::from(!live);
+                        stale += usize::from(counted && !live);
                         for game in value.as_array().into_iter().flatten() {
                             let id = text(game, "id");
                             if id.is_empty() || !board.iter().any(|seen| text(seen, "id") == id) {

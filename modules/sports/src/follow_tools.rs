@@ -1,6 +1,5 @@
-//! The follow and unfollow chat tools, and the approval cards that show what each would change.
-//! Following saves exactly what the follow route saves. A card is built from the catalog, today's
-//! team list and the person's saved follows, never from text the model supplied.
+//! The follow and unfollow chat tools. Following saves exactly what the follow route saves, and
+//! both tools touch only the signed-in person's own follows, so neither needs an approval card.
 use crate::teams::TeamList;
 use crate::{catalog, follows};
 use moss_module_sdk::{
@@ -32,14 +31,6 @@ pub fn keys(input: &Map<String, Value>, verb: &str) -> std::result::Result<(Stri
 
 fn failure(message: &str) -> Value {
     json!({"data":{"error":message}})
-}
-
-fn field(label: &str, value: &str) -> Value {
-    json!({"label":label,"value":value})
-}
-
-fn competition_label(key: &str) -> String {
-    catalog::entry(key).map_or_else(|| key.to_owned(), |e| e.label.to_owned())
 }
 
 /// `sports.followTeam`. The route's own check and save, so the two cannot disagree.
@@ -88,44 +79,4 @@ pub fn unfollow<H: Host + ?Sized>(host: &H, teams: &dyn TeamList, input: &Map<St
     };
     let gone = Client(host).query(follows::TABLE, &Query::delete(Filter::eq("id", row["id"].clone())))?;
     Ok(json!({"data":{"removed":!gone.is_empty()}}))
-}
-
-/// The card for one follow or unfollow call, or `None` when the call cannot be shown in full.
-pub fn card<H: Host + ?Sized>(host: &H, teams: &dyn TeamList, tool: &str, input: &Value) -> Result<Option<Value>> {
-    let Some(map) = input.as_object().filter(|m| m.keys().all(|k| k == "competitionKey" || k == "teamKey")) else {
-        return Ok(None);
-    };
-    let Ok((competition, team)) = keys(map, "follow") else { return Ok(None) };
-    let label = competition_label(&competition);
-    if tool == FOLLOW {
-        let Ok(pick) = follows::pick(teams, &competition, team.as_deref()) else { return Ok(None) };
-        let shown = pick.name.clone().unwrap_or_else(|| format!("All of {label}"));
-        let version = json!([tool, competition, pick.team_key, pick.source_team_id]);
-        return Ok(Some(json!({
-            "title": if pick.name.is_some() { "Follow sports team" } else { "Follow sports competition" },
-            "content": "user_authored", "target": shown,
-            "fields": [field("Competition", &label), field("Team", &shown)],
-            "version": version.to_string(),
-        })));
-    }
-    if !catalog::is_known(&competition) {
-        return Ok(None);
-    }
-    let found = saved(host, teams, &competition, team.as_deref())?;
-    let shown = match (&team, &found) {
-        (None, _) => format!("All of {label}"),
-        (Some(_), Some(row)) => row["team_key"].as_str().unwrap_or_default().to_owned(),
-        (Some(key), None) => teams
-            .teams(&competition)
-            .into_iter()
-            .find(|t| &t.team_key == key)
-            .map_or_else(|| key.clone(), |t| t.name),
-    };
-    let effect = if found.is_some() { "Stop following and remove it from your sports pages." } else { "You do not follow this, so nothing changes." };
-    let version = json!([tool, competition, team, found.as_ref().map(|row| row["id"].clone())]);
-    Ok(Some(json!({
-        "title": "Unfollow sports team", "content": "user_authored", "target": shown,
-        "fields": [field("Competition", &label), field("Team", &shown), field("Effect", effect)],
-        "version": version.to_string(),
-    })))
 }
