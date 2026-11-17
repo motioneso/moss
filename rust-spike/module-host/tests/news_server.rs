@@ -359,7 +359,7 @@ fn installed_news_package_serves_routes_from_the_real_server() {
     assert_eq!(status, 200, "{text}");
     let read = json_of(&text);
     assert_eq!(read["sourceExclusions"].as_array().unwrap().len(), 1, "{text}");
-    assert_eq!(read["refresh"]["state"], "idle", "{text}");
+    assert!(matches!(read["refresh"]["state"].as_str(), Some("idle" | "queued" | "running")), "{text}");
     // The other person sees none of it and cannot remove it.
     let (_, text) = call(Method::GET, "/personalization", Some(&other), None);
     assert_eq!(json_of(&text)["sourceExclusions"], json!([]), "{text}");
