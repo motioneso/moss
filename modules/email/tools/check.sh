@@ -17,4 +17,4 @@ pnpm exec tsx modules/email/tools/routes-parity.ts
 CARGO_TARGET_DIR="$guest" RUSTFLAGS='-C link-arg=--import-memory -C link-arg=--initial-memory=2097152 -C link-arg=--max-memory=67108864' \
   cargo +1.95.0 build --locked --offline --release --lib --target wasm32-unknown-unknown --manifest-path modules/email/src/Cargo.toml
 export EMAIL_CORE_WASM="$guest/wasm32-unknown-unknown/release/moss_email.wasm"
-cargo +1.95.0 test --locked --offline --manifest-path modules/email/host/Cargo.toml --test package
+cargo +1.95.0 test --locked --offline --manifest-path modules/email/host/Cargo.toml --test package --test registry
