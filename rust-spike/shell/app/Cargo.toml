@@ -17,6 +17,9 @@ moss-backtrack-host = { path = "../../../modules/backtrack/host" }
 moss-scratchpad-host = { path = "../../../modules/scratchpad/host" }
 moss-meetings-host = { path = "../../../modules/meetings/host" }
 moss-memory-host = { path = "../../../modules/memory/host" }
+moss-integrations = { path = "../../integrations" }
+moss-integrations-host = { path = "../../integrations/host" }
+moss-platform-jobs = { path = "../../module-host/bridges/jobs" }
 anyhow = "1"
 safety-core = { path = "../../safety-core" }
 uuid = "1"
