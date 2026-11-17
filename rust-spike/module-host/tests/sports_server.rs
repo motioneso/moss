@@ -609,6 +609,61 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
         assert!(["unavailable", "rejected", "ok"].contains(&proposed["status"].as_str().unwrap_or_default()), "{text}");
         println!("sports live: NOT PROVEN: no test endpoint key on this box, so no model was set up");
     }
+    // Part 14b. The nine source tools run through the real tool route of the real server. The
+    // approval is granted through the trusted host store, as the approval screen does, and nothing
+    // the server answers is rewritten.
+    {
+        struct NoModel;
+        impl moss_module_host::ai::Intelligence for NoModel {
+            fn generate(&self, _: &moss_module_host::runtime::CallScope, _: &moss_module_host::runtime::Request) -> anyhow::Result<Value> {
+                anyhow::bail!("No model")
+            }
+            fn embed(&self, _: &moss_module_host::runtime::CallScope, _: &moss_module_host::runtime::Request) -> anyhow::Result<Value> {
+                anyhow::bail!("No model")
+            }
+        }
+        let services = moss_module_host::services::ServicePorts::new(
+            &root.join("data"),
+            std::sync::Arc::new(safety_core::secret::SecretCipher::connectors(&Default::default()).unwrap()),
+            std::sync::Arc::new(NoModel),
+            std::sync::Arc::new(moss_module_host::runtime::DenyPorts),
+        )
+        .unwrap();
+        let tool = |who: &str, name: &str, parameters: Value| call(Method::POST, "/sports/tools/run", Some(who), Some(json!({"tool":name,"parameters":parameters})));
+        let (status, text) = tool(&cookie, "sports.listSources", json!({}));
+        assert_eq!(status, 200, "{text}\n{}", log());
+        println!("sports live: listSources through the tool route answered {}", json_of(&text)["data"]["sources"].as_array().map_or(0, Vec::len));
+        // A read-only preview of a real subreddit, then a save that is refused three ways.
+        let (status, text) = tool(&cookie, "sports.previewSource", json!({"url":"r/soccer"}));
+        assert_eq!(status, 200, "{text}\n{}", log());
+        let shown = json_of(&text)["data"].clone();
+        println!("sports live: previewSource through the tool route: {} {}", shown["status"], shown["reason"]);
+        if shown["status"] == "ok" {
+            let confirm = json!({
+                "confirmationId": shown["confirmationId"],
+                "authorizationAcknowledgement": shown["authorizationAcknowledgement"],
+                "canonicalDomain": shown["candidate"]["canonicalDomain"],
+                "confirmedFetchHosts": shown["candidate"]["confirmedFetchHosts"],
+                "targets": [],
+            });
+            let (status, text) = tool(&cookie, "sports.confirmSource", confirm.clone());
+            assert_eq!(status, 403, "no approval: {text}");
+            services.approve_tool(&access, "sports", "sports.confirmSource", &confirm).unwrap();
+            let (status, text) = tool(&cookie, "sports.confirmSource", confirm.clone());
+            assert_ne!(status, 200, "a plain approval without the displayed version must not save: {text}");
+            services.approve_tool_at_version(&access, "sports", "sports.confirmSource", &confirm, "an-old-version").unwrap();
+            let (status, text) = tool(&cookie, "sports.confirmSource", confirm.clone());
+            assert!(status == 200 && json_of(&text)["data"]["error"].as_str().is_some_and(|e| e.contains("approval no longer matches")), "{status} {text}");
+            let (_, text) = call(Method::GET, "/sources", Some(&cookie), None);
+            assert_eq!(json_of(&text)["sources"].as_array().unwrap().len(), 1, "nothing was saved: {text}");
+            println!("sports live: confirmSource refused with no approval, a plain approval and an old version; nothing saved");
+        } else {
+            println!("sports live: NOT PROVEN: the real subreddit preview answered {} {}", shown["status"], shown["reason"]);
+        }
+        let (status, text) = tool(&other, "sports.removeSource", json!({"sourceId":"99999999-9999-4999-8999-999999999999"}));
+        assert_eq!(status, 403, "{text}");
+        println!("sports live: removeSource asks first: refused without an approval");
+    }
     // Nothing the test sent reached the server log.
     assert!(!log().contains(MARK));
     println!("sports live: follows and standings choices for two people worked over HTTPS");
