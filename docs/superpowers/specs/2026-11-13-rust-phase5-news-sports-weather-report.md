@@ -994,3 +994,7 @@ how recipes work.
 
 - No blockers or majors. Three minors: the two above, and the call-ceiling note, which is listed
   under Not proven. None was changed.
+
+## Sports overview stories (part 12b)
+
+See `2026-11-17-rust-phase5-sports-part-12b-report.md`.
