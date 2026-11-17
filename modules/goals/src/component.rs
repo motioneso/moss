@@ -18,6 +18,7 @@ impl Host for ComponentHost {
         )?;
         let response = match port {
             "db" => moss::module::db::call(&request),
+            "tools" => moss::module::tools::call(&request),
             "context" => moss::module::context::call(&request),
             _ => return Err(Error::new("Unsupported Goals host port")),
         }

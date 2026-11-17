@@ -34,4 +34,16 @@ const run = spawnSync(
     }
   }
 );
-process.exit(run.status ?? 1);
+if (run.status !== 0) process.exit(run.status ?? 1);
+// Run security assertions with each guard removed, then restore and run the protected tests.
+const controls = spawnSync("python3", ["modules/goals/tools/privacy-controls.py"], {
+  stdio: "inherit",
+  env: {
+    ...process.env,
+    JS48_APP_URL: urls.app,
+    JS48_BOOTSTRAP_URL: urls.bootstrap,
+    JS48_WORKER_URL: urls.worker,
+    GOALS_COMPONENT_WASM: `${process.env.CARGO_TARGET_DIR ?? "/tmp/moss-goals-host"}/module.wasm`
+  }
+});
+process.exit(controls.status ?? 1);

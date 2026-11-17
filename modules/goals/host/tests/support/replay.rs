@@ -1,6 +1,9 @@
 //! Replays the old routes against the installed package, step for step.
 use serde_json::{json, Value};
-use std::{io::Write, process::{Command, Stdio}};
+use std::{
+    io::Write,
+    process::{Command, Stdio},
+};
 
 /// Ids and times differ between two runs, so both sides are compared with them masked.
 pub fn mask(value: &mut Value) {
@@ -45,10 +48,46 @@ pub fn old_routes(actor: uuid::Uuid, steps: &[Value], vars: &Value) -> Vec<Value
         .stdin
         .take()
         .unwrap()
-        .write_all(json!({"actor":actor,"steps":filled,"vars":{}}).to_string().as_bytes())
+        .write_all(
+            json!({"actor":actor,"steps":filled,"vars":{}})
+                .to_string()
+                .as_bytes(),
+        )
         .unwrap();
     let out = child.wait_with_output().unwrap();
-    assert!(out.status.success(), "Old route oracle failed: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "Old route oracle failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let parsed: Value = serde_json::from_slice(&out.stdout).unwrap();
     parsed["responses"].as_array().unwrap().clone()
+}
+
+pub fn old_tool(actor: uuid::Uuid, tool: &str, parameters: Value) -> Value {
+    let mut child = Command::new("pnpm")
+        .args(["exec", "tsx", "modules/goals/tools/tools-oracle.ts"])
+        .current_dir(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.."))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(
+            json!({"actor":actor,"tool":tool,"parameters":parameters})
+                .to_string()
+                .as_bytes(),
+        )
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert!(
+        output.status.success(),
+        "Legacy tools failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    serde_json::from_slice(&output.stdout).unwrap()
 }
