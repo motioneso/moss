@@ -46,8 +46,8 @@ pub fn enqueue_day<H: Host + ?Sized>(host: &H, plan_id: &str, day_id: &str) -> R
             "availableAt": crate::util::context(host)?.1
         }),
     );
-    if let Err(e) = &queued {
-        store::set_plan_state(host, plan_id, "paused", Some(&format!("DIAG {e:?}")))?;
+    if queued.is_err() {
+        store::set_plan_state(host, plan_id, "paused", Some("pending"))?;
     }
     Ok(())
 }
