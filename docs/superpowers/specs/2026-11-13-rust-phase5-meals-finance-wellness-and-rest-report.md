@@ -134,3 +134,12 @@ scripts/run-gate.sh start --gate test:rust-web-research-live
 - **Page reading** is part 11. News still does not call this package in Rust. Wiring it is a News part.
 - **Other devices.** The live run was on the same machine. Nothing was checked from a phone or
   second device, because this part has no screen.
+- **The old server-side key variable is not read.** The old code also accepted a Brave key from an
+  environment variable. The package reads only the saved key, so an install that relied on the
+  variable has no search until the settings part adds a way to save it. Nothing in the Rust build
+  ships to an existing install yet.
+- **Small differences from the old tool.** A blank query is refused with an error where the old
+  tool returned an unavailable result. Result addresses for IPv6 hosts drop the square brackets.
+  The Brave call has no 8 second cap of its own and uses the time the host has left.
+- **A failure reading the chat model shows as "no model".** The search stays off either way, but
+  the reason shown can be the wrong one.

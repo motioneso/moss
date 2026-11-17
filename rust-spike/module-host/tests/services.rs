@@ -856,7 +856,10 @@ fn credential_status_says_only_whether_a_key_is_saved() {
         resources: ["example.test".into()].into(),
         allow_private: false,
     });
-    for (name, scope) in [("shared", CredentialScope::Instance), ("mine", CredentialScope::Account)] {
+    for (name, scope) in [
+        ("shared", CredentialScope::Instance),
+        ("mine", CredentialScope::Account),
+    ] {
         m.credentials.insert(
             name.into(),
             Credential {
@@ -868,24 +871,67 @@ fn credential_status_says_only_whether_a_key_is_saved() {
         );
     }
     let status = |who, name: &str, resource: &str| {
-        let request = json!({"operation":"status","resource":resource,"parameters":{"credential":name}});
+        let request =
+            json!({"operation":"status","resource":resource,"parameters":{"credential":name}});
         call(&host, services.clone(), &m, who, "credentials", request)
     };
-    assert_eq!(status(a, "shared", "example.test").unwrap(), json!({"configured":false}));
+    assert_eq!(
+        status(a, "shared", "example.test").unwrap(),
+        json!({"configured":false})
+    );
     let secret = "test-only-status-secret";
     // The host stores an instance key under its own nil-UUID account.
     for (name, owner) in [("shared", uuid::Uuid::nil()), ("mine", a)] {
         services
-            .set_credential(&AccessContext::new(owner, "configure"), &m.id, name, &SecretFields::new().with("apiKey", Secret::new(secret)))
+            .set_credential(
+                &AccessContext::new(owner, "configure"),
+                &m.id,
+                name,
+                &SecretFields::new().with("value", Secret::new(secret)),
+            )
             .unwrap();
     }
     let on = status(a, "shared", "example.test").unwrap();
     assert_eq!(on, json!({"configured":true}));
     assert!(!on.to_string().contains(secret));
     // An instance key is the same for everyone. An account key is each person's own.
-    assert_eq!(status(b, "shared", "example.test").unwrap(), json!({"configured":true}));
-    assert_eq!(status(a, "mine", "example.test").unwrap(), json!({"configured":true}));
-    assert_eq!(status(b, "mine", "example.test").unwrap(), json!({"configured":false}));
+    assert_eq!(
+        status(b, "shared", "example.test").unwrap(),
+        json!({"configured":true})
+    );
+    assert_eq!(
+        status(a, "mine", "example.test").unwrap(),
+        json!({"configured":true})
+    );
+    assert_eq!(
+        status(b, "mine", "example.test").unwrap(),
+        json!({"configured":false})
+    );
+    // A record with no value, or a blank one, does not count as a saved key.
+    services
+        .set_credential(
+            &AccessContext::new(b, "configure"),
+            &m.id,
+            "mine",
+            &SecretFields::new().with("value", Secret::new("  ")),
+        )
+        .unwrap();
+    assert_eq!(
+        status(b, "mine", "example.test").unwrap(),
+        json!({"configured":false})
+    );
+    services
+        .set_credential(
+            &AccessContext::new(b, "configure"),
+            &m.id,
+            "mine",
+            &SecretFields::new().with("other", Secret::new(secret)),
+        )
+        .unwrap();
+    assert_eq!(
+        status(b, "mine", "example.test").unwrap(),
+        json!({"configured":false})
+    );
     // A name the manifest does not declare, or a destination it is not bound to, is refused.
     assert!(status(a, "unknown", "example.test").is_err());
     assert!(status(a, "shared", "other.test").is_err());
@@ -924,8 +970,17 @@ fn chat_capabilities_reports_search_ability_and_nothing_else() {
         call(&host, services_for(data.path(), ai), &m, a, "ai", request)
     };
     assert_eq!(ask(Arc::new(NoAi), "chat").unwrap(), json!({"model":null}));
-    assert_eq!(ask(Arc::new(SearchingAi(None)), "chat").unwrap(), json!({"model":null}));
-    assert_eq!(ask(Arc::new(SearchingAi(Some(true))), "chat").unwrap(), json!({"model":{"webSearch":true}}));
-    assert_eq!(ask(Arc::new(SearchingAi(Some(false))), "chat").unwrap(), json!({"model":{"webSearch":false}}));
+    assert_eq!(
+        ask(Arc::new(SearchingAi(None)), "chat").unwrap(),
+        json!({"model":null})
+    );
+    assert_eq!(
+        ask(Arc::new(SearchingAi(Some(true))), "chat").unwrap(),
+        json!({"model":{"webSearch":true}})
+    );
+    assert_eq!(
+        ask(Arc::new(SearchingAi(Some(false))), "chat").unwrap(),
+        json!({"model":{"webSearch":false}})
+    );
     assert!(ask(Arc::new(SearchingAi(Some(true))), "other").is_err());
 }
