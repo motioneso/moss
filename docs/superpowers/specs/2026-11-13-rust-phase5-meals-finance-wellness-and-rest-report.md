@@ -852,3 +852,74 @@ scripts/run-gate.sh start --gate test:rust-plaid-live
 - **Link and public tokens reach the module** on purpose. Only keys and bank tokens are hidden.
 - **No App Map entries,** because no screen, setting or route was added.
 - **Route parity** does not apply, since no route was added.
+
+## Finance package skeleton (part 20)
+
+### What was built
+
+- The Finance package: manifest with App Map entries, the old ledger kept as a module-legacy
+  ledger (42 SQL files, 24 tables), the account list, manual account create and manual entries.
+- Six routes and four tools. The old code had no HTTP routes, so the routes exist for the live
+  proof and for later screens. Tools and routes share one code path.
+- Old rules kept: operation id must be a UUID v4 and is stored as `manual:<uuid>`, 12 currencies,
+  6 account types and their stored kinds, no future dates, trimmed names, note and amount limits,
+  the ordered-JSON digest, the balance direction per account type, and the old result codes.
+- Host change 1: legacy-ledger tables get owner-only row-level security and grants at install,
+  because the old SQL has none. Tables that already have policies are left alone.
+- Host change 2: a typed insert may name a column called `actor` (the old activity table has
+  one). Only column names inside `values` are exempt. Identity keys anywhere else, or nested in
+  a value, are still refused. One host unit test covers it.
+
+### Proof
+
+| Check                                                                                     | Result                                                                                                            |
+| ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Native guest tests (`finance.rs` 18, `privacy.rs` 4)                                      | passed                                                                                                            |
+| Package tests (6) and the real component built as WebAssembly                             | passed, component loads in the real host                                                                          |
+| Installed package, two people plus an admin, row-level security                           | passed; with security removed the admin saw rows and the second person listed A's account (RED), restored (GREEN) |
+| Same operation id from two people makes one account each                                  | passed                                                                                                            |
+| Chat writes need an exact, one-use approval tied to the account                           | passed                                                                                                            |
+| Planted name, note and amounts searched in 14 tables, job payloads and activity rows      | found only in ledger rows                                                                                         |
+| Put the amount into the activity row                                                      | host scan failed, restored                                                                                        |
+| Let a host failure echo its text                                                          | guest test failed, restored                                                                                       |
+| Live run: real server, real HTTPS on a non-loopback address, untrusted origin, signed out | passed: 403 for untrusted origin, 401 signed out, account and entry worked, second person saw none                |
+| Moss reachable from another device                                                        | passed, same live run                                                                                             |
+
+From the repo root, through the gate script:
+
+```
+scripts/run-gate.sh start --gate test:rust-finance
+```
+
+```
+scripts/run-gate.sh start --gate test:rust-finance-live
+```
+
+### Deliberate differences from the old code
+
+- Activity rows hold ids only. The old rows could hold more.
+- Refusals come back as `{"status":"error","code","message"}` data from tools and as HTTP 4xx
+  from routes.
+- The category list is the 16 seeded defaults, or the saved list once the budget policy says
+  categories are ready. The old key-value fallback is not built.
+- Two writers on one account use a revision check, not a row lock. The loser rereads once, so
+  a repeated operation answers unchanged. A second loss fails the call with no balance change.
+- The account list sorts by account id in the database, so mixed manual and bank ids may order
+  differently from the old list.
+- A missing time zone and an unavailable old storage upgrade show as a generic tool failure, not
+  the old named errors.
+
+### Not proven or not built
+
+- **Parity against the running old code.** The old Finance had no routes. Rules, codes and
+  digests are checked by table-driven cases copied from the old handlers, and the digest was
+  checked equal to node's earlier. The old handlers were not run side by side.
+- **Shared accounts.** The shared-accounts mirror is not built, so the list shows own accounts.
+- **Bank link, sync, budgets, screens** belong to later parts.
+- **The wasm run is the packaged component loaded by the installed and live tests.** The guest
+  unit tests themselves run native only.
+- **Rollback after a late failure** is not shown by a test. The host rolls the whole call back,
+  but no test forces a failure after the balance moves.
+- **The privacy scan reads database tables and the server log,** not the chat approval record.
+- **The two negative controls** cover the leak routes that were wired. Other fields were not
+  each given a control.
