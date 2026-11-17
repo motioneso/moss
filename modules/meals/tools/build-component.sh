@@ -5,7 +5,7 @@ if [[ $# != 1 ]]; then
   echo 'Usage: modules/meals/tools/build-component.sh <output.wasm>' >&2
   exit 2
 fi
-target_dir="${GOALS_GUEST_TARGET_DIR:-${CARGO_TARGET_DIR:-$PWD/modules/meals/src/target}}"
+target_dir="${MEALS_GUEST_TARGET_DIR:-${CARGO_TARGET_DIR:-$PWD/modules/meals/src/target}}"
 CARGO_TARGET_DIR="$target_dir" cargo +1.95.0 build --locked --offline --manifest-path modules/meals/src/Cargo.toml \
   --target wasm32-unknown-unknown --release
 CARGO_TARGET_DIR="$target_dir/component-encoder" cargo +1.95.0 run --locked --offline \
