@@ -45,6 +45,9 @@ fn read_key(input: &Map<String, Value>) -> std::result::Result<Key, Refusal> {
 }
 
 fn category_name<H: Host + ?Sized>(host: &H, id: &str) -> Result<String> {
+    if let Some(live) = crate::accounts::categories(host)?.into_iter().find(|c| c.id == id) {
+        return Ok(live.name);
+    }
     Ok(first(host, CATEGORIES, Filter::eq("id", id))?
         .and_then(|r| r["name"].as_str().map(str::to_owned))
         .unwrap_or_else(|| id.to_owned()))

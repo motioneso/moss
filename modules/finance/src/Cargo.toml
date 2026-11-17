@@ -36,3 +36,15 @@ path = "../tests/finance.rs"
 [[test]]
 name = "privacy"
 path = "../tests/privacy.rs"
+
+[[test]]
+name = "transactions"
+path = "../tests/transactions.rs"
+
+[[test]]
+name = "import"
+path = "../tests/import.rs"
+
+[[test]]
+name = "isolation"
+path = "../tests/isolation.rs"
