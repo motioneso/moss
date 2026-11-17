@@ -332,7 +332,7 @@ fn the_route_hands_every_tool_to_the_host_for_approval() {
         f.route(
             "POST",
             "/meals/tools/run",
-            json!({"tool":"meals.plan.delete","parameters":{}})
+            json!({"tool":"meals.not.a.tool","parameters":{}})
         )
         .0,
         400
