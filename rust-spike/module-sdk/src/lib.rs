@@ -98,9 +98,26 @@ pub struct RouteRequest {
 pub struct Response {
     pub status: u16,
     pub body: Value,
+    /// A picture the shell sends as the response body instead of JSON.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image: Option<Image>,
+}
+/// A picture a route returns. The bytes travel as base64 inside the JSON reply, so the host
+/// message limit bounds the picture. The shell checks the type and size before sending it.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Image {
+    pub content_type: String,
+    pub base64: String,
+    /// Seconds the person's browser may keep the picture.
+    pub max_age: u32,
 }
 impl Response {
     pub fn new(status: u16, body: Value) -> Self {
-        Self { status, body }
+        Self { status, body, image: None }
+    }
+    pub fn image(content_type: &str, base64: String, max_age: u32) -> Self {
+        let image = Image { content_type: content_type.into(), base64, max_age };
+        Self { status: 200, body: Value::Null, image: Some(image) }
     }
 }

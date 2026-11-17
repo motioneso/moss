@@ -1,10 +1,10 @@
-//! Account deletion and export shape. Deleting an account removes all eight tables by cascade.
+//! Account deletion and export shape. Deleting an account removes all nine tables by cascade.
 use crate::util::iso_or_null;
 use moss_module_sdk::{query::Order, query::Query, Client, Error, Host, Result};
 use serde_json::{Map, Value};
 
 pub const COUNT_PREDICATE: &str = "owner_user_id = $1::uuid";
-pub const OWNED_TABLES: [&str; 8] = [
+pub const OWNED_TABLES: [&str; 9] = [
     "app.news_prefs",
     "app.news_custom_sources",
     "app.news_custom_topics",
@@ -13,6 +13,7 @@ pub const OWNED_TABLES: [&str; 8] = [
     "app.news_refresh_state",
     "app.news_policy_verdicts",
     "app.news_source_credentials",
+    "app.news_story_feedback",
 ];
 const PAGE: u32 = 100;
 
