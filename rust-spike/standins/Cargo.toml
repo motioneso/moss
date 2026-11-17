@@ -4,7 +4,7 @@ version = "0.0.0"
 edition = "2021"
 publish = false
 
-# Test-only stand-in servers for Google, IMAP and SMTP. Shipped nowhere: no module or app
+# Test-only stand-in servers for Google, IMAP, SMTP and Plaid. Shipped nowhere: no module or app
 # depends on this crate. Every dependency below is already in the workspace lock files.
 [workspace]
 

@@ -1,0 +1,25 @@
+[package]
+name = "moss-plaid-probe"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Test-only guest that asks the host broker to talk to Plaid. Never shipped."
+
+[workspace]
+
+[lib]
+path = "lib.rs"
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+moss-module-sdk = { path = "../../../module-sdk" }
+serde_json = "1"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wit-bindgen = { version = "=0.57.1", default-features = false, features = ["macros", "realloc"] }
+
+[profile.release]
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

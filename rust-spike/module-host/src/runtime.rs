@@ -384,7 +384,7 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
             "The browser opens public pages only"
         ),
         // Only whether a credential is saved. The value is never a port result.
-        "credentials" if request.operation == "status" => {
+        "credentials" if matches!(request.operation.as_str(), "status" | "forget") => {
             let name = request.parameters["credential"]
                 .as_str()
                 .context("A credential name is required")?;

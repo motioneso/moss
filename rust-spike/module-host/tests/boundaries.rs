@@ -235,6 +235,8 @@ fn approval_describes_changed_credential_tool_and_install_scope() {
             scope: CredentialScope::Instance,
             hosts: ["example.test".into()].into(),
             attachment: Attachment::Header("authorization".into()),
+            with: vec![],
+            expose_fields: Default::default(),
         },
     );
     new.tools.insert(
