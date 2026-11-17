@@ -459,6 +459,14 @@ and manage them. It uses the shared reader and the plain public-web fetch. It st
   database, three older tests (overview, privacy of typed text, repeat follow) fail. The same three
   fail when the Sports package is replaced with the code on main, so the cause is not part 13. Run
   in smaller groups, every test passes, including all four new ones. The cause is not found.
+- Two saves of one person's coverage at the same instant are not serialized. The old code takes a
+  per-person lock first. The new code reads and deletes first, so two simultaneous saves can leave
+  both choices, or one can fail. The same gap lets two simultaneous confirmations of one preview
+  both pass the stale check. Closing this needs the Sports package to use the host's opt-in
+  transaction port, which part 13 does not.
+- A preview is not strictly single-use under simultaneous calls. Taking one reads and rewrites the
+  person's whole preview list in separate steps, so a used preview can come back or a new one can
+  be lost. Closing this needs an atomic store change in the host.
 - The live add of a real subreddit did not happen. Reddit answered the real server "sign-in needed"
   or "rate limited" on all 4 tries, and the same box gets 200, 403 and 429 from Reddit in turn when
   asked with curl. The test reports this as not proven instead of failing. The News parts read
@@ -700,3 +708,9 @@ fallback was found in either round.
 - Reaching the browser port from a phone or another computer was not tested. The port adds no
   listener. The live run reached the server on this machine only.
 - The live run reached the guest through the install path, not an HTTP route, as in part 14.
+
+### Review round 1 (part 13)
+
+Codex found no blocker, no cross-person leak and no secret exposure. It found one major point
+(coverage and stale-check saves are not serialized) and one minor point (preview store is not
+atomic). Neither is fixed here. Both need a host-side change and are listed in the not-proven list.
