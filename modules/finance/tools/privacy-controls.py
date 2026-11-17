@@ -56,11 +56,11 @@ control("activity amounts", "modules/finance/src/ledger.rs",
         'json!({"accountId":account_id,"transactionId":id,"amountCents":amount})',
         "modules/finance/host/Cargo.toml", "installed", HOST, ["--ignored", "--test-threads=1"], target,
         rebuild=True)
-# A queued poll must hold ids only. Put the link seed into its payload and the bank scan must fail.
+# The connect activity row must hold ids only. Put an account name into it and the bank scan must fail.
 BANK = "bank_tokens_and_private_text_never_reach_job_rows_activity_rows_or_finance_tables"
-control("poll payload", "modules/finance/src/bank.rs",
-        'json!({"params": {}, "idempotencyKey": job_key(seed)',
-        'json!({"params": {"seed": seed}, "idempotencyKey": job_key(seed)',
+control("connect activity", "modules/finance/src/connect.rs",
+        '"bank.connect" }, json!({"itemId":item_id}))',
+        '"bank.connect" }, json!({"itemId":item_id,"name":listing.accounts[0].name}))',
         "modules/finance/host/Cargo.toml", "installed", BANK, ["--ignored", "--test-threads=1"], target,
         rebuild=True)
 # Re-run the assertions after restoring their guards; a negative control alone is not proof.
