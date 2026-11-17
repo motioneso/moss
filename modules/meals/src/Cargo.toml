@@ -40,3 +40,7 @@ path = "../tests/privacy.rs"
 [[test]]
 name = "lists"
 path = "../tests/lists.rs"
+
+[[test]]
+name = "log"
+path = "../tests/log.rs"
