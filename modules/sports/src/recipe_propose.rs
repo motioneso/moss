@@ -14,6 +14,7 @@ const EVIDENCE_CAP: usize = 3000;
 const HOMEPAGE_CAP: usize = 16000;
 const EVIDENCE_PAGE_BYTES: u64 = 64_000;
 const EVIDENCE_PIECES: usize = 4;
+const RENDERED_CAP: usize = 8000;
 const CANDIDATE_LINKS: usize = 4;
 const REPLAY_CAP: usize = 10;
 const SAMPLE_CAP: usize = 10;
@@ -179,20 +180,30 @@ pub fn replay<H: Host + ?Sized>(host: &H, recipe: &Recipe, parameters: &[Value])
     Ok(Some(out))
 }
 
-/// The whole proposal: gather evidence, ask the model, check the reply, replay the recipe.
-pub fn propose<H: Host + ?Sized>(
-    host: &H,
-    homepage_url: &str,
-    homepage_body: &str,
-    wanted: &[Wanted],
-    allowed: &[String],
-    fixed: Option<&Recipe>,
-) -> Result<Outcome> {
-    let pieces = evidence(host, homepage_url, homepage_body, wanted, allowed)?;
+/// The plain-fetch evidence: the homepage, the pages a person asked for, and a few same-site links.
+pub fn gather<H: Host + ?Sized>(host: &H, homepage_url: &str, homepage_body: &str, wanted: &[Wanted], allowed: &[String]) -> Result<Vec<Value>> {
+    evidence(host, homepage_url, homepage_body, wanted, allowed)
+}
+
+/// Evidence from a page the sandboxed browser rendered: its visible text and the links it found.
+/// The homepage piece stays first, the rendered pieces follow, and plain pieces fill what is left.
+pub fn with_rendered(plain: &[Value], final_url: &str, text: &str, links: &[(String, String)]) -> Vec<Value> {
+    let mut pieces: Vec<Value> = plain.iter().take(1).cloned().collect();
+    pieces.push(json!({"url": final_url, "rendered": true, "text": clean(text, RENDERED_CAP)}));
+    if !links.is_empty() {
+        let lines: Vec<String> = links.iter().map(|(url, label)| format!("{} -> {url}", clean(label, 200))).collect();
+        pieces.push(json!({"url": final_url, "rendered": true, "links": lines}));
+    }
+    pieces.extend(plain.iter().skip(1).take(EVIDENCE_PIECES.saturating_sub(pieces.len())).cloned());
+    pieces
+}
+
+/// Asks the model with the evidence given, checks the reply, and replays the recipe.
+pub fn ask<H: Host + ?Sized>(host: &H, pieces: &[Value], wanted: &[Wanted], allowed: &[String], fixed: Option<&Recipe>) -> Result<Outcome> {
     if fixed.is_some() && wanted.is_empty() {
         return Ok(Outcome::Rejected);
     }
-    let answer = host.call("ai", "generate", "structured", json!({"prompt": prompt(&pieces, wanted, allowed, fixed), "maxOutputTokens": 4000}));
+    let answer = host.call("ai", "generate", "structured", json!({"prompt": prompt(pieces, wanted, allowed, fixed), "maxOutputTokens": 4000}));
     let Ok(answer) = answer else { return Ok(Outcome::Unavailable) };
     let Some(reply) = answer["text"].as_str().and_then(reply_value) else { return Ok(Outcome::Rejected) };
     let parsed = match fixed {
@@ -203,4 +214,17 @@ pub fn propose<H: Host + ?Sized>(
     let Some(replays) = replay(host, &recipe, &parameters)? else { return Ok(Outcome::Rejected) };
     let fingerprint = recipe::fingerprint(&recipe);
     Ok(Outcome::Recipe(Box::new(Proposed { recipe, fingerprint, replays })))
+}
+
+/// The whole plain proposal: gather evidence, ask the model, check the reply, replay the recipe.
+pub fn propose<H: Host + ?Sized>(
+    host: &H,
+    homepage_url: &str,
+    homepage_body: &str,
+    wanted: &[Wanted],
+    allowed: &[String],
+    fixed: Option<&Recipe>,
+) -> Result<Outcome> {
+    let pieces = gather(host, homepage_url, homepage_body, wanted, allowed)?;
+    ask(host, &pieces, wanted, allowed, fixed)
 }

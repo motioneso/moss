@@ -282,6 +282,36 @@ fn resolve_site<H: Host + ?Sized>(host: &H, raw: &str, wanted: &[Wanted], author
     })))
 }
 
+/// Renders the homepage in the host's sandboxed browser and turns what it saw into evidence.
+/// Any refusal (no browser, a chat call, busy, slow, blank page, an address outside the confirmed
+/// sites) answers `None`, so the caller keeps the plain-fetch result.
+fn render_evidence<H: Host + ?Sized>(host: &H, homepage_url: &str, plain: &[serde_json::Value], confirmed: &[String], domain: &str) -> Option<Vec<serde_json::Value>> {
+    let mut allowed = dedupe(std::iter::once(exact_host(homepage_url)).chain(confirmed.iter().cloned()));
+    allowed.truncate(MAX_CONFIRMED_HOSTS);
+    let listed: Vec<&str> = allowed.iter().map(String::as_str).collect();
+    let rendered = moss_module_sdk::Client(host).render_page(homepage_url, &listed).ok()?;
+    if rendered["ok"] != true {
+        return None;
+    }
+    let final_url = rendered["finalUrl"].as_str()?;
+    if !allowed.contains(&exact_host(final_url)) || web::accepted_final_domain(final_url, domain).is_none() {
+        return None;
+    }
+    let text = rendered["text"].as_str().unwrap_or_default();
+    if text.trim().is_empty() {
+        return None;
+    }
+    let links: Vec<(String, String)> = rendered["candidates"]
+        .as_array()
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|c| Some((c["url"].as_str()?.to_owned(), c["text"].as_str()?.to_owned())))
+        .filter(|(url, _)| allowed.contains(&exact_host(url)) && web::accepted_final_domain(url, domain).is_some())
+        .collect();
+    Some(crate::recipe_propose::with_rendered(plain, final_url, text, &links))
+}
+
 /// A site with no feed: the model proposes a recipe (or fills a saved one), and the recipe is kept
 /// only after a replay through the real fetch path returns headlines.
 fn scrape_candidate<H: Host + ?Sized>(
@@ -293,7 +323,7 @@ fn scrape_candidate<H: Host + ?Sized>(
     domain: String,
     hosts: Vec<String>,
 ) -> Result<Resolution> {
-    use crate::recipe_propose::{propose, Outcome};
+    use crate::recipe_propose::{ask, gather, Outcome};
     let fixed = match authority.and_then(|a| a.recipe.as_ref()) {
         Some(value) => match crate::recipe::validate(value) {
             Some(recipe) => Some(recipe),
@@ -301,7 +331,16 @@ fn scrape_candidate<H: Host + ?Sized>(
         },
         None => None,
     };
-    let proposed = match propose(host, homepage_url, homepage_body, wanted, &hosts, fixed.as_ref())? {
+    let plain = gather(host, homepage_url, homepage_body, wanted, &hosts)?;
+    let mut outcome = ask(host, &plain, wanted, &hosts, fixed.as_ref())?;
+    if matches!(outcome, Outcome::Rejected) {
+        // The plain page gave no usable recipe. A page that hides its headlines until scripts run
+        // gets one render, and one more proposal from what the browser saw.
+        if let Some(rendered) = render_evidence(host, homepage_url, &plain, &hosts, &domain) {
+            outcome = ask(host, &rendered, wanted, &hosts, fixed.as_ref())?;
+        }
+    }
+    let proposed = match outcome {
         Outcome::Recipe(proposed) => proposed,
         Outcome::Unavailable => return Ok(Resolution::Rejected("unavailable")),
         Outcome::Rejected => return Ok(Resolution::Rejected("unsupported")),

@@ -4,7 +4,7 @@
   "name": "Sports",
   "publisher": "Moss",
   "version": "0.1.0",
-  "description": "Keeps each person's followed leagues and teams, private to the owner. A whole league can be followed once, and following it again returns the saved follow. A followed team is tied to the provider's permanent team number. The standings picker remembers the leagues a person chose and the standings view they last opened, under the same saved settings as before. Account export and deletion cover all six Sports tables. The package reads ESPN's public data for the league catalog, each league's team list and club search, and keeps a shared copy so one person's lookup serves everyone. The copy holds only public sports data, never a person's follows or searches. Following a team checks the live team list and is refused, with the same fail-closed messages the old app gave, when ESPN is down. Scoreboard, standings and news reading are built but not yet offered as routes. A person can add news sources of their own, up to ten, each a website with a news feed or a subreddit, and choose which sports and followed teams each one covers, up to twenty choices in all. Adding a source shows a preview first, which names the reason when a site cannot be used, and a source saves only after the person confirms it. Two subreddits that differ only by letter case are one source. The package reads those public sites itself, and keeps unconfirmed previews for ten minutes under the person's own saved settings. A site with no feed can get a recipe that the person's chosen AI model proposes. The recipe is a strict description of one public address and where the headlines sit in it, it may only name sites the person already confirmed, and it is saved only after a real replay finds headlines. Sources are read again on a schedule without a browser or article text, each source shows whether it is healthy, drifted or missing its recipe, and a person can retry a source or rebuild its recipe after confirming a preview. Nine chat tools list, preview, confirm, retry, rebuild and remove sources. Every change asks the person first, showing a card built from the saved source and the stored preview, and removing a source asks before it deletes. Headline photos, sites that need a browser, the followed-team chat tools and the screens are not part of this package yet.",
+  "description": "Keeps each person's followed leagues and teams, private to the owner. A whole league can be followed once, and following it again returns the saved follow. A followed team is tied to the provider's permanent team number. The standings picker remembers the leagues a person chose and the standings view they last opened, under the same saved settings as before. Account export and deletion cover all six Sports tables. The package reads ESPN's public data for the league catalog, each league's team list and club search, and keeps a shared copy so one person's lookup serves everyone. The copy holds only public sports data, never a person's follows or searches. Following a team checks the live team list and is refused, with the same fail-closed messages the old app gave, when ESPN is down. Scoreboard, standings and news reading are built but not yet offered as routes. A person can add news sources of their own, up to ten, each a website with a news feed or a subreddit, and choose which sports and followed teams each one covers, up to twenty choices in all. Adding a source shows a preview first, which names the reason when a site cannot be used, and a source saves only after the person confirms it. Two subreddits that differ only by letter case are one source. The package reads those public sites itself, and keeps unconfirmed previews for ten minutes under the person's own saved settings. A site with no feed can get a recipe that the person's chosen AI model proposes. The recipe is a strict description of one public address and where the headlines sit in it, it may only name sites the person already confirmed, and it is saved only after a real replay finds headlines. Sources are read again on a schedule without a browser or article text, each source shows whether it is healthy, drifted or missing its recipe, and a person can retry a source or rebuild its recipe after confirming a preview. Nine chat tools list, preview, confirm, retry, rebuild and remove sources. Every change asks the person first, showing a card built from the saved source and the stored preview, and removing a source asks before it deletes. When a site shows no headlines until its scripts run, adding or rebuilding a source from the screen can open the page in a sandboxed browser, and the AI model proposes the recipe from what the browser saw. A machine that cannot run the browser safely, or a chat tool, keeps the plain reading. Headline photos, the followed-team chat tools and the screens are not part of this package yet.",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 250000000,
   "callLimitMs": 30000,
@@ -67,6 +67,11 @@
       "port": "fetch",
       "operations": ["get"],
       "resources": ["content.core.api.espn.com", "site.api.espn.com", "public-web"]
+    },
+    {
+      "port": "browser",
+      "operations": ["render"],
+      "resources": ["public-web"]
     }
   ],
   "installWideKv": [
@@ -353,7 +358,7 @@
         {
           "code": "sports_source_unsupported",
           "class": "validation",
-          "description": "The site has no news feed and the AI model could not give a recipe that finds headlines on the sites already confirmed, so it cannot be added. Sites that need a browser are not built."
+          "description": "The site has no news feed and the AI model could not give a recipe that finds headlines on the sites already confirmed, so it cannot be added. If the site only shows headlines after its scripts run and this machine cannot open the sandboxed browser, it cannot be added either."
         },
         {
           "code": "sports_source_limit",
@@ -388,6 +393,24 @@
         {
           "id": "sports.source_recipes.rebuild",
           "description": "Rebuild the recipe from the source's preview and confirm it, or retry the source later.",
+          "path": "/settings?section=modules&module=sports"
+        }
+      ]
+    },
+    {
+      "id": "sports.browser_discovery",
+      "description": "When the plain page gives the AI model no usable recipe, adding a source or rebuilding a recipe from the screen opens the home page once in a sandboxed browser that has no network of its own. The model then sees the page text and a few links as the browser rendered them, still only as data, and its recipe is checked and replayed exactly as before, through the plain fetch. Only the sites the person already confirmed can be opened. The browser is never used by a refresh, by a scheduled read, or by a chat tool. A machine that cannot run the browser safely, a busy or slow browser, or a page that shows nothing keeps the plain-fetch result, so the preview says the site is unsupported.",
+      "errors": [
+        {
+          "code": "sports_browser_unavailable",
+          "class": "transient",
+          "description": "The sandboxed browser is not set up on this machine, is busy, or took too long, so a script-driven site was read without it."
+        }
+      ],
+      "remediations": [
+        {
+          "id": "sports.browser_discovery.other-address",
+          "description": "Try the site's feed address or a subreddit, or try again in a minute.",
           "path": "/settings?section=modules&module=sports"
         }
       ]

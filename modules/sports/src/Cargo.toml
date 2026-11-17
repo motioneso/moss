@@ -63,3 +63,7 @@ path = "../tests/recipes.rs"
 [[test]]
 name = "source_tools"
 path = "../tests/source_tools.rs"
+
+[[test]]
+name = "browser_discovery"
+path = "../tests/browser_discovery.rs"
