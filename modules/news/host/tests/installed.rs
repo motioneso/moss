@@ -23,7 +23,8 @@ struct Approves(std::sync::Mutex<Vec<String>>);
 impl moss_module_host::ai::Intelligence for Approves {
     fn generate(&self, _: &CallScope, request: &Request) -> anyhow::Result<Value> {
         self.0.lock().unwrap().push(request.parameters.to_string());
-        Ok(json!({"text": "{\"allowed\":true,\"category\":\"news_publisher\"}"}))
+        let category = if request.parameters.to_string().contains("news TOPIC") { "news_topic" } else { "news_publisher" };
+        Ok(json!({"text": format!("{{\"allowed\":true,\"category\":\"{category}\"}}")}))
     }
     fn embed(&self, _: &CallScope, _: &Request) -> anyhow::Result<Value> {
         anyhow::bail!("News does not embed")
