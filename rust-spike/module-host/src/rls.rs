@@ -19,6 +19,7 @@ pub async fn emit(
             format!("({owner} OR app.has_share('{resource_type}',{share_key},'view'))"),
             format!("({owner} OR app.has_share('{resource_type}',{share_key},'manage'))"),
         ),
+        Some(TableAccess::HouseholdRead) => ("app.current_actor_user_id() IS NOT NULL".into(), owner.into()),
         _ => (owner.into(), owner.into()),
     };
     tx.batch_execute(&format!("ALTER TABLE {table} ENABLE ROW LEVEL SECURITY; ALTER TABLE {table} FORCE ROW LEVEL SECURITY; DROP POLICY IF EXISTS moss_module_actor ON {table}; GRANT SELECT,INSERT,UPDATE,DELETE ON {table} TO {role}; GRANT EXECUTE ON FUNCTION app.has_share(text,uuid,text) TO {role}")).await?;

@@ -151,6 +151,11 @@ pub fn query<H: Host + ?Sized>(host: &H, params: &Value) -> Result<Outcome> {
     for row in &rows {
         *groups.entry(duplicate_key(row)).or_default() += 1;
     }
+    // Household rows join the month before the filters run. They never count as duplicates or
+    // as needing a look, because they belong to someone else's books.
+    rows.extend(crate::shared::month_rows(host, &start, &next)?);
+    rows.sort_by(|a, b| b["date"].as_str().cmp(&a["date"].as_str()).then(a["id"].as_str().cmp(&b["id"].as_str())));
+    let dup = |r: &Value| if crate::shared::is_shared(r) { 0 } else { groups.get(&duplicate_key(r)).copied().unwrap_or(0) };
     rows.retain(|r| {
         let parts = splits_of(r);
         account.as_deref().is_none_or(|a| r["account_id"] == a)
@@ -176,19 +181,23 @@ pub fn query<H: Host + ?Sized>(host: &H, params: &Value) -> Result<Outcome> {
                 }
             })
             && (!uncategorized || (r["category_id"].is_null() && !split_balanced(r)))
-            && (!duplicates_only || groups.get(&duplicate_key(r)).copied().unwrap_or(0) >= 2)
+            && (!duplicates_only || dup(r) >= 2)
     });
-    let needs_look_count = rows.iter().filter(|r| needs_look(r)).count();
+    let looks = |r: &Value| !crate::shared::is_shared(r) && needs_look(r);
+    let needs_look_count = rows.iter().filter(|r| looks(r)).count();
     if needs_look_only {
-        rows.retain(needs_look);
+        rows.retain(|r| looks(r));
     }
     let total = rows.len();
     rows.truncate(limit);
     let shown: Vec<Value> = rows
         .iter()
         .map(|r| {
+            if crate::shared::is_shared(r) {
+                return crate::shared::view(r);
+            }
             let mut v = view(r);
-            if groups.get(&duplicate_key(r)).copied().unwrap_or(0) >= 2 {
+            if dup(r) >= 2 {
                 v["possibleDuplicate"] = json!(true);
             }
             v

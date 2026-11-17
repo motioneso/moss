@@ -185,6 +185,44 @@ impl World {
             id
         })
     }
+    /// Runs a tool as the actor through the host's own tool service, the way chat reaches it.
+    /// The host checks the account's approval first and answers an error when there is none.
+    fn tool(&self, actor: uuid::Uuid, name: &str, parameters: Value) -> anyhow::Result<Value> {
+        let probe = wat::parse_str(
+            include_str!("../../../../rust-spike/module-host/sample/module.wat").replace("moss:module/kv@", "moss:module/tools@"),
+        )
+        .unwrap();
+        let ports: Arc<dyn moss_module_host::runtime::Ports> = self.app.services.clone();
+        let out = Host::new(Limits::default()).unwrap().call(
+            &probe,
+            Arc::new(moss_sports_host::package::manifest().unwrap()),
+            AccessContext::new(actor, "sports-tool"),
+            ports,
+            "route",
+            &json!({"operation":"run","resource":name,"parameters":{"parameters":parameters}}).to_string(),
+        )?;
+        Ok(serde_json::from_str(&out)?)
+    }
+    /// The approval card for a change, built from stored records as the approval screen asks.
+    fn card(&self, actor: uuid::Uuid, name: &str, parameters: &Value) -> Value {
+        let out = self
+            .app
+            .installer
+            .call(
+                "sports",
+                AccessContext::new(actor, "sports-card"),
+                "api",
+                &json!({"name":"prepareSportsSourceAction","parameters":{"tool":name,"inputJson":parameters.to_string()}}).to_string(),
+            )
+            .unwrap();
+        serde_json::from_str::<Value>(&out).unwrap()["ok"].clone()
+    }
+    fn approve(&self, actor: uuid::Uuid, name: &str, parameters: &Value, version: &str) {
+        self.app.services.approve_tool_at_version(&AccessContext::new(actor, "sports-approve"), "sports", name, parameters, version).unwrap();
+    }
+    fn source_rows(&self, id: &str) -> i64 {
+        self.f.rt.block_on(self.f.root.query_one("SELECT count(*) FROM app.sports_custom_sources WHERE id::text=$1", &[&id])).unwrap().get(0)
+    }
     fn follow_rows(&self, who: uuid::Uuid) -> i64 {
         self.f.rt.block_on(self.f.root.query_one("SELECT count(*) FROM app.sports_follows WHERE owner_user_id=$1", &[&who])).unwrap().get(0)
     }
@@ -558,4 +596,97 @@ fn the_installed_source_routes_answer_like_the_old_routes_step_for_step() {
     let icon = w.call(w.f.a, "GET", "/sources/not-a-uuid/icon", Value::Null);
     assert_eq!((icon["status"].as_u64(), icon["body"]["error"].as_str()), (Some(404), Some("Sports source not found")), "{icon}");
     println!("PASS deliberate fix: an icon request with a bad id answers 404, not 500");
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn removing_a_source_asks_first_and_another_person_cannot_use_the_card_and_it_fails_without_row_security() {
+    let w = World::new();
+    let (a, b) = (w.f.a, w.f.b);
+    let id = w.plant_source(a, "news.example.com", "Example Daily").to_string();
+    let input = json!({"sourceId":id});
+    // The card is read from the saved row.
+    let card = w.card(a, "sports.removeSource", &input);
+    assert_eq!(card["title"], "Remove sports news source", "{card}");
+    assert!(card["fields"].to_string().contains("Example Daily"), "{card}");
+    // No approval: the host refuses and the row stays.
+    assert!(w.tool(a, "sports.removeSource", input.clone()).is_err(), "no approval, no removal");
+    assert_eq!(w.source_rows(&id), 1);
+    // An old version is refused by the tool and the row stays.
+    w.approve(a, "sports.removeSource", &input, "an-old-version");
+    let stale = w.tool(a, "sports.removeSource", input.clone()).unwrap();
+    assert!(stale["data"]["error"].as_str().is_some_and(|e| e.contains("approval no longer matches")), "{stale}");
+    assert_eq!(w.source_rows(&id), 1);
+    // B has no card for A's source and cannot remove it even with an approval of their own.
+    assert_eq!(w.card(b, "sports.removeSource", &input), Value::Null);
+    w.approve(b, "sports.removeSource", &input, "guess");
+    let theirs = w.tool(b, "sports.removeSource", input.clone()).unwrap();
+    assert!(theirs["data"]["error"].is_string(), "{theirs}");
+    assert_eq!(w.source_rows(&id), 1, "A's source survived B");
+    let listed = w.tool(b, "sports.listSources", json!({}));
+    if let Ok(listed) = &listed {
+        assert!(!listed.to_string().contains("news.example.com"), "{listed}");
+    }
+    println!("GREEN: removeSource asks first, refuses an old version, and B cannot see or remove A's source");
+    // With row security removed, B's card for A's source is built, so the protection is what stops it.
+    let table = "app.sports_custom_sources";
+    w.f.rt.block_on(w.f.root.batch_execute(&format!("ALTER TABLE {table} DISABLE ROW LEVEL SECURITY"))).unwrap();
+    let open = w.card(b, "sports.removeSource", &input);
+    w.f.rt.block_on(w.f.root.batch_execute(&format!("ALTER TABLE {table} ENABLE ROW LEVEL SECURITY; ALTER TABLE {table} FORCE ROW LEVEL SECURITY"))).unwrap();
+    assert!(open["title"].is_string(), "RED expected: B gets A's card with row security removed, got {open}");
+    assert_eq!(w.card(b, "sports.removeSource", &input), Value::Null, "restored");
+    println!("RED: with row security removed B is shown A's source on a removal card, and it is restored after");
+    // The real approval, shown and consumed once, removes the row.
+    let version = card["version"].as_str().unwrap();
+    w.approve(a, "sports.removeSource", &input, version);
+    let done = w.tool(a, "sports.removeSource", input.clone()).unwrap();
+    assert_eq!(done["data"]["removed"], true, "{done}");
+    assert_eq!(w.source_rows(&id), 0);
+    assert!(w.tool(a, "sports.removeSource", input).is_err(), "an approval is used once");
+    println!("PASS: the approved removal deleted the row and the approval worked once");
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn typed_tool_text_reaches_no_other_table() {
+    let w = World::new();
+    let a = w.f.a;
+    let host = format!("{}.example.com", MARK.to_lowercase());
+    for params in [
+        json!({"url":host}),
+        json!({"url":format!("r/{MARK}")}),
+        json!({"url":"news.example.com","assignments":[{"target":{"kind":"sport","sportKey":MARK}}]}),
+    ] {
+        w.approve(a, "sports.previewSource", &params, "v");
+        let out = w.tool(a, "sports.previewSource", params);
+        assert!(out.is_ok(), "{out:?}");
+    }
+    let confirm = json!({"confirmationId":MARK,"authorizationAcknowledgement":MARK,"canonicalDomain":MARK,"confirmedFetchHosts":[MARK],"targets":[]});
+    w.approve(a, "sports.confirmSource", &confirm, "v");
+    let out = w.tool(a, "sports.confirmSource", confirm).unwrap();
+    assert!(out["data"]["error"].is_string(), "{out}");
+    let tables: Vec<String> = w.f.rt.block_on(async {
+        w.f.root
+            .query(
+                "SELECT table_schema||'.'||table_name FROM information_schema.tables WHERE table_schema IN ('moss_queue','moss_modules') \
+                 OR table_name IN ('notifications','moss_activity_detail','moss_error_log','moss_action_audit_log','moss_model_activity_log') \
+                 OR table_name LIKE 'sports\\_%'",
+                &[],
+            )
+            .await
+            .unwrap()
+            .iter()
+            .map(|r| r.get(0))
+            .collect()
+    });
+    for table in &tables {
+        let hits: i64 = w
+            .f
+            .rt
+            .block_on(w.f.root.query_one(&format!("SELECT count(*) FROM {table} t WHERE lower(to_jsonb(t)::text) LIKE '%'||lower($1)||'%'"), &[&MARK]))
+            .unwrap()
+            .get(0);
+        assert_eq!(hits, 0, "{table} holds typed tool text");
+    }
+    println!("PASS privacy: scanned {} tables after tool calls, the planted text is in none", tables.len());
 }

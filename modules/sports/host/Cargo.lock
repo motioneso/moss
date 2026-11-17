@@ -1397,6 +1397,7 @@ dependencies = [
  "tokio",
  "tokio-postgres",
  "uuid",
+ "wat",
 ]
 
 [[package]]

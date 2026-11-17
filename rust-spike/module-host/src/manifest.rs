@@ -115,6 +115,9 @@ pub struct Database {
 #[serde(tag = "access", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum TableAccess {
     OwnerOnly,
+    /// Any signed-in person may read every row. Only the owner may write or delete. A module
+    /// uses it for a projection the owner chooses to publish, such as a shared-account mirror.
+    HouseholdRead,
     OwnerOrShare {
         #[serde(rename = "resourceType")]
         resource_type: String,
@@ -437,6 +440,12 @@ impl Manifest {
                 self.database.owned_tables.contains(table),
                 "Sharing may name only an owned table"
             );
+            if *access == TableAccess::HouseholdRead {
+                ensure!(
+                    self.database.ledger != Ledger::CoreLegacy,
+                    "Household read cannot apply to a core legacy table"
+                );
+            }
             if let TableAccess::OwnerOrShare {
                 resource_type,
                 share_key,

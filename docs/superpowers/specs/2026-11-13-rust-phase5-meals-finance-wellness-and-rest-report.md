@@ -1358,6 +1358,59 @@ Both ended with exit code 0. The first run of the package gate failed because a 
 - The stored-job-row search was not seen failing with protection off, because Finance queues no jobs. The control shows the search can find stored text.
 - No screens were built.
 
+## Host integrations (part 37)
+
+### What existed before this part
+
+Connected tools (outside services chat can call) had 10 routes, 9 SQL files and two sorting queues in the TypeScript server. Moss sorts each tool into a tier (reads, writes, sends things out) so chat knows what needs asking first. This part stays in the host with chat and is not a package.
+
+### What was built
+
+- A sorting library with the old tier rules, checked against the old code on shared fixtures.
+- A host layer with the 10 routes, the stored connections, the sort job, the manifest (12 features, copied from the old one) and tool discovery over MCP.
+- The connection credential is sealed with the old server's envelope and reads the same key variables as the old server, so either server opens the other's rows when both use the same key. The master-key store is not read. With no usable key the routes answer 503 "paused". Outside production, with no key set, a development key is used, as in the old server.
+- The Rust shell serves the routes and runs a worker that picks up queued sorts.
+- Account delete removes the person's connections.
+
+### Differences from the old code (on purpose)
+
+- A queued sort uses a random id for its de-duplication key, so repeated reads of a connection whose sort failed for lack of a model can queue several sorts. The old code queued one. This costs nothing today because the shell has no model, and must be fixed before a model is plugged in.
+- Refreshing with a pasted spec answers 422 "OpenAPI connections are not available yet." and leaves the row untouched.
+- Discovery does not follow redirects, so a credential cannot be sent to another host.
+- With no chat model configured, sorting reports "no model" and tools stay unsorted.
+- Sending without asking on an unsorted tool is refused with 409, as before.
+
+### Proof
+
+Sorting tiers match the old code on fixtures. The view of a connection matches the old one on 12 cases, including exactly 30 and 31 tools. A tool holding a credential is never sent to the model, and the test fails with that protection removed. Row-level security was seen failing with the owner policy dropped, and passing again with it restored. Job payloads hold no credential and no private text. The live run uses the real server and real routes, with no rewritten responses: sign-in required, create, list, a second person sees nothing, patch, delete, and the stand-in service received the credential while logs and queue held none.
+
+```
+scripts/run-gate.sh start --gate test:rust-integrations
+```
+
+```
+scripts/run-gate.sh start --gate test:rust-integrations-live
+```
+
+Both end with exit code 0 when waited on with `scripts/run-gate.sh wait --follow`. Earlier runs failed for test mistakes (wrong field names, a stub tool that echoes its credential, a sign-up the server rightly refuses for a second owner, a missing toolchain setting). All were test-side fixes.
+
+### Not proven or not built
+
+- Discovery from an OpenAPI description is not built (the old message "OpenAPI connections are not available yet." is kept).
+- The preparation worker body is not built. The prepare route does the guards and a retry sort, and returns empty lists.
+- Queuing preparation after a tool-choice change is not built.
+- No chat model adapter exists in the shell yet, so sorting never reaches a real model.
+- The key comes from the environment only. The master-key keyring is not built.
+- The start-up sweep that re-queues tools left unsorted after a lost job is written but not wired into the shell.
+- Creating or refreshing an OpenAPI connection, or pasting a spec, is unavailable. The MCP client has no fallback for servers that speak only the older streaming style.
+- The live run covers create, list, read, patch, delete, a second person, and the log and queue leak check. Refresh, kept-out, send-without-asking, sort, prepare and the paused answer are covered only by the database test with a fake service. The refusal to follow redirects and the 422 on refresh with a pasted spec have no test.
+- Edge cases not matched exactly: ordering and length of non-Latin text, lowercase and trim quirks, float formatting in schemas, names cut at 80 characters.
+- There is no activity table in the host, so private text was checked in job payloads and logs only.
+- The prepare route answer is accepted as 200 or 409 and the sort route as 200 or 202 in the database test.
+- The old handlers were not run side by side with the new ones.
+- No screens were built.
+- Release note is not applicable.
+
 ## Finance budgets (part 23)
 
 ### What was built

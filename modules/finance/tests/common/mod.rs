@@ -123,9 +123,23 @@ fn order(a: &Value, b: &Value) -> std::cmp::Ordering {
     }
 }
 
+/// Tables any signed-in person can read, as the host's household-read class allows.
+fn household(table: &str) -> bool {
+    table == "app.finance_shared_accounts" || table == "app.finance_shared_transactions"
+}
+
+fn has_owned(filter: &Filter) -> bool {
+    match filter {
+        Filter::Owned => true,
+        Filter::And { filters } | Filter::Or { filters } => filters.iter().any(has_owned),
+        _ => false,
+    }
+}
+
 fn keys(table: &str) -> &'static [&'static str] {
     match table {
-        "app.finance_accounts" => &["account_id"],
+        "app.finance_accounts" | "app.finance_shared_accounts" => &["account_id"],
+        "app.finance_shared_transactions" => &["id"],
         "app.finance_transactions" | "app.finance_activity" | "app.finance_merchant_rules" | "app.finance_categories" => &["id"],
         "app.finance_imports" => &["id"],
         "app.finance_budget_assignments" => &["month", "category_id"],
@@ -186,7 +200,7 @@ impl Host for Fake {
         match query.kind {
             Kind::Select => {
                 let mut found: Vec<Value> =
-                    rows.iter().filter(|r| owns(r) && matches(r, &query.filter)).cloned().collect();
+                    rows.iter().filter(|r| (owns(r) || household(resource)) && (!has_owned(&query.filter) || r["owner_user_id"] == actor) && matches(r, &query.filter)).cloned().collect();
                 for order in query.order.iter().rev() {
                     found.sort_by(|a, b| {
                         let ord = a[order.column.as_str()].to_string().cmp(&b[order.column.as_str()].to_string());

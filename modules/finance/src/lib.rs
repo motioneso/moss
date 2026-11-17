@@ -13,6 +13,8 @@ macro_rules! ask {
 }
 
 pub mod accounts;
+pub mod activity;
+pub mod archive;
 pub mod budget;
 pub mod bill_adjust;
 pub mod bill_entry;
@@ -26,15 +28,18 @@ pub mod connect;
 pub mod csv_import;
 pub mod draft;
 pub mod envelope;
+pub mod export;
 pub mod flex;
 pub mod recurrence;
 pub mod input;
 pub mod ledger;
+pub mod reports;
 pub mod rules;
 pub mod plaid;
 pub mod sort_run;
 pub mod splits;
 pub mod sorting;
+pub mod shared;
 pub mod sync;
 pub mod targets;
 pub mod text;
@@ -68,13 +73,34 @@ pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
             _ => return Response::new(404, json!({"message":"Route not found"})),
         },
     };
-    result.unwrap_or_else(|_| Response::new(500, json!({"error":"Internal server error"})))
+    let response = result.unwrap_or_else(|_| Response::new(500, json!({"error":"Internal server error"})));
+    if request.method == "POST" && response.status < 300 && !request.path.starts_with("/finance/chat/") {
+        sync_household(host);
+    }
+    response
+}
+
+/// Keeps the household copy of shared accounts current after a change. The copy only matters to
+/// other people, so a failure here never changes the answer the person gets.
+fn sync_household<H: Host + ?Sized>(host: &H) {
+    let _ = shared::sync_mirror(host);
 }
 
 /// Route to tool name. The flag says the route is the assistant's write path.
 fn tool_for(method: &str, path: &str) -> Option<(&'static str, bool)> {
     Some(match (method, path) {
         ("GET", "/finance/transactions") => ("finance.transactions.query", false),
+        ("GET", "/finance/transactions/export") => ("finance.transactions.export", false),
+        ("GET", "/finance/reports/spending") => ("finance.reports.spending", false),
+        ("GET", "/finance/reports/net-worth") => ("finance.reports.net-worth", false),
+        ("GET", "/finance/reports/transactions") => ("finance.reports.transactions", false),
+        ("GET", "/finance/activity") => ("finance.activity.list", false),
+        ("POST", "/finance/activity/undo") => ("finance.activity.undo", false),
+        ("POST", "/finance/accounts/shared") => ("finance.account.set-shared", false),
+        ("POST", "/finance/categories/archive") => ("finance.category.archive", false),
+        ("POST", "/finance/chat/accounts/set-shared") => ("finance.account.set-shared", true),
+        ("POST", "/finance/chat/categories/archive") => ("finance.category.archive", true),
+        ("POST", "/finance/chat/activity/undo") => ("finance.activity.undo", true),
         ("POST", "/finance/transactions/category") => ("finance.transactions.category-set", false),
         ("POST", "/finance/transactions/review") => ("finance.transactions.review-apply", false),
         ("POST", "/finance/transactions/bulk-categorize") => ("finance.transactions.bulk-categorize", false),
@@ -194,11 +220,16 @@ pub fn handle<H: Host + ?Sized>(
                 Some(bank::POLL_QUEUE) => connect::poll(host, true)?,
                 _ => return Err(moss_module_sdk::Error::new("Unsupported Finance job")),
             };
+            sync_household(host);
             Ok(done.to_string())
         }
         "tool" => {
-            let result = tools::execute(host, serde_json::from_str(payload)?)
-                .map_err(|_| moss_module_sdk::Error::new("Finance tool failed"))?;
+            let request: tools::Request = serde_json::from_str(payload)?;
+            let writes = tools::changes_data(&request.tool);
+            let result = tools::execute(host, request).map_err(|_| moss_module_sdk::Error::new("Finance tool failed"))?;
+            if writes && result["status"] != "error" {
+                sync_household(host);
+            }
             Ok(serde_json::to_string(&result)?)
         }
         _ => Err(moss_module_sdk::Error::new("Unsupported Finance invocation")),

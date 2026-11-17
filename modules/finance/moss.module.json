@@ -2,9 +2,9 @@
   "schemaVersion": 2,
   "id": "finance",
   "name": "Finance",
-  "description": "Private money accounts and transactions. You can list your accounts, add manual accounts and transactions, connect a bank and pull its balances and transactions every six hours or on demand, sort and review transactions, set rules, split, add notes, import a CSV bank file, and plan a monthly budget with drafts. It also plans bills, sets targets, shares a flexible pool and reserves money for card payments. The screens are not built yet.",
+  "description": "Private money accounts and transactions. You can list your accounts, add manual accounts and transactions, connect a bank and pull its balances and transactions every six hours or on demand, sort and review transactions, set rules, split, add notes, import a CSV bank file, and plan a monthly budget with drafts. It also plans bills, sets targets, shares a flexible pool and reserves money for card payments. You can share a bank account with the household, read spending and net worth reports, export your history, review the activity list and undo a change, and archive an empty category. The screens are not built yet.",
   "publisher": "Moss",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
@@ -27,6 +27,9 @@
         "app.finance_budget_assignments",
         "app.finance_budget_drafts",
         "app.finance_budget_draft_lines",
+        "app.finance_transfer_corrections",
+        "app.finance_shared_accounts",
+        "app.finance_shared_transactions",
         "app.finance_targets",
         "app.finance_bill_plans",
         "app.finance_bill_occurrences",
@@ -67,6 +70,9 @@
         "finance.budget.draft.build",
         "finance.budget.draft.update",
         "finance.budget.draft.start",
+        "finance.account.set-shared",
+        "finance.category.archive",
+        "finance.activity.undo",
         "finance.bill.create",
         "finance.bill.decide",
         "finance.bill.stop",
@@ -144,7 +150,9 @@
       "sql/0041_create_finance_card_assignments.sql",
       "sql/0042_create_finance_bill_suggestion_dismissals.sql",
       "sql/0368_finance_bank_links.sql",
-      "sql/0369_finance_link_sessions.sql"
+      "sql/0369_finance_link_sessions.sql",
+      "sql/0371_finance_shared_accounts.sql",
+      "sql/0372_finance_shared_transactions.sql"
     ],
     "ownedTables": [
       "app.finance_accounts",
@@ -172,7 +180,9 @@
       "app.finance_transactions",
       "app.finance_transfer_corrections",
       "app.finance_bank_links",
-      "app.finance_link_sessions"
+      "app.finance_link_sessions",
+      "app.finance_shared_accounts",
+      "app.finance_shared_transactions"
     ],
     "ledger": "module-legacy",
     "access": {
@@ -253,6 +263,12 @@
       },
       "app.finance_link_sessions": {
         "access": "owner-only"
+      },
+      "app.finance_shared_accounts": {
+        "access": "household-read"
+      },
+      "app.finance_shared_transactions": {
+        "access": "household-read"
       }
     }
   },
@@ -522,6 +538,17 @@
       "path": "/finance/chat/budget/draft/start",
       "signIn": true
     },
+    { "method": "GET", "path": "/finance/transactions/export", "signIn": true },
+    { "method": "GET", "path": "/finance/reports/spending", "signIn": true },
+    { "method": "GET", "path": "/finance/reports/net-worth", "signIn": true },
+    { "method": "GET", "path": "/finance/reports/transactions", "signIn": true },
+    { "method": "GET", "path": "/finance/activity", "signIn": true },
+    { "method": "POST", "path": "/finance/activity/undo", "signIn": true },
+    { "method": "POST", "path": "/finance/accounts/shared", "signIn": true },
+    { "method": "POST", "path": "/finance/categories/archive", "signIn": true },
+    { "method": "POST", "path": "/finance/chat/accounts/set-shared", "signIn": true },
+    { "method": "POST", "path": "/finance/chat/categories/archive", "signIn": true },
+    { "method": "POST", "path": "/finance/chat/activity/undo", "signIn": true },
     {
       "method": "GET",
       "path": "/finance/bills",
@@ -807,6 +834,38 @@
     },
     "finance.budget.draft.start": {
       "description": "Turn the open draft into this month's budget amounts.",
+      "risk": "write"
+    },
+    "finance.transactions.export": {
+      "description": "Prepare a spreadsheet of your own transaction history. Another person's shared rows are never included. Payee names are outside content.",
+      "risk": "read"
+    },
+    "finance.reports.spending": {
+      "description": "Read your monthly spending report, with other people's shared accounts listed apart.",
+      "risk": "read"
+    },
+    "finance.reports.net-worth": {
+      "description": "Read your net worth over time. Net worth is never shared with other people.",
+      "risk": "read"
+    },
+    "finance.reports.transactions": {
+      "description": "List the transactions behind one report figure. Payee names are outside content.",
+      "risk": "read"
+    },
+    "finance.activity.list": {
+      "description": "List recent changes made to your finance data, with whether each can be undone.",
+      "risk": "read"
+    },
+    "finance.account.set-shared": {
+      "description": "Share a bank account with the household, or stop sharing it. Others see balances and transactions, never notes.",
+      "risk": "write"
+    },
+    "finance.category.archive": {
+      "description": "Archive a category that holds no budget money. Income and transfers cannot be archived.",
+      "risk": "write"
+    },
+    "finance.activity.undo": {
+      "description": "Undo one earlier change, such as a category choice, if nothing has moved on since.",
       "risk": "write"
     },
     "finance.bills.read": {
@@ -1144,6 +1203,81 @@
           "code": "category_not_in_draft",
           "class": "validation",
           "description": "That category is not in the draft. To add a line, give its name, group and amount."
+        }
+      ]
+    },
+    {
+      "id": "finance.sharing",
+      "description": "A person can share a bank account with the household or stop sharing it. Others then see its name, balance and transactions with date, payee, merchant, bank category, category, amount, pending state and any transfer link, never notes, review state, who chose the category, or bank link details. Manual accounts cannot be shared yet. No screen is built yet.",
+      "errors": [
+        {
+          "code": "unknown_account",
+          "class": "validation",
+          "description": "That account is not on record."
+        },
+        {
+          "code": "manual_sharing_unavailable",
+          "class": "validation",
+          "description": "Manual accounts stay private for now."
+        }
+      ]
+    },
+    {
+      "id": "finance.reports",
+      "description": "A person can read a monthly spending report and a net worth chart, and list the transactions behind a figure. Other people's shared accounts appear in spending apart from the person's own. Net worth never includes other people. No screen is built yet.",
+      "errors": [
+        {
+          "code": "report_scope_changed",
+          "class": "validation",
+          "description": "The report changed since you opened it. Reload and try again."
+        }
+      ]
+    },
+    {
+      "id": "finance.export",
+      "description": "A person can export their own transaction history as a spreadsheet, for all dates or a range, or for one account. Other people's rows are never included. Very large histories are refused with the count.",
+      "errors": [
+        {
+          "code": "export_failed",
+          "class": "validation",
+          "description": "Choose valid dates, with the start on or before the end."
+        }
+      ]
+    },
+    {
+      "id": "finance.activity",
+      "description": "A person can list recent changes to their finance data and undo a category choice, a rule, a new category or an archive when nothing has changed since. Budget changes cannot be undone yet. No screen is built yet.",
+      "errors": [
+        {
+          "code": "not_undoable",
+          "class": "validation",
+          "description": "That change cannot be undone."
+        },
+        {
+          "code": "changed_since",
+          "class": "validation",
+          "description": "Something changed since, so this cannot be undone safely."
+        },
+        {
+          "code": "not_found",
+          "class": "validation",
+          "description": "That change is not on record."
+        }
+      ]
+    },
+    {
+      "id": "finance.category-archive",
+      "description": "A person can archive a category with no budget money assigned. Income and transfer categories are protected. A budget currency must be saved first.",
+      "errors": [
+        {
+          "code": "protected_category",
+          "class": "validation",
+          "description": "Income and transfers cannot be archived."
+        },
+        {
+          "code": "has_assignments",
+          "class": "validation",
+          "description": "Move the budget money out of this category first."
         }
       ]
     },

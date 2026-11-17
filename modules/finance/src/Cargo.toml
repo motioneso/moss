@@ -58,5 +58,9 @@ name = "budget"
 path = "../tests/budget.rs"
 
 [[test]]
+name = "part25"
+path = "../tests/part25.rs"
+
+[[test]]
 name = "part24"
 path = "../tests/part24.rs"

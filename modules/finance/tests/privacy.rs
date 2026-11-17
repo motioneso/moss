@@ -22,7 +22,7 @@ fn only_the_finance_tables_and_the_clock_are_called() {
         assert!(["db", "context"].contains(&port.as_str()), "unexpected port {port}");
         if port == "db" {
             assert!(
-                ["app.finance_accounts", "app.finance_transactions", "app.finance_activity", "app.finance_budget_policy", "app.finance_merchant_rules", "app.finance_imports", "app.finance_categories"].contains(&resource.as_str()),
+                ["app.finance_accounts", "app.finance_transactions", "app.finance_activity", "app.finance_budget_policy", "app.finance_merchant_rules", "app.finance_imports", "app.finance_categories", "app.finance_shared_accounts", "app.finance_shared_transactions"].contains(&resource.as_str()),
                 "unexpected table {resource}"
             );
         } else {

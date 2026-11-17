@@ -1,0 +1,38 @@
+[package]
+name = "moss-integrations-host"
+version = "0.1.0"
+edition = "2021"
+publish = false
+autoexamples = false
+
+[workspace]
+
+[dependencies]
+moss-integrations = { path = ".." }
+access-context = { path = "../../access-context" }
+safety-core = { path = "../../safety-core" }
+moss-platform-contracts = { path = "../../module-host/bridges/contracts" }
+moss-platform-jobs = { path = "../../module-host/bridges/jobs" }
+anyhow = "1"
+async-trait = "0.1"
+axum = "0.8"
+chrono = "0.4"
+serde = { version = "1", features = ["derive"] }
+bytes = "1"
+serde_json = { version = "1", features = ["preserve_order"] }
+sha2 = "0.10"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time"] }
+tokio-postgres = { version = "0.7", features = ["with-serde_json-1", "with-uuid-1", "with-chrono-0_4"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+url = "2"
+uuid = { version = "1", features = ["v4", "serde"] }
+
+[dev-dependencies]
+moss-integrations = { path = "..", features = ["selftest"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time"] }
+tower = "0.5"
+http-body-util = "0.1"
+wasmtime = { version = "38", default-features = false, features = ["cranelift", "runtime", "std"] }
+
+[profile.dev]
+debug = 0
