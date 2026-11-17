@@ -234,3 +234,81 @@ scripts/run-gate.sh start --gate test:rust-web-research-live
   The Brave call has no 8 second cap of its own and uses the time the host has left.
 - **A failure reading the chat model shows as "no model".** The search stays off either way, but
   the reason shown can be the wrong one.
+
+## Web Research page reading (part 11)
+
+Card JS-292. Part of [issue 4027](https://github.com/motioneso/moss/issues/4027). Release note
+Category: N/A.
+
+### What was built
+
+The Web Research package can now read pages. It has no screen, no database table and no new crate.
+
+- **What already existed.** The server already had a safe "read a public page" service. It refuses
+  anything that is not HTTPS on the normal port, refuses addresses with a password in them, checks
+  every address a name points to and every redirect hop, follows the site's robots rules, spaces
+  calls to one site one second apart, and caps time and size. That was built and tested earlier, so
+  this part did not rebuild it.
+- **The new tool.** The chat tool `web.read` takes up to five addresses and reads them one after
+  another. Each good page comes back with its address, site, title, text (cut at 12,000
+  characters), a 500 character excerpt, the time it was read and whether it was cut. A page that
+  could not be read shows as skipped with one fixed reason word. The trace counts addresses asked
+  for, read and skipped, and says if the five-address limit applied.
+- **The text.** Scripts, styles, navigation, comments and tags are removed, six entities are
+  decoded and white space is collapsed, the same way as the old reader.
+- **A read route.** `POST /read` takes the same addresses for a signed-in person. A call that
+  names no address gets a plain 400.
+- **A package call.** `webRead` gives the same answer to other modules, so News can use it later.
+
+### Differences from the old code (on purpose)
+
+- Only HTTPS is read. The old tool also read plain HTTP.
+- Robots rules and the one-second spacing now apply. The old tool applied neither.
+- Only web pages and plain text are read. The old tool read any type.
+- Addresses are read one at a time. The old tool read them side by side.
+- A read that fails carries only a fixed reason, never the page or the error text. Two new
+  reasons exist, `challenge` for a bot check page and an optional detail word.
+- Text is never cut inside a character.
+- The old module had no routes. The read route is new, added so the real server path can be
+  checked.
+- The `goal` input is still ignored, as before.
+
+### Proof
+
+| Claim                                      | Evidence                                                                                                                                                                                                             |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Text matches the old reader                | 34 pages, including odd ones, were run through the old reader. The new code gives the same title and text on all of them                                                                                             |
+| Private and loopback addresses are refused | The real component and real host refused nine addresses (private, loopback, shared-range, localhost, and names that point at them). The site log shows none was contacted. Each guard was removed in turn and failed |
+| Only HTTPS, port 443, no password          | Plain HTTP, another port and a password in the address are each refused. Each check was removed and the test failed                                                                                                  |
+| Robots rules and spacing                   | A site that forbids everything is never asked for the page. A long wait is refused as `rate_limited`. Both checks were removed and the tests failed                                                                  |
+| Private text stays private                 | The address goes only to the fetch call. The live run sent a marker inside a refused address; no table and not the server log held it. The scan failed with a leak planted                                           |
+| Two people                                 | Two signed-in people each read through the real server and got their own answers. The package owns no tables, so there is no row rule to remove; the table scan covers three schemas                                 |
+| Route and sign-in                          | Live: signed out gets 401, no address gets 400, a valid call gets 200 for two people                                                                                                                                 |
+| Real public web                            | The live server read a real public page (title "Example Domain") for two people                                                                                                                                      |
+| Reachable from another device              | The live server was reached through the machine's own network address. With sharing off it answered 403; after the administrator turned sharing on it answered 200                                                   |
+| Native and WebAssembly builds              | 33 native tests; the same code as a component passes 9 package tests and 6 read tests in the real host                                                                                                               |
+
+Guard-removal results, one run per removed check: the literal address check, the resolved
+address check, the localhost name check, HTTPS only, port 443 only, the password check, robots
+rules and the long-wait refusal each made at least one read test fail, and the restored code
+passed.
+
+Commands, all through `scripts/run-gate.sh` (expected exit code 0):
+
+```bash
+scripts/run-gate.sh start --gate test:rust-web-research
+scripts/run-gate.sh start --gate test:rust-web-research-live
+```
+
+### Not proven or not built
+
+- **No row-level-security test with a removable rule.** The package owns no tables, so there is
+  no row rule to remove. The proof is the two-person live run and the planted-marker scan.
+- **The approval default differs.** The old ruling made `web.read` run without a prompt. In
+  Rust the prompt follows each account's action policy, which asks until a settings part exists.
+- **News does not call `webRead` yet.** Wiring it is a News part.
+- **Other-device check was from the same machine.** It used the machine's network address, not a
+  phone. Nothing was checked from a second physical device.
+- **The real internet was read only for one site.** The refusal of private addresses was proven
+  against a local test site and a name table, not against hostile real sites.
+- **Chat-model search results** still come back empty, as noted in part 10.

@@ -20,6 +20,8 @@ impl Host for ComponentHost {
             "kv" => moss::module::kv::call(&request),
             "credentials" => moss::module::credentials::call(&request),
             "ai" => moss::module::ai::call(&request),
+            "fetch" => moss::module::fetch::call(&request),
+            "context" => moss::module::context::call(&request),
             _ => return Err(Error::new("Unsupported Web Research host port")),
         }
         .map_err(|_| Error::new("Web Research host call failed"))?;
