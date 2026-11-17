@@ -383,6 +383,19 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
                 && request.parameters.get("url").is_some_and(Value::is_string),
             "The browser opens public pages only"
         ),
+        // Only whether a credential is saved. The value is never a port result.
+        "credentials" if request.operation == "status" => {
+            let name = request.parameters["credential"]
+                .as_str()
+                .context("A credential name is required")?;
+            ensure!(
+                manifest
+                    .credentials
+                    .get(name)
+                    .is_some_and(|c| c.hosts.contains(&request.resource)),
+                "The credential is bound to another service"
+            );
+        }
         "fetch" | "credentials" => {
             let url = request
                 .parameters

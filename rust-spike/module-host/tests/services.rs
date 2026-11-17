@@ -829,3 +829,158 @@ fn wasm_ai_uses_phase2b_router_and_host_actor_model_selection() {
     }
     println!("PASS real Wasm + Phase2b Router: authenticated actor chooses account model, guest model name refused; AI transport is a test stand-in");
 }
+
+fn services_for(data: &std::path::Path, ai: Arc<dyn Intelligence>) -> Arc<ServicePorts> {
+    Arc::new(
+        ServicePorts::new(
+            data,
+            Arc::new(SecretCipher::connectors(&Default::default()).unwrap()),
+            ai,
+            Arc::new(LocalPorts::new(data).unwrap()),
+        )
+        .unwrap(),
+    )
+}
+
+#[test]
+fn credential_status_says_only_whether_a_key_is_saved() {
+    use moss_module_host::manifest::{Attachment, Credential, CredentialScope};
+    let data = tempfile::tempdir().unwrap();
+    let services = services_for(data.path(), Arc::new(NoAi));
+    let (a, b) = (uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
+    let host = Host::new(Limits::default()).unwrap();
+    let mut m = common::manifest("1.0.0");
+    m.capabilities.push(Capability {
+        port: "credentials".into(),
+        operations: ["status".into(), "request".into()].into(),
+        resources: ["example.test".into()].into(),
+        allow_private: false,
+    });
+    for (name, scope) in [
+        ("shared", CredentialScope::Instance),
+        ("mine", CredentialScope::Account),
+    ] {
+        m.credentials.insert(
+            name.into(),
+            Credential {
+                scope,
+                hosts: ["example.test".into()].into(),
+                attachment: Attachment::Header("x-subscription-token".into()),
+                exchange: None,
+            },
+        );
+    }
+    let status = |who, name: &str, resource: &str| {
+        let request =
+            json!({"operation":"status","resource":resource,"parameters":{"credential":name}});
+        call(&host, services.clone(), &m, who, "credentials", request)
+    };
+    assert_eq!(
+        status(a, "shared", "example.test").unwrap(),
+        json!({"configured":false})
+    );
+    let secret = "test-only-status-secret";
+    // The host stores an instance key under its own nil-UUID account.
+    for (name, owner) in [("shared", uuid::Uuid::nil()), ("mine", a)] {
+        services
+            .set_credential(
+                &AccessContext::new(owner, "configure"),
+                &m.id,
+                name,
+                &SecretFields::new().with("value", Secret::new(secret)),
+            )
+            .unwrap();
+    }
+    let on = status(a, "shared", "example.test").unwrap();
+    assert_eq!(on, json!({"configured":true}));
+    assert!(!on.to_string().contains(secret));
+    // An instance key is the same for everyone. An account key is each person's own.
+    assert_eq!(
+        status(b, "shared", "example.test").unwrap(),
+        json!({"configured":true})
+    );
+    assert_eq!(
+        status(a, "mine", "example.test").unwrap(),
+        json!({"configured":true})
+    );
+    assert_eq!(
+        status(b, "mine", "example.test").unwrap(),
+        json!({"configured":false})
+    );
+    // A record with no value, or a blank one, does not count as a saved key.
+    services
+        .set_credential(
+            &AccessContext::new(b, "configure"),
+            &m.id,
+            "mine",
+            &SecretFields::new().with("value", Secret::new("  ")),
+        )
+        .unwrap();
+    assert_eq!(
+        status(b, "mine", "example.test").unwrap(),
+        json!({"configured":false})
+    );
+    services
+        .set_credential(
+            &AccessContext::new(b, "configure"),
+            &m.id,
+            "mine",
+            &SecretFields::new().with("other", Secret::new(secret)),
+        )
+        .unwrap();
+    assert_eq!(
+        status(b, "mine", "example.test").unwrap(),
+        json!({"configured":false})
+    );
+    // A name the manifest does not declare, or a destination it is not bound to, is refused.
+    assert!(status(a, "unknown", "example.test").is_err());
+    assert!(status(a, "shared", "other.test").is_err());
+}
+
+struct SearchingAi(Option<bool>);
+impl Intelligence for SearchingAi {
+    fn generate(&self, _: &CallScope, _: &Request) -> Result<Value> {
+        anyhow::bail!("not used")
+    }
+    fn embed(&self, _: &CallScope, _: &Request) -> Result<Value> {
+        anyhow::bail!("not used")
+    }
+    fn chat_capabilities(&self, _: &CallScope) -> Result<Value> {
+        Ok(match self.0 {
+            Some(web_search) => json!({"model":{"webSearch":web_search}}),
+            None => json!({"model":null}),
+        })
+    }
+}
+
+#[test]
+fn chat_capabilities_reports_search_ability_and_nothing_else() {
+    let data = tempfile::tempdir().unwrap();
+    let a = uuid::Uuid::new_v4();
+    let host = Host::new(Limits::default()).unwrap();
+    let mut m = common::manifest("1.0.0");
+    m.capabilities.push(Capability {
+        port: "ai".into(),
+        operations: ["capabilities".into()].into(),
+        resources: ["chat".into(), "other".into()].into(),
+        allow_private: false,
+    });
+    let ask = |ai: Arc<dyn Intelligence>, resource: &str| {
+        let request = json!({"operation":"capabilities","resource":resource,"parameters":{}});
+        call(&host, services_for(data.path(), ai), &m, a, "ai", request)
+    };
+    assert_eq!(ask(Arc::new(NoAi), "chat").unwrap(), json!({"model":null}));
+    assert_eq!(
+        ask(Arc::new(SearchingAi(None)), "chat").unwrap(),
+        json!({"model":null})
+    );
+    assert_eq!(
+        ask(Arc::new(SearchingAi(Some(true))), "chat").unwrap(),
+        json!({"model":{"webSearch":true}})
+    );
+    assert_eq!(
+        ask(Arc::new(SearchingAi(Some(false))), "chat").unwrap(),
+        json!({"model":{"webSearch":false}})
+    );
+    assert!(ask(Arc::new(SearchingAi(Some(true))), "other").is_err());
+}

@@ -311,6 +311,10 @@ impl ServicePorts {
                 Some(browser) => Ok(browser.render(scope, r)),
                 None => Ok(crate::browser::Reason::Unsupported.to_json()),
             },
+            "ai" if r.operation == "capabilities" => {
+                ensure!(r.resource == "chat", "Unknown AI capability query");
+                self.ai.chat_capabilities(scope)
+            }
             "ai" => self.ai.generate(scope, r),
             "embed" => self.ai.embed(scope, r),
             "transcribe" => self.ai.transcribe(scope, r),

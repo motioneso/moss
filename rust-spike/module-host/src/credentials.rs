@@ -30,6 +30,18 @@ impl ServicePorts {
         } else {
             scope.access()
         };
+        if r.operation == "status" {
+            // Read-only, so it takes no lock and never waits behind a running request.
+            // Only whether a non-empty value is saved. The value and its fields stay here.
+            let configured = self
+                .credential(access, &scope.module().id, name)
+                .is_ok_and(|f| {
+                    f.get("accessToken")
+                        .or_else(|| f.get("value"))
+                        .is_some_and(|v| !v.expose_secret().trim().is_empty())
+                });
+            return Ok(json!({"configured":configured}));
+        }
         let _lock = self.credential_lock(&scope.module().id, access.actor_user_id(), name)?;
         let mut fields = self.credential(access, &scope.module().id, name)?;
         let url = url::Url::parse(r.parameters["url"].as_str().context("URL required")?)?;
