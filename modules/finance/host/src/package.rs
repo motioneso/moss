@@ -35,7 +35,7 @@ pub fn files(root: &Path, component: &[u8]) -> Result<BTreeMap<String, Vec<u8>>>
                     "90878a1e9d96baa12b9596f76cb3393145d7c7eaedade0b0f4a6b97f0412e38a"
                 }
                 "sql/0371_finance_shared_accounts.sql" => {
-                    "c0f3796f4f3eb2ed3072b473bdf9db624bf121a06d22c6d90a11fc459ebfcf2e"
+                    "ad940871c38d579c3fa95471a495f3064054253d9a7b6dac0e931821682bcaba"
                 }
                 "sql/0372_finance_shared_transactions.sql" => {
                     "5e64e2b1eec46959bd238319ac268fbaa438bae3d77d2f9367488aefb13d5542"

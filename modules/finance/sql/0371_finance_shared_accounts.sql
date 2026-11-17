@@ -2,7 +2,6 @@ CREATE TABLE app.finance_shared_accounts (
   owner_user_id uuid NOT NULL REFERENCES app.users(id) ON DELETE CASCADE,
   account_id text NOT NULL,
   name text NOT NULL,
-  official_name text,
   type text NOT NULL,
   subtype text,
   mask text,

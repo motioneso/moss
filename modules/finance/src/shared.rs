@@ -47,7 +47,7 @@ fn others(actor: &str) -> Filter {
 /// The columns of a mirrored account. The owner's flag, bank link and item are left out.
 fn account_columns(row: &Value) -> BTreeMap<String, Value> {
     values(
-        ["account_id", "name", "official_name", "type", "subtype", "mask", "balance_cents", "iso_currency", "updated_at"]
+        ["account_id", "name", "type", "subtype", "mask", "balance_cents", "iso_currency", "updated_at"]
             .iter()
             .map(|c| (*c, row[*c].clone()))
             .collect(),
