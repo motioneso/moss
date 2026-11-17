@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import pg from "pg";
 import { getMossDatabaseUrls } from "@moss/db";
 import { HANDLERS } from "../../../external-modules/meals/src/worker/registry.js";
-import { InputError } from "../../../external-modules/meals/src/tools/validate.js";
 
 assert.equal(process.env.JARVIS_GATE_RUN, "1", "Use verify-gate");
 let raw = "";
@@ -34,8 +33,9 @@ try {
     const data = await handler({ input: parameters, db } as never);
     reply = { data };
   } catch (error) {
-    if (!(error instanceof InputError)) throw error;
-    reply = { data: { error: error.message, code: error.code } };
+    const failure = error as { message?: string; code?: unknown };
+    if (typeof failure.code !== "string") throw error;
+    reply = { data: { error: failure.message, code: failure.code } };
   }
   await client.query("COMMIT");
   console.log(JSON.stringify(reply));

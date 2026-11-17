@@ -87,10 +87,10 @@ fn tools_keep_both_tables_private_and_leave_no_text_behind() {
     }
     assert_eq!(rows_as(&w.f, a, "SELECT name FROM app.meals_household_members WHERE name = 'Stolen'").len(), 0);
     // Negative control: with the owner rule weakened the same observation must fail.
-    for (table, sql) in [
-        ("app.meals_kitchens", "SELECT kitchen_id FROM app.meals_kitchens"),
-        ("app.meals_household_members", "SELECT name FROM app.meals_household_members"),
-    ] {
+    // The second person owns rows of their own, so the check asks only for the first person's rows.
+    let kitchens = format!("SELECT kitchen_id FROM app.meals_kitchens WHERE owner_user_id = '{a}'");
+    let members = format!("SELECT name FROM app.meals_household_members WHERE name = '{MARK}'");
+    for (table, sql) in [("app.meals_kitchens", kitchens.as_str()), ("app.meals_household_members", members.as_str())] {
         assert!(rows_as(&w.f, b, sql).is_empty());
         let weaken = format!("DROP POLICY moss_module_select ON {table}; CREATE POLICY moss_module_select ON {table} FOR SELECT TO {} USING (true)", role());
         let restore = format!("DROP POLICY moss_module_select ON {table}; CREATE POLICY moss_module_select ON {table} FOR SELECT TO {} USING (owner_user_id=app.current_actor_user_id())", role());
