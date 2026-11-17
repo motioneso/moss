@@ -725,3 +725,6 @@ fn rust_medications_match_the_old_routes_step_for_step() {
     run_both(&w, old, new, &steps, &old_ids, &new_ids);
     println!("PASS parity: {} schedule, dose, summary and change steps match the old routes", steps.len());
 }
+
+#[path = "support/insights_tools.rs"]
+mod insights_tools;

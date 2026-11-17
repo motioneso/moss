@@ -47,11 +47,23 @@ control("export expiry", "modules/wellness/src/export.rs",
         'status == "ready" && instant(record, "expiresAt").is_some_and(|at| at <= now)',
         'false',
         "modules/wellness/src/Cargo.toml", "therapy_export", "an_export_reads_as_gone_after_24_hours", [])
+TOOL_OFF = "with_consent_off_both_tools_return_the_refusal_and_read_nothing"
+TOOL_ERR = "a_host_failure_never_echoes_private_text"
+control("tool consent check", "modules/wellness/src/tools.rs",
+        'if !consent::effective(host)? {',
+        'if false && !consent::effective(host)? {',
+        "modules/wellness/src/Cargo.toml", "insights_tools", TOOL_OFF, [])
+control("tool error text", "modules/wellness/src/lib.rs",
+        '.map_err(|_| moss_module_sdk::Error::new("Wellness tool failed"))?;',
+        '.map_err(|e| e)?;',
+        "modules/wellness/src/Cargo.toml", "insights_tools", TOOL_ERR, [])
 # Re-run both assertions after restoring their guards; a negative control alone is not proof.
 for manifest, test, case, extra, output in [
     ("modules/wellness/src/Cargo.toml", "therapy_export", "a_finished_export_holds_only_the_chosen_categories", [], target / "guest"),
     ("modules/wellness/src/Cargo.toml", "therapy_export", "an_export_reads_as_gone_after_24_hours", [], target / "guest"),
     ("modules/wellness/src/Cargo.toml", "privacy", GUEST, [], target / "guest"),
+    ("modules/wellness/src/Cargo.toml", "insights_tools", TOOL_OFF, [], target / "guest"),
+    ("modules/wellness/src/Cargo.toml", "insights_tools", TOOL_ERR, [], target / "guest"),
     ("modules/wellness/host/Cargo.toml", "installed", HOST,
      ["--ignored", "--test-threads=1"], target),
 ]:
