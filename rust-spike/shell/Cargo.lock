@@ -3119,6 +3119,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "moss-integrations"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
+name = "moss-integrations-host"
+version = "0.1.0"
+dependencies = [
+ "access-context",
+ "anyhow",
+ "async-trait",
+ "axum",
+ "bytes",
+ "chrono",
+ "moss-integrations",
+ "moss-platform-contracts",
+ "moss-platform-jobs",
+ "reqwest",
+ "safety-core",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tokio",
+ "tokio-postgres",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "moss-meetings-host"
 version = "0.1.0"
 dependencies = [
@@ -3309,6 +3343,8 @@ dependencies = [
  "moss-calendar-host",
  "moss-connectors-host",
  "moss-email-host",
+ "moss-integrations",
+ "moss-integrations-host",
  "moss-meetings-host",
  "moss-memory-host",
  "moss-module-host",
@@ -3316,6 +3352,7 @@ dependencies = [
  "moss-on-device",
  "moss-platform-adapters",
  "moss-platform-contracts",
+ "moss-platform-jobs",
  "moss-platform-routing",
  "moss-scratchpad-host",
  "moss-shell-contract",

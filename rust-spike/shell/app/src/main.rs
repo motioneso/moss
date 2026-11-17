@@ -24,6 +24,7 @@ use safety_core::access::AccessContext;
 use tower_http::services::ServeDir;
 
 mod desktop_notices;
+mod integrations;
 mod module_admin;
 mod module_ai;
 mod module_embedding;
@@ -285,6 +286,23 @@ fn main() {
                 Ok(embedding) => private.merge(module_embedding::routes(Arc::new(embedding))),
                 Err(_) => private,
             },
+            None => private,
+        };
+        let private = match modules_path
+            .as_deref()
+            .and_then(|path| modules::read_settings(path).ok())
+        {
+            Some(settings) => {
+                let wiring = integrations::Wiring {
+                    producer_url: settings.producer_url.clone(),
+                    worker_url: settings.worker_url.clone(),
+                    key: settings.connector_key.clone(),
+                };
+                match integrations::routes(platform.app.clone(), wiring, stop.clone()).await {
+                    Ok(routes) => private.merge(routes),
+                    Err(_) => private,
+                }
+            }
             None => private,
         };
         let private = match admin {
