@@ -432,7 +432,11 @@ fn installed_meals_package_serves_routes_from_the_real_server() {
         let (status, text) = call(Method::POST, "/meals/tools/run", Some(who), Some(json!({"tool":"meals.kitchen.get","parameters":{}})));
         assert_eq!(status, 403, "a tool without approval is refused: {text}");
     }
-    let policies = BTreeMap::from([("meals.kitchen.get".into(), false)]);
+    let policies = BTreeMap::from([
+        ("meals.kitchen.get".into(), false),
+        ("meals.list.get".into(), false),
+        ("meals.pantry.get".into(), false),
+    ]);
     services.set_action_policy(&access, "meals", &policies).unwrap();
     let (status, text) = tool("meals.kitchen.get", json!({}), false);
     assert_eq!(status, 200, "{text}\n{}", log());
@@ -455,9 +459,29 @@ fn installed_meals_package_serves_routes_from_the_real_server() {
     assert!(again.contains(MARK), "the other person removed nothing");
     let (_, removed) = tool("meals.household.remove", json!({"memberId":member_id}), true);
     assert_eq!(json_of(&removed)["data"], json!({"removed":true}));
+    // Lists and pantry through the same route. The second person sees and changes none of it.
+    let (status, text) = tool("meals.list.edit", json!({"action":"add","name":MARK,"quantity":2,"unit":"kg"}), true);
+    assert_eq!(status, 200, "{text}\n{}", log());
+    let line_id = json_of(&text)["data"]["list"]["lines"][0]["lineId"].as_str().unwrap().to_owned();
+    let (status, text) = tool("meals.pantry.edit", json!({"action":"add","name":MARK}), true);
+    assert_eq!(status, 200, "{text}");
+    let (_, listed) = tool("meals.list.get", json!({}), false);
+    assert!(listed.contains(MARK) && listed.contains(&line_id), "{listed}");
+    let (_, stocked) = tool("meals.pantry.get", json!({}), false);
+    assert!(stocked.contains(MARK), "{stocked}");
+    let (status, text) = call(Method::POST, "/meals/tools/run", Some(&other), Some(json!({"tool":"meals.list.clear","parameters":{}})));
+    assert!(status == 403 && !text.contains(MARK), "{text}");
+    let (_, still) = tool("meals.list.get", json!({}), false);
+    assert!(still.contains(&line_id), "the other person cleared nothing");
+    let (status, text) = tool("meals.list.bought", json!({"lines":[{"lineId":line_id}]}), true);
+    assert_eq!(status, 200, "{text}");
+    let (status, text) = tool("meals.list.clear", json!({}), true);
+    assert_eq!(status, 200, "{text}");
+    let (_, after) = tool("meals.pantry.get", json!({}), false);
+    assert!(after.contains(MARK), "clearing the list left the pantry alone");
     let activity = serde_json::to_string(&services.activity("meals", &access).unwrap()).unwrap();
     assert!(!activity.contains(MARK));
     // Nothing the test sent reached the server log.
     assert!(!log().to_lowercase().contains(&MARK.to_lowercase()));
-    println!("PASS live HTTPS: kitchen and household tools, one-use approval, second person refused, private text absent from activity and the server log");
+    println!("PASS live HTTPS: kitchen, household, list and pantry tools, one-use approval, second person refused, private text absent from activity and the server log");
 }

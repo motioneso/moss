@@ -29,7 +29,7 @@ try {
   };
   let reply: unknown;
   try {
-    // The handlers read only ctx.input and ctx.db for these four tools.
+    // The handlers read only ctx.input and ctx.db for the kitchen, household, list and pantry tools.
     const data = await handler({ input: parameters, db } as never);
     reply = { data };
   } catch (error) {
