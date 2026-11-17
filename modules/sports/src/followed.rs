@@ -112,7 +112,7 @@ pub fn side_for<'a>(game: &'a Value, id: &str) -> Option<&'a Value> {
     }
 }
 
-fn opponent_for<'a>(game: &'a Value, id: &str) -> Option<&'a Value> {
+pub fn opponent_for<'a>(game: &'a Value, id: &str) -> Option<&'a Value> {
     if claimed(&game["home"], id) {
         Some(&game["away"])
     } else if claimed(&game["away"], id) {
@@ -126,7 +126,7 @@ fn is_home(game: &Value, id: &str) -> bool {
     claimed(&game["home"], id)
 }
 
-fn score_text(score: &Value) -> String {
+pub fn score_text(score: &Value) -> String {
     match score.as_f64() {
         Some(n) if n.fract() == 0.0 => (n as i64).to_string(),
         Some(n) => n.to_string(),
@@ -184,7 +184,7 @@ pub fn matchup_line(game: &Value) -> String {
     )
 }
 
-fn result_of(side: &Value, opponent: &Value) -> &'static str {
+pub fn result_of(side: &Value, opponent: &Value) -> &'static str {
     match (side["score"].as_f64(), opponent["score"].as_f64()) {
         (Some(a), Some(b)) if a == b => "D",
         _ if side["winner"] == true => "W",

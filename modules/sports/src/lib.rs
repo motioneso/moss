@@ -1,6 +1,7 @@
 //! Sports package: followed leagues and teams, the standings picker's saved choices, and
 //! account export. All effects cross the guest-safe SDK Host interface.
 pub mod article;
+pub mod briefing;
 pub mod catalog;
 mod catalog_table;
 pub mod datasets;
@@ -12,7 +13,9 @@ pub mod espn_schedule;
 pub mod espn_standings;
 pub mod followed;
 pub mod gameday;
+pub mod follow_tools;
 pub mod follows;
+pub mod heartbeat;
 pub mod identity;
 pub mod input;
 pub mod lifecycle;
@@ -41,6 +44,7 @@ pub mod standings;
 pub mod story;
 pub mod standings_views;
 pub mod teams;
+pub mod tools;
 pub mod util;
 
 #[cfg(target_arch = "wasm32")]
@@ -97,7 +101,7 @@ pub fn handle<H: Host + ?Sized>(host: &H, kind: &str, payload: &str) -> moss_mod
             Ok(serde_json::to_string(&route(host, request))?)
         }
         "tool" => Ok(serde_json::to_string(
-            &source_tools::run(host, &roster::EspnTeams(host), payload)
+            &tools::run(host, &roster::EspnTeams(host), payload)
                 .map_err(|_| moss_module_sdk::Error::new("Sports tool failed"))?,
         )?),
         "api" => api(host, payload),
@@ -114,6 +118,13 @@ fn api<H: Host + ?Sized>(host: &H, payload: &str) -> moss_module_sdk::Result<Str
         Export(#[allow(dead_code)] Value),
         #[serde(rename = "prepareSportsSourceAction")]
         Prepare(Prepare),
+        #[serde(rename = "sportsFollowedFactsToday")]
+        Facts(Facts),
+    }
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase", deny_unknown_fields)]
+    struct Facts {
+        time_zone: Option<String>,
     }
     #[derive(serde::Deserialize)]
     #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -124,7 +135,20 @@ fn api<H: Host + ?Sized>(host: &H, payload: &str) -> moss_module_sdk::Result<Str
     }
     Ok(match serde_json::from_str(payload)? {
         Api::Export(_) => json!({"ok":lifecycle::collect(host)?}),
-        Api::Prepare(p) => source_approval::prepare(host, &roster::EspnTeams(host), &p.tool, &p.input_json),
+        Api::Prepare(p) => prepare(host, &p.tool, &p.input_json),
+        Api::Facts(f) => briefing::today(host, f.time_zone.as_deref().unwrap_or("UTC")),
     }
     .to_string())
+}
+
+fn prepare<H: Host + ?Sized>(host: &H, tool: &str, input_json: &str) -> Value {
+    let teams = roster::EspnTeams(host);
+    if !(tool == follow_tools::FOLLOW || tool == follow_tools::UNFOLLOW) {
+        return source_approval::prepare(host, &teams, tool, input_json);
+    }
+    let Ok(input) = serde_json::from_str::<Value>(input_json) else { return json!({"ok":null}) };
+    match follow_tools::card(host, &teams, tool, &input) {
+        Ok(card) => json!({"ok":card}),
+        Err(_) => json!({"error":{"statusCode":503,"error":"Sports service is unavailable"}}),
+    }
 }

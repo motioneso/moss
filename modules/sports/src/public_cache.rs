@@ -62,6 +62,13 @@ impl Store {
         (entry["e"].as_i64()? > now).then(|| &entry["v"])
     }
 
+    /// An entry whether or not it has expired, with `true` while it is still live. Heartbeat
+    /// reads use this so an expired day reads as stale and not as missing.
+    pub fn peek(&self, key: &str, now: i64) -> Option<(&Value, bool)> {
+        let entry = self.entries.get(key)?;
+        Some((&entry["v"], entry["e"].as_i64().is_some_and(|e| e > now)))
+    }
+
     pub fn put(&mut self, key: &str, value: Value, ttl_ms: i64, now: i64) {
         self.entries.insert(key.to_owned(), json!({"e": now + ttl_ms, "v": value}));
         let max = max_entries(self.namespace);

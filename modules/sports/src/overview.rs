@@ -14,7 +14,7 @@ use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 
 /// Shown when the person follows nothing, so the page is never empty.
-const DEFAULT_SLATE: [&str; 5] = ["nfl", "nba", "nhl", "mlb", "eng.1"];
+pub const DEFAULT_SLATE: [&str; 5] = ["nfl", "nba", "nhl", "mlb", "eng.1"];
 const FIXTURE_DAYS_BEFORE: i64 = -3;
 const FIXTURE_DAYS_AFTER: i64 = 4;
 
@@ -31,7 +31,7 @@ fn follow_of(row: &Value) -> Result<Follow> {
 }
 
 /// The person's follows, newest first, as row level security hands them over.
-fn load_follows<H: Host + ?Sized>(host: &H) -> Result<Vec<Follow>> {
+pub fn load_follows<H: Host + ?Sized>(host: &H) -> Result<Vec<Follow>> {
     let mut query = Query::select(Filter::All);
     query.order = vec![
         Order { column: "created_at".into(), descending: true },
@@ -45,7 +45,7 @@ fn label_of(key: &str) -> String {
 }
 
 /// Games for every Eastern day in `from..=to`, one cached read per day, deduped by event id.
-fn scoreboard_for_days<H: Host + ?Sized>(host: &H, key: &str, from: &str, to: &str, degraded: &mut bool) -> Result<Vec<Value>> {
+pub fn scoreboard_for_days<H: Host + ?Sized>(host: &H, key: &str, from: &str, to: &str, degraded: &mut bool) -> Result<Vec<Value>> {
     let mut seen: Vec<String> = vec![];
     let mut games = vec![];
     for day in eastern::days_inclusive(from, to) {
