@@ -289,10 +289,12 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
     }
     drop(installer);
 
-    private(
-        &root.join("modules.json"),
-        &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"ai_key":ai_key}),
-    );
+    let mut modules = json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"ai_key":ai_key});
+    // Part 16. With a browser folder the real server may open the sandboxed browser.
+    if let Ok(dir) = std::env::var("MOSS_BROWSER_DIR") {
+        modules["browser_dir"] = json!(dir);
+    }
+    private(&root.join("modules.json"), &modules);
     let _server = start(true);
     // Setup allows one owner over HTTP, so the second person is made in the database with the
     // owner's password hash and then signs in through the real route.

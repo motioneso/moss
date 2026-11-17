@@ -26,6 +26,10 @@ pub struct Src {
     pub calls: RefCell<Vec<(String, String, String, Value)>>,
     pub pages: RefCell<BTreeMap<String, Value>>,
     pub files: RefCell<BTreeMap<(String, String), Value>>,
+    /// What the browser port answers for a page address. An address with no entry is refused.
+    pub renders: RefCell<BTreeMap<String, Value>>,
+    /// Set to make the whole browser port missing, as on a host that does not grant it.
+    pub no_browser: Cell<bool>,
     pub clock: Cell<i64>,
     /// Canned model replies, used oldest first. With none left the model is "not set up".
     pub replies: RefCell<Vec<String>>,
@@ -40,6 +44,8 @@ impl Src {
             calls: RefCell::new(vec![]),
             pages: RefCell::new(BTreeMap::new()),
             files: RefCell::new(BTreeMap::new()),
+            renders: RefCell::new(BTreeMap::new()),
+            no_browser: Cell::new(false),
             clock: Cell::new(1_794_000_000_000),
             replies: RefCell::new(vec![]),
             ids: Cell::new(1),
@@ -108,6 +114,29 @@ impl Src {
             page["status"] = json!(status);
         }
         self.pages.borrow_mut().insert(url.into(), page);
+    }
+    /// A page the browser renders, with its visible text and link candidates.
+    pub fn render(&self, url: &str, text: &str, links: &[(&str, &str)]) {
+        let candidates: Vec<Value> = links.iter().map(|(u, t)| json!({"url": u, "text": t})).collect();
+        self.renders.borrow_mut().insert(
+            url.into(),
+            json!({"ok":true,"requestId":"r","finalUrl":url,"title":"T","text":text,"candidates":candidates,"requests":3}),
+        );
+    }
+    pub fn render_refused(&self, url: &str, reason: &str) {
+        self.renders.borrow_mut().insert(url.into(), json!({"ok":false,"reason":reason}));
+    }
+    /// Every browser call, as the address asked for and the hosts allowed.
+    pub fn rendered(&self) -> Vec<(String, Vec<String>)> {
+        self.calls
+            .borrow()
+            .iter()
+            .filter(|(p, ..)| p == "browser")
+            .map(|(_, _, _, v)| {
+                let hosts = v["allowedHosts"].as_array().unwrap().iter().map(|h| h.as_str().unwrap().to_owned()).collect();
+                (v["url"].as_str().unwrap().to_owned(), hosts)
+            })
+            .collect()
     }
     pub fn reply(&self, text: &str) {
         self.replies.borrow_mut().push(text.to_owned());
@@ -194,6 +223,14 @@ impl Host for Src {
             ("fetch", "get") => {
                 let url = parameters["url"].as_str().unwrap_or("");
                 return Ok(self.pages.borrow().get(url).cloned().unwrap_or_else(|| json!({"ok":false,"reason":"network"})));
+            }
+            ("browser", "render") => {
+                assert_eq!(resource, "public-web");
+                if self.no_browser.get() {
+                    return Err(Error::new("Sports host call failed"));
+                }
+                let url = parameters["url"].as_str().unwrap_or("");
+                return Ok(self.renders.borrow().get(url).cloned().unwrap_or_else(|| json!({"ok":false,"reason":"render_failed"})));
             }
             ("ai", "generate") => {
                 assert_eq!(resource, "structured", "recipes ask for structured output");

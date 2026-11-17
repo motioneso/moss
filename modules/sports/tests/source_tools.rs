@@ -190,9 +190,9 @@ fn text_a_person_types_into_a_tool_stays_out_of_logs_and_jobs() {
     let out = call(&f, "sports.previewSource", json!({"url":marked}), None);
     assert_eq!(out["data"]["reason"], "unsupported", "{out}");
     for (port, operation, resource, parameters) in f.calls.borrow().iter() {
-        assert!(["db", "kv", "context", "fetch", "ai"].contains(&port.as_str()), "{port}");
+        assert!(["db", "kv", "context", "fetch", "ai", "browser"].contains(&port.as_str()), "{port}");
         assert!(!(resource.contains("activity") || operation.contains("job")));
-        let sink = port != "fetch" && port != "ai" && !(port == "db" && operation == "query");
+        let sink = port != "fetch" && port != "ai" && port != "browser" && !(port == "db" && operation == "query");
         assert!(!(sink && parameters.to_string().to_lowercase().contains(&MARK.to_lowercase())), "{port}.{operation}.{resource}");
     }
 }

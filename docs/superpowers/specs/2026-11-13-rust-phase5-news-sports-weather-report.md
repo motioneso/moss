@@ -938,3 +938,59 @@ runs the same code as the matching route, so a tool and a route cannot disagree.
   where it used to stop. This is listed above, so nothing passes silently.
 - Minor, not fixed: the chat route answers 403 for any host failure, as the Meals, Goals and
   Wellness routes do. An expired preview or a team list outage also makes an approval stale.
+
+## Sports browser discovery (part 16)
+
+### What was built
+
+A website that hides its headlines until scripts run can now get a recipe. Nothing else changed in
+how recipes work.
+
+- The model first sees the plain page, as before. Only if that gives no usable recipe does the
+  package open the page once in the sandboxed browser from part 15 and ask the model again, now
+  with the text and links the browser saw.
+- The browser may open only the page's own site and the hosts the person confirmed. Evidence from
+  any other site, and links to other publishers, are dropped before the model sees them.
+- Anything that stops the browser (unsupported machine, busy, timeout, blocked, failed render, no
+  permission, blank page) leaves today's answer: the source is reported as unsupported. The model
+  is not asked a second time, so the fallback costs nothing extra.
+- A recipe from rendered evidence still has to name only confirmed hosts and still saves only
+  after a replay through the real fetch finds headlines. Refresh never renders.
+- The manifest gains the browser permission, a features entry, and updated error and fix text.
+
+### Proof
+
+| Claim                            | Check                                                                                        | Result                                             |
+| -------------------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Hidden headlines give a recipe   | Fixture page with no headlines until scripts run; plain ask fails, rendered ask succeeds     | Recipe saved, one render                           |
+| Browser off gives today's answer | Each refusal reason, no permission, blank render, no model                                   | Unsupported, one model call                        |
+| Plain pages never render         | A page whose headlines are in the HTML                                                       | No browser call                                    |
+| Only confirmed hosts             | Render ending on another site; off-site links; a reply naming a new host                     | Ignored or refused whole                           |
+| Rebuild renders, retry does not  | Rebuild preview and retry against the fixture                                                | Rebuild rendered; retry did not                    |
+| Private text stays out           | Rendered text planted; rows, saved settings, other people and every non-model host call      | Found nowhere outside the model prompt             |
+| Guards are real                  | Four guards removed one at a time, and a leak added                                          | Each made its test fail                            |
+| Other person shut out, parity    | Existing real-database checks on the built component                                         | Row security failure seen; 32 and 34 steps matched |
+| Native and WebAssembly builds    | 11 new native tests, full native suite, real-database tests against the built component      | All passed                                         |
+| Real server                      | Real server with the sandboxed browser enabled and a real model, one real script-driven page | Answered unsupported (see below)                   |
+
+### Not proven
+
+- No real run turned a script-hidden page into a recipe. The real host only fetches public HTTPS
+  pages, so a local fixture cannot be served to it. The one real script-driven page tried keeps its
+  headline data on a second host the package may not name, and the live answer was unsupported.
+- The live run cannot show whether the browser opened for that page.
+- The host's 30 second call ceiling has to cover a model call, a render and a second model call.
+  A slow model could hit it, and the person would see a failed preview.
+- The browser sees page text and links, not the page's own data requests.
+- Chat tools never render, because the host allows the browser on routes only. The tool still
+  tries once and gets a refusal. Allowing tools would need a host change.
+- The browser works on Linux only.
+- Changing which teams a source covers reuses the same discovery code, so a failed replay there
+  can also open the browser. No test covers that route.
+- For a saved source, the home page's own host comes from the page and is not checked against the
+  confirmed hosts before the browser opens it. A recipe still may name only confirmed hosts.
+
+### Review round 1 (part 16)
+
+- No blockers or majors. Three minors: the two above, and the call-ceiling note, which is listed
+  under Not proven. None was changed.
