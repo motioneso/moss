@@ -234,7 +234,7 @@ fn cards_and_feedback_follow_the_rules_privately() {
     };
     let (status, less) = story("less_like_this", Some(&format!("too much {MARKER} coverage")));
     assert_eq!(status, 201, "{less}");
-    assert_eq!(less["feedback"]["metadata"], json!({"topicRef":"topic-a"}));
+    assert_eq!(less["feedback"]["metadata"], json!({"topicRef":"topic-a","headline":"dropped"}));
     assert_eq!(less["feedback"]["ruleVersion"], 1);
     let less_id = less["feedback"]["id"].as_str().unwrap().to_owned();
     let (status, edited) = call!(rt, database, owner, |cx| feedback::update_reason(cx, &less_id, &json!({"reason":"fewer repeats"})));
