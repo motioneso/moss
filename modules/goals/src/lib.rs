@@ -1,7 +1,8 @@
 //! Goals package: long-running goals and their evidence, private to each owner. All effects
-//! cross the guest-safe SDK Host interface. Chat tools and the Today section are later parts.
+//! cross the guest-safe SDK Host interface. Chat tools share the route mutations; Today reads active goals without a screen.
 pub mod goals;
 pub mod input;
+pub mod tools;
 pub mod util;
 
 #[cfg(target_arch = "wasm32")]
@@ -14,6 +15,8 @@ use serde_json::json;
 /// because host errors can carry request text.
 pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
     let result = match (request.method.as_str(), request.path.as_str()) {
+        ("GET", "/goals/today") => tools::today(host),
+        ("POST", "/goals/tools/run") => tools::run(host, &request.body),
         ("GET", "/goals") => goals::list(host),
         ("POST", "/goals") => goals::create(host, &request),
         ("GET", "/goals/:id") => goals::get(host, &request),
@@ -25,9 +28,20 @@ pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
 }
 
 /// The same entry point runs natively in tests and inside the packaged component.
-pub fn handle<H: Host + ?Sized>(host: &H, kind: &str, payload: &str) -> moss_module_sdk::Result<String> {
+pub fn handle<H: Host + ?Sized>(
+    host: &H,
+    kind: &str,
+    payload: &str,
+) -> moss_module_sdk::Result<String> {
     match kind {
         "health" | "install" => Ok("{}".into()),
+        "tool" => {
+            let result = serde_json::from_str(payload)
+                .map_err(|_| moss_module_sdk::Error::new("Invalid Goals tool request"))
+                .and_then(|request| tools::handle(host, request))
+                .map_err(|_| moss_module_sdk::Error::new("Goals tool failed"))?;
+            Ok(serde_json::to_string(&result)?)
+        }
         "route" => {
             let request: RouteRequest = serde_json::from_str(payload)?;
             Ok(serde_json::to_string(&route(host, request))?)

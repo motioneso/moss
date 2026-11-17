@@ -14,7 +14,8 @@ crate-type = ["rlib", "cdylib"]
 [dependencies]
 moss-module-sdk = { path = "../../../rust-spike/module-sdk" }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# Keep approval input bytes stable across the host and Wasm boundary.
+serde_json = { version = "1", features = ["preserve_order"] }
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
