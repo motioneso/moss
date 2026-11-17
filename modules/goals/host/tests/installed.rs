@@ -8,7 +8,7 @@ use access_context::AccessContext;
 use moss_module_host::{
     application::{Application, Configuration},
     registry::Source,
-    runtime::{Limits, Host},
+    runtime::{Host, Limits},
 };
 use safety_core::secret::{Secret, SecretCipher};
 use serde_json::{json, Value};
@@ -19,10 +19,18 @@ const MARK: &str = "PLANTED-MARKER-7d2e41";
 /// Goals declares no model port. This stub only satisfies the host's configuration.
 struct NoModel;
 impl moss_module_host::ai::Intelligence for NoModel {
-    fn generate(&self, _: &moss_module_host::runtime::CallScope, _: &moss_module_host::runtime::Request) -> anyhow::Result<Value> {
+    fn generate(
+        &self,
+        _: &moss_module_host::runtime::CallScope,
+        _: &moss_module_host::runtime::Request,
+    ) -> anyhow::Result<Value> {
         anyhow::bail!("Goals does not call a model")
     }
-    fn embed(&self, _: &moss_module_host::runtime::CallScope, _: &moss_module_host::runtime::Request) -> anyhow::Result<Value> {
+    fn embed(
+        &self,
+        _: &moss_module_host::runtime::CallScope,
+        _: &moss_module_host::runtime::Request,
+    ) -> anyhow::Result<Value> {
         anyhow::bail!("Goals does not embed")
     }
 }
@@ -39,19 +47,24 @@ fn root() -> std::path::PathBuf {
 }
 
 /// Reads as the app role with the actor set, so row security applies as it does at run time.
-fn rows_as(
-    f: &support::Fixture,
-    actor: uuid::Uuid,
-    sql: &str,
-) -> Vec<tokio_postgres::Row> {
+fn rows_as(f: &support::Fixture, actor: uuid::Uuid, sql: &str) -> Vec<tokio_postgres::Row> {
     f.rt.block_on(async {
-        let (mut client, conn) =
-            tokio_postgres::connect(&std::env::var("JS48_APP_URL").unwrap(), tokio_postgres::NoTls).await.unwrap();
+        let (mut client, conn) = tokio_postgres::connect(
+            &std::env::var("JS48_APP_URL").unwrap(),
+            tokio_postgres::NoTls,
+        )
+        .await
+        .unwrap();
         tokio::spawn(async move {
             let _ = conn.await;
         });
         let tx = client.transaction().await.unwrap();
-        tx.execute("SELECT set_config('app.actor_user_id', $1, true)", &[&actor.to_string()]).await.unwrap();
+        tx.execute(
+            "SELECT set_config('app.actor_user_id', $1, true)",
+            &[&actor.to_string()],
+        )
+        .await
+        .unwrap();
         let rows = tx.query(sql, &[]).await.unwrap();
         tx.commit().await.unwrap();
         rows
@@ -67,13 +80,25 @@ impl World {
     fn new() -> Self {
         let f = support::Fixture::new();
         f.rt.block_on(async {
-            let ready = f.root.query_one("SELECT to_regclass('moss_queue.jobs') IS NOT NULL", &[]).await.unwrap().get::<_, bool>(0);
+            let ready = f
+                .root
+                .query_one("SELECT to_regclass('moss_queue.jobs') IS NOT NULL", &[])
+                .await
+                .unwrap()
+                .get::<_, bool>(0);
             if !ready {
-                f.root.batch_execute(moss_platform_jobs::MIGRATION).await.unwrap();
-                f.root.batch_execute(moss_module_host::jobs::MIGRATION).await.unwrap();
+                f.root
+                    .batch_execute(moss_platform_jobs::MIGRATION)
+                    .await
+                    .unwrap();
+                f.root
+                    .batch_execute(moss_module_host::jobs::MIGRATION)
+                    .await
+                    .unwrap();
             }
         });
-        f.rt.block_on(f.root.execute("DELETE FROM moss_modules.catalog", &[])).unwrap();
+        f.rt.block_on(f.root.execute("DELETE FROM moss_modules.catalog", &[]))
+            .unwrap();
         let dir = tempfile::tempdir().unwrap();
         let reg = tempfile::tempdir().unwrap();
         let bytes = moss_goals_host::package::pack(&root(), &component()).unwrap();
@@ -97,16 +122,33 @@ impl World {
         .unwrap();
         let source = app
             .installer
-            .refresh(&f.access(f.a), Source::Folder(reg.path().into()), &key, &publisher, "goals-test-registry")
+            .refresh(
+                &f.access(f.a),
+                Source::Folder(reg.path().into()),
+                &key,
+                &publisher,
+                "goals-test-registry",
+            )
             .unwrap();
-        app.installer.install(&f.access(f.a), &source, &artifact, true).unwrap();
-        Self { f, app, _dirs: (dir, reg) }
+        app.installer
+            .install(&f.access(f.a), &source, &artifact, true)
+            .unwrap();
+        Self {
+            f,
+            app,
+            _dirs: (dir, reg),
+        }
     }
     fn call(&self, actor: uuid::Uuid, method: &str, path: &str, body: Value) -> Value {
         serde_json::from_str(
             &self
                 .app
-                .dispatch_extended(self.f.access(actor), method, &format!("/api/m/goals{path}"), &body.to_string())
+                .dispatch_extended(
+                    self.f.access(actor),
+                    method,
+                    &format!("/api/m/goals{path}"),
+                    &body.to_string(),
+                )
                 .unwrap(),
         )
         .unwrap()
@@ -126,7 +168,12 @@ impl World {
 fn goals_routes_work_and_a_second_person_is_refused() {
     let w = World::new();
     let (a, b) = (w.f.a, w.f.b);
-    let created = w.call(a, "POST", "/goals", json!({"title":MARK,"desiredOutcome":"Ship it","priority":4}));
+    let created = w.call(
+        a,
+        "POST",
+        "/goals",
+        json!({"title":MARK,"desiredOutcome":"Ship it","priority":4}),
+    );
     assert_eq!(created["status"], 201, "{created}");
     let id = created["body"]["id"].as_str().unwrap().to_owned();
     assert_eq!(created["body"]["status"], "active");
@@ -140,29 +187,53 @@ fn goals_routes_work_and_a_second_person_is_refused() {
 
     // The second person sees nothing, through the routes or the database.
     assert_eq!(w.call(b, "GET", "/goals", json!(null))["body"], json!([]));
-    assert_eq!(w.call(b, "GET", &format!("/goals/{id}"), json!(null))["status"], 404);
+    assert_eq!(
+        w.call(b, "GET", &format!("/goals/{id}"), json!(null))["status"],
+        404
+    );
     assert!(rows_as(&w.f, b, "SELECT id FROM app.moss_goals").is_empty());
     assert_eq!(rows_as(&w.f, a, "SELECT id FROM app.moss_goals").len(), 1);
     println!("PASS rls: the second person reads no goals");
 
     // With the owner rule removed, the second person can read them. The rule is put back.
-    w.f.rt.block_on(w.f.root.execute("DROP POLICY moss_goals_rw ON app.moss_goals", &[])).unwrap();
+    w.f.rt
+        .block_on(
+            w.f.root
+                .execute("DROP POLICY moss_goals_rw ON app.moss_goals", &[]),
+        )
+        .unwrap();
     w.f.rt.block_on(w.f.root.execute(
         "CREATE POLICY moss_goals_rw ON app.moss_goals FOR ALL TO jarvis_app_runtime USING (true) WITH CHECK (true)",
         &[],
     )).unwrap();
     let leaked = rows_as(&w.f, b, "SELECT id FROM app.moss_goals");
-    w.f.rt.block_on(w.f.root.execute("DROP POLICY moss_goals_rw ON app.moss_goals", &[])).unwrap();
+    w.f.rt
+        .block_on(
+            w.f.root
+                .execute("DROP POLICY moss_goals_rw ON app.moss_goals", &[]),
+        )
+        .unwrap();
     w.f.rt.block_on(w.f.root.execute(
         "CREATE POLICY moss_goals_rw ON app.moss_goals FOR ALL TO jarvis_app_runtime USING (owner_user_id = app.current_actor_user_id()) WITH CHECK (owner_user_id = app.current_actor_user_id())",
         &[],
     )).unwrap();
-    assert_eq!(leaked.len(), 1, "without the policy the second person must see the goal");
+    assert_eq!(
+        leaked.len(),
+        1,
+        "without the policy the second person must see the goal"
+    );
     assert!(rows_as(&w.f, b, "SELECT id FROM app.moss_goals").is_empty());
-    println!("PASS rls: removing the policy lets the second person in, restoring it shuts them out");
+    println!(
+        "PASS rls: removing the policy lets the second person in, restoring it shuts them out"
+    );
 
     // Closing refuses further evidence.
-    let closed = w.call(a, "PATCH", &format!("/goals/{id}"), json!({"status":"completed"}));
+    let closed = w.call(
+        a,
+        "PATCH",
+        &format!("/goals/{id}"),
+        json!({"status":"completed"}),
+    );
     assert_eq!(closed["body"]["status"], "completed");
     let refused = w.call(a, "POST", &format!("/goals/{id}/evidence"),
         json!({"evidenceKind":"progress","sourceKind":"manual","sourceLabel":"Note","summary":"Late"}));
@@ -170,11 +241,19 @@ fn goals_routes_work_and_a_second_person_is_refused() {
     println!("PASS closed goal: evidence on a completed goal is refused");
 
     // The marker reaches no job payload, no other person's answer and no error body.
-    let jobs: i64 = w.f.rt.block_on(w.f.root.query_one(
-        "SELECT count(*) FROM moss_queue.jobs WHERE payload::text LIKE $1", &[&format!("%{MARK}%")],
-    )).unwrap().get(0);
+    let jobs: i64 =
+        w.f.rt
+            .block_on(w.f.root.query_one(
+                "SELECT count(*) FROM moss_queue.jobs WHERE payload::text LIKE $1",
+                &[&format!("%{MARK}%")],
+            ))
+            .unwrap()
+            .get(0);
     assert_eq!(jobs, 0);
-    assert!(!w.call(b, "GET", "/goals", json!(null)).to_string().contains(MARK));
+    assert!(!w
+        .call(b, "GET", "/goals", json!(null))
+        .to_string()
+        .contains(MARK));
     println!("PASS privacy: the marker is in no job payload and no second-person answer");
     let _ = Host::new(Limits::default()).unwrap();
     let _ = AccessContext::new(a, "goals-proof");
@@ -202,8 +281,15 @@ fn rust_answers_match_the_old_routes_step_for_step() {
     let mut new = vec![];
     for step in &steps {
         let method = step["method"].as_str().unwrap();
-        let url = step["url"].as_str().unwrap().replace("/api/goals", "/goals");
-        let body = if step.get("body").is_some() { step["body"].clone() } else { json!(null) };
+        let url = step["url"]
+            .as_str()
+            .unwrap()
+            .replace("/api/goals", "/goals");
+        let body = if step.get("body").is_some() {
+            step["body"].clone()
+        } else {
+            json!(null)
+        };
         let answer = w.call(new_actor, method, &url, body);
         new.push(json!({"status":answer["status"],"body":answer["body"]}));
     }
@@ -214,9 +300,20 @@ fn rust_answers_match_the_old_routes_step_for_step() {
     println!("PASS parity: {} steps match the old routes", steps.len());
 
     // Steps that use the created goal's id, run on each side with its own id.
-    let created_old = replay::old_routes(old_actor, &[json!({"method":"POST","url":"/api/goals","body":{"title":"Id goal","desiredOutcome":"x"}})], &json!({}));
+    let created_old = replay::old_routes(
+        old_actor,
+        &[
+            json!({"method":"POST","url":"/api/goals","body":{"title":"Id goal","desiredOutcome":"x"}}),
+        ],
+        &json!({}),
+    );
     let old_id = created_old[0]["body"]["id"].as_str().unwrap().to_owned();
-    let created_new = w.call(new_actor, "POST", "/goals", json!({"title":"Id goal","desiredOutcome":"x"}));
+    let created_new = w.call(
+        new_actor,
+        "POST",
+        "/goals",
+        json!({"title":"Id goal","desiredOutcome":"x"}),
+    );
     let new_id = created_new["body"]["id"].as_str().unwrap().to_owned();
     let id_steps: Vec<Value> = vec![
         json!({"method":"GET","url":"/api/goals/{id}"}),
@@ -230,12 +327,22 @@ fn rust_answers_match_the_old_routes_step_for_step() {
     let mut new = vec![];
     for step in &id_steps {
         let method = step["method"].as_str().unwrap();
-        let url = step["url"].as_str().unwrap().replace("/api/goals", "/goals").replace("{id}", &new_id);
+        let url = step["url"]
+            .as_str()
+            .unwrap()
+            .replace("/api/goals", "/goals")
+            .replace("{id}", &new_id);
         let answer = w.call(new_actor, method, &url, step["body"].clone());
         new.push(json!({"status":answer["status"],"body":answer["body"]}));
     }
     old.iter_mut().for_each(replay::mask);
     new.iter_mut().for_each(replay::mask);
     assert_eq!(new, old);
-    println!("PASS parity: {} id steps match the old routes", id_steps.len());
+    println!(
+        "PASS parity: {} id steps match the old routes",
+        id_steps.len()
+    );
 }
+
+#[path = "support/tools.rs"]
+mod tools;
