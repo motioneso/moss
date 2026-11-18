@@ -1,5 +1,11 @@
 # Backtrack package
 
+## 0.1.1
+
+- Settings now has a Backtrack screen. It shows the recording switch that pauses every Mac, how many days and how much text are kept, and when a Mac last sent text.
+- The screen deletes the last hour, today, one chosen day or everything, and asks first every time. Days run midnight to midnight in the account time zone, which a new route reports.
+- It shows its own messages while loading, when loading fails, when no Mac is linked, and when an admin has not turned storage on.
+
 ## 0.1.0
 
 - Backtrack starts as a built-in package that cannot be turned off. It keeps the same tables and saved data as before.
@@ -8,4 +14,3 @@
 - Screen text is stored for 37 days. An hourly job removes older text.
 - Your account export includes your Backtrack history.
 - Stored screen text is added to Memory's search, and removed from it when the history is deleted or expires. Memory must be installed.
-- The Backtrack screen is not part of this package yet.

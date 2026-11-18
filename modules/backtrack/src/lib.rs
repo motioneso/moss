@@ -25,6 +25,7 @@ use serde_json::{json, Value};
 pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
     let result = match (request.method.as_str(), request.path.as_str()) {
         ("GET", "/status") => user_routes::status(host),
+        ("GET", "/local-day") => user_routes::local_day(host, &request),
         ("PUT", "/preferences") => user_routes::set_paused(host, &request),
         ("DELETE", "/segments") => user_routes::delete(host, &request),
         ("POST", "/ingest") => ingest::post(host, &request),

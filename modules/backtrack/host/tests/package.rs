@@ -48,6 +48,16 @@ fn the_package_builds_and_the_manifest_validates() {
 }
 
 #[test]
+fn the_settings_screen_ships_with_every_file_it_loads() {
+    let files = moss_backtrack_host::package::files(&root(), &component()).unwrap();
+    let manifest = moss_backtrack_host::package::manifest().unwrap();
+    assert_eq!(manifest.screens["/settings/backtrack"], "ui/index.html");
+    for name in ["index.html", "app.mjs", "view.mjs", "api.mjs", "guest-bridge.mjs", "backtrack.css"] {
+        assert!(files.contains_key(&format!("ui/{name}")), "ui/{name} missing");
+    }
+}
+
+#[test]
 fn the_package_asks_only_for_its_own_resources() {
     let manifest = moss_backtrack_host::package::manifest().unwrap();
     let ask = |port: &str, operation: &str, resource: &str| {

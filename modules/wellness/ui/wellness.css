@@ -1,0 +1,650 @@
+/* Wellness page styles — part 1: wrap, hero, sections, cards, today row,
+   insights, charts. Split into two files to stay under the 1000-line cap;
+   import order (1 then 2) must be preserved.
+   Layout only — visual declarations (color, background, border, radius, font,
+   shadow, outline, fill/stroke) for these selectors live in
+   packages/ui/src/styles/components-wellness-1.css and components-wellness-2.css (#1392). */
+
+.wl-wrap {
+  min-width: 0;
+  max-width: 1220px;
+  margin: 0 auto;
+  padding: 30px 40px 110px;
+}
+/* ---- hero ---- */
+.wl-hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding-bottom: 22px;
+}
+.wl-hero__main {
+  max-width: 60ch;
+}
+.wl-title {
+  letter-spacing: -0.014em;
+  line-height: 1.08;
+  margin: 10px 0 0;
+}
+.wl-lede {
+  line-height: 1.55;
+  margin-top: 10px;
+}
+.wl-hero__stat {
+  display: flex;
+  gap: var(--space-3) var(--space-5);
+  flex-wrap: wrap;
+  align-items: center;
+  min-width: 0;
+}
+.wl-herostat {
+  text-align: right;
+}
+.wl-herostat .k {
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.wl-herostat .v {
+  font-variant-numeric: tabular-nums;
+  margin-top: 3px;
+}
+.wl-herostat--streak .v {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.wl-streakchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px 3px 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- section scaffold ---- */
+.wl-sec {
+  min-width: 0;
+  margin-top: 30px;
+}
+.wl-sec__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 13px;
+}
+.wl-sec__title {
+  letter-spacing: -0.008em;
+}
+.wl-sec__title .sub {
+  letter-spacing: 0.03em;
+  margin-left: 10px;
+  text-transform: uppercase;
+}
+.wl-sec__aside {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.wl-sec__note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.wl-sec__note .ic {
+  display: inline-flex;
+}
+
+/* ---- card ---- */
+.wl-card {
+  padding: 18px 20px 18px;
+}
+.wl-card__hd {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.wl-card__hd .ic {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.wl-card__hd .r {
+  margin-left: auto;
+}
+
+/* ===================== TODAY ROW ===================== */
+.wl-today {
+  display: grid;
+  grid-template-columns: 1.12fr 1fr;
+  gap: 16px;
+  align-items: stretch;
+}
+@media (max-width: 880px) {
+  .wl-today {
+    grid-template-columns: 1fr;
+  }
+}
+.wl-today > * {
+  min-width: 0;
+}
+
+/* medication card */
+.wl-medlist {
+  display: flex;
+  flex-direction: column;
+}
+.wl-medgrp {
+  margin-top: 6px;
+}
+.wl-medgrp:first-child {
+  margin-top: 0;
+}
+.wl-medgrp__lbl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 8px 2px 4px;
+}
+.wl-medgrp__lbl .ic {
+  display: inline-flex;
+}
+.wl-medrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 6px;
+  cursor: pointer;
+  transition: var(--transition-control);
+}
+.wl-medrow__box {
+  width: 23px;
+  height: 23px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-control);
+}
+.wl-medrow__dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+}
+.wl-medrow__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.wl-medrow__sub {
+  margin-top: 1px;
+}
+.wl-medrow--tight {
+  padding: 11px 8px;
+}
+.wl-medrow__prn {
+  display: inline-block;
+  margin-left: 8px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 1px 7px;
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+.wl-medrow--tight .wl-medrow__name {
+  white-space: nowrap;
+}
+.wl-medrow__time {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.wl-medrow__taken {
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.wl-medfoot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 14px;
+}
+.wl-medfoot__bar {
+  flex: 1;
+}
+.wl-medfoot__track {
+  display: block;
+  height: 4px;
+  overflow: hidden;
+}
+.wl-medfoot__fill {
+  display: block;
+  height: 100%;
+  transition: width 0.3s ease;
+}
+.wl-medfoot__ct {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* check-in card */
+.wl-checkin {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.wl-checkin__prompt {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.wl-checkin__q {
+  line-height: 1.4;
+  margin: 2px 0 4px;
+}
+.wl-checkin__hint {
+  line-height: 1.5;
+}
+.wl-emostrip {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 18px 0 16px;
+}
+.wl-emostrip__b {
+  flex: 1;
+  min-width: 0;
+  padding: 13px 4px 11px;
+  cursor: pointer;
+  transition: var(--transition-control);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.wl-emostrip__b:hover {
+  transform: translateY(-2px);
+}
+.wl-emostrip__dot {
+  width: 19px;
+  height: 19px;
+}
+.wl-emostrip__name {
+  letter-spacing: 0.01em;
+}
+.wl-checkin__cta {
+  margin-top: auto;
+}
+
+/* completed check-in summary */
+.wl-done {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.wl-done__top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.wl-done__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 13px 7px 10px;
+}
+.wl-done__chip .d {
+  width: 11px;
+  height: 11px;
+}
+.wl-done__mood {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  margin-left: auto;
+  text-align: right;
+}
+.wl-done__mood .k {
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.wl-done__mood .v {
+  font-variant-numeric: tabular-nums;
+}
+.wl-senrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.wl-sentag {
+  padding: 4px 10px;
+}
+.wl-intens {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.wl-intens__track {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+.wl-intens__pip {
+  height: 6px;
+  flex: 1;
+}
+.wl-intens__lbl {
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* ===================== INSIGHTS ===================== */
+.wl-insights {
+  padding-top: var(--space-5);
+}
+.wl-insights__hd {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 15px 20px 14px;
+}
+.wl-insights__hd .ic {
+  display: inline-flex;
+}
+.wl-insights__hd .meta {
+  margin-left: auto;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.wl-insights__body {
+  padding: var(--space-3) 0 0;
+}
+.wl-insight {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 13px 0;
+}
+.wl-insight__ic {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+.wl-insight__main {
+  flex: 1;
+  min-width: 0;
+}
+.wl-insight__tx {
+  line-height: 1.5;
+}
+.wl-insight__act {
+  margin-top: 7px;
+}
+.wl-linkbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  cursor: pointer;
+}
+.wl-linkbtn:hover {
+  text-decoration: underline;
+}
+.wl-linkbtn .ic {
+  display: inline-flex;
+}
+
+/* ===================== CHARTS ===================== */
+.wl-chartcard {
+  min-width: 0;
+  padding: var(--space-5) 0;
+}
+.wl-chartcard + .wl-chartcard {
+  margin-top: 16px;
+}
+.wl-rangetoggle {
+  display: inline-flex;
+  padding: 3px;
+}
+.wl-rangetoggle__btn {
+  padding: 4px 14px;
+  cursor: pointer;
+  transition: var(--transition-control);
+}
+.wl-chart__hd {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+.wl-chart__hd > div:first-child {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+.wl-chart__title {
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.wl-chart__title .ic {
+  display: inline-flex;
+}
+/* help popover (the ? next to the chart title) */
+.wl-help {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+}
+.wl-help__btn {
+  width: 19px;
+  height: 19px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: var(--transition-control);
+}
+.wl-help__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+.wl-help__pop {
+  position: absolute;
+  top: calc(100% + 9px);
+  left: -8px;
+  z-index: 41;
+  width: 320px;
+  max-width: 78vw;
+  padding: 14px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: normal;
+}
+.wl-help__pop::before {
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: 14px;
+  width: 9px;
+  height: 9px;
+  transform: rotate(45deg);
+}
+.wl-help__row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.wl-help__k {
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.wl-help__v {
+  line-height: 1.5;
+}
+.wl-chart__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1 1 auto;
+}
+.wl-leg {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.wl-leg__dot {
+  width: 9px;
+  height: 9px;
+  flex: none;
+}
+.wl-tipdiv {
+  height: 1px;
+  margin: 7px 0 5px;
+}
+.wl-chart__plot {
+  min-width: 0;
+  margin-top: 10px;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: var(--space-1);
+}
+/* Match the 760-unit viewBox at every content width so 11px SVG text never shrinks.
+   The canvas also anchors tooltip percentages to the scrollable plot, not its viewport. */
+.wl-chart__canvas {
+  position: relative;
+  min-width: 760px;
+}
+.wl-chart__plot svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.wl-chart__tip {
+  position: absolute;
+  pointer-events: none;
+  z-index: 5;
+  padding: 9px 11px;
+  min-width: 150px;
+  max-width: 100%;
+  max-height: 100%;
+  overflow: auto;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+.wl-chart__tip.is-pinned {
+  pointer-events: auto;
+}
+.wl-chart__tip.is-on {
+  opacity: 1;
+}
+.wl-chart__tip .d {
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+  text-transform: uppercase;
+}
+.wl-chart__tip .big {
+  margin-top: 3px;
+}
+.wl-tiprow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 5px;
+}
+.wl-tiprow .sw {
+  width: 8px;
+  height: 8px;
+  flex: none;
+}
+.wl-tiprow .miss {
+  margin-left: auto;
+  opacity: 0.55;
+}
+.wl-tiprow--more {
+  opacity: 0.6;
+  font-style: italic;
+  margin-top: 3px;
+}
+
+.wl-sec > .jds-section-head {
+  margin-bottom: var(--space-5);
+}
+@media (max-width: 620px) {
+  .wl-wrap {
+    padding: var(--space-5) var(--space-3) var(--space-9);
+  }
+  .wl-hero__stat {
+    width: 100%;
+  }
+  .wl-herostat {
+    text-align: left;
+  }
+  .wl-emostrip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .wl-card__hd {
+    flex-wrap: wrap;
+  }
+  .wl-chart__title {
+    white-space: normal;
+    flex-wrap: wrap;
+  }
+}
+
+.wl-chart-data {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+.wl-chart-data select {
+  max-width: 20rem;
+}
+.wl-chart-data p {
+  margin: 0;
+}
+.wl-chart-data details {
+  overflow-x: auto;
+}
+.wl-chart-data table {
+  width: 100%;
+}
+.wl-chart-data th,
+.wl-chart-data td {
+  padding: var(--space-2);
+  text-align: left;
+}

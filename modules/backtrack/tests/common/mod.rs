@@ -41,6 +41,7 @@ impl Host for Fake {
         self.calls.borrow_mut().push((port.into(), operation.into(), resource.into(), parameters.clone()));
         Ok(match (port, operation) {
             ("context", "read") => json!({"now": NOW}),
+            ("context", "local-date") => json!({"timezone": "Europe/London", "date": "2026-11-12", "start": "2026-11-12T00:00:00Z", "nextStart": "2026-11-13T00:00:00Z"}),
             ("kv", "link") => self.link.clone(),
             ("kv", "storage") => json!({"on": self.storage}),
             ("kv", "paused") => json!({"paused": self.paused}),
