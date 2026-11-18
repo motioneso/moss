@@ -144,6 +144,7 @@ fn search_makes_at_most_five_live_fetches_and_reports_partial() {
     let host = EspnHost::new();
     let found = roster::search(&host, "ar").unwrap();
     assert!(found.partial);
+    assert_eq!(roster::search_body(&found)["partial"], serde_json::json!(true), "the wire answer carries partial");
     let rosters = host.fetched.borrow().iter().filter(|u| u.contains("/teams?")).count();
     assert!(rosters >= 1 && rosters <= 5 + 4, "page walks may add pages but never a sixth league");
     let leagues: std::collections::HashSet<String> = host
