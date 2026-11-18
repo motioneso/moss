@@ -467,6 +467,18 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
             assert!(!kv.contains(MARK) && !kv.contains(&owner.to_string()), "cache file {entry:?} holds a query or a person");
         }
     }
+    // Hold the server open so the real screen can be opened in a browser with real ESPN data.
+    if let Ok(hold) = std::env::var("SPORTS_LIVE_HOLD") {
+        for (key, team) in [("nfl", "dal"), ("nba", "lal"), ("nhl", "")] {
+            let body = if team.is_empty() { json!({"competitionKey":key}) } else { json!({"competitionKey":key,"teamKey":team}) };
+            let (status, text) = call(Method::POST, "/follows", Some(&cookie), Some(body));
+            println!("hold: follow {key} {team}: {status} {}", text.chars().take(80).collect::<String>());
+        }
+        fs::write(format!("{hold}/ready.txt"), format!("{origin}\n{cookie}\n{origin}/module-frame?module=sports&path=/sports\n")).unwrap();
+        while !std::path::Path::new(&format!("{hold}/stop")).exists() {
+            std::thread::sleep(Duration::from_millis(500));
+        }
+    }
     // The owner removes the follow.
     let (status, text) = call(Method::DELETE, &format!("/follows/{id}"), Some(&cookie), None);
     assert_eq!((status, json_of(&text)), (200, json!({"ok":true})));
