@@ -8,6 +8,14 @@
      shared .content-surface padding both pages already sit in) — News was missing this and
      started noticeably higher on the page. */
   padding-top: var(--space-6);
+  /* Side margins match the app's content area on the old screen. */
+  padding-inline: var(--space-6);
+}
+
+@media (max-width: 560px) {
+  .nw-wrap {
+    padding-inline: var(--space-3);
+  }
 }
 
 .nw-lede {
