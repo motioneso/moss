@@ -52,6 +52,23 @@ fn the_package_builds_and_the_manifest_validates() {
 }
 
 #[test]
+fn the_package_serves_the_meetings_screen() {
+    let manifest = moss_meetings_host::package::manifest().unwrap();
+    assert_eq!(manifest.screens["/meetings"], "ui/index.html");
+    let files = moss_meetings_host::package::files(&root(), &component()).unwrap();
+    for name in [
+        "index.html", "app.mjs", "api.mjs", "format.mjs", "kit.mjs", "home.mjs", "manual.mjs",
+        "record.mjs", "transcript.mjs", "summary.mjs", "summary-parts.mjs", "guest-bridge.mjs",
+        "meetings.css", "meetings-record.css",
+    ] {
+        assert!(files.contains_key(&format!("ui/{name}")), "ui/{name} missing");
+    }
+    let nav = &manifest.navigation[0];
+    assert_eq!(nav["path"], "/meetings");
+    assert!(manifest.screens.contains_key(nav["path"].as_str().unwrap()));
+}
+
+#[test]
 fn the_package_asks_only_for_its_own_resources() {
     let manifest = moss_meetings_host::package::manifest().unwrap();
     let ask = |port: &str, operation: &str, resource: &str| {

@@ -72,6 +72,7 @@ fn router(data: Arc<Accounts>, web: PathBuf) -> Router {
                 let row = cx.db().query_one("SELECT name, is_instance_admin FROM app.get_user_by_id($1::uuid)", &[&access.actor_user_id()]).await?;
                 let mut shell = d.for_actor(&access).shell();
                 shell.account.display_name = row.get(0);
+                shell.account.is_admin = row.get(1);
                 if d.can_install_modules && row.get::<_, bool>(1) {
                     shell.nav.push(moss_shell_contract::NavSection {
                         label: Some("Instance".into()),
