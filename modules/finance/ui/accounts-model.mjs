@@ -45,7 +45,10 @@ export function buildAccountsView(accounts, banks, now) {
     byItem.set(key, [...(byItem.get(key) ?? []), a]);
   }
   const bankFor = new Map(banks.map((b) => [b.itemId, b]));
-  const ids = [...banks.map((b) => b.itemId), ...[...byItem.keys()].filter((id) => !bankFor.has(id))].filter((id) => byItem.has(id));
+  const ids = [
+    ...banks.map((b) => b.itemId),
+    ...[...byItem.keys()].filter((id) => !bankFor.has(id))
+  ].filter((id) => byItem.has(id));
   const net = new Map();
   const assets = new Map();
   const debts = new Map();
@@ -55,20 +58,50 @@ export function buildAccountsView(accounts, banks, now) {
       const balanceCents = (isDebt(a.type) ? -1 : 1) * a.balanceCents;
       add(net, a.isoCurrency, balanceCents);
       add(balanceCents < 0 ? debts : assets, a.isoCurrency, Math.abs(balanceCents));
-      return { accountId: a.accountId, name: a.name, mask: a.mask, balanceCents, isoCurrency: a.isoCurrency, type: a.type, subtype: a.subtype };
+      return {
+        accountId: a.accountId,
+        name: a.name,
+        mask: a.mask,
+        balanceCents,
+        isoCurrency: a.isoCurrency,
+        type: a.type,
+        subtype: a.subtype
+      };
     });
     if (itemId === "manual-account-group")
-      return { itemId, name: "Manual accounts", status: "ready", statusLabel: "Recorded in Moss", asOf: null, message: null, reconnect: false, accounts: accountsHere };
+      return {
+        itemId,
+        name: "Manual accounts",
+        status: "ready",
+        statusLabel: "Recorded in Moss",
+        asOf: null,
+        message: null,
+        reconnect: false,
+        accounts: accountsHere
+      };
     const status = bank?.status ?? "error";
     const known = bank?.institutionName?.trim();
     const name = known ? known : ids.length === 1 ? "Connected bank" : `Bank ${index + 1}`;
     if (status === "connected")
-      return { itemId, name, status: "ready", statusLabel: syncedAgo(bank?.lastSyncAt ?? null, now), asOf: null, message: null, reconnect: false, accounts: accountsHere };
+      return {
+        itemId,
+        name,
+        status: "ready",
+        statusLabel: syncedAgo(bank?.lastSyncAt ?? null, now),
+        asOf: null,
+        message: null,
+        reconnect: false,
+        accounts: accountsHere
+      };
     return {
-      itemId, name, status: "error",
+      itemId,
+      name,
+      status: "error",
       statusLabel: status === "reauth-required" ? "Sign-in expired" : "Connection problem",
-      asOf: asOfDate(bank?.lastSyncAt ?? null), message: bank?.message ?? null,
-      reconnect: status === "reauth-required", accounts: accountsHere
+      asOf: asOfDate(bank?.lastSyncAt ?? null),
+      message: bank?.message ?? null,
+      reconnect: status === "reauth-required",
+      accounts: accountsHere
     };
   });
   const groups = KINDS.map(([kind, title]) => {
@@ -88,6 +121,11 @@ export function buildAccountsView(accounts, banks, now) {
   return {
     banks: sections,
     groups,
-    net: totals(net).map(({ currency, cents }) => ({ currency, cents, assets: totals(assets).find((t) => t.currency === currency)?.cents ?? 0, debts: totals(debts).find((t) => t.currency === currency)?.cents ?? 0 }))
+    net: totals(net).map(({ currency, cents }) => ({
+      currency,
+      cents,
+      assets: totals(assets).find((t) => t.currency === currency)?.cents ?? 0,
+      debts: totals(debts).find((t) => t.currency === currency)?.cents ?? 0
+    }))
   };
 }

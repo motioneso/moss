@@ -42,8 +42,7 @@ export function amountFieldText(cents, currency) {
 export const meterWidth = ({ assigned, spent }) =>
   Math.round((assigned <= 0 ? (spent > 0 ? 1 : 0) : Math.min(1, spent / assigned)) * 100);
 
-export const overspent = (groups) =>
-  groups.flatMap((g) => g.lines).filter((l) => l.available < 0);
+export const overspent = (groups) => groups.flatMap((g) => g.lines).filter((l) => l.available < 0);
 
 export function groupAssigned(group) {
   const total = group.lines.reduce((sum, l) => sum + l.assigned, 0);

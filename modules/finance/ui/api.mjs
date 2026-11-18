@@ -15,7 +15,8 @@ export function financeApi(client) {
       const failure = new Error("Finance request failed");
       failure.status = reply.status;
       const b = reply.body;
-      failure.code = typeof b?.code === "string" ? b.code : typeof b?.error === "string" ? b.error : "";
+      failure.code =
+        typeof b?.code === "string" ? b.code : typeof b?.error === "string" ? b.error : "";
       failure.detail = typeof b?.message === "string" ? b.message : failure.code;
       throw failure;
     }

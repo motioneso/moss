@@ -1,4 +1,4 @@
-/* global document, window, Element, HTMLInputElement, HTMLSelectElement, HTMLFormElement, FormData, setTimeout, clearTimeout */
+/* global document, window, Element, HTMLInputElement, HTMLSelectElement, HTMLFormElement */
 import { moduleClient } from "./guest-bridge.mjs";
 import { financeApi } from "./api.mjs";
 import { defaultLedgerMonth, parseAmountToCents, shiftMonth, thisMonth } from "./format.mjs";

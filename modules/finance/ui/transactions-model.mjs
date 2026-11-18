@@ -3,7 +3,12 @@ export const PAGE = 200;
 export const MAX_PAGES = 10;
 
 export const emptyFilters = () => ({
-  accountId: "", categoryId: "", postingState: "", direction: "", ledgerState: "", check: ""
+  accountId: "",
+  categoryId: "",
+  postingState: "",
+  direction: "",
+  ledgerState: "",
+  check: ""
 });
 
 export const filterCount = (f) => Object.values(f).filter(Boolean).length;

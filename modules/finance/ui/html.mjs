@@ -18,7 +18,10 @@ export const icons = {
   chevron: () => svg('<path d="m6 9 6 6 6-6"/>', 14)
 };
 
-export const button = (label, { act, variant = "secondary", size = "sm", disabled = false, extra = "" } = {}) =>
+export const button = (
+  label,
+  { act, variant = "secondary", size = "sm", disabled = false, extra = "" } = {}
+) =>
   `<button type="button" class="jds-btn jds-btn--${variant}${size !== "md" ? ` jds-btn--${size}` : ""}" data-act="${act}"${disabled ? " disabled" : ""}${extra}>${label}</button>`;
 
 export const badge = (label, tone = "neutral") =>
@@ -27,7 +30,8 @@ export const badge = (label, tone = "neutral") =>
 export const sectionHead = (title, meta = "", { rule = true } = {}) =>
   `<div class="jds-section-head${rule ? " jds-section-head--rule" : ""}"><h2 class="jds-section-head__title">${esc(title)}</h2>${meta ? `<span class="jds-section-head__meta">${esc(meta)}</span>` : ""}</div>`;
 
-export const eyebrow = (text) => `<span class="jds-eyebrow jds-eyebrow--strong">${esc(text)}</span>`;
+export const eyebrow = (text) =>
+  `<span class="jds-eyebrow jds-eyebrow--strong">${esc(text)}</span>`;
 
 export const note = (variant, text) => `<p class="jds-note jds-note--${variant}">${esc(text)}</p>`;
 
