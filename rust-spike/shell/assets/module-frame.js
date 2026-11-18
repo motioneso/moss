@@ -60,6 +60,16 @@ try {
     },
     chat: async () => {
       throw new Error();
+    },
+    save: async ({ filename, contentType, text }) => {
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(new Blob([text], { type: contentType }));
+      link.download = filename;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(link.href), 60_000);
+      return null;
     }
   });
 } catch {

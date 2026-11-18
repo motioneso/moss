@@ -64,6 +64,7 @@ export function moduleClient({ guestWindow = globalThis.window, timeoutMs = 3000
     navigate: (path) => call("navigate", { path }),
     chat: (text = "") => call("chat", { text }),
     resize: (height) => call("resize", { height }),
+    save: (file) => call("save", file),
     dispose() {
       live = false;
       transport.port1.close();

@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "wellness",
   "name": "Wellness",
-  "description": "Private mood check-ins, medications with their schedules and dose records, therapy notes, a selective export of check-ins and therapy notes, and the choice of whether the assistant may use them. Insights worked out in code, two assistant tools that answer only while assistant access is on, and the choice of whether the assistant may use them. The screens are not built yet.",
+  "description": "Private mood check-ins, medications with their schedules and dose records, therapy notes, a selective export of check-ins and therapy notes, and the choice of whether the assistant may use them. Insights worked out in code, two assistant tools that answer only while assistant access is on, and the choice of whether the assistant may use them.",
   "publisher": "Moss",
   "version": "0.1.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
@@ -194,15 +194,17 @@
     "bundled": true,
     "removable": true
   },
-  "screens": {},
+  "screens": {
+    "/settings/wellness": "ui/settings.html"
+  },
   "navigation": [],
   "settings": [
     {
       "id": "wellness.ai-consent",
       "label": "Wellness",
-      "path": "/settings?section=modules&module=wellness",
+      "path": "/settings/wellness",
       "scope": "user",
-      "description": "Whether the assistant may use mood check-ins and medication counts is read and saved through the Wellness routes. Until you choose, access stays on while Wellness is installed. The settings screen is not built yet."
+      "description": "Whether the assistant may use mood check-ins and medication counts is read and saved through the Wellness routes. Until you choose, access stays on while Wellness is installed."
     }
   ],
   "features": [
@@ -272,7 +274,7 @@
     },
     {
       "id": "wellness.insights",
-      "description": "A person can read insight lines worked out from their own last 30 days: the most-logged feeling, the hardest and strongest weekday, how many sad or angry check-ins carry a note, and medication adherence. Nothing shows until there are at least seven check-ins and the first is a week old. Every figure comes from stored records and fixed wording, and no model is involved. Each person sees only their own insights. The insights screen is not built yet.",
+      "description": "A person can read insight lines worked out from their own last 30 days: the most-logged feeling, the hardest and strongest weekday, how many sad or angry check-ins carry a note, and medication adherence. Nothing shows until there are at least seven check-ins and the first is a week old. Every figure comes from stored records and fixed wording, and no model is involved. Each person sees only their own insights.",
       "errors": []
     },
     {
@@ -293,7 +295,7 @@
     },
     {
       "id": "wellness.therapy_notes",
-      "description": "A person can write a private therapy note, optionally tied to one of their own check-ins or to one of the six core feelings, read their notes newest first, and delete a note. Each person sees only their own notes. The notes screen is not built yet.",
+      "description": "A person can write a private therapy note, optionally tied to one of their own check-ins or to one of the six core feelings, read their notes newest first, and delete a note. Each person sees only their own notes.",
       "errors": [
         {
           "code": "wellness_therapy_note_invalid",
@@ -314,7 +316,7 @@
     },
     {
       "id": "wellness.export",
-      "description": "A person can ask for a printable page of their own mood check-ins and therapy notes for a date range of at most 366 days, check on its progress, and download it for 24 hours. Only the chosen categories appear in the page. Medications and insights cannot be chosen yet. The page comes back inside a small JSON envelope with its file name. The export screen is not built yet.",
+      "description": "A person can ask for a printable page of their own mood check-ins and therapy notes for a date range of at most 366 days, check on its progress, and download it for 24 hours. Only the chosen categories appear in the page. Medications and insights cannot be chosen yet. The page comes back inside a small JSON envelope with its file name.",
       "errors": [
         {
           "code": "wellness_export_invalid",

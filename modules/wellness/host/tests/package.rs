@@ -48,6 +48,14 @@ fn the_package_builds_and_the_manifest_validates() {
     for needed in ["moss.module.json", "code/module.wasm", "LICENSE", "NOTICE", "CHANGELOG.md"] {
         assert!(files.contains_key(needed), "{needed} missing");
     }
+    // Every screen the manifest declares is in the package, and so is every file it loads.
+    let manifest = moss_wellness_host::package::manifest().unwrap();
+    for entry in manifest.screens.values() {
+        assert!(files.contains_key(entry.as_str()), "{entry} missing");
+    }
+    for name in ["settings.html", "settings.mjs", "dom.mjs", "insights.mjs", "notes.mjs", "export.mjs", "guest-bridge.mjs"] {
+        assert!(files.contains_key(&format!("ui/{name}")), "ui/{name} missing");
+    }
     assert!(moss_wellness_host::package::pack(&root(), &component()).is_ok());
 }
 
