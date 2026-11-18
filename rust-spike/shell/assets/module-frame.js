@@ -49,6 +49,8 @@ try {
   document.title = screen.title;
   const screenUrl = new URL(screen.src, location.href);
   if (/^[a-z]{1,20}$/.test(focusParam)) screenUrl.searchParams.set("focus", focusParam);
+  // Weather's "Use my location" reads the browser position from inside the sandboxed frame.
+  if (moduleId === "weather") frame.setAttribute("allow", "geolocation *");
   openModuleFrame(frame, moduleId, screenUrl.href, {
     request,
     theme: () => ({ theme: "park-press", colorMode: dark ? "dark" : "light" }),
