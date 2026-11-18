@@ -159,7 +159,7 @@ function prefsSection() {
 function draw() {
   const focused = document.activeElement;
   const active = focused?.id;
-  let caret = null;
+  let caret;
   try {
     caret = { start: focused?.selectionStart, end: focused?.selectionEnd };
   } catch {
