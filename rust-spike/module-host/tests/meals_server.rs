@@ -560,6 +560,40 @@ fn installed_meals_package_serves_routes_from_the_real_server() {
     assert_eq!(status, 200, "{text}\n{}", log());
     let (_, still) = tool("meals.plan.get", json!({"planId":plan_id}), true);
     assert!(still.contains(&day_id), "the other person deleted nothing: {still}");
+    // The screen route. A signed-in click runs a tool with no chat approval, a person who is not
+    // signed in is refused, a removal needs the confirmation the screen collects, and the second
+    // person reads only their own rows.
+    let screen = |who: Option<&str>, tool: &str, parameters: Value, confirmed: bool| {
+        let mut body = json!({"tool":tool,"parameters":parameters});
+        if confirmed {
+            body["confirmed"] = json!(true);
+        }
+        call(Method::POST, "/meals/screen/tool", who, Some(body))
+    };
+    assert_eq!(screen(None, "meals.pantry.get", json!({}), false).0, 401);
+    let (status, text) = screen(Some(&cookie), "meals.plan.get", json!({"planId":plan_id}), false);
+    assert_eq!(status, 200, "{text}\n{}", log());
+    assert!(text.contains(&day_id), "the owner reads the plan: {text}");
+    let (status, text) = screen(Some(&cookie), "meals.meal.edit", json!({"mealId":meal_id,"action":"lock"}), false);
+    assert_eq!(status, 200, "a click needs no chat approval: {text}\n{}", log());
+    let (_, text) = screen(Some(&cookie), "meals.meal.edit", json!({"mealId":meal_id,"action":"unlock"}), false);
+    assert!(text.contains("data"), "{text}");
+    let (status, _) = screen(Some(&cookie), "meals.household.remove", json!({"memberId":"00000000-0000-0000-0000-000000000000"}), false);
+    assert_eq!(status, 409, "a removal without confirmation is refused");
+    let (_, theirs) = screen(Some(&other), "meals.plan.get", json!({"planId":plan_id}), false);
+    assert!(!theirs.contains(&day_id), "the second person cannot read the plan: {theirs}");
+    let (_, theirs) = screen(Some(&other), "meals.pantry.get", json!({}), false);
+    assert!(!theirs.contains("milk") && !theirs.contains("Milk"), "the second person has an empty Pantry: {theirs}");
+    println!("PASS live screen route: no chat approval for a click, 401 signed out, 409 for a removal without confirmation, second person sees only their own rows");
+    // MOSS_MEALS_HOLD names a folder. The test then keeps the server up for a browser check,
+    // writes the address to url.txt, and waits for a file named finished in that folder.
+    if let Ok(hold) = std::env::var("MOSS_MEALS_HOLD") {
+        fs::write(Path::new(&hold).join("url.txt"), &remote_origin).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(3600);
+        while !Path::new(&hold).join("finished").exists() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(500));
+        }
+    }
     let (status, text) = tool("meals.plan.delete", json!({"planId":plan_id}), true);
     assert_eq!(status, 200, "{text}\n{}", log());
     assert_eq!(json_of(&text)["data"]["deleted"], true, "{text}");
