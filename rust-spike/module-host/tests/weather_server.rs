@@ -83,11 +83,21 @@ fn installed_weather_package_serves_routes_from_the_real_server() {
             .unwrap();
         assert!(status.success());
     }
-    fs::write(
-        root.join("web/index.html"),
-        "<!doctype html><title>Weather HTTP fixture</title>",
-    )
-    .unwrap();
+    if let Ok(shell_web) = std::env::var("MOSS_SHELL_WEB_DIR") {
+        // The built app, so a held-open run can show Today and the module frames.
+        let status = Command::new("cp")
+            .args(["-r", &format!("{shell_web}/.")])
+            .arg(root.join("web"))
+            .status()
+            .unwrap();
+        assert!(status.success());
+    } else {
+        fs::write(
+            root.join("web/index.html"),
+            "<!doctype html><title>Weather HTTP fixture</title>",
+        )
+        .unwrap();
+    }
     let app_url = std::env::var("JS43_APP_URL").unwrap();
     let worker_url = std::env::var("JS43_WORKER_URL").unwrap();
     let bootstrap_url = std::env::var("JS43_BOOTSTRAP_URL").unwrap();
@@ -283,6 +293,21 @@ fn installed_weather_package_serves_routes_from_the_real_server() {
         &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"ai_key":ai_key}),
     );
     let _server = start(true);
+    if let Ok(hold) = std::env::var("WEATHER_HOLD_OPEN") {
+        // Held-open mode for browser proof. Writes the origin and owner cookie to the hold file,
+        // then keeps the real server up until the stop file appears.
+        let started = Instant::now();
+        while client.get(format!("{origin}/api/m/weather/unit")).header("origin", &origin).header("cookie", &cookie).send().is_ok_and(|r| r.status().as_u16() == 503)
+            && started.elapsed() < Duration::from_secs(60)
+        {
+            std::thread::sleep(Duration::from_millis(500));
+        }
+        fs::write(&hold, json!({"origin":origin,"cookie":cookie,"certificate":cert}).to_string()).unwrap();
+        while !Path::new(&format!("{hold}.stop")).exists() {
+            std::thread::sleep(Duration::from_millis(500));
+        }
+        return;
+    }
     // Setup allows one owner over HTTP, so the second person is made in the database with the
     // owner's password hash and then signs in through the real route.
     let other = {

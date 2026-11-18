@@ -6,6 +6,7 @@ mod frame;
 mod icons;
 mod modules_page;
 mod today;
+mod weather;
 
 use wasm_bindgen::JsCast;
 
