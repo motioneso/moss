@@ -461,6 +461,7 @@ fn installed_news_package_serves_routes_from_the_real_server() {
     let with_picture: Vec<&Value> = stories.iter().filter(|s| s["imageUrl"].is_string()).collect();
     println!("news live: {} of {} real stories carry a picture address", with_picture.len(), stories.len());
     let mut served = 0;
+    let mut served_id = String::new();
     for story in with_picture.iter().take(6) {
         let id = story["id"].as_str().unwrap();
         let (status, kind, cache, bytes) = raw(&format!("/api/m/news/images/{id}"), &cookie);
@@ -475,11 +476,12 @@ fn installed_news_package_serves_routes_from_the_real_server() {
             let expect = if held { 200 } else { 404 };
             assert_eq!(raw(&format!("/api/m/news/images/{id}"), &other).0, expect, "another person's picture follows their own page");
             served += 1;
+            served_id = id.to_owned();
         }
     }
-    if let Some(story) = with_picture.first() {
+    if !with_picture.is_empty() {
         assert!(served > 0, "no real picture could be served\n{}", log());
-        assert_eq!(raw(&format!("/api/news/images/{}", story["id"].as_str().unwrap()), &cookie).0, 200, "the old picture address still works");
+        assert_eq!(raw(&format!("/api/news/images/{served_id}"), &cookie).0, 200, "the old picture address still works");
     }
     assert_eq!(raw("/api/m/news/images/not-a-story", &cookie).0, 404);
     let (icon_status, icon_kind, _, icon_bytes) = raw("/api/m/news/favicon/feeds.bbci.co.uk", &cookie);
