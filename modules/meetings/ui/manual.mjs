@@ -1,3 +1,4 @@
+/* global document */
 import { randomKey } from "./format.mjs";
 import { alertHint, btn, field, hint, input, select, textarea } from "./kit.mjs";
 
@@ -82,6 +83,11 @@ ${btn("Cancel", "back", { variant: "secondary", disabled: locked })}
     render,
     input(name, value) {
       s[name] = value;
+      // The submit button depends on the transcript, and typing does not redraw.
+      const submitButton = document.querySelector('[data-act="submit"]');
+      if (submitButton && name === "transcript") {
+        submitButton.disabled = s.phase === "saving" || !s.transcript.trim();
+      }
     },
     submit,
     acts: { back: () => go({ view: "home" }), "types-retry": () => void loadTypes() }

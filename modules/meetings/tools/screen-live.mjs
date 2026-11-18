@@ -1,4 +1,3 @@
-/* global document */
 // Browser pass for the Meetings screen against the real server held up by the live gate.
 // Usage: MOSS_MEETINGS_HOLD=<dir> run the live gate, then
 //   node modules/meetings/tools/screen-live.mjs <url from <dir>/url.txt> <screenshot dir>
@@ -91,26 +90,15 @@ for (const [name, width] of [
     await page.screenshot({ path: `${out}/${name}-transcript.png`, fullPage: true });
   }
 
-  // Add recording.
-  await frame
-    .getByRole("button", { name: "Meetings" })
-    .first()
-    .click()
-    .catch(() => {});
+  // Add recording, from a fresh load of the screen.
   await page.goto(`${url}/module-frame?module=meetings&path=${encodeURIComponent("/meetings")}`);
-  await page.waitForTimeout(2500);
-  await frame
+  await page.waitForTimeout(3000);
+  await page
+    .frames()
+    .find((f) => f !== page.mainFrame())
     .getByRole("button", { name: "Add recording" })
     .first()
-    .click()
-    .catch(async () => {
-      await page
-        .frames()
-        .find((f) => f !== page.mainFrame())
-        .getByRole("button", { name: "Add recording" })
-        .first()
-        .click();
-    });
+    .click();
   await page.waitForTimeout(800);
   const f2 = page.frames().find((f) => f !== page.mainFrame());
   await f2
