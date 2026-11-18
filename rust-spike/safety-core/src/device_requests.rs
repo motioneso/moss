@@ -11,6 +11,12 @@ use uuid::Uuid;
 pub struct DeviceRequests(Arc<Mutex<HashMap<String, Uuid>>>);
 
 impl DeviceRequests {
+    /// The one map for this process. The gate writes it and modules read it.
+    pub fn shared() -> Self {
+        static SHARED: std::sync::OnceLock<DeviceRequests> = std::sync::OnceLock::new();
+        SHARED.get_or_init(DeviceRequests::default).clone()
+    }
+
     pub fn insert(&self, request_id: &str, device_id: Uuid) {
         self.0.lock().expect("device map").insert(request_id.to_owned(), device_id);
     }

@@ -16,6 +16,7 @@
 pub mod access;
 pub mod admin;
 pub mod auth;
+pub mod companion_gate;
 pub mod db;
 pub mod device_requests;
 pub mod error;
