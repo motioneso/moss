@@ -48,6 +48,20 @@ fn the_package_builds_and_the_manifest_validates() {
     for needed in ["moss.module.json", "code/module.wasm", "LICENSE", "NOTICE", "CHANGELOG.md"] {
         assert!(files.contains_key(needed), "{needed} missing");
     }
+    for screen in [
+        "ui/index.html",
+        "ui/briefing.html",
+        "ui/settings.mjs",
+        "ui/briefing.mjs",
+        "ui/briefings.css",
+        "ui/reader.css",
+    ] {
+        assert!(files.contains_key(screen), "{screen} missing");
+    }
+    let manifest = moss_briefings_host::package::manifest().unwrap();
+    for path in manifest.screens.values() {
+        assert!(files.contains_key(path.as_str()), "{path} is declared but not packaged");
+    }
     assert!(moss_briefings_host::package::pack(&root(), &component()).is_ok());
 }
 

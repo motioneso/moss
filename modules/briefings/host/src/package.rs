@@ -29,6 +29,21 @@ pub fn files(root: &Path, component: &[u8]) -> Result<BTreeMap<String, Vec<u8>>>
         );
         files.insert(path.clone(), bytes);
     }
+    for (name, bytes) in [
+        ("index.html", include_bytes!("../../ui/index.html").as_slice()),
+        ("briefing.html", include_bytes!("../../ui/briefing.html")),
+        ("settings.mjs", include_bytes!("../../ui/settings.mjs")),
+        ("briefing.mjs", include_bytes!("../../ui/briefing.mjs")),
+        ("parts.mjs", include_bytes!("../../ui/parts.mjs")),
+        ("api.mjs", include_bytes!("../../ui/api.mjs")),
+        ("view.mjs", include_bytes!("../../ui/view.mjs")),
+        ("markdown.mjs", include_bytes!("../../ui/markdown.mjs")),
+        ("guest-bridge.mjs", include_bytes!("../../ui/guest-bridge.mjs")),
+        ("briefings.css", include_bytes!("../../ui/briefings.css")),
+        ("reader.css", include_bytes!("../../ui/reader.css")),
+    ] {
+        files.insert(format!("ui/{name}"), bytes.to_vec());
+    }
     Ok(files)
 }
 pub fn pack(root: &Path, component: &[u8]) -> Result<Vec<u8>> {
