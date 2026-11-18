@@ -374,3 +374,19 @@ pub async fn rename(
     Ok(Json(json!({"device": {"id": device, "displayName": name}})).into_response())
 }
 
+
+struct Revoker(PairingStore);
+
+impl safety_core::admin::DeviceRevoker for Revoker {
+    fn revoke_all_for<'a>(
+        &'a self,
+        user: Uuid,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<u64, ApiError>> + Send + 'a>> {
+        Box::pin(async move { self.0.revoke_all_for(user).await.map_err(internal) })
+    }
+}
+
+/// Hands the admin sign-out the store that owns the device rows.
+pub fn register_revoker(data: &Accounts) {
+    safety_core::admin::set_device_revoker(Arc::new(Revoker(pairing(data))));
+}

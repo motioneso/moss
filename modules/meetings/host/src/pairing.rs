@@ -365,6 +365,11 @@ impl PairingStore {
     pub async fn revoke_all_for(&self, user: Uuid) -> Result<u64> {
         let mut c = self.client().await?;
         let tx = c.transaction().await?;
+        // With Meetings never installed the table does not exist, and there is nothing to revoke.
+        let present: bool = tx.query_one("SELECT to_regclass('app.companion_devices') IS NOT NULL", &[]).await?.get(0);
+        if !present {
+            return Ok(0);
+        }
         let n = tx.execute("DELETE FROM app.companion_devices WHERE user_id = $1", &[&user]).await?;
         tx.commit().await?;
         Ok(n)

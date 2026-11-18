@@ -281,6 +281,7 @@ fn main() {
             runner: args.runner,
             data: Mutex::new(HashMap::new()),
         });
+        companion::register_revoker(&data);
         let private = router(data, args.web.clone());
         let private = match &loader {
             Some(_) => private.merge(modules::routes(modules.clone(), args.web.clone())),
