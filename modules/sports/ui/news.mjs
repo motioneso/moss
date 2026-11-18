@@ -115,6 +115,7 @@ export function heroCarousel({ headlines, degraded = false }) {
     root.append(ctl);
     paintControls();
   }
+  root.stop = () => rotation.stop();
   return root;
 }
 
