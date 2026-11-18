@@ -52,6 +52,19 @@ fn the_package_builds_and_the_manifest_validates() {
 }
 
 #[test]
+fn the_settings_screen_ships_with_every_file_it_loads() {
+    let files = moss_news_host::package::files(&root(), &component()).unwrap();
+    let manifest = moss_news_host::package::manifest().unwrap();
+    assert_eq!(manifest.screens["/settings/news"], "ui/settings.html");
+    for name in [
+        "settings.html", "settings.mjs", "topics.mjs", "add-source.mjs", "feedback.mjs", "parts.mjs",
+        "domain.mjs", "api.mjs", "dom.mjs", "guest-bridge.mjs", "news-settings.css",
+    ] {
+        assert!(files.contains_key(&format!("ui/{name}")), "ui/{name} missing");
+    }
+}
+
+#[test]
 fn the_package_asks_only_for_its_own_resources() {
     let manifest = moss_news_host::package::manifest().unwrap();
     let ask = |port: &str, operation: &str, resource: &str, parameters: Value| {
