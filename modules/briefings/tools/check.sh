@@ -8,4 +8,5 @@ export CARGO_TARGET_DIR
 CARGO_TARGET_DIR="$CARGO_TARGET_DIR/guest" cargo +1.95.0 test --locked --offline --manifest-path modules/briefings/src/Cargo.toml
 modules/briefings/tools/build-component.sh "$CARGO_TARGET_DIR/module.wasm"
 export BRIEFINGS_COMPONENT_WASM="$CARGO_TARGET_DIR/module.wasm"
+node --test modules/briefings/ui/view.test.mjs
 cargo +1.95.0 test --locked --offline --manifest-path modules/briefings/host/Cargo.toml --test package

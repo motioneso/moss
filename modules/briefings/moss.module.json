@@ -4,7 +4,7 @@
   "name": "Briefings",
   "publisher": "Moss",
   "version": "0.1.0",
-  "description": "Keeps each person's briefing definitions and past runs, private to the owner. A definition can be shared. Saving a definition sets or removes its scheduled run in the person's time zone, and the list moves run times after a time zone change. A manual or scheduled run saves a dated briefing and, for a scheduled run, tells the person once. A run now reads the person's own open tasks, finished tasks, calendar and mail summaries through those modules, and shows a visible gap for any source that is missing, empty, cut short or not signed in. Chat of the day, commitments, saved priorities and outside contributions have no source yet and show as gaps. A morning run writes its text through the configured model, with calendar and mail signals, suggested-task rows and an email catch-up beside it, and keeps a plain digest when the model is unavailable. Evening and weekly runs are written through the model too. Chat can re-run the person's own briefing after approval and check how a run is going. The screens are not part of this package yet.",
+  "description": "Keeps each person's briefing definitions and past runs, private to the owner. A definition can be shared. Saving a definition sets or removes its scheduled run in the person's time zone, and the list moves run times after a time zone change. A manual or scheduled run saves a dated briefing and, for a scheduled run, tells the person once. A run now reads the person's own open tasks, finished tasks, calendar and mail summaries through those modules, and shows a visible gap for any source that is missing, empty, cut short or not signed in. Chat of the day, commitments, saved priorities and outside contributions have no source yet and show as gaps. A morning run writes its text through the configured model, with calendar and mail signals, suggested-task rows and an email catch-up beside it, and keeps a plain digest when the model is unavailable. Evening and weekly runs are written through the model too. Chat can re-run the person's own briefing after approval and check how a run is going. The package serves the briefing settings and the briefing reader screens.",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
@@ -165,15 +165,18 @@
       }
     }
   },
-  "screens": {},
+  "screens": {
+    "/settings/briefings": "ui/index.html",
+    "/briefing": "ui/briefing.html"
+  },
   "navigation": [],
   "settings": [
     {
       "id": "briefings.settings",
       "label": "Briefings",
-      "path": "/settings?section=modules&module=briefings",
+      "path": "/settings/briefings",
       "scope": "user",
-      "description": "Briefing times and sources can be changed through the Briefings routes. The Settings page for them is not part of this package yet."
+      "description": "Choose when the morning briefing and the evening wind-down are prepared, and which sources the morning briefing reads."
     }
   ],
   "features": [
