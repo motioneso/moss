@@ -1,4 +1,4 @@
-/* global document */
+/* global document, Node */
 
 /** Builds an element. Props starting with "on" become listeners; null and false children are skipped. */
 export function h(tag, props, ...children) {

@@ -38,7 +38,11 @@ function formPip(result, detail, locale) {
   if (!detail) return h("span", { class: cls }, result);
   const verb = result === "W" ? "Won" : result === "D" ? "Drew" : "Lost";
   const prep = detail.homeAway === "home" ? "vs" : "at";
-  const played = formatDate(detail.playedAt, locale, { weekday: "short", month: "short", day: "numeric" });
+  const played = formatDate(detail.playedAt, locale, {
+    weekday: "short",
+    month: "short",
+    day: "numeric"
+  });
   const label = `${verb} ${detail.score} ${prep} ${detail.opponentName}, ${played}`;
   return h(
     "span",
@@ -47,7 +51,12 @@ function formPip(result, detail, locale) {
     h(
       "span",
       { class: "sp-formpop", "aria-hidden": "true" },
-      h("span", { class: "sp-formpop__top" }, h("span", { class: "sp-formpop__verb" }, verb), h("span", { class: "sp-formpop__score" }, detail.score)),
+      h(
+        "span",
+        { class: "sp-formpop__top" },
+        h("span", { class: "sp-formpop__verb" }, verb),
+        h("span", { class: "sp-formpop__score" }, detail.score)
+      ),
       h("span", { class: "sp-formpop__opp" }, `${prep} ${detail.opponentName}`),
       h("span", { class: "sp-formpop__date" }, played)
     )
@@ -56,6 +65,16 @@ function formPip(result, detail, locale) {
 
 export const trophyIcon = () =>
   svg(
-    { viewBox: "0 0 24 24", width: 15, height: 15, fill: "none", stroke: "currentColor", "stroke-width": 2, "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true" },
+    {
+      viewBox: "0 0 24 24",
+      width: 15,
+      height: 15,
+      fill: "none",
+      stroke: "currentColor",
+      "stroke-width": 2,
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round",
+      "aria-hidden": "true"
+    },
     "M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 4H4v2a3 3 0 0 0 3 3M17 4h3v2a3 3 0 0 1-3 3"
   );

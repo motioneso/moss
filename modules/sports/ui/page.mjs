@@ -1,5 +1,4 @@
 /* global window, document */
-import { SOCCER_COMPETITIONS } from "./competitions.mjs";
 import { aroundLeaguesBoard } from "./board.mjs";
 import { button, clear, h } from "./dom.mjs";
 import {

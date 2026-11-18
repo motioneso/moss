@@ -17,7 +17,14 @@ import { buildDesk } from "./today.mjs";
 
 const locale = { timezone: "America/New_York", region: "en-US" };
 const now = new Date("2026-11-17T20:00:00Z");
-const side = (id, name = id) => ({ teamKey: id, sourceTeamId: id, name, shortName: name, score: 1, crestUrl: null });
+const side = (id, name = id) => ({
+  teamKey: id,
+  sourceTeamId: id,
+  name,
+  shortName: name,
+  score: 1,
+  crestUrl: null
+});
 const game = (id, state, startsAt, extra = {}) => ({
   id,
   competitionKey: "nfl",
@@ -43,7 +50,10 @@ const data = (games, extra = {}) => ({
 });
 
 test("a followed team is matched on its permanent id only", () => {
-  const index = followedTeamIndex([{ competitionKey: "nfl", sourceTeamId: "12", teamKey: "nyg" }, { competitionKey: "nfl", sourceTeamId: null, teamKey: "dal" }]);
+  const index = followedTeamIndex([
+    { competitionKey: "nfl", sourceTeamId: "12", teamKey: "nyg" },
+    { competitionKey: "nfl", sourceTeamId: null, teamKey: "dal" }
+  ]);
   assert.equal(isFollowed(index, "nfl", "12"), true);
   assert.equal(isFollowed(index, "nfl", "nyg"), false);
   assert.equal(isFollowed(index, "nfl", null), false);
@@ -52,30 +62,60 @@ test("a followed team is matched on its permanent id only", () => {
 test("game phase follows the viewer's local day and the postponed words", () => {
   assert.equal(deriveGamePhase(game("1", "pre", "2026-11-18T01:00:00Z"), now, locale), "tonight");
   assert.equal(deriveGamePhase(game("2", "pre", "2026-11-19T01:00:00Z"), now, locale), "upcoming");
-  assert.equal(deriveGamePhase(game("3", "pre", "2026-11-18T01:00:00Z", { statusDetail: "Postponed" }), now, locale), "postponed");
+  assert.equal(
+    deriveGamePhase(
+      game("3", "pre", "2026-11-18T01:00:00Z", { statusDetail: "Postponed" }),
+      now,
+      locale
+    ),
+    "postponed"
+  );
   assert.equal(deriveGamePhase(game("4", "live", "2026-11-17T19:00:00Z"), now, locale), "live");
 });
 
 test("scores put followed games first and cap the rest", () => {
-  const games = Array.from({ length: 7 }, (_, i) => game(String(i), "final", `2026-11-17T1${i}:00:00Z`));
+  const games = Array.from({ length: 7 }, (_, i) =>
+    game(String(i), "final", `2026-11-17T1${i}:00:00Z`)
+  );
   games.push(game("mine", "final", "2026-11-17T09:00:00Z", { home: side("42", "Mine") }));
-  const followed = followedTeamIndex([{ competitionKey: "nfl", sourceTeamId: "42", teamKey: "mine" }]);
+  const followed = followedTeamIndex([
+    { competitionKey: "nfl", sourceTeamId: "42", teamKey: "mine" }
+  ]);
   const { followedRows, elsewhereRows } = selectScoreRows(data(games), followed, now, locale);
-  assert.deepEqual(followedRows.map((r) => r.game.id), ["mine"]);
+  assert.deepEqual(
+    followedRows.map((r) => r.game.id),
+    ["mine"]
+  );
   assert.equal(elsewhereRows.length, ELSEWHERE_SCORES_MAX);
 });
 
 test("tonight caps at six and lists postponed games from today", () => {
-  const games = Array.from({ length: 9 }, (_, i) => game(String(i), "pre", `2026-11-17T2${i % 4}:30:00Z`));
+  const games = Array.from({ length: 9 }, (_, i) =>
+    game(String(i), "pre", `2026-11-17T2${i % 4}:30:00Z`)
+  );
   games.push(game("pp", "pre", "2026-11-17T23:00:00Z", { statusDetail: "Postponed" }));
-  const { tonightRows, postponedRows } = selectTonightRows(data(games), followedTeamIndex([]), now, locale);
+  const { tonightRows, postponedRows } = selectTonightRows(
+    data(games),
+    followedTeamIndex([]),
+    now,
+    locale
+  );
   assert.equal(tonightRows.length, TONIGHT_ROWS_MAX);
-  assert.deepEqual(postponedRows.map((r) => r.game.id), ["pp"]);
+  assert.deepEqual(
+    postponedRows.map((r) => r.game.id),
+    ["pp"]
+  );
 });
 
 test("a game live or finished today means the quiet-night line steps aside", () => {
-  assert.equal(hasGameStartedToday(data([game("1", "final", "2026-11-17T17:00:00Z")]), now, locale), true);
-  assert.equal(hasGameStartedToday(data([game("1", "pre", "2026-11-17T23:00:00Z")]), now, locale), false);
+  assert.equal(
+    hasGameStartedToday(data([game("1", "final", "2026-11-17T17:00:00Z")]), now, locale),
+    true
+  );
+  assert.equal(
+    hasGameStartedToday(data([game("1", "pre", "2026-11-17T23:00:00Z")]), now, locale),
+    false
+  );
 });
 
 test("the desk is empty only when there is nothing to show", () => {
@@ -87,10 +127,22 @@ test("a game more than 15 minutes from kickoff leaves the gameday hero", () => {
   const soon = new Date(Date.now() + 5 * 60_000).toISOString();
   const later = new Date(Date.now() + 3 * 3_600_000).toISOString();
   const entry = (g) => ({ game: g, competitionLabel: "NFL" });
-  const hero = demoteEarlyGameday({ ...data([]), hero: { mode: "gameday", games: [entry(game("a", "pre", soon)), entry(game("b", "pre", later))] } });
+  const hero = demoteEarlyGameday({
+    ...data([]),
+    hero: {
+      mode: "gameday",
+      games: [entry(game("a", "pre", soon)), entry(game("b", "pre", later))]
+    }
+  });
   assert.equal(hero.mode, "gameday");
-  assert.deepEqual(hero.games.map((e) => e.game.id), ["a"]);
-  const none = demoteEarlyGameday({ ...data([]), hero: { mode: "gameday", games: [entry(game("b", "pre", later))] } });
+  assert.deepEqual(
+    hero.games.map((e) => e.game.id),
+    ["a"]
+  );
+  const none = demoteEarlyGameday({
+    ...data([]),
+    hero: { mode: "gameday", games: [entry(game("b", "pre", later))] }
+  });
   assert.equal(none.mode, "story");
 });
 
@@ -102,7 +154,10 @@ test("polling is wanted only while something is live", () => {
 
 test("a wide photo story leads the carousel", () => {
   const list = [{ id: "a" }, { id: "b", imageWidth: 1200 }, { id: "c" }];
-  assert.deepEqual(leadWidePhotoFirst(list).map((x) => x.id), ["b", "a", "c"]);
+  assert.deepEqual(
+    leadWidePhotoFirst(list).map((x) => x.id),
+    ["b", "a", "c"]
+  );
 });
 
 test("followed cards order live first, then in season", () => {
@@ -121,7 +176,10 @@ test("the picker lists followed leagues first and leaves out unchosen ones", () 
   ];
   const groups = buildStandingsPickerGroups(catalog, [{ competitionKey: "nba" }], ["nfl", "nba"]);
   assert.equal(groups[0].label, "Following");
-  assert.deepEqual(groups.slice(1).map((g) => g.label), ["Football"]);
+  assert.deepEqual(
+    groups.slice(1).map((g) => g.label),
+    ["Football"]
+  );
 });
 
 test("the api turns failures into errors with a status and wraps the saved view", async () => {

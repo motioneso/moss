@@ -14,7 +14,11 @@ export function autoAdvance({ root, count, advance, intervalMs, onChange }) {
   function sync() {
     if (state.timer) window.clearInterval(state.timer);
     state.timer = null;
-    const running = !state.paused && (state.resumed || !(state.hovered || state.focused)) && !reduced() && count() >= 2;
+    const running =
+      !state.paused &&
+      (state.resumed || !(state.hovered || state.focused)) &&
+      !reduced() &&
+      count() >= 2;
     if (running) state.timer = window.setInterval(() => advance(), intervalMs);
     onChange?.();
   }

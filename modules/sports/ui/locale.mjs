@@ -8,7 +8,9 @@ export function userLocale() {
 function format(input, locale, options) {
   const date = input instanceof Date ? input : new Date(input);
   try {
-    return new Intl.DateTimeFormat(locale.region, { timeZone: locale.timezone, ...options }).format(date);
+    return new Intl.DateTimeFormat(locale.region, { timeZone: locale.timezone, ...options }).format(
+      date
+    );
   } catch {
     return new Intl.DateTimeFormat("en-US", options).format(date);
   }
@@ -26,7 +28,10 @@ export function formatTime(input, locale, options) {
 export function formatTimeZoneShort(input, locale) {
   try {
     const date = input instanceof Date ? input : new Date(input);
-    const part = new Intl.DateTimeFormat(locale.region, { timeZone: locale.timezone, timeZoneName: "short" })
+    const part = new Intl.DateTimeFormat(locale.region, {
+      timeZone: locale.timezone,
+      timeZoneName: "short"
+    })
       .formatToParts(date)
       .find((p) => p.type === "timeZoneName");
     return part ? part.value : "";

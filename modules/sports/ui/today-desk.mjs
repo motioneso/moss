@@ -23,17 +23,31 @@ export function deriveGamePhase(game, now, locale) {
   if (game.state === "final") return "final";
   const start = new Date(game.startsAt);
   if (Number.isNaN(start.getTime())) return "upcoming";
-  if (localDay(start, locale) === localDay(now, locale) && start.getTime() > now.getTime()) return "tonight";
+  if (localDay(start, locale) === localDay(now, locale) && start.getTime() > now.getTime())
+    return "tonight";
   return "upcoming";
 }
 
-const sideFollowed = (followed, game, side) => isFollowed(followed, game.competitionKey, side.sourceTeamId);
-const gameFollowed = (followed, game) => sideFollowed(followed, game, game.home) || sideFollowed(followed, game, game.away);
-const followedSide = (followed, game) => (sideFollowed(followed, game, game.home) ? "home" : sideFollowed(followed, game, game.away) ? "away" : null);
+const sideFollowed = (followed, game, side) =>
+  isFollowed(followed, game.competitionKey, side.sourceTeamId);
+const gameFollowed = (followed, game) =>
+  sideFollowed(followed, game, game.home) || sideFollowed(followed, game, game.away);
+const followedSide = (followed, game) =>
+  sideFollowed(followed, game, game.home)
+    ? "home"
+    : sideFollowed(followed, game, game.away)
+      ? "away"
+      : null;
 
 /** Live rows first, then the most recent start. */
-const byScoreOrder = (a, b) => (a.game.state !== b.game.state ? (a.game.state === "live" ? -1 : 1) : startMs(b.game) - startMs(a.game));
-const followedFirstByStart = (a, b) => (a.followed !== b.followed ? (a.followed ? -1 : 1) : startMs(a.game) - startMs(b.game));
+const byScoreOrder = (a, b) =>
+  a.game.state !== b.game.state
+    ? a.game.state === "live"
+      ? -1
+      : 1
+    : startMs(b.game) - startMs(a.game);
+const followedFirstByStart = (a, b) =>
+  a.followed !== b.followed ? (a.followed ? -1 : 1) : startMs(a.game) - startMs(b.game);
 
 /** Every game in the window, hero games included once. Labels travel with the rows. */
 function collectGames(data) {
@@ -65,7 +79,10 @@ export function selectScoreRows(data, followed, now, locale) {
   }
   return {
     followedRows: rows.filter((r) => r.followed).sort(byScoreOrder),
-    elsewhereRows: rows.filter((r) => !r.followed).sort(byScoreOrder).slice(0, ELSEWHERE_SCORES_MAX)
+    elsewhereRows: rows
+      .filter((r) => !r.followed)
+      .sort(byScoreOrder)
+      .slice(0, ELSEWHERE_SCORES_MAX)
   };
 }
 
@@ -74,9 +91,15 @@ export function selectTonightRows(data, followed, now, locale) {
   const postponedRows = [];
   for (const { game, competitionLabel } of collectGames(data)) {
     const phase = deriveGamePhase(game, now, locale);
-    const row = { game, competitionLabel, followed: gameFollowed(followed, game), followedSide: followedSide(followed, game) };
+    const row = {
+      game,
+      competitionLabel,
+      followed: gameFollowed(followed, game),
+      followedSide: followedSide(followed, game)
+    };
     if (phase === "tonight") tonightRows.push(row);
-    else if (phase === "postponed" && localDay(game.startsAt, locale) === localDay(now, locale)) postponedRows.push(row);
+    else if (phase === "postponed" && localDay(game.startsAt, locale) === localDay(now, locale))
+      postponedRows.push(row);
   }
   tonightRows.sort(followedFirstByStart);
   postponedRows.sort(followedFirstByStart);
@@ -93,7 +116,10 @@ export function hasGameStartedToday(data, now, locale) {
 }
 
 export function followingSummary(teams, leagues) {
-  const parts = [teams > 0 ? `${teams} ${teams === 1 ? "team" : "teams"}` : "", leagues > 0 ? `${leagues} ${leagues === 1 ? "league" : "leagues"}` : ""].filter(Boolean);
+  const parts = [
+    teams > 0 ? `${teams} ${teams === 1 ? "team" : "teams"}` : "",
+    leagues > 0 ? `${leagues} ${leagues === 1 ? "league" : "leagues"}` : ""
+  ].filter(Boolean);
   return parts.length > 0 ? `Following ${parts.join(" and ")}` : "";
 }
 

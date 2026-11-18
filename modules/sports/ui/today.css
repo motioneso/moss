@@ -69,8 +69,6 @@
   min-width: 0;
 }
 
-
-
 /* --- Score rows: names, scores, status in three columns --- */
 .jds-brief--sports .sp-scores__row {
   display: grid;
@@ -162,4 +160,3 @@
     grid-template-columns: 1fr;
   }
 }
-

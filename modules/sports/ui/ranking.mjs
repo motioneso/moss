@@ -32,7 +32,10 @@ export function storyWeight(headline, followed) {
   const competitionKey = headline.competitionKey;
   if (headline.imageUrl) weight += 2;
   if (headline.summary) weight += 1;
-  if (competitionKey !== null && (headline.teamKeys ?? []).some((key) => isFollowedStoryTeam(followed, competitionKey, key))) {
+  if (
+    competitionKey !== null &&
+    (headline.teamKeys ?? []).some((key) => isFollowedStoryTeam(followed, competitionKey, key))
+  ) {
     weight += 2;
   }
   return weight;

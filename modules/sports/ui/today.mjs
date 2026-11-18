@@ -31,17 +31,29 @@ function scoreSide(side, mine) {
 }
 
 function scoreRow(row, followed) {
-  const [first, second] = orderGameSides(row.game, SOCCER_COMPETITIONS.has(row.game.competitionKey));
+  const [first, second] = orderGameSides(
+    row.game,
+    SOCCER_COMPETITIONS.has(row.game.competitionKey)
+  );
   const key = row.game.competitionKey;
   return h(
     "li",
     { class: "sp-scores__row" },
-    h("div", { class: "sp-scores__sides" }, scoreSide(first, isFollowed(followed, key, first.sourceTeamId)), scoreSide(second, isFollowed(followed, key, second.sourceTeamId))),
+    h(
+      "div",
+      { class: "sp-scores__sides" },
+      scoreSide(first, isFollowed(followed, key, first.sourceTeamId)),
+      scoreSide(second, isFollowed(followed, key, second.sourceTeamId))
+    ),
     h(
       "div",
       { class: "sp-scores__status" },
       row.game.state === "live" ? liveDot() : null,
-      h("span", { class: "sp-scores__statusline", "aria-label": row.competitionLabel }, row.game.statusDetail),
+      h(
+        "span",
+        { class: "sp-scores__statusline", "aria-label": row.competitionLabel },
+        row.game.statusDetail
+      ),
       h("span", { class: "sp-scores__recap" }, row.game.recap ?? "")
     )
   );
@@ -49,22 +61,44 @@ function scoreRow(row, followed) {
 
 function tonightRow(row, locale) {
   const { game } = row;
-  const matchup = SOCCER_COMPETITIONS.has(game.competitionKey) ? `${game.home.shortName} vs. ${game.away.shortName}` : `${game.away.shortName} at ${game.home.shortName}`;
+  const matchup = SOCCER_COMPETITIONS.has(game.competitionKey)
+    ? `${game.home.shortName} vs. ${game.away.shortName}`
+    : `${game.away.shortName} at ${game.home.shortName}`;
   const postponed = game.statusDetail != null && /postpon|ppd|cancel/i.test(game.statusDetail);
-  const note = row.followed && row.followedSide ? (row.followedSide === "home" ? "Home" : "Away") : (game.recap ?? "");
+  const note =
+    row.followed && row.followedSide
+      ? row.followedSide === "home"
+        ? "Home"
+        : "Away"
+      : (game.recap ?? "");
   return h(
     "li",
     { class: "sp-tonight__row" },
-    h("span", { class: "sp-tonight__kicker" }, `${row.followed ? "Following" : "Worth watching"} · ${row.competitionLabel}`),
+    h(
+      "span",
+      { class: "sp-tonight__kicker" },
+      `${row.followed ? "Following" : "Worth watching"} · ${row.competitionLabel}`
+    ),
     h("span", { class: "sp-tonight__matchup" }, matchup),
-    h("span", { class: "sp-tonight__time" }, postponed ? "Postponed" : formatTime(game.startsAt, locale)),
+    h(
+      "span",
+      { class: "sp-tonight__time" },
+      postponed ? "Postponed" : formatTime(game.startsAt, locale)
+    ),
     h("span", { class: "sp-tonight__note" }, note)
   );
 }
 
 function recapStories(data) {
   const fromCards = data.followed.flatMap((card) =>
-    card.stories.map((story) => ({ url: story.url, imageUrl: story.imageUrl, competitionLabel: card.competitionLabel, publisherLabel: story.publisherLabel, title: story.title, summary: null }))
+    card.stories.map((story) => ({
+      url: story.url,
+      imageUrl: story.imageUrl,
+      competitionLabel: card.competitionLabel,
+      publisherLabel: story.publisherLabel,
+      title: story.title,
+      summary: null
+    }))
   );
   const all = [...data.topStories, ...fromCards];
   return all.filter((story, index) => all.findIndex((other) => other.url === story.url) === index);
@@ -73,7 +107,12 @@ function recapStories(data) {
 function leadStory(lead) {
   const link = h("a", { class: "sp-lead", href: lead.url, target: "_blank", rel: "noreferrer" });
   if (lead.imageUrl) {
-    const photo = h("img", { class: "sp-lead__photo", src: lead.imageUrl, alt: "", loading: "lazy" });
+    const photo = h("img", {
+      class: "sp-lead__photo",
+      src: lead.imageUrl,
+      alt: "",
+      loading: "lazy"
+    });
     photo.addEventListener("error", () => photo.remove());
     link.append(photo);
   }
@@ -100,7 +139,11 @@ function briefList(briefs) {
           h(
             "a",
             { class: "sp-brief__link", href: story.url, target: "_blank", rel: "noreferrer" },
-            h("span", { class: "sp-brief__tag" }, `${story.competitionLabel} · ${story.publisherLabel}`),
+            h(
+              "span",
+              { class: "sp-brief__tag" },
+              `${story.competitionLabel} · ${story.publisherLabel}`
+            ),
             h("span", { class: "sp-brief__title" }, story.title)
           )
         )
@@ -124,9 +167,21 @@ export function buildDesk(data, ctx, now = new Date()) {
   const hasTonight = tonightRows.length > 0 || postponedRows.length > 0;
   const startedToday = hasGameStartedToday(data, now, locale);
 
-  if (!hasScores && !hasTonight && data.topStories.length === 0 && teamCards.length === 0 && leagueCards.length === 0) return null;
+  if (
+    !hasScores &&
+    !hasTonight &&
+    data.topStories.length === 0 &&
+    teamCards.length === 0 &&
+    leagueCards.length === 0
+  )
+    return null;
 
-  const cardsLabel = teamCards.length > 0 && leagueCards.length > 0 ? "Your teams & leagues" : leagueCards.length > 0 ? "Your leagues" : "Your teams";
+  const cardsLabel =
+    teamCards.length > 0 && leagueCards.length > 0
+      ? "Your teams & leagues"
+      : leagueCards.length > 0
+        ? "Your leagues"
+        : "Your teams";
   const followingLine = followingSummary(data.followed.length, data.followedLeagues.length);
   const dateLine = formatDate(now, locale, DATE_LINE);
   const zone = formatTimeZoneShort(now, locale);
@@ -148,17 +203,50 @@ export function buildDesk(data, ctx, now = new Date()) {
       h(
         "div",
         { class: "desk-scores", "aria-label": "Scores" },
-        h("div", { class: "desk-scores__head" }, h("div", { class: "jds-brief__title" }, "Last night"), h("span", {}, dateLine)),
+        h(
+          "div",
+          { class: "desk-scores__head" },
+          h("div", { class: "jds-brief__title" }, "Last night"),
+          h("span", {}, dateLine)
+        ),
         followedRows.length > 0
-          ? [h("div", { class: "sp-tksub" }, h("span", { class: "sp-tksub__morning-star" }, "★ "), "Your followed teams"), h("ul", { class: "sp-scores" }, followedRows.map((r) => scoreRow(r, followed)))]
+          ? [
+              h(
+                "div",
+                { class: "sp-tksub" },
+                h("span", { class: "sp-tksub__morning-star" }, "★ "),
+                "Your followed teams"
+              ),
+              h(
+                "ul",
+                { class: "sp-scores" },
+                followedRows.map((r) => scoreRow(r, followed))
+              )
+            ]
           : null,
-        elsewhereRows.length > 0 ? [h("div", { class: "sp-tksub" }, "Elsewhere worth a look"), h("ul", { class: "sp-scores" }, elsewhereRows.map((r) => scoreRow(r, followed)))] : null
+        elsewhereRows.length > 0
+          ? [
+              h("div", { class: "sp-tksub" }, "Elsewhere worth a look"),
+              h(
+                "ul",
+                { class: "sp-scores" },
+                elsewhereRows.map((r) => scoreRow(r, followed))
+              )
+            ]
+          : null
       )
     );
   }
 
   if (lead) {
-    desk.append(h("div", { class: "desk-stories", "aria-label": "Top stories" }, leadStory(lead), briefs.length > 0 ? briefList(briefs) : null));
+    desk.append(
+      h(
+        "div",
+        { class: "desk-stories", "aria-label": "Top stories" },
+        leadStory(lead),
+        briefs.length > 0 ? briefList(briefs) : null
+      )
+    );
   }
 
   if (teamCards.length > 0 || leagueCards.length > 0) {
@@ -166,8 +254,18 @@ export function buildDesk(data, ctx, now = new Date()) {
       h(
         "div",
         { class: "desk-cards" },
-        h("div", { class: "desk-cards__head" }, h("div", { class: "sp-tksub" }, cardsLabel), followingLine ? h("span", {}, followingLine) : null),
-        h("div", { class: "sp-tkgrid" }, teamCards.map((card) => tickerTeam(card, ctx)), leagueCards.slice(0, 3).map((card) => tickerLeague(card)))
+        h(
+          "div",
+          { class: "desk-cards__head" },
+          h("div", { class: "sp-tksub" }, cardsLabel),
+          followingLine ? h("span", {}, followingLine) : null
+        ),
+        h(
+          "div",
+          { class: "sp-tkgrid" },
+          teamCards.map((card) => tickerTeam(card, ctx)),
+          leagueCards.slice(0, 3).map((card) => tickerLeague(card))
+        )
       )
     );
   }
@@ -177,9 +275,19 @@ export function buildDesk(data, ctx, now = new Date()) {
       h(
         "div",
         { class: "desk-tonight" },
-        h("div", { class: "desk-tonight__head" }, h("div", { class: "sp-tksub" }, "Tonight"), h("span", {}, `${dateLine}${zone ? ` · ${zone}` : ""}`)),
+        h(
+          "div",
+          { class: "desk-tonight__head" },
+          h("div", { class: "sp-tksub" }, "Tonight"),
+          h("span", {}, `${dateLine}${zone ? ` · ${zone}` : ""}`)
+        ),
         hasTonight
-          ? h("ul", { class: "sp-tonight" }, tonightRows.map((r) => tonightRow(r, locale)), postponedRows.map((r) => tonightRow(r, locale)))
+          ? h(
+              "ul",
+              { class: "sp-tonight" },
+              tonightRows.map((r) => tonightRow(r, locale)),
+              postponedRows.map((r) => tonightRow(r, locale))
+            )
           : h("p", { class: "sp-tonight__quiet" }, QUIET_NIGHT_LINE)
       )
     );
@@ -203,14 +311,34 @@ export function mountTodayDesk({ root, api, ctx }) {
     if (!state.data) {
       wrap.append(
         state.error
-          ? h("p", { class: "sp-lede", role: "status" }, "Sports are unavailable right now. ", retry())
+          ? h(
+              "p",
+              { class: "sp-lede", role: "status" },
+              "Sports are unavailable right now. ",
+              retry()
+            )
           : h("p", { class: "sp-lede", role: "status" }, "Loading your teams…")
       );
       return;
     }
-    if (state.error) wrap.append(h("p", { class: "sp-lede", role: "status" }, "Could not refresh sports. Showing the last loaded scores. ", retry()));
+    if (state.error)
+      wrap.append(
+        h(
+          "p",
+          { class: "sp-lede", role: "status" },
+          "Could not refresh sports. Showing the last loaded scores. ",
+          retry()
+        )
+      );
     const desk = buildDesk(state.data, ctx);
-    wrap.append(desk ?? h("p", { class: "sp-lede", role: "status" }, "Nothing from the sports desk yet. Follow a team or a league and it fills in."));
+    wrap.append(
+      desk ??
+        h(
+          "p",
+          { class: "sp-lede", role: "status" },
+          "Nothing from the sports desk yet. Follow a team or a league and it fills in."
+        )
+    );
   }
 
   async function load() {
@@ -229,7 +357,8 @@ export function mountTodayDesk({ root, api, ctx }) {
       render();
     }
     window.clearTimeout(timer);
-    if (!gone && !document.hidden && hasLiveGame(state.data)) timer = window.setTimeout(load, LIVE_REFETCH_INTERVAL_MS);
+    if (!gone && !document.hidden && hasLiveGame(state.data))
+      timer = window.setTimeout(load, LIVE_REFETCH_INTERVAL_MS);
   }
 
   const onVisible = () => {
@@ -244,4 +373,3 @@ export function mountTodayDesk({ root, api, ctx }) {
     document.removeEventListener("visibilitychange", onVisible);
   };
 }
-
