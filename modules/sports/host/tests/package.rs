@@ -58,7 +58,7 @@ fn the_package_ships_the_sports_screens() {
     assert_eq!(manifest.screens["/sports"], "ui/index.html");
     assert_eq!(manifest.screens["/sports/today"], "ui/today.html");
     assert_eq!(manifest.navigation.len(), 1);
-    assert_eq!(manifest.navigation[0].path, "/sports");
+    assert_eq!(manifest.navigation[0]["path"], "/sports");
     for page in manifest.screens.values() {
         assert!(files.contains_key(page), "{page} missing");
     }
