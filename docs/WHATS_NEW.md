@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-11-17
+
+#### Added
+
+- **Weather settings and forecast screens.** You can now choose Fahrenheit or Celsius, set your place by location or search, see the hourly forecast, and see the current weather at the top of Today. [PR #4341](https://github.com/motioneso/moss/pull/4341)
+
 ### 2026-11-07
 
 #### Added
