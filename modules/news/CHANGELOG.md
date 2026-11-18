@@ -1,5 +1,11 @@
 # News package
 
+## 0.1.1
+
+- Settings now has a News screen. It shows built-in sources, sources you added, subreddits, described topics, excluded publishers and story preferences.
+- Described topics show why web search is off and where to fix it. Adding a source and the other controls have their own loading, empty and failed messages.
+- Connecting a publisher with a key is not part of this screen.
+
 ## 0.1.0
 
 - News starts as a built-in package. It keeps the same eight tables and saved data as before.
