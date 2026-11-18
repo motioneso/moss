@@ -41,6 +41,9 @@ The News settings page as a package screen at `/settings/news`, reproducing the 
 | Real writes           | source on and off, topic on, exclusion add, source check all hit the real routes and returned 200 |
 | Source check failure  | Reddit was unreachable from this box; the real "We couldn't reach that site" answer showed        |
 
+Adding a source was proven live: a real NPR feed, checked by a real model (gpt-5.6-luna through the
+local model proxy), saved, and still listed after a full reload.
+
 No network response was intercepted or rewritten.
 
 ## Found and fixed during live proof
