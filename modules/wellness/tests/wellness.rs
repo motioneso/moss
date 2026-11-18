@@ -123,3 +123,11 @@ fn consent_defaults_on_and_follows_the_saved_choice() {
     let (status, out) = f.route("PUT", "/wellness/ai-consent", &[], json!({"granted":"maybe"}));
     assert_eq!((status, out["error"].as_str().unwrap()), (400, "body/granted must be boolean"));
 }
+
+#[test]
+fn local_day_gives_the_persons_date_and_zone_and_nothing_else() {
+    let f = Fake::new();
+    let (status, out) = f.route("GET", "/wellness/local-day", &[], Value::Null);
+    assert_eq!(status, 200, "{out}");
+    assert_eq!(out, json!({"date":"2026-11-11","timezone":"America/Los_Angeles"}));
+}
