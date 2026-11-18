@@ -56,3 +56,31 @@
     min-height: 20rem;
   }
 }
+.meetings-capture {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: stretch;
+}
+.meetings-capture p {
+  margin: 0;
+}
+.meetings-capture-heading {
+  justify-content: flex-end;
+}
+.meetings-capture-title {
+  flex: 1;
+  min-width: 12rem;
+  margin-right: auto;
+}
+@media (max-width: 760px) {
+  .meetings-capture {
+    max-width: 100%;
+  }
+  .meetings-capture-heading > .jds-btn,
+  .meetings-capture-heading > .jds-control-pill {
+    position: fixed;
+    bottom: var(--space-4);
+    right: var(--space-4);
+    z-index: 10;
+  }
+}

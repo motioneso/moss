@@ -26,8 +26,8 @@ fn the_manifest_declares_the_same_routes_jobs_and_ledger() {
     let m = manifest();
     assert_eq!(m["database"]["ledger"], "core-legacy");
     assert_eq!(m["database"]["migrations"].as_array().unwrap().len(), 17);
-    assert_eq!(m["navigation"], json!([]));
-    assert_eq!(m["screens"], json!({}));
+    assert_eq!(m["navigation"][0]["path"], "/meetings");
+    assert_eq!(m["screens"], json!({"/meetings": "ui/index.html", "/settings/meetings": "ui/settings.html"}));
     let routes: BTreeSet<(String, String)> = m["routes"]
         .as_array()
         .unwrap()

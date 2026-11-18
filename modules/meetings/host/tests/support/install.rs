@@ -112,6 +112,7 @@ pub fn install_all(
             version: "0.1.0".parse().unwrap(),
             compiled_cache: None,
             fuel_ceiling: Some(250_000_000),
+            browser_dir: None,
         },
         move |next| {
             let authority = Arc::new(moss_meetings_host::authority::MeetingsAuthority::new(database.clone()));
