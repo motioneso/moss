@@ -138,7 +138,7 @@ export function sportsBlock(sports, locale) {
 }
 
 /** The "What informed this briefing?" list, one honest line per source. */
-export function sourcesHtml(freshness, metadata, now) {
+export function sourcesHtml(freshness, metadata) {
   const gaps = readGaps(metadata);
   if (!freshness && gaps.length === 0) return "";
   const lines = (freshness?.sources ?? []).map((entry) => {

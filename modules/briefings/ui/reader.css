@@ -2,7 +2,6 @@
    on desktop and a full-screen dialog on the phone. Scoped under
    .brief-reader; canonical tokens only. Values follow the approved
    prototype (morning-briefing.css, evening-plan.css). */
-}
 .brief-reader {
   background: var(--surface);
   border: 1px solid var(--line);

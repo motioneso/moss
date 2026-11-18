@@ -481,4 +481,12 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
     // Nothing the test sent reached the server log.
     assert!(!log().contains(MARK));
     println!("briefings live: definitions, runs and privacy for two people worked over HTTPS");
+    if let Ok(hold) = std::env::var("BRIEFINGS_HOLD_OPEN") {
+        // Held-open mode for browser proof. Writes the origin and owner cookie to the hold file,
+        // then keeps the real server and its stand-in model up until the stop file appears.
+        fs::write(&hold, json!({"origin":origin,"cookie":cookie,"certificate":cert}).to_string()).unwrap();
+        while !Path::new(&format!("{hold}.stop")).exists() {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+    }
 }

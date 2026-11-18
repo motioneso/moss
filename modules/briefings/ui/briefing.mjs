@@ -1,4 +1,4 @@
-/* global document, navigator, crypto, setTimeout, clearTimeout */
+/* global document */
 import { moduleClient } from "./guest-bridge.mjs";
 import { briefingsApi } from "./api.mjs";
 import {
@@ -76,7 +76,7 @@ function reportHtml(detail, evening) {
     ${catchUpHtml(payload.catchUp, now, locale, state.expanded)}
     ${newsBlock(news)}
     ${sportsBlock(sports, locale)}
-    ${sourcesHtml(freshness, meta, now)}
+    ${sourcesHtml(freshness, meta)}
     ${earlierHtml(state.runs, state.selectedRunId, locale)}`;
 }
 
