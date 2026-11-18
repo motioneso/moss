@@ -6,10 +6,13 @@ ga gd gl gn gu gv ha he hi ho hr ht hu hy hz ia id ie ig ii ik io is it iu
 ja jv ka kg ki kj kk kl km kn ko kr ks ku kv kw ky la lb lg li ln lo lt lu lv
 mg mh mi mk ml mn mr ms mt my na nb nd ne ng nl nn no nr nv ny
 oc oj om or os pa pi pl ps pt qu rm rn ro ru rw sa sc sd se sg si sk sl sm sn so sq sr ss st su sv sw
-ta te tg th ti tk tl tn to tr ts tt tw ty ug uk ur uz ve vi vo wa wo xh yi yo za zh zu`.split(/\s+/);
+ta te tg th ti tk tl tn to tr ts tt tw ty ug uk ur uz ve vi vo wa wo xh yi yo za zh zu`.split(
+  /\s+/
+);
 
 const MAX_TERMS = 20;
 const MAX_BYTES = 200;
+// eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u001f\u007f]/;
 
 /** Language options sorted by English name. `names` maps a code to its display name. */
@@ -33,7 +36,9 @@ export function normalizeVocabulary(text) {
   }
   if (terms.length > MAX_TERMS) throw new Error("Enter at most 20 spellings.");
   if (terms.length && new TextEncoder().encode(terms.join(", ")).length > MAX_BYTES)
-    throw new Error("The complete vocabulary must fit within 200 UTF-8 bytes, including separators.");
+    throw new Error(
+      "The complete vocabulary must fit within 200 UTF-8 bytes, including separators."
+    );
   return terms;
 }
 
@@ -55,7 +60,10 @@ export function audioOptions(prefs) {
     ["computer-audio", "Microphone + system audio"],
     ["microphone-only", "Microphone only"]
   ];
-  if (prefs.rememberedSource?.mode === "selected-app" || prefs.defaultCaptureMode === "selected-app")
+  if (
+    prefs.rememberedSource?.mode === "selected-app" ||
+    prefs.defaultCaptureMode === "selected-app"
+  )
     options.push(["selected-app", "Selected app (saved)"]);
   return options;
 }

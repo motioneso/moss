@@ -1,4 +1,4 @@
-/* global document, window */
+/* global document */
 import { esc, randomKey, transcriptTime } from "./format.mjs";
 import { alertHint, btn, hint } from "./kit.mjs";
 import {
@@ -35,7 +35,9 @@ export function capturePanel({ api, draw, meeting, heading, onLive, navigate }) 
   let alive = true;
   let shown = { grantId: null, duration: 0 };
 
-  const live = () => !!s.op || (!!s.capture && !["idle", "revoked"].includes(s.capture.desired) && !captureStopped(s.capture));
+  const live = () =>
+    !!s.op ||
+    (!!s.capture && !["idle", "revoked"].includes(s.capture.desired) && !captureStopped(s.capture));
 
   async function refresh() {
     try {
@@ -64,7 +66,11 @@ export function capturePanel({ api, draw, meeting, heading, onLive, navigate }) 
     s.prefs = prefs.status === "fulfilled" ? prefs.value : s.prefs;
     s.devices =
       devices.status === "fulfilled"
-        ? { phase: "ready", list: devices.value.devices ?? [], processingReady: devices.value.processingReady }
+        ? {
+            phase: "ready",
+            list: devices.value.devices ?? [],
+            processingReady: devices.value.processingReady
+          }
         : { phase: "failed", list: s.devices.list, processingReady: undefined };
     onLive(live());
     draw();
@@ -73,10 +79,13 @@ export function capturePanel({ api, draw, meeting, heading, onLive, navigate }) 
   function schedule() {
     clearTimeout(poll);
     if (!alive) return;
-    poll = setTimeout(async () => {
-      await refreshAll();
-      schedule();
-    }, live() ? POLL_LIVE_MS : POLL_IDLE_MS);
+    poll = setTimeout(
+      async () => {
+        await refreshAll();
+        schedule();
+      },
+      live() ? POLL_LIVE_MS : POLL_IDLE_MS
+    );
   }
 
   function serverNow() {
@@ -107,7 +116,8 @@ export function capturePanel({ api, draw, meeting, heading, onLive, navigate }) 
     draw();
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        if (request.kind === "start") await api.captureStart(meeting.id, { requestKey: request.requestKey });
+        if (request.kind === "start")
+          await api.captureStart(meeting.id, { requestKey: request.requestKey });
         else await api.captureControl(meeting.id, request.input);
         s.op = null;
         await refresh();
@@ -120,8 +130,15 @@ export function capturePanel({ api, draw, meeting, heading, onLive, navigate }) 
           // The capture moved on. Reload it and send the command against the new generation.
           await refresh();
           const c = s.capture;
-          if (c && c.grantId === request.input.grantId && c.generation !== request.input.expectedGeneration) {
-            request = { kind: "control", input: { ...request.input, expectedGeneration: c.generation } };
+          if (
+            c &&
+            c.grantId === request.input.grantId &&
+            c.generation !== request.input.expectedGeneration
+          ) {
+            request = {
+              kind: "control",
+              input: { ...request.input, expectedGeneration: c.generation }
+            };
             continue;
           }
         }
@@ -140,7 +157,12 @@ export function capturePanel({ api, draw, meeting, heading, onLive, navigate }) 
     if (c && !["stopped", "revoked"].includes(c.desired)) {
       await send({
         kind: "control",
-        input: { grantId: c.grantId, command: "stop", expectedGeneration: c.generation, requestKey: randomKey() }
+        input: {
+          grantId: c.grantId,
+          command: "stop",
+          expectedGeneration: c.generation,
+          requestKey: randomKey()
+        }
       });
     } else if (!c && s.op?.request.kind === "start") {
       const key = s.op.request.requestKey;
@@ -162,7 +184,12 @@ export function capturePanel({ api, draw, meeting, heading, onLive, navigate }) 
     if (!c) return;
     void send({
       kind: "control",
-      input: { grantId: c.grantId, command, expectedGeneration: c.generation, requestKey: randomKey() }
+      input: {
+        grantId: c.grantId,
+        command,
+        expectedGeneration: c.generation,
+        requestKey: randomKey()
+      }
     });
   };
 
@@ -190,7 +217,13 @@ export function capturePanel({ api, draw, meeting, heading, onLive, navigate }) 
     const denied = s.status === "denied";
     const loading = s.status === "loading" || s.devices.phase === "loading" || !s.prefs;
     const ready =
-      !denied && !loading && s.status === "ready" && !!device && sourceOk && !device.busy && processingOk;
+      !denied &&
+      !loading &&
+      s.status === "ready" &&
+      !!device &&
+      sourceOk &&
+      !device.busy &&
+      processingOk;
     return { c, device, linked, connectedNow, sourceOk, denied, loading, ready };
   }
 
@@ -198,8 +231,14 @@ export function capturePanel({ api, draw, meeting, heading, onLive, navigate }) 
     const c = v.c;
     const stopped = captureStopped(c);
     const revoked = c?.desired === "revoked";
-    if ((!c || stopped || revoked) && !s.op) return stopped ? hint("Ended", ' style="margin:0"') : "";
-    const label = s.status !== "ready" ? "Recording status unconfirmed" : c ? statusLabel(c, v.connectedNow) : "Starting…";
+    if ((!c || stopped || revoked) && !s.op)
+      return stopped ? hint("Ended", ' style="margin:0"') : "";
+    const label =
+      s.status !== "ready"
+        ? "Recording status unconfirmed"
+        : c
+          ? statusLabel(c, v.connectedNow)
+          : "Starting…";
     const recording = c?.desired === "recording";
     const sending = s.op?.phase === "sending";
     const dot = `<span aria-label="${esc(label)}" title="${esc(label)}"><span class="jds-indicator jds-indicator--${recording ? "error" : "idle"}${v.connectedNow && c?.observed?.phase === "recording" ? " jds-indicator--live" : ""}"><span class="jds-indicator__dot"></span></span></span>`;
@@ -209,7 +248,8 @@ export function capturePanel({ api, draw, meeting, heading, onLive, navigate }) 
       c?.desired === "paused"
         ? btn("Resume", "capture-resume", {
             variant: "quiet",
-            disabled: sending || !v.connectedNow || !captureAcknowledged(c) || s.processingReady === false
+            disabled:
+              sending || !v.connectedNow || !captureAcknowledged(c) || s.processingReady === false
           })
         : ""
     }${!stopped && !revoked ? btn("Stop", "capture-stop", { variant: "quiet" }) : ""}</div>`;
@@ -265,13 +305,13 @@ export function capturePanel({ api, draw, meeting, heading, onLive, navigate }) 
           ? '<span class="jds-badge jds-badge--forest">Ready</span>'
           : "";
     const start =
-      !c && !s.op
-        ? btn("Start recording", "capture-start", { disabled: !v.ready })
-        : controls(v);
+      !c && !s.op ? btn("Start recording", "capture-start", { disabled: !v.ready }) : controls(v);
     const name = c?.deviceName ?? v.device?.deviceName;
     const link =
       !v.denied && (c || v.device)
-        ? hint(`${esc(name)} · ${(c ? v.connectedNow : s.devices.phase !== "failed") ? "Connected" : "Disconnected"}`)
+        ? hint(
+            `${esc(name)} · ${(c ? v.connectedNow : s.devices.phase !== "failed") ? "Connected" : "Disconnected"}`
+          )
         : "";
     const action =
       s.op?.phase === "retry"

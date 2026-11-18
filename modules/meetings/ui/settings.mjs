@@ -1,14 +1,9 @@
-/* global document, Intl */
+/* global document */
 import { moduleClient } from "./guest-bridge.mjs";
 import { meetingsApi } from "./api.mjs";
 import { esc } from "./format.mjs";
 import { alertHint, btn, field, hint, select, sectionHead, status, textarea } from "./kit.mjs";
-import {
-  audioOptions,
-  checkVocabulary,
-  languageOptions,
-  savedMode
-} from "./settings-logic.mjs";
+import { audioOptions, checkVocabulary, languageOptions, savedMode } from "./settings-logic.mjs";
 
 const root = document.getElementById("root");
 const client = moduleClient();
@@ -69,9 +64,11 @@ async function save(changes, { vocabulary = false } = {}) {
     if (vocabulary) {
       s.vocab = (s.prefs.transcriptVocabulary ?? []).join("\n");
       s.vocabDirty = false;
-      s.vocabMessage = changes.transcriptVocabulary.length ? "Vocabulary saved." : "Vocabulary cleared.";
+      s.vocabMessage = changes.transcriptVocabulary.length
+        ? "Vocabulary saved."
+        : "Vocabulary cleared.";
     }
-  } catch (error) {
+  } catch {
     const text = "Couldn’t save your settings.";
     if (vocabulary) s.vocabError = text;
     else s.error = text;
@@ -92,7 +89,8 @@ function vocabularyProblem() {
 }
 
 function macsSection() {
-  if (s.macs.phase === "denied") return alertHint("Mac access could not be verified. Sign in again.");
+  if (s.macs.phase === "denied")
+    return alertHint("Mac access could not be verified. Sign in again.");
   if (s.macs.phase === "loading" && !s.macs.list.length) return status("Checking your linked Mac…");
   const unavailable = s.macs.phase === "unavailable";
   const rows = s.macs.list
@@ -126,7 +124,10 @@ function prefsSection() {
     ${field(
       "meeting-settings-language",
       "Transcript language",
-      select("meeting-settings-language", language, p.transcriptLanguage ?? "", { model: "language", disabled: s.busy }),
+      select("meeting-settings-language", language, p.transcriptLanguage ?? "", {
+        model: "language",
+        disabled: s.busy
+      }),
       hint("Used for upcoming transcription, including imports. Existing text stays unchanged.")
     )}
     ${
@@ -137,7 +138,12 @@ function prefsSection() {
     ${field(
       "meeting-settings-vocabulary",
       "Transcript vocabulary",
-      textarea("meeting-settings-vocabulary", s.vocab, { rows: 4, max: 2000, model: "vocab", disabled: s.busy }),
+      textarea("meeting-settings-vocabulary", s.vocab, {
+        rows: 4,
+        max: 2000,
+        model: "vocab",
+        disabled: s.busy
+      }),
       `<p class="jds-hint">One spelling per line, up to 20. Choose a transcript language and use spellings in that language. The complete hint, including separators, must fit within 200 UTF-8 bytes. Saved spellings go to your selected audio service for upcoming meeting clips and normal imports. Hints are best effort: the service may ignore them and accuracy is not guaranteed. Existing text and hold recordings stay unchanged.</p>
        <p class="jds-hint" role="status">${esc(problem)}</p>
        <div class="meeting-vocabulary-actions">${btn("Save vocabulary", "vocab-save", { disabled: s.busy || !!problem })}${btn("Clear vocabulary", "vocab-clear", { variant: "quiet", disabled: s.busy })}</div>

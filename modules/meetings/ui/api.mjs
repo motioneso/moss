@@ -28,7 +28,8 @@ export function meetingsApi(client) {
     putPreferences: (body) => call("PUT", "/preferences", body),
     createRecord: (body) => call("POST", "/records", body),
     capture: (meetingId) => call("GET", `/records/${id(meetingId)}/capture`),
-    captureStart: (meetingId, body) => call("POST", `/records/${id(meetingId)}/capture/start`, body),
+    captureStart: (meetingId, body) =>
+      call("POST", `/records/${id(meetingId)}/capture/start`, body),
     captureCancelStart: (meetingId, body) =>
       call("POST", `/records/${id(meetingId)}/capture/cancel-start`, body),
     captureControl: (meetingId, body) =>

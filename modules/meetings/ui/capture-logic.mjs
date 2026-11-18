@@ -82,8 +82,7 @@ export function recordedDuration(capture, serverNow, connected, shown) {
     capture.recordedDurationMs !== undefined;
   if (recording && connected && capture.lastSeenAt)
     return acknowledged + Math.max(0, serverNow - Date.parse(capture.lastSeenAt));
-  const waiting =
-    !captureAcknowledged(capture) && capture.observed?.phase === "recording";
+  const waiting = !captureAcknowledged(capture) && capture.observed?.phase === "recording";
   if ((recording || waiting) && shown?.grantId === capture.grantId)
     return Math.max(acknowledged, shown.duration);
   return acknowledged;
@@ -103,14 +102,17 @@ export function sourceReady(prefs, inventory) {
   if (mode === "microphone-only") return true;
   if (inventory.systemAudioPermission === "denied") return false;
   if (mode === "selected-app")
-    return (inventory.applications ?? []).filter((a) => a.applicationId === saved?.applicationId)
-      .length === 1;
+    return (
+      (inventory.applications ?? []).filter((a) => a.applicationId === saved?.applicationId)
+        .length === 1
+    );
   return inventory.computerAudio?.available === true;
 }
 
 /** The hint under the buttons, or null when there is nothing to say. */
 export function panelHint(v) {
-  if (v.denied) return "Recording access is unavailable. Use Trail Marker’s local Stop, then sign in again.";
+  if (v.denied)
+    return "Recording access is unavailable. Use Trail Marker’s local Stop, then sign in again.";
   if (v.notFound) return "Recording isn’t available on this server yet.";
   if (v.statusFailed) return "Couldn’t confirm the recorder connection.";
   if (v.revoked && v.capture) return `${revocationLabel(v.capture)}. Recording stopped.`;
