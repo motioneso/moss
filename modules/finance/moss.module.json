@@ -4,9 +4,10 @@
   "name": "Finance",
   "description": "Private money accounts and transactions. You can list your accounts, add manual accounts and transactions, connect a bank and pull its balances and transactions every six hours or on demand, sort and review transactions, set rules, split, add notes, import a CSV bank file, and plan a monthly budget with drafts. It also plans bills, sets targets, shares a flexible pool and reserves money for card payments. You can share a bank account with the household, read spending and net worth reports, export your history, review the activity list and undo a change, and archive an empty category. The screens are not built yet.",
   "publisher": "Moss",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
+  "callLimitMs": 30000,
   "abi": "moss:module@1",
   "capabilities": [
     {

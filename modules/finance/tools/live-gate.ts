@@ -46,15 +46,18 @@ cargo([
   "--bin",
   "moss-network"
 ]);
-cargo([
-  "build",
-  "--offline",
-  "--locked",
-  "--manifest-path",
-  "rust-spike/standins/Cargo.toml",
-  "--bin",
-  "fake-plaid"
-]);
+const realBank = process.env.JS325_PLAID === "1";
+if (!realBank) {
+  cargo([
+    "build",
+    "--offline",
+    "--locked",
+    "--manifest-path",
+    "rust-spike/standins/Cargo.toml",
+    "--bin",
+    "fake-plaid"
+  ]);
+}
 cargo(
   [
     "test",
@@ -63,7 +66,7 @@ cargo(
     "--manifest-path",
     "rust-spike/module-host/Cargo.toml",
     "--test",
-    "finance_server",
+    realBank ? "finance_plaid_live" : "finance_server",
     "--",
     "--ignored",
     "--nocapture"
@@ -76,6 +79,13 @@ cargo(
     JS43_BOOTSTRAP_URL: urls.bootstrap,
     JS170_AUTH_URL: urls.auth,
     JS305_FAKE_PLAID: join(target, "debug/fake-plaid"),
+    ...(realBank
+      ? {
+          JS325_PLAID_KEYS: join(process.env.HOME!, ".config/moss-proof/plaid-sandbox"),
+          JS325_RELAY: join(process.cwd(), "modules/finance/tools/sandbox-relay.py"),
+          JS325_DIR: process.env.JS325_DIR!
+        }
+      : {}),
     JS170_SERVER: join(target, "debug/moss-shell"),
     JS170_CERTIFICATE: join(target, "debug/moss-network")
   }
