@@ -2,9 +2,9 @@
   "schemaVersion": 2,
   "id": "backtrack",
   "name": "Backtrack",
-  "description": "Keeps the screen text a linked Mac sends, private to each account, for 37 days. A person can pause storing, see what is kept and delete it, with or without a Mac linked. A Mac sends its text through the upload route, which checks the Mac's clock, hides secrets again and drops anything inside a time the person already deleted. Each person's text is added to Memory's search so it can be found by meaning, and it leaves the search when it is deleted or expires. An hourly job removes old text. Your account export holds your stored text. The Backtrack screen is not part of this package yet.",
+  "description": "Keeps the screen text a linked Mac sends, private to each account, for 37 days. A person can pause storing, see what is kept and delete it, with or without a Mac linked. A Mac sends its text through the upload route, which checks the Mac's clock, hides secrets again and drops anything inside a time the person already deleted. Each person's text is added to Memory's search so it can be found by meaning, and it leaves the search when it is deleted or expires. An hourly job removes old text. Your account export holds your stored text. The Backtrack screen in Settings shows the recording switch, what is kept and the delete buttons.",
   "publisher": "Moss",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
@@ -102,15 +102,17 @@
     "backtrack.upkeep": {},
     "backtrack.index": {}
   },
-  "screens": {},
+  "screens": {
+    "/settings/backtrack": "ui/index.html"
+  },
   "navigation": [],
   "settings": [
     {
       "id": "backtrack.module-settings",
       "label": "Backtrack",
-      "path": "/settings?section=modules&module=backtrack",
+      "path": "/settings/backtrack",
       "scope": "user",
-      "description": "Pausing, the days and size kept and deleting history can be reached through the Backtrack routes. The Settings page for them is not part of this package yet."
+      "description": "The recording switch that pauses every Mac, how many days and how much text are kept, the last time a Mac sent text, and delete buttons for the last hour, today, one chosen day or everything."
     }
   ],
   "features": [
