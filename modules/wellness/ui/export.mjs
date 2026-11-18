@@ -1,3 +1,5 @@
+/* global document */
+
 import { h, icon, PATHS, button, linkButton } from "./dom.mjs";
 
 // Medication and insight export is not offered by the Rust routes yet, so only the two

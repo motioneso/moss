@@ -1,3 +1,5 @@
+/* global document, Node */
+
 /** Builds elements with textContent only, so text from the server never becomes markup. */
 export function h(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);

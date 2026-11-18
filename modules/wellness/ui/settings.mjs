@@ -1,3 +1,5 @@
+/* global document */
+
 import { moduleClient } from "./guest-bridge.mjs";
 import { h, icon, button } from "./dom.mjs";
 
