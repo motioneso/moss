@@ -400,6 +400,9 @@ test("save hands a small named html file to the host and refuses anything else",
   const bad = [
     { ...good, filename: "../evil.html" },
     { ...good, filename: "a b.html" },
+    { ...good, filename: "x.exe" },
+    { ...good, filename: "report" },
+    { ...good, filename: "a..html" },
     { ...good, contentType: "application/zip" },
     { ...good, text: 5 },
     { ...good, text: "x".repeat(8 * 1024 * 1024 + 1) }

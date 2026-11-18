@@ -115,8 +115,14 @@
   opacity: 0;
   transition: var(--transition-control);
 }
-.wl-tnote:hover .wl-tnote__x {
+.wl-tnote:hover .wl-tnote__x,
+.wl-tnote__x:focus-visible {
   opacity: 1;
+}
+@media (hover: none) {
+  .wl-tnote__x {
+    opacity: 1;
+  }
 }
 .wl-tdone {
   display: inline-flex;

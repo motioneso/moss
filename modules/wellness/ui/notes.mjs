@@ -50,7 +50,7 @@ export function renderTherapyNotes(root, { api, locale = {} }) {
     problem.hidden = true;
     try {
       await api.call("POST", "/wellness/therapy-notes", { body: text });
-      textarea.value = "";
+      if (textarea.value.trim() === text) textarea.value = "";
       await refresh();
     } catch {
       problem.textContent = "Couldn't save that note. It's still in the box, so try again.";

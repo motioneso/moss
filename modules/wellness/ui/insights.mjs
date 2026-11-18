@@ -59,7 +59,7 @@ export function renderInsights(root, { api, onReviewNotes = () => {} }) {
           h(
             "span",
             { class: `wl-insight__ic wl-insight__ic--${tone}` },
-            icon(ICONS[item.icon] ?? PATHS.activity)
+            icon(Object.hasOwn(ICONS, item.icon) ? ICONS[item.icon] : PATHS.activity)
           ),
           main
         );

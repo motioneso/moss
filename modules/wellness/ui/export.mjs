@@ -67,6 +67,7 @@ export function openExportDialog({ api, save, today = browserToday(), returnFocu
   let status = null; // The last export status reply, or an { unavailable: true } marker.
   let statusFailed = false;
   let downloadFailed = false;
+  let downloading = false;
   let timer = null;
   let closed = false;
 
@@ -118,7 +119,7 @@ export function openExportDialog({ api, save, today = browserToday(), returnFocu
     if (stops.length === 0) return;
     const first = stops[0];
     const last = stops[stops.length - 1];
-    const active = scrim.getRootNode().activeElement;
+    const active = document.activeElement;
     if (event.shiftKey && (active === first || active === dialog)) {
       event.preventDefault();
       last.focus();
@@ -169,7 +170,7 @@ export function openExportDialog({ api, save, today = browserToday(), returnFocu
 
   function form() {
     const days = exportRangeDays(from(), to());
-    const rangeValid = days !== null && days <= 366;
+    const rangeValid = days !== null && days <= 366 && to() <= defaults.to;
     const canGenerate = rangeValid && draft.categories.length > 0 && acknowledged && !starting;
     const failedMessage = startError ?? (status?.status === "failed" ? "Export failed." : null);
     const generate = button(starting ? "Starting…" : "Generate export", {
@@ -266,7 +267,10 @@ export function openExportDialog({ api, save, today = browserToday(), returnFocu
   }
 
   async function download() {
+    if (downloading) return;
+    downloading = true;
     downloadFailed = false;
+    paint();
     try {
       const file = await api.call(
         "GET",
@@ -275,8 +279,10 @@ export function openExportDialog({ api, save, today = browserToday(), returnFocu
       await save({ filename: file.filename, contentType: file.contentType, text: file.html });
     } catch {
       downloadFailed = true;
-      paint();
+    } finally {
+      downloading = false;
     }
+    paint();
   }
 
   function view() {
@@ -286,7 +292,8 @@ export function openExportDialog({ api, save, today = browserToday(), returnFocu
       state === "expired" ||
       (state === "ready" && expiresAt && Date.parse(expiresAt) <= Date.now());
     if (!draft.jobId || state === "failed") return form();
-    if (expired || status?.unavailable) {
+    const known = ["pending", "building", "ready", "failed", "expired"].includes(state);
+    if (expired || status?.unavailable || (status && !known)) {
       return [
         h(
           "div",
@@ -326,8 +333,9 @@ export function openExportDialog({ api, save, today = browserToday(), returnFocu
           h(
             "div",
             { style: "display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap" },
-            button("Download", {
+            button(downloading ? "Downloading…" : "Download", {
               size: "sm",
+              disabled: downloading,
               iconPaths: PATHS.download,
               onclick: () => void download()
             }),
@@ -347,18 +355,25 @@ export function openExportDialog({ api, save, today = browserToday(), returnFocu
 
   function paint() {
     if (closed) return;
-    const focused = scrim.getRootNode().activeElement?.id;
+    const stops = () => [...body.querySelectorAll("button, input, a[href]")];
+    const at = stops().indexOf(document.activeElement);
     body.replaceChildren(...view().filter(Boolean));
-    if (focused) body.querySelector(`#${focused}`)?.focus?.();
+    // Keep keyboard focus inside the dialog: same position if it still exists, else the dialog.
+    if (at >= 0) (stops()[at] ?? dialog).focus();
+    else if (!dialog.contains(document.activeElement)) dialog.focus();
   }
 
   async function poll() {
     clearTimeout(timer);
     if (closed || !draft.jobId) return;
     statusFailed = false;
+    const job = draft.jobId;
     try {
-      status = await api.call("GET", `/wellness/export/${encodeURIComponent(draft.jobId)}`);
+      const reply = await api.call("GET", `/wellness/export/${encodeURIComponent(job)}`);
+      if (draft.jobId !== job) return;
+      status = reply;
     } catch (error) {
+      if (draft.jobId !== job) return;
       if ([404, 410].includes(error?.status)) status = { unavailable: true };
       else statusFailed = true;
     }

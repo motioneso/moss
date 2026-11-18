@@ -109,10 +109,10 @@ export function connectModuleFrame(
           if (
             typeof save !== "function" ||
             typeof filename !== "string" ||
-            !/^[A-Za-z0-9][A-Za-z0-9._-]{0,120}$/.test(filename) ||
+            !/^[A-Za-z0-9][A-Za-z0-9_-]{0,100}(\.[A-Za-z0-9_-]{1,40})*\.html$/.test(filename) ||
             contentType !== "text/html; charset=utf-8" ||
             typeof text !== "string" ||
-            text.length > 8 * 1024 * 1024
+            new TextEncoder().encode(text).length > 8 * 1024 * 1024
           )
             throw new Error();
           result = await save({ filename, contentType, text });
