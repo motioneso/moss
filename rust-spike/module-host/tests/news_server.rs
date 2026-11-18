@@ -83,11 +83,17 @@ fn installed_news_package_serves_routes_from_the_real_server() {
             .unwrap();
         assert!(status.success());
     }
-    fs::write(
-        root.join("web/index.html"),
-        "<!doctype html><title>News HTTP fixture</title>",
-    )
-    .unwrap();
+    if let Ok(shell_web) = std::env::var("NEWS_LIVE_WEB") {
+        // A built shell, so the screen opens inside the real app frame.
+        let status = Command::new("cp").args(["-r", "-T", &shell_web]).arg(root.join("web")).status().unwrap();
+        assert!(status.success());
+    } else {
+        fs::write(
+            root.join("web/index.html"),
+            "<!doctype html><title>News HTTP fixture</title>",
+        )
+        .unwrap();
+    }
     let app_url = std::env::var("JS43_APP_URL").unwrap();
     let worker_url = std::env::var("JS43_WORKER_URL").unwrap();
     let bootstrap_url = std::env::var("JS43_BOOTSTRAP_URL").unwrap();
@@ -550,6 +556,14 @@ fn installed_news_package_serves_routes_from_the_real_server() {
     }
     let _ = other_id;
     println!("news live: {} queued News jobs, all metadata only", jobs.len());
+
+    // Hold the server open so the real screen can be opened in a browser with the real data above.
+    if let Ok(hold) = std::env::var("NEWS_LIVE_HOLD") {
+        fs::write(format!("{hold}/ready.txt"), format!("{origin}\n{cookie}\n{origin}/module-frame?module=news&path=/settings/news\n")).unwrap();
+        while !std::path::Path::new(&format!("{hold}/stop")).exists() {
+            std::thread::sleep(Duration::from_millis(500));
+        }
+    }
 
     // Nothing the test sent reached the server log.
     assert!(!log().to_lowercase().contains(&MARK.to_lowercase()));
