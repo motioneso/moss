@@ -34,6 +34,8 @@ export const meetingsModuleManifest = {
   availability: { defaultEnabled: true, required: false, supportsUserDisable: true },
   database: {
     migrations: [
+      "sql/0238_companion_devices.sql",
+      "sql/0239_companion_device_pair_attempt.sql",
       "sql/0273_meeting_records.sql",
       "sql/0274_meeting_draft_delete.sql",
       "sql/0275_meeting_transcript_batches.sql",
@@ -42,6 +44,7 @@ export const meetingsModuleManifest = {
       "sql/0280_meeting_history.sql",
       "sql/0283_meeting_account_export.sql",
       "sql/0284_meeting_capture.sql",
+      "sql/0287_companion_recording_capabilities.sql",
       "sql/0288_meeting_recording_connections.sql",
       "sql/0292_meeting_minimal.sql",
       "sql/0295_meeting_capture_start_limits.sql",
@@ -49,6 +52,7 @@ export const meetingsModuleManifest = {
       "sql/0326_meeting_import_summaries.sql",
       "sql/0328_meeting_voice_recordings.sql",
       "sql/0329_meeting_recording_uploads.sql",
+      "sql/0330_android_companion_linking.sql",
       "sql/0335_meeting_recording_identity.sql",
       "sql/0352_meeting_output_reservation_expiry.sql"
     ],
@@ -75,7 +79,11 @@ export const meetingsModuleManifest = {
       "app.meeting_capture_connections",
       "app.meeting_capture_start_cancellations",
       "app.meeting_stop_summaries",
-      "app.meeting_capture_start_limits"
+      "app.meeting_capture_start_limits",
+      "app.companion_pair_attempts",
+      "app.companion_devices",
+      "app.companion_recording_capabilities",
+      "app.companion_recording_attempts"
     ]
   },
   permissions: [
