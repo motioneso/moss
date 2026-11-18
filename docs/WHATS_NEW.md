@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Wellness settings screen.** You can now choose in Wellness settings whether your assistant may read your wellness data. [PR #4340](https://github.com/motioneso/moss/pull/4340)
 - **Weather settings and forecast screens.** You can now choose Fahrenheit or Celsius, set your place by location or search, see the hourly forecast, and see the current weather at the top of Today. [PR #4341](https://github.com/motioneso/moss/pull/4341)
 
 ### 2026-11-07
