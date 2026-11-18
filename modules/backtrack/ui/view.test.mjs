@@ -1,14 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  daysBack,
-  confirmation,
-  esc,
-  formatBytes,
-  lastHourRange,
-  screen,
-  formatDay
-} from "./view.mjs";
+import { daysBack, confirmation, esc, formatBytes, lastHourRange, screen } from "./view.mjs";
 import { backtrackApi } from "./api.mjs";
 
 const ui = (over = {}) => ({
@@ -64,7 +56,9 @@ test("the last hour is one hour and days count back from the account's today", (
 
 test("by-day deleting is off while the time zone loads and explains a failure", () => {
   const loading = screen(data(), ui({ tz: { state: "loading", timezone: null, date: null } }));
-  assert.ok(/data-act="today" disabled/.test(loading) && /data-act="choose" disabled/.test(loading));
+  assert.ok(
+    /data-act="today" disabled/.test(loading) && /data-act="choose" disabled/.test(loading)
+  );
   assert.ok(/data-act="hour"(?! disabled)/.test(loading));
   const failed = screen(data(), ui({ tz: { state: "failed", timezone: null, date: null } }));
   assert.ok(failed.includes("Could not load your time zone, so deleting by day is off."));
@@ -82,7 +76,10 @@ test("every delete states it cannot be undone", () => {
 
 test("text from the server is escaped and the confirmation is announced", () => {
   assert.equal(esc("<b>&"), "&lt;b&gt;&amp;");
-  const html = screen(data(), ui({ confirming: { title: "<i>t</i>", description: "d", action: "Go" } }));
+  const html = screen(
+    data(),
+    ui({ confirming: { title: "<i>t</i>", description: "d", action: "Go" } })
+  );
   assert.ok(!html.includes("<i>t") && html.includes('role="alertdialog"'));
   assert.equal(formatBytes(5 * 1024 * 1024), "5.0 MB");
 });

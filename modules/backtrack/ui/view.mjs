@@ -28,8 +28,10 @@ export function formatReceived(iso, timeZone) {
 }
 
 /** [from, to) for the last hour. Days come from the server in the account's time zone. */
-export const lastHourRange = (now) =>
-  ({ from: new Date(now.getTime() - HOUR_MS).toISOString(), to: now.toISOString() });
+export const lastHourRange = (now) => ({
+  from: new Date(now.getTime() - HOUR_MS).toISOString(),
+  to: now.toISOString()
+});
 /** Whole days from the `YYYY-MM-DD` day `today` back to `chosen`; undefined for a bad or future day. */
 export function daysBack(today, chosen) {
   const parse = (text) => {
@@ -114,7 +116,7 @@ function confirmBox(confirming) {
   )}${button("danger", confirming.action, "confirm")}</div></div>`;
 }
 
-function deleteGroup(ui, data) {
+function deleteGroup(ui) {
   const off = ui.pending ? " disabled" : "";
   const dayOff = ui.pending || ui.tz.state !== "ready" ? " disabled" : "";
   const buttons = `<span class="bt-actions">${button("secondary", "Last hour", "hour", off)}${button(
@@ -165,7 +167,7 @@ export function screen(data, ui) {
   if (data.storage === "off") {
     return `${head}${note("Backtrack storage isn't available on this Moss yet. An admin has to turn it on.")}${
       hasHistory
-        ? `${note("Text kept from an earlier time is still stored, and you can delete it here.")}${deleteGroup(ui, data)}`
+        ? `${note("Text kept from an earlier time is still stored, and you can delete it here.")}${deleteGroup(ui)}`
         : ""
     }`;
   }
@@ -197,9 +199,13 @@ export function screen(data, ui) {
       `<span>${esc(formatBytes(data.bytes))}</span>`
     )}${
       data.lastReceivedAt
-        ? row("Last received", "", `<span>${esc(formatReceived(data.lastReceivedAt, ui.tz.timezone ?? undefined))}</span>`)
+        ? row(
+            "Last received",
+            "",
+            `<span>${esc(formatReceived(data.lastReceivedAt, ui.tz.timezone ?? undefined))}</span>`
+          )
         : ""
     }`
   );
-  return `${head}${recording}${kept}${deleteGroup(ui, data)}`;
+  return `${head}${recording}${kept}${deleteGroup(ui)}`;
 }
