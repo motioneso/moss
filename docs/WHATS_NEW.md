@@ -29,10 +29,21 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-11-18
+
+#### Added
+
+- **News settings in the new app.** The News settings page now opens in the new app, with your sources, topics, excluded publishers and story preferences. [PR #4355](https://github.com/motioneso/moss/pull/4355)
+- **Briefings screens in the new app.** You can read your morning and evening briefings and change when they are prepared from the new Moss app, including on your phone. [PR #4349](https://github.com/motioneso/moss/pull/4349)
+- **Sports settings.** You can now choose the teams and leagues you follow, your news sources, and your standings leagues from the Sports settings page. [PR #4348](https://github.com/motioneso/moss/pull/4348)
+- **Sports screen.** The Sports page now shows live scores, your followed teams, standings and team news. [PR #4345](https://github.com/motioneso/moss/pull/4345)
+
 ### 2026-11-17
 
 #### Added
 
+- **Wellness screen.** The Wellness screen now shows your medicines, mood check-ins and trends on desktop and phone. [PR #4339](https://github.com/motioneso/moss/pull/4339)
+- **Wellness settings screen.** You can now choose in Wellness settings whether your assistant may read your wellness data. [PR #4340](https://github.com/motioneso/moss/pull/4340)
 - **Weather settings and forecast screens.** You can now choose Fahrenheit or Celsius, set your place by location or search, see the hourly forecast, and see the current weather at the top of Today. [PR #4341](https://github.com/motioneso/moss/pull/4341)
 
 ### 2026-11-07

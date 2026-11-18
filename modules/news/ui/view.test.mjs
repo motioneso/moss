@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as v from "./view.mjs";
-import { newsApi } from "./api.mjs";
+import { newsApi } from "./screen-api.mjs";
 import { leadArtSvg, leadArtPalette, drawLeadContours } from "./lead-art.mjs";
 
 const story = (id, extra = {}) => ({

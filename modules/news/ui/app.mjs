@@ -1,8 +1,8 @@
 /* global document, window, Element */
 import { moduleClient } from "./guest-bridge.mjs";
-import { newsApi } from "./api.mjs";
+import { newsApi } from "./screen-api.mjs";
 import { createImages } from "./images.mjs";
-import { createFeedback } from "./feedback.mjs";
+import { createFeedback } from "./story-menu.mjs";
 import * as v from "./view.mjs";
 
 const client = moduleClient();

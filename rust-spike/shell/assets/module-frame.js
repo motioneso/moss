@@ -58,6 +58,14 @@ try {
   if (!reply.ok) throw new Error();
   const screen = await reply.json();
   const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  // Screens word some hints differently for admins, so the parent passes the role along.
+  let isAdmin = false;
+  try {
+    const shellReply = await fetch("/api/shell", { credentials: "same-origin" });
+    if (shellReply.ok) isAdmin = (await shellReply.json())?.account?.is_admin === true;
+  } catch {
+    isAdmin = false;
+  }
   document.title = screen.title;
   const screenUrl = new URL(screen.src, location.href);
   if (/^[a-z]{1,20}$/.test(focusParam)) screenUrl.searchParams.set("focus", focusParam);
@@ -65,7 +73,7 @@ try {
   if (moduleId === "weather") frame.setAttribute("allow", "geolocation *");
   openModuleFrame(frame, moduleId, screenUrl.href, {
     request,
-    theme: () => ({ theme: "park-press", colorMode: dark ? "dark" : "light" }),
+    theme: () => ({ theme: "park-press", colorMode: dark ? "dark" : "light", isAdmin }),
     navigate: async (path) => {
       (globalThis.top ?? globalThis).location.assign(path);
       return null;

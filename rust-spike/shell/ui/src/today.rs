@@ -72,8 +72,25 @@ fn Hero(hero: TodayHero) -> impl IntoView {
             <crate::weather::HeroWeather />
             <div class="today-hero__prepared">
                 <span class="today-hero__not-ready">{hero.briefing_note}</span>
+                <HeroBriefing />
             </div>
         </section>
+    }
+}
+
+/// Link to the Briefings reader, shown only when the Briefings package answers.
+#[component]
+fn HeroBriefing() -> impl IntoView {
+    let available = RwSignal::new(false);
+    spawn_local(async move { available.set(api::briefings_available().await) });
+    move || {
+        available.get().then(|| {
+            view! {
+                <a class="today-hero__briefing-link" href="/module-frame?module=briefings&path=%2Fbriefing">
+                    "Read your briefing"
+                </a>
+            }
+        })
     }
 }
 

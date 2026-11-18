@@ -1,0 +1,687 @@
+/* Sports broadsheet editorial layer for issue 839. Tokens only - see tokens.css. */
+
+/* Broadsheet masthead (header redesign pass): now just the section-nav bar + the gameday event
+   headline at display scale. The folio strip — date line, "The Sports Desk" nameplate, and
+   Manage link — was removed (Ben 2026-07-07; the app topbar already titles the page "Sports"), so
+   those rules are gone with it. Sans throughout. */
+.sp-mast {
+  padding-top: var(--space-3);
+  padding-bottom: var(--space-3);
+}
+
+.sp-mast__event {
+  margin: var(--space-5) 0 var(--space-2);
+  text-align: center;
+  line-height: var(--leading-none);
+  text-transform: uppercase;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+/* Featured-game score bar: team brand colors fill the halves (inline style from
+   team-colors.ts — module data, constant across themes), scores pinned to the outer
+   edges, game clock in the paper center chip. Neutral ink fallback for unmapped teams. */
+.sp-scorebar {
+  margin-top: var(--space-2);
+}
+
+.sp-scorebar__bar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: stretch;
+  min-height: 52px;
+}
+
+.sp-scorebar__side {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-2) var(--space-4);
+  /* the watermark crest deliberately overflows the band and gets cropped */
+  position: relative;
+  overflow: hidden;
+}
+
+.sp-scorebar__side--r {
+  flex-direction: row-reverse;
+}
+
+/* Oversized ghost crest behind the score/name: ~80% of the band's width, vertically centered
+   so the short band crops most of it (live feedback mra36r06). Content stacks above it. */
+.sp-scorebar__watermark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80%;
+  opacity: 0.22;
+  pointer-events: none;
+}
+
+.sp-scorebar__side > :not(.sp-scorebar__watermark) {
+  position: relative;
+}
+
+.sp-scorebar__score {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  line-height: var(--leading-none);
+  min-width: 1.2ch;
+}
+
+.sp-scorebar__team {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sp-scorebar__team-abbr {
+  display: none;
+}
+
+.sp-scorebar__mid {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-4);
+  white-space: nowrap;
+}
+
+.sp-scorebar__foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-top: var(--space-1);
+}
+
+.sp-scorebar__comp {
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+
+/* Matchup story band under the score bar (mockup's photo + dek): a real headline about the
+   featured game, linking out to the source. Only rendered when one exists. */
+.sp-scorebar__story {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  text-decoration: none;
+}
+
+.sp-scorebar__story:hover .sp-scorebar__storytitle {
+  text-decoration: underline;
+}
+
+.sp-scorebar__photo {
+  flex: none;
+  width: 168px;
+  height: 100px;
+  object-fit: cover;
+  display: block;
+}
+
+.sp-scorebar__storycopy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.sp-scorebar__storytitle {
+  line-height: 1.25;
+}
+
+.sp-scorebar__storydek {
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+@media (max-width: 720px) {
+  .sp-scorebar__team-full {
+    display: none;
+  }
+
+  .sp-scorebar__photo {
+    width: 96px;
+    height: 64px;
+  }
+
+  .sp-scorebar__team-abbr {
+    display: inline;
+  }
+
+  .sp-scorebar__side {
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+  }
+}
+
+.sp-skel--around {
+  height: 2.5rem;
+}
+
+.sp-skel--grid {
+  height: 24rem;
+}
+
+/* Reusable editorial primitives (consumed by Latest / Standings / News). */
+.sp-col__kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: var(--space-2);
+}
+
+.sp-eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.sp-rule {
+  margin: var(--space-3) 0;
+}
+
+/* Around-the-leagues ticker: a denser, all-leagues scores strip under .sp-ticker (#839 task 5).
+   Its "Around the leagues" nameplate was cut (live feedback mrav84vx) — the league plates
+   below carry the strip's identity now. */
+.sp-around {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+  margin: var(--space-4) 0;
+}
+.sp-around__scroll {
+  display: flex;
+  gap: var(--space-4);
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex: 1;
+  min-width: 0;
+}
+.sp-around__scroll::-webkit-scrollbar {
+  display: none;
+}
+.sp-around__scroll:focus-visible {
+  outline-offset: 2px;
+}
+.sp-around__group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: none;
+}
+/* League nameplate doubles as the section separator: an ink block, sticky within its group —
+   the active league pins at the left edge while its games scroll, then the next league's
+   plate pushes it out. Opaque bg + z-index so games pass beneath. Text is --surface (not
+   --white): dark mode flips --ink to a light cream, so the pairing inverts cleanly in both
+   themes. */
+.sp-around__league {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+.sp-around__logo,
+.sp-around__crest {
+  flex: none;
+  object-fit: contain;
+}
+.sp-around__game {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+/* hairline between games so a status chip can't read as the next game's */
+.sp-around__game + .sp-around__game {
+  padding-left: var(--space-3);
+}
+.sp-around__status {
+  padding-left: var(--space-1);
+}
+.sp-around__nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: var(--space-1);
+  flex: none;
+}
+.sp-around__nav[hidden] {
+  display: none;
+}
+
+/* Hero carousel (live feedback mrb4w77y): the quiet-day hero rotates the topStories pool.
+   Slides stack in a single grid cell so the stage sizes to the tallest slide — swapping a
+   dek-heavy story for a bare headline must not reflow the page under the reader. */
+.sp-carousel {
+  /* The carousel is now the front-page lead directly under the masthead (mrbalm9x) — this gap
+     separates it from the masthead rule above (was: from the followed strip, back when the
+     carousel sat below the ticker). .sp-hero sets margin-top:0, so the spacing lives here. */
+  margin-top: var(--space-6);
+}
+.sp-carousel__stage {
+  display: grid;
+}
+.sp-carousel__slide {
+  grid-area: 1 / 1;
+  min-width: 0;
+  opacity: 0;
+  visibility: hidden;
+  /* visibility flips after the fade completes so outgoing links leave the a11y tree without
+     popping out mid-crossfade */
+  transition:
+    opacity 360ms ease,
+    visibility 0s linear 360ms;
+}
+.sp-carousel__slide--active {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 360ms ease;
+}
+/* Incoming headline rises a touch as it fades in — the first of the Paper Portfolio motion
+   moments (skin pass to follow); the fade alone still carries reduced-motion users. */
+@keyframes sp-carousel-rise {
+  from {
+    transform: translateY(6px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sp-carousel__slide--active .sp-hero__storybody {
+    animation: sp-carousel-rise 480ms ease both;
+  }
+}
+/* Controls sit centered under the stage, above the grid's section rule. */
+.sp-carousel__ctl {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding-bottom: var(--space-3);
+}
+.sp-carousel__nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: var(--space-1);
+}
+.sp-carousel__dots {
+  display: flex;
+  gap: var(--space-2);
+}
+.sp-carousel__dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* Gameday hero carousel (#1386): when more than one followed game is inside the window, the
+   score bar carousels instead of the page picking one and burying the rest. Same stacked-grid
+   stage as .sp-carousel above — one slide carries a story band and the next doesn't, and the
+   stage must hold the tallest so a rotation never reflows the page under the reader. */
+.sp-gameday__stage {
+  display: grid;
+}
+.sp-gameday__slide {
+  grid-area: 1 / 1;
+  min-width: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 360ms ease,
+    visibility 0s linear 360ms;
+}
+.sp-gameday__slide[data-active="true"] {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 360ms ease;
+}
+/* Tabs left, arrows right: the tabs ARE the position indicator, so the arrows are a secondary
+   affordance rather than the main control the story carousel's dots need them to be. */
+.sp-gameday__ctl {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0 var(--space-3);
+}
+.sp-gameday__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+}
+/* A tab reads as a scoreline, not a chip: hairline box, caps-tracked team names, tabular score.
+   No pill, no accent fill — the ink underline is what says "showing". */
+.sp-gameday__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  border-bottom-width: 2px;
+  cursor: pointer;
+  padding: var(--space-1) var(--space-2);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  line-height: var(--leading-none);
+}
+.sp-gameday__tab[aria-selected="true"] {
+  border-bottom-color: var(--ink);
+}
+.sp-gameday__tabscore {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+@media (max-width: 720px) {
+  /* Narrow: the arrows are redundant once the tabs wrap to their own rows, and they were the
+     first thing to collide with the wrap. Tabs alone still reach every game. */
+  .sp-gameday__ctl > .jds-iconbtn {
+    display: none;
+  }
+}
+
+/* Broadsheet body: around-the-leagues board + Standings (mrb4w77y; was Latest + Standings,
+   #839 task 7). */
+.sp-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--space-6);
+  /* stretch keeps the two columns bottoming out together (mrb4w77y). Decoupled from the rail's
+     content height (mrbah9gw): the rail is now capped + internally scrolls (see .sp-grid__rail),
+     so tall standings no longer drive an over-tall row that left a vertical void beneath the
+     6-game-capped board. Row height is now bounded by the board's own 3–6 game band. */
+  align-items: stretch;
+  padding-top: var(--space-4);
+}
+
+.sp-grid__main {
+  min-width: 0;
+  /* column so the board (flex: 1 below) absorbs whatever height the gameday Top-stories
+     list doesn't use */
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* Around-the-leagues board (mrb4w77y): the hidden strip's slate in the main column, one
+   league per column of stacked scoreboxes, columns scrolling behind the header arrows. */
+.sp-board {
+  flex: 1;
+  min-width: 0;
+  /* min-height:0 lets the body bound to the grid row instead of the board growing to fit all
+     games — the standings rail then decides the row height (mrb8wvo1). */
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.sp-board__hd {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+.sp-board__navs {
+  display: flex;
+  gap: var(--space-1);
+}
+.sp-board__nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: var(--space-1);
+}
+.sp-board__nav[hidden] {
+  display: none;
+}
+/* Height anchor: flexes toward the standings-sized grid row, but the column height is now
+   banded by game count, not the rail (mrba2geu — Ben wants columns min 3 games / max 6 games
+   tall, so a short slate doesn't stub out and a long one doesn't run as one giant column).
+   --sp-board-game-h approximates one scorebox row (gstatus + 2 team rows + padding); the
+   +40px in each bound reserves a league nameplate. The scroll fills the body absolutely so
+   content still wraps sideways rather than lengthening the row (mrb8wvo1). */
+.sp-board__body {
+  --sp-board-game-h: 80px;
+  position: relative;
+  flex: 1;
+  min-height: calc(var(--sp-board-game-h) * 3 + 40px);
+  max-height: calc(var(--sp-board-game-h) * 6 + 40px);
+  margin-top: var(--space-2);
+}
+/* Vertical-wrap flow: games stack down a column, then spill into the next column when they hit
+   the body height — leagues share columns, scrolling horizontally behind the header arrows. */
+.sp-board__scroll {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 0 var(--space-6);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+/* Right-edge fade is an affordance for "there's more this way" — so it only shows while the
+   strip can still scroll right (mrba0kdh: at the end it was fading the last card even though
+   nothing was clipped). The component adds --more whenever !atEnd. */
+.sp-board__scroll--more {
+  -webkit-mask-image: linear-gradient(to right, black calc(100% - 32px), transparent);
+  mask-image: linear-gradient(to right, black calc(100% - 32px), transparent);
+}
+.sp-board__scroll:focus-visible {
+  outline-offset: 2px;
+}
+/* League nameplate: same ink-block voice as the strip's sticky plates (--surface text so
+   the pairing inverts cleanly in dark mode), sized to the column head. */
+.sp-board__league {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  /* margin-top separates a league from the one above it when they share a wrap-column; the
+     first nameplate (and any that land at a column top) get it trimmed below (mrb8wvo1). */
+  margin-top: var(--space-4);
+  margin-bottom: var(--space-2);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+/* Nameplate + its first score, welded into one atomic wrap unit so the separator never
+   orphans at a column bottom (mrb9x3rk). */
+.sp-board__lead {
+  width: 232px;
+  display: flex;
+  flex-direction: column;
+}
+/* Trim the top margin on whichever league heading opens the flow. */
+.sp-board__scroll > .sp-board__lead:first-child .sp-board__league {
+  margin-top: 0;
+}
+.sp-board__game {
+  /* fixed width so the vertical-wrap columns are uniform (mrb8wvo1) */
+  width: 232px;
+  padding: var(--space-2) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.sp-board__gstatus {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.sp-board__side {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+/* Followed team = whole row tinted in the accent green (mrba397w → mrbad2i8: replaces the
+   gold crest star Ben rejected; same "your team" signal as the standings marker). The box has
+   no horizontal padding, so the tint already spans its full width; a small negative inline
+   margin + radius just softens the block without shifting the crest/score alignment. */
+.sp-board__side--you {
+  margin-inline: calc(-1 * var(--space-1));
+  padding-inline: var(--space-1);
+}
+.sp-board__team {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sp-board__score {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Vertical keyline between Latest and Standings — the broadsheet column rule (spec §Type & Grid).
+   Collapses to a horizontal rule under the ≤900px single-column breakpoint below. */
+.sp-grid__rail {
+  min-width: 0;
+  padding-left: var(--space-6);
+  /* The height cap + internal scroll (mrbah9gw decouple) lives on .sp-standings itself, not here,
+     so StandingsRail owns the scroller and can hang a sticky header + a "more below" fade cue off
+     it. This column just supplies the keyline + gutter. */
+}
+
+.sp-latest__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  columns: 2;
+  column-gap: var(--space-5);
+}
+
+.sp-latest__item {
+  break-inside: avoid;
+  margin-bottom: var(--space-4);
+}
+
+.sp-hl {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: start;
+  padding: var(--space-3) 0;
+  text-decoration: none;
+  transition: background 140ms ease;
+}
+
+.sp-hl__thumb {
+  width: 64px;
+  height: 48px;
+  object-fit: cover;
+}
+
+.sp-hl__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.sp-hl__comp {
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+
+.sp-hl__title {
+  line-height: 1.34;
+  text-wrap: pretty;
+}
+
+/* Qualification legend under the standings table (#841): each swatch carries the same
+   tint + edge-bar inline style as the qualifying rows, so it reads as a miniature row. */
+.sp-legend {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.sp-legend__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.sp-legend__marker {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  flex: none;
+}
+
+@media (max-width: 900px) {
+  .sp-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sp-grid__rail {
+    padding-left: 0;
+    padding-top: var(--space-6);
+  }
+
+  .sp-latest__list {
+    columns: 1;
+  }
+}
+
+/* At phone widths the game clock owns a second row so team identities and scores fit. */
+@media (max-width: 480px) {
+  .sp-scorebar__bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sp-scorebar__mid {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: center;
+    padding: var(--space-3);
+    white-space: normal;
+  }
+  .sp-scorebar__side {
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-2);
+  }
+  .sp-scorebar__side > .sp-crest {
+    display: none;
+  }
+  .sp-scorebar__team {
+    overflow: visible;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}

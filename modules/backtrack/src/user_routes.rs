@@ -65,3 +65,28 @@ pub fn delete<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Resp
     crate::upkeep::keep_scheduled(host);
     Ok(Response::new(200, json!({"deleted": reply["deleted"].as_u64().unwrap_or(0)})))
 }
+
+/// The person's own calendar day, `offsetDays` before today (0 to 400). The delete buttons use
+/// its start and next start as midnight to midnight in the account's time zone.
+pub fn local_day<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Response> {
+    let offset = match request.query.get("offsetDays") {
+        None => Some(0),
+        Some(Value::Number(n)) => n.as_i64(),
+        Some(Value::String(text)) => text.parse::<i64>().ok(),
+        _ => None,
+    };
+    let Some(offset) = offset.filter(|n| (0..=400).contains(n)) else {
+        return Ok(Response::new(400, json!({"error": "offsetDays must be 0 to 400"})));
+    };
+    let at = now(host)?;
+    let day = host.call(
+        "context",
+        "local-date",
+        "account",
+        json!({"instant": at.to_rfc3339(), "offsetDays": -offset}),
+    )?;
+    Ok(Response::new(
+        200,
+        json!({"timezone": day["timezone"], "date": day["date"], "start": day["start"], "nextStart": day["nextStart"]}),
+    ))
+}

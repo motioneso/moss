@@ -481,4 +481,80 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
     // Nothing the test sent reached the server log.
     assert!(!log().contains(MARK));
     println!("briefings live: definitions, runs and privacy for two people worked over HTTPS");
+    if let Ok(hold) = std::env::var("BRIEFINGS_HOLD_OPEN") {
+        // Held-open mode for browser proof. Writes the origin and owner cookie to the hold file,
+        // then keeps the real server and its stand-in model up until the stop file appears.
+        fs::write(&hold, json!({"origin":origin,"cookie":cookie,"certificate":cert}).to_string()).unwrap();
+        let mut extras = json!({});
+        // Real-model pass. Points the router at a real OpenAI-compatible endpoint and runs one
+        // morning briefing end to end. The key comes from a file and is never written out.
+        if let (Ok(url), Ok(key_file), Ok(model_name)) = (
+            std::env::var("BRIEFINGS_REAL_MODEL_URL"),
+            std::env::var("BRIEFINGS_REAL_MODEL_KEY_FILE"),
+            std::env::var("BRIEFINGS_REAL_MODEL_NAME"),
+        ) {
+            let real_key = fs::read_to_string(key_file).unwrap().trim().to_owned();
+            let sealed = safety_core::secret::SecretCipher::ai(&[("JARVIS_AI_SECRET_KEY".into(), ai_key.clone())].into())
+                .unwrap()
+                .seal(&safety_core::secret::SecretFields::new().with("apiKey", safety_core::secret::Secret::new(&real_key)));
+            runtime.block_on(async {
+                let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+                tokio::spawn(async move { let _ = connection.await; });
+                db.execute("UPDATE app.ai_provider_configs SET base_url=$1, encrypted_credential=$2 WHERE id=$3", &[&url, &sealed, &provider]).await.unwrap();
+                db.execute("UPDATE app.ai_configured_models SET provider_model_id=$1 WHERE id=$2", &[&model_name, &model]).await.unwrap();
+            });
+            let (status, text) = call(Method::POST, &format!("/definitions/{id}/run"), Some(&cookie), Some(json!({})));
+            let queued = json_of(&text);
+            let (job, run) = (queued["jobId"].as_str().unwrap_or_default().to_owned(), queued["runId"].as_str().unwrap_or_default().to_owned());
+            let waited = std::time::Instant::now();
+            let (mut state, mut detail_text) = (String::new(), String::new());
+            while status == 202 && waited.elapsed() < std::time::Duration::from_secs(240) {
+                let (_, t) = call(Method::GET, &format!("/definitions/{id}/runs/{run}?jobId={job}"), Some(&cookie), None);
+                state = json_of(&t)["state"].as_str().unwrap_or_default().to_owned();
+                detail_text = t;
+                if state != "pending" { break; }
+                std::thread::sleep(std::time::Duration::from_secs(2));
+            }
+            let (_, t) = call(Method::GET, &format!("/definitions/{id}/runs/{run}"), Some(&cookie), None);
+            let detail = json_of(&t);
+            extras["realModel"] = json!({
+                "queuedStatus": status, "state": state, "seconds": waited.elapsed().as_secs(),
+                "model": model_name, "aiModel": detail["run"]["sourceMetadata"]["aiModel"],
+                "summary": detail["run"]["summaryText"], "pollBody": detail_text.chars().take(300).collect::<String>(),
+            });
+        }
+        // Upgrade check. Loads rows copied from the dev database into this throwaway database,
+        // then reads them back through the real routes as their original owner.
+        if let (Ok(dump), Ok(dev_owner)) = (std::env::var("BRIEFINGS_UPGRADE_DUMP"), std::env::var("BRIEFINGS_UPGRADE_OWNER_ID")) {
+            let sql = fs::read_to_string(dump).unwrap();
+            let dev_owner: uuid::Uuid = dev_owner.parse().unwrap();
+            runtime.block_on(async {
+                let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+                tokio::spawn(async move { let _ = connection.await; });
+                db.batch_execute(&sql).await.unwrap();
+                db.execute("INSERT INTO app.auth_accounts (id, account_id, provider_id, user_id, password, created_at, updated_at) SELECT gen_random_uuid(), $1::uuid::text, 'credential', $1::uuid, password, now(), now() FROM app.auth_accounts WHERE user_id = $2::uuid AND provider_id = 'credential'", &[&dev_owner, &owner]).await.unwrap();
+            });
+            let signed = client.post(format!("{origin}/api/auth/sign-in/email")).header("origin", &origin)
+                .json(&json!({"email":"dev-owner-copy@example.test","password":"temporary-briefings-password-263-not-a-real-secret"})).send().unwrap();
+            let sign_status = signed.status().as_u16();
+            let dev_cookie = signed.headers().get("set-cookie").and_then(|v| v.to_str().ok()).and_then(|v| v.split(';').next()).unwrap_or_default().to_owned();
+            let (list_status, text) = call(Method::GET, "/definitions", Some(&dev_cookie), None);
+            let defs = json_of(&text)["definitions"].as_array().cloned().unwrap_or_default();
+            let mut runs = vec![];
+            for d in &defs {
+                let did = d["id"].as_str().unwrap_or_default();
+                let (rs, t) = call(Method::GET, &format!("/definitions/{did}/runs"), Some(&dev_cookie), None);
+                let n = json_of(&t)["runs"].as_array().map(|a| a.len()).unwrap_or(0);
+                let newest = json_of(&t)["runs"][0]["id"].as_str().unwrap_or_default().to_owned();
+                let (ds, dt) = if newest.is_empty() { (0, String::new()) } else { call(Method::GET, &format!("/definitions/{did}/runs/{newest}"), Some(&dev_cookie), None) };
+                runs.push(json!({"type": d["briefingType"], "runsStatus": rs, "runs": n, "newestStatus": ds, "newestState": json_of(&dt)["state"], "newestHasText": json_of(&dt)["run"]["summaryText"].as_str().map(|t| !t.is_empty()).unwrap_or(false)}));
+            }
+            extras["upgrade"] = json!({"signIn": sign_status, "listStatus": list_status, "definitions": defs.len(), "perDefinition": runs});
+            extras["devCookie"] = json!(dev_cookie);
+        }
+        fs::write(format!("{hold}.extras.json"), extras.to_string()).unwrap();
+        while !Path::new(&format!("{hold}.stop")).exists() {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+    }
 }

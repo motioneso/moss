@@ -1,5 +1,15 @@
 # News package
 
+## 0.1.2
+
+- The News screen and the Today News widget now ship in the package. The screen has the front-page carousel, the mosaic, the source rail, the in-brief list, topic filters when topics exist, and the story menu with a reason form. Pictures and site icons load through the signed-in shell. Links open in a new tab.
+
+## 0.1.1
+
+- Settings now has a News screen. It shows built-in sources, sources you added, subreddits, described topics, excluded publishers and story preferences.
+- Described topics show why web search is off and where to fix it. Adding a source and the other controls have their own loading, empty and failed messages.
+- Connecting a publisher with a key is not part of this screen.
+
 ## 0.1.0
 
 - News starts as a built-in package. It keeps the same eight tables and saved data as before.
@@ -16,4 +26,3 @@
 - Story pictures and publisher icons load through the package after the shell re-checks type, signature and size. A picture only loads for a story on the person's own stored page, and an icon only for a publisher they already see. A picture is limited to about 700 KB.
 - The approval card for refresh and for picture and icon loads is built from the stored record.
 - Story feedback: mark a story on your page "more like this" or "less like this", with an optional reason, change the reason, or undo it. A story marked less is left out of the overview, chat tools, briefings and its picture until undone. News keeps these choices in its own table; they do not change ranking yet.
-- The News screen and the Today News widget now ship in the package. The screen has the front-page carousel, the mosaic, the source rail, the in-brief list, topic filters when topics exist, and the story menu with a reason form. Pictures and site icons load through the signed-in shell. Links open in a new tab.

@@ -60,6 +60,27 @@ fn the_package_builds_and_the_manifest_validates() {
 }
 
 #[test]
+fn the_screen_ships_with_every_file_it_loads() {
+    let manifest = moss_wellness_host::package::manifest().unwrap();
+    assert_eq!(manifest.screens["/wellness"], "ui/index.html");
+    let files = moss_wellness_host::package::files(&root(), &component()).unwrap();
+    for entry in manifest.screens.values() {
+        assert!(files.contains_key(entry), "{entry} is not in the package");
+    }
+    let page = String::from_utf8(files["ui/index.html"].clone()).unwrap();
+    for linked in ["./wellness.css", "./wellness-history.css", "./wellness-checkin.css", "./app.mjs"] {
+        assert!(page.contains(linked), "the page does not link {linked}");
+        assert!(files.contains_key(&format!("ui/{}", linked.trim_start_matches("./"))));
+    }
+    // Every local module the app imports is in the package.
+    let app = String::from_utf8(files["ui/app.mjs"].clone()).unwrap();
+    for line in app.lines().filter(|l| l.starts_with("import ") && l.contains("\"./")) {
+        let name = line.split("\"./").nth(1).unwrap().split('"').next().unwrap();
+        assert!(files.contains_key(&format!("ui/{name}")), "ui/{name} is not in the package");
+    }
+}
+
+#[test]
 fn the_package_asks_only_for_its_own_resources() {
     let manifest = moss_wellness_host::package::manifest().unwrap();
     let ask = |port: &str, operation: &str, resource: &str| {

@@ -83,19 +83,25 @@ fn installed_news_package_serves_routes_from_the_real_server() {
             .unwrap();
         assert!(status.success());
     }
-    fs::write(
-        root.join("web/index.html"),
-        "<!doctype html><title>News HTTP fixture</title>",
-    )
-    .unwrap();
-    if std::env::var("NEWS_SCREEN_HOLD").is_ok() {
-        // The browser check opens the screens through the shell's own frame page.
-        for name in ["module-frame.html", "module-frame.css", "module-frame.js"] {
-            fs::copy(
-                Path::new(env!("CARGO_MANIFEST_DIR")).join("../shell/assets").join(name),
-                root.join("web").join(name),
-            )
-            .unwrap();
+    if let Ok(shell_web) = std::env::var("NEWS_LIVE_WEB") {
+        // A built shell, so the screen opens inside the real app frame.
+        let status = Command::new("cp").args(["-r", "-T", &shell_web]).arg(root.join("web")).status().unwrap();
+        assert!(status.success());
+    } else {
+        fs::write(
+            root.join("web/index.html"),
+            "<!doctype html><title>News HTTP fixture</title>",
+        )
+        .unwrap();
+        if std::env::var("NEWS_SCREEN_HOLD").is_ok() {
+            // The browser check opens the screens through the shell's own frame page.
+            for name in ["module-frame.html", "module-frame.css", "module-frame.js"] {
+                fs::copy(
+                    Path::new(env!("CARGO_MANIFEST_DIR")).join("../shell/assets").join(name),
+                    root.join("web").join(name),
+                )
+                .unwrap();
+            }
         }
     }
     let app_url = std::env::var("JS43_APP_URL").unwrap();
@@ -597,6 +603,38 @@ fn installed_news_package_serves_routes_from_the_real_server() {
     }
     let _ = other_id;
     println!("news live: {} queued News jobs, all metadata only", jobs.len());
+
+    // Hold the server open so the real screen can be opened in a browser with the real data above.
+    if let Ok(hold) = std::env::var("NEWS_LIVE_HOLD") {
+        // A real model through the local test endpoint with the person's own stored provider, so a
+        // new site can get its policy verdict from a model. The key is read from its config file and
+        // never printed.
+        let key_path = std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".config/cliproxyapi/client-key");
+        if let (Ok(model_name), Ok(key)) = (std::env::var("NEWS_LIVE_MODEL"), fs::read_to_string(&key_path)) {
+            let sealed = safety_core::secret::SecretCipher::ai(&[("JARVIS_AI_SECRET_KEY".into(), ai_key.clone())].into())
+                .unwrap()
+                .seal(&safety_core::secret::SecretFields::new().with("apiKey", safety_core::secret::Secret::new(key.trim())));
+            let provider: uuid::Uuid = uuid::Uuid::new_v4();
+            let model: uuid::Uuid = uuid::Uuid::new_v4();
+            runtime.block_on(async {
+                let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+                tokio::spawn(async move { let _ = connection.await; });
+                db.execute(
+                    "INSERT INTO app.ai_provider_configs(id,owner_user_id,provider_kind,display_name,base_url,encrypted_credential,is_instance_default) VALUES($1,$2,'openai-compatible','Test endpoint','http://127.0.0.1:5190',$3,true)",
+                    &[&provider, &owner, &sealed],
+                ).await.unwrap();
+                db.execute(
+                    "INSERT INTO app.ai_configured_models(id,provider_config_id,owner_user_id,provider_model_id,display_name,capabilities) VALUES($1,$2,$3,$4,'Test model',ARRAY['chat','json'])",
+                    &[&model, &provider, &owner, &model_name],
+                ).await.unwrap();
+            });
+            println!("news live: a real model ({model_name}) is set up for the hold");
+        }
+        fs::write(format!("{hold}/ready.txt"), format!("{origin}\n{cookie}\n{origin}/module-frame?module=news&path=/settings/news\n")).unwrap();
+        while !std::path::Path::new(&format!("{hold}/stop")).exists() {
+            std::thread::sleep(Duration::from_millis(500));
+        }
+    }
 
     // Nothing the test sent reached the server log.
     assert!(!log().to_lowercase().contains(&MARK.to_lowercase()));

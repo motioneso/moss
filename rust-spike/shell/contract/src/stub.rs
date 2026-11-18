@@ -54,6 +54,7 @@ impl ShellData for StubShellData {
             account: Account {
                 display_name: "Sam Rivera".into(),
                 unread_notifications: 2,
+                is_admin: false,
             },
             nav: vec![
                 NavSection {

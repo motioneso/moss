@@ -1,0 +1,39 @@
+/* Layout for the Sports settings screen. Colours and type come from the shared Park Press sheet. */
+.sp-settings {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 30px 40px 80px;
+}
+@media (max-width: 620px) {
+  .sp-settings {
+    padding: 20px 16px 60px;
+  }
+}
+[hidden] {
+  display: none !important;
+}
+.pane__head {
+  margin-bottom: 4px;
+}
+.pane__title {
+  margin: 0;
+}
+.pane__desc {
+  line-height: 1.55;
+  margin: 8px 0 0;
+}
+.set2-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 14px 2px 0;
+  line-height: 1.5;
+}
+.set2-note svg {
+  flex: none;
+  margin-top: 2px;
+}
+.sp-src__item-glyph {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}

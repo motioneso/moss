@@ -79,3 +79,31 @@ Backtrack is now a Rust package in `modules/backtrack`. It keeps the screen text
 - A real embedding pass. The tests use a fake embedder, so no real model embedded real screen text. Ben needs to try this with his own model.
 - Device pairing. A real Mac still cannot upload, so no real upload reached the index job on the live server. Indexing from uploads is proven only through the fake link.
 - Searching the text. Search results and the screen are part 15.
+
+## Part 15 (Settings screen) live pass
+
+Real Rust server over HTTPS from this branch, Backtrack installed from its package, a real signed-in
+account, the screen opened through the server's own frame page. Nothing was intercepted or rewritten.
+Desktop (1280 wide) and phone (390 wide) in a real browser.
+
+| Check                          | Result                                                                                                   |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| Storage off on the instance    | Screen shows the storage-off message, no controls                                                        |
+| Storage on, no history, no Mac | "No Mac is linked" message                                                                               |
+| Recording switch               | Toggled off and on, both saves answered 200, desktop and phone                                           |
+| Kept group                     | Days kept, stored size and last received show real values                                                |
+| Last hour, Today, Everything   | Each opens its confirmation. Cancel closes it. Confirm deleted rows (2, 2 and 8) and the numbers updated |
+| Phone                          | No sideways scroll, rows stack, buttons wrap, confirmation fits                                          |
+
+How the data got there: the storage setting and eight stored segments were written straight into the
+throwaway test database, because no real Mac can upload until pairing exists (part 13). The screen read
+them back through the real server.
+
+Not proven:
+
+- A real upload from a Mac. Pairing does not exist yet.
+- Choose a day with a real picked date was not clicked through in the browser.
+- The loading and broken states were not seen live. They are covered by the screen tests.
+- One run on the phone size answered 500 twice on the recording switch. Three further phone runs and
+  one desktop run did not repeat it, and the server log held no 500. The cause is not known.
+- Opening the screen from the real app shell. The check used the server's frame page.

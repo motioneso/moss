@@ -1,4 +1,4 @@
-/** Calls the News routes and turns every failure into an error with a status. */
+/** Calls the News routes. A failure becomes an error with the status and the server's own message. */
 export function newsApi(client) {
   async function call(method, path, body) {
     let reply;
@@ -12,30 +12,32 @@ export function newsApi(client) {
       reply = { status: 200, body: reply };
     }
     if (reply.status >= 400) {
-      const failure = new Error("News request failed");
+      const failure = new Error(
+        typeof reply.body?.error === "string" ? reply.body.error : "News request failed"
+      );
       failure.status = reply.status;
       throw failure;
     }
     return reply.body;
   }
-
-  // The overview hands out pictures as /api/news/... addresses. Only the two picture routes
-  // are fetched, and the host returns each one as a data address the frame can show.
-  const PICTURE = /^\/api\/news(\/(?:images|favicon)\/[A-Za-z0-9._~%-]+)$/;
-  async function picture(url) {
-    const match = PICTURE.exec(String(url));
-    if (!match) throw new Error("Not a News picture");
-    const body = await call("GET", match[1]);
-    if (typeof body?.dataUrl !== "string" || !body.dataUrl.startsWith("data:image/"))
-      throw new Error("No picture");
-    return body.dataUrl;
-  }
-
+  const id = encodeURIComponent;
   return {
-    overview: () => call("GET", "/overview"),
     catalog: () => call("GET", "/catalog"),
-    feedback: (storyRef, kind, reason) =>
-      call("POST", "/story-feedback", reason ? { storyRef, kind, reason } : { storyRef, kind }),
-    picture
+    prefs: () => call("GET", "/prefs"),
+    createPref: (kind, key) => call("POST", "/prefs", { kind, key }),
+    deletePref: (prefId) => call("DELETE", `/prefs/${id(prefId)}`),
+    personalization: () => call("GET", "/personalization"),
+    addExclusion: (source) => call("POST", "/source-exclusions", { source }),
+    removeExclusion: (exId) => call("DELETE", `/source-exclusions/${id(exId)}`),
+    createTopic: (input) => call("POST", "/topics", input),
+    updateTopic: (topicId, input) => call("PATCH", `/topics/${id(topicId)}`, input),
+    removeTopic: (topicId) => call("DELETE", `/topics/${id(topicId)}`),
+    previewSource: (input) => call("POST", "/sources/preview", { input }),
+    confirmSource: (input) => call("POST", "/sources", input),
+    removeSource: (sourceId) => call("DELETE", `/sources/${id(sourceId)}`),
+    revalidate: () => call("POST", "/revalidation", {}),
+    feedback: () => call("GET", "/story-feedback"),
+    updateFeedback: (fbId, reason) => call("PATCH", `/story-feedback/${id(fbId)}`, { reason }),
+    removeFeedback: (fbId) => call("POST", `/story-feedback/${id(fbId)}/undo`, {})
   };
 }

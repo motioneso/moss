@@ -65,8 +65,21 @@ fn the_screens_and_the_menu_entry_are_declared_and_shipped() {
     }
     assert_eq!(manifest.navigation.len(), 1);
     assert_eq!(manifest.navigation[0]["path"], "/news");
-    for helper in ["ui/app.mjs", "ui/widget.mjs", "ui/view.mjs", "ui/lead-art.mjs", "ui/news.css", "ui/widget.css"] {
+    for helper in ["ui/screen-api.mjs", "ui/story-menu.mjs", "ui/app.mjs", "ui/widget.mjs", "ui/view.mjs", "ui/lead-art.mjs", "ui/news.css", "ui/widget.css"] {
         assert!(files.contains_key(helper), "{helper} missing");
+    }
+}
+
+#[test]
+fn the_settings_screen_ships_with_every_file_it_loads() {
+    let files = moss_news_host::package::files(&root(), &component()).unwrap();
+    let manifest = moss_news_host::package::manifest().unwrap();
+    assert_eq!(manifest.screens["/settings/news"], "ui/settings.html");
+    for name in [
+        "settings.html", "settings.mjs", "topics.mjs", "add-source.mjs", "feedback.mjs", "parts.mjs",
+        "domain.mjs", "api.mjs", "dom.mjs", "guest-bridge.mjs", "news-settings.css",
+    ] {
+        assert!(files.contains_key(&format!("ui/{name}")), "ui/{name} missing");
     }
 }
 

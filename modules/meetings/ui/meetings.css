@@ -1,0 +1,102 @@
+[hidden] {
+  display: none !important;
+}
+.meetings-page {
+  display: grid;
+  gap: var(--space-6);
+  width: 100%;
+  min-width: 0;
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-6);
+  box-sizing: border-box;
+}
+.meetings-title {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-2);
+}
+.meetings-title h1 {
+  margin: 0;
+}
+.meetings-list-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+.meetings-section {
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+}
+.meetings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.meetings-input {
+  padding: var(--space-3);
+  width: 100%;
+  box-sizing: border-box;
+}
+.meetings-history-scroll {
+  overflow-x: auto;
+}
+.meetings-history-table {
+  width: 100%;
+  min-width: 36rem;
+  border-collapse: collapse;
+}
+.meetings-history-table th,
+.meetings-history-table td {
+  padding: var(--space-3) var(--space-4) var(--space-3) 0;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+.meetings-history-table th {
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.meetings-history-row {
+  border-bottom: 1px solid var(--border);
+}
+.meetings-history-title {
+  color: var(--text);
+  font-weight: var(--weight-semibold);
+  text-align: left;
+}
+.meetings-history-title:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.meetings-history-date-source,
+.meetings-history-side {
+  display: block;
+  margin-top: var(--space-1);
+}
+.meetings-manual-fields,
+.meetings-history-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--space-5);
+}
+@media (max-width: 760px) {
+  .meetings-page {
+    padding-block-end: var(--space-12);
+    padding-inline: var(--space-4);
+  }
+  .meetings-history-table th,
+  .meetings-history-table td {
+    padding: var(--space-3) var(--space-2) var(--space-3) 0;
+  }
+  .meetings-manual-fields,
+  .meetings-history-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

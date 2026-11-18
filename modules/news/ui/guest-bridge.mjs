@@ -65,6 +65,7 @@ export function moduleClient({ guestWindow = globalThis.window, timeoutMs = 3000
     chat: (text = "") => call("chat", { text }),
     open: (url) => call("open", { url }),
     resize: (height) => call("resize", { height }),
+    save: (file) => call("save", file),
     dispose() {
       live = false;
       transport.port1.close();

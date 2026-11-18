@@ -4,7 +4,7 @@
   "name": "Sports",
   "publisher": "Moss",
   "version": "0.1.0",
-  "description": "Keeps each person's followed leagues and teams, private to the owner. A whole league can be followed once, and following it again returns the saved follow. A followed team is tied to the provider's permanent team number. The standings picker remembers the leagues a person chose and the standings view they last opened, under the same saved settings as before. Account export and deletion cover all six Sports tables. The package reads ESPN's public data for the league catalog, each league's team list and club search, and keeps a shared copy so one person's lookup serves everyone. The copy holds only public sports data, never a person's follows or searches. Following a team checks the live team list and is refused, with the same fail-closed messages the old app gave, when ESPN is down. Scoreboard, standings and news reading are built but not yet offered as routes. A person can add news sources of their own, up to ten, each a website with a news feed or a subreddit, and choose which sports and followed teams each one covers, up to twenty choices in all. Adding a source shows a preview first, which names the reason when a site cannot be used, and a source saves only after the person confirms it. Two subreddits that differ only by letter case are one source. The package reads those public sites itself, and keeps unconfirmed previews for ten minutes under the person's own saved settings. A site with no feed can get a recipe that the person's chosen AI model proposes. The recipe is a strict description of one public address and where the headlines sit in it, it may only name sites the person already confirmed, and it is saved only after a real replay finds headlines. Sources are read again on a schedule without a browser or article text, each source shows whether it is healthy, drifted or missing its recipe, and a person can retry a source or rebuild its recipe after confirming a preview. Nine chat tools list, preview, confirm, retry, rebuild and remove sources. Every change asks the person first, showing a card built from the saved source and the stored preview, and removing a source asks before it deletes. When a site shows no headlines until its scripts run, adding or rebuilding a source from the screen can open the page in a sandboxed browser, and the AI model proposes the recipe from what the browser saw. A machine that cannot run the browser safely, or a chat tool, keeps the plain reading. Each refresh also looks for a photo for the newest stories of every source, from the feed, then from a saved page rule, then from the page's share picture. Pictures are re-encoded as plain JPEG with no hidden camera or location data and kept in the person's own private folder for fourteen days after they were last shown. A person can stop photos for a source, which forgets its page rule and clears its saved pictures (feed and share pictures come back at the next refresh), and deleting the source deletes them for good. The followed-team chat tools and the screens are not part of this package yet.",
+  "description": "Keeps each person's followed leagues and teams, private to the owner. A whole league can be followed once, and following it again returns the saved follow. A followed team is tied to the provider's permanent team number. The standings picker remembers the leagues a person chose and the standings view they last opened, under the same saved settings as before. Account export and deletion cover all six Sports tables. The package reads ESPN's public data for the league catalog, each league's team list and club search, and keeps a shared copy so one person's lookup serves everyone. The copy holds only public sports data, never a person's follows or searches. Following a team checks the live team list and is refused, with the same fail-closed messages the old app gave, when ESPN is down. Scoreboard, standings and news reading are built but not yet offered as routes. A person can add news sources of their own, up to ten, each a website with a news feed or a subreddit, and choose which sports and followed teams each one covers, up to twenty choices in all. Adding a source shows a preview first, which names the reason when a site cannot be used, and a source saves only after the person confirms it. Two subreddits that differ only by letter case are one source. The package reads those public sites itself, and keeps unconfirmed previews for ten minutes under the person's own saved settings. A site with no feed can get a recipe that the person's chosen AI model proposes. The recipe is a strict description of one public address and where the headlines sit in it, it may only name sites the person already confirmed, and it is saved only after a real replay finds headlines. Sources are read again on a schedule without a browser or article text, each source shows whether it is healthy, drifted or missing its recipe, and a person can retry a source or rebuild its recipe after confirming a preview. Nine chat tools list, preview, confirm, retry, rebuild and remove sources. Every change asks the person first, showing a card built from the saved source and the stored preview, and removing a source asks before it deletes. When a site shows no headlines until its scripts run, adding or rebuilding a source from the screen can open the page in a sandboxed browser, and the AI model proposes the recipe from what the browser saw. A machine that cannot run the browser safely, or a chat tool, keeps the plain reading. Each refresh also looks for a photo for the newest stories of every source, from the feed, then from a saved page rule, then from the page's share picture. Pictures are re-encoded as plain JPEG with no hidden camera or location data and kept in the person's own private folder for fourteen days after they were last shown. A person can stop photos for a source, which forgets its page rule and clears its saved pictures (feed and share pictures come back at the next refresh), and deleting the source deletes them for good. The followed-team chat tools and the story preferences list are not part of this package yet. The Sports screen, the Sports desk page and the Sports settings page are.",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 250000000,
   "callLimitMs": 30000,
@@ -293,22 +293,35 @@
     "bundled": true,
     "removable": true
   },
-  "screens": {},
-  "navigation": [],
+  "screens": {
+    "/sports": "ui/index.html",
+    "/sports/today": "ui/today.html",
+    "/settings/sports": "ui/settings.html"
+  },
+  "navigation": [
+    {
+      "id": "sports",
+      "label": "Sports",
+      "description": "Scores, standings, team news and headlines for the teams and leagues you follow, with a gameday banner when a game is on and a Follow your teams start when nothing is followed. The Sports desk page shows last night's scores, top stories, your team cards and tonight's games. Story feedback is not part of this package yet, and times use the browser's own zone.",
+      "path": "/sports",
+      "icon": "trophy",
+      "order": 35
+    }
+  ],
   "settings": [
     {
       "id": "sports.follows",
       "label": "Sports",
-      "path": "/settings?section=modules&module=sports",
+      "path": "/settings/sports",
       "scope": "user",
-      "description": "Followed leagues and the standings choices can be changed through the Sports routes. The Settings page for them is not part of this package yet."
+      "description": "Search for teams and leagues, browse leagues by confederation, follow or unfollow them, and choose which leagues the standings picker offers. The page shows a notice when a search covered only some leagues so far."
     },
     {
       "id": "sports.sources",
       "label": "News sources",
-      "path": "/settings?section=modules&module=sports",
+      "path": "/settings/sports",
       "scope": "user",
-      "description": "Added news sources and the sports each one covers can be managed through the Sports routes, including stopping Moss's photos for a source. The Settings page for them is not part of this package yet."
+      "description": "Add a news source after a preview, choose the sports and followed teams each one covers, retry or rebuild a source, stop Moss's photos for it, or remove it."
     }
   ],
   "features": [
@@ -326,7 +339,7 @@
         {
           "id": "sports.follows.whole-league",
           "description": "Follow the whole league for now, then pick the team once ESPN answers again.",
-          "path": "/settings?section=modules&module=sports"
+          "path": "/settings/sports"
         }
       ]
     },
@@ -340,7 +353,7 @@
     },
     {
       "id": "sports.catalog_and_search",
-      "description": "Sports lists every league and tournament it covers, grouped by confederation. A league's clubs load only when that league is opened, and club search looks across every league. Search fetches at most five leagues that are not stored yet, and stops sooner if it has spent about two seconds, and reports that coverage is partial until the rest fill in. A search needs at least two characters. The screens for these are not part of this package yet.",
+      "description": "Sports lists every league and tournament it covers, grouped by confederation. A league's clubs load only when that league is opened, and club search looks across every league. Search fetches at most five leagues that are not stored yet, and stops sooner if it has spent about two seconds, and reports that coverage is partial until the rest fill in. A search needs at least two characters. The Sports settings page browses and searches them, and shows a notice when a search is only partial.",
       "errors": [
         {
           "code": "sports_unknown_competition",
@@ -351,7 +364,7 @@
     },
     {
       "id": "sports.remembered_standings",
-      "description": "The standings picker keeps the leagues a person chose and the competition and view they last opened, on any device, until they pick another. A name that is not a known league is refused. The picker itself is not part of this package yet."
+      "description": "The standings picker keeps the leagues a person chose and the competition and view they last opened, on any device, until they pick another. A name that is not a known league is refused. The Sports screen's standings picker uses these routes."
     },
     {
       "id": "sports.overview",
@@ -367,7 +380,7 @@
         {
           "id": "sports.overview.retry",
           "description": "Open the Sports overview again in a few minutes, when ESPN answers.",
-          "path": "/settings?section=modules&module=sports"
+          "path": "/settings/sports"
         }
       ]
     },
@@ -403,7 +416,7 @@
         {
           "id": "sports.added_sources.other-address",
           "description": "Try the site's feed address, or a subreddit such as r/nfl, instead of the home page.",
-          "path": "/settings?section=modules&module=sports"
+          "path": "/settings/sports"
         }
       ]
     },
@@ -426,7 +439,7 @@
         {
           "id": "sports.source_recipes.rebuild",
           "description": "Rebuild the recipe from the source's preview and confirm it, or retry the source later.",
-          "path": "/settings?section=modules&module=sports"
+          "path": "/settings/sports"
         }
       ]
     },
@@ -444,7 +457,7 @@
         {
           "id": "sports.browser_discovery.other-address",
           "description": "Try the site's feed address or a subreddit, or try again in a minute.",
-          "path": "/settings?section=modules&module=sports"
+          "path": "/settings/sports"
         }
       ]
     },
@@ -462,7 +475,7 @@
         {
           "id": "sports.source_tools.ask-again",
           "description": "Ask for the change again so a fresh card can be reviewed.",
-          "path": "/settings?section=modules&module=sports"
+          "path": "/settings/sports"
         }
       ]
     },

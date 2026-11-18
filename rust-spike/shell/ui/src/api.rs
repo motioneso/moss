@@ -80,6 +80,13 @@ pub async fn weather_today() -> Result<Option<WeatherToday>, String> {
         .map(|r| r.data)
 }
 
+/// True when the Briefings package is installed and answers for the signed-in person.
+pub async fn briefings_available() -> bool {
+    get::<serde_json::Value>("/api/m/briefings/definitions")
+        .await
+        .is_ok()
+}
+
 pub async fn chat_thread() -> Result<ChatThread, String> {
     get("/api/chat/thread").await
 }
