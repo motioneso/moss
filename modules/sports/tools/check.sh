@@ -4,6 +4,7 @@ cd "$(dirname "$0")/../../.."
 [[ "${JARVIS_GATE_RUN:-}" == 1 ]] || { echo 'Use scripts/run-gate.sh' >&2; exit 4; }
 : "${CARGO_TARGET_DIR:=/tmp/moss-sports-host}"
 export CARGO_TARGET_DIR
+node --test modules/sports/ui/*.test.mjs
 # Native tests, then the real component build and the package tests against it.
 CARGO_TARGET_DIR="$CARGO_TARGET_DIR/guest" cargo +1.95.0 test --locked --offline --manifest-path modules/sports/src/Cargo.toml
 modules/sports/tools/build-component.sh "$CARGO_TARGET_DIR/module.wasm"

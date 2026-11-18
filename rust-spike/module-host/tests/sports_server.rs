@@ -94,11 +94,17 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
             .unwrap();
         assert!(status.success());
     }
-    fs::write(
-        root.join("web/index.html"),
-        "<!doctype html><title>Sports HTTP fixture</title>",
-    )
-    .unwrap();
+    if let Ok(shell_web) = std::env::var("SPORTS_LIVE_WEB") {
+        // A built shell, so the screen opens inside the real app frame.
+        let status = Command::new("cp").args(["-r", "-T", &shell_web]).arg(root.join("web")).status().unwrap();
+        assert!(status.success());
+    } else {
+        fs::write(
+            root.join("web/index.html"),
+            "<!doctype html><title>Sports HTTP fixture</title>",
+        )
+        .unwrap();
+    }
     let app_url = std::env::var("JS43_APP_URL").unwrap();
     let worker_url = std::env::var("JS43_WORKER_URL").unwrap();
     let bootstrap_url = std::env::var("JS43_BOOTSTRAP_URL").unwrap();
@@ -465,6 +471,18 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
         if entry.file_name().is_some_and(|n| n == "kv.json") {
             let kv = fs::read_to_string(&entry).unwrap_or_default();
             assert!(!kv.contains(MARK) && !kv.contains(&owner.to_string()), "cache file {entry:?} holds a query or a person");
+        }
+    }
+    // Hold the server open so the real screen can be opened in a browser with real ESPN data.
+    if let Ok(hold) = std::env::var("SPORTS_LIVE_HOLD") {
+        for (key, team) in [("nfl", "dal"), ("nba", "lal"), ("nhl", "")] {
+            let body = if team.is_empty() { json!({"competitionKey":key}) } else { json!({"competitionKey":key,"teamKey":team}) };
+            let (status, text) = call(Method::POST, "/follows", Some(&cookie), Some(body));
+            println!("hold: follow {key} {team}: {status} {}", text.chars().take(80).collect::<String>());
+        }
+        fs::write(format!("{hold}/ready.txt"), format!("{origin}\n{cookie}\n{origin}/module-frame?module=sports&path=/sports\n")).unwrap();
+        while !std::path::Path::new(&format!("{hold}/stop")).exists() {
+            std::thread::sleep(Duration::from_millis(500));
         }
     }
     // The owner removes the follow.

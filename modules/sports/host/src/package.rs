@@ -17,6 +17,37 @@ pub fn files(root: &Path, component: &[u8]) -> Result<BTreeMap<String, Vec<u8>>>
         ("NOTICE".into(), include_bytes!("../../NOTICE").to_vec()),
         ("CHANGELOG.md".into(), include_bytes!("../../CHANGELOG.md").to_vec()),
     ]);
+    for (name, bytes) in [
+        ("api.mjs", include_bytes!("../../ui/api.mjs").as_slice()),
+        ("app.mjs", include_bytes!("../../ui/app.mjs").as_slice()),
+        ("board.mjs", include_bytes!("../../ui/board.mjs").as_slice()),
+        ("competitions.mjs", include_bytes!("../../ui/competitions.mjs").as_slice()),
+        ("dom.mjs", include_bytes!("../../ui/dom.mjs").as_slice()),
+        ("gameday.mjs", include_bytes!("../../ui/gameday.mjs").as_slice()),
+        ("guest-bridge.mjs", include_bytes!("../../ui/guest-bridge.mjs").as_slice()),
+        ("index.html", include_bytes!("../../ui/index.html").as_slice()),
+        ("locale.mjs", include_bytes!("../../ui/locale.mjs").as_slice()),
+        ("news.mjs", include_bytes!("../../ui/news.mjs").as_slice()),
+        ("page.mjs", include_bytes!("../../ui/page.mjs").as_slice()),
+        ("parts.mjs", include_bytes!("../../ui/parts.mjs").as_slice()),
+        ("picker.mjs", include_bytes!("../../ui/picker.mjs").as_slice()),
+        ("ranking.mjs", include_bytes!("../../ui/ranking.mjs").as_slice()),
+        ("rotation.mjs", include_bytes!("../../ui/rotation.mjs").as_slice()),
+        ("sports.css", include_bytes!("../../ui/sports.css").as_slice()),
+        ("sports-ticker.css", include_bytes!("../../ui/sports-ticker.css").as_slice()),
+        ("sports-broadsheet.css", include_bytes!("../../ui/sports-broadsheet.css").as_slice()),
+        ("sports-news.css", include_bytes!("../../ui/sports-news.css").as_slice()),
+        ("standings.mjs", include_bytes!("../../ui/standings.mjs").as_slice()),
+        ("team-colors.mjs", include_bytes!("../../ui/team-colors.mjs").as_slice()),
+        ("ticker.mjs", include_bytes!("../../ui/ticker.mjs").as_slice()),
+        ("today-app.mjs", include_bytes!("../../ui/today-app.mjs").as_slice()),
+        ("today-desk.mjs", include_bytes!("../../ui/today-desk.mjs").as_slice()),
+        ("today.css", include_bytes!("../../ui/today.css").as_slice()),
+        ("today.html", include_bytes!("../../ui/today.html").as_slice()),
+        ("today.mjs", include_bytes!("../../ui/today.mjs").as_slice()),
+    ] {
+        files.insert(format!("ui/{name}"), bytes.to_vec());
+    }
     for path in &manifest.database.migrations {
         let frozen = moss_module_host::legacy::entry("sports", path)
             .ok_or_else(|| anyhow::anyhow!("Sports SQL is not in the legacy inventory"))?;
