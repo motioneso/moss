@@ -1,7 +1,7 @@
 /** Supply the verified screenUrl to bind and open the initial document. Commands use its
  * document's transferred port; later frame loads revoke the connection.
  * `request` runs the signed-in own-module route;
- * theme/navigation/chat callbacks belong to the host. Account session credentials stay there. */
+ * theme/navigation/chat/open callbacks belong to the host. Account session credentials stay there. */
 export function connectModuleFrame(
   frame,
   moduleId,
@@ -10,6 +10,7 @@ export function connectModuleFrame(
     theme,
     navigate,
     chat,
+    open,
     screenUrl,
     hostWindow = globalThis.window,
     bootstrapToken = null
@@ -95,6 +96,25 @@ export function connectModuleFrame(
           )
             throw new Error();
           result = await navigate(message.path);
+          break;
+        }
+        case "open": {
+          // Only plain web addresses leave the app, and only through the host's own callback.
+          let target;
+          try {
+            target = new URL(message.url);
+          } catch {
+            throw new Error();
+          }
+          if (
+            typeof message.url !== "string" ||
+            message.url.length > 4096 ||
+            hasControl(message.url) ||
+            !["http:", "https:"].includes(target.protocol) ||
+            typeof open !== "function"
+          )
+            throw new Error();
+          result = await open(target.href);
           break;
         }
         case "chat": {

@@ -7,7 +7,8 @@ function setup({
   request = () => ({ saved: true }),
   keyed = true,
   connect = true,
-  theme = () => ({ theme: "sage" })
+  theme = () => ({ theme: "sage" }),
+  opened = []
 } = {}) {
   let listener;
   const replies = [];
@@ -30,6 +31,10 @@ function setup({
     },
     theme,
     navigate: () => null,
+    open: (url) => {
+      opened.push(url);
+      return null;
+    },
     chat: () => null
   });
   const commandPort = { postMessage() {}, start() {}, close() {} };
@@ -67,6 +72,26 @@ test("an async theme callback replies with its value, not a promise", async () =
     ok: true,
     result: { theme: "sage", displayName: "Ben" }
   });
+});
+test("open passes only plain web addresses to the host", async () => {
+  const opened = [];
+  const s = setup({ opened });
+  await s.send({ type: "open", url: "https://example.com/story?a=1" });
+  assert.equal(s.replies.at(-1).ok, true);
+  for (const url of [
+    "javascript:alert(1)",
+    "data:text/html,hi",
+    "file:///etc/passwd",
+    "/relative",
+    "https://example.com/\nx",
+    "https://example.com/" + "a".repeat(5000),
+    42
+  ]) {
+    await s.send({ type: "open", url });
+    assert.equal(s.replies.at(-1).ok, false, String(url));
+  }
+  assert.deepEqual(opened, ["https://example.com/story?a=1"]);
+  s.dispose();
 });
 test("initial frame load before the queued connect message still permits requests", async () => {
   const s = setup({ loadsBeforeConnect: 1 });
