@@ -88,6 +88,16 @@ fn installed_news_package_serves_routes_from_the_real_server() {
         "<!doctype html><title>News HTTP fixture</title>",
     )
     .unwrap();
+    if std::env::var("NEWS_SCREEN_HOLD").is_ok() {
+        // The browser check opens the screens through the shell's own frame page.
+        for name in ["module-frame.html", "module-frame.css", "module-frame.js"] {
+            fs::copy(
+                Path::new(env!("CARGO_MANIFEST_DIR")).join("../shell/assets").join(name),
+                root.join("web").join(name),
+            )
+            .unwrap();
+        }
+    }
     let app_url = std::env::var("JS43_APP_URL").unwrap();
     let worker_url = std::env::var("JS43_WORKER_URL").unwrap();
     let bootstrap_url = std::env::var("JS43_BOOTSTRAP_URL").unwrap();
@@ -495,6 +505,43 @@ fn installed_news_package_serves_routes_from_the_real_server() {
     let (_, text) = call(Method::GET, "/overview", Some(&cookie), None);
     assert!(ids(&text).contains(&first), "undo brings the story back");
     println!("news live: story feedback hid the story for the owner only and undo brought it back");
+    // The News screen and the Today widget are declared screens. The shell resolves each to a
+    // package page whose security policy lets the sandboxed frame show the pictures it is handed.
+    for (path, title_word) in [("/news", "News"), ("/news/today-widget", "News")] {
+        let response = client
+            .get(format!("{origin}/api/modules/news/screen?path={path}"))
+            .header("origin", &origin)
+            .header("cookie", &cookie)
+            .send()
+            .unwrap();
+        assert_eq!(response.status().as_u16(), 200, "screen {path}\n{}", log());
+        let screen = json_of(&response.text().unwrap());
+        assert!(screen["title"].as_str().unwrap_or("").contains(title_word), "{screen}");
+        let page = client
+            .get(format!("{origin}{}", screen["src"].as_str().unwrap()))
+            .header("cookie", &cookie)
+            .send()
+            .unwrap();
+        assert_eq!(page.status().as_u16(), 200, "page for {path}");
+        let policy = page.headers().get("content-security-policy").and_then(|v| v.to_str().ok()).unwrap_or("").to_owned();
+        assert!(policy.contains("img-src") && policy.contains("data:"), "{policy}");
+        assert!(policy.contains("default-src 'none'"), "{policy}");
+    }
+    println!("news live: both News screens resolve and carry the frame policy");
+    // For the browser check, keep the server up until the named file appears. The login is written
+    // beside it. Nothing else changes.
+    if let Ok(hold) = std::env::var("NEWS_SCREEN_HOLD") {
+        let hold = std::path::PathBuf::from(hold);
+        fs::write(
+            hold.with_extension("json"),
+            json!({"origin":origin,"email":"news-owner@example.test","password":"temporary-news-password-276-not-a-real-secret","certificate":cert}).to_string(),
+        )
+        .unwrap();
+        fs::write(hold.with_extension("ready"), "ready").unwrap();
+        while !hold.exists() {
+            std::thread::sleep(Duration::from_secs(2));
+        }
+    }
     // The refresh left a success time and the other person has no refresh record of their own work.
     let rows = |sql: &'static str, who: uuid::Uuid| -> Vec<tokio_postgres::Row> {
         runtime.block_on(async {
