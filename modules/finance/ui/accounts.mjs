@@ -38,7 +38,7 @@ export function accountsView(s, now = new Date()) {
         `<div class="fnm-account-totals-item">${masthead({
           eyebrowText: multi ? `Net worth · ${n.currency}` : "Net worth",
           title: esc(amount(n.cents, n.currency)),
-          aside: `<dl class="jds-masthead__figures" aria-label="Assets and debts"><div><dt>Assets</dt><dd>${esc(amount(n.assets, n.currency))}</dd></div><div><dt>Debts</dt><dd>${esc(amount(n.debts, n.currency))}</dd></div></dl>`
+          aside: `<dl class="jds-masthead__figures" aria-label="Assets and debts"><div class="jds-masthead__figure"><dt class="jds-masthead__figure-label">Assets</dt><dd class="jds-masthead__figure-value">${esc(amount(n.assets, n.currency))}</dd></div><div class="jds-masthead__figure"><dt class="jds-masthead__figure-label">Debts</dt><dd class="jds-masthead__figure-value">${esc(amount(n.debts, n.currency))}</dd></div></dl>`
         })}</div>`
     )
     .join("");
