@@ -2,6 +2,7 @@
 // Browser pass for the Backtrack screen against the real server held up by the live gate.
 // Usage: MOSS_BACKTRACK_HOLD=<dir> run the live gate, then
 //   node modules/backtrack/tools/screen-live.mjs <url from <dir>/url.txt> <screenshot dir>
+// Today and Choose a day were clicked by hand in the recorded pass; this script covers the rest.
 // Seed storage and segments in the gate database first. Touch <dir>/finished to end the gate.
 import { chromium } from "playwright-core";
 
@@ -31,7 +32,12 @@ for (const [name, width] of [
   );
   page.on("response", async (r) => {
     if (r.url().includes("/api/m/backtrack") && r.request().method() !== "GET") {
-      console.log(`[${name}]`, r.request().method(), r.status(), (await r.text()).slice(0, 100));
+      console.log(
+        `[${name}]`,
+        r.request().method(),
+        r.status(),
+        (await r.text().catch(() => "")).slice(0, 100)
+      );
     }
   });
   await page.goto(
@@ -39,6 +45,7 @@ for (const [name, width] of [
   );
   await page.waitForTimeout(4000);
   const frame = page.frames().find((f) => f !== page.mainFrame());
+  if (!frame) throw new Error(`${name}: the screen frame did not load`);
   const tail = async () =>
     (await frame.locator("body").innerText()).replace(/\n+/g, " | ").slice(-300);
   console.log(`[${name}] start`, await tail());
