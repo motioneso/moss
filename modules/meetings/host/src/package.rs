@@ -34,6 +34,12 @@ pub fn files(root: &Path, component: &[u8]) -> Result<BTreeMap<String, Vec<u8>>>
         ("guest-bridge.mjs", include_bytes!("../../ui/guest-bridge.mjs")),
         ("meetings.css", include_bytes!("../../ui/meetings.css")),
         ("meetings-record.css", include_bytes!("../../ui/meetings-record.css")),
+        ("settings.html", include_bytes!("../../ui/settings.html")),
+        ("settings.mjs", include_bytes!("../../ui/settings.mjs")),
+        ("settings-logic.mjs", include_bytes!("../../ui/settings-logic.mjs")),
+        ("settings.css", include_bytes!("../../ui/settings.css")),
+        ("capture.mjs", include_bytes!("../../ui/capture.mjs")),
+        ("capture-logic.mjs", include_bytes!("../../ui/capture-logic.mjs")),
     ] {
         files.insert(format!("ui/{name}"), bytes.to_vec());
     }
