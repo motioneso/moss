@@ -43,6 +43,7 @@
     "test:rust-commitments-live": "bash modules/commitments/tools/live.sh",
     "test:rust-wellness": "tsx modules/wellness/tools/gate.ts",
     "test:rust-wellness-live": "bash modules/wellness/tools/live.sh",
+    "test:rust-wellness-ui": "bash modules/wellness/tools/ui-gate.sh",
     "test:rust-finance": "tsx modules/finance/tools/gate.ts",
     "test:rust-finance-live": "bash modules/finance/tools/live.sh",
     "test:rust-backtrack": "tsx modules/backtrack/tools/gate.ts",
