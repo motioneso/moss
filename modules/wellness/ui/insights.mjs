@@ -16,7 +16,12 @@ export function renderInsights(root, { api, onReviewNotes = () => {} }) {
   let run = 0;
   const body = h("div", { class: "wl-insights__body" });
   root.replaceChildren(
-    h("div", { class: "wl-insights" }, sectionHead("02", "Patterns in your check-ins", "30 days"), body)
+    h(
+      "div",
+      { class: "wl-insights" },
+      sectionHead("02", "Patterns in your check-ins", "30 days"),
+      body
+    )
   );
 
   const line = (...content) => h("div", { class: "wl-insight" }, ...content);
@@ -24,7 +29,9 @@ export function renderInsights(root, { api, onReviewNotes = () => {} }) {
 
   function show(insights) {
     if (insights.length === 0) {
-      body.replaceChildren(line(quiet("Insights appear after about a week of check-ins. Keep going.")));
+      body.replaceChildren(
+        line(quiet("Insights appear after about a week of check-ins. Keep going."))
+      );
       return;
     }
     body.replaceChildren(
@@ -40,12 +47,20 @@ export function renderInsights(root, { api, onReviewNotes = () => {} }) {
             h(
               "div",
               { class: "wl-insight__act" },
-              linkButton("Review those notes", onReviewNotes, icon(PATHS.arrowRight, { size: 13, stroke: 2.2 }))
+              linkButton(
+                "Review those notes",
+                onReviewNotes,
+                icon(PATHS.arrowRight, { size: 13, stroke: 2.2 })
+              )
             )
           );
         }
         return line(
-          h("span", { class: `wl-insight__ic wl-insight__ic--${tone}` }, icon(ICONS[item.icon] ?? PATHS.activity)),
+          h(
+            "span",
+            { class: `wl-insight__ic wl-insight__ic--${tone}` },
+            icon(ICONS[item.icon] ?? PATHS.activity)
+          ),
           main
         );
       })
@@ -61,7 +76,12 @@ export function renderInsights(root, { api, onReviewNotes = () => {} }) {
       show(Array.isArray(reply?.insights) ? reply.insights : []);
     } catch {
       if (mine !== run) return;
-      body.replaceChildren(line(quiet("Couldn't load insights. ", { role: "status" }), linkButton("Try again", refresh)));
+      body.replaceChildren(
+        line(
+          quiet("Couldn't load insights. ", { role: "status" }),
+          linkButton("Try again", refresh)
+        )
+      );
     }
   }
 

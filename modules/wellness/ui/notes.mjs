@@ -31,7 +31,11 @@ export function renderTherapyNotes(root, { api, locale = {} }) {
   });
   const add = button("Add", { class: "jds-btn jds-btn--primary wl-fs13", disabled: true });
   add.style.cssText = "padding: 5px 12px; min-height: unset";
-  const problem = h("div", { class: "wl-modal__note wl-modal__note--error", role: "alert", hidden: true });
+  const problem = h("div", {
+    class: "wl-modal__note wl-modal__note--error",
+    role: "alert",
+    hidden: true
+  });
   const list = h("div", { class: "wl-tnotes" });
 
   const sync = () => {
@@ -97,8 +101,15 @@ export function renderTherapyNotes(root, { api, locale = {} }) {
   );
 
   function noteRow(note) {
-    const core = typeof note.linkedEmotion === "string" && CORES.test(note.linkedEmotion) ? note.linkedEmotion : null;
-    const meta = h("div", { class: "wl-tnote__meta" }, h("span", { class: "wl-tnote__date" }, noteDate(note.createdAt, locale)));
+    const core =
+      typeof note.linkedEmotion === "string" && CORES.test(note.linkedEmotion)
+        ? note.linkedEmotion
+        : null;
+    const meta = h(
+      "div",
+      { class: "wl-tnote__meta" },
+      h("span", { class: "wl-tnote__date" }, noteDate(note.createdAt, locale))
+    );
     if (core) {
       meta.append(
         h(
@@ -113,10 +124,20 @@ export function renderTherapyNotes(root, { api, locale = {} }) {
       "div",
       { class: "wl-tnote" },
       h("span", { class: "wl-tnote__mark" }, icon(PATHS.message, { size: 15 })),
-      h("div", { class: "wl-tnote__main" }, h("div", { class: "wl-tnote__tx" }, note.body ?? ""), meta),
+      h(
+        "div",
+        { class: "wl-tnote__main" },
+        h("div", { class: "wl-tnote__tx" }, note.body ?? ""),
+        meta
+      ),
       h(
         "button",
-        { type: "button", class: "wl-tnote__x", "aria-label": "Remove", onclick: () => void remove(note.id) },
+        {
+          type: "button",
+          class: "wl-tnote__x",
+          "aria-label": "Remove",
+          onclick: () => void remove(note.id)
+        },
         icon(PATHS.trash, { size: 15 })
       )
     );
@@ -125,7 +146,9 @@ export function renderTherapyNotes(root, { api, locale = {} }) {
   async function refresh() {
     const mine = ++run;
     if (list.childElementCount === 0) {
-      list.replaceChildren(h("p", { class: "wl-subtle-text", role: "status" }, "Loading session notes…"));
+      list.replaceChildren(
+        h("p", { class: "wl-subtle-text", role: "status" }, "Loading session notes…")
+      );
     }
     try {
       const reply = await api.call("GET", "/wellness/therapy-notes");
@@ -147,7 +170,12 @@ export function renderTherapyNotes(root, { api, locale = {} }) {
         h(
           "div",
           { class: "wl-tdone" },
-          h("span", { class: "wl-subtle-text", role: "status" }, "Couldn't load notes. ", linkButton("Try again", refresh))
+          h(
+            "span",
+            { class: "wl-subtle-text", role: "status" },
+            "Couldn't load notes. ",
+            linkButton("Try again", refresh)
+          )
         )
       );
     }

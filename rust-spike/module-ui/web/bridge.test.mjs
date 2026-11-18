@@ -389,7 +389,11 @@ test("guest echoes only its initial document fragment token", () => {
 test("save hands a small named html file to the host and refuses anything else", async () => {
   const saved = [];
   const s = setup({ save: (file) => saved.push(file) });
-  const good = { filename: "wellness-2026-11-17.html", contentType: "text/html; charset=utf-8", text: "<p>hi</p>" };
+  const good = {
+    filename: "wellness-2026-11-17.html",
+    contentType: "text/html; charset=utf-8",
+    text: "<p>hi</p>"
+  };
   await s.send({ type: "save", ...good });
   assert.deepEqual(saved, [good]);
   assert.equal(s.replies.at(-1).ok, true);
