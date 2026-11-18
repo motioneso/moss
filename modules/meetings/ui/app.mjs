@@ -18,6 +18,7 @@ function focus(id) {
 }
 
 function go(next) {
+  if (route.view === "record" && next.view !== "record") record.leave();
   route = next;
   screen().start(next.id);
   draw();
