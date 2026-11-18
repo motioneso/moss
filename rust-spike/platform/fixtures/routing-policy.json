@@ -1,0 +1,614 @@
+[
+  {
+    "name": "pinned worker stays within provider",
+    "config": {
+      "models": [
+        {
+          "id": "00000000-0000-4000-8000-000000000020",
+          "providerId": "00000000-0000-4000-8000-000000000010",
+          "providerModelId": "fixture-model-20",
+          "capabilities": ["chat"],
+          "tier": "interactive",
+          "active": true,
+          "providerActive": true,
+          "assistant": true,
+          "automaticEligible": true,
+          "defaultSentinel": false,
+          "sharedTranscriptionEligible": true,
+          "voiceEndpoint": false,
+          "releasedAt": null,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "allowUserOverride": true
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000021",
+          "providerId": "00000000-0000-4000-8000-000000000010",
+          "providerModelId": "fixture-model-21",
+          "capabilities": ["json"],
+          "tier": "interactive",
+          "active": true,
+          "providerActive": true,
+          "assistant": true,
+          "automaticEligible": true,
+          "defaultSentinel": false,
+          "sharedTranscriptionEligible": true,
+          "voiceEndpoint": false,
+          "releasedAt": null,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "allowUserOverride": true
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000022",
+          "providerId": "00000000-0000-4000-8000-000000000011",
+          "providerModelId": "fixture-model-22",
+          "capabilities": ["json"],
+          "tier": "interactive",
+          "active": true,
+          "providerActive": true,
+          "assistant": true,
+          "automaticEligible": true,
+          "defaultSentinel": false,
+          "sharedTranscriptionEligible": true,
+          "voiceEndpoint": false,
+          "releasedAt": null,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "allowUserOverride": true
+        }
+      ],
+      "providers": [
+        {
+          "id": "00000000-0000-4000-8000-000000000010",
+          "active": true,
+          "assistant": true,
+          "adminOwned": true
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000011",
+          "active": true,
+          "assistant": true,
+          "adminOwned": true
+        }
+      ],
+      "pinnedModel": "00000000-0000-4000-8000-000000000020",
+      "pinnedProvider": null,
+      "defaultProvider": "00000000-0000-4000-8000-000000000010",
+      "chatBinding": null,
+      "transcriptionBinding": null,
+      "chatOverride": null,
+      "overrideEnabled": false
+    },
+    "capability": "json",
+    "expected": {
+      "available": true,
+      "reason": "admin-pin",
+      "modelId": "00000000-0000-4000-8000-000000000021"
+    }
+  },
+  {
+    "name": "pinned worker never escapes provider",
+    "config": {
+      "models": [
+        {
+          "id": "00000000-0000-4000-8000-000000000020",
+          "providerId": "00000000-0000-4000-8000-000000000010",
+          "providerModelId": "fixture-model-20",
+          "capabilities": ["chat"],
+          "tier": "interactive",
+          "active": true,
+          "providerActive": true,
+          "assistant": true,
+          "automaticEligible": true,
+          "defaultSentinel": false,
+          "sharedTranscriptionEligible": true,
+          "voiceEndpoint": false,
+          "releasedAt": null,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "allowUserOverride": true
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000022",
+          "providerId": "00000000-0000-4000-8000-000000000011",
+          "providerModelId": "fixture-model-22",
+          "capabilities": ["json"],
+          "tier": "interactive",
+          "active": true,
+          "providerActive": true,
+          "assistant": true,
+          "automaticEligible": true,
+          "defaultSentinel": false,
+          "sharedTranscriptionEligible": true,
+          "voiceEndpoint": false,
+          "releasedAt": null,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "allowUserOverride": true
+        }
+      ],
+      "providers": [
+        {
+          "id": "00000000-0000-4000-8000-000000000010",
+          "active": true,
+          "assistant": true,
+          "adminOwned": true
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000011",
+          "active": true,
+          "assistant": true,
+          "adminOwned": true
+        }
+      ],
+      "pinnedModel": "00000000-0000-4000-8000-000000000020",
+      "pinnedProvider": null,
+      "defaultProvider": "00000000-0000-4000-8000-000000000010",
+      "chatBinding": null,
+      "transcriptionBinding": null,
+      "chatOverride": null,
+      "overrideEnabled": false
+    },
+    "capability": "json",
+    "expected": {
+      "available": false,
+      "reason": "needs-config",
+      "modelId": null
+    }
+  },
+  {
+    "name": "unavailable provider pin locks chat",
+    "config": {
+      "models": [
+        {
+          "id": "00000000-0000-4000-8000-000000000020",
+          "providerId": "00000000-0000-4000-8000-000000000010",
+          "providerModelId": "fixture-model-20",
+          "capabilities": ["chat", "json"],
+          "tier": "interactive",
+          "active": true,
+          "providerActive": true,
+          "assistant": true,
+          "automaticEligible": true,
+          "defaultSentinel": false,
+          "sharedTranscriptionEligible": true,
+          "voiceEndpoint": false,
+          "releasedAt": null,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "allowUserOverride": true
+        }
+      ],
+      "providers": [
+        {
+          "id": "00000000-0000-4000-8000-000000000010",
+          "active": true,
+          "assistant": true,
+          "adminOwned": true
+        }
+      ],
+      "pinnedModel": null,
+      "pinnedProvider": "00000000-0000-4000-8000-000000000099",
+      "defaultProvider": "00000000-0000-4000-8000-000000000010",
+      "chatBinding": null,
+      "transcriptionBinding": null,
+      "chatOverride": null,
+      "overrideEnabled": false
+    },
+    "capability": "chat",
+    "expected": {
+      "available": false,
+      "reason": "admin-pin-unavailable",
+      "modelId": null
+    }
+  },
+  {
+    "name": "pin blocks voice escape",
+    "config": {
+      "models": [
+        {
+          "id": "00000000-0000-4000-8000-000000000020",
+          "providerId": "00000000-0000-4000-8000-000000000010",
+          "providerModelId": "fixture-model-20",
+          "capabilities": ["chat", "json"],
+          "tier": "interactive",
+          "active": true,
+          "providerActive": true,
+          "assistant": true,
+          "automaticEligible": true,
+          "defaultSentinel": false,
+          "sharedTranscriptionEligible": true,
+          "voiceEndpoint": false,
+          "releasedAt": null,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "allowUserOverride": true
+        }
+      ],
+      "providers": [
+        {
+          "id": "00000000-0000-4000-8000-000000000010",
+          "active": true,
+          "assistant": true,
+          "adminOwned": true
+        }
+      ],
+      "pinnedModel": null,
+      "pinnedProvider": "00000000-0000-4000-8000-000000000099",
+      "defaultProvider": "00000000-0000-4000-8000-000000000010",
+      "chatBinding": null,
+      "transcriptionBinding": null,
+      "chatOverride": null,
+      "overrideEnabled": false
+    },
+    "capability": "transcription",
+    "expected": {
+      "available": false,
+      "reason": "admin-pin-unavailable",
+      "modelId": null
+    }
+  },
+  {
+    "name": "user chat override rescues lookup",
+    "config": {
+      "models": [
+        {
+          "id": "00000000-0000-4000-8000-000000000020",
+          "providerId": "00000000-0000-4000-8000-000000000010",
+          "providerModelId": "fixture-model-20",
+          "capabilities": ["json"],
+          "tier": "interactive",
+          "active": true,
+          "providerActive": true,
+          "assistant": true,
+          "automaticEligible": true,
+          "defaultSentinel": false,
+          "sharedTranscriptionEligible": true,
+          "voiceEndpoint": false,
+          "releasedAt": null,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "allowUserOverride": true
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000021",
+          "providerId": "00000000-0000-4000-8000-000000000011",
+          "providerModelId": "fixture-model-21",
+          "capabilities": ["chat", "json"],
+          "tier": "interactive",
+          "active": true,
+          "providerActive": true,
+          "assistant": true,
+          "automaticEligible": true,
+          "defaultSentinel": false,
+          "sharedTranscriptionEligible": true,
+          "voiceEndpoint": false,
+          "releasedAt": null,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "allowUserOverride": true
+        }
+      ],
+      "providers": [
+        {
+          "id": "00000000-0000-4000-8000-000000000010",
+          "active": true,
+          "assistant": true,
+          "adminOwned": true
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000011",
+          "active": true,
+          "assistant": true,
+          "adminOwned": true
+        }
+      ],
+      "pinnedModel": null,
+      "pinnedProvider": null,
+      "defaultProvider": "00000000-0000-4000-8000-000000000010",
+      "chatBinding": null,
+      "transcriptionBinding": null,
+      "chatOverride": "00000000-0000-4000-8000-000000000021",
+      "overrideEnabled": true
+    },
+    "capability": "chat",
+    "expected": {
+      "available": true,
+      "reason": "user-override",
+      "modelId": "00000000-0000-4000-8000-000000000021"
+    }
+  },
+  {
+    "name": "admin pin makes override inert",
+    "config": {
+      "models": [
+        {
+          "id": "00000000-0000-4000-8000-000000000020",
+          "providerId": "00000000-0000-4000-8000-000000000010",
+          "providerModelId": "fixture-model-20",
+          "capabilities": ["chat", "json"],
+          "tier": "interactive",
+          "active": true,
+          "providerActive": true,
+          "assistant": true,
+          "automaticEligible": true,
+          "defaultSentinel": false,
+          "sharedTranscriptionEligible": true,
+          "voiceEndpoint": false,
+          "releasedAt": null,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "allowUserOverride": true
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000021",
+          "providerId": "00000000-0000-4000-8000-000000000011",
+          "providerModelId": "fixture-model-21",
+          "capabilities": ["chat", "json"],
+          "tier": "interactive",
+          "active": true,
+          "providerActive": true,
+          "assistant": true,
+          "automaticEligible": true,
+          "defaultSentinel": false,
+          "sharedTranscriptionEligible": true,
+          "voiceEndpoint": false,
+          "releasedAt": null,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "allowUserOverride": true
+        }
+      ],
+      "providers": [
+        {
+          "id": "00000000-0000-4000-8000-000000000010",
+          "active": true,
+          "assistant": true,
+          "adminOwned": true
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000011",
+          "active": true,
+          "assistant": true,
+          "adminOwned": true
+        }
+      ],
+      "pinnedModel": "00000000-0000-4000-8000-000000000020",
+      "pinnedProvider": null,
+      "defaultProvider": "00000000-0000-4000-8000-000000000010",
+      "chatBinding": null,
+      "transcriptionBinding": null,
+      "chatOverride": "00000000-0000-4000-8000-000000000021",
+      "overrideEnabled": true
+    },
+    "capability": "chat",
+    "expected": {
+      "available": true,
+      "reason": "admin-pin",
+      "modelId": "00000000-0000-4000-8000-000000000020"
+    }
+  },
+  {
+    "name": "disabled override stays unavailable",
+    "config": {
+      "models": [
+        {
+          "id": "00000000-0000-4000-8000-000000000020",
+          "providerId": "00000000-0000-4000-8000-000000000010",
+          "providerModelId": "fixture-model-20",
+          "capabilities": ["json"],
+          "tier": "interactive",
+          "active": true,
+          "providerActive": true,
+          "assistant": true,
+          "automaticEligible": true,
+          "defaultSentinel": false,
+          "sharedTranscriptionEligible": true,
+          "voiceEndpoint": false,
+          "releasedAt": null,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "allowUserOverride": true
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000021",
+          "providerId": "00000000-0000-4000-8000-000000000011",
+          "providerModelId": "fixture-model-21",
+          "capabilities": ["chat", "json"],
+          "tier": "interactive",
+          "active": true,
+          "providerActive": true,
+          "assistant": true,
+          "automaticEligible": true,
+          "defaultSentinel": false,
+          "sharedTranscriptionEligible": true,
+          "voiceEndpoint": false,
+          "releasedAt": null,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "allowUserOverride": true
+        }
+      ],
+      "providers": [
+        {
+          "id": "00000000-0000-4000-8000-000000000010",
+          "active": true,
+          "assistant": true,
+          "adminOwned": true
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000011",
+          "active": true,
+          "assistant": true,
+          "adminOwned": true
+        }
+      ],
+      "pinnedModel": null,
+      "pinnedProvider": null,
+      "defaultProvider": "00000000-0000-4000-8000-000000000010",
+      "chatBinding": null,
+      "transcriptionBinding": null,
+      "chatOverride": "00000000-0000-4000-8000-000000000021",
+      "overrideEnabled": false
+    },
+    "capability": "chat",
+    "expected": {
+      "available": false,
+      "reason": "needs-config",
+      "modelId": null
+    }
+  },
+  {
+    "name": "another actor receives own pin",
+    "config": {
+      "models": [
+        {
+          "id": "00000000-0000-4000-8000-000000000020",
+          "providerId": "00000000-0000-4000-8000-000000000010",
+          "providerModelId": "fixture-model-20",
+          "capabilities": ["chat", "json"],
+          "tier": "interactive",
+          "active": true,
+          "providerActive": true,
+          "assistant": true,
+          "automaticEligible": true,
+          "defaultSentinel": false,
+          "sharedTranscriptionEligible": true,
+          "voiceEndpoint": false,
+          "releasedAt": null,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "allowUserOverride": true
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000021",
+          "providerId": "00000000-0000-4000-8000-000000000011",
+          "providerModelId": "fixture-model-21",
+          "capabilities": ["chat", "json"],
+          "tier": "interactive",
+          "active": true,
+          "providerActive": true,
+          "assistant": true,
+          "automaticEligible": true,
+          "defaultSentinel": false,
+          "sharedTranscriptionEligible": true,
+          "voiceEndpoint": false,
+          "releasedAt": null,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "allowUserOverride": true
+        }
+      ],
+      "providers": [
+        {
+          "id": "00000000-0000-4000-8000-000000000010",
+          "active": true,
+          "assistant": true,
+          "adminOwned": true
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000011",
+          "active": true,
+          "assistant": true,
+          "adminOwned": true
+        }
+      ],
+      "pinnedModel": "00000000-0000-4000-8000-000000000021",
+      "pinnedProvider": null,
+      "defaultProvider": "00000000-0000-4000-8000-000000000010",
+      "chatBinding": null,
+      "transcriptionBinding": null,
+      "chatOverride": null,
+      "overrideEnabled": false
+    },
+    "capability": "chat",
+    "expected": {
+      "available": true,
+      "reason": "admin-pin",
+      "modelId": "00000000-0000-4000-8000-000000000021"
+    },
+    "actor": "00000000-0000-4000-8000-000000000002"
+  },
+  {
+    "name": "voice binding is explicit",
+    "config": {
+      "models": [
+        {
+          "id": "00000000-0000-4000-8000-000000000020",
+          "providerId": "00000000-0000-4000-8000-000000000010",
+          "providerModelId": "fixture-model-20",
+          "capabilities": ["transcription"],
+          "tier": "interactive",
+          "active": true,
+          "providerActive": true,
+          "assistant": true,
+          "automaticEligible": true,
+          "defaultSentinel": false,
+          "sharedTranscriptionEligible": true,
+          "voiceEndpoint": false,
+          "releasedAt": null,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "allowUserOverride": true
+        }
+      ],
+      "providers": [
+        {
+          "id": "00000000-0000-4000-8000-000000000010",
+          "active": true,
+          "assistant": true,
+          "adminOwned": true
+        }
+      ],
+      "pinnedModel": null,
+      "pinnedProvider": null,
+      "defaultProvider": "00000000-0000-4000-8000-000000000010",
+      "chatBinding": null,
+      "transcriptionBinding": {
+        "kind": "model",
+        "modelId": "00000000-0000-4000-8000-000000000020"
+      },
+      "chatOverride": null,
+      "overrideEnabled": false
+    },
+    "capability": "transcription",
+    "expected": {
+      "available": true,
+      "reason": "manual-route",
+      "modelId": "00000000-0000-4000-8000-000000000020"
+    }
+  },
+  {
+    "name": "voice explicit missing binding refuses fallback",
+    "config": {
+      "models": [
+        {
+          "id": "00000000-0000-4000-8000-000000000020",
+          "providerId": "00000000-0000-4000-8000-000000000010",
+          "providerModelId": "fixture-model-20",
+          "capabilities": ["chat", "json"],
+          "tier": "interactive",
+          "active": true,
+          "providerActive": true,
+          "assistant": true,
+          "automaticEligible": true,
+          "defaultSentinel": false,
+          "sharedTranscriptionEligible": true,
+          "voiceEndpoint": false,
+          "releasedAt": null,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "allowUserOverride": true
+        }
+      ],
+      "providers": [
+        {
+          "id": "00000000-0000-4000-8000-000000000010",
+          "active": true,
+          "assistant": true,
+          "adminOwned": true
+        }
+      ],
+      "pinnedModel": null,
+      "pinnedProvider": null,
+      "defaultProvider": "00000000-0000-4000-8000-000000000010",
+      "chatBinding": null,
+      "transcriptionBinding": {
+        "kind": "model",
+        "modelId": "00000000-0000-4000-8000-000000000099"
+      },
+      "chatOverride": null,
+      "overrideEnabled": false
+    },
+    "capability": "transcription",
+    "expected": {
+      "available": false,
+      "reason": "needs-config",
+      "modelId": null
+    }
+  }
+]

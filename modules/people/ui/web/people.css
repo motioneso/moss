@@ -1,0 +1,68 @@
+/* Layout only; all visual roles come from the shared Park Press stylesheet. */
+body {
+  margin: 0;
+}
+.people-settings {
+  padding: var(--space-5);
+  display: grid;
+  gap: var(--space-7);
+  min-width: 0;
+}
+.people-section {
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-5);
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+}
+.people-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.people-copy {
+  flex: 1 1 15rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.people-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.people-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  align-items: end;
+  gap: var(--space-3);
+}
+.people-settings .jds-input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.people-settings h2,
+.people-settings p {
+  margin: 0;
+}
+.people-directory {
+  display: grid;
+  gap: var(--space-3);
+}
+.people-settings [role="status"],
+.people-settings [role="alert"] {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 480px) {
+  .people-settings {
+    padding: var(--space-3);
+  }
+  .people-actions {
+    width: 100%;
+  }
+}

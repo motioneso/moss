@@ -1,0 +1,65 @@
+import { spawnSync } from "node:child_process";
+import { getMossDatabaseUrls } from "@moss/db";
+if (process.env["JARVIS_GATE_RUN"] !== "1") throw new Error("Use verify-gate");
+const urls = getMossDatabaseUrls();
+const run = spawnSync(
+  "cargo",
+  [
+    "+1.95.0",
+    "test",
+    "--locked",
+    "--offline",
+    "--manifest-path",
+    "modules/tasks/tools/Cargo.toml",
+    "--test",
+    "privacy",
+    "--",
+    "--ignored",
+    "--nocapture",
+    "--test-threads=1",
+    ...(process.env["TASKS_PRIVACY_FILTER"]?.split(",") ?? [])
+  ],
+  {
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      JS51_APP_URL: urls.app,
+      JS51_WORKER_URL: urls.worker,
+      JS51_BOOTSTRAP_URL: urls.bootstrap
+    }
+  }
+);
+if (run.status !== 0) process.exit(run.status ?? 1);
+// A focused run (comma-separated test-name filters) stops after the privacy suite.
+if (process.env["TASKS_PRIVACY_FILTER"]) process.exit(0);
+const tools = spawnSync("pnpm", ["exec", "tsx", "modules/tasks/tools/tool-parity.ts"], {
+  stdio: "inherit",
+  env: process.env
+});
+if (tools.status !== 0) process.exit(tools.status ?? 1);
+const heartbeat = spawnSync("pnpm", ["exec", "tsx", "modules/tasks/tools/heartbeat-parity.ts"], {
+  stdio: "inherit",
+  env: process.env
+});
+if (heartbeat.status !== 0) process.exit(heartbeat.status ?? 1);
+const list = spawnSync("pnpm", ["exec", "tsx", "modules/tasks/tools/list-parity.ts"], {
+  stdio: "inherit",
+  env: process.env
+});
+if (list.status !== 0) process.exit(list.status ?? 1);
+const drift = spawnSync("pnpm", ["exec", "tsx", "modules/tasks/tools/drift-parity.ts"], {
+  stdio: "inherit",
+  env: process.env
+});
+if (drift.status !== 0) process.exit(drift.status ?? 1);
+const appMap = spawnSync("pnpm", ["build:app-map"], {
+  stdio: "inherit",
+  env: process.env
+});
+if (appMap.status !== 0) process.exit(appMap.status ?? 1);
+const legacy = spawnSync(
+  "pnpm",
+  ["exec", "tsx", "scripts/test-integration.ts", "tests/integration/tasks.test.ts"],
+  { stdio: "inherit", env: process.env }
+);
+process.exit(legacy.status ?? 1);

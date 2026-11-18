@@ -1,0 +1,1003 @@
+//! The Moss desktop app. It connects to a Moss server on this computer, starting it when
+//! needed, or to one on another computer. Everything else runs on the server.
+//!
+//! The app's own screens are served from `moss-app://`. Server pages open in a separate web
+//! view with its own profile. That view allows the server's pinned certificate and closes any
+//! page load that arrived over a different one (see `trust_on_linux`).
+
+mod desktop;
+mod launch;
+mod link;
+mod notifier;
+mod pin;
+mod provision;
+mod reach;
+#[cfg(all(test, target_os = "linux"))]
+mod runtime_proof;
+#[cfg(all(test, windows))]
+mod windows_proof;
+mod store;
+
+#[cfg(target_os = "linux")]
+mod trust_linux;
+#[cfg(target_os = "macos")]
+mod trust_macos;
+#[cfg(windows)]
+mod trust_windows;
+
+use reach::Problem;
+use serde_json::{json, Value};
+use std::borrow::Cow;
+use std::path::PathBuf;
+use store::{Remote, Servers, Store, Target};
+use tao::dpi::LogicalSize;
+use tao::event::{Event, WindowEvent};
+use tao::event_loop::{ControlFlow, EventLoopBuilder, EventLoopProxy};
+use tao::window::{Window, WindowBuilder};
+use wry::http::{header, Request, Response, StatusCode};
+use wry::{NewWindowResponse, WebContext, WebView, WebViewBuilder};
+
+const SCHEME: &str = "moss-app";
+const HOME: &str = "moss-app://localhost/index.html";
+const SERVERS_LINK: &str = "moss-app://servers";
+
+enum UserEvent {
+    Ipc(String),
+    Notice {
+        server: String,
+        kind: String,
+        receipt: String,
+    },
+    Show(Value),
+    Open(Opened),
+    ShowServers,
+    /// Another program asked this window to show a saved server, and maybe one of its pages.
+    OpenLink {
+        server: Option<String>,
+        path: Option<String>,
+    },
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    Reveal,
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    TrayUnavailable,
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    Desktop,
+    Stopped {
+        id: String,
+        turn: u64,
+        result: Result<(), Problem>,
+    },
+    Connect(String),
+    /// A server page failed to load; check whether the server is still there.
+    #[cfg_attr(target_os = "macos", allow(dead_code))]
+    Check(String),
+    /// A server page arrived over a certificate other than the pinned one. Holds its
+    /// fingerprint, if it had a certificate at all.
+    WrongCertificate(String, Option<String>),
+    /// A background result, dropped if the user has acted since it started.
+    Later(u64, Box<UserEvent>),
+}
+
+struct Opened {
+    id: String,
+    name: String,
+    origin: String,
+    certificate: Vec<u8>,
+}
+
+/// Declared in this order so the web view drops before the profile it uses.
+struct ServerView {
+    id: String,
+    origin: String,
+    view: WebView,
+    _profile: Box<WebContext>,
+}
+
+struct App {
+    store: Store,
+    servers: Servers,
+    install: PathBuf,
+    runtime: tokio::runtime::Runtime,
+    proxy: EventLoopProxy<UserEvent>,
+    window: Window,
+    connect: WebView,
+    server: Option<ServerView>,
+    /// A page to land on once the named server opens.
+    pending_link: Option<(String, String)>,
+    current: Option<String>,
+    /// The address and code on the certificate screen, the only pin the user can confirm.
+    shown_pin: Option<(String, String)>,
+    turn: u64,
+    screen: String,
+    pending_stop: Option<String>,
+    stopping: Option<String>,
+    preferences: desktop::Preferences,
+    last_notice: [Option<std::time::Instant>; 2],
+    tray: Option<desktop::Tray>,
+    quit: bool,
+}
+
+struct Args {
+    data: PathBuf,
+    install: PathBuf,
+}
+
+fn parse_args() -> Result<Args, String> {
+    let install = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(PathBuf::from))
+        .unwrap_or_default();
+    let mut args = Args {
+        data: store::default_data_dir().ok_or("no home folder")?,
+        install,
+    };
+    let mut raw = std::env::args().skip(1);
+    while let Some(flag) = raw.next() {
+        let value = raw.next().ok_or_else(|| format!("{flag} needs a value"))?;
+        match flag.as_str() {
+            "--data" => args.data = PathBuf::from(value),
+            "--install" => args.install = PathBuf::from(value),
+            _ => return Err(format!("unknown option {flag}")),
+        }
+    }
+    args.data = std::path::absolute(&args.data).map_err(|_| "Cannot resolve the data folder")?;
+    args.install =
+        std::path::absolute(&args.install).map_err(|_| "Cannot resolve the install folder")?;
+    Ok(args)
+}
+
+fn main() {
+    if std::env::args().nth(1).as_deref() == Some("notifier") {
+        std::process::exit(notifier::command(std::env::args().skip(2).collect()));
+    }
+    let args = match parse_args() {
+        Ok(a) => a,
+        Err(e) => {
+            eprintln!("moss-app: {e}");
+            std::process::exit(2);
+        }
+    };
+    // One window per data folder. A second launch asks the first to come forward and leaves.
+    let _ = store::private_dir(&args.data);
+    let Some(_window_lock) = link::window_lock(&args.data) else {
+        // A destination already waiting for the first window must not be overwritten.
+        if !args.data.join("open-request.json").exists() {
+            let _ = link::write_request(&args.data, &link::Request { server: None, path: None });
+        }
+        std::process::exit(0);
+    };
+    let store = Store::new(args.data);
+    let servers = store.load().unwrap_or_else(|_| {
+        eprintln!("moss-app: the server list is unreadable; starting with an empty list");
+        Servers::default()
+    });
+    let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
+    let proxy = event_loop.create_proxy();
+    let window = WindowBuilder::new()
+        .with_title("Moss")
+        .with_inner_size(LogicalSize::new(1360.0, 860.0))
+        .with_min_inner_size(LogicalSize::new(360.0, 560.0))
+        .build(&event_loop)
+        .expect("window");
+
+    let hand_off = proxy.clone();
+    let hand_off_data = store.data.clone();
+    std::thread::spawn(move || loop {
+        if let Some(request) = link::take_request(&hand_off_data) {
+            let event = UserEvent::OpenLink { server: request.server, path: request.path };
+            if hand_off.send_event(event).is_err() {
+                return;
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(400));
+    });
+
+    let web = args.install.join("web");
+    let ipc = proxy.clone();
+    let builder = WebViewBuilder::new()
+        .with_custom_protocol(SCHEME.into(), move |_, request| asset(&web, request))
+        .with_ipc_handler(move |request: Request<String>| {
+            // Only the app's own pages may send actions.
+            if request.uri().scheme_str() == Some(SCHEME) {
+                let _ = ipc.send_event(UserEvent::Ipc(request.into_body()));
+            }
+        })
+        .with_navigation_handler(|url| url.starts_with("moss-app://localhost/"))
+        .with_new_window_req_handler(|_, _| NewWindowResponse::Deny)
+        .with_url(HOME);
+    let connect = build(builder, &window);
+
+    let preferences = desktop::Preferences::load(&store).unwrap_or_default();
+    let tray = desktop::tray(proxy.clone());
+    let mut app = App {
+        store,
+        servers,
+        install: args.install,
+        runtime: tokio::runtime::Runtime::new().expect("tokio runtime"),
+        proxy,
+        window,
+        connect,
+        server: None,
+        pending_link: None,
+        current: None,
+        shown_pin: None,
+        turn: 0,
+        screen: String::new(),
+        pending_stop: None,
+        stopping: None,
+        preferences,
+        last_notice: [None; 2],
+        tray,
+        quit: false,
+    };
+    event_loop.run(move |event, _, control_flow| {
+        *control_flow = ControlFlow::Wait;
+        match event {
+            Event::WindowEvent {
+                event: WindowEvent::CloseRequested,
+                ..
+            } => {
+                if app.tray.is_some() {
+                    app.window.set_visible(false);
+                } else {
+                    *control_flow = ControlFlow::Exit;
+                }
+            }
+            Event::UserEvent(event) => app.handle(event),
+            _ => {}
+        }
+        if app.quit {
+            *control_flow = ControlFlow::Exit;
+        }
+    });
+}
+
+fn build(builder: WebViewBuilder, window: &Window) -> WebView {
+    #[cfg(target_os = "linux")]
+    {
+        use tao::platform::unix::WindowExtUnix;
+        use wry::WebViewBuilderExtUnix;
+        builder
+            .build_gtk(window.default_vbox().expect("vbox"))
+            .expect("webview")
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        builder.build(window).expect("webview")
+    }
+}
+
+/// The app's own pages come from this binary; the stylesheet, fonts and theme come from the
+/// installed web build, so the screens match the server's.
+fn asset(web: &std::path::Path, request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]>> {
+    let path = request.uri().path();
+    let embedded: Option<(&str, &'static [u8])> = match path {
+        "/" | "/index.html" => Some(("text/html", include_bytes!("../assets/index.html"))),
+        "/connect.js" => Some(("text/javascript", include_bytes!("../assets/connect.js"))),
+        "/connect.css" => Some(("text/css", include_bytes!("../assets/connect.css"))),
+        _ => None,
+    };
+    let reply = |status: StatusCode, kind: &str, body: Cow<'static, [u8]>| {
+        Response::builder()
+            .status(status)
+            .header(header::CONTENT_TYPE, kind)
+            .header(
+                "content-security-policy",
+                "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'",
+            )
+            .body(body)
+            .expect("response")
+    };
+    if let Some((kind, body)) = embedded {
+        return reply(StatusCode::OK, kind, Cow::Borrowed(body));
+    }
+    let file = match path {
+        "/app.css" | "/boot-theme.js" | "/icon.svg" => {
+            Some(path.trim_start_matches('/').to_owned())
+        }
+        p if p.starts_with("/fonts/") && !p.contains("..") && p.ends_with(".woff2") => {
+            Some(p.trim_start_matches('/').to_owned())
+        }
+        _ => None,
+    };
+    let kind = match path.rsplit('.').next() {
+        Some("css") => "text/css",
+        Some("js") => "text/javascript",
+        Some("svg") => "image/svg+xml",
+        Some("woff2") => "font/woff2",
+        _ => "application/octet-stream",
+    };
+    match file.and_then(|f| std::fs::read(web.join(f)).ok()) {
+        Some(bytes) => reply(StatusCode::OK, kind, Cow::Owned(bytes)),
+        None => reply(StatusCode::NOT_FOUND, "text/plain", Cow::Borrowed(b"")),
+    }
+}
+
+impl App {
+    fn handle(&mut self, event: UserEvent) {
+        match event {
+            UserEvent::Notice {
+                server,
+                kind,
+                receipt,
+            } => {
+                if self.current.as_ref() != Some(&server) {
+                    return;
+                }
+                let Some(view) = self.server.as_ref().filter(|view| view.id == server) else {
+                    return;
+                };
+                let (slot, title, body) = match kind.as_str() {
+                    "chat" => (0, "Moss chat", "A new reply is ready in Moss."),
+                    "reminder" => (
+                        1,
+                        "Moss notification",
+                        "A new notification is waiting in Moss.",
+                    ),
+                    _ => return,
+                };
+                if self.preferences.notifications {
+                    if self.last_notice[slot].is_some_and(|last| last.elapsed().as_secs() < 3) {
+                        return; // No receipt: the next poll retries this batch.
+                    }
+                    if desktop::notify(title, body).is_err() {
+                        return;
+                    }
+                    self.last_notice[slot] = Some(std::time::Instant::now());
+                }
+                // JSON encoding keeps the opaque document token out of executable source.
+                if let Ok(token) = serde_json::to_string(&receipt) {
+                    let _ = view
+                        .view
+                        .evaluate_script(&format!("window.mossNoticeAck?.({token});"));
+                }
+            }
+            UserEvent::Ipc(body) => {
+                if let Ok(message) = serde_json::from_str::<Value>(&body) {
+                    self.turn += 1;
+                    self.action(&message);
+                }
+            }
+            UserEvent::Later(turn, event) => {
+                if turn == self.turn {
+                    self.handle(*event);
+                }
+            }
+            UserEvent::Show(state) => self.show(state),
+            UserEvent::Open(opened) => self.open(opened),
+            UserEvent::ShowServers => {
+                self.turn += 1;
+                self.list_servers();
+            }
+            UserEvent::OpenLink { server, path } => {
+                self.bring_forward();
+                let Some(id) = server else { return };
+                self.turn += 1;
+                if self.store.find(&self.servers, &id).is_none() {
+                    return self.list_servers();
+                }
+                let shown = self.current.as_deref() == Some(id.as_str());
+                if let (true, Some(view), Some(path)) = (shown, self.server.as_ref(), path.as_ref())
+                {
+                    if view.id == id {
+                        let _ = view.view.load_url(&format!("{}{path}", view.origin));
+                        self.screen.clear();
+                        self.restore_views();
+                        return;
+                    }
+                }
+                self.pending_link = path.map(|p| (id.clone(), p));
+                self.choose(id);
+            }
+            UserEvent::TrayUnavailable => {
+                self.tray = None;
+                self.window.set_visible(true);
+            }
+            UserEvent::Reveal => {
+                self.bring_forward();
+            }
+            UserEvent::Desktop => {
+                self.turn += 1;
+                self.window.set_visible(true);
+                self.window.set_focus();
+                self.show_desktop(None);
+            }
+            UserEvent::Stopped { id, turn, result } => {
+                let waiting = self.stopping.as_deref() == Some(&id) && self.screen == "stopping";
+                if self.stopping.as_deref() == Some(&id) {
+                    self.stopping = None;
+                }
+                if self.preferences.notifications && result.is_ok() {
+                    let _ = desktop::notify(
+                        "Moss server stopped",
+                        "The local server and its database have stopped.",
+                    );
+                }
+                if self.turn == turn || waiting {
+                    match result {
+                        Ok(()) => self.list_servers(),
+                        Err(_) => self.show(json!({"screen":"stop-failed", "code":"app_server_stop_failed", "reason":"The server or its database could not be stopped. Open Servers to check its state and try again."})),
+                    }
+                }
+            }
+            UserEvent::Connect(id) => self.choose(id),
+            UserEvent::Check(id) => {
+                if self.current.as_deref() == Some(id.as_str()) {
+                    self.check(id);
+                }
+            }
+            UserEvent::WrongCertificate(id, fingerprint) => {
+                // Only the page on screen counts; the Servers list keeps the page but clears current.
+                let showing = self.current.as_deref() == Some(id.as_str())
+                    && self.server.as_ref().is_some_and(|s| s.id == id);
+                if !showing {
+                    return;
+                }
+                // No certificate means an error page, so the native check reports why.
+                let Some(fingerprint) = fingerprint else {
+                    return self.check(id);
+                };
+                self.server = None;
+                let Some(target) = self.store.find(&self.servers, &id) else {
+                    return self.list_servers();
+                };
+                self.show(problem_screen(
+                    &target,
+                    &Problem::CertificateChanged { fingerprint },
+                ));
+            }
+        }
+    }
+
+    fn action(&mut self, message: &Value) {
+        let text = |key: &str| {
+            message
+                .get(key)
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_owned()
+        };
+        match message
+            .get("do")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+        {
+            "start" | "retry" => match self.current.clone().or_else(|| self.servers.last.clone()) {
+                Some(id) => self.connect(id),
+                None => self.show(json!({"screen":"first-run"})),
+            },
+            "first-run" => self.show(json!({"screen":"first-run"})),
+            "this-computer" => self.this_computer(),
+            "new-server" => self.show(json!({"screen":"create", "name": text("name")})),
+            "create" => self.create(text("name")),
+            "stop" => self.confirm_stop(text("id")),
+            "confirm-stop" => {
+                let id = text("id");
+                if self.pending_stop.take().as_deref() == Some(&id) {
+                    self.stop(id);
+                }
+            }
+            "desktop" => self.show_desktop(None),
+            "quit" => self.quit = true,
+            "login" => {
+                let enabled = message["enabled"].as_bool().unwrap_or(false);
+                let result = desktop::set_login(&self.store, &self.install, enabled);
+                self.show_desktop(result.err());
+            }
+            "notifications" => {
+                let old = self.preferences.notifications;
+                self.preferences.notifications =
+                    message["enabled"].as_bool().unwrap_or(false) && cfg!(target_os = "linux");
+                let result = self.preferences.save(&self.store);
+                if result.is_err() {
+                    self.preferences.notifications = old;
+                }
+                self.show_desktop(result.err());
+            }
+            "test-notification" => {
+                let error = if self.preferences.notifications {
+                    desktop::notify("Moss", "Desktop notifications are on.").err()
+                } else {
+                    None
+                };
+                self.show_desktop(error);
+            }
+            "another" => self.show(json!({
+                "screen":"add", "first": self.servers.last.is_none(), "address": text("address"),
+            })),
+            "probe" => self.probe(text("address")),
+            "confirm" => {
+                if let Some(pin) = self.confirmed(&text("address"), &text("fingerprint")) {
+                    self.add_remote(text("address"), pin);
+                }
+            }
+            "accept-new" => {
+                let id = text("id");
+                let Some(origin) = self
+                    .servers
+                    .remotes
+                    .iter()
+                    .find(|r| r.id == id)
+                    .map(|r| r.origin.clone())
+                else {
+                    return;
+                };
+                if let Some(pin) = self.confirmed(&origin, &text("fingerprint")) {
+                    if let Some(remote) = self.servers.remotes.iter_mut().find(|r| r.id == id) {
+                        remote.pin = pin;
+                    }
+                    self.save();
+                    self.connect(id);
+                }
+            }
+            "servers" => self.list_servers(),
+            "open" => self.choose(text("id")),
+            "remove" => self.remove(text("id")),
+            _ => {}
+        }
+    }
+
+    /// The pin the certificate screen showed for this address, when the page echoes it back.
+    fn confirmed(&mut self, address: &str, fingerprint: &str) -> Option<String> {
+        let (shown_address, shown) = self.shown_pin.take()?;
+        (shown_address == address && shown == fingerprint).then_some(shown)
+    }
+
+    fn save(&self) {
+        if self.store.save(&self.servers).is_err() {
+            eprintln!("moss-app: could not save the server list");
+        }
+    }
+
+    /// Opens this computer's default server, setting it up first when it does not exist yet.
+    fn this_computer(&mut self) {
+        let id = store::local_id("default");
+        let set_up = self
+            .store
+            .targets(&self.servers)
+            .iter()
+            .any(|t| t.id() == id);
+        if set_up {
+            return self.choose(id);
+        }
+        self.create("default".into());
+    }
+
+    /// Makes a local server (folder, certificate, database) and opens it.
+    fn create(&mut self, name: String) {
+        if !store::valid_instance(&name) {
+            return self.show(
+                json!({"screen":"create", "name": name, "error": provision::Failure::BadName.reason()}),
+            );
+        }
+        let label = if name == "default" {
+            "This computer".to_owned()
+        } else {
+            format!("This computer ({name})")
+        };
+        self.show(json!({"screen":"setting-up", "name": label}));
+        let (proxy, turn) = (self.proxy.clone(), self.turn);
+        let (store, install) = (self.store.clone(), self.install.clone());
+        self.runtime.spawn(async move {
+            let made = tokio::task::spawn_blocking({
+                let name = name.clone();
+                move || provision::create_instance(&store, &install, &name)
+            })
+            .await;
+            let event = match made {
+                Ok(Ok(())) => UserEvent::Connect(store::local_id(&name)),
+                Ok(Err(failure)) => UserEvent::Show(
+                    json!({"screen":"create", "name": name, "error": failure.reason()}),
+                ),
+                Err(_) => UserEvent::Show(
+                    json!({"screen":"create", "name": name, "error": provision::Failure::Other.reason()}),
+                ),
+            };
+            let _ = proxy.send_event(UserEvent::Later(turn, Box::new(event)));
+        });
+    }
+
+    fn show_desktop(&mut self, error: Option<String>) {
+        self.current = None;
+        self.show(json!({"screen":"desktop", "tray":self.tray.is_some(),
+            "supported":cfg!(any(target_os = "linux", target_os = "macos", windows)), "login":desktop::starts_at_login(&self.store),
+            "notifications":self.preferences.notifications, "code":if error.is_some() { "app_desktop_integration_failed" } else { "" }, "error":error}));
+    }
+
+    fn confirm_stop(&mut self, id: String) {
+        if self.stopping.is_some() {
+            return self.show(json!({"screen":"stopping", "name":"Moss"}));
+        }
+        let Some(target @ Target::Local { .. }) = self.store.find(&self.servers, &id) else {
+            return self.list_servers();
+        };
+        self.current = None;
+        self.show(json!({"screen":"confirm-stop", "id":id, "name":target.name()}));
+    }
+
+    /// Serializes with any in-progress start, then stops the server and its database.
+    fn stop(&mut self, id: String) {
+        if self.stopping.is_some() {
+            return;
+        }
+        let Some(Target::Local { folder, .. }) = self.store.find(&self.servers, &id) else {
+            return self.list_servers();
+        };
+        if self.server.as_ref().is_some_and(|s| s.id == id) {
+            self.server = None;
+        }
+        self.current = None;
+        self.stopping = Some(id.clone());
+        self.show(json!({"screen":"stopping", "name":"Moss"}));
+        let (proxy, install, turn) = (self.proxy.clone(), self.install.clone(), self.turn);
+        self.runtime.spawn(async move {
+            let result = reach::stop_local(&install, &folder).await;
+            let _ = proxy.send_event(UserEvent::Stopped { id, turn, result });
+        });
+    }
+
+    fn choose(&mut self, id: String) {
+        self.servers.last = Some(id.clone());
+        self.save();
+        self.connect(id);
+    }
+
+    /// Shows one of the app's own screens, hiding any server page.
+    fn show(&mut self, state: Value) {
+        self.screen = state["screen"].as_str().unwrap_or_default().to_owned();
+        self.pending_stop = if state["screen"] == "confirm-stop" {
+            state["id"].as_str().map(str::to_owned)
+        } else {
+            None
+        };
+        self.shown_pin = match (
+            state["screen"].as_str(),
+            state["address"].as_str(),
+            state["fingerprint"].as_str(),
+        ) {
+            (Some("check"), Some(address), Some(fingerprint)) => {
+                Some((address.to_owned(), fingerprint.to_owned()))
+            }
+            _ => None,
+        };
+        if let Some(server) = &self.server {
+            let _ = server.view.set_visible(false);
+        }
+        let _ = self.connect.set_visible(true);
+        self.window.set_title("Moss");
+        let _ = self
+            .connect
+            .evaluate_script(&format!("window.moss.show({state})"));
+    }
+
+    /// Raises the window. A window that is already visible is only focused, because showing it
+    /// again would also show the web view that is meant to stay hidden.
+    fn bring_forward(&self) {
+        if !self.window.is_visible() {
+            self.window.set_visible(true);
+        }
+        self.window.set_focus();
+        self.restore_views();
+    }
+
+    /// Showing the window shows every web view in it again, so the app's own screen is hidden
+    /// again whenever a server page is the one that should be on top.
+    fn restore_views(&self) {
+        if !self.screen.is_empty() {
+            return;
+        }
+        if let Some(server) = &self.server {
+            let _ = self.connect.set_visible(false);
+            let _ = server.view.set_visible(true);
+        }
+    }
+
+    fn connect(&mut self, id: String) {
+        if self.stopping.as_deref() == Some(&id) {
+            return self.show(json!({"screen":"stopping", "name":"Moss"}));
+        }
+        let Some(target) = self.store.find(&self.servers, &id) else {
+            return self.list_servers();
+        };
+        self.current = Some(id.clone());
+        let name = target.name();
+        self.show(json!({"screen":"connecting", "name": name}));
+        let (proxy, turn) = (self.proxy.clone(), self.turn);
+        let install = self.install.clone();
+        self.runtime.spawn(async move {
+            let reached = match &target {
+                Target::Local { folder, .. } => reach::local_or_start(&install, folder)
+                    .await
+                    .map(|(running, der)| (running.origin, der)),
+                Target::Remote(remote) => reach::hello(&remote.origin, &remote.pin)
+                    .await
+                    .map(|(_, der)| (remote.origin.clone(), der)),
+            };
+            let event = match reached {
+                Ok((origin, certificate)) => UserEvent::Open(Opened {
+                    id,
+                    name,
+                    origin,
+                    certificate,
+                }),
+                Err(problem) => UserEvent::Show(problem_screen(&target, &problem)),
+            };
+            let _ = proxy.send_event(UserEvent::Later(turn, Box::new(event)));
+        });
+    }
+
+    /// Re-checks the current server after a page failed to load. The page stays if it answers.
+    fn check(&mut self, id: String) {
+        let Some(target) = self.store.find(&self.servers, &id) else {
+            return;
+        };
+        let (proxy, turn) = (self.proxy.clone(), self.turn);
+        self.runtime.spawn(async move {
+            let problem = match &target {
+                Target::Local { folder, .. } => reach::local(folder).await.err(),
+                Target::Remote(remote) => reach::hello(&remote.origin, &remote.pin).await.err(),
+            };
+            if let Some(problem) = problem {
+                let screen = UserEvent::Show(problem_screen(&target, &problem));
+                let _ = proxy.send_event(UserEvent::Later(turn, Box::new(screen)));
+            }
+        });
+    }
+
+    fn probe(&mut self, address: String) {
+        let origin = match reach::parse_origin(&address) {
+            Ok(origin) => origin,
+            Err(error) => {
+                return self.show(json!({"screen":"add", "address": address, "error": error, "first": self.servers.last.is_none()}))
+            }
+        };
+        self.show(json!({"screen":"connecting", "name": origin.trim_start_matches("https://")}));
+        let first = self.servers.last.is_none();
+        let (proxy, turn) = (self.proxy.clone(), self.turn);
+        self.runtime.spawn(async move {
+            let state = match reach::peek_certificate(&origin).await {
+                Ok(fingerprint) => json!({"screen":"check", "address": origin, "fingerprint": fingerprint}),
+                Err(problem) => json!({"screen":"add", "address": origin, "error": problem.reason(), "first": first}),
+            };
+            let _ = proxy.send_event(UserEvent::Later(turn, Box::new(UserEvent::Show(state))));
+        });
+    }
+
+    fn add_remote(&mut self, address: String, pin: String) {
+        let Ok(origin) = reach::parse_origin(&address) else {
+            return self.list_servers();
+        };
+        let name = origin.trim_start_matches("https://").to_owned();
+        let id = match self.servers.remotes.iter_mut().find(|r| r.origin == origin) {
+            Some(existing) => {
+                existing.pin = pin;
+                existing.id.clone()
+            }
+            None => {
+                let id = uuid::Uuid::new_v4().to_string();
+                self.servers.remotes.push(Remote {
+                    id: id.clone(),
+                    name,
+                    origin,
+                    pin,
+                });
+                id
+            }
+        };
+        self.choose(id);
+    }
+
+    fn remove(&mut self, id: String) {
+        // Only other computers can be removed; this computer's servers stay listed.
+        if !self.servers.remotes.iter().any(|r| r.id == id) {
+            return self.list_servers();
+        }
+        self.servers.remotes.retain(|r| r.id != id);
+        if self.servers.last.as_deref() == Some(id.as_str()) {
+            self.servers.last = None;
+        }
+        if self.current.as_deref() == Some(id.as_str()) {
+            self.current = None;
+        }
+        if self.server.as_ref().is_some_and(|s| s.id == id) {
+            self.server = None;
+        }
+        self.store.remove_profile(&id);
+        self.save();
+        self.list_servers();
+    }
+
+    fn list_servers(&mut self) {
+        self.current = None;
+        let targets = self.store.targets(&self.servers);
+        let rows: Vec<Value> = targets.iter().map(|t| server_row(t, "Checking…")).collect();
+        self.show(json!({"screen":"servers", "servers": rows}));
+        let (proxy, turn) = (self.proxy.clone(), self.turn);
+        self.runtime.spawn(async move {
+            let mut rows = Vec::new();
+            for target in &targets {
+                let state = match target {
+                    Target::Local { folder, .. } => match reach::local(folder).await {
+                        Ok(_) => "Running",
+                        Err(_) => "Not running",
+                    },
+                    Target::Remote(remote) => match reach::hello(&remote.origin, &remote.pin).await
+                    {
+                        Ok(_) => "Reachable",
+                        Err(_) => "Can't reach",
+                    },
+                };
+                rows.push(server_row(target, state));
+            }
+            let rows = UserEvent::Show(json!({"screen":"servers", "servers": rows}));
+            let _ = proxy.send_event(UserEvent::Later(turn, Box::new(rows)));
+        });
+    }
+
+    fn open(&mut self, opened: Opened) {
+        if self.current.as_deref() != Some(opened.id.as_str()) {
+            return;
+        }
+        let reuse = self
+            .server
+            .as_ref()
+            .is_some_and(|s| s.id == opened.id && s.origin == opened.origin);
+        let landing = match self.pending_link.take() {
+            Some((id, path)) if id == opened.id => path,
+            _ => String::from("/today"),
+        };
+        if reuse {
+            if landing != "/today" {
+                if let Some(server) = &self.server {
+                    let _ = server.view.load_url(&format!("{}{landing}", opened.origin));
+                }
+            }
+        } else {
+            self.server = None;
+            match self.server_view(&opened, &landing) {
+                Ok(view) => self.server = Some(view),
+                Err(error) => {
+                    eprintln!("moss-app: cannot open the server's pages ({error})");
+                    return self.show(json!({"screen":"problem", "name": opened.name, "reason": "This app could not open the server's pages.", "retry": false}))
+                }
+            }
+        }
+        self.screen.clear();
+        self.restore_views();
+        self.window.set_title(&format!("Moss · {}", opened.name));
+        if self.preferences.notifications {
+            let _ = desktop::notify("Moss connected", &format!("Connected to {}", opened.name));
+        }
+    }
+
+    fn server_view(&self, opened: &Opened, landing: &str) -> Result<ServerView, String> {
+        let dir = self.store.profile(&opened.id)?;
+        let mut profile = Box::new(WebContext::new(Some(dir)));
+        let origin = opened.origin.clone();
+        let links = self.proxy.clone();
+        let builder = WebViewBuilder::new_with_web_context(&mut profile)
+            .with_navigation_handler(move |url| {
+                if url == SERVERS_LINK || url == format!("{SERVERS_LINK}/") {
+                    let _ = links.send_event(UserEvent::ShowServers);
+                    return false;
+                }
+                url == origin || url.starts_with(&format!("{origin}/"))
+            })
+            .with_new_window_req_handler(|_, _| NewWindowResponse::Deny)
+            .with_ipc_handler({
+                let proxy = self.proxy.clone();
+                let server = opened.id.clone();
+                let origin = opened.origin.clone();
+                let data = self.store.data.clone();
+                let pin = moss_network::instance::fingerprint(&opened.certificate);
+                move |request: Request<String>| {
+                    if url::Url::parse(&request.uri().to_string())
+                        .is_ok_and(|u| u.origin().ascii_serialization() == origin)
+                    {
+                        if let Ok(message) = serde_json::from_str::<Value>(request.body()) {
+                            if message["heartbeat"].as_bool() == Some(true) {
+                                notifier::mark_app_active(&data, &server);
+                            }
+                            // Signing out ends background alerts for this server.
+                            if message["forget"].as_bool() == Some(true) {
+                                let _ = notifier::forget(&data, &server);
+                            }
+                            // The page registered a device token for the notifier. The client id
+                            // is the page's own, so a receipt from either side covers both.
+                            if let (Some(client), Some(token)) =
+                                (message["client"].as_str(), message["token"].as_str())
+                            {
+                                if uuid::Uuid::parse_str(client).is_ok() && token.len() <= 128 {
+                                    let entry = notifier::Entry {
+                                        server: server.clone(),
+                                        origin: origin.clone(),
+                                        pin: pin.clone(),
+                                        client: client.into(),
+                                        token: token.into(),
+                                    };
+                                    if notifier::enroll(&data, entry).is_ok() {
+                                        notifier::spawn(&data);
+                                    }
+                                }
+                            }
+                            if let (Some(kind @ ("chat" | "reminder")), Some(receipt)) =
+                                (message["notice"].as_str(), message["receipt"].as_str())
+                            {
+                                if receipt.len() <= 128 {
+                                    let _ = proxy.send_event(UserEvent::Notice {
+                                        server: server.clone(),
+                                        kind: kind.into(),
+                                        receipt: receipt.into(),
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            })
+            .with_initialization_script("window.mossApp = true;")
+            .with_initialization_script(include_str!("../assets/notices.js"));
+        let view = build(builder, &self.window);
+        #[cfg(target_os = "linux")]
+        trust_linux::install(&view, opened, self.proxy.clone())?;
+        #[cfg(target_os = "macos")]
+        trust_macos::install(&view, opened, self.proxy.clone())?;
+        #[cfg(windows)]
+        trust_windows::install(&view, opened, self.proxy.clone())?;
+        view.load_url(&format!("{}{landing}", opened.origin))
+            .map_err(|_| "Cannot load the server")?;
+        Ok(ServerView {
+            id: opened.id.clone(),
+            origin: opened.origin.clone(),
+            view,
+            _profile: profile,
+        })
+    }
+}
+
+fn server_row(target: &Target, state: &str) -> Value {
+    let detail = match target {
+        Target::Local { instance, .. } => instance.clone(),
+        Target::Remote(remote) => remote.origin.trim_start_matches("https://").to_owned(),
+    };
+    json!({
+        "id": target.id(),
+        "name": target.name(),
+        "detail": detail,
+        "state": state,
+        "removable": matches!(target, Target::Remote(_)),
+        "stoppable": matches!(target, Target::Local { .. }) && state == "Running",
+    })
+}
+
+fn problem_screen(target: &Target, problem: &Problem) -> Value {
+    let name = target.name();
+    let local = matches!(target, Target::Local { .. });
+    let mut state = match problem {
+        Problem::CertificateChanged { fingerprint } => match target {
+            Target::Remote(remote) => json!({
+                "screen":"check", "changed": true, "id": remote.id, "name": name,
+                "address": remote.origin, "fingerprint": fingerprint,
+            }),
+            Target::Local { .. } => {
+                return json!({"screen":"problem", "code": Problem::Unreachable.code(), "name": name, "reason": Problem::Unreachable.reason(), "retry": false, "local": true});
+            }
+        },
+        Problem::ServerTooOld => json!({
+            "screen":"version", "title": problem.reason().trim_end_matches('.'),
+            "detail": format!("This app needs a newer Moss on {name}."),
+        }),
+        Problem::AppTooOld => json!({
+            "screen":"version", "title": problem.reason().trim_end_matches('.'),
+            "detail": format!("{name} needs a newer app."),
+        }),
+        Problem::NotSetUp => {
+            json!({"screen":"problem", "name": name, "reason": problem.reason(), "retry": false, "local": local})
+        }
+        _ => {
+            json!({"screen":"problem", "name": name, "reason": problem.reason(), "retry": true, "local": local})
+        }
+    };
+    state["code"] = json!(problem.code());
+    state
+}

@@ -1,0 +1,16 @@
+[workspace]
+resolver = "2"
+members = ["contracts", "jobs", "registry", "routing", "adapters", "harness"]
+
+[workspace.package]
+edition = "2021"
+publish = false
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["serde", "v4", "v5"] }
+chrono = { version = "0.4", features = ["serde"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "time", "sync", "process"] }
+tokio-postgres = { version = "0.7", features = ["with-uuid-1", "with-serde_json-1", "with-chrono-0_4"] }
+async-trait = "0.1"

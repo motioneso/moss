@@ -160,7 +160,14 @@ describe("Tasks module M1", () => {
     expect(registrations.map((registration) => registration.manifest.id)).toEqual(
       expectedBuiltInModuleIds
     );
-    expect(tasksManifest?.database?.ownedTables).toEqual(["app.tasks", "app.task_activity"]);
+    expect(tasksManifest?.database?.ownedTables).toEqual([
+      "app.tasks",
+      "app.task_activity",
+      "app.task_lists",
+      "app.task_tags",
+      "app.task_tag_assignments",
+      "app.task_preferences"
+    ]);
     expect(tasksManifest?.navigation?.[0]).toMatchObject({
       id: "tasks",
       path: "/tasks",

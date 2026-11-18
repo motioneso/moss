@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sharing · Moss</title>
+    <link rel="stylesheet" href="/app.css" />
+    <script src="/boot-theme.js"></script>
+    <script src="/access.js" defer></script>
+  </head>
+  <body>
+    <main class="auth-screen">
+      <section class="auth-panel" aria-labelledby="auth-title">
+        <div>
+          <p class="jds-eyebrow">Moss · Settings</p>
+          <h1 id="auth-title">Reach Moss from other devices</h1>
+          <p>
+            Allow signed-in people on your home network or tailnet to reach this Moss. Sign-in is
+            always required.
+          </p>
+          <p>
+            Only share with people you trust. Accounts on this computer share its operating system
+            user; someone with access to the computer may be able to read its files.
+          </p>
+        </div>
+        <form class="auth-form" id="sharing">
+          <label class="jds-label"
+            ><input type="checkbox" name="sharing" id="sharing-enabled" disabled /> Allow LAN and
+            tailnet access</label
+          >
+          <p>Your trusted addresses:</p>
+          <ul id="origins"></ul>
+          <p>Public certificate fingerprint (SHA-256): <span id="fingerprint"></span></p>
+          <a href="/api/network/certificate" download="moss-certificate.cer"
+            >Download public certificate</a
+          >
+          <p>
+            Local certificates show a browser warning until you trust the certificate on each
+            device. A tailnet or your own certificate can avoid that warning.
+          </p>
+          <button class="jds-btn jds-btn--primary" type="submit" disabled>Save sharing</button>
+        </form>
+        <p id="status" role="status" aria-live="polite">Loading sharing settings…</p>
+        <a href="/today">Back to Today</a
+        ><button class="jds-btn" id="sign-out" type="button">Sign out</button>
+      </section>
+    </main>
+  </body>
+</html>

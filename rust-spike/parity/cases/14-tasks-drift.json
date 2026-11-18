@@ -1,0 +1,155 @@
+[
+  {
+    "name": "drift 30: a task due in the past is overdue",
+    "source": "tasks-drift.test.ts:30 returns a task with due_at clearly in the past as overdue (no locale set)",
+    "steps": [
+      {
+        "id": "t",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "TZ test - past task",
+          "priority": 3,
+          "status": "todo",
+          "dueAt": "{{now-10d}}"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "overdue",
+        "method": "GET",
+        "path": "/api/tasks/overdue",
+        "as": "A",
+        "expect": {
+          "body": {
+            "tasks": [
+              {
+                "id": "{{t:/body/task/id}}"
+              }
+            ]
+          },
+          "status": 200
+        }
+      }
+    ],
+    "note": "Due time is ten days back from now, not 12:00 UTC on that day. Exact one-task answer instead of 'contains'."
+  },
+  {
+    "name": "drift 50: a task due in the future is not overdue",
+    "source": "tasks-drift.test.ts:50 does not return a task with due_at clearly in the future as overdue",
+    "steps": [
+      {
+        "id": "t",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "TZ test - future task",
+          "priority": 3,
+          "status": "todo",
+          "dueAt": "{{now+10d}}"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "overdue",
+        "method": "GET",
+        "path": "/api/tasks/overdue",
+        "as": "A",
+        "expect": {
+          "body": {
+            "tasks": []
+          },
+          "status": 200
+        }
+      }
+    ],
+    "note": "Due time is ten days ahead from now, not 12:00 UTC on that day."
+  },
+  {
+    "name": "drift 70: a task due at the end of day-after-tomorrow is at risk in the user's timezone",
+    "source": "tasks-drift.test.ts:70 returns due_at at risk through the user's day-after-tomorrow boundary",
+    "seed": [
+      "insert into app.preferences (owner_user_id, key, value_json, updated_at) values ('{{userA}}','locale','{\"timezone\":\"America/Los_Angeles\",\"region\":\"en-US\",\"dateFormat\":\"24\"}'::jsonb, now())",
+      "insert into app.task_lists (id, owner_user_id, name) values ('20000000-0000-4000-8000-000000000001','{{userA}}','Personal')",
+      "insert into app.tasks (id, owner_user_id, title, status, priority, list_id, due_at) values ('30000000-0000-4000-8000-0000000000d1','{{userA}}','TZ test - LA boundary at risk','todo',3,'20000000-0000-4000-8000-000000000001',((date_trunc('day', now() AT TIME ZONE 'America/Los_Angeles') + interval '2 days 23 hours 59 minutes') AT TIME ZONE 'America/Los_Angeles'))"
+    ],
+    "steps": [
+      {
+        "id": "risk",
+        "method": "GET",
+        "path": "/api/tasks/at-risk",
+        "as": "A",
+        "expect": {
+          "body": {
+            "tasks": [
+              {
+                "title": "TZ test - LA boundary at risk"
+              }
+            ]
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "control",
+        "sql": "select count(*)::int as n from app.preferences where key = 'locale'",
+        "as": "A",
+        "expect": {
+          "rows": [
+            {
+              "n": 1
+            }
+          ]
+        }
+      }
+    ],
+    "note": "Locale preference and the task are seeded by SQL; the test writes them through the app connection and the repository. The due time is computed in SQL exactly as the test does."
+  },
+  {
+    "name": "drift 109: the locale timezone is used for overdue",
+    "source": "tasks-drift.test.ts:109 reads user timezone from locale preference and uses it for overdue classification",
+    "seed": [
+      "insert into app.preferences (owner_user_id, key, value_json, updated_at) values ('{{userA}}','locale','{\"timezone\":\"America/Los_Angeles\",\"region\":\"en-US\",\"dateFormat\":\"24\"}'::jsonb, now())"
+    ],
+    "steps": [
+      {
+        "id": "t",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "TZ test - LA locale past task",
+          "priority": 3,
+          "status": "todo",
+          "dueAt": "{{now-5d}}"
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "overdue",
+        "method": "GET",
+        "path": "/api/tasks/overdue",
+        "as": "A",
+        "expect": {
+          "body": {
+            "tasks": [
+              {
+                "id": "{{t:/body/task/id}}"
+              }
+            ]
+          },
+          "status": 200
+        }
+      }
+    ],
+    "note": "Locale preference is seeded by SQL. Due time is five days back from now."
+  }
+]

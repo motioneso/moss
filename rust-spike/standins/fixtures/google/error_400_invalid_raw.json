@@ -1,0 +1,14 @@
+{
+  "error": {
+    "code": 400,
+    "message": "Invalid value for ByteString: not a valid base64url message",
+    "errors": [
+      {
+        "message": "Invalid value for ByteString: not a valid base64url message",
+        "domain": "global",
+        "reason": "invalidArgument"
+      }
+    ],
+    "status": "INVALID_ARGUMENT"
+  }
+}

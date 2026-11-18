@@ -1,0 +1,96 @@
+[package]
+name = "moss-meetings-module"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Guest-safe Meetings records, notes and capture preferences"
+
+[workspace]
+
+[lib]
+path = "lib.rs"
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+moss-module-sdk = { path = "../../../rust-spike/module-sdk" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+sha2 = "0.10"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wit-bindgen = { version = "=0.57.1", default-features = false, features = ["macros", "realloc"] }
+
+[profile.release]
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
+
+[[test]]
+name = "records"
+path = "../tests/records.rs"
+
+[[test]]
+name = "preferences"
+path = "../tests/preferences.rs"
+
+[[test]]
+name = "privacy"
+path = "../tests/privacy.rs"
+
+[[test]]
+name = "lifecycle"
+path = "../tests/lifecycle.rs"
+
+[[test]]
+name = "transcripts"
+path = "../tests/transcripts.rs"
+
+[[test]]
+name = "history"
+path = "../tests/history.rs"
+
+[[test]]
+name = "recording"
+path = "../tests/recording.rs"
+
+[[test]]
+name = "outputs_logic"
+path = "../tests/outputs_logic.rs"
+
+[[test]]
+name = "review"
+path = "../tests/review.rs"
+
+[[test]]
+name = "export"
+path = "../tests/export.rs"
+
+[[test]]
+name = "recording_reading"
+path = "../tests/recording_reading.rs"
+
+[[test]]
+name = "ring_source"
+path = "../tests/ring_source.rs"
+
+[[test]]
+name = "capture_limit"
+path = "../tests/capture_limit.rs"
+
+[[test]]
+name = "capture_selection"
+path = "../tests/capture_selection.rs"
+
+[[test]]
+name = "capture_devices"
+path = "../tests/capture_devices.rs"
+
+[[test]]
+name = "capture_flow"
+path = "../tests/capture_flow.rs"
+
+[[test]]
+name = "capture_audio"
+path = "../tests/capture_audio.rs"

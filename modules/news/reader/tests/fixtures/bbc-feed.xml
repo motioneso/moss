@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?><rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom" version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+    <channel>
+        <title><![CDATA[BBC News]]></title>
+        <description><![CDATA[BBC News - News Front Page]]></description>
+        <link>https://www.bbc.co.uk/news</link>
+        <image>
+            <url>https://news.bbcimg.co.uk/nol/shared/img/bbc_news_120x60.gif</url>
+            <title>BBC News</title>
+            <link>https://www.bbc.co.uk/news</link>
+        </image>
+        <generator>RSS for Node</generator>
+        <lastBuildDate>Thu, 09 Jul 2026 05:57:00 GMT</lastBuildDate>
+        <atom:link href="https://feeds.bbci.co.uk/news/rss.xml" rel="self" type="application/rss+xml"/>
+        <copyright><![CDATA[Copyright: (C) British Broadcasting Corporation, see https://www.bbc.co.uk/usingthebbc/terms-of-use/#15metadataandrssfeeds for terms and conditions of reuse.]]></copyright>
+        <language><![CDATA[en-gb]]></language>
+        <ttl>15</ttl>
+        <item>
+            <title><![CDATA[Jackdaw boss warns of winter fuel shortages if gas field not approved]]></title>
+            <description><![CDATA[Adura says the UK government must approve North Sea production urgently to avoid domestic supply shortages.]]></description>
+            <link>https://www.bbc.co.uk/news/articles/cdx78n4nkvyo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.co.uk/news/articles/cdx78n4nkvyo#0</guid>
+            <pubDate>Thu, 09 Jul 2026 05:04:17 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/1127/live/fbe04900-7b0c-11f1-bd97-bb877df31663.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[No crude proposals on disability benefits, minister leading review says]]></title>
+            <description><![CDATA[Sir Stephen Timms says personal independence payments (Pip) are not "fit for purpose" and need changing.]]></description>
+            <link>https://www.bbc.co.uk/news/articles/czrxj5vvey0o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.co.uk/news/articles/czrxj5vvey0o#0</guid>
+            <pubDate>Wed, 08 Jul 2026 23:10:43 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/5eb2/live/69d40850-7aec-11f1-94d8-c95634a95d3e.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Met investigate donation to Jenrick's Tory leadership campaign]]></title>
+            <description><![CDATA[The former Conservative, now Reform UK, MP says the allegations are "entirely false".]]></description>
+            <link>https://www.bbc.co.uk/news/articles/cgev4jq4jngo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.co.uk/news/articles/cgev4jq4jngo#0</guid>
+            <pubDate>Thu, 09 Jul 2026 00:50:56 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/7778/live/a673afa0-7b22-11f1-b976-0b9c15b0ccfc.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Starmer hints at bank holiday if England win World Cup]]></title>
+            <description><![CDATA[The prime minister says he does not want to "jinx it" but "ask me again if we get to the final". ]]></description>
+            <link>https://www.bbc.co.uk/news/articles/c20y9g2v2wvo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.co.uk/news/articles/c20y9g2v2wvo#0</guid>
+            <pubDate>Thu, 09 Jul 2026 01:25:24 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/ff07/live/4822f750-7b2a-11f1-bee8-53ce494e1abc.jpg"/>
+        </item>
+</channel>
+</rss>

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f2eee4" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/app.css" />
+    <script src="/boot-theme.js"></script>
+    <title>Moss</title>
+  </head>
+  <body>
+    <noscript>JavaScript is required to run Moss.</noscript>
+    <div id="root">
+      <main class="center-screen">
+        <span class="loading-mark">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+            <rect x="4" y="5.5" width="13" height="3" rx="1.5" fill="currentColor" />
+            <rect x="4" y="10.5" width="16" height="3" rx="1.5" fill="var(--gold)" />
+            <rect x="4" y="15.5" width="9" height="3" rx="1.5" fill="currentColor" />
+          </svg>
+        </span>
+        <p id="boot-loading" role="status">Loading Moss</p>
+      </main>
+    </div>
+    <script type="module" src="/moss-start.js"></script>
+  </body>
+</html>

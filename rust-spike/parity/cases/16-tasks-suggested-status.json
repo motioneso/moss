@@ -1,0 +1,101 @@
+[
+  {
+    "name": "suggested 242: accepting a suggestion sets todo without a completed time",
+    "source": "tasks-suggested-status.test.ts:242 promotes suggested \u2192 todo without setting completed_at",
+    "seed": [
+      "insert into app.task_lists (id, owner_user_id, name) values ('20000000-0000-4000-8000-000000000001','{{userA}}','Personal')",
+      "insert into app.tasks (id, owner_user_id, title, status, list_id, parent_task_id) values ('30000000-0000-4000-8000-0000000000a1','{{userA}}','Accept me','suggested','20000000-0000-4000-8000-000000000001',null)"
+    ],
+    "steps": [
+      {
+        "id": "before",
+        "method": "GET",
+        "path": "/api/tasks/30000000-0000-4000-8000-0000000000a1",
+        "as": "A",
+        "expect": {
+          "body": {
+            "task": {
+              "status": "suggested"
+            }
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "accept",
+        "method": "PATCH",
+        "path": "/api/tasks/30000000-0000-4000-8000-0000000000a1",
+        "as": "A",
+        "body": {
+          "status": "todo"
+        },
+        "expect": {
+          "body": {
+            "task": {
+              "status": "todo",
+              "completedAt": null
+            }
+          },
+          "status": 200
+        }
+      }
+    ],
+    "rows": ["app.tasks"],
+    "note": "Neither server lets the create route set status suggested (400), and the test sets source email and an external key, which the Rust server leaves out. The suggestion is seeded by SQL; the promotion is what the test checks."
+  },
+  {
+    "name": "suggested 387: closing a parent leaves suggested children alone",
+    "source": "tasks-suggested-status.test.ts:387 leaves suggested children unreviewed when a parent closes",
+    "seed": [
+      "insert into app.task_lists (id, owner_user_id, name) values ('20000000-0000-4000-8000-000000000001','{{userA}}','Personal')",
+      "insert into app.tasks (id, owner_user_id, title, status, list_id) values ('30000000-0000-4000-8000-0000000000a1','{{userA}}','Parent','todo','20000000-0000-4000-8000-000000000001')",
+      "insert into app.tasks (id, owner_user_id, title, status, list_id, parent_task_id) values ('30000000-0000-4000-8000-0000000000a2','{{userA}}','Suggested child','suggested','20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-0000000000a1')",
+      "insert into app.tasks (id, owner_user_id, title, status, list_id, parent_task_id) values ('30000000-0000-4000-8000-0000000000a3','{{userA}}','Open child','todo','20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-0000000000a1')"
+    ],
+    "steps": [
+      {
+        "id": "close",
+        "method": "PATCH",
+        "path": "/api/tasks/30000000-0000-4000-8000-0000000000a1",
+        "as": "A",
+        "body": {
+          "status": "done"
+        },
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "sug after",
+        "method": "GET",
+        "path": "/api/tasks/30000000-0000-4000-8000-0000000000a2",
+        "as": "A",
+        "expect": {
+          "body": {
+            "task": {
+              "status": "suggested",
+              "completedAt": null
+            }
+          },
+          "status": 200
+        }
+      },
+      {
+        "id": "open after",
+        "method": "GET",
+        "path": "/api/tasks/30000000-0000-4000-8000-0000000000a3",
+        "as": "A",
+        "expect": {
+          "body": {
+            "task": {
+              "status": "done"
+            }
+          },
+          "status": 200
+        }
+      }
+    ],
+    "rows": ["app.tasks"],
+    "note": "Children are seeded by SQL (create route cannot set suggested); no source or external key."
+  }
+]

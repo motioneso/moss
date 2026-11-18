@@ -1,0 +1,30 @@
+[package]
+name = "moss-goals-host"
+version = "0.1.0"
+edition = "2021"
+publish = false
+autoexamples = false
+
+[workspace]
+
+[dependencies]
+anyhow = "1"
+moss-module-host = { path = "../../../rust-spike/module-host" }
+access-context = { path = "../../../rust-spike/access-context" }
+safety-core = { path = "../../../rust-spike/safety-core" }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread"] }
+tokio-postgres = { version = "0.7", features = ["with-serde_json-1", "with-uuid-1"] }
+
+[dev-dependencies]
+moss-platform-jobs = { path = "../../../rust-spike/module-host/bridges/jobs" }
+base64 = "0.22"
+ring = "0.17"
+chrono = "0.4"
+tempfile = "3"
+uuid = { version = "1", features = ["v4"] }
+sha2 = "0.10"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
+
+[profile.dev]
+debug = 0

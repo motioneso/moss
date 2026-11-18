@@ -1,0 +1,26 @@
+[package]
+name = "moss-on-device"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "The search model that runs inside the Moss host, with its download and cache"
+
+[workspace]
+
+[dependencies]
+anyhow = "1"
+# The ONNX Runtime binding. The release candidate is pinned because there is no stable 2.0.
+# Telemetry is switched off in code. Prebuilt runtimes exist for fewer targets than Moss ships on,
+# so `lax-feature-matching` takes the nearest build (see the part 6 report).
+ort = { version = "=2.0.0-rc.15", default-features = false, features = ["std", "download-binaries", "tls-rustls", "lax-feature-matching"] }
+# The model's own tokenizer. Pure Rust regex, so no C build step.
+tokenizers = { version = "0.23", default-features = false, features = ["fancy-regex"] }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+sha2 = "0.10"
+
+[dev-dependencies]
+serde_json = "1"
+tempfile = "3"
+
+[profile.dev]
+debug = 0

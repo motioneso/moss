@@ -1,0 +1,84 @@
+/* Layout only; colours, type and controls come from app.css. */
+
+.connect-choices {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.connect-choice {
+  display: grid;
+  gap: var(--space-1);
+  text-align: left;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+}
+
+.connect-choice:hover,
+.connect-choice:focus-visible {
+  border-color: var(--border-strong);
+}
+
+.connect-choice strong {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+}
+
+.connect-muted {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.connect-code {
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.connect-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.connect-back {
+  justify-self: start;
+}
+
+.connect-servers {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.connect-server {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border);
+}
+
+.connect-server:last-child {
+  border-bottom: 1px solid var(--border);
+}
+
+.connect-server p {
+  margin: 0;
+}
+
+.connect-error {
+  margin: 0;
+  color: var(--danger-fg);
+}

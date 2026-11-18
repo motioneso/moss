@@ -1,0 +1,304 @@
+{
+  "schemaVersion": 2,
+  "id": "people",
+  "name": "People & Context",
+  "description": "People settings and legacy data component. Installed application and device qualification remain open.",
+  "publisher": "Moss",
+  "version": "0.1.0",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "fuelLimit": 200000000,
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "db",
+      "operations": ["query"],
+      "resources": [
+        "app.person_context_people",
+        "app.person_context_identities",
+        "app.person_context_links",
+        "app.person_context_link_sources",
+        "app.person_context_match_candidates",
+        "app.person_context_events",
+        "app.person_context_indexing_state"
+      ]
+    },
+    {
+      "port": "context",
+      "operations": ["read", "uuid"],
+      "resources": ["call", "new"]
+    },
+    {
+      "port": "vault",
+      "operations": ["notes.status", "notes.read", "notes.list", "notes.compare-write"],
+      "resources": ["people-notes"]
+    },
+    {
+      "port": "kv",
+      "operations": [
+        "get",
+        "records.get",
+        "records.put",
+        "preference.read",
+        "preference.write",
+        "preference.folders"
+      ],
+      "resources": ["people-commands", "people-folder", "people-suggestions", "person-providers"]
+    },
+    {
+      "port": "jobs",
+      "operations": ["enqueue-options", "enqueue-after-commit"],
+      "resources": ["person-index", "sync-person-memory"]
+    },
+    {
+      "port": "api",
+      "operations": ["call"],
+      "resources": ["person-providers"]
+    }
+  ],
+  "database": {
+    "ownedTables": [
+      "app.person_context_people",
+      "app.person_context_identities",
+      "app.person_context_links",
+      "app.person_context_link_sources",
+      "app.person_context_match_candidates",
+      "app.person_context_events",
+      "app.person_context_indexing_state"
+    ],
+    "migrations": ["sql/0128_person_context.sql"],
+    "ledger": "core-legacy"
+  },
+  "jobs": {
+    "person-index": {
+      "command-id": {
+        "kind": "id"
+      }
+    },
+    "sync-person-memory": {
+      "command-id": {
+        "kind": "id"
+      }
+    }
+  },
+  "provides": {
+    "findPeopleByNames": "0.1.0",
+    "resolve": "0.1.0",
+    "getPerson": "0.1.0",
+    "listEmailIdentityValues": "0.1.0"
+  },
+  "requires": {
+    "person-providers": ">=1.0.0, <2.0.0"
+  },
+  "navigation": [],
+  "settings": [
+    {
+      "id": "people.settings",
+      "label": "People",
+      "description": "Choose your People notes folder, refresh notes, review matches and manage people. Requires the installed host preference and note adapters.",
+      "path": "/settings/memory/people",
+      "scope": "user",
+      "entry": "ui/index.html"
+    }
+  ],
+  "features": [
+    {
+      "id": "people.settings",
+      "description": "People Settings pane in the shared module frame. Full installed UI, chat and device parity remain unverified.",
+      "remediations": [
+        {
+          "id": "people-choose-folder",
+          "description": "Choose an existing folder inside your allowed notes folders.",
+          "path": "/settings/memory/people"
+        },
+        {
+          "id": "people-retry",
+          "description": "Try again after checking the module and its host services are available. Large reads may exceed module limits; request fewer results when supported.",
+          "path": "/settings/modules"
+        },
+        {
+          "id": "people-correct-input",
+          "description": "Check the name, status or folder value, then try saving again.",
+          "path": "/settings/memory/people"
+        }
+      ],
+      "errors": [
+        {
+          "code": "people-folder-unavailable",
+          "class": "prerequisite",
+          "description": "The selected People folder cannot be opened.",
+          "remediationRef": "people-choose-folder"
+        },
+        {
+          "code": "people-operation-failed",
+          "class": "transient",
+          "description": "A People request failed. No successful save is shown.",
+          "remediationRef": "people-retry"
+        },
+        {
+          "code": "people-invalid-input",
+          "class": "validation",
+          "description": "An invalid People request is rejected before a change is made.",
+          "remediationRef": "people-correct-input"
+        }
+      ]
+    },
+    {
+      "id": "people.list-reads",
+      "description": "Contact and link list APIs support limiting returned results. The current legacy fixture uses a 1,005-contact account: default-budget probes pass at 100 complete contacts and 100 complete links, then exhaust fuel at 150 contacts. Large responses can exceed module budgets and fail; reduce the requested result count where supported. Installed UI and physical-device verification remain open."
+    },
+    {
+      "id": "people.note-suggestions",
+      "description": "Suggest note updates is on by default; the account switch preserves the existing sourceBehaviors preference."
+    },
+    {
+      "id": "people.canonical-edits",
+      "description": "Renaming, archiving and contact-list edits update the canonical People note and its contact projection together. Empty contact lists can be cleared; summary fields stay unchanged on note-backed edits."
+    },
+    {
+      "id": "people.nested-note-scan",
+      "description": "Canonical note discovery visits nested folders in the legacy depth-first listing order. Refresh still refuses scans above two thousand admitted entries or four MiB of note text, and aborts on listing or read failure before projecting notes. Real installed screen and device qualification remain open."
+    },
+    {
+      "id": "people.index-provider-check",
+      "description": "The packaged indexing worker can check for an optional source provider. When no provider is present it finishes without changing People data. Live provider delivery remains unverified."
+    },
+    {
+      "id": "people.manual-index-refresh",
+      "description": "Manual indexing accepts up to fifty source references using the standard module call budget and queues each for fifteen minutes after the batch's host timestamp. Repeated requests retain the legacy standard-queue behavior. Invalid batches are rejected before any job is sent. A failure or timeout can leave earlier jobs queued and an unsent command stored. Repeating a request creates separate jobs and more stored commands; check earlier work before retrying. Command cleanup, limits, the installed screen and live source delivery remain unverified."
+    },
+    {
+      "id": "people.relative-folder-browse",
+      "description": "Browse directories relative to the selected People folder through the legacy API. Canonically equivalent Unicode spellings compare equally while returned names and paths keep their original spelling. Comparison preserves multiple accents in canonical order before comparing case. Selected letter families have legacy comparisons for base-letter, accent and case ordering; complete locale-sensitive ordering remains unqualified. The Settings chooser still uses allowed absolute notes roots."
+    },
+    {
+      "id": "people.note-field-compatibility",
+      "description": "Canonical-note edits keep the legacy handling of aliases, emails and phones, including nulls, empty lists and mixed JSON list values. The module host and People component parse incoming JSON numbers with correct rounding and keep the legacy decimal spelling, including equal-distance rounding ties. Listener and installed application parsing remain unqualified. Unusable list values return an error; legacy empty list items may publish unreadable frontmatter before projection fails. Repair the note and retry. Missing notes retain projection-only fallback. Dollar replacement tokens remain literal to protect human text."
+    },
+    {
+      "id": "people.json-body-validation",
+      "description": "On methods that parse a body, People rejects decoded JSON containing __proto__ members or constructor objects with a prototype member, including inside arrays and unknown fields, before schema coercion or host calls. It returns the legacy JSON parser error. Remove the forbidden members and send the request again. GET ignores bodies as before; ordinary constructor and prototype fields and string values remain allowed. This qualifies module dispatch; the shipping listener and installed application remain unverified.",
+      "errors": [
+        {
+          "code": "people-invalid-json-body",
+          "class": "validation",
+          "description": "Body is not valid JSON but content-type is set to 'application/json'"
+        }
+      ]
+    }
+  ],
+  "screens": {
+    "/settings/memory/people": "ui/index.html"
+  },
+  "icons": ["icons/people.svg"],
+  "accounts": {
+    "supportsUserDisable": false,
+    "defaultEnabled": true
+  },
+  "routes": [
+    {
+      "method": "POST",
+      "path": "/people/index/refresh",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/people",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/people/resolve",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/people/match-candidates",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/people/:id",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/people/:id/links",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/people/:id",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/people",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/people/:id/archive",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/people/:id/merge",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/people/:id/split-identity",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/people/notes/refresh",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/people/notes-settings",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/people/notes-settings",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/people/note-folders",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/people/note-suggestions",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/people/note-suggestions",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/people/match-candidates/:id/accept",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/people/match-candidates/:id/reject",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/people/match-candidates/:id/suppress",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/people/notes-directories",
+      "signIn": true
+    }
+  ]
+}

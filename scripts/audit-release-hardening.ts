@@ -99,7 +99,14 @@ const forceRlsExemptions = new Map<string, string>([
   ],
   // users has ENABLE (not FORCE) so jarvis_migration_owner can bypass for SECURITY DEFINER
   // auth functions. Checked explicitly in the authOwnerTable block above.
-  ["users", "ENABLE-only: SECURITY DEFINER auth functions need owner bypass; checked separately"]
+  ["users", "ENABLE-only: SECURITY DEFINER auth functions need owner bypass; checked separately"],
+  // The desktop notifier signs in with a device token before any actor is known, so the
+  // SECURITY DEFINER lookup function must read this table as its owner. Runtime roles stay
+  // bound by the owner-only policy; only the token hash is stored.
+  [
+    "desktop_notifier_devices",
+    "ENABLE-only: SECURITY DEFINER token lookup needs owner bypass; runtime roles stay under the owner policy"
+  ]
 ]);
 
 export interface AuditReleaseHardeningOptions {

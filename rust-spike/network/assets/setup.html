@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Create owner account · Moss</title>
+    <link rel="stylesheet" href="/app.css" />
+    <script src="/boot-theme.js"></script>
+    <script src="/access.js" defer></script>
+  </head>
+  <body>
+    <main class="auth-screen">
+      <section class="auth-panel" aria-labelledby="auth-title">
+        <div>
+          <p class="jds-eyebrow">Moss</p>
+          <h1 id="auth-title">Create owner account</h1>
+          <p>Set up Moss on this computer first. Sharing with other devices starts off.</p>
+        </div>
+        <form id="setup" hidden>
+          <div class="jds-field">
+            <label class="jds-label" for="name">Name</label
+            ><input
+              class="jds-input"
+              id="name"
+              name="name"
+              autocomplete="name"
+              maxlength="120"
+              required
+            />
+          </div>
+          <div class="jds-field">
+            <label class="jds-label" for="email">Email</label
+            ><input
+              class="jds-input"
+              id="email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              required
+            />
+          </div>
+          <div class="jds-field">
+            <label class="jds-label" for="password">Password</label
+            ><input
+              class="jds-input"
+              id="password"
+              name="password"
+              type="password"
+              autocomplete="new-password"
+              minlength="8"
+              maxlength="128"
+              required
+            />
+          </div>
+          <button class="jds-btn jds-btn--primary" type="submit">Create owner account</button>
+        </form>
+        <p id="status" role="status" aria-live="polite">Checking setup…</p>
+        <a href="/sign-in">Back to sign in</a>
+      </section>
+    </main>
+  </body>
+</html>

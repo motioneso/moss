@@ -1,0 +1,55 @@
+[package]
+name = "moss-calendar"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[lib]
+path = "lib.rs"
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+moss-module-sdk = { path = "../../../rust-spike/module-sdk" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+chrono-tz = "0.10"
+sha2 = "0.10"
+
+[[test]]
+name = "data"
+path = "tests/data.rs"
+
+[[test]]
+name = "tools"
+path = "tests/tools.rs"
+
+[[bin]]
+name = "calendar-data-parity"
+path = "bin/data-parity.rs"
+
+[[test]]
+name = "jobs"
+path = "tests/jobs.rs"
+
+[[test]]
+name = "operations"
+path = "tests/operations.rs"
+
+[[test]]
+name = "apply"
+path = "tests/apply.rs"
+
+[[test]]
+name = "auto_plan"
+path = "tests/auto_plan.rs"
+
+[[test]]
+name = "preview"
+path = "tests/preview.rs"
+
+[[test]]
+name = "mirror"
+path = "tests/mirror.rs"

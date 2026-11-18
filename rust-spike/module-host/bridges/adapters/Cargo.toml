@@ -1,0 +1,18 @@
+[package]
+name = "moss-platform-adapters"
+version = "0.1.0"
+edition = "2021"
+publish = false
+[dependencies]
+moss-platform-contracts = { path = "../contracts" }
+moss-platform-routing = { path = "../routing" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["serde", "v4", "v5"] }
+async-trait = "0.1"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+zeroize = "1"
+
+# Compile the unchanged Phase 2b source; do not fork or modify its workspace.
+[lib]
+path = "../../../platform/adapters/src/lib.rs"

@@ -1,0 +1,75 @@
+[package]
+name = "moss-notes"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Guest-safe Notes module and domain operations"
+
+[workspace]
+
+[features]
+write-tools = []
+
+[lib]
+path = "lib.rs"
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+uuid = "1"
+moss-module-sdk = { path = "../../../rust-spike/module-sdk" }
+
+[dev-dependencies]
+serde_json = { version = "1", features = ["raw_value"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wit-bindgen = { version = "=0.57.1", default-features = false, features = ["macros", "realloc"] }
+
+[profile.release]
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
+
+[[test]]
+name = "export"
+path = "tests/export.rs"
+
+[[test]]
+name = "approval_api"
+path = "tests/approval_api.rs"
+
+[[test]]
+name = "settings_input"
+path = "tests/settings_input.rs"
+
+[[test]]
+name = "write_tools"
+path = "tests/write_tools.rs"
+required-features = ["write-tools"]
+
+[[test]]
+name = "sync"
+path = "tests/sync.rs"
+required-features = ["write-tools"]
+
+[[test]]
+name = "manual_sync"
+path = "tests/manual_sync.rs"
+required-features = ["write-tools"]
+
+[[test]]
+name = "private_export"
+path = "tests/private_export.rs"
+required-features = ["write-tools"]
+
+[[test]]
+name = "daily_archive"
+path = "tests/daily_archive.rs"
+required-features = ["write-tools"]
+
+[[test]]
+name = "work_mail"
+path = "tests/work_mail.rs"

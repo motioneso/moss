@@ -1,0 +1,378 @@
+mod common;
+use access_context::AccessContext;
+use anyhow::{ensure, Result};
+use moss_module_host::{
+    lifecycle::FileLifecycle,
+    local::LocalPorts,
+    registry::{ModuleList, Source},
+    runtime::{Host, Limits},
+    sql::LegacyInventory,
+    store::{CatalogStore, Installer, State},
+};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::{Arc, Mutex},
+};
+#[derive(Default)]
+struct MemoryCatalog(Mutex<State>, std::sync::atomic::AtomicBool);
+impl CatalogStore for MemoryCatalog {
+    fn load(&self) -> Result<State> {
+        Ok(self.0.lock().unwrap().clone())
+    }
+    fn commit(&self, expected: u64, next: &State) -> Result<()> {
+        ensure!(
+            !self.1.load(std::sync::atomic::Ordering::SeqCst),
+            "Simulated catalog failure"
+        );
+        let mut old = self.0.lock().unwrap();
+        ensure!(old.revision == expected, "Stale catalog");
+        *old = next.clone();
+        Ok(())
+    }
+}
+#[test]
+fn sample_install_pin_upgrade_remove_and_reinstall_preserves_account_data() {
+    let data = tempfile::tempdir().unwrap();
+    let registry = tempfile::tempdir().unwrap();
+    let keys = common::Keys::new();
+    let a = keys.write(registry.path(), "1.0.0", 1, vec![]);
+    let actor = uuid::Uuid::new_v4();
+    let access = AccessContext::new(actor, "sample");
+    let state = Arc::new(MemoryCatalog::default());
+    let installer = Installer::new(
+        data.path(),
+        state.clone(),
+        Arc::new(FileLifecycle::new(data.path(), BTreeSet::from([actor])).unwrap()),
+        Host::new(Limits::default()).unwrap(),
+        Arc::new(LocalPorts::new(data.path()).unwrap()),
+        "0.1.0".parse().unwrap(),
+        LegacyInventory::default(),
+    )
+    .unwrap();
+    let source = Source::Folder(registry.path().into());
+    let root = common::Keys::public(&keys.root);
+    let first = common::Keys::public(&keys.root);
+    let catalog = installer
+        .refresh(&access, source.clone(), &root, &first, "sample-registry")
+        .unwrap();
+    installer.install(&access, &catalog, &a, true).unwrap();
+    let set = r#"{"operation":"set","resource":"counter","parameters":{"count":7}}"#;
+    let get = r#"{"operation":"get","resource":"counter","parameters":{}}"#;
+    installer
+        .call("sample.counter", access.clone(), "route", set)
+        .unwrap();
+    let other = AccessContext::new(uuid::Uuid::new_v4(), "other-account");
+    assert_eq!(
+        installer
+            .call("sample.counter", other, "route", get)
+            .unwrap(),
+        "null"
+    );
+    // Another trusted registry cannot grant itself replacement authority over A's key.
+    let hostile = tempfile::tempdir().unwrap();
+    let hostile_keys = common::Keys::new();
+    let hostile_artifact = hostile_keys.write(hostile.path(), "2.0.0", 1, vec![]);
+    let mut identity: moss_module_host::trust::RegistryIdentity =
+        serde_json::from_slice(&std::fs::read(hostile.path().join("registry.json")).unwrap())
+            .unwrap();
+    identity.id = "other-registry".into();
+    identity
+        .publishers
+        .get_mut("sample")
+        .unwrap()
+        .replaces
+        .insert(common::Keys::public(&keys.publisher));
+    let identity = serde_json::to_vec(&identity).unwrap();
+    std::fs::write(hostile.path().join("registry.json"), &identity).unwrap();
+    std::fs::write(
+        hostile.path().join("registry.json.sig"),
+        common::Keys::sign(&hostile_keys.root, &identity),
+    )
+    .unwrap();
+    let hostile_catalog = installer
+        .refresh(
+            &access,
+            Source::Folder(hostile.path().into()),
+            &common::Keys::public(&hostile_keys.root),
+            &first,
+            "other-registry",
+        )
+        .unwrap();
+    assert!(installer
+        .install(&access, &hostile_catalog, &hostile_artifact, true)
+        .is_err());
+    assert_eq!(
+        state.load().unwrap().installed["sample.counter"].publisher_public_key,
+        common::Keys::public(&keys.publisher)
+    );
+
+    installer
+        .remove_registry(&access, "other-registry")
+        .unwrap();
+    // Install a genuine second package which the next index no longer lists.
+    let mut absent = common::manifest("1.0.0");
+    absent.id = "sample.absent".into();
+    let absent_bytes = moss_module_host::archive::pack(&common::files(&absent)).unwrap();
+    let absent_digest = moss_module_host::trust::digest(&absent_bytes);
+    installer
+        .import_file(
+            &access,
+            &catalog,
+            &absent_bytes,
+            &common::Keys::sign(&keys.publisher, absent_digest.as_bytes()),
+            "sample",
+            true,
+        )
+        .unwrap();
+    installer
+        .pin(&access, "sample.counter", Some("1.0.0".parse().unwrap()))
+        .unwrap();
+    let stale_catalog = catalog;
+    let b = keys.write(registry.path(), "1.1.0", 2, vec![]);
+    let catalog = installer
+        .refresh(&access, source, &root, &first, "sample-registry")
+        .unwrap();
+    assert!(installer
+        .install(&access, &stale_catalog, &a, true)
+        .is_err());
+    let mut catalogs = BTreeMap::from([("sample-registry".into(), catalog)]);
+    let unpinned_list =
+        ModuleList::parse(br#"{"modules":[{"id":"sample.counter","registry":"sample-registry"}]}"#)
+            .unwrap();
+    installer
+        .apply_list(&access, &unpinned_list, &catalogs, &BTreeMap::new())
+        .unwrap();
+    assert_eq!(
+        state.load().unwrap().installed["sample.counter"]
+            .pin
+            .as_ref(),
+        Some(&"1.0.0".parse().unwrap())
+    );
+    assert_eq!(
+        state.load().unwrap().installed["sample.counter"].digest,
+        a.digest
+    );
+    let changing_list = ModuleList::parse(
+        br#"{"modules":[{"id":"sample.counter","registry":"sample-registry","version":"1.1.0"}]}"#,
+    )
+    .unwrap();
+    let preview = installer
+        .preview_list(&access, &changing_list, &catalogs)
+        .unwrap();
+    assert_eq!(preview.len(), 1);
+    assert!(installer
+        .apply_list(&access, &changing_list, &catalogs, &BTreeMap::new())
+        .is_err());
+    let mut wrong = preview[0].consent.clone();
+    wrong.previous = None;
+    assert!(installer
+        .apply_list(
+            &access,
+            &changing_list,
+            &catalogs,
+            &BTreeMap::from([("sample.counter".into(), wrong)])
+        )
+        .is_err());
+    assert_eq!(
+        state.load().unwrap().installed["sample.counter"]
+            .pin
+            .as_ref(),
+        Some(&"1.0.0".parse().unwrap())
+    );
+    let consent = BTreeMap::from([("sample.counter".into(), preview[0].consent.clone())]);
+    state.1.store(true, std::sync::atomic::Ordering::SeqCst);
+    let failure = installer
+        .apply_list(&access, &changing_list, &catalogs, &consent)
+        .unwrap_err();
+    assert!(failure.to_string().contains("Simulated catalog failure"));
+    state.1.store(false, std::sync::atomic::Ordering::SeqCst);
+    assert_eq!(
+        state.load().unwrap().installed["sample.counter"]
+            .pin
+            .as_ref(),
+        Some(&"1.0.0".parse().unwrap())
+    );
+    let catalog = catalogs.remove("sample-registry").unwrap();
+    assert!(installer.install(&access, &catalog, &b, false).is_err());
+    installer.pin(&access, "sample.counter", None).unwrap();
+    let updates = installer.update(&access, &catalog, true).unwrap();
+    assert_eq!(updates.failures.len(), 1);
+    assert_eq!(updates.failures[0].0, "sample.absent");
+    assert_eq!(
+        state.load().unwrap().installed["sample.counter"]
+            .manifest
+            .version,
+        b.version
+    );
+    installer.remove(&access, "sample.absent", None).unwrap();
+    assert_eq!(
+        installer
+            .call("sample.counter", access.clone(), "route", get)
+            .unwrap(),
+        r#"{"count":7}"#
+    );
+    let list = installer.export_list().unwrap();
+    assert_eq!(
+        ModuleList::parse(&serde_json::to_vec(&list).unwrap())
+            .unwrap()
+            .modules
+            .len(),
+        1
+    );
+    installer.remove(&access, "sample.counter", None).unwrap();
+    assert!(installer
+        .install(&access, &hostile_catalog, &hostile_artifact, true)
+        .is_err());
+    assert!(installer
+        .call("sample.counter", access.clone(), "route", get)
+        .is_err());
+    installer.install(&access, &catalog, &b, true).unwrap();
+    assert_eq!(
+        installer
+            .call("sample.counter", access.clone(), "route", get)
+            .unwrap(),
+        r#"{"count":7}"#
+    );
+    assert!(installer
+        .remove(&access, "sample.counter", Some("wrong name"))
+        .is_err());
+    installer
+        .remove(&access, "sample.counter", Some("Sample counter"))
+        .unwrap();
+    installer.install(&access, &catalog, &b, true).unwrap();
+    assert_eq!(
+        installer
+            .call("sample.counter", access, "route", get)
+            .unwrap(),
+        "null"
+    );
+    println!("PASS real signed package → disk install → Wasmtime → account-scoped kv → pin → upgrade → keep-data removal → reinstall → confirmed purge");
+}
+
+#[test]
+fn saved_registry_survives_outage_and_signed_root_rotation_preserves_replay_floor() {
+    use base64::Engine;
+    use moss_module_host::registry_manager::{RegistryConfiguration, RootTransition};
+    let data = tempfile::tempdir().unwrap();
+    let registry = tempfile::tempdir().unwrap();
+    let keys = common::Keys::new();
+    let a = keys.write(registry.path(), "1.0.0", 1, vec![]);
+    let actor = uuid::Uuid::new_v4();
+    let access = AccessContext::new(actor, "registry-settings");
+    let state = Arc::new(MemoryCatalog::default());
+    let open = || {
+        Installer::new(
+            data.path(),
+            state.clone(),
+            Arc::new(FileLifecycle::new(data.path(), [actor].into()).unwrap()),
+            Host::new(Limits::default()).unwrap(),
+            Arc::new(LocalPorts::new(data.path()).unwrap()),
+            "0.1.0".parse().unwrap(),
+            LegacyInventory::default(),
+        )
+        .unwrap()
+    };
+    let installer = open();
+    let config = RegistryConfiguration {
+        id: "sample-registry".into(),
+        source: Source::Folder(registry.path().into()),
+        root_key: common::Keys::public(&keys.root),
+        first_party_key: common::Keys::public(&keys.root),
+    };
+    installer.configure_registry(&access, &config).unwrap();
+    installer
+        .install(
+            &access,
+            &installer.saved_catalog(&access, "sample-registry").unwrap(),
+            &a,
+            true,
+        )
+        .unwrap();
+    std::fs::rename(
+        registry.path().join("index.json"),
+        registry.path().join("offline-index"),
+    )
+    .unwrap();
+    assert!(installer.refresh_configured(&access).unwrap()[0]
+        .1
+        .is_some());
+    drop(installer);
+    let installer = open();
+    assert_eq!(installer.registries(&access).unwrap().len(), 1);
+    assert_eq!(
+        installer
+            .saved_catalog(&access, "sample-registry")
+            .unwrap()
+            .index
+            .serial,
+        1
+    );
+    keys.write(registry.path(), "1.0.0", 3, vec![]);
+    let next = common::Keys::new();
+    let mut identity: moss_module_host::trust::RegistryIdentity =
+        serde_json::from_slice(&std::fs::read(registry.path().join("registry.json")).unwrap())
+            .unwrap();
+    let next_key = common::Keys::public(&next.root);
+    identity.root_fingerprint = moss_module_host::trust::digest(
+        &base64::engine::general_purpose::STANDARD
+            .decode(&next_key)
+            .unwrap(),
+    );
+    let bytes = serde_json::to_vec(&identity).unwrap();
+    std::fs::write(registry.path().join("registry.json"), &bytes).unwrap();
+    std::fs::write(
+        registry.path().join("registry.json.sig"),
+        common::Keys::sign(&next.root, &bytes),
+    )
+    .unwrap();
+    let transition = RootTransition {
+        registry: "sample-registry".into(),
+        previous_fingerprint: state.load().unwrap().registries["sample-registry"]
+            .root_fingerprint
+            .clone()
+            .unwrap(),
+        next_key: next_key.clone(),
+        serial: 3,
+    };
+    let transition = serde_json::to_vec(&transition).unwrap();
+    assert!(installer
+        .rotate_root(
+            &access,
+            &transition,
+            &common::Keys::sign(&next.root, &transition)
+        )
+        .is_err());
+    installer
+        .rotate_root(
+            &access,
+            &transition,
+            &common::Keys::sign(&keys.root, &transition),
+        )
+        .unwrap();
+    assert!(installer
+        .rotate_root(
+            &access,
+            &transition,
+            &common::Keys::sign(&keys.root, &transition)
+        )
+        .is_err());
+    drop(installer);
+    let installer = open();
+    assert_eq!(installer.registries(&access).unwrap()[0].root_key, next_key);
+    assert_eq!(
+        installer
+            .saved_catalog(&access, "sample-registry")
+            .unwrap()
+            .index
+            .serial,
+        3
+    );
+    installer
+        .remove_registry(&access, "sample-registry")
+        .unwrap();
+    assert!(installer.registries(&access).unwrap().is_empty());
+    assert_eq!(
+        state.load().unwrap().registries["sample-registry"].serial,
+        3
+    );
+}

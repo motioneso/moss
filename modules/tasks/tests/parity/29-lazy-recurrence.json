@@ -1,0 +1,86 @@
+[
+  {
+    "name": "component lazy recurrence: stale series advances on list, overdue and focus reads",
+    "source": "packages/tasks/src/recurrence.ts rollForwardOwnedSeries via listFiltered and drift reads",
+    "steps": [
+      {
+        "id": "daily",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "Lazy daily",
+          "dueAt": "2020-01-10T20:00:00.000Z",
+          "doAt": "2020-01-10T18:00:00.000Z",
+          "recurrence": {
+            "freq": "daily",
+            "interval": 3,
+            "occurrence_date": "2020-01-10"
+          }
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "first-roll",
+        "method": "GET",
+        "path": "/api/tasks/focus",
+        "as": "A",
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "monthly",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "body": {
+          "title": "Lazy monthly",
+          "dueAt": "2020-01-31T20:00:00.000Z",
+          "recurrence": {
+            "freq": "monthly",
+            "interval": 1,
+            "occurrence_date": "2020-01-31"
+          }
+        },
+        "expect": {
+          "status": 201
+        }
+      },
+      {
+        "id": "list",
+        "method": "GET",
+        "path": "/api/tasks",
+        "as": "A",
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "overdue",
+        "method": "GET",
+        "path": "/api/tasks/overdue",
+        "as": "A",
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "other-user",
+        "method": "GET",
+        "path": "/api/tasks",
+        "as": "B",
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "id": "stored",
+        "sql": "select recurrence->>'occurrence_date' as occurrence, (due_at is not null) as has_due from app.tasks where id = '{{monthly:/body/task/id}}'",
+        "as": "A"
+      }
+    ]
+  }
+]

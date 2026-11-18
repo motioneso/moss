@@ -53,7 +53,7 @@ What it will take:
 | --------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | Server          | Fastify API, pg-boss worker, CLI-runner sidecar, scripts | One Rust program with internal services: web server, job runner, agent runner, migrator |
 | Screens         | React 19 app built by Vite, served as static files       | Rust UI compiled to WebAssembly, served by the same program to any browser              |
-| Desktop         | None (browser only)                                      | Rust desktop shell (tray, window, start at login) that opens the same UI                |
+| Desktop         | None (browser only)                                      | `moss-app`, installed with the server, connects to this or another computer (JS-90)     |
 | Database        | Postgres with pgvector in Docker                         | Same Postgres and pgvector, bundled and managed by Moss on every install (see 3.2)      |
 | Add-on modules  | Node processes over JSON-RPC, React bundles in the host  | WebAssembly components with the same host ports, UI in a sandboxed frame (see 3.4)      |
 | Server installs | Docker Compose                                           | Same program as a Linux service or a Docker image                                       |
@@ -122,13 +122,15 @@ Phase 0 measures what that harness costs and how many existing cases convert.
 ### 2.4 What the rewrite does to modules
 
 - **In-repo modules** (calendar, email, tasks, notes, meetings, sports and the rest) become Rust
-  crates compiled into the program. They keep their SQL folders and their manifests' meaning.
+  module packages, bundled with the installer and updated through the download registry
+  (amended 2026-11-07, JS-41 spec section 7). They keep their SQL files and their manifests'
+  meaning.
 - **Installed modules** (`external-modules/finance`, `meals`, archived `job-search`) run today as
   separate Node processes started by `packages/module-registry/src/external/worker-runtime.ts:284`,
   with web code bound to the host's React (`docs/module-developer-guide.md` §13.4). Both halves
   stop working. They must be rebuilt in the new module format (3.4).
-- **Workshop** builds TypeScript modules today. It must produce the new format before it is useful
-  again.
+- **Workshop** builds TypeScript modules today. It is not ported; Workshop and Food are redone
+  later (Ben, 2026-11-07).
 - **Third-party authors.** No outside modules are known to exist. If any do, they break without
   a compatibility path.
 
@@ -173,12 +175,12 @@ Postgres with pgvector and RLS is the security model. 633 policies, 93 security-
 and four locked-down roles carry the privacy guarantees. The desktop question is how to get that
 database onto a Windows or Mac machine.
 
-| Option                                       | Keeps RLS and roles                    | Keeps migrations and data          | Desktop cost                                                     | Verdict                        |
-| -------------------------------------------- | -------------------------------------- | ---------------------------------- | ---------------------------------------------------------------- | ------------------------------ |
-| Bundled Postgres plus pgvector               | Yes, unchanged                         | Yes, same files, same dump format  | Ship and manage a Postgres per OS, sign its files                | **Recommended**                |
-| Embedded Postgres-compatible engine          | Partly; RLS and extension support vary | Unproven for 84 PL/pgSQL functions | Smaller, but every policy needs re-proof                         | Reject                         |
-| SQLite with a new isolation model            | No; SQLite has no RLS or roles         | No; every SQL file rewritten       | Smallest, but the privacy model must be redesigned and re-proven | Reject                         |
-| Thin client to an install on another machine | Yes                                    | Yes                                | No local database                                                | Fallback only if Phase 1 fails |
+| Option                                       | Keeps RLS and roles                    | Keeps migrations and data          | Desktop cost                                                     | Verdict                  |
+| -------------------------------------------- | -------------------------------------- | ---------------------------------- | ---------------------------------------------------------------- | ------------------------ |
+| Bundled Postgres plus pgvector               | Yes, unchanged                         | Yes, same files, same dump format  | Ship and manage a Postgres per OS, sign its files                | **Recommended**          |
+| Embedded Postgres-compatible engine          | Partly; RLS and extension support vary | Unproven for 84 PL/pgSQL functions | Smaller, but every policy needs re-proof                         | Reject                   |
+| SQLite with a new isolation model            | No; SQLite has no RLS or roles         | No; every SQL file rewritten       | Smallest, but the privacy model must be redesigned and re-proven | Reject                   |
+| Thin client to an install on another machine | Yes                                    | Yes                                | No local database                                                | First-class mode (JS-90) |
 
 Recommendation: bundle Postgres and pgvector on every OS. The deferred desktop plan reached the
 same answer (`docs/superpowers/plans/2026-09-05-moss-desktop-install.md`, "Postgres stays"), and so
@@ -476,9 +478,10 @@ its own.
 | 2     | Core platform                        | L    | 0          |
 | 3     | Chat and agents                      | L    | 2          |
 | 4     | UI shell and design system           | L    | 2          |
-| 5     | In-repo modules and connectors       | XL   | 2, 3, 4    |
-| 6     | New module format and Workshop       | L    | 2, 4       |
-| 7     | Installers, signing, updates, backup | L    | 1, 2       |
+| 4b    | Module host and package format       | L    | 2, 4       |
+| 5     | In-repo modules and connectors       | XL   | 2, 3, 4b   |
+| 6     | Registry screens, review, finance    | L    | 4b, 5      |
+| 7     | Installers, signing, updates, backup | L    | 1, 2, M7   |
 | 8     | Cutover of existing installs         | M    | 5, 6, 7    |
 | 9     | Retire the TypeScript code           | S    | 8          |
 
@@ -520,8 +523,8 @@ converted tests.
   protection at rest only when verified (companion doc).
 
 **Kill gate.** If pgvector cannot load under macOS notarization, or Postgres cannot run as a normal
-Windows user, installs on that OS become a thin client to an install on another machine, and the
-plan is re-cut before Phase 7.
+Windows user, installs on that OS use the app to connect to another computer until it is fixed.
+The plan is not re-cut, because connecting to another computer is already a normal mode (JS-90).
 
 ### Phase 2: core platform (L)
 
@@ -551,10 +554,18 @@ the gate.
 
 ### Phase 4: UI shell and design system (L)
 
-- App frame, navigation, chat drawer, Today, Settings frame, desktop shell, design-system audit.
+- App frame, navigation, chat drawer, Today, Settings frame, design-system audit.
+- The desktop shell is `moss-app`, a separate program that connects to a local or remote server.
+  The server has no window of its own. See
+  `docs/superpowers/specs/2026-11-08-rust-server-and-app-split-design.md` (JS-90).
 
 **Kill gate.** Today and the chat drawer pass Ben's look check on a phone and a desktop, using the
 carried-over CSS. If the CSS cannot be reused cleanly, re-size Phase 5 before it starts.
+
+> **Amended 2026-11-07 (JS-41).** Modules ship as signed packages from a download registry.
+> A new Phase 4b (module host and package format) runs before Phase 5, and every Phase 5 module
+> follows the package rule. Workshop and Food are not ported. See
+> `docs/superpowers/specs/2026-11-07-rust-module-packages-and-registry-design.md` sections 7 and 9.
 
 ### Phase 5: in-repo modules and connectors (XL)
 
@@ -565,10 +576,13 @@ carried-over CSS. If the CSS cannot be reused cleanly, re-size Phase 5 before it
 **Kill gate.** At the halfway point, compare the real rate with the Phase 0 estimate. If it is
 worse by half or more, stop and re-plan with Ben before porting further.
 
-### Phase 6: new module format and Workshop (L)
+### Phase 6: registry screens, review, finance and meals (L)
 
-- WebAssembly host with the 3.4 ports, sandboxed module screens, install and upgrade flow.
-- Rebuild finance and meals in the new format. Workshop produces the new format.
+Amended 2026-11-07 (JS-41). The WebAssembly host, module screens and install flow moved to Phase
+4b. Workshop is not ported.
+
+- Registry screens, review, revocation and local packages (JS-41 spec slices M9 to M11).
+- Port finance and meals as packages, as they are (slice M12).
 
 **Kill gate.** Finance runs in the new format and passes its own tests. If the port interface cannot
 express what finance needs, redesign it before rebuilding meals.
@@ -577,6 +591,9 @@ express what finance needs, redesign it before rebuilding meals.
 
 - Per-OS packages, signing, signed updates, start at login, LAN sharing prompt, backup and restore,
   the import screen for existing Docker installs.
+- Each package installs both the server and the app. Each local instance runs as a user service
+  or login item. The updater updates both together. The app gains instance, Stop and tray
+  controls, and accepts public certificates through the OS trust store (JS-90 sections 6.3, 13.2).
 
 **Kill gate.** A clean install on a fresh machine on each OS, using clicks only, starts, signs in,
 opens Today, and backs up and restores. A failed update on each OS falls back to the old cluster.
@@ -587,6 +604,7 @@ The full parity checklist runs in Phase 8, once modules exist.
 - Rehearse the 4.2 move and both 4.3 rollbacks on a copy of real data, then move Ben's prod.
 - Run the full parity checklist on a fresh install on each OS: sign-in, chat with tools, one read
   and one write per module, one job per queue kind, backup and restore, and phone access.
+- A second computer connects to the moved server through the app (JS-90).
 
 **Kill gate.** The rehearsal passes both rollbacks, and the full parity checklist passes on each
 OS. If either fails, prod does not move.

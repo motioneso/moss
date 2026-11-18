@@ -1,0 +1,530 @@
+{
+  "schemaVersion": 2,
+  "id": "meals",
+  "name": "Meals",
+  "description": "Private kitchen and household for meal planning, with meal plans written day by day in the background, under the host's approval rules. Shopping lists, the pantry, cooking a meal, ratings, undo and the food log work through chat, and a background job estimates each logged meal. Recipes beyond plans and the wider pantry maths are not part of this package yet. No screens.",
+  "publisher": "Moss",
+  "version": "0.1.0",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "fuelLimit": 200000000,
+  "callLimitMs": 30000,
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "db",
+      "operations": ["query"],
+      "resources": [
+        "app.meals_kitchens",
+        "app.meals_household_members",
+        "app.meals_meal_slot_rules",
+        "app.meals_favourites",
+        "app.meals_ratings",
+        "app.meals_plans",
+        "app.meals_plan_days",
+        "app.meals_planned_meals",
+        "app.meals_planned_meal_eaters",
+        "app.meals_swap_choices",
+        "app.meals_recipes",
+        "app.meals_recipe_ingredients",
+        "app.meals_pantry_items",
+        "app.meals_staples",
+        "app.meals_shopping_lists",
+        "app.meals_shopping_list_items",
+        "app.meals_undo_actions",
+        "app.meals_log_entries",
+        "app.meals_log_estimates",
+        "app.meals_log_estimate_items"
+      ]
+    },
+    {
+      "port": "context",
+      "operations": ["read", "uuid", "local-date"],
+      "resources": ["call", "new", "account"]
+    },
+    {
+      "port": "tools",
+      "operations": ["offer", "run"],
+      "resources": [
+        "meals.kitchen.get",
+        "meals.kitchen.save",
+        "meals.household.save",
+        "meals.household.remove",
+        "meals.plan.create",
+        "meals.plan.get",
+        "meals.plan.current",
+        "meals.plan.control",
+        "meals.list.get",
+        "meals.list.build",
+        "meals.list.edit",
+        "meals.list.bought",
+        "meals.list.clear",
+        "meals.pantry.get",
+        "meals.pantry.edit",
+        "meals.log.list",
+        "meals.log.summarize",
+        "meals.log.add",
+        "meals.log.reestimate",
+        "meals.log.correct",
+        "meals.log.delete",
+        "meals.meal.cooked",
+        "meals.meal.rate",
+        "meals.undo",
+        "meals.plan.delete",
+        "meals.meal.get",
+        "meals.meal.servings",
+        "meals.meal.edit",
+        "meals.meal.swap",
+        "meals.day.edit",
+        "meals.favourites.edit"
+      ]
+    },
+    {
+      "port": "ai",
+      "operations": ["generate"],
+      "resources": ["structured"]
+    },
+    {
+      "port": "jobs",
+      "operations": ["enqueue-options"],
+      "resources": ["meals-plan-day", "meals-log-estimate", "meals-meal-job"]
+    }
+  ],
+  "database": {
+    "migrations": [
+      "sql/0001_create_meals_kitchens.sql",
+      "sql/0002_create_meals_household_members.sql",
+      "sql/0003_index_meals_household_members_one_self.sql",
+      "sql/0004_create_meals_meal_slot_rules.sql",
+      "sql/0005_create_meals_plans.sql",
+      "sql/0006_create_meals_plan_days.sql",
+      "sql/0007_create_meals_recipes.sql",
+      "sql/0008_index_meals_recipes_title_key.sql",
+      "sql/0009_create_meals_recipe_ingredients.sql",
+      "sql/0010_create_meals_planned_meals.sql",
+      "sql/0011_create_meals_planned_meal_eaters.sql",
+      "sql/0012_create_meals_shopping_lists.sql",
+      "sql/0013_create_meals_shopping_list_items.sql",
+      "sql/0014_index_meals_shopping_list_items_line_key.sql",
+      "sql/0015_create_meals_pantry_items.sql",
+      "sql/0016_index_meals_pantry_items_name_key.sql",
+      "sql/0017_create_meals_undo_actions.sql",
+      "sql/0018_create_meals_staples.sql",
+      "sql/0019_create_meals_log_entries.sql",
+      "sql/0020_create_meals_log_estimates.sql",
+      "sql/0021_index_meals_log_entries_owner_local_date.sql",
+      "sql/0022_create_meals_log_estimate_items.sql",
+      "sql/0023_create_meals_swap_choices.sql",
+      "sql/0024_add_meals_planned_meals_job_generation.sql",
+      "sql/0025_create_meals_ratings.sql",
+      "sql/0026_create_meals_favourites.sql",
+      "sql/0027_add_meals_planned_meals_quick_max_minutes.sql"
+    ],
+    "ownedTables": [
+      "app.meals_favourites",
+      "app.meals_household_members",
+      "app.meals_kitchens",
+      "app.meals_log_entries",
+      "app.meals_log_estimate_items",
+      "app.meals_log_estimates",
+      "app.meals_meal_slot_rules",
+      "app.meals_pantry_items",
+      "app.meals_plan_days",
+      "app.meals_planned_meal_eaters",
+      "app.meals_planned_meals",
+      "app.meals_plans",
+      "app.meals_ratings",
+      "app.meals_recipe_ingredients",
+      "app.meals_recipes",
+      "app.meals_shopping_list_items",
+      "app.meals_shopping_lists",
+      "app.meals_staples",
+      "app.meals_swap_choices",
+      "app.meals_undo_actions"
+    ],
+    "ledger": "module-legacy",
+    "access": {
+      "app.meals_favourites": {
+        "access": "owner-only"
+      },
+      "app.meals_household_members": {
+        "access": "owner-only"
+      },
+      "app.meals_kitchens": {
+        "access": "owner-only"
+      },
+      "app.meals_log_entries": {
+        "access": "owner-only"
+      },
+      "app.meals_log_estimate_items": {
+        "access": "owner-only"
+      },
+      "app.meals_log_estimates": {
+        "access": "owner-only"
+      },
+      "app.meals_meal_slot_rules": {
+        "access": "owner-only"
+      },
+      "app.meals_pantry_items": {
+        "access": "owner-only"
+      },
+      "app.meals_plan_days": {
+        "access": "owner-only"
+      },
+      "app.meals_planned_meal_eaters": {
+        "access": "owner-only"
+      },
+      "app.meals_planned_meals": {
+        "access": "owner-only"
+      },
+      "app.meals_plans": {
+        "access": "owner-only"
+      },
+      "app.meals_ratings": {
+        "access": "owner-only"
+      },
+      "app.meals_recipe_ingredients": {
+        "access": "owner-only"
+      },
+      "app.meals_recipes": {
+        "access": "owner-only"
+      },
+      "app.meals_shopping_list_items": {
+        "access": "owner-only"
+      },
+      "app.meals_shopping_lists": {
+        "access": "owner-only"
+      },
+      "app.meals_staples": {
+        "access": "owner-only"
+      },
+      "app.meals_swap_choices": {
+        "access": "owner-only"
+      },
+      "app.meals_undo_actions": {
+        "access": "owner-only"
+      }
+    }
+  },
+  "routes": [
+    {
+      "method": "POST",
+      "path": "/meals/tools/run",
+      "signIn": true
+    }
+  ],
+  "requires": {},
+  "provides": {
+    "collectMealsExportSection": "1.0.0",
+    "deleteMealsAccountData": "1.0.0"
+  },
+  "icons": ["icons/meals.svg"],
+  "accounts": {
+    "supportsUserDisable": true,
+    "defaultEnabled": true
+  },
+  "lifecycle": {
+    "required": false,
+    "bundled": true,
+    "removable": true
+  },
+  "screens": {},
+  "navigation": [],
+  "settings": [
+    {
+      "id": "meals.module-settings",
+      "label": "Meals",
+      "path": "/settings?section=modules&module=meals",
+      "scope": "user",
+      "description": "Kitchen units, the default pantry mode and the shared or solo rule for each meal are read and saved through chat. The settings screen is not built yet."
+    }
+  ],
+  "features": [
+    {
+      "id": "meals.chat-kitchen",
+      "description": "Chat can read the kitchen and change its units, default pantry mode and the shared or solo rule for each meal. A new account shows one member named You and the default settings. Reading never saves anything. Changes need the host's one-use approval for the same person and exact inputs.",
+      "errors": [
+        {
+          "code": "approval_required",
+          "class": "validation",
+          "description": "The tool cannot run without approval. Ask for approval for these exact inputs and try again."
+        }
+      ]
+    },
+    {
+      "id": "meals.chat-household",
+      "description": "Add or change household members through Moss, including their targets, meals of the day, never-serve list and preferences. Removing a member needs approval each time. Each person sees only their own household.",
+      "errors": [
+        {
+          "code": "member_not_found",
+          "class": "validation",
+          "description": "The member does not exist or belongs to another person. Read the kitchen to see the members and try again."
+        },
+        {
+          "code": "self_member",
+          "class": "validation",
+          "description": "The member is you, and your own member cannot be removed. Choose another member."
+        }
+      ]
+    },
+    {
+      "id": "meals.chat-plan",
+      "description": "Chat can start a meal plan of 1 to 28 days, read it, and stop, resume, retry or regenerate it. Each day is written by a background job that checks every meal against each eater's never-serve list and calorie target. Each person sees only their own plans. Starting or changing a plan needs the host's one-use approval.",
+      "errors": [
+        {
+          "code": "invalid_input",
+          "class": "validation",
+          "description": "The plan or day was not found, belongs to another person, or a field is missing or out of range. Read the current plan and try again with corrected input."
+        },
+        {
+          "code": "approval_required",
+          "class": "validation",
+          "description": "The tool cannot run without approval. Ask for approval for these exact inputs and try again."
+        }
+      ]
+    },
+    {
+      "id": "meals.chat-list",
+      "description": "Chat can build a shopping list from a meal plan, read it, add, change, tick, untick and remove lines, mark ticked lines as bought so they move into the Pantry, and clear the list. Each person sees only their own list. Changes need the host's one-use approval, and clearing the list asks every time.",
+      "errors": [
+        {
+          "code": "invalid_input",
+          "class": "validation",
+          "description": "A line, plan or list was not found, belongs to another person, or a field is missing or out of range. Read the list and try again with corrected input."
+        },
+        {
+          "code": "approval_required",
+          "class": "validation",
+          "description": "The tool cannot run without approval. Ask for approval for these exact inputs and try again."
+        }
+      ]
+    },
+    {
+      "id": "meals.chat-pantry",
+      "description": "Chat can read the Pantry and its Staples, add, change or remove Pantry items, and add, rename or remove Staples. Changing the Pantry updates a shopping list that follows a plan. Each person sees only their own Pantry.",
+      "errors": [
+        {
+          "code": "invalid_input",
+          "class": "validation",
+          "description": "The item or Staple was not found, belongs to another person, a Staple with that name exists, or a field is missing or out of range. Read the Pantry and try again with corrected input."
+        },
+        {
+          "code": "approval_required",
+          "class": "validation",
+          "description": "The tool cannot run without approval. Ask for approval for these exact inputs and try again."
+        }
+      ]
+    },
+    {
+      "id": "meals.chat-log",
+      "description": "Chat can log what you ate from a description, read a day or a range of up to 31 days, add up a range of up to 92 days, retry an estimate, correct a meal or one of its foods, and delete a meal. A new meal is saved at once as pending and a background job estimates its calories and macros. Every estimate is shown as an estimate, and anything the estimate could not tell stays unknown, never zero. Each person sees only their own log. Adding, retrying and correcting need the host's one-use approval, and deleting asks every time.",
+      "errors": [
+        {
+          "code": "invalid_input",
+          "class": "validation",
+          "description": "A field is missing or out of range, the meal id names no meal of yours, or the time could not be read. Read the log and try again with corrected input."
+        },
+        {
+          "code": "approval_required",
+          "class": "validation",
+          "description": "The tool cannot run without approval. Ask for approval for these exact inputs and try again."
+        }
+      ]
+    },
+    {
+      "id": "meals.chat-cooking",
+      "description": "Chat can mark a planned meal cooked, which takes what the recipe used out of the Pantry and offers to log the portion, rate a meal's recipe from 1 to 5 stars for each person, and undo a removed shopping line or Pantry item, a Bought, or a Mark cooked. Each person sees only their own meals, ratings and undo history. Changes need the host's one-use approval.",
+      "errors": [
+        {
+          "code": "invalid_input",
+          "class": "validation",
+          "description": "The meal has no recipe yet or is already cooked, the person is not in the household, stars are not a whole number from 1 to 5, or there is nothing to undo. Read the plan and try again with corrected input."
+        },
+        {
+          "code": "approval_required",
+          "class": "validation",
+          "description": "The tool cannot run without approval. Ask for approval for these exact inputs and try again."
+        }
+      ]
+    },
+    {
+      "id": "meals.chat-arrange",
+      "description": "Chat can read one meal as a recipe, change its servings in halves, lock, unlock, move or change who eats it, swap it for one of three checked choices or a quick one, arrange a day (plain-text slots, one-off meals, cook-time limits, shared or solo slots), edit favourites and place one into a meal, re-plan the rest of the week, and delete a plan, which is destructive. Swaps and Safety re-checks run as background jobs that carry only ids. Changes need the host's one-use approval.",
+      "errors": [
+        {
+          "code": "invalid_input",
+          "class": "validation",
+          "description": "The meal, day or plan was not found, belongs to another person, or a field is missing or out of range. Read it again and retry with corrected input."
+        },
+        {
+          "code": "approval_required",
+          "class": "validation",
+          "description": "The tool cannot run without approval. Ask for approval for these exact inputs and try again."
+        }
+      ]
+    },
+    {
+      "id": "meals.account-data",
+      "description": "The whole-account export collects a person's kitchen, household, plans, recipes, shopping lists, pantry, food log, ratings and undo records, and the whole-account delete removes all of them. Each call touches only the signed-in person's rows.",
+      "errors": []
+    }
+  ],
+  "tools": {
+    "meals.kitchen.get": {
+      "description": "Read the kitchen: units, default pantry mode, every household member and the shared or solo rule for each meal.",
+      "risk": "read"
+    },
+    "meals.kitchen.save": {
+      "description": "Change kitchen settings: units, the default pantry mode and shared or solo rules per meal.",
+      "risk": "write"
+    },
+    "meals.household.save": {
+      "description": "Add or change a household member. Leave memberId out to add someone.",
+      "risk": "write"
+    },
+    "meals.household.remove": {
+      "description": "Remove a household member. The self member cannot be removed.",
+      "risk": "destructive"
+    },
+    "meals.plan.create": {
+      "description": "Start a meal plan of 1 to 28 days from a start date. Moss writes the days one at a time in the background, checking every meal against each eater's Never serve list and calorie target, and returns the plan at once with its days pending. Call meals.plan.get to follow progress.",
+      "risk": "write"
+    },
+    "meals.plan.get": {
+      "description": "Read a meal plan by its id, or the newest plan that covers a date: each day's status, its meals, who eats them, safety results and calorie fit.",
+      "risk": "read"
+    },
+    "meals.plan.current": {
+      "description": "Read the meal plan the Plan tab shows for a date: the plan that covers it, else the next one to start, else the newest. Returns plan null when nothing is planned.",
+      "risk": "read"
+    },
+    "meals.plan.control": {
+      "description": "Stop a plan that is being written, resume a stopped or paused plan where it left off, retry one day that failed, regenerate, or re-plan the rest of the week. A retry keeps the day's finished meals and rewrites only the rest. Name the day by dayId or date. Retrying a day on a stopped plan resumes the whole plan, so later unwritten days are written too. A retry asked for while another day is being written waits its turn. Regenerate replaces written and failed recipe meals with new ones and never touches locked meals, cooked meals or text meals. It covers the whole plan, one day (dayId or date) or one meal (mealId). Re-plan replaces only the meals still to come, from the Pantry as it is now: past days stay, today's meals stay once their usual time has passed, and locked, cooked and text meals stay. A plan that ignored the Pantry is raised to prefer what is on hand. The household's own time zone decides what today means. The plan's replaceable count says how many meals a whole-plan regenerate would replace. Shopping list ticks survive, and only lines whose amount changed show a new amount.",
+      "risk": "write"
+    },
+    "meals.list.get": {
+      "description": "Read the shopping list. Lines are grouped by store section and carry the amount the recipes need, the amount to buy, the meals each line is for, whether it is ticked, and whether it is already bought. A line marked notInPlan is ticked but no longer needed by the plan. Returns an empty list before one is built.",
+      "risk": "read"
+    },
+    "meals.list.build": {
+      "description": "Build the shopping list from a meal plan, or rebuild it after the plan changed. The same ingredient across meals becomes one line, and amounts round up to what the shop sells. Lines you ticked stay ticked, lines you added stay, and a ticked line the plan no longer needs stays, marked not in the plan.",
+      "risk": "write"
+    },
+    "meals.list.edit": {
+      "description": "Add, change, remove, tick or untick shopping lines. add needs a name and takes an optional quantity, unit and store section. update changes a line by lineId, and on a line built from the plan the quantity is the amount to buy. remove records an undo entry that meals.undo can use. tick and untick take lineId, or lineIds to do several at once.",
+      "risk": "write"
+    },
+    "meals.list.bought": {
+      "description": "Mark shopping lines as bought and add them to the Pantry. Without lines it takes every ticked line. Give a line a quantity and unit when you bought a different amount than the list said. It records an undo entry that meals.undo can use.",
+      "risk": "write"
+    },
+    "meals.list.clear": {
+      "description": "Remove every line from the shopping list, including lines you added. This cannot be undone.",
+      "risk": "destructive"
+    },
+    "meals.pantry.get": {
+      "description": "Read the Pantry. Items carry a name, an optional amount and unit (no amount means the household has some), and where the item came from. Staples are the things always on hand, such as salt and oil, that never go on the shopping list.",
+      "risk": "read"
+    },
+    "meals.pantry.edit": {
+      "description": "Add, change or remove a Pantry item or a Staple. action is add, update or remove. target is item (the default) or staple. add needs a name and takes an optional quantity and unit for an item; no quantity means the household has some. update changes an item by itemId, or renames a Staple by stapleId. Removing an item records an undo entry that meals.undo can use. Changing the Pantry updates a shopping list that follows a plan.",
+      "risk": "write"
+    },
+    "meals.log.list": {
+      "description": "List logged meals for one day (localDate) or a range of up to 31 days (fromLocalDate and toLocalDate). A single day also returns the day's totals, the self member's daily targets and how the calories compare to the calorie target. Totals count only estimated meals. A meal still being estimated is counted in entriesWithoutEstimate, never as zero.",
+      "risk": "read"
+    },
+    "meals.log.summarize": {
+      "description": "Add up nutrition across a date range of up to 92 days. Meals without an estimate are counted, never treated as zero.",
+      "risk": "read"
+    },
+    "meals.log.add": {
+      "description": "Log a meal from a description. The meal is saved at once as pending and Moss estimates calories and macros in the background. Read it again with meals.log.list to see the estimate. A retry with the same idempotencyKey returns the same meal.",
+      "risk": "write"
+    },
+    "meals.log.reestimate": {
+      "description": "Retry the estimate for a meal that is still pending or whose estimate failed. A meal that already has an estimate is left alone. Use meals.log.correct to change one.",
+      "risk": "write"
+    },
+    "meals.log.correct": {
+      "description": "Correct a logged meal's description, serving note, time or one of the foods in it. Pass the expectedRevision from the last read. A stale revision is refused. The meal's totals are recalculated from its foods.",
+      "risk": "write"
+    },
+    "meals.log.delete": {
+      "description": "Delete a logged meal.",
+      "risk": "destructive"
+    },
+    "meals.meal.cooked": {
+      "description": "Mark a planned meal cooked. It takes what the recipe used, scaled to the servings, out of the Pantry without taking any item below zero, and returns what changed, an undo token for meals.undo, and an offer to log the person's portion. The offer is only an offer: to log it, call meals.log.add with its description and servingNote. A meal can be marked cooked once.",
+      "risk": "write"
+    },
+    "meals.meal.rate": {
+      "description": "Rate a meal's recipe from 1 to 5 stars for one or more household members, or pass null stars to clear a rating. One star keeps that recipe out of future plans that include that person, unless a request names the recipe.",
+      "risk": "write"
+    },
+    "meals.undo": {
+      "description": "Undo the change an undo token names. A removed shopping line or Pantry item comes back, a Bought is reversed, and a Mark cooked puts the meal back to not cooked and its Pantry amounts back. A Pantry amount that was edited after Bought or Mark cooked is left alone and counted as skipped.",
+      "risk": "write"
+    },
+    "meals.plan.delete": {
+      "description": "Delete a meal plan with all its days and meals.",
+      "risk": "destructive"
+    },
+    "meals.meal.get": {
+      "description": "Read one planned meal as a recipe: steps, ingredients scaled to the servings, check-the-label notes, and each eater's portion, Safety result and calorie fit.",
+      "risk": "read"
+    },
+    "meals.meal.servings": {
+      "description": "Change how many servings a planned meal cooks, in steps of half a serving from 0.5 to 24, or pass null to go back to the eaters' portions. The recipe amounts and the shopping list follow the new servings.",
+      "risk": "write"
+    },
+    "meals.meal.edit": {
+      "description": "Lock or unlock one written recipe meal, move a meal to another day or slot in the same plan, or change who eats it. A locked meal stays through every Regenerate. Cooked meals and text meals cannot be locked, and a cooked meal cannot be moved. Moving takes targetDayId or targetDate, and targetSlotName when the meal also changes slot. Changing eaters takes eaterIds: servings follow the new eaters and Safety runs again for them before the meal shows as checked.",
+      "risk": "write"
+    },
+    "meals.meal.swap": {
+      "description": "Swap one written or failed recipe meal. request_choices starts three replacement recipes, each checked for Safety before it shows; read the meal to see them as they finish. choose takes a ready choiceId, replaces the meal with it and rebuilds the shopping list. quick takes maxMinutes (5 to 240) and writes one replacement inside that time, preferring what is on hand; read the meal to see it and what is still to buy. A locked meal can be swapped by asking.",
+      "risk": "write"
+    },
+    "meals.day.edit": {
+      "description": "Arrange one day of a plan. set_text turns a meal (mealId, text) into a plain-text slot such as eating out, which never reaches the shopping list; clear_text turns it back into a meal Moss writes. add_one_off adds a Solo meal for one person (dayId or planId and date, slotName, memberId). set_cook_limit sets a night's cook-time limit in minutes (minutes, 5 to 240, or null to clear), and Regenerate then writes inside it. set_sharing makes one slot Shared or Solo for that day only (slotName, sharing); Solo writes one meal per eater.",
+      "risk": "write"
+    },
+    "meals.favourites.edit": {
+      "description": "Add or remove a recipe as one person's favourite (action add or remove, with memberId and recipeId), or place a favourite into a planned meal (action place, with mealId). Placing runs the Never serve check for everyone who eats that meal and refuses when it fails or when the meal is locked. Returns the kitchen, and the meal when one was placed.",
+      "risk": "write"
+    }
+  },
+  "jobs": {
+    "meals-log-estimate": {
+      "entry-id": {
+        "kind": "id"
+      },
+      "revision": {
+        "kind": "count"
+      }
+    },
+    "meals-plan-day": {
+      "plan-id": {
+        "kind": "id"
+      },
+      "day-id": {
+        "kind": "id"
+      },
+      "generation": {
+        "kind": "count"
+      }
+    },
+    "meals-meal-job": {
+      "meal-id": {
+        "kind": "id"
+      },
+      "generation": {
+        "kind": "count"
+      },
+      "mode": {
+        "kind": "choice",
+        "choices": ["swap-choices", "quick-swap", "safety-recheck"]
+      }
+    }
+  }
+}

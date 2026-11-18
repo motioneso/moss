@@ -1,0 +1,13 @@
+[package]
+name = "moss-shell-contract"
+version = "0.0.0"
+edition.workspace = true
+publish.workspace = true
+description = "Data shapes the UI shell reads, and the ShellData seam the core platform fills in"
+
+[features]
+stub = ["dep:chrono"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+chrono = { version = "0.4", optional = true, default-features = false, features = ["clock"] }

@@ -1,0 +1,212 @@
+[
+  {
+    "op": "parse",
+    "content": "---\ndisplayName: Al\rice\nstatus: active\n---\n",
+    "expected": null
+  },
+  {
+    "op": "parse",
+    "content": "---\ndisplayName: Alice\nstatus: active\naliases:\n  - Al\rice\n---\n",
+    "expected": null
+  },
+  {
+    "op": "parse",
+    "content": "---\ndisplayName: \rAlice\nstatus: active\n---\n",
+    "expected": {
+      "frontmatter": {
+        "jarvisPersonId": null,
+        "displayName": "Alice",
+        "aliases": [],
+        "emails": [],
+        "phones": [],
+        "status": "active"
+      },
+      "body": ""
+    }
+  },
+  {
+    "op": "parse",
+    "content": "---\ndisplayName: Alice\nstatus: active\naliases:\n  - \rAlice\n---\n",
+    "expected": {
+      "frontmatter": {
+        "jarvisPersonId": null,
+        "displayName": "Alice",
+        "aliases": ["Alice"],
+        "emails": [],
+        "phones": [],
+        "status": "active"
+      },
+      "body": ""
+    }
+  },
+  {
+    "op": "parse",
+    "content": "---\ndisplayName: Alice\r\nstatus: active\n---\n",
+    "expected": {
+      "frontmatter": {
+        "jarvisPersonId": null,
+        "displayName": "Alice",
+        "aliases": [],
+        "emails": [],
+        "phones": [],
+        "status": "active"
+      },
+      "body": ""
+    }
+  },
+  {
+    "op": "parse",
+    "content": "---\ndisplayName: Alice\nstatus: active\naliases:\n  - Alice\r\n---\n",
+    "expected": {
+      "frontmatter": {
+        "jarvisPersonId": null,
+        "displayName": "Alice",
+        "aliases": ["Alice"],
+        "emails": [],
+        "phones": [],
+        "status": "active"
+      },
+      "body": ""
+    }
+  },
+  {
+    "op": "parse",
+    "content": "---\ndisplayName: Al ice\nstatus: active\n---\n",
+    "expected": null
+  },
+  {
+    "op": "parse",
+    "content": "---\ndisplayName: Alice\nstatus: active\naliases:\n  - Al ice\n---\n",
+    "expected": null
+  },
+  {
+    "op": "parse",
+    "content": "---\ndisplayName:  Alice\nstatus: active\n---\n",
+    "expected": {
+      "frontmatter": {
+        "jarvisPersonId": null,
+        "displayName": "Alice",
+        "aliases": [],
+        "emails": [],
+        "phones": [],
+        "status": "active"
+      },
+      "body": ""
+    }
+  },
+  {
+    "op": "parse",
+    "content": "---\ndisplayName: Alice\nstatus: active\naliases:\n  -  Alice\n---\n",
+    "expected": {
+      "frontmatter": {
+        "jarvisPersonId": null,
+        "displayName": "Alice",
+        "aliases": ["Alice"],
+        "emails": [],
+        "phones": [],
+        "status": "active"
+      },
+      "body": ""
+    }
+  },
+  {
+    "op": "parse",
+    "content": "---\ndisplayName: Alice \nstatus: active\n---\n",
+    "expected": {
+      "frontmatter": {
+        "jarvisPersonId": null,
+        "displayName": "Alice",
+        "aliases": [],
+        "emails": [],
+        "phones": [],
+        "status": "active"
+      },
+      "body": ""
+    }
+  },
+  {
+    "op": "parse",
+    "content": "---\ndisplayName: Alice\nstatus: active\naliases:\n  - Alice \n---\n",
+    "expected": {
+      "frontmatter": {
+        "jarvisPersonId": null,
+        "displayName": "Alice",
+        "aliases": ["Alice"],
+        "emails": [],
+        "phones": [],
+        "status": "active"
+      },
+      "body": ""
+    }
+  },
+  {
+    "op": "parse",
+    "content": "---\ndisplayName: Al ice\nstatus: active\n---\n",
+    "expected": null
+  },
+  {
+    "op": "parse",
+    "content": "---\ndisplayName: Alice\nstatus: active\naliases:\n  - Al ice\n---\n",
+    "expected": null
+  },
+  {
+    "op": "parse",
+    "content": "---\ndisplayName:  Alice\nstatus: active\n---\n",
+    "expected": {
+      "frontmatter": {
+        "jarvisPersonId": null,
+        "displayName": "Alice",
+        "aliases": [],
+        "emails": [],
+        "phones": [],
+        "status": "active"
+      },
+      "body": ""
+    }
+  },
+  {
+    "op": "parse",
+    "content": "---\ndisplayName: Alice\nstatus: active\naliases:\n  -  Alice\n---\n",
+    "expected": {
+      "frontmatter": {
+        "jarvisPersonId": null,
+        "displayName": "Alice",
+        "aliases": ["Alice"],
+        "emails": [],
+        "phones": [],
+        "status": "active"
+      },
+      "body": ""
+    }
+  },
+  {
+    "op": "parse",
+    "content": "---\ndisplayName: Alice \nstatus: active\n---\n",
+    "expected": {
+      "frontmatter": {
+        "jarvisPersonId": null,
+        "displayName": "Alice",
+        "aliases": [],
+        "emails": [],
+        "phones": [],
+        "status": "active"
+      },
+      "body": ""
+    }
+  },
+  {
+    "op": "parse",
+    "content": "---\ndisplayName: Alice\nstatus: active\naliases:\n  - Alice \n---\n",
+    "expected": {
+      "frontmatter": {
+        "jarvisPersonId": null,
+        "displayName": "Alice",
+        "aliases": ["Alice"],
+        "emails": [],
+        "phones": [],
+        "status": "active"
+      },
+      "body": ""
+    }
+  }
+]

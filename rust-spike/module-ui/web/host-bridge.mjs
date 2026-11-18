@@ -1,0 +1,189 @@
+/** Supply the verified screenUrl to bind and open the initial document. Commands use its
+ * document's transferred port; later frame loads revoke the connection.
+ * `request` runs the signed-in own-module route;
+ * theme/navigation/chat callbacks belong to the host. Account session credentials stay there. */
+export function connectModuleFrame(
+  frame,
+  moduleId,
+  {
+    request,
+    theme,
+    navigate,
+    chat,
+    screenUrl,
+    hostWindow = globalThis.window,
+    bootstrapToken = null
+  }
+) {
+  if (!/^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)*$/.test(moduleId)) throw new Error("Invalid module");
+  if (
+    screenUrl !== undefined &&
+    (typeof screenUrl !== "string" ||
+      !screenUrl.startsWith(`/module-ui/${moduleId}/`) ||
+      /[\\?#\s]/.test(screenUrl) ||
+      new URL(screenUrl, "https://moss.invalid").pathname !== screenUrl)
+  )
+    throw new Error("Invalid screen URL");
+  if (bootstrapToken !== null && !/^[a-f0-9]{32}$/.test(bootstrapToken))
+    throw new Error("Invalid bootstrap token");
+  if (screenUrl !== undefined && bootstrapToken !== null)
+    throw new Error("Choose one verified screen opener");
+  const documentKey =
+    screenUrl === undefined
+      ? null
+      : Array.from(globalThis.crypto.getRandomValues(new Uint8Array(32)), (byte) =>
+          byte.toString(16).padStart(2, "0")
+        ).join("");
+  let live = true;
+  let commandPort;
+  let loaded = false;
+  const pending = new Set();
+  const hasControl = (value) => [...value].some((c) => c.charCodeAt(0) < 32);
+  const listener = async (event) => {
+    if (!live) return;
+    const message = event.data;
+    if (
+      !message ||
+      message.channel !== "moss.module.v1" ||
+      typeof message.id !== "string" ||
+      message.id.length > 100 ||
+      !message.id ||
+      pending.has(message.id) ||
+      pending.size >= 32
+    )
+      return;
+    const replyPort = event.ports?.[0];
+    if (!replyPort || typeof replyPort.postMessage !== "function") return;
+    pending.add(message.id);
+    const reply = (body) => {
+      if (live) replyPort.postMessage({ channel: "moss.module.v1", id: message.id, ...body });
+    };
+    try {
+      let result;
+      switch (message.type) {
+        case "request": {
+          const { method, path, body = null } = message;
+          if (
+            !["GET", "POST", "PUT", "PATCH", "DELETE"].includes(method) ||
+            typeof path !== "string" ||
+            !path.startsWith("/") ||
+            path.startsWith("//") ||
+            /[\\#]/.test(path) ||
+            hasControl(path) ||
+            path.length > 16384
+          )
+            throw new Error();
+          const url = new URL(`/api/m/${moduleId}${path}`, "https://moss.invalid");
+          if (
+            !url.pathname.startsWith(`/api/m/${moduleId}/`) ||
+            url.origin !== "https://moss.invalid"
+          )
+            throw new Error();
+          if (JSON.stringify(body).length > 1024 * 1024) throw new Error();
+          result = await request(method, url.pathname + url.search, body);
+          break;
+        }
+        case "theme":
+          result = await theme();
+          break;
+        case "navigate": {
+          if (
+            typeof message.path !== "string" ||
+            !/^\/(?!\/)/.test(message.path) ||
+            /[\\]/.test(message.path) ||
+            hasControl(message.path)
+          )
+            throw new Error();
+          result = await navigate(message.path);
+          break;
+        }
+        case "chat": {
+          if (typeof message.text !== "string" || message.text.length > 16384) throw new Error();
+          result = await chat(message.text);
+          break;
+        }
+        case "resize": {
+          if (!Number.isFinite(message.height)) throw new Error();
+          frame.style.height = `${Math.min(10000, Math.max(160, Math.ceil(message.height)))}px`;
+          result = null;
+          break;
+        }
+        default:
+          throw new Error();
+      }
+      reply({ ok: true, result });
+    } catch (error) {
+      const status = Number.isInteger(error?.status) && error.status >= 400 && error.status < 600;
+      const detail = status && JSON.stringify(error.body ?? null).length <= 4096;
+      reply({
+        ok: false,
+        error: "Moss could not finish this request",
+        ...(status ? { status: error.status } : {}),
+        ...(detail ? { body: error.body ?? null } : {})
+      });
+    } finally {
+      pending.delete(message.id);
+      replyPort.close();
+    }
+  };
+  const connect = (event) => {
+    if (
+      !live ||
+      commandPort ||
+      event.source !== frame.contentWindow ||
+      event.origin !== "null" ||
+      event.data?.channel !== "moss.module.v1" ||
+      event.data?.type !== "connect" ||
+      (documentKey !== null && event.data?.documentKey !== documentKey) ||
+      (bootstrapToken !== null && event.data?.bootstrapToken !== bootstrapToken)
+    )
+      return;
+    const port = event.ports?.[0];
+    if (!port || typeof port.postMessage !== "function") return;
+    commandPort = port;
+    port.onmessage = listener;
+    port.start();
+    hostWindow.removeEventListener("message", connect);
+  };
+  const onLoad = () => {
+    // postMessage queues a task: the initial document's load may be delivered
+    // before its connect message. Either initial ordering is valid; a subsequent
+    // load always revokes the one-shot bridge, even if it never connected.
+    // Legacy callers without a keyed URL retain the original fail-closed timing.
+    if (loaded || (!commandPort && documentKey === null && bootstrapToken === null)) dispose();
+    loaded = true;
+  };
+  hostWindow.addEventListener("message", connect);
+  const dispose = () => {
+    live = false;
+    pending.clear();
+    hostWindow.removeEventListener("message", connect);
+    commandPort?.close();
+    frame.removeEventListener("load", onLoad);
+  };
+  frame.addEventListener("load", onLoad);
+  if (documentKey !== null) frame.src = `${screenUrl}#moss-frame=${documentKey}`;
+  return dispose;
+}
+
+/** Open only the installer's verified same-origin screen. A fresh fragment token pins
+ * the initial document even when its queued postMessage arrives after the first load.
+ * No token is sent to a replacement document; every later load still revokes the bridge.
+ * Signed initial package code is trusted to hold its token, like its private reply ports.
+ */
+export function openModuleFrame(frame, moduleId, verifiedSrc, callbacks) {
+  const hostWindow = callbacks.hostWindow ?? globalThis.window;
+  const url = new URL(verifiedSrc, hostWindow.location.href);
+  if (
+    url.origin !== hostWindow.location.origin ||
+    !url.pathname.startsWith(`/module-ui/${moduleId}/`)
+  )
+    throw new Error("Use the verified module screen URL");
+  const bootstrapToken = Array.from(hostWindow.crypto.getRandomValues(new Uint8Array(16)), (byte) =>
+    byte.toString(16).padStart(2, "0")
+  ).join("");
+  url.hash = new URLSearchParams({ "moss-bootstrap": bootstrapToken }).toString();
+  const dispose = connectModuleFrame(frame, moduleId, { ...callbacks, bootstrapToken });
+  frame.src = url.href;
+  return dispose;
+}

@@ -1,0 +1,1493 @@
+{
+  "schemaVersion": 2,
+  "id": "finance",
+  "name": "Finance",
+  "description": "Private money accounts and transactions. You can list your accounts, add manual accounts and transactions, connect a bank and pull its balances and transactions every six hours or on demand, sort and review transactions, set rules, split, add notes, import a CSV bank file, and plan a monthly budget with drafts. It also plans bills, sets targets, shares a flexible pool and reserves money for card payments. You can share a bank account with the household, read spending and net worth reports, export your history, review the activity list and undo a change, and archive an empty category. The screens are not built yet.",
+  "publisher": "Moss",
+  "version": "0.5.1",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "fuelLimit": 200000000,
+  "callLimitMs": 30000,
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "db",
+      "operations": ["query"],
+      "resources": [
+        "app.finance_accounts",
+        "app.finance_transactions",
+        "app.finance_activity",
+        "app.finance_items",
+        "app.finance_categories",
+        "app.finance_budget_policy",
+        "app.finance_merchant_rules",
+        "app.finance_imports",
+        "app.finance_bank_links",
+        "app.finance_link_sessions",
+        "app.finance_balance_snapshots",
+        "app.finance_budget_assignments",
+        "app.finance_budget_drafts",
+        "app.finance_budget_draft_lines",
+        "app.finance_transfer_corrections",
+        "app.finance_shared_accounts",
+        "app.finance_shared_transactions",
+        "app.finance_targets",
+        "app.finance_bill_plans",
+        "app.finance_bill_occurrences",
+        "app.finance_bill_adjustments",
+        "app.finance_bill_suggestion_dismissals",
+        "app.finance_flex_policies",
+        "app.finance_card_policies",
+        "app.finance_card_assignments"
+      ]
+    },
+    {
+      "port": "context",
+      "operations": ["local-date", "read", "uuid"],
+      "resources": ["account", "call", "new"]
+    },
+    {
+      "port": "tools",
+      "operations": ["run"],
+      "resources": [
+        "finance.manual.account-create",
+        "finance.manual.entry-create",
+        "finance.transactions.categorize",
+        "finance.transactions.categorize-new",
+        "finance.transactions.review-apply",
+        "finance.transactions.bulk-categorize",
+        "finance.transactions.bulk-confirm",
+        "finance.transactions.notes.save",
+        "finance.transactions.splits",
+        "finance.rule.set",
+        "finance.import.apply",
+        "finance.connect.start",
+        "finance.connect.poll",
+        "finance.sync.run-now",
+        "finance.budget.configure",
+        "finance.budget.assign",
+        "finance.budget.move",
+        "finance.budget.apply",
+        "finance.budget.draft.build",
+        "finance.budget.draft.update",
+        "finance.budget.draft.start",
+        "finance.account.set-shared",
+        "finance.category.archive",
+        "finance.activity.undo",
+        "finance.bill.create",
+        "finance.bill.decide",
+        "finance.bill.stop",
+        "finance.bill.clear",
+        "finance.bill.adjust",
+        "finance.bill.adjust-reset",
+        "finance.bills.suggestions.dismiss",
+        "finance.bill.entry-record",
+        "finance.target.set",
+        "finance.target.remove",
+        "finance.targets.fund",
+        "finance.flex.configure",
+        "finance.flex.assign",
+        "finance.card-reserve.save"
+      ]
+    },
+    {
+      "port": "credentials",
+      "operations": ["status", "request", "exchange", "forget"],
+      "resources": ["sandbox.plaid.com", "production.plaid.com"]
+    },
+    {
+      "port": "jobs",
+      "operations": ["schedule", "enqueue-after-commit", "enqueue-options"],
+      "resources": ["finance.sync-run", "finance.connect-poll"]
+    },
+    {
+      "port": "action-policy",
+      "operations": ["route-read"],
+      "resources": ["sorting", "sorting_new"]
+    }
+  ],
+  "database": {
+    "migrations": [
+      "sql/0001_create_finance_items.sql",
+      "sql/0002_create_finance_accounts.sql",
+      "sql/0003_index_finance_accounts_item.sql",
+      "sql/0004_create_finance_transactions.sql",
+      "sql/0005_index_finance_transactions_account_date.sql",
+      "sql/0006_index_finance_transactions_date.sql",
+      "sql/0007_create_finance_balance_snapshots.sql",
+      "sql/0008_create_finance_budget_assignments.sql",
+      "sql/0009_add_finance_items_last_error_detail.sql",
+      "sql/0010_create_finance_categories.sql",
+      "sql/0011_add_finance_transactions_review.sql",
+      "sql/0012_index_finance_transactions_review.sql",
+      "sql/0013_create_finance_activity.sql",
+      "sql/0014_index_finance_activity_at.sql",
+      "sql/0015_add_finance_items_institution_name.sql",
+      "sql/0016_flag_uncategorized_finance_transactions.sql",
+      "sql/0017_create_finance_budget_drafts.sql",
+      "sql/0018_create_finance_budget_draft_lines.sql",
+      "sql/0019_add_finance_transaction_splits.sql",
+      "sql/0020_add_finance_manual_ledger.sql",
+      "sql/0021_add_finance_manual_entries.sql",
+      "sql/0022_add_finance_statement_baseline.sql",
+      "sql/0023_create_finance_reconciliations.sql",
+      "sql/0024_create_finance_imports.sql",
+      "sql/0025_create_finance_budget_policy.sql",
+      "sql/0026_add_finance_taxonomy_cutover.sql",
+      "sql/0027_create_finance_targets.sql",
+      "sql/0028_create_finance_bill_plans.sql",
+      "sql/0029_create_finance_bill_occurrences.sql",
+      "sql/0030_create_finance_flex_policies.sql",
+      "sql/0031_create_finance_manual_transfers.sql",
+      "sql/0032_add_finance_transfer_legs.sql",
+      "sql/0033_create_finance_merchant_rules.sql",
+      "sql/0034_create_finance_bill_adjustments.sql",
+      "sql/0035_index_finance_bill_adjustments.sql",
+      "sql/0036_create_finance_transfer_corrections.sql",
+      "sql/0037_add_finance_weekly_targets.sql",
+      "sql/0038_add_finance_refill_targets.sql",
+      "sql/0039_create_finance_provider_handoffs.sql",
+      "sql/0040_create_finance_card_policies.sql",
+      "sql/0041_create_finance_card_assignments.sql",
+      "sql/0042_create_finance_bill_suggestion_dismissals.sql",
+      "sql/0368_finance_bank_links.sql",
+      "sql/0369_finance_link_sessions.sql",
+      "sql/0371_finance_shared_accounts.sql",
+      "sql/0372_finance_shared_transactions.sql"
+    ],
+    "ownedTables": [
+      "app.finance_accounts",
+      "app.finance_activity",
+      "app.finance_balance_snapshots",
+      "app.finance_bill_adjustments",
+      "app.finance_bill_occurrences",
+      "app.finance_bill_plans",
+      "app.finance_bill_suggestion_dismissals",
+      "app.finance_budget_assignments",
+      "app.finance_budget_draft_lines",
+      "app.finance_budget_drafts",
+      "app.finance_budget_policy",
+      "app.finance_card_assignments",
+      "app.finance_card_policies",
+      "app.finance_categories",
+      "app.finance_flex_policies",
+      "app.finance_imports",
+      "app.finance_items",
+      "app.finance_manual_transfers",
+      "app.finance_merchant_rules",
+      "app.finance_provider_handoffs",
+      "app.finance_reconciliations",
+      "app.finance_targets",
+      "app.finance_transactions",
+      "app.finance_transfer_corrections",
+      "app.finance_bank_links",
+      "app.finance_link_sessions",
+      "app.finance_shared_accounts",
+      "app.finance_shared_transactions"
+    ],
+    "ledger": "module-legacy",
+    "access": {
+      "app.finance_accounts": {
+        "access": "owner-only"
+      },
+      "app.finance_activity": {
+        "access": "owner-only"
+      },
+      "app.finance_balance_snapshots": {
+        "access": "owner-only"
+      },
+      "app.finance_bill_adjustments": {
+        "access": "owner-only"
+      },
+      "app.finance_bill_occurrences": {
+        "access": "owner-only"
+      },
+      "app.finance_bill_plans": {
+        "access": "owner-only"
+      },
+      "app.finance_bill_suggestion_dismissals": {
+        "access": "owner-only"
+      },
+      "app.finance_budget_assignments": {
+        "access": "owner-only"
+      },
+      "app.finance_budget_draft_lines": {
+        "access": "owner-only"
+      },
+      "app.finance_budget_drafts": {
+        "access": "owner-only"
+      },
+      "app.finance_budget_policy": {
+        "access": "owner-only"
+      },
+      "app.finance_card_assignments": {
+        "access": "owner-only"
+      },
+      "app.finance_card_policies": {
+        "access": "owner-only"
+      },
+      "app.finance_categories": {
+        "access": "owner-only"
+      },
+      "app.finance_flex_policies": {
+        "access": "owner-only"
+      },
+      "app.finance_imports": {
+        "access": "owner-only"
+      },
+      "app.finance_items": {
+        "access": "owner-only"
+      },
+      "app.finance_manual_transfers": {
+        "access": "owner-only"
+      },
+      "app.finance_merchant_rules": {
+        "access": "owner-only"
+      },
+      "app.finance_provider_handoffs": {
+        "access": "owner-only"
+      },
+      "app.finance_reconciliations": {
+        "access": "owner-only"
+      },
+      "app.finance_targets": {
+        "access": "owner-only"
+      },
+      "app.finance_transactions": {
+        "access": "owner-only"
+      },
+      "app.finance_transfer_corrections": {
+        "access": "owner-only"
+      },
+      "app.finance_bank_links": {
+        "access": "owner-only"
+      },
+      "app.finance_link_sessions": {
+        "access": "owner-only"
+      },
+      "app.finance_shared_accounts": {
+        "access": "household-read"
+      },
+      "app.finance_shared_transactions": {
+        "access": "household-read"
+      }
+    }
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/finance/accounts",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/finance/manual/context",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/manual/accounts",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/manual/entries",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/manual/account-create",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/manual/entry-create",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/finance/transactions",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/transactions/category",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/transactions/review",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/transactions/bulk-categorize",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/transactions/bulk-confirm",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/finance/transactions/notes",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/transactions/notes",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/transactions/splits",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/finance/rules",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/finance/rules/preview",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/rules",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/categories",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/import/parse",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/import/preview",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/import/apply",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/sorting/run",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/transactions/categorize",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/transactions/categorize-new",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/transactions/review",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/transactions/bulk-categorize",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/transactions/bulk-confirm",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/transactions/notes",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/transactions/splits",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/rules/set",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/import/apply",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/connect/start",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/connect/poll",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/sync/run-now",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/connect/start",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/connect/poll",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/sync/run-now",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/finance/budget/status",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/finance/budget/draft",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/budget/configure",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/budget/assign",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/budget/move",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/budget/apply",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/budget/draft/build",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/budget/draft/update",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/budget/draft/start",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/budget/configure",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/budget/assign",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/budget/move",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/budget/apply",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/budget/draft/build",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/budget/draft/update",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/budget/draft/start",
+      "signIn": true
+    },
+    { "method": "GET", "path": "/finance/transactions/export", "signIn": true },
+    { "method": "GET", "path": "/finance/reports/spending", "signIn": true },
+    { "method": "GET", "path": "/finance/reports/net-worth", "signIn": true },
+    { "method": "GET", "path": "/finance/reports/transactions", "signIn": true },
+    { "method": "GET", "path": "/finance/activity", "signIn": true },
+    { "method": "POST", "path": "/finance/activity/undo", "signIn": true },
+    { "method": "POST", "path": "/finance/accounts/shared", "signIn": true },
+    { "method": "POST", "path": "/finance/categories/archive", "signIn": true },
+    { "method": "POST", "path": "/finance/chat/accounts/set-shared", "signIn": true },
+    { "method": "POST", "path": "/finance/chat/categories/archive", "signIn": true },
+    { "method": "POST", "path": "/finance/chat/activity/undo", "signIn": true },
+    {
+      "method": "GET",
+      "path": "/finance/bills",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/finance/bills/suggestions",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/bills/entry-preview",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/flex/preview",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/cards/preview",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/bills",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/bills",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/bills/decide",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/bills/decide",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/bills/stop",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/bills/stop",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/bills/clear",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/bills/clear",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/bills/adjust",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/bills/adjust",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/bills/adjust-reset",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/bills/adjust-reset",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/bills/suggestions/dismiss",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/bills/suggestions/dismiss",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/bills/entry-record",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/bills/entry-record",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/targets",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/targets",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/targets/remove",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/targets/remove",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/targets/fund",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/targets/fund",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/flex/configure",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/flex/configure",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/flex/assign",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/flex/assign",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/cards/save",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/finance/chat/cards/save",
+      "signIn": true
+    }
+  ],
+  "tools": {
+    "finance.accounts.list": {
+      "description": "List your accounts, currencies, current balances and bank sync status. Manual account balances come from the ledger. Account names are outside content.",
+      "risk": "read"
+    },
+    "finance.manual.context": {
+      "description": "Read manual entry setup. Manual records only; no bank money is moved.",
+      "risk": "read"
+    },
+    "finance.manual.account-create": {
+      "description": "Add a manual account. Manual records only; no bank money is moved.",
+      "risk": "write"
+    },
+    "finance.manual.entry-create": {
+      "description": "Add a manual transaction. Manual records only; no bank money is moved.",
+      "risk": "write"
+    },
+    "finance.transactions.query": {
+      "description": "List your transactions for a month, with filters, notes, splits and review state. Payee names and notes are outside content.",
+      "risk": "read"
+    },
+    "finance.transactions.categorize": {
+      "description": "Put a transaction you have seen before into a category. Moss's guess is trusted without asking by default.",
+      "risk": "write"
+    },
+    "finance.transactions.categorize-new": {
+      "description": "Put a transaction from a new payee into a category. This asks each time by default.",
+      "risk": "write"
+    },
+    "finance.transactions.review-apply": {
+      "description": "Confirm or change the category of transactions that need a look, optionally saving a rule.",
+      "risk": "write"
+    },
+    "finance.transactions.bulk-categorize": {
+      "description": "Put several transactions into one category.",
+      "risk": "write"
+    },
+    "finance.transactions.bulk-confirm": {
+      "description": "Confirm several transactions that Moss sorted.",
+      "risk": "write"
+    },
+    "finance.transactions.notes.read": {
+      "description": "Read the note on one transaction. Notes are outside content.",
+      "risk": "read"
+    },
+    "finance.transactions.notes.save": {
+      "description": "Save the note on one transaction.",
+      "risk": "write"
+    },
+    "finance.transactions.splits": {
+      "description": "Split a transaction across categories, or remove the split.",
+      "risk": "write"
+    },
+    "finance.rule.set": {
+      "description": "Always put a payee into a category from now on.",
+      "risk": "write"
+    },
+    "finance.rules.list": {
+      "description": "List your payee rules.",
+      "risk": "read"
+    },
+    "finance.rules.preview": {
+      "description": "Show which transactions a payee rule would change, without changing any.",
+      "risk": "read"
+    },
+    "finance.import.preview": {
+      "description": "Check a parsed bank file for duplicates before importing. Nothing is saved.",
+      "risk": "read"
+    },
+    "finance.import.apply": {
+      "description": "Import rows from a bank file into a manual account. Manual records only; no bank money is moved.",
+      "risk": "write"
+    },
+    "finance.connect.start": {
+      "description": "Start linking a bank, or reconnect one that needs a new sign-in. Returns a page address for the person to open. Needs approval.",
+      "risk": "write"
+    },
+    "finance.connect.poll": {
+      "description": "Check whether the person has finished the bank page and, if so, save the bank and pull its first data.",
+      "risk": "write"
+    },
+    "finance.sync.run-now": {
+      "description": "Pull the latest balances and transactions from every connected bank now.",
+      "risk": "write"
+    },
+    "finance.budget.configure": {
+      "description": "Choose the budget currency once and start the saved category list. The currency cannot be changed later.",
+      "risk": "write"
+    },
+    "finance.budget.status": {
+      "description": "Read one month of the budget: money in each category, what is ready to assign, and the review numbers a save needs.",
+      "risk": "read"
+    },
+    "finance.budget.assign": {
+      "description": "Set the amount assigned to one category for a month.",
+      "risk": "write"
+    },
+    "finance.budget.move": {
+      "description": "Move money between two categories, or from ready to assign into a category, for one month.",
+      "risk": "write"
+    },
+    "finance.budget.apply": {
+      "description": "Save the amounts for one category or a batch of up to 20 categories for a month, as the person typed them.",
+      "risk": "write"
+    },
+    "finance.budget.draft.build": {
+      "description": "Build a first budget draft from the last three full months of saved spending.",
+      "risk": "write"
+    },
+    "finance.budget.draft.get": {
+      "description": "Read the current budget draft.",
+      "risk": "read"
+    },
+    "finance.budget.draft.update": {
+      "description": "Change, add or drop one line of the open budget draft.",
+      "risk": "write"
+    },
+    "finance.budget.draft.start": {
+      "description": "Turn the open draft into this month's budget amounts.",
+      "risk": "write"
+    },
+    "finance.transactions.export": {
+      "description": "Prepare a spreadsheet of your own transaction history. Another person's shared rows are never included. Payee names are outside content.",
+      "risk": "read"
+    },
+    "finance.reports.spending": {
+      "description": "Read your monthly spending report, with other people's shared accounts listed apart.",
+      "risk": "read"
+    },
+    "finance.reports.net-worth": {
+      "description": "Read your net worth over time. Net worth is never shared with other people.",
+      "risk": "read"
+    },
+    "finance.reports.transactions": {
+      "description": "List the transactions behind one report figure. Payee names are outside content.",
+      "risk": "read"
+    },
+    "finance.activity.list": {
+      "description": "List recent changes made to your finance data, with whether each can be undone.",
+      "risk": "read"
+    },
+    "finance.account.set-shared": {
+      "description": "Share a bank account with the household, or stop sharing it. Others see balances and transactions, never notes.",
+      "risk": "write"
+    },
+    "finance.category.archive": {
+      "description": "Archive a category that holds no budget money. Income and transfers cannot be archived.",
+      "risk": "write"
+    },
+    "finance.activity.undo": {
+      "description": "Undo one earlier change, such as a category choice, if nothing has moved on since.",
+      "risk": "write"
+    },
+    "finance.bills.read": {
+      "description": "Read the bill plans and the coming bills for a month.",
+      "risk": "read"
+    },
+    "finance.bills.suggestions": {
+      "description": "Suggest bills found in saved spending.",
+      "risk": "read"
+    },
+    "finance.bill.entry-preview": {
+      "description": "Preview the entry that would record a bill as paid.",
+      "risk": "read"
+    },
+    "finance.flex.preview": {
+      "description": "Preview a flexible pool for a month.",
+      "risk": "read"
+    },
+    "finance.card-reserve.preview": {
+      "description": "Preview a card payment reserve.",
+      "risk": "read"
+    },
+    "finance.bill.create": {
+      "description": "Create a bill plan.",
+      "risk": "write"
+    },
+    "finance.bill.decide": {
+      "description": "Confirm, skip or match one coming bill.",
+      "risk": "write"
+    },
+    "finance.bill.stop": {
+      "description": "Stop a bill plan.",
+      "risk": "write"
+    },
+    "finance.bill.clear": {
+      "description": "Clear a bill occurrence.",
+      "risk": "write"
+    },
+    "finance.bill.adjust": {
+      "description": "Change the amount or date of one coming bill.",
+      "risk": "write"
+    },
+    "finance.bill.adjust-reset": {
+      "description": "Put one coming bill back to its plan.",
+      "risk": "write"
+    },
+    "finance.bills.suggestions.dismiss": {
+      "description": "Dismiss a bill suggestion.",
+      "risk": "write"
+    },
+    "finance.bill.entry-record": {
+      "description": "Record a bill as paid with a manual entry.",
+      "risk": "write"
+    },
+    "finance.target.set": {
+      "description": "Set a category target.",
+      "risk": "write"
+    },
+    "finance.target.remove": {
+      "description": "Remove a category target.",
+      "risk": "destructive"
+    },
+    "finance.targets.fund": {
+      "description": "Fund targets from what is ready to assign.",
+      "risk": "write"
+    },
+    "finance.flex.configure": {
+      "description": "Choose which categories share the flexible pool.",
+      "risk": "write"
+    },
+    "finance.flex.assign": {
+      "description": "Set the total of the flexible pool.",
+      "risk": "write"
+    },
+    "finance.card-reserve.save": {
+      "description": "Enroll a card or set its payment reserve.",
+      "risk": "write"
+    }
+  },
+  "requires": {},
+  "provides": {},
+  "icons": ["icons/finance.svg"],
+  "accounts": {
+    "supportsUserDisable": true,
+    "defaultEnabled": true
+  },
+  "lifecycle": {
+    "required": false,
+    "bundled": false,
+    "removable": true
+  },
+  "screens": {},
+  "navigation": [],
+  "settings": [],
+  "features": [
+    {
+      "id": "finance.accounts",
+      "description": "A person can list their own accounts with current balances, currencies and, for manual accounts, the opening date and balance. With no accounts, the list suggests adding a manual account. Accounts shared by other people and bank links are not built yet. No screen is built yet.",
+      "errors": [
+        {
+          "code": "finance_accounts_unavailable",
+          "class": "transient",
+          "description": "Accounts could not be read. Try again in a moment."
+        }
+      ]
+    },
+    {
+      "id": "finance.manual-accounts",
+      "description": "A person can add a private manual account (checking, savings, cash, credit, loan or asset) in one of twelve currencies, with an opening date that is not in the future and an opening balance. Repeating the same operation id with the same values changes nothing. The assistant's version needs the account's one-use approval. No bank money is moved.",
+      "errors": [
+        {
+          "code": "invalid_input",
+          "class": "validation",
+          "description": "A value was not accepted. Fix the field named in the message and try again."
+        },
+        {
+          "code": "unsupported_currency",
+          "class": "validation",
+          "description": "Choose one of the twelve supported two-decimal currencies and try again."
+        },
+        {
+          "code": "future_date",
+          "class": "validation",
+          "description": "The date is after today in your time zone. Choose today or an earlier date."
+        },
+        {
+          "code": "manual_conflict",
+          "class": "validation",
+          "description": "This operation id already saved different values. Check the saved account and use a new operation id for a new one."
+        }
+      ]
+    },
+    {
+      "id": "finance.manual-entries",
+      "description": "A person can add a manual transaction to a manual account. It moves the account balance (down for cash-like accounts, up for credit and loans), needs a current category or is marked for a look, and cannot be dated before the account opened, in a reconciled period or in the future. Repeating the same operation id with the same values changes nothing. The assistant's version needs the account's one-use approval.",
+      "errors": [
+        {
+          "code": "invalid_category",
+          "class": "validation",
+          "description": "Choose a current category. Linked transfers need their own workflow."
+        },
+        {
+          "code": "manual_unavailable",
+          "class": "validation",
+          "description": "The manual account is missing, closed or uses a different currency. Check the account and try again."
+        },
+        {
+          "code": "manual_invalid_date",
+          "class": "validation",
+          "description": "The date is before the account's opening date. Choose a later date."
+        },
+        {
+          "code": "manual_reconciled_period",
+          "class": "validation",
+          "description": "The date falls in a reconciled statement period. Choose a later date."
+        },
+        {
+          "code": "manual_overflow",
+          "class": "validation",
+          "description": "The new balance would be too large to store. Check the amount and try again."
+        }
+      ]
+    },
+    {
+      "id": "finance.transactions",
+      "description": "A person can list their own transactions for a month with filters, search, notes and splits. They can set or change a category, confirm what Moss sorted, save a note, split a transaction across categories, and sort many at once. Moss sorts by payee rule first, then the bank's own category, and only confirms on its own when the sorting tier allows it. No screen is built yet.",
+      "errors": [
+        {
+          "code": "stale_transaction",
+          "class": "validation",
+          "description": "The transaction changed since you opened it. Reload and try again."
+        },
+        {
+          "code": "split_transaction",
+          "class": "validation",
+          "description": "This transaction is split. Remove the split before choosing one category."
+        },
+        {
+          "code": "linked_transfer",
+          "class": "validation",
+          "description": "This transaction is part of a transfer. Use the transfer workflow instead."
+        },
+        {
+          "code": "amount_mismatch",
+          "class": "validation",
+          "description": "The parts of a split must add up to the transaction amount."
+        },
+        {
+          "code": "new_merchant",
+          "class": "validation",
+          "description": "This payee is new, so the category needs your approval."
+        }
+      ]
+    },
+    {
+      "id": "finance.rules",
+      "description": "A person can list payee rules, preview what a rule would change, and turn rules on, off or remove them. A rule always confirms the category it sets.",
+      "errors": [
+        {
+          "code": "stale_rules",
+          "class": "validation",
+          "description": "Your rules changed since you opened them. Reload and try again."
+        }
+      ]
+    },
+    {
+      "id": "finance.categories",
+      "description": "A person can add or rename a category inside a group. Archiving a category is not built yet.",
+      "errors": [
+        {
+          "code": "duplicate_name",
+          "class": "validation",
+          "description": "A category with this name already exists. Choose another name."
+        }
+      ]
+    },
+    {
+      "id": "finance.import",
+      "description": "A person can read a CSV bank file of up to 1 MiB and 200 rows, check the rows against what is already saved, choose what to do with each duplicate, and import the rest into a manual account. Importing the same file twice with the same operation id saves it once. No bank money is moved.",
+      "errors": [
+        {
+          "code": "invalid_csv",
+          "class": "validation",
+          "description": "The file could not be read. The message names the row and what to fix."
+        },
+        {
+          "code": "stale_import",
+          "class": "validation",
+          "description": "The account changed since the preview. Preview again and import."
+        }
+      ]
+    },
+    {
+      "id": "finance.bank-connect",
+      "description": "A person can link a bank. Starting returns a page address to open, the person signs in there, and a check then saves the bank and pulls its first accounts and transactions. Starting again for a bank that needs a new sign-in reconnects it without a second copy. The assistant's version of starting needs a one-use approval. The bank's sign-in token never leaves the host.",
+      "errors": [
+        {
+          "code": "bank_unavailable",
+          "class": "transient",
+          "description": "The bank service is not set up or could not start the link. Check the bank service keys in settings, then try again."
+        },
+        {
+          "code": "token_read_failed",
+          "class": "transient",
+          "description": "The saved bank sign-in could not be read. Try again, or reconnect the bank."
+        }
+      ]
+    },
+    {
+      "id": "finance.bank-sync",
+      "description": "Balances and transactions for every connected bank are pulled every six hours and on request. Each bank is handled on its own, so one failing bank never stops the others. A bank that needs a new sign-in is marked as needing a reconnect and keeps its saved data. A person's own category and note on a bank transaction are kept, and manual entries are never overwritten. Categorizing new transactions is not built yet.",
+      "errors": []
+    },
+    {
+      "id": "finance.budget",
+      "description": "A person can choose a budget currency once, see a month of the budget with each category's assigned, spent and available money and what is ready to assign, set the amount for one category or up to 20 at once, and move money between categories or from ready to assign. Every save needs the review numbers from the screen. If the budget or the ledger changed since, nothing is saved. Flexible pools, targets, card payments and bills are not built yet.",
+      "errors": [
+        {
+          "code": "stale_budget",
+          "class": "validation",
+          "description": "The budget or ledger changed. Refresh and review the amounts again before saving."
+        },
+        {
+          "code": "stale_previous",
+          "class": "validation",
+          "description": "The amount shown for a category is out of date. Refresh and try again."
+        },
+        {
+          "code": "invalid_category",
+          "class": "validation",
+          "description": "The category is not one that can be budgeted."
+        },
+        {
+          "code": "not_enough_ready",
+          "class": "validation",
+          "description": "The amount is more than is ready to assign."
+        },
+        {
+          "code": "not_enough_available",
+          "class": "validation",
+          "description": "The amount is more than the source category holds."
+        },
+        {
+          "code": "funding_unavailable",
+          "class": "validation",
+          "description": "Ready to assign cannot be worked out for that month."
+        },
+        {
+          "code": "budget_currency_required",
+          "class": "validation",
+          "description": "Choose a budget currency first."
+        },
+        {
+          "code": "budget_currency_fixed",
+          "class": "validation",
+          "description": "The budget currency is already chosen and cannot be changed."
+        },
+        {
+          "code": "legacy_review_required",
+          "class": "validation",
+          "description": "Earlier budget data exists. Review it and confirm before starting over."
+        },
+        {
+          "code": "storage_upgrade_required",
+          "class": "validation",
+          "description": "Finish the category upgrade before budgeting."
+        }
+      ]
+    },
+    {
+      "id": "finance.budget-drafts",
+      "description": "A person can ask for a first budget built from the last three full months of saved spending, edit its lines, and start it so its amounts become this month's budget. A draft is built once and never overwrites an existing budget.",
+      "errors": [
+        {
+          "code": "draft_not_found",
+          "class": "validation",
+          "description": "That draft is not the current draft."
+        },
+        {
+          "code": "draft_not_open",
+          "class": "validation",
+          "description": "The draft has already been started."
+        },
+        {
+          "code": "protected_category",
+          "class": "validation",
+          "description": "Income and transfers cannot be budgeted."
+        },
+        {
+          "code": "archived_category",
+          "class": "validation",
+          "description": "A planned line points at an archived category."
+        },
+        {
+          "code": "category_not_in_draft",
+          "class": "validation",
+          "description": "That category is not in the draft. To add a line, give its name, group and amount."
+        }
+      ]
+    },
+    {
+      "id": "finance.sharing",
+      "description": "A person can share a bank account with the household or stop sharing it. Others then see its name, balance and transactions with date, payee, merchant, bank category, category, amount, pending state and any transfer link, never notes, review state, who chose the category, or bank link details. Manual accounts cannot be shared yet. No screen is built yet.",
+      "errors": [
+        {
+          "code": "unknown_account",
+          "class": "validation",
+          "description": "That account is not on record."
+        },
+        {
+          "code": "manual_sharing_unavailable",
+          "class": "validation",
+          "description": "Manual accounts stay private for now."
+        }
+      ]
+    },
+    {
+      "id": "finance.reports",
+      "description": "A person can read a monthly spending report and a net worth chart, and list the transactions behind a figure. Other people's shared accounts appear in spending apart from the person's own. Net worth never includes other people. No screen is built yet.",
+      "errors": [
+        {
+          "code": "report_scope_changed",
+          "class": "validation",
+          "description": "The report changed since you opened it. Reload and try again."
+        }
+      ]
+    },
+    {
+      "id": "finance.export",
+      "description": "A person can export their own transaction history as a spreadsheet, for all dates or a range, or for one account. Other people's rows are never included. Very large histories are refused with the count.",
+      "errors": [
+        {
+          "code": "export_failed",
+          "class": "validation",
+          "description": "Choose valid dates, with the start on or before the end."
+        }
+      ]
+    },
+    {
+      "id": "finance.activity",
+      "description": "A person can list recent changes to their finance data and undo a category choice, a rule, a new category or an archive when nothing has changed since. Budget changes cannot be undone yet. No screen is built yet.",
+      "errors": [
+        {
+          "code": "not_undoable",
+          "class": "validation",
+          "description": "That change cannot be undone."
+        },
+        {
+          "code": "changed_since",
+          "class": "validation",
+          "description": "Something changed since, so this cannot be undone safely."
+        },
+        {
+          "code": "not_found",
+          "class": "validation",
+          "description": "That change is not on record."
+        }
+      ]
+    },
+    {
+      "id": "finance.category-archive",
+      "description": "A person can archive a category with no budget money assigned. Income and transfer categories are protected. A budget currency must be saved first.",
+      "errors": [
+        {
+          "code": "protected_category",
+          "class": "validation",
+          "description": "Income and transfers cannot be archived."
+        },
+        {
+          "code": "has_assignments",
+          "class": "validation",
+          "description": "Move the budget money out of this category first."
+        }
+      ]
+    },
+    {
+      "id": "finance.bills",
+      "description": "A person can plan bills that repeat, adjust one coming bill, accept or dismiss suggestions found in saved spending, and record a bill as paid.",
+      "errors": [
+        {
+          "code": "bill_entry_conflict",
+          "class": "validation",
+          "description": "The bill entry clashes with an existing one."
+        },
+        {
+          "code": "bill_entry_duplicate",
+          "class": "validation",
+          "description": "That bill is already recorded."
+        },
+        {
+          "code": "bill_already_reviewed",
+          "class": "validation",
+          "description": "That bill was already reviewed."
+        },
+        {
+          "code": "bill_entry_account",
+          "class": "validation",
+          "description": "Pick a manual account in the budget currency."
+        },
+        {
+          "code": "bill_entry_period",
+          "class": "validation",
+          "description": "That date falls in a reconciled period."
+        },
+        {
+          "code": "bill_entry_overflow",
+          "class": "validation",
+          "description": "The amount is too large."
+        },
+        {
+          "code": "bill_not_due",
+          "class": "validation",
+          "description": "That bill is not due yet."
+        },
+        {
+          "code": "invalid_bill_projection",
+          "class": "validation",
+          "description": "The bill dates cannot be worked out."
+        },
+        {
+          "code": "invalid_occurrence",
+          "class": "validation",
+          "description": "That coming bill does not exist."
+        },
+        {
+          "code": "invalid_date",
+          "class": "validation",
+          "description": "Choose a valid planned date."
+        },
+        {
+          "code": "invalid_category",
+          "class": "validation",
+          "description": "Choose a current category for the payment."
+        }
+      ]
+    },
+    {
+      "id": "finance.targets",
+      "description": "A person can set monthly, weekly, refill or balance targets, and fund them from what is ready to assign.",
+      "errors": [
+        {
+          "code": "stale_target_guidance",
+          "class": "validation",
+          "description": "The target guidance is out of date. Refresh and try again."
+        },
+        {
+          "code": "target_unavailable",
+          "class": "validation",
+          "description": "That category cannot have a target."
+        },
+        {
+          "code": "current_month_required",
+          "class": "validation",
+          "description": "Funding works on the current month only."
+        },
+        {
+          "code": "invalid_selection",
+          "class": "validation",
+          "description": "Pick between 1 and 20 different targets."
+        },
+        {
+          "code": "not_enough_ready",
+          "class": "validation",
+          "description": "The targets cost more than is ready to assign."
+        },
+        {
+          "code": "cover_overspending",
+          "class": "validation",
+          "description": "Cover overspent categories and card payments before funding targets."
+        },
+        {
+          "code": "funding_unavailable",
+          "class": "validation",
+          "description": "Ready to assign cannot be worked out for that month."
+        }
+      ]
+    },
+    {
+      "id": "finance.flex-pool",
+      "description": "A person can let several categories share one pool, set the pool total, and leave it again.",
+      "errors": [
+        {
+          "code": "flex_member",
+          "class": "validation",
+          "description": "That category is in the flexible pool."
+        },
+        {
+          "code": "flex_active",
+          "class": "validation",
+          "description": "The flexible pool is active for that month."
+        },
+        {
+          "code": "flex_target",
+          "class": "validation",
+          "description": "A flexible category cannot have a target."
+        },
+        {
+          "code": "future_assignments",
+          "class": "validation",
+          "description": "Later months already have amounts."
+        },
+        {
+          "code": "open_draft",
+          "class": "validation",
+          "description": "Finish the open draft first."
+        },
+        {
+          "code": "current_month_required",
+          "class": "validation",
+          "description": "This works on the current month only."
+        }
+      ]
+    },
+    {
+      "id": "finance.card-reserves",
+      "description": "A person can set aside money for a manual credit card payment, month by month.",
+      "errors": [
+        {
+          "code": "card_ledger_review_required",
+          "class": "validation",
+          "description": "The card ledger needs repair before reserves work."
+        },
+        {
+          "code": "insufficient_ready",
+          "class": "validation",
+          "description": "Choose less payment cash or release other assignments before saving."
+        },
+        {
+          "code": "current_month_required",
+          "class": "validation",
+          "description": "This works on the current month only."
+        }
+      ]
+    }
+  ],
+  "policyRoutes": {
+    "sorting": {
+      "installTier": "trusted_auto"
+    },
+    "sorting_new": {
+      "installTier": "ask_each_time"
+    }
+  },
+  "credentials": {
+    "plaid-keys": {
+      "scope": "instance",
+      "hosts": ["sandbox.plaid.com", "production.plaid.com"],
+      "attachment": {
+        "kind": "fields",
+        "name": {
+          "client_id": "clientId",
+          "secret": "clientSecret"
+        }
+      },
+      "exposeFields": ["link_token", "public_token", "hosted_link_url", "expiration"]
+    },
+    "plaid-item": {
+      "scope": "account",
+      "hosts": ["sandbox.plaid.com", "production.plaid.com"],
+      "attachment": {
+        "kind": "fields",
+        "name": {
+          "access_token": "accessToken"
+        }
+      },
+      "with": ["plaid-keys"],
+      "exchange": {
+        "endpoint": "https://production.plaid.com/item/public_token/exchange",
+        "grantType": "token_swap",
+        "format": "json",
+        "input": "public_token"
+      },
+      "exposeFields": ["link_token", "hosted_link_url", "expiration"]
+    }
+  },
+  "jobRetries": {
+    "finance.sync-run": 3,
+    "finance.connect-poll": 5
+  },
+  "jobs": {
+    "finance.sync-run": {},
+    "finance.connect-poll": {}
+  }
+}

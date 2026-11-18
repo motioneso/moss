@@ -1,0 +1,62 @@
+{
+  "id": "a1_*x",
+  "meetingId": "11111111-1111-4111-8111-111111111111",
+  "version": 3,
+  "createdAt": "2026-11-11T10:00:00.123Z",
+  "origin": "manual",
+  "templateId": "general-1",
+  "templateVersion": 2,
+  "inputs": {
+    "meetingId": "11111111-1111-4111-8111-111111111111",
+    "notesRevision": 4,
+    "transcript": { "transcriptRevision": 7 }
+  },
+  "content": {
+    "overview": "Hello <b>world</b> & [link](http://x) `code` #h {{speaker:S2}} said {{speaker:S10}} and {{speaker:bad id}} and {{speaker:}} 1.5 - ok! ~tilde~ |pipe| +plus",
+    "speakers": [
+      { "speakerId": "S2", "name": "Dana *Q*" },
+      { "speakerId": "S10", "name": "" }
+    ],
+    "decisions": [
+      {
+        "text": "Ship {{speaker:S2}}'s plan",
+        "evidence": [
+          {
+            "kind": "transcript",
+            "meetingId": "11111111-1111-4111-8111-111111111111",
+            "segmentId": "seg-1",
+            "segmentRevision": 2,
+            "startCharacter": 0,
+            "endCharacter": 12
+          },
+          {
+            "kind": "personal-note",
+            "meetingId": "11111111-1111-4111-8111-111111111111",
+            "notesRevision": 4,
+            "startCharacter": 3,
+            "endCharacter": 9
+          }
+        ]
+      }
+    ],
+    "openQuestions": ["Why? (really) _yes_", "{{speaker:S0042}}"],
+    "actions": [
+      {
+        "text": "Send <it>",
+        "ownerPhrase": "Dana.",
+        "duePhrase": null,
+        "evidence": [
+          {
+            "kind": "personal-note",
+            "meetingId": "11111111-1111-4111-8111-111111111111",
+            "notesRevision": 4,
+            "startCharacter": 0,
+            "endCharacter": 1
+          }
+        ]
+      },
+      { "text": "Plain", "evidence": [] }
+    ],
+    "warnings": ["Careful \\ back", "emoji 🎉 ok"]
+  }
+}

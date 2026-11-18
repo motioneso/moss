@@ -1,0 +1,313 @@
+{
+  "schemaVersion": 2,
+  "id": "notes",
+  "name": "Notes",
+  "description": "Choose your notes folder, search your indexed notes, and create, edit or delete notes with your approval.",
+  "publisher": "Moss",
+  "version": "0.1.23",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "db",
+      "operations": ["query"],
+      "resources": [
+        "app.notes_managed_actors",
+        "app.notes_managed_sources",
+        "app.notes_destination_bindings",
+        "app.notes_recording_contributions",
+        "app.notes_contribution_proposals",
+        "app.notes_contribution_operations",
+        "app.notes_sync_checkpoints"
+      ]
+    },
+    {
+      "port": "vault",
+      "operations": [
+        "folder.get",
+        "folder.status",
+        "folder.list",
+        "folder.set",
+        "folder.resolve",
+        "notes.read",
+        "index.search",
+        "notes.compare-write",
+        "notes.remove",
+        "index.sync-open",
+        "index.sync-file",
+        "index.sync-cleanup"
+      ],
+      "resources": ["source", "private-export"]
+    },
+    {
+      "port": "jobs",
+      "operations": ["enqueue-after-commit", "enqueue-options", "schedule", "unschedule"],
+      "resources": ["notes.sync", "notes.sync-tick"]
+    },
+    {
+      "port": "context",
+      "operations": ["uuid", "read"],
+      "resources": ["new", "call"]
+    }
+  ],
+  "database": {
+    "ownedTables": [
+      "app.notes_managed_actors",
+      "app.notes_managed_sources",
+      "app.notes_destination_bindings",
+      "app.notes_recording_contributions",
+      "app.notes_contribution_proposals",
+      "app.notes_contribution_operations",
+      "app.notes_sync_checkpoints"
+    ],
+    "migrations": [
+      "sql/0336_notes_managed_source_lifecycle.sql",
+      "sql/0337_notes_recording_contributions.sql",
+      "sql/0340_notes_recording_cleanup.sql",
+      "sql/0360_notes_sync_checkpoints.sql"
+    ],
+    "ledger": "core-legacy"
+  },
+  "provides": {
+    "collectManagedNotesExportSection": "1.0.0",
+    "prepareNoteAction": "1.0.0",
+    "exportPrivateNote": "1.0.0",
+    "inspectPrivateNote": "1.0.0",
+    "writeDailyChatArchive": "1.0.0",
+    "listWorkMailCandidates": "1.0.0",
+    "appendWorkMailNote": "1.0.0"
+  },
+  "navigation": [],
+  "settings": [
+    {
+      "id": "notes.source",
+      "label": "Notes folder",
+      "description": "Browse, link, change or unlink your allowed notes folder, view saved sync status and sync now. A linked folder also syncs on its own every fifteen minutes.",
+      "path": "/settings/connections",
+      "scope": "user",
+      "entry": "ui/index.html"
+    }
+  ],
+  "features": [
+    {
+      "id": "notes.managed-source-export",
+      "description": "The Notes package provides the managed-source account-export section through its public API. It includes saved source status, destination labels, contributions, proposals and operation receipts visible to the calling account. The account export screen is not joined yet. Notes has no standalone screen or navigation entry.",
+      "errors": [
+        {
+          "code": "notes-export-unavailable",
+          "class": "bug",
+          "description": "The host could not complete the export. No partial export is returned.",
+          "remediationRef": "notes.retry-export"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "notes.retry-export",
+          "description": "Retry the account export after the host service is available.",
+          "path": "/settings"
+        }
+      ]
+    },
+    {
+      "id": "notes.private-export",
+      "description": "Other modules can save a versioned private copy of a note through the exportPrivateNote API and check one with inspectPrivateNote. Each copy is created once, never overwritten, and kept in the calling account's private notes area, separate from the linked notes folder. The server must be configured with a private notes location. These copies are not indexed or searchable yet."
+    },
+    {
+      "id": "notes.daily-chat-archive",
+      "description": "The chat module can save a day's conversations as one Markdown file in a folder inside the linked notes folder, through the writeDailyChatArchive API. Each file starts with a Moss marker, so a later run replaces only its own file. A file of your own with the same name is never touched; the archive goes beside it as a file ending in (moss). With no linked folder, no conversations or an unusable folder name, nothing is written. A write requests a sync. The caller supplies each conversation's time label already formatted for the person. The chat settings screen and the daily trigger are not joined yet."
+    },
+    {
+      "id": "notes.work-mail",
+      "description": "Connectors can ask Notes for note candidates and append one work mail entry through listWorkMailCandidates and appendWorkMailNote. A note marked private in its front matter is never written, an entry already present is not repeated, and a note changed in the meantime is reported as changed instead of being overwritten. The default note is Work mail notes.md."
+    },
+    {
+      "id": "notes.folder-settings",
+      "description": "Settings → Connections shows the linked folder and its saved last-sync status. Browse allowed folders, enter a path, change the link, or confirm unlinking without deleting files. Folder requests preserve legacy schema validation and coercion; extra fields are ignored and cannot choose another account. Invalid bodies or repeated directory paths receive the legacy validation response. Relative and symlink path behavior still differs. Sync now requests an indexing run on the server and the line shows the saved last-sync status. Linking a folder also creates one fifteen-minute sync schedule for the account; each tick requests a fresh sync and does nothing while no folder is linked. Sync now and each tick reuse a recent unfinished request for the same folder instead of stacking another. Each tick also removes saved sync requests older than a day and asks the server to retry any unfinished request. This package is not yet a replacement for legacy Notes. The host must connect the folder settings adapter with account-specific allowed roots. Symlink selections are refused by the current vault adapter.",
+      "errors": [
+        {
+          "code": "notes-folder-invalid-input",
+          "class": "prerequisite",
+          "description": "The folder request has an invalid body or path type, or more than one directory path. Validation refuses it before preferences or files are accessed.",
+          "remediationRef": "notes.correct-folder-path"
+        },
+        {
+          "code": "notes-folder-path-refused",
+          "class": "prerequisite",
+          "description": "Missing paths inside allowed roots and existing paths outside them have distinct API responses and chooser guidance. Other in-root vault policy refusals retain general guidance; missing paths outside roots still differ from legacy. A rejected save keeps the entered path editable and leaves the saved folder link unchanged.",
+          "remediationRef": "notes.correct-folder-path"
+        },
+        {
+          "code": "notes-folder-unavailable",
+          "class": "prerequisite",
+          "description": "The configured folder roots are missing or unavailable.",
+          "remediationRef": "notes.configure-roots"
+        },
+        {
+          "code": "notes-folder-request-failed",
+          "class": "transient",
+          "description": "The linked folder could not be checked, or a save had an uncertain result. Writes stay disabled until it is checked again.",
+          "remediationRef": "notes.retry-folder"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "notes.correct-folder-path",
+          "description": "Correct a missing path or browse an allowed folder, then link it again.",
+          "path": "/settings/connections"
+        },
+        {
+          "id": "notes.configure-roots",
+          "description": "Ask the host administrator to configure allowed folders for your account.",
+          "path": "/settings/connections"
+        },
+        {
+          "id": "notes.retry-folder",
+          "description": "Check the connection and use Try again before changing the folder.",
+          "path": "/settings/connections"
+        }
+      ]
+    },
+    {
+      "id": "notes.action-details",
+      "description": "The prepareNoteAction public API prepares legacy create, edit and delete approval details from the calling account's linked folder. It returns the target, ordered fields and current version, including the permanent-delete warning. Preparing details does not grant approval, change files or request sync. Preparing details leaves the folder available for the next approved action. Create, edit and delete require a trusted displayed-target version: a changed note or relinked folder is refused before writing or requesting sync. The trusted server must store the displayed version with approval and declare approvalVersion on those tools. Stale grants are consumed, requiring a newly prepared approval. Canonical source identity is used for versions; symlink descendant selections remain refused.",
+      "errors": [
+        {
+          "code": "notes-action-stale",
+          "class": "transient",
+          "description": "An approved write found a changed note or relinked source. It does not write or request sync, and its approval has been consumed.",
+          "remediationRef": "notes.retry-action-details"
+        },
+        {
+          "code": "notes-action-source-unavailable",
+          "class": "prerequisite",
+          "description": "The source is unlinked, missing or outside allowed roots. No action details are returned.",
+          "remediationRef": "notes.link-action-source"
+        },
+        {
+          "code": "notes-action-details-unavailable",
+          "class": "transient",
+          "description": "The source or file could not be checked. No action is approved or run.",
+          "remediationRef": "notes.retry-action-details"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "notes.link-action-source",
+          "description": "Link an available notes folder within the allowed roots. Ask the administrator to configure roots if none are available.",
+          "path": "/settings/connections"
+        },
+        {
+          "id": "notes.retry-action-details",
+          "description": "Check the connection and prepare the action again before approving it.",
+          "path": "/settings/connections"
+        }
+      ]
+    },
+    {
+      "id": "notes.sync-ingest",
+      "description": "The host provides core-owned Notes file ingestion (folder walk, legacy document chunking, configured document embeddings, unchanged-file skipping and per-page atomic indexing) behind the sync coordinator's vault ports, plus atomic deleted-note cleanup. Assembly must connect MemoryIngestPorts and MemoryCleanupPorts with the same account-specific roots and notes-source-path preference as folder settings, and supply the account's configured document embedding model. Managed publication snapshots are refused until that join exists. The package declares the notes.sync job and the manual sync route. It also declares the notes.sync-tick job, which a per-account fifteen-minute schedule runs; the schedule is created when a folder is linked or a manual sync is requested.",
+      "remediations": [
+        {
+          "id": "notes.configure-ingest",
+          "description": "Ask the host administrator to connect core memory ingestion and the configured document embedding service, and link an allowed notes folder.",
+          "path": "/settings/connections"
+        }
+      ]
+    },
+    {
+      "id": "notes.semantic-search",
+      "description": "The read-only notes.search tool returns your existing indexed Notes chunks in semantic order, with source paths and line ranges. The host must connect core memory and your configured query embedding service. Automatic chat recall is not implemented yet. File changes are indexed by sync. Chat integration must first preserve the legacy schemas and outside-content classification; note text is untrusted data.",
+      "errors": [
+        {
+          "code": "notes-search-unavailable",
+          "class": "prerequisite",
+          "description": "The memory search adapter or query embedding service is unavailable.",
+          "remediationRef": "notes.configure-search"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "notes.configure-search",
+          "description": "Ask the host administrator to connect core memory search and the configured query embedding service.",
+          "path": "/settings/connections"
+        }
+      ]
+    },
+    {
+      "id": "notes.manual-sync-request",
+      "description": "Notes handles POST /notes/sync with the legacy missing-folder response and an accepted durable request ID. It saves the calling account's source preference in the private checkpoint so later folder changes cannot retarget a pending request; queued metadata contains only its ID. Request body and query fields cannot choose another account or source. The surrounding server must commit and publish before returning success. Configured embeddings, worker dispatch, recall preparation and legacy singleton coalescing still need assembly."
+    },
+    {
+      "id": "notes.sync-outcomes",
+      "description": "The durable sync worker records final counts or a safe failure in the calling account's saved last-sync status after database finalization. Deferred pages and ticks after unlinking preserve prior results. Status writes are best effort and never change the sync result. Assembly must wrap the transaction and queue adapters with FolderSyncStatusPorts, bound to notes-last-sync. Scheduled ticks write the same status."
+    },
+    {
+      "id": "notes.sync-checkpoints",
+      "description": "Owner-only durable sync checkpoints keep continuation paths and hashes out of queued job parameters. Notes can request and resume sync by checkpoint ID. Its requestNotesSync API saves the calling account's selected source in the private request and refuses a missing source before checkpoint or queue creation, matching manual sync. It accepts no account or source override; filesystem resolution remains worker work. Create, edit and delete save the resolved source folder in their private request after file mutation. A changed or unlinked source refuses pending work until the original folder is selected again; queued metadata still contains only the checkpoint ID. This path check does not identify replacement folders at the same path. Checkpoint refusal before finalization compensates files, while publication refusal after commit leaves the file and checkpoint available for retry. Successful pages save a result under a transaction row lock; retries return that result and republish the same continuation ID without repeating ingestion. Final and no-op replays keep newer status; failed deferred publication can record a new safe failure. The test-only recoverNotesSync API scans private checkpoints in pages of at most twenty-five rows and requests publication of unfinished IDs without caller-selected accounts or paths. Completed pages are skipped; retries reuse their queue identities. A trusted server timer must follow each cursor only after successful finalization and periodically restart the scan to notice new requests. This is explicit recovery, not an active timer or retry of exhausted queue jobs. Transactional worker assembly with reserved ingestion connection capacity, checkpoint retention and automatic recovery timer assembly remain activation blockers."
+    }
+  ],
+  "screens": {
+    "/settings/connections": "ui/index.html"
+  },
+  "icons": ["icons/notes.svg"],
+  "accounts": {
+    "supportsUserDisable": false,
+    "defaultEnabled": true
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/notes-source",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/notes-source",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/notes-source/directories",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/notes-last-sync",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/notes/sync",
+      "signIn": true
+    }
+  ],
+  "tools": {
+    "notes.search": {
+      "description": "Search your indexed notes by meaning. Returns source paths, line ranges and text. File changes appear after sync.",
+      "risk": "read"
+    },
+    "notes.create": {
+      "description": "Create a Markdown note in the linked notes source. Needs your approval.",
+      "risk": "write",
+      "approvalVersion": true
+    },
+    "notes.edit": {
+      "description": "Edit a Markdown note in the linked notes source. Needs your approval.",
+      "risk": "write",
+      "approvalVersion": true
+    },
+    "notes.delete": {
+      "description": "Delete a Markdown note from the linked notes source immediately and permanently. There is no trash or restore. Always asks first.",
+      "risk": "destructive",
+      "approvalVersion": true
+    }
+  },
+  "jobs": {
+    "notes.sync-tick": {},
+    "notes.sync": {
+      "checkpoint-id": {
+        "kind": "id"
+      }
+    }
+  }
+}

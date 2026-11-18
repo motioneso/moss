@@ -31,6 +31,12 @@ pnpm typecheck
 
 `pnpm verify:foundation` includes these checks before migrations and integration tests.
 
+CI skips the browser job when a change touches only Rust (`rust-spike/`, Rust sources and Cargo files
+under `modules/`, `rust-*.yml` workflows) and docs. The "Classify changed paths" step in
+`.github/workflows/ci.yml` decides this, and any path it does not recognise runs the full gate. On
+pushes to main it classifies from the merged pull request's files and falls back to the full gate if
+the lookup fails.
+
 ### Dispatching a subagent
 
 A subagent verifies exactly what its brief names and nothing more, so **the brief must carry the

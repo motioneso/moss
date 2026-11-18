@@ -1,0 +1,8 @@
+package moss:module@1.0.0;
+
+interface credentials { call: func(request: string) -> result<string, string>; }
+
+world plaid-probe {
+  import credentials;
+  export handle: func(kind: string, payload: string) -> result<string, string>;
+}

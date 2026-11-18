@@ -1,0 +1,417 @@
+{
+  "schemaVersion": 2,
+  "id": "calendar",
+  "name": "Calendar",
+  "description": "Calendar cached-event screens and draft tools; signed-in HTTPS Calendar pages; provider execution and full shell composition remain incomplete.",
+  "publisher": "Moss",
+  "version": "0.30.0",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "db",
+      "operations": ["query"],
+      "resources": [
+        "app.calendar_events",
+        "app.day_plans",
+        "app.day_plan_blocks",
+        "app.day_plan_operations",
+        "app.day_plan_operation_items"
+      ]
+    },
+    {
+      "port": "context",
+      "operations": ["read", "uuid"],
+      "resources": ["call", "new"]
+    },
+    {
+      "port": "api",
+      "operations": ["call"],
+      "resources": ["tasks", "connectors"]
+    },
+    {
+      "port": "jobs",
+      "operations": ["enqueue"],
+      "resources": ["calendar-cache-evict-event"]
+    },
+    {
+      "port": "kv",
+      "operations": ["get", "set"],
+      "resources": [
+        "calendar.briefing-settings",
+        "calendar.chat-context",
+        "calendar.task-reference",
+        "calendar.briefing-reference",
+        "calendar.ui-view",
+        "calendar.source-behaviors",
+        "calendar.cache-write"
+      ]
+    }
+  ],
+  "database": {
+    "ownedTables": [
+      "app.calendar_events",
+      "app.day_plans",
+      "app.day_plan_blocks",
+      "app.day_plan_operations",
+      "app.day_plan_operation_items"
+    ],
+    "migrations": [
+      "sql/0011_calendar_module.sql",
+      "sql/0020_calendar_owner_or_share.sql",
+      "sql/0066_calendar_worker_grants_and_google_insert.sql",
+      "sql/0087_calendar_events_update_connector_scope.sql",
+      "sql/0113_worker_calendar_events_delete.sql",
+      "sql/0126_app_runtime_calendar_events_delete.sql",
+      "sql/0229_day_plans.sql",
+      "sql/0229a_day_plan_preserve_legacy.sql",
+      "sql/0230_day_plan_ownership.sql",
+      "sql/0231_day_plan_reconcile_storage.sql",
+      "sql/0232_day_plan_blank_legacy_notes.sql",
+      "sql/0233_day_plan_block_task_soft_reference.sql",
+      "sql/0234_day_plan_apply_batch.sql",
+      "sql/0235_day_plan_apply_item_result.sql",
+      "sql/0236_day_plan_worker_apply_grants.sql"
+    ],
+    "ledger": "core-legacy",
+    "ownerDelete": ["app.calendar_events"],
+    "access": {
+      "app.calendar_events": {
+        "access": "owner-or-share",
+        "resourceType": "calendar_event",
+        "shareKey": "id"
+      },
+      "app.day_plans": {
+        "access": "owner-only"
+      },
+      "app.day_plan_blocks": {
+        "access": "owner-only"
+      },
+      "app.day_plan_operations": {
+        "access": "owner-only"
+      },
+      "app.day_plan_operation_items": {
+        "access": "owner-only"
+      }
+    }
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/events",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/events/:id",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/day-plan",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/day-plans",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/day-plans/:id/draft",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/day-plans/:id/preview",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/briefing-settings",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/source-behaviors",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/source-behaviors",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/display-settings",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/display-settings",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/briefing-settings",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/day-plans/:id/operations/:operation_id",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/day-plans/:id/apply",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/day-plans/:id/operations/:operation_id/retry",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/day-plans/:id/operations/:operation_id/recover",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/day-plans/:id/operations/:operation_id/confirm",
+      "signIn": true
+    }
+  ],
+  "requires": {
+    "tasks": ">=0.1.1, <1.0.0"
+  },
+  "provides": {
+    "listEvents": "1.0.0",
+    "getEvent": "1.0.0",
+    "getPlan": "1.0.0",
+    "createPlan": "1.0.0",
+    "saveDraft": "1.0.0",
+    "reserveAutoPlan": "1.0.0",
+    "findUnfinishedBatch": "1.0.0",
+    "getSourceSwitches": "1.0.0",
+    "upsertCachedEvent": "1.0.0",
+    "pruneCachedEvents": "1.0.0",
+    "evictCachedEvent": "1.0.0",
+    "importCalendarMirror": "1.0.0"
+  },
+  "icons": ["icons/calendar.svg"],
+  "accounts": {
+    "supportsUserDisable": true,
+    "defaultEnabled": true
+  },
+  "features": [
+    {
+      "id": "calendar.source-switches",
+      "description": "The Calendar settings screen has two switches, Include in briefings and Use for planning, both on by default. They save to the account's source-behavior preferences and change nothing for other modules. The Briefings module reads them: it leaves tomorrow's calendar out of the evening briefing when the first is off, and plans no day blocks when the second is off."
+    },
+    {
+      "id": "calendar.cache-api",
+      "description": "Connectors adds and updates cached events through a public interface, and removes the ones a sync no longer sees. Only the signed-in person's own events are touched."
+    },
+    {
+      "id": "calendar.data",
+      "description": "Reads cached events and saves private day-plan drafts. Writing events to the provider calendar is done by the three write tools below, which go through Connectors.",
+      "errors": [
+        {
+          "code": "calendar-unavailable",
+          "class": "transient",
+          "description": "Calendar storage or a declared public dependency is unavailable",
+          "remediationRef": "calendar-check-package"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "calendar-check-package",
+          "description": "Check that Calendar and its public dependencies are enabled",
+          "path": "/settings/modules"
+        }
+      ]
+    },
+    {
+      "id": "calendar.heartbeat_source",
+      "description": "Provides a bounded cache-only heartbeat read of owned events. Shared events are excluded; no provider request is made.",
+      "errors": [
+        {
+          "code": "invalid-heartbeat-input",
+          "class": "validation",
+          "description": "Retry with only horizonHours from one to forty-eight and limit from one to twenty. These are caller inputs, not account settings."
+        },
+        {
+          "code": "calendar_heartbeat_source_unavailable",
+          "class": "transient",
+          "description": "Cached Calendar events could not be read for a check-in. Check-in delivery and Alerts integration remain outside this package checkpoint."
+        }
+      ]
+    },
+    {
+      "id": "calendar.day_plan_draft",
+      "description": "HTTP draft creation and saves accept the original date field through the installed API and Calendar web router. Creation without a timezone uses the saved account timezone or the product default. Original source-run creation remains unavailable until its public provenance adapter is ready. Saved HTTP reads include live task/source summaries from scoped public reference adapters, with unavailable references reported beside the unchanged plan. Concrete production adapters remain open. The package tool saves intent and untimed task additions to today or tomorrow in the saved account timezone. It is not yet connected to signed-in chat. Drafts require the current revision and public task reference adapter. Provider writes and dialog execution are not shipped in this checkpoint.",
+      "errors": [
+        {
+          "code": "draft-source-unavailable",
+          "class": "transient",
+          "description": "Original source-linked draft creation is unavailable until the public Briefings provenance adapter is connected. Create an unlinked draft instead."
+        },
+        {
+          "code": "draft-date-invalid",
+          "class": "validation",
+          "description": "Use one date field, a real calendar day and a valid timezone. Saving requires an explicit timezone."
+        },
+        {
+          "code": "draft-not-available",
+          "class": "transient",
+          "description": "The draft, current revision or public task adapter is unavailable.",
+          "remediationRef": "calendar-read-draft"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "calendar-read-draft",
+          "description": "Read the current draft before retrying. Check the public task adapter for task-linked edits.",
+          "path": "/settings/modules"
+        }
+      ]
+    },
+    {
+      "id": "calendar.day_plan_preview",
+      "description": "Preview a saved day plan's selected changes before anything is applied: before and after times, task eligibility, deadline risk and overlaps between selected changes. Nothing is written and no provider is contacted. Calendar-busy conflicts need the provider-backed source context, which this host does not provide yet, so availability reports unavailable instead of claiming the time is free.",
+      "errors": [
+        {
+          "code": "preview-not-available",
+          "class": "transient",
+          "description": "The plan changed since it was read, or a selected change is not part of this plan. Read the current plan before previewing again.",
+          "remediationRef": "calendar-read-draft"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "calendar-read-draft",
+          "description": "Read the current draft before retrying. Check the public task adapter for task-linked edits.",
+          "path": "/settings/modules"
+        }
+      ]
+    },
+    {
+      "id": "calendar.cache_eviction",
+      "description": "A background job removes one cached calendar event for the account that queued it. An event the account cannot see is left untouched and reported as not removed, so one account can never remove or detect another account's event.",
+      "errors": []
+    },
+    {
+      "id": "calendar.screens",
+      "description": "Packaged Rust Day, Week and Month screens with saved views and event links. The authored grouped View and Week type controls show the selected choice; compact Previous and Next arrows, Today, keyboard-operated choices and saved Work week or Full week match the existing toolbar. Keyboard focus returns to the chosen control after a view save unless focus moved elsewhere. Day and Week initially center the current time in the measured visible grid, clamped at the day boundaries; changed-data refreshes in the same timezone retain vertical user scroll, including midnight. A changed saved account timezone recenters the current time. Calendar labels, held-event details and settings use the account assistant name. Week view explains sideways scrolling and brings today into view on navigation and resize while preserving user scroll during ordinary refreshes. The Day legend counts today’s held blocks and shows the authored event swatches. Default English date labels retain exclusive all-day and midnight ends. Timed events match the existing compact labels: title only below 44 pixels, time on taller events, and location at 58 pixels or taller in Day view. Held events show their marker, and held all-day events use the accent colour. Month keeps the existing five- or six-row layout, highlights today with the authored date pill, labels the first of each month, and omits time labels for all-day and continuation entries. Month reserves room for three event chips and the extra-events button in shorter viewports. Extra events and date buttons open Day; event chips open details. Details use the authored title marker, time/date rows, location and attendee rows, status marker and held-block note. Long detail text wraps inside the panel. Details show duration, attendee and status wording, follow successful refreshes, and close when an event disappears. Failed refreshes retain loaded events and explicit retry shows progress. The Calendar web router serves installed frames behind Rust sign-in and HTTPS. Original event and briefing-settings read and settings-write URLs dispatch through the installed package. External-calendar status, provider writes, full shell assembly and second-device acceptance remain open. A visible startup message remains until the screen mounts. Reload page in the parent retries the current screen and preserves an event link when one is present.",
+      "errors": [
+        {
+          "code": "calendar-page-unavailable",
+          "class": "transient",
+          "description": "Calendar could not load. Check that its package is installed and enabled, then reload."
+        },
+        {
+          "code": "calendar-refresh-failed",
+          "class": "transient",
+          "description": "Retry Calendar. Previously loaded events remain visible."
+        },
+        {
+          "code": "calendar-view-save-failed",
+          "class": "transient",
+          "description": "The selected view lasts for this visit if its account preference cannot be saved."
+        },
+        {
+          "code": "calendar-startup-failed",
+          "class": "transient",
+          "description": "Calendar could not start. Use Reload page above to retry. If Opening Calendar takes too long, use the same control."
+        }
+      ]
+    },
+    {
+      "id": "calendar.briefing-settings",
+      "description": "Edit and reload account lookahead, prep-task and time-block choices. Both original and installed settings URLs retain legacy scalar and singleton-array coercion, discard unknown fields, and return the original validation error for invalid well-formed JSON requests. Only normalized declared fields reach the strict account-scoped preference writer. Settings and the time-block writeback policy save together; failed saves retain confirmed values. Auto grants standing permission also honored by the existing app. This Rust screen does not execute provider actions. A visible startup message remains until the screen mounts. Reload page in the parent retries the current screen and preserves an event link when one is present.",
+      "errors": [
+        {
+          "code": "calendar-settings-request-invalid",
+          "class": "validation",
+          "description": "Invalid settings in well-formed JSON bodies return HTTP 400 with plain field-specific validation text, or body must be object for a non-object. The response has no error code. Use lookahead days zero, one or two, supported automation modes, and boolean legacy flags. Your saved settings are unchanged."
+        },
+        {
+          "code": "calendar-settings-save-failed",
+          "class": "transient",
+          "description": "Your last confirmed settings remain shown. Check the connection and try the change again."
+        },
+        {
+          "code": "calendar-startup-failed",
+          "class": "transient",
+          "description": "Calendar could not start. Use Reload page above to retry. If Opening Calendar takes too long, use the same control."
+        }
+      ]
+    },
+    {
+      "id": "calendar.saved_day_plan_operation_status",
+      "description": "Read saved apply progress through the installed API and original Calendar URL. Preserves selected item order, pending or completed status and access-denied guidance. Owner-only stored operations remain private. Reading never runs a provider action; apply, retry, recovery and confirmation execution remain unavailable. Invalid ids are rejected, missing operations return not found, and unreadable stored batches return an error. Read the current account’s plan and operation ids before retrying."
+    },
+    {
+      "id": "calendar.preview-busy-check",
+      "description": "When Connectors is installed, the day-plan preview checks proposed times against the person's connected calendar events and marks busy times. Without Connectors the preview works as before and skips the check."
+    }
+  ],
+  "tools": {
+    "calendar.heartbeatWindow": {
+      "description": "Background cache-only read of the actor's own upcoming events, with bounded results, freshness and material revision.",
+      "risk": "read"
+    },
+    "calendar.dayPlanDraft": {
+      "description": "Save evening intent and untimed task additions to the current day-plan draft for dialog review. Does not schedule events.",
+      "risk": "write"
+    },
+    "calendar.createEvent": {
+      "description": "Add a focus-time block to the person's own Google Calendar in the first free slot of the window, then show it in Calendar. Never double-books.",
+      "risk": "write"
+    },
+    "calendar.deleteEvent": {
+      "description": "Delete one event from the person's own Google Calendar and remove it from Calendar. Outlook events are read-only.",
+      "risk": "write"
+    },
+    "calendar.rescheduleEvent": {
+      "description": "Move one event without guests on the person's own Google Calendar and update it in Calendar.",
+      "risk": "write"
+    },
+    "calendar.listVisibleEvents": {
+      "description": "Read the actor's upcoming events from every connected calendar, live first with a cached fallback, with conflict and travel flags.",
+      "risk": "read"
+    }
+  },
+  "jobs": {
+    "calendar-cache-evict-event": {
+      "target-item-id": {
+        "kind": "id"
+      }
+    }
+  },
+  "screens": {
+    "/calendar": "ui/index.html",
+    "/settings/calendar": "ui/settings.html"
+  },
+  "navigation": [
+    {
+      "id": "calendar",
+      "label": "Calendar",
+      "path": "/calendar",
+      "description": "Day, Week and Month views of visible cached events in the saved account timezone. The Calendar web router supports signed-in event links at /calendar?event=<id> and installed-package read routing."
+    }
+  ],
+  "settings": [
+    {
+      "id": "calendar.automation",
+      "label": "Calendar",
+      "path": "/settings/calendar",
+      "description": "Saved account lookahead, prep-task and time-block choices. Time-block mode also saves the matching writeback permission. Auto grants standing permission also honored by the existing app; Rust action execution and source-behavior controls remain open.",
+      "scope": "user"
+    }
+  ],
+  "optionalRequires": {
+    "connectors": ">=0.5.0, <1.0.0"
+  }
+}

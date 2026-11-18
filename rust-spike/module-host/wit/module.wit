@@ -1,0 +1,27 @@
+package moss:module@1.0.0;
+
+// JSON envelopes are validated against the port-specific Rust request contract.
+interface db { call: func(request: string) -> result<string, string>; }
+interface kv { call: func(request: string) -> result<string, string>; }
+interface vault { call: func(request: string) -> result<string, string>; }
+interface fetch { call: func(request: string) -> result<string, string>; }
+interface credentials { call: func(request: string) -> result<string, string>; }
+interface ai { call: func(request: string) -> result<string, string>; }
+interface embed { call: func(request: string) -> result<string, string>; }
+interface jobs { call: func(request: string) -> result<string, string>; }
+interface events { call: func(request: string) -> result<string, string>; }
+interface api { call: func(request: string) -> result<string, string>; }
+interface notify { call: func(request: string) -> result<string, string>; }
+interface attachments { call: func(request: string) -> result<string, string>; }
+interface tools { call: func(request: string) -> result<string, string>; }
+interface action-policy { call: func(request: string) -> result<string, string>; }
+interface context { call: func(request: string) -> result<string, string>; }
+
+world module {
+  import db; import kv; import vault; import fetch; import credentials;
+  import ai; import embed; import jobs; import events; import api; import notify;
+  import attachments; import tools; import action-policy;
+  // Kinds: route, api, job, tool, event, install, health. Actor identity never crosses this ABI.
+  // api receives a host-built {name, parameters} envelope, separate from signed-in routes.
+  export handle: func(kind: string, payload: string) -> result<string, string>;
+}

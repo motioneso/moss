@@ -1,0 +1,43 @@
+{
+  "authUrl": "https://accounts.google.com/o/oauth2/v2/auth?client_id=cid.apps.example.com&redirect_uri=http%3A%2F%2Flocalhost%3A1&response_type=code&access_type=offline&prompt=consent&include_granted_scopes=true&state=state-1&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fgmail.modify+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcalendar",
+  "redirects": [
+    {
+      "input": "http://localhost:1/?code=abc&state=xyz",
+      "code": "abc",
+      "state": "xyz"
+    },
+    {
+      "input": "  http://localhost:1/?state=xyz&code=a%2Fb+c  ",
+      "code": "a/b c",
+      "state": "xyz"
+    },
+    {
+      "input": "http://localhost:1/?error=access_denied&state=xyz",
+      "error": "Google returned an authorization error: access_denied"
+    },
+    {
+      "input": "http://localhost:1/?code=abc",
+      "error": "Redirect URL is missing the code or state parameter"
+    },
+    {
+      "input": "http://localhost:1/?state=xyz",
+      "error": "Redirect URL is missing the code or state parameter"
+    },
+    {
+      "input": "http://localhost:1/?code=&state=xyz",
+      "error": "Redirect URL is missing the code or state parameter"
+    },
+    {
+      "input": "http://localhost:1/",
+      "error": "Redirect URL is missing the code or state parameter"
+    },
+    {
+      "input": "not a url",
+      "error": "Pasted redirect URL is not a valid URL"
+    },
+    {
+      "input": "",
+      "error": "Pasted redirect URL is not a valid URL"
+    }
+  ]
+}

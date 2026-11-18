@@ -1,0 +1,113 @@
+name: Rust local lifecycle locks
+on:
+  pull_request:
+    paths:
+      - "rust-spike/portability/**"
+      - "rust-spike/bundled-db/**"
+      - "rust-spike/shell/connect/**"
+      - "rust-spike/network/**"
+      - "rust-spike/shell/tools/test-notices.mjs"
+      - "rust-spike/Cargo.lock"
+      - "rust-spike/shell/Cargo.lock"
+      - ".github/workflows/rust-local-locks.yml"
+permissions:
+  contents: read
+jobs:
+  locks:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    env:
+      CARGO_HOME: ${{ github.workspace }}/.rust-locks/cargo
+      RUSTUP_HOME: ${{ github.workspace }}/.rust-locks/rustup
+      CARGO_TARGET_DIR: ${{ github.workspace }}/.rust-locks/target
+      # Repeated mutation builds must fit alongside the app and toolchain on hosted runners.
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check connected notification receipt protocol
+        run: node --test rust-spike/shell/tools/test-notices.mjs
+      - name: Provision the declared Rust toolchain
+        run: rustup toolchain install 1.95.0 --profile minimal
+      - name: Check process contention, readable state and crash release
+        run: cargo +1.95.0 test --locked --manifest-path rust-spike/Cargo.toml -p portability file_lock -- --nocapture
+      - name: Build the Windows process lifecycle tests
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cargo +1.95.0 test --locked --manifest-path rust-spike/Cargo.toml -p portability --lib --no-run --message-format=json > .rust-locks/child-build.jsonl
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Exercise Windows children as a standard user
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./rust-spike/portability/proof/windows-child.ps1
+      - name: Exercise private files and two-account Windows access denial
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./rust-spike/portability/proof/windows-private.ps1
+      - name: Check Windows elevation refusal
+        if: runner.os == 'Windows'
+        run: cargo +1.95.0 test --locked --manifest-path rust-spike/Cargo.toml -p portability --lib windows_child::tests::elevated_launch_is_refused -- --ignored --exact --nocapture
+      - name: Check Windows lifecycle and handle negative controls
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./rust-spike/portability/proof/windows-child-negative.ps1
+      - name: Check Windows private-file negative controls
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./rust-spike/portability/proof/windows-private-negative.ps1
+      - name: Compile the Windows app and check server executable discovery
+        if: runner.os == 'Windows'
+        run: cargo +1.95.0 test --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-app server_program_uses_the_platform_executable_suffix -- --nocapture
+      - name: Build Windows layout and lock tests (CLI stays Unix only)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cargo +1.95.0 test --locked --manifest-path rust-spike/Cargo.toml -p bundled-db --lib --no-run --message-format=json > .rust-locks/layout-build.jsonl
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Exercise canonical Windows layout as a standard user
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./rust-spike/portability/proof/windows-child.ps1 -BuildReport '.rust-locks/layout-build.jsonl' -TestTarget bundled_db -Filter 'layout::windows::tests' -ExpectedSummary 'test result: ok\. 8 passed; 0 failed; 0 ignored'
+      - name: Exercise pinned Windows supervisor locks as a standard user
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./rust-spike/portability/proof/windows-child.ps1 -BuildReport '.rust-locks/layout-build.jsonl' -TestTarget bundled_db -Filter 'supervisor_lock::tests' -ExpectedSummary 'test result: ok\. 7 passed; 0 failed; 0 ignored'
+      - name: Check canonical Windows layout negative controls
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./rust-spike/bundled-db/proof/windows/layout-negative.ps1
+      - name: Check pinned Windows supervisor lock negative controls
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./rust-spike/bundled-db/proof/windows/lock-negative.ps1
+      - name: Check canonical Unix layout regressions
+        if: runner.os != 'Windows'
+        run: cargo +1.95.0 test --locked --manifest-path rust-spike/Cargo.toml -p bundled-db --lib
+      - name: Check the page-link hand-off between alert, notifier and window
+        if: runner.os != 'Linux'
+        run: |
+          cargo +1.95.0 test --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-app link:: -- --nocapture
+      - name: Check that a clicked Windows balloon asks the window app for its page
+        if: runner.os == 'Windows'
+        run: cargo +1.95.0 test --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-app balloon_click_opens_the_page_the_alert_carries -- --nocapture
+      - name: Check that a clicked macOS alert asks the window app for its page
+        if: runner.os == 'macOS'
+        run: |
+          cargo +1.95.0 test --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-app desktop::macos::tests -- --nocapture
+      - name: Check the Windows stop request file against a real HTTPS server
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # Git for Windows ships the OpenSSL command the local certificate step uses.
+          $env:PATH = "C:\Program Files\Git\usr\bin;$env:PATH"
+          openssl version
+          cargo +1.95.0 test --locked --manifest-path rust-spike/shell/Cargo.toml -p moss-app stop_request_file_ends_only_the_server_it_names -- --nocapture
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

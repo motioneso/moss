@@ -40,7 +40,7 @@ concurrency:
 jobs:
   scripted-app-actions:
     name: Verify app action approval and screen refresh
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
       JARVIS_IMAGE_TAG: app-actions-uat-${{ github.run_id }}

@@ -1,0 +1,502 @@
+//! Installed Calendar package served by the real HTTPS executable. Not a native UI proof.
+mod common;
+#[path = "people_routes/installed.rs"]
+mod installed;
+use common::Keys;
+use moss_module_host::{
+    archive::Package,
+    registry::{Artifact, Channel, Index, Source},
+    trust::{self, Publisher, RegistryIdentity},
+};
+use std::collections::{BTreeMap, BTreeSet};
+use access_context::AccessContext;
+use safety_core::db::{Database, RuntimeRole};
+use serde_json::{json, Value};
+use std::{
+    fs,
+    path::Path,
+    process::{Child, Command, Stdio},
+    time::{Duration, Instant},
+};
+struct Server(Child);
+impl Drop for Server {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+struct Port(String);
+impl Drop for Port {
+    fn drop(&mut self) {
+        let _ = Command::new("devports").args(["release", &self.0]).output();
+    }
+}
+fn private(path: &Path, value: &Value) {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(path)
+        .unwrap();
+    file.write_all(value.to_string().as_bytes()).unwrap();
+}
+#[test]
+#[ignore = "Only through verify-gate and the Calendar server gate"]
+fn installed_calendar_package_serves_routes_from_the_real_server() {
+    assert_eq!(std::env::var("JARVIS_GATE_RUN").as_deref(), Ok("1"));
+    let scratch = tempfile::tempdir().unwrap();
+    let root = scratch.path();
+    let port = Port(
+        String::from_utf8(
+            Command::new("devports")
+                .args(["claim", &format!("js181-calendar-{}", std::process::id())])
+                .output()
+                .unwrap()
+                .stdout,
+        )
+        .unwrap()
+        .trim()
+        .into(),
+    );
+    assert!(!port.0.is_empty());
+    let origin = format!("https://localhost:{}", port.0);
+    let cert = root.join("tls/certificate.pem");
+    assert!(Command::new(std::env::var("JS170_CERTIFICATE").unwrap())
+        .args(["local-certificate"])
+        .arg(root.join("tls"))
+        .arg(&origin)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .unwrap()
+        .success());
+    fs::create_dir(root.join("web")).unwrap();
+    if let Ok(shared) = std::env::var("MOSS_MODULE_SHARED_DIR") {
+        // Generated shared styles and fonts, which the sandboxed screens load.
+        let status = Command::new("cp")
+            .args(["-r", &shared])
+            .arg(root.join("web/module-shared"))
+            .status()
+            .unwrap();
+        assert!(status.success());
+    }
+    fs::write(
+        root.join("web/index.html"),
+        "<!doctype html><title>Calendar HTTP fixture</title>",
+    )
+    .unwrap();
+    let app_url = std::env::var("JS43_APP_URL").unwrap();
+    let worker_url = std::env::var("JS43_WORKER_URL").unwrap();
+    let bootstrap_url = std::env::var("JS43_BOOTSTRAP_URL").unwrap();
+    let auth_url = std::env::var("JS170_AUTH_URL").unwrap();
+    let connector_key = "ab".repeat(32);
+    private(
+        &root.join("credentials.json"),
+        &json!({"app_url":app_url,"auth_url":auth_url,"auth_secret":"temporary-disposable-calendar-signing-secret-181","connector_key":connector_key}),
+    );
+    private(
+        &root.join("network.json"),
+        &json!({"listen":format!("127.0.0.1:{}",port.0),"origins":[origin],"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
+    );
+    let client = reqwest::blocking::Client::builder()
+        .add_root_certificate(reqwest::Certificate::from_pem(&fs::read(&cert).unwrap()).unwrap())
+        .no_proxy()
+        .timeout(Duration::from_secs(60))
+        .build()
+        .unwrap();
+    let start = |modules: bool| {
+        let mut command = Command::new(std::env::var("JS170_SERVER").unwrap());
+        command
+            .arg("--network")
+            .arg(root.join("network.json"))
+            .arg("--web")
+            .arg(root.join("web"));
+        if modules {
+            command.arg("--modules").arg(root.join("modules.json"));
+        }
+        let log = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(root.join("server.log"))
+            .unwrap();
+        let mut server = Server(
+            command
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(log)
+                .spawn()
+                .unwrap(),
+        );
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            assert!(
+                server.0.try_wait().unwrap().is_none(),
+                "server startup failed"
+            );
+            if client
+                .get(format!("{origin}/api/hello"))
+                .send()
+                .is_ok_and(|r| r.status().is_success())
+            {
+                break;
+            }
+            assert!(Instant::now() < deadline, "server startup deadline");
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        server
+    };
+    let signup = |email: &str, name: &str| {
+        let response = client.post(format!("{origin}/api/auth/sign-up/email")).header("origin", &origin).json(&json!({"name":name,"email":email,"password":"temporary-calendar-password-181-not-a-real-secret"})).send().unwrap();
+        let status = response.status();
+        if status != 200 {
+            panic!("sign-up answered {status}: {}", response.text().unwrap_or_default());
+        }
+        response.headers()["set-cookie"]
+            .to_str()
+            .unwrap()
+            .split(';')
+            .next()
+            .unwrap()
+            .to_owned()
+    };
+    let server = start(false);
+    let cookie = signup("calendar-owner@example.test", "Calendar owner");
+    drop(server);
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let (owner, app) = runtime.block_on(async {
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
+            .await
+            .unwrap();
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        for migration in [
+            moss_module_host::postgres::MIGRATION,
+            moss_module_host::migrations::MIGRATION,
+            moss_platform_jobs::MIGRATION,
+            moss_module_host::jobs::MIGRATION,
+        ] {
+            db.batch_execute(migration).await.unwrap();
+        }
+        let owner: uuid::Uuid = db
+            .query_one(
+                "SELECT id FROM app.users WHERE email='calendar-owner@example.test'",
+                &[],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        (
+            owner,
+            Database::connect(&app_url, 4, RuntimeRole::App)
+                .await
+                .unwrap(),
+        )
+    });
+    let access = AccessContext::new(owner, "calendar-install");
+    // Publish the Calendar package through a signed folder registry and install it with the
+    // canonical installer, as the server would find it.
+    let keys = Keys::new();
+    fs::create_dir_all(root.join("registry/packages")).unwrap();
+    // Calendar reads task facts through the Tasks package, so both are published and installed.
+    let artifacts: Vec<Artifact> = [
+        ("JS220_TASKS_PACKAGE", "tasks"),
+        ("JS181_CALENDAR_PACKAGE", "calendar"),
+    ]
+    .iter()
+    .map(|(variable, id)| {
+        let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
+        let digest = trust::digest(&bytes);
+        let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
+        let manifest = &package.manifest;
+        assert_eq!(manifest.id, *id);
+        fs::write(root.join(format!("registry/packages/{digest}.mosspkg")), &bytes).unwrap();
+        Artifact {
+            id: manifest.id.clone(),
+            version: manifest.version.clone(),
+            digest: digest.clone(),
+            size: bytes.len() as u64,
+            publisher_key: "calendar-test".into(),
+            signature: Keys::sign(&keys.publisher, digest.as_bytes()),
+            requires_moss: manifest.requires_moss.clone(),
+            abi: manifest.abi.clone(),
+            capabilities: manifest.capabilities.clone(),
+            migrations: manifest.database.migrations.clone(),
+            requires: manifest.requires.clone(),
+            changelog: "Calendar server gate".into(),
+            channel: Channel::Stable,
+            urgent: false,
+        }
+    })
+    .collect();
+    let identity = RegistryIdentity {
+        id: "calendar-test-registry".into(),
+        name: "Calendar test registry".into(),
+        root_fingerprint: trust::digest(ring::signature::KeyPair::public_key(&keys.root).as_ref()),
+        index_keys: BTreeMap::from([("online".into(), Keys::public(&keys.index))]),
+        publishers: BTreeMap::from([(
+            "calendar-test".into(),
+            Publisher {
+                key: Keys::public(&keys.publisher),
+                prefix: String::new(),
+                replaces: BTreeSet::new(),
+            },
+        )]),
+        lifted_revocations: BTreeSet::new(),
+    };
+    let index = Index {
+        serial: 1,
+        expires: chrono::Utc::now() + chrono::Duration::days(1),
+        signing_key: "online".into(),
+        modules: artifacts.clone(),
+        revoked: vec![],
+    };
+    for (name, data, key) in [
+        ("registry.json", serde_json::to_vec(&identity).unwrap(), &keys.root),
+        ("index.json", serde_json::to_vec(&index).unwrap(), &keys.index),
+    ] {
+        fs::write(root.join("registry").join(name), &data).unwrap();
+        fs::write(root.join("registry").join(format!("{name}.sig")), Keys::sign(key, &data)).unwrap();
+    }
+    let installer = installed::reopen(
+        &root.join("data"),
+        app,
+        &access,
+        std::sync::Arc::new(moss_module_host::runtime::DenyPorts),
+    );
+    let source = installer
+        .refresh(
+            &access,
+            Source::Folder(root.join("registry")),
+            &Keys::public(&keys.root),
+            &Keys::public(&keys.publisher),
+            "calendar-test-registry",
+        )
+        .unwrap();
+    for artifact in &artifacts {
+        installer.install(&access, &source, artifact, true).unwrap();
+    }
+    drop(installer);
+    // A cached event for the signed-in owner, written the way a sync would leave it.
+    let event_title = "Server gate planning review";
+    runtime.block_on(async {
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
+            .await
+            .unwrap();
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let account = uuid::Uuid::new_v4();
+        db.execute("INSERT INTO app.connector_accounts(id,provider_id,owner_user_id,encrypted_secret,scopes) VALUES($1,'google',$2,'{}',ARRAY['https://www.googleapis.com/auth/calendar'])", &[&account, &owner]).await.unwrap();
+        // Today at 15:00 UTC, so the Month view of a later run still shows it.
+        let day = chrono::Utc::now().date_naive();
+        let starts = day.and_hms_opt(15, 0, 0).unwrap().and_utc();
+        let ends = day.and_hms_opt(16, 0, 0).unwrap().and_utc();
+        db.execute("INSERT INTO app.calendar_events(id,connector_account_id,owner_user_id,title,starts_at,ends_at,external_id) VALUES($1,$2,$3,$4,$5,$6,'server-gate')", &[&uuid::Uuid::new_v4(), &account, &owner, &event_title, &starts, &ends]).await.unwrap();
+    });
+    private(
+        &root.join("modules.json"),
+        &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key}),
+    );
+    let _server = start(true);
+    let call = |method: reqwest::Method, path: &str, cookie: Option<&str>, body: Option<Value>| {
+        let mut request = client
+            .request(method, format!("{origin}/api/m/calendar{path}"))
+            .header("origin", &origin);
+        if let Some(cookie) = cookie {
+            request = request.header("cookie", cookie);
+        }
+        if let Some(body) = body {
+            request = request.json(&body);
+        }
+        let response = request.send().unwrap_or_else(|e| {
+            panic!(
+                "{path}: {e}\n{}",
+                fs::read_to_string(root.join("server.log")).unwrap_or_default()
+            )
+        });
+        let status = response.status().as_u16();
+        let text = response.text().unwrap_or_default();
+        let body = serde_json::from_str::<Value>(&text).unwrap_or_else(|_| {
+            if !text.is_empty() {
+                println!("{path} non-JSON body: {text}");
+            }
+            Value::Null
+        });
+        println!("{path} -> {status}");
+        (status, body)
+    };
+    use reqwest::Method;
+    assert_eq!(call(Method::GET, "/events", None, None).0, 401);
+    // The server loads modules in the background and answers 503 until the host is ready.
+    let started = std::time::Instant::now();
+    let (status, events) = loop {
+        let answer = call(Method::GET, "/events", Some(&cookie), None);
+        if answer.0 != 503 || started.elapsed() > std::time::Duration::from_secs(60) {
+            break answer;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    };
+    assert_eq!(status, 200, "{events}");
+    let found = events["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e["title"] == event_title)
+        .unwrap_or_else(|| panic!("owner event missing: {events}"))
+        .clone();
+    let (status, one) = call(
+        Method::GET,
+        &format!("/events/{}", found["id"].as_str().unwrap()),
+        Some(&cookie),
+        None,
+    );
+    assert_eq!(status, 200, "{one}");
+    assert_eq!(one["event"]["title"], event_title);
+    let (status, _) = call(
+        Method::GET,
+        &format!("/events/{}", uuid::Uuid::new_v4()),
+        Some(&cookie),
+        None,
+    );
+    assert_eq!(status, 404);
+    let (status, none) = call(
+        Method::GET,
+        "/day-plan?date=2026-11-12&timeZone=UTC",
+        Some(&cookie),
+        None,
+    );
+    assert_eq!(status, 200, "{none}");
+    assert_eq!(none["plan"], Value::Null);
+    let (status, created) = call(
+        Method::POST,
+        "/day-plans",
+        Some(&cookie),
+        Some(json!({"date":"2026-11-12","timeZone":"UTC"})),
+    );
+    assert_eq!(status, 200, "{created}\n{}", fs::read_to_string(root.join("server.log")).unwrap_or_default());
+    let (status, read) = call(
+        Method::GET,
+        "/day-plan?date=2026-11-12&timeZone=UTC",
+        Some(&cookie),
+        None,
+    );
+    assert_eq!(status, 200, "{read}");
+    assert_eq!(read["plan"]["localDay"], "2026-11-12", "{read}");
+    let apply = format!("/day-plans/{}/apply", created["plan"]["id"].as_str().unwrap());
+    let good = json!({"expectedRevision":1,"idempotencyKey":"live-apply-1"});
+    assert_eq!(call(Method::POST, &apply, None, Some(good.clone())).0, 401);
+    let (status, refused) = call(Method::POST, &apply, Some(&cookie), Some(good));
+    assert_eq!((status, refused["error"].as_str()), (503, Some("day plan apply is unavailable")), "{refused}");
+    let (status, bad) = call(
+        Method::POST,
+        &apply,
+        Some(&cookie),
+        Some(json!({"expectedRevision":1,"idempotencyKey":"k","surprise":true})),
+    );
+    assert_eq!((status, bad["code"].as_str()), (400, Some("day_plan_invalid")), "{bad}");
+    // Retry, recover and confirm validate the request and then fail closed, like apply.
+    let plan_id = created["plan"]["id"].as_str().unwrap();
+    let operation = uuid::Uuid::new_v4();
+    let item = uuid::Uuid::new_v4();
+    let operation_path = |action: &str| format!("/day-plans/{plan_id}/operations/{operation}/{action}");
+    for (action, body) in [
+        ("retry", json!({"itemIds":[item]})),
+        ("recover", json!({})),
+        ("confirm", json!({"approvalId":uuid::Uuid::new_v4()})),
+    ] {
+        let path = operation_path(action);
+        assert_eq!(call(Method::POST, &path, None, Some(body.clone())).0, 401, "{action}");
+        let (status, refused) = call(Method::POST, &path, Some(&cookie), Some(body));
+        assert_eq!((status, refused["error"].as_str()), (503, Some("day plan apply is unavailable")), "{action}: {refused}");
+    }
+    let (status, bad) = call(Method::POST, &operation_path("retry"), Some(&cookie), Some(json!({"itemIds":[]})));
+    assert_eq!((status, bad["code"].as_str()), (400, Some("day_plan_invalid")), "{bad}");
+    let (status, settings) = call(Method::GET, "/briefing-settings", Some(&cookie), None);
+    println!("briefing settings read -> {status}: {settings}");
+    assert_eq!(call(Method::GET, "/source-behaviors", None, None).0, 401);
+    let (status, sources) = call(Method::GET, "/source-behaviors", Some(&cookie), None);
+    assert_eq!((status, &sources), (200, &json!({"briefings":true,"planning":true})));
+    let (status, bad) = call(Method::PATCH, "/source-behaviors", Some(&cookie), Some(json!({"writeback":true})));
+    assert_eq!(status, 400, "{bad}");
+    // Day plans check task references through the installed Tasks package, under the caller's account.
+    let (own_task, other_task) = runtime.block_on(async {
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
+            .await
+            .unwrap();
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        // Setup allows one owner over HTTP, so the second account is inserted directly.
+        let other = uuid::Uuid::new_v4();
+        db.execute("INSERT INTO app.users(id,email,name,is_instance_admin) VALUES($1,'calendar-other@example.test','Calendar other',false)", &[&other]).await.unwrap();
+        let mut ids = vec![];
+        for email in ["calendar-owner@example.test", "calendar-other@example.test"] {
+            let user: uuid::Uuid = db
+                .query_one("SELECT id FROM app.users WHERE email=$1", &[&email])
+                .await
+                .unwrap()
+                .get(0);
+            let list = uuid::Uuid::new_v4();
+            let task = uuid::Uuid::new_v4();
+            db.execute("INSERT INTO app.task_lists(id,owner_user_id,name) VALUES($1,$2,'Gate list')", &[&list, &user]).await.unwrap();
+            db.execute("INSERT INTO app.tasks(id,owner_user_id,list_id,title,status) VALUES($1,$2,$3,'Gate task','todo')", &[&task, &user, &list]).await.unwrap();
+            ids.push(task);
+        }
+        (ids[0], ids[1])
+    });
+    // The first call into Tasks compiles its package, which a debug build does slowly. Warm it
+    // so the day plan checks below run inside the module time limit.
+    let warm = client
+        .get(format!("{origin}/api/m/tasks/tasks"))
+        .header("origin", &origin)
+        .header("cookie", &cookie)
+        .send()
+        .unwrap();
+    println!("tasks warm-up -> {}", warm.status());
+    for (day, task, who, expected) in [
+        ("2026-11-13", own_task, &cookie, 200),
+        ("2026-11-14", other_task, &cookie, 404),
+        ("2026-11-15", uuid::Uuid::new_v4(), &cookie, 404),
+    ] {
+        let (status, reply) = call(
+            Method::POST,
+            "/day-plans",
+            Some(who),
+            Some(json!({"localDay":day,"timeZone":"UTC","eveningIntent":{"priorityTaskIds":[task]}})),
+        );
+        assert_eq!(status, expected, "{day}: {reply}\n{}", fs::read_to_string(root.join("server.log")).unwrap_or_default());
+    }
+    println!("PASS installed Calendar package served over HTTPS by the real server: sign-in required, owner event list and detail, unknown event 404, day plan create and read, apply route validates and fails closed");
+    // The signed-in owner gets the verified screen address; the files need no session.
+    let screen_url = format!("{origin}/api/modules/calendar/screen?path=/calendar");
+    assert_eq!(client.get(&screen_url).send().unwrap().status(), 401);
+    let screen: Value = client.get(&screen_url).header("cookie", &cookie).send().unwrap().json().unwrap();
+    let src = screen["src"].as_str().expect("screen address");
+    assert!(src.starts_with("/module-ui/calendar/"), "{screen}");
+    assert_eq!(client.get(format!("{origin}{src}")).header("origin", "null").header("sec-fetch-site", "cross-site").send().unwrap().status(), 200);
+    println!("PASS Calendar screen address and files served over HTTPS");
+    // Real-browser check of the Calendar screens against this server.
+    {
+        let script = std::env::var("MOSS_CALENDAR_BROWSER_SCRIPT").expect("the gate must supply the browser script");
+        let out = std::env::var("MOSS_CALENDAR_BROWSER_OUT").unwrap_or_else(|_| root.display().to_string());
+        let status = Command::new("pnpm")
+            .args(["exec", "tsx", &script])
+            .env("ORIGIN", &origin)
+            .env("EMAIL", "calendar-owner@example.test")
+            .env("PASSWORD", "temporary-calendar-password-181-not-a-real-secret")
+            .env("EVENT_TITLE", event_title)
+            .env("OUT", out)
+            .status()
+            .unwrap();
+        assert!(status.success(), "browser check failed\n{}", fs::read_to_string(root.join("server.log")).unwrap_or_default());
+    }
+    // Optional manual browser check: keep the server up and print where it is.
+    if let Ok(seconds) = std::env::var("MOSS_CALENDAR_HOLD_SECONDS") {
+        println!("HOLD {origin} for {seconds}s");
+        std::thread::sleep(std::time::Duration::from_secs(seconds.parse().unwrap_or(0)));
+    }
+    println!("NOT PROVEN: Calendar screens on the real server (it serves module routes only), provider tools, second account over HTTP, second physical device");
+}

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sign in · Moss</title>
+    <link rel="stylesheet" href="/app.css" />
+    <script src="/boot-theme.js"></script>
+    <script src="/access.js" defer></script>
+  </head>
+  <body>
+    <main class="auth-screen">
+      <section class="auth-panel" aria-labelledby="auth-title">
+        <div>
+          <p class="jds-eyebrow">Moss</p>
+          <h1 id="auth-title">Sign in</h1>
+          <p>Your Moss, wherever you are.</p>
+        </div>
+        <form class="auth-form" id="sign-in">
+          <div class="jds-field">
+            <label class="jds-label" for="email">Email</label
+            ><input
+              class="jds-input"
+              id="email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              required
+            />
+          </div>
+          <div class="jds-field">
+            <label class="jds-label" for="password">Password</label
+            ><input
+              class="jds-input"
+              id="password"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              maxlength="128"
+              required
+            />
+          </div>
+          <p id="status" role="status" aria-live="polite"></p>
+          <button class="jds-btn jds-btn--primary" type="submit">Sign in</button>
+        </form>
+        <p id="setup-link" hidden>
+          First time on this computer? <a href="/setup">Create owner account</a>.
+        </p>
+      </section>
+    </main>
+  </body>
+</html>

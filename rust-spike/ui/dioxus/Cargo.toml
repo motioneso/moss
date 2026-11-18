@@ -1,0 +1,25 @@
+[package]
+name = "ui-dioxus"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Phase 0b spike: the Tasks priority screen in Dioxus"
+
+[workspace]
+
+[dependencies]
+dioxus = { version = "0.7", default-features = false, features = ["web", "launch", "macro", "html", "signals", "hooks"] }
+gloo-net = { version = "0.6", default-features = false, features = ["http", "json"] }
+gloo-timers = { version = "0.3", features = ["futures"] }
+js-sys = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+wasm-bindgen = "0.2"
+web-sys = { version = "0.3", features = ["Window", "Document", "Element", "HtmlElement", "Node", "NodeList", "Performance"] }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = "debuginfo"

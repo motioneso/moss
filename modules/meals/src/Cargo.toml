@@ -1,0 +1,54 @@
+[package]
+name = "moss-meals-module"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Guest-safe Meals: the kitchen and household, with their chat tools"
+
+[workspace]
+
+[lib]
+path = "lib.rs"
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+moss-module-sdk = { path = "../../../rust-spike/module-sdk" }
+serde = { version = "1", features = ["derive"] }
+# Keep approval input bytes stable across the host and Wasm boundary.
+serde_json = { version = "1", features = ["preserve_order"] }
+
+[dev-dependencies]
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wit-bindgen = { version = "=0.57.1", default-features = false, features = ["macros", "realloc"] }
+
+[profile.release]
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
+
+[[test]]
+name = "kitchen"
+path = "../tests/kitchen.rs"
+
+[[test]]
+name = "privacy"
+path = "../tests/privacy.rs"
+
+[[test]]
+name = "lists"
+path = "../tests/lists.rs"
+
+[[test]]
+name = "log"
+path = "../tests/log.rs"
+
+[[test]]
+name = "cooking"
+path = "../tests/cooking.rs"
+
+[[test]]
+name = "arrange"
+path = "../tests/arrange.rs"

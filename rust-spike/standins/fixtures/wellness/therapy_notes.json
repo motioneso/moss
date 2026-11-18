@@ -1,0 +1,60 @@
+{
+  "alice": [
+    {
+      "id": "f1a00000-0000-4000-8000-000000000001",
+      "ownerUserId": "aaaaaaaa-0000-4000-8000-000000000001",
+      "body": "MKR-THERAPY-A-01 invented note about a session",
+      "linkedCheckinId": null,
+      "linkedEmotion": null,
+      "createdAt": "2026-03-04T19:00:00.000Z",
+      "updatedAt": "2026-03-04T19:00:00.000Z"
+    },
+    {
+      "id": "f1a00000-0000-4000-8000-000000000002",
+      "ownerUserId": "aaaaaaaa-0000-4000-8000-000000000001",
+      "body": "MKR-THERAPY-A-02 invented note linked to a check-in",
+      "linkedCheckinId": "c1a00000-0000-4000-8000-000000000002",
+      "linkedEmotion": "sad",
+      "createdAt": "2026-03-03T19:00:00.000Z",
+      "updatedAt": "2026-03-03T19:00:00.000Z"
+    },
+    {
+      "id": "f1a00000-0000-4000-8000-000000000003",
+      "ownerUserId": "aaaaaaaa-0000-4000-8000-000000000001",
+      "body": "MKR-THERAPY-A-03 invented note with only an emotion",
+      "linkedCheckinId": null,
+      "linkedEmotion": "anger",
+      "createdAt": "2026-03-09T19:00:00.000Z",
+      "updatedAt": "2026-03-09T19:00:00.000Z"
+    },
+    {
+      "id": "f1a00000-0000-4000-8000-000000000004",
+      "ownerUserId": "aaaaaaaa-0000-4000-8000-000000000001",
+      "body": "MKR-THERAPY-A-04 invented note linked to the latest check-in",
+      "linkedCheckinId": "c1a00000-0000-4000-8000-000000000008",
+      "linkedEmotion": null,
+      "createdAt": "2026-03-15T19:00:00.000Z",
+      "updatedAt": "2026-03-15T19:00:00.000Z"
+    }
+  ],
+  "bob": [
+    {
+      "id": "f1b00000-0000-4000-8000-000000000001",
+      "ownerUserId": "bbbbbbbb-0000-4000-8000-000000000002",
+      "body": "MKR-THERAPY-B-01 invented b note",
+      "linkedCheckinId": null,
+      "linkedEmotion": null,
+      "createdAt": "2026-03-07T19:00:00.000Z",
+      "updatedAt": "2026-03-07T19:00:00.000Z"
+    },
+    {
+      "id": "f1b00000-0000-4000-8000-000000000002",
+      "ownerUserId": "bbbbbbbb-0000-4000-8000-000000000002",
+      "body": "MKR-THERAPY-B-02 invented b linked note",
+      "linkedCheckinId": "c1b00000-0000-4000-8000-000000000002",
+      "linkedEmotion": "happy",
+      "createdAt": "2026-03-06T19:00:00.000Z",
+      "updatedAt": "2026-03-06T19:00:00.000Z"
+    }
+  ]
+}

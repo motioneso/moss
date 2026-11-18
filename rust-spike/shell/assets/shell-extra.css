@@ -1,0 +1,8 @@
+/* Installed module screens in the page area. */
+.module-screen {
+  display: block;
+  width: 100%;
+  height: calc(100dvh - 9rem);
+  min-height: 24rem;
+  border: 0;
+}

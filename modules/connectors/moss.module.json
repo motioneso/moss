@@ -1,0 +1,739 @@
+{
+  "schemaVersion": 2,
+  "id": "connectors",
+  "name": "Connectors",
+  "description": "Keeps the mail and calendar connections of each account, their sign-in secrets and the Email and Calendar permissions. Connecting Google works by pasting your own Google client details. Yahoo, Proton Bridge, iCloud and Fastmail mail connect with an app password. Google mail and calendar sync into the Email and Calendar caches. Outlook calendar syncing reads the Outlook web page through a dedicated browser, calendar only and read-only. Outlook mail and sign-in are not part of this package yet.",
+  "publisher": "Moss",
+  "version": "0.7.0",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "fuelLimit": 200000000,
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "kv",
+      "operations": ["get", "set"],
+      "resources": [
+        "connectors.providers",
+        "connectors.accounts",
+        "connectors.account-write",
+        "connectors.feature-grants",
+        "connectors.admin-accounts",
+        "connectors.diagnostics",
+        "connectors.google-authorize",
+        "connectors.google-complete",
+        "connectors.imap-test",
+        "connectors.imap-connect",
+        "connectors.imap-sync-start",
+        "connectors.imap-list",
+        "connectors.imap-fetch",
+        "connectors.imap-sync-finish",
+        "connectors.sync-google-start",
+        "connectors.sync-google-calendar",
+        "connectors.sync-google-list",
+        "connectors.sync-google-fetch",
+        "connectors.sync-google-finish",
+        "connectors.refresh-request",
+        "connectors.refresh-status",
+        "connectors.refresh-pending",
+        "connectors.refresh-dispatch",
+        "connectors.refresh-account-start",
+        "connectors.refresh-account-finish",
+        "connectors.refresh-sweep",
+        "connectors.context-setup",
+        "connectors.live-calendar",
+        "connectors.live-gmail-list",
+        "connectors.live-gmail-get",
+        "connectors.write-gmail-draft",
+        "connectors.write-gmail-send",
+        "connectors.write-calendar-freebusy",
+        "connectors.write-calendar-insert",
+        "connectors.write-calendar-patch",
+        "connectors.write-calendar-delete",
+        "connectors.write-imap-send",
+        "connectors.write-imap-draft",
+        "connectors.work-mail-cursor",
+        "connectors.monitor-status",
+        "connectors.outlook-binding",
+        "connectors.outlook-scan",
+        "connectors.outlook-health"
+      ]
+    },
+    {
+      "port": "jobs",
+      "operations": ["enqueue-options", "schedule", "unschedule"],
+      "resources": [
+        "imap-sync",
+        "google-sync",
+        "google-sync-sweep",
+        "email-refresh-google",
+        "email-refresh-imap",
+        "email-refresh-sweep",
+        "email-monitor",
+        "calendar-monitor",
+        "outlook-calendar"
+      ]
+    },
+    {
+      "port": "api",
+      "operations": ["call"],
+      "resources": ["email", "calendar", "notes"]
+    },
+    {
+      "port": "ai",
+      "operations": ["generate"],
+      "resources": ["structured"]
+    },
+    {
+      "port": "context",
+      "operations": ["read", "uuid"],
+      "resources": ["call", "new"]
+    }
+  ],
+  "database": {
+    "ownedTables": [
+      "app.connector_accounts",
+      "app.connector_definitions",
+      "app.connector_email_refresh_accounts",
+      "app.connector_email_refresh_keys",
+      "app.connector_email_refreshes",
+      "app.connector_oauth_pending"
+    ],
+    "migrations": [
+      "sql/0009_connectors_module.sql",
+      "sql/0010_connector_admin_safe_metadata.sql",
+      "sql/0022_connectors_owner_only.sql",
+      "sql/0043_connector_google_enum.sql",
+      "sql/0044_google_unified_connection.sql",
+      "sql/0069_connector_worker_runtime_grants.sql",
+      "sql/0099_connector_health_metadata.sql",
+      "sql/0100_connector_admin_safe_metadata_health.sql",
+      "sql/0130_connector_imap_enum.sql",
+      "sql/0131_connector_imap_definitions.sql",
+      "sql/0141_email_triage_feedback.sql",
+      "sql/0144_google_sync_sweep_accounts.sql",
+      "sql/0179_email_action_suppression.sql",
+      "sql/0180_email_action_suppression_evidence.sql",
+      "sql/0215_connector_sync_previous_run.sql",
+      "sql/0244_email_refresh.sql",
+      "sql/0248_connector_email_history_id.sql",
+      "sql/0331_outlook_browser_calendar.sql"
+    ],
+    "ledger": "core-legacy",
+    "access": {
+      "app.connector_accounts": {
+        "access": "owner-only"
+      },
+      "app.connector_oauth_pending": {
+        "access": "owner-only"
+      }
+    }
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/providers",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/accounts",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/accounts",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/accounts/:id",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/accounts/:id/revoke",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/accounts/:id/feature-grants",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/accounts/:id/feature-grants",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/google/authorize",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/google/complete",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/google/sync",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/imap/test-connection",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/imap/connect",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/email-refresh",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/email-refresh/:refresh_id",
+      "signIn": true
+    },
+    { "method": "GET", "path": "/outlook-calendar", "signIn": true },
+    { "method": "POST", "path": "/outlook-calendar/connect", "signIn": true },
+    { "method": "POST", "path": "/outlook-calendar/refresh", "signIn": true },
+    { "method": "POST", "path": "/outlook-calendar/disconnect", "signIn": true },
+    {
+      "method": "GET",
+      "path": "/admin/accounts",
+      "signIn": true
+    }
+  ],
+  "requires": {
+    "email": ">=0.4.0, <1.0.0",
+    "calendar": ">=0.30.0, <1.0.0"
+  },
+  "optionalRequires": {
+    "notes": ">=0.1.23, <1.0.0"
+  },
+  "provides": {
+    "listCalendarContext": "1.0.0",
+    "listEmailContext": "1.0.0",
+    "listSavedEmailContext": "1.0.0",
+    "captureWorkMail": "1.0.0",
+    "prepareEmailAction": "1.0.0",
+    "createCalendarEvent": "1.0.0",
+    "deleteCalendarEvent": "1.0.0",
+    "rescheduleCalendarEvent": "1.0.0"
+  },
+  "icons": ["icons/connectors.svg"],
+  "accounts": {
+    "supportsUserDisable": false,
+    "defaultEnabled": true
+  },
+  "features": [
+    {
+      "id": "connectors.accounts",
+      "description": "Lists, creates, updates and revokes the signed-in person's connection accounts. Secrets are sealed on save and never returned; only a safe summary is shown. Google connects through its own guided flow, and mail providers connect with an app password. Outlook calendar connects through its own dedicated-browser requests, not through this list.",
+      "errors": [
+        {
+          "code": "connector-account-not-found",
+          "class": "validation",
+          "description": "The account does not exist or belongs to another person"
+        },
+        {
+          "code": "connector-request-invalid",
+          "class": "validation",
+          "description": "The connection request was refused as invalid"
+        },
+        {
+          "code": "connectors-unavailable",
+          "class": "transient",
+          "description": "Connection storage is unavailable",
+          "remediationRef": "connectors-check-package"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "connectors-check-package",
+          "description": "Check that Connectors is enabled",
+          "path": "/settings/modules"
+        }
+      ]
+    },
+    {
+      "id": "connectors.google-connect",
+      "description": "Settings, Connections, Connect Google walks through making a Google client (a desktop-app type), then you paste its client ID and secret, open Google's consent page and paste the address you land on to finish. Moss swaps the code for tokens on the server and seals them. With no Google account connected, the Connections screen offers this flow first. Reconnecting replaces the old sign-in. The chat can explain the steps but never sees the secret.",
+      "errors": [
+        {
+          "code": "google-connect-no-pending",
+          "class": "validation",
+          "description": "There is no sign-in in progress, so the pasted address cannot be finished",
+          "remediationRef": "connectors-restart-google"
+        },
+        {
+          "code": "google-connect-state-mismatch",
+          "class": "validation",
+          "description": "The pasted address belongs to a different attempt",
+          "remediationRef": "connectors-restart-google"
+        },
+        {
+          "code": "google-connect-no-refresh-token",
+          "class": "validation",
+          "description": "Google did not hand back a long-lived sign-in, usually because consent was not asked again",
+          "remediationRef": "connectors-restart-google"
+        },
+        {
+          "code": "google-connect-rate-limited",
+          "class": "transient",
+          "description": "Finishing was tried more than five times in a minute",
+          "remediationRef": "connectors-restart-google"
+        },
+        {
+          "code": "google-connect-failed",
+          "class": "transient",
+          "description": "Google refused the code or could not be reached",
+          "remediationRef": "connectors-restart-google"
+        },
+        {
+          "code": "google-sign-in-needed",
+          "class": "validation",
+          "description": "Google no longer accepts the stored sign-in, for example after access was removed in the Google account",
+          "remediationRef": "connectors-restart-google"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "connectors-restart-google",
+          "description": "Start Connect Google again",
+          "path": "/settings/connections"
+        }
+      ]
+    },
+    {
+      "id": "connectors.feature-grants",
+      "description": "Each connection account has an Email switch and a Calendar switch. A missing choice means on. Changing a switch writes an admin audit line."
+    },
+    {
+      "id": "connectors.health",
+      "description": "Settings, Connections shows each account as never synced, healthy, partly synced, failing, in error or revoked. Outlook calendar shows healthy, partial, stale, collecting, disconnected, sign-in needed, source changed or settings not found."
+    },
+    {
+      "id": "connectors.admin-list",
+      "description": "Instance administrators see a safe list of every account (provider, status, last sync) without secrets. Administrators cannot read another person's secrets or data."
+    },
+    {
+      "id": "connectors.imap-connect",
+      "description": "Connects a Yahoo, Proton Bridge, iCloud or Fastmail mail account with an app password. Moss takes the server settings from the provider choice, signs in to the mail server and then to the sending server to test the details, and seals the password only when both work. The test answers ok, wrong password, secure connection failed or unreachable without saving anything. Once connected, Moss reads the Inbox every 15 minutes and also straight after connecting.",
+      "errors": [
+        {
+          "code": "imap-auth-failed",
+          "class": "validation",
+          "description": "The mail server rejected the supplied username and password",
+          "remediationRef": "connectors-imap-app-password"
+        },
+        {
+          "code": "imap-tls-failed",
+          "class": "validation",
+          "description": "Could not establish a secure connection to the mail server"
+        },
+        {
+          "code": "imap-unreachable",
+          "class": "transient",
+          "description": "Could not reach the mail server"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "connectors-imap-app-password",
+          "description": "Make an app password with the mail provider and try again",
+          "path": "/settings/connections"
+        }
+      ]
+    },
+    {
+      "id": "connectors.imap-sync",
+      "description": "Reads the Inbox of each connected Yahoo, Proton Bridge, iCloud or Fastmail account every 15 minutes, looking back 30 days. New and changed messages are copied into Email as sender, recipients, subject, time and a short plain-text preview, and messages the mail server no longer lists are removed from Email. Sign-in code messages get no preview. The connection's health shows the last run, its result and the counts. Read and unread changes are not copied. Revoking the account stops the schedule.",
+      "errors": [
+        {
+          "code": "auth-error",
+          "class": "validation",
+          "description": "The mail server refused the saved sign-in during a sync",
+          "remediationRef": "connectors-imap-app-password"
+        },
+        {
+          "code": "email-error",
+          "class": "transient",
+          "description": "The mail server could not be reached or answered badly during a sync"
+        },
+        {
+          "code": "email-message-error",
+          "class": "transient",
+          "description": "Some messages could not be read or saved during a sync, and the rest were saved"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "connectors-imap-app-password",
+          "description": "Make a new app password with the mail provider and enter it again",
+          "path": "/settings/connections"
+        }
+      ]
+    },
+    {
+      "id": "connectors.google-sync",
+      "description": "Copies the signed-in person's own Gmail and Google Calendar into their Email and Calendar caches every fifteen minutes, right after connecting, and on demand from the Sync now action. Calendar covers the week behind and the month ahead, and mail covers the last thirty days, read in small steps so a large mailbox never blocks the app. Each Email and Calendar switch for the account is respected. Mail text beyond Gmail's short preview is not kept, and no sign-in secret leaves the connection service.",
+      "errors": [
+        {
+          "code": "auth-error",
+          "class": "validation",
+          "description": "Google refused the saved sign-in during a sync",
+          "remediationRef": "connectors-google-reconnect"
+        },
+        {
+          "code": "calendar-error",
+          "class": "transient",
+          "description": "Some calendar events could not be read or saved during a sync"
+        },
+        {
+          "code": "email-error",
+          "class": "transient",
+          "description": "Google could not be reached or answered badly during a sync"
+        },
+        {
+          "code": "email-message-error",
+          "class": "transient",
+          "description": "Some messages could not be read or saved during a sync, and the rest were saved"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "connectors-google-reconnect",
+          "description": "Connect Google again from Connections",
+          "path": "/settings/connections"
+        }
+      ]
+    },
+    {
+      "id": "connectors.email-refresh",
+      "description": "Refresh email asks every connected Google and IMAP account to sync recent mail now and reports each account's progress. Today shows a Refresh email button when mail is more than a day old. One refresh runs at a time per person, and asking again while one runs joins it. Each account finishes as succeeded, partial or failed, and the refresh finishes when every account has an outcome. Only the person's own accounts are refreshed, and mail text never goes into the refresh record.",
+      "errors": [
+        {
+          "code": "no-eligible-accounts",
+          "class": "validation",
+          "description": "No connected account has Email switched on, so there was nothing to refresh",
+          "remediationRef": "connectors-open-connections"
+        },
+        {
+          "code": "no-active-connection",
+          "class": "validation",
+          "description": "An account was disconnected or changed before its refresh ran",
+          "remediationRef": "connectors-open-connections"
+        },
+        {
+          "code": "auth-error",
+          "class": "validation",
+          "description": "The account refused the saved sign-in during the refresh",
+          "remediationRef": "connectors-open-connections"
+        },
+        {
+          "code": "email-needs-config",
+          "class": "validation",
+          "description": "Email was switched off for the account before its refresh ran",
+          "remediationRef": "connectors-open-connections"
+        },
+        {
+          "code": "email-error",
+          "class": "transient",
+          "description": "The mail service could not be reached or answered badly during the refresh"
+        },
+        {
+          "code": "email-message-error",
+          "class": "transient",
+          "description": "Some messages could not be read or saved during the refresh, and the rest were saved"
+        },
+        {
+          "code": "enqueue-failed",
+          "class": "transient",
+          "description": "The refresh could not be queued for an account after three tries"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "connectors-open-connections",
+          "description": "Open Connections to check the account",
+          "path": "/settings/connections"
+        }
+      ]
+    },
+    {
+      "id": "connectors.email-context",
+      "description": "The assistant tool email.listVisibleMessages lists the person's recent mail with a short summary and an action label. For a connected Gmail account it reads live and triages up to two unsummarised messages through Email; if Gmail or the model is slow it falls back to saved mail. For mail-server (IMAP) accounts it reads saved mail only. Bodies are never returned."
+    },
+    {
+      "id": "connectors.monitors",
+      "description": "Each connected Google account gets an email check every 15 minutes and a calendar check every 30 minutes, scheduled when the account is connected and cancelled when it is revoked. Each check writes a health row of times and counts only. The checks do not yet create tasks from mail or apply suppression."
+    },
+    {
+      "id": "connectors.email-writes",
+      "description": "The assistant can save a reply as a draft, and send one only after the person approves the exact text. A reply goes to the original sender on the same thread, from the person's own Gmail or mail account, and is sent once and never retried. A reply that cannot be sent says why in plain words, such as reconnecting Google to grant send permission."
+    },
+    {
+      "id": "connectors.outlook-calendar",
+      "description": "Moss can copy a person's own Outlook calendar into Calendar by reading the Outlook web page in a browser on the same machine. It only reads, it keeps the events read-only, and it covers about a month around today. Connecting needs a dedicated browser set up for that person's account, and without one the connect and refresh requests say that no dedicated Outlook browser is configured. The copy refreshes every five minutes. When the page asks for sign-in, changes layout or shows a different account, Moss stops and says so instead of guessing. Placing a new event is refused until the Outlook copy is fresh and covers the requested dates.",
+      "errors": [
+        {
+          "code": "outlook-browser-not-configured",
+          "class": "validation",
+          "description": "No dedicated Outlook browser is set up for this person",
+          "remediationRef": "connectors-check-package"
+        },
+        {
+          "code": "outlook-browser-changed",
+          "class": "validation",
+          "description": "The dedicated browser no longer matches the one that was connected",
+          "remediationRef": "connectors-check-package"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "connectors-check-package",
+          "description": "Check that Connectors is enabled",
+          "path": "/settings/modules"
+        }
+      ]
+    },
+    {
+      "id": "connectors.work-mail",
+      "description": "Work mail capture reads mail the host has already collected, asks the person's model through the router whether it earns a short note, and appends that note through the Notes package. Notes marked private are never written, plain mail is skipped, and the place it stopped is kept as hashed markers only, so a later run does not repeat mail. Mail text goes only to the model prompt and the note itself. No mailbox is read by this package, and memory preferences and sender context are not used yet.",
+      "errors": [
+        {
+          "code": "connectors.work_mail.processing_unavailable",
+          "class": "prerequisite",
+          "description": "Processing stops without advancing past a model or notes failure",
+          "remediationRef": "connectors-work-mail-check"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "connectors-work-mail-check",
+          "description": "Check the model binding and that Notes is installed, then try again",
+          "path": "/settings/connections"
+        }
+      ]
+    },
+    {
+      "id": "structured.connectors.work-mail",
+      "description": "Checked work mail for note context"
+    },
+    {
+      "id": "connectors.calendar-writes",
+      "description": "Calendar can add a focus-time block to the person's own Google Calendar in the first free slot, move an event that has no guests, and delete an event. Each change shows up in Calendar at once. Outlook events are read-only. A change that needs calendar permission says to reconnect Google in Settings."
+    }
+  ],
+  "tools": {
+    "email.draftReply": {
+      "description": "Save a reply to one cached email as a draft in the person's own mailbox. Input is the cached message id and the body only. The recipient, subject and thread come from the original message.",
+      "risk": "write"
+    },
+    "email.sendReply": {
+      "description": "Send a reply to one cached email from the person's own mailbox, to the original sender on the same thread. Sends only after the person approves the exact text shown.",
+      "risk": "destructive",
+      "approvalVersion": true
+    },
+    "connectors.startGoogleGuidance": {
+      "description": "Explain, step by step, how the user connects their Google account (Gmail + Calendar). Read-only guidance; the user completes the secret-entry steps in Settings.",
+      "risk": "read"
+    },
+    "email.listVisibleMessages": {
+      "description": "List the user's recent email with a short summary and an action label for each message. Reads Gmail live when it can, and falls back to saved mail. Never returns full bodies.",
+      "risk": "read"
+    },
+    "gmail.searchLive": {
+      "description": "Search the user's live Gmail. Returns bounded message metadata and snippets, not full bodies.",
+      "risk": "read"
+    },
+    "gmail.getLiveMessage": {
+      "description": "Fetch one live Gmail message by id. Returns a capped plain-text body.",
+      "risk": "read"
+    },
+    "calendar.listLiveEvents": {
+      "description": "List live primary-calendar events for a bounded time window.",
+      "risk": "read"
+    }
+  },
+  "jobs": {
+    "imap-sync": {
+      "account-id": {
+        "kind": "id"
+      },
+      "cursor": {
+        "kind": "count"
+      },
+      "upserted": {
+        "kind": "count"
+      },
+      "failures": {
+        "kind": "count"
+      }
+    },
+    "google-sync": {
+      "account-id": {
+        "kind": "id"
+      },
+      "phase": {
+        "kind": "choice",
+        "choices": ["calendar", "email-day", "email"]
+      },
+      "cursor": {
+        "kind": "count"
+      },
+      "calendar-upserted": {
+        "kind": "count"
+      },
+      "calendar-reconciled": {
+        "kind": "count"
+      },
+      "email-upserted": {
+        "kind": "count"
+      },
+      "email-failures": {
+        "kind": "count"
+      },
+      "trigger": {
+        "kind": "choice",
+        "choices": ["schedule", "manual", "assistant", "on-connect"]
+      },
+      "recent-only": {
+        "kind": "flag"
+      },
+      "error": {
+        "kind": "choice",
+        "choices": ["none", "auth-error", "calendar-error", "email-error", "email-message-error"]
+      },
+      "email-on": {
+        "kind": "flag"
+      },
+      "calendar-on": {
+        "kind": "flag"
+      },
+      "begun": {
+        "kind": "flag"
+      },
+      "finishing": {
+        "kind": "flag"
+      }
+    },
+    "google-sync-sweep": {
+      "account-id": {
+        "kind": "id"
+      }
+    },
+    "email-monitor": {
+      "account-id": {
+        "kind": "id"
+      }
+    },
+    "calendar-monitor": {
+      "account-id": {
+        "kind": "id"
+      }
+    },
+    "outlook-calendar": {
+      "account-id": {
+        "kind": "id"
+      },
+      "run-id": {
+        "kind": "id"
+      },
+      "begun": {
+        "kind": "flag"
+      }
+    },
+    "email-refresh-google": {
+      "account-id": {
+        "kind": "id"
+      },
+      "phase": {
+        "kind": "choice",
+        "choices": ["calendar", "email-day", "email"]
+      },
+      "cursor": {
+        "kind": "count"
+      },
+      "calendar-upserted": {
+        "kind": "count"
+      },
+      "calendar-reconciled": {
+        "kind": "count"
+      },
+      "email-upserted": {
+        "kind": "count"
+      },
+      "email-failures": {
+        "kind": "count"
+      },
+      "trigger": {
+        "kind": "choice",
+        "choices": ["schedule", "manual", "assistant", "on-connect"]
+      },
+      "recent-only": {
+        "kind": "flag"
+      },
+      "error": {
+        "kind": "choice",
+        "choices": ["none", "auth-error", "calendar-error", "email-error", "email-message-error"]
+      },
+      "email-on": {
+        "kind": "flag"
+      },
+      "calendar-on": {
+        "kind": "flag"
+      },
+      "begun": {
+        "kind": "flag"
+      },
+      "finishing": {
+        "kind": "flag"
+      },
+      "refresh-id": {
+        "kind": "id"
+      }
+    },
+    "email-refresh-imap": {
+      "account-id": {
+        "kind": "id"
+      },
+      "cursor": {
+        "kind": "count"
+      },
+      "upserted": {
+        "kind": "count"
+      },
+      "failures": {
+        "kind": "count"
+      },
+      "refresh-id": {
+        "kind": "id"
+      }
+    },
+    "email-refresh-sweep": {
+      "round": {
+        "kind": "count"
+      }
+    }
+  },
+  "screens": {
+    "/settings/connections": "ui/settings.html"
+  },
+  "navigation": [],
+  "settings": [
+    {
+      "id": "connectors.connections",
+      "label": "Connections",
+      "path": "/settings/connections",
+      "scope": "user",
+      "description": "Mail and calendar connections for this account, their health and the Email and Calendar switches for each. Connect Google is offered here. Mail connects by app password through the connection service, but this screen does not offer it yet, and it does not offer Outlook calendar yet either."
+    }
+  ]
+}

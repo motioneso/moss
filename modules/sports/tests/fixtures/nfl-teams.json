@@ -1,0 +1,30 @@
+{
+  "sports": [
+    {
+      "leagues": [
+        {
+          "teams": [
+            {
+              "team": {
+                "id": "6",
+                "abbreviation": "DAL",
+                "displayName": "Dallas Cowboys",
+                "shortDisplayName": "Cowboys",
+                "logos": [{ "href": "https://a.espncdn.com/i/teamlogos/nfl/500/dal.png" }]
+              }
+            },
+            {
+              "team": {
+                "id": "17",
+                "abbreviation": "NE",
+                "displayName": "New England Patriots",
+                "shortDisplayName": "Patriots",
+                "logos": [{ "href": "https://a.espncdn.com/i/teamlogos/nfl/500/ne.png" }]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

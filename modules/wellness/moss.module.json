@@ -1,0 +1,370 @@
+{
+  "schemaVersion": 2,
+  "id": "wellness",
+  "name": "Wellness",
+  "description": "Private mood check-ins, medications with their schedules and dose records, therapy notes, a selective export of check-ins and therapy notes, and the choice of whether the assistant may use them. Insights worked out in code, two assistant tools that answer only while assistant access is on, and the choice of whether the assistant may use them. The screens are not built yet.",
+  "publisher": "Moss",
+  "version": "0.1.0",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "fuelLimit": 200000000,
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "db",
+      "operations": ["query"],
+      "resources": [
+        "app.wellness_checkins",
+        "app.wellness_therapy_notes",
+        "app.medications",
+        "app.medication_logs"
+      ]
+    },
+    {
+      "port": "context",
+      "operations": ["local-date", "read", "uuid"],
+      "resources": ["account", "call", "new"]
+    },
+    {
+      "port": "kv",
+      "operations": ["preference.read", "preference.write", "get", "set", "delete"],
+      "resources": ["ai-consent", "wellness.export-jobs", "wellness.export-files"]
+    },
+    {
+      "port": "jobs",
+      "operations": ["enqueue-options"],
+      "resources": ["wellness-export"]
+    },
+    {
+      "port": "tools",
+      "operations": ["offer", "run"],
+      "resources": ["wellness.recentCheckIns", "wellness.medicationAdherence"]
+    }
+  ],
+  "database": {
+    "migrations": [
+      "sql/0082_wellness_checkins.sql",
+      "sql/0083_wellness_medications.sql",
+      "sql/0084_wellness_medication_logs.sql",
+      "sql/0088_wellness_emotion_taxonomy.sql",
+      "sql/0089_wellness_therapy_notes.sql",
+      "sql/0104_wellness_medication_logs_prn_reason_optional.sql",
+      "sql/0107_wellness_checkins_temporal.sql",
+      "sql/0114_data_export_jobs_format_and_params.sql",
+      "sql/0115_list_expired_data_export_jobs_format.sql",
+      "sql/0135_wellness_worker_read_grants.sql",
+      "sql/0136_admin_audit_events_worker_insert.sql",
+      "sql/0138_worker_get_data_export_job.sql",
+      "sql/0139_wellness_worker_read_policies.sql",
+      "sql/0143_wellness_checkins_local_date_backfill.sql",
+      "sql/0194_wellness_medication_schedule_v2.sql",
+      "sql/0197_wellness_medication_start_date_reminders.sql"
+    ],
+    "ownedTables": [
+      "app.wellness_checkins",
+      "app.medications",
+      "app.medication_logs",
+      "app.wellness_therapy_notes"
+    ],
+    "ledger": "core-legacy",
+    "access": {
+      "app.wellness_checkins": {
+        "access": "owner-only"
+      },
+      "app.medications": {
+        "access": "owner-only"
+      },
+      "app.medication_logs": {
+        "access": "owner-only"
+      },
+      "app.wellness_therapy_notes": {
+        "access": "owner-only"
+      }
+    }
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/wellness/ai-consent",
+      "signIn": true
+    },
+    {
+      "method": "PUT",
+      "path": "/wellness/ai-consent",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/wellness/checkins",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/wellness/checkins",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/wellness/checkins/:id",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/wellness/medications",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/wellness/medications",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/wellness/medications/:id",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/wellness/medications/schedule",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/wellness/medications/logs",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/wellness/medications/:id/logs",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/wellness/insights",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/wellness/tools/run",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/wellness/therapy-notes",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/wellness/therapy-notes",
+      "signIn": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/wellness/therapy-notes/:id",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/wellness/export",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/wellness/export/:id",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/wellness/export/:id/download",
+      "signIn": true
+    }
+  ],
+  "requires": {},
+  "provides": {
+    "medicationAdherence": "1.0.0",
+    "collectWellnessExportSection": "1.0.0",
+    "deleteWellnessAccountData": "1.0.0"
+  },
+  "icons": ["icons/wellness.svg"],
+  "accounts": {
+    "supportsUserDisable": true,
+    "defaultEnabled": true
+  },
+  "lifecycle": {
+    "required": false,
+    "bundled": true,
+    "removable": true
+  },
+  "screens": {},
+  "navigation": [],
+  "settings": [
+    {
+      "id": "wellness.ai-consent",
+      "label": "Wellness",
+      "path": "/settings?section=modules&module=wellness",
+      "scope": "user",
+      "description": "Whether the assistant may use mood check-ins and medication counts is read and saved through the Wellness routes. Until you choose, access stays on while Wellness is installed. The settings screen is not built yet."
+    }
+  ],
+  "features": [
+    {
+      "id": "wellness.mood_checkins",
+      "description": "A person can save a mood check-in with a feeling from the feeling wheel, body sensations, intensity, energy and a note, read their history newest first in pages, and change an earlier check-in. Each person sees only their own check-ins. The check-in screen is not built yet.",
+      "errors": [
+        {
+          "code": "wellness_checkin_invalid",
+          "class": "validation",
+          "description": "The feeling, its second level, a rating or the history paging value was not accepted. Fix the value named in the message and try again."
+        },
+        {
+          "code": "wellness_checkin_not_found",
+          "class": "validation",
+          "description": "The check-in does not exist or belongs to another person. Check the check-in and try again."
+        },
+        {
+          "code": "wellness_checkins_unavailable",
+          "class": "transient",
+          "description": "Check-ins could not be read or saved. Try again in a moment."
+        }
+      ]
+    },
+    {
+      "id": "wellness.medications",
+      "description": "A person can keep a list of their medicines with dose, form and notes, and set a schedule of one of eight kinds (daily times, chosen weekdays, every few hours, repeating cycles, every few days, weeks or months, and monthly by date or by weekday). They see each day's doses with taken, skipped or pending, log a dose taken or skipped or an as-needed dose, and read thirty-day adherence counts. Each person sees only their own medicines. A reminder queue is declared but nothing sends reminders yet. The medication screens are not built yet.",
+      "errors": [
+        {
+          "code": "wellness_medication_invalid",
+          "class": "validation",
+          "description": "The medicine name, schedule, dose status or date was not accepted. Fix the value named in the message and try again."
+        },
+        {
+          "code": "wellness_medication_not_found",
+          "class": "validation",
+          "description": "The medicine does not exist or belongs to another person. Check the medicine and try again."
+        },
+        {
+          "code": "wellness_medications_unavailable",
+          "class": "transient",
+          "description": "Medicines or doses could not be read or saved. Try again in a moment."
+        }
+      ]
+    },
+    {
+      "id": "wellness.ai-consent",
+      "description": "A person can read and change whether the assistant may use their mood check-ins. With no saved choice, access is on while Wellness is installed. The assistant tools below answer only while it is on. No check-in text is sent to any model, and no Wellness job or log carries it.",
+      "errors": [
+        {
+          "code": "wellness_consent_invalid",
+          "class": "validation",
+          "description": "The choice must be true or false. Send one of those and try again."
+        }
+      ]
+    },
+    {
+      "id": "wellness.medication-adherence",
+      "description": "Other parts of Moss can ask for a seven-day count of scheduled, taken, skipped and as-needed doses and an adherence rate. The answer holds counts only, never a medicine name or a list of medicines, and it is refused when the person has switched assistant access off.",
+      "errors": [
+        {
+          "code": "WELLNESS_CONSENT_REQUIRED",
+          "class": "validation",
+          "description": "The person has switched assistant access to Wellness off. Ask them to turn it on in Wellness settings first."
+        }
+      ]
+    },
+    {
+      "id": "wellness.insights",
+      "description": "A person can read insight lines worked out from their own last 30 days: the most-logged feeling, the hardest and strongest weekday, how many sad or angry check-ins carry a note, and medication adherence. Nothing shows until there are at least seven check-ins and the first is a week old. Every figure comes from stored records and fixed wording, and no model is involved. Each person sees only their own insights. The insights screen is not built yet.",
+      "errors": []
+    },
+    {
+      "id": "wellness.chat-tools",
+      "description": "Chat can list the person's 20 most recent check-ins (feeling, intensity, mood index and note) and read seven-day medication counts (scheduled, taken, skipped, as-needed, rate). The counts never name a medicine. Both tools return nothing private and answer WELLNESS_CONSENT_REQUIRED while the person has assistant access switched off, and both follow the host's approval rules. The old energy-trend note in chat memory is not written, and therapy notes and medicine names are never offered.",
+      "errors": [
+        {
+          "code": "WELLNESS_CONSENT_REQUIRED",
+          "class": "validation",
+          "description": "The person has switched assistant access to Wellness off. Ask them to turn it on in Wellness settings first."
+        },
+        {
+          "code": "approval_required",
+          "class": "validation",
+          "description": "The tool cannot run without approval. Ask for approval for this tool and try again."
+        }
+      ]
+    },
+    {
+      "id": "wellness.therapy_notes",
+      "description": "A person can write a private therapy note, optionally tied to one of their own check-ins or to one of the six core feelings, read their notes newest first, and delete a note. Each person sees only their own notes. The notes screen is not built yet.",
+      "errors": [
+        {
+          "code": "wellness_therapy_note_invalid",
+          "class": "validation",
+          "description": "The note text is empty, or the linked feeling is not one of the six core feelings. Fix the value named in the message and try again."
+        },
+        {
+          "code": "wellness_therapy_note_checkin_not_found",
+          "class": "validation",
+          "description": "The check-in the note points to does not exist or belongs to another person. Pick one of your own check-ins and try again."
+        },
+        {
+          "code": "wellness_therapy_note_not_found",
+          "class": "validation",
+          "description": "The note does not exist or belongs to another person. Check the note and try again."
+        }
+      ]
+    },
+    {
+      "id": "wellness.export",
+      "description": "A person can ask for a printable page of their own mood check-ins and therapy notes for a date range of at most 366 days, check on its progress, and download it for 24 hours. Only the chosen categories appear in the page. Medications and insights cannot be chosen yet. The page comes back inside a small JSON envelope with its file name. The export screen is not built yet.",
+      "errors": [
+        {
+          "code": "wellness_export_invalid",
+          "class": "validation",
+          "description": "The dates, the date range or the chosen categories were not accepted. Fix the value named in the message and try again."
+        },
+        {
+          "code": "wellness_export_in_progress",
+          "class": "validation",
+          "description": "Another export with different dates or categories is still being built. Wait for it to finish, then start the new one."
+        },
+        {
+          "code": "wellness_export_not_ready",
+          "class": "validation",
+          "description": "The export is still being built, or it failed. Check its status and wait, or start it again."
+        },
+        {
+          "code": "wellness_export_expired",
+          "class": "validation",
+          "description": "The export is more than 24 hours old and has been removed. Start a new export."
+        },
+        {
+          "code": "wellness_export_not_found",
+          "class": "validation",
+          "description": "No export with that id exists for this person. Start a new export."
+        }
+      ]
+    },
+    {
+      "id": "wellness.account-data",
+      "description": "The whole-account export collects a person's Wellness check-ins and therapy notes, and the whole-account delete removes their check-ins, therapy notes, medications and medication logs together with any saved exports. Each call touches only the signed-in person's rows.",
+      "errors": []
+    }
+  ],
+  "tools": {
+    "wellness.recentCheckIns": {
+      "description": "List the actor's 20 most recent check-ins, newest first: time, core feeling, secondary feeling, intensity, mood index and note.",
+      "risk": "read"
+    },
+    "wellness.medicationAdherence": {
+      "description": "Summarize the last seven days of medication as counts and an adherence rate. Never a medicine list.",
+      "risk": "read"
+    }
+  },
+  "jobs": {
+    "wellness-medication-reminder": {},
+    "wellness-export": {
+      "export-id": {
+        "kind": "id"
+      }
+    }
+  }
+}

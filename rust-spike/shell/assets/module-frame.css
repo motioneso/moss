@@ -1,0 +1,15 @@
+html,
+body {
+  margin: 0;
+}
+iframe {
+  display: block;
+  width: 100%;
+  /* Screens that size to their viewport (Calendar grids) need a full-height frame. */
+  min-height: 100vh;
+  border: 0;
+}
+#failure {
+  padding: 1rem;
+  font-family: sans-serif;
+}

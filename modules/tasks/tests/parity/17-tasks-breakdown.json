@@ -1,0 +1,236 @@
+[
+  {
+    "name": "package breakdown: ordered trimmed steps and parent activity",
+    "source": "packages/tasks/src/routes.ts and breakdown.ts",
+    "steps": [
+      {
+        "id": "parent",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "expect": {
+          "status": 201
+        },
+        "body": {
+          "title": "Breakdown parent"
+        }
+      },
+      {
+        "id": "breakdown",
+        "method": "POST",
+        "path": "/api/tasks/{{parent:/body/task/id}}/breakdown",
+        "as": "A",
+        "expect": {
+          "status": 201,
+          "body": {
+            "tasks": [
+              {
+                "title": "First",
+                "position": 0
+              },
+              {
+                "title": "2",
+                "position": 1
+              }
+            ]
+          }
+        },
+        "body": {
+          "steps": ["  First  ", 2]
+        }
+      },
+      {
+        "id": "activity",
+        "method": "GET",
+        "path": "/api/tasks/{{parent:/body/task/id}}/activity",
+        "as": "A",
+        "expect": {
+          "status": 200,
+          "body": {
+            "activity": [
+              {
+                "activityType": "broken_down",
+                "body": "Broken into 2 steps"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "rows": ["app.tasks", "app.task_activity"]
+  },
+  {
+    "name": "package breakdown: blank step",
+    "source": "packages/tasks/src/routes.ts and shared/tasks-api.ts",
+    "steps": [
+      {
+        "id": "parent",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "expect": {
+          "status": 201
+        },
+        "body": {
+          "title": "Breakdown parent"
+        }
+      },
+      {
+        "id": "breakdown",
+        "method": "POST",
+        "path": "/api/tasks/{{parent:/body/task/id}}/breakdown",
+        "as": "A",
+        "expect": {
+          "status": 400,
+          "body": {
+            "error": "steps[0] must be a non-empty string"
+          }
+        },
+        "body": {
+          "steps": [" "]
+        }
+      }
+    ],
+    "rows": ["app.tasks", "app.task_activity"]
+  },
+  {
+    "name": "package breakdown: missing steps",
+    "source": "packages/tasks/src/routes.ts and shared/tasks-api.ts",
+    "steps": [
+      {
+        "id": "parent",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "expect": {
+          "status": 201
+        },
+        "body": {
+          "title": "Breakdown parent"
+        }
+      },
+      {
+        "id": "breakdown",
+        "method": "POST",
+        "path": "/api/tasks/{{parent:/body/task/id}}/breakdown",
+        "as": "A",
+        "expect": {
+          "status": 400
+        },
+        "body": {}
+      }
+    ],
+    "rows": ["app.tasks", "app.task_activity"]
+  },
+  {
+    "name": "package breakdown: scalar step",
+    "source": "packages/tasks/src/routes.ts and shared/tasks-api.ts",
+    "steps": [
+      {
+        "id": "parent",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "expect": {
+          "status": 201
+        },
+        "body": {
+          "title": "Breakdown parent"
+        }
+      },
+      {
+        "id": "breakdown",
+        "method": "POST",
+        "path": "/api/tasks/{{parent:/body/task/id}}/breakdown",
+        "as": "A",
+        "expect": {
+          "status": 201,
+          "body": {
+            "tasks": [
+              {
+                "title": "One",
+                "position": 0
+              }
+            ]
+          }
+        },
+        "body": {
+          "steps": " One "
+        }
+      }
+    ],
+    "rows": ["app.tasks", "app.task_activity"]
+  },
+  {
+    "name": "package breakdown: empty steps do not require an existing parent",
+    "source": "packages/tasks/src/breakdown.ts",
+    "steps": [
+      {
+        "id": "empty",
+        "method": "POST",
+        "path": "/api/tasks/30000000-0000-4000-8000-000000000099/breakdown",
+        "as": "A",
+        "expect": {
+          "status": 201,
+          "body": {
+            "tasks": []
+          }
+        },
+        "body": {
+          "steps": []
+        }
+      }
+    ],
+    "rows": ["app.tasks", "app.task_activity"]
+  },
+  {
+    "name": "package breakdown: missing parent returns legacy error",
+    "source": "packages/tasks/src/breakdown.ts",
+    "steps": [
+      {
+        "id": "missing",
+        "method": "POST",
+        "path": "/api/tasks/30000000-0000-4000-8000-000000000099/breakdown",
+        "as": "A",
+        "expect": {
+          "status": 500
+        },
+        "body": {
+          "steps": ["First"]
+        }
+      }
+    ],
+    "rows": ["app.tasks", "app.task_activity"]
+  },
+  {
+    "name": "package breakdown: another account cannot break down a private task",
+    "source": "packages/tasks/src/breakdown.ts",
+    "steps": [
+      {
+        "id": "parent",
+        "method": "POST",
+        "path": "/api/tasks",
+        "as": "A",
+        "expect": {
+          "status": 201
+        },
+        "body": {
+          "title": "Breakdown parent"
+        }
+      },
+      {
+        "id": "blocked",
+        "method": "POST",
+        "path": "/api/tasks/{{parent:/body/task/id}}/breakdown",
+        "as": "B",
+        "expect": {
+          "status": 500
+        },
+        "body": {
+          "steps": ["Forbidden"]
+        }
+      }
+    ],
+    "rows": ["app.tasks", "app.task_activity"]
+  }
+]

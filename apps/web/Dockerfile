@@ -22,7 +22,8 @@ COPY . .
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
-RUN pnpm install --frozen-lockfile
+# Skip onnxruntime's optional CUDA download from GitHub releases; nothing uses it.
+RUN ONNXRUNTIME_NODE_INSTALL_CUDA=skip pnpm install --frozen-lockfile
 RUN pnpm build:web
 
 # ---- runtime: nginx serving the static bundle -----------------------------

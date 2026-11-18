@@ -1,0 +1,17 @@
+{
+  "id": "00000000-0000-4000-8000-000000000020",
+  "providerId": "00000000-0000-4000-8000-000000000010",
+  "providerModelId": "fixture-model-20",
+  "capabilities": ["chat", "json"],
+  "tier": "interactive",
+  "active": true,
+  "providerActive": true,
+  "assistant": true,
+  "automaticEligible": true,
+  "defaultSentinel": false,
+  "sharedTranscriptionEligible": true,
+  "voiceEndpoint": false,
+  "releasedAt": null,
+  "createdAt": "2026-01-01T00:00:00Z",
+  "allowUserOverride": true
+}

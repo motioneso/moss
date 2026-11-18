@@ -12,11 +12,12 @@ import { fileURLToPath } from "node:url";
  *  - infra/postgres/migrations/<version>_<name>.sql
  *  - packages/<package>/sql/<version>_<name>.sql
  *  - packages/<package>/src/sql/<version>_<name>.sql
+ *  - modules/<module>/sql/<version>_<name>.sql (reserved, installer executes)
  *
  * Version numbers are numeric prefixes followed by an underscore (e.g. 0220_...).
  */
 export const MIGRATION_PATH_PATTERN =
-  /^(?:infra\/postgres\/migrations|packages\/[^/]+\/(?:src\/)?sql)\/([^/]+)$/;
+  /^(?:infra\/postgres\/migrations|packages\/[^/]+\/(?:src\/)?sql|modules\/[^/]+\/sql)\/([^/]+)$/;
 
 export const MIGRATION_FILENAME_PATTERN = /^(\d+)_([a-zA-Z0-9_-]+)\.sql$/;
 
@@ -242,6 +243,17 @@ export async function findLocalMigrationFiles(rootDirectory: string): Promise<Mi
     // packages directory may not exist in minimal fixtures
   }
 
+  // Module-package SQL reserves versions too: core-legacy packages share the
+  // legacy ledger, even though only their restricted installer executes SQL.
+  const modulesDir = join(rootDirectory, "modules");
+  try {
+    for (const mod of await readdir(modulesDir, { withFileTypes: true })) {
+      if (mod.isDirectory()) await scanDir(join(modulesDir, mod.name, "sql"));
+    }
+  } catch {
+    // modules directory may not exist in minimal fixtures
+  }
+
   return migrationFiles.sort((a, b) => a.version.localeCompare(b.version));
 }
 
@@ -272,7 +284,7 @@ export function getBaseBranchMigrationFiles(
   try {
     const rawOutput = execFileSync(
       "git",
-      ["ls-tree", "-r", targetRef, "--", "infra/postgres/migrations", "packages"],
+      ["ls-tree", "-r", targetRef, "--", "infra/postgres/migrations", "packages", "modules"],
       { cwd, encoding: "utf8" }
     );
 

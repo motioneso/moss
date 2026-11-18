@@ -1,0 +1,36 @@
+[package]
+name = "moss-shell"
+version = "0.0.0"
+edition.workspace = true
+publish.workspace = true
+description = "The Moss server: serves the UI shell to browsers, phones and the desktop app"
+
+[dependencies]
+moss-shell-contract = { path = "../contract", features = ["stub"] }
+moss-network = { path = "../../network" }
+moss-module-host = { path = "../../module-host" }
+moss-on-device = { path = "../../on-device" }
+moss-calendar-host = { path = "../../../modules/calendar/host" }
+moss-connectors-host = { path = "../../../modules/connectors/host" }
+moss-email-host = { path = "../../../modules/email/host" }
+moss-backtrack-host = { path = "../../../modules/backtrack/host" }
+moss-scratchpad-host = { path = "../../../modules/scratchpad/host" }
+moss-meetings-host = { path = "../../../modules/meetings/host" }
+moss-memory-host = { path = "../../../modules/memory/host" }
+moss-integrations = { path = "../../integrations" }
+moss-integrations-host = { path = "../../integrations/host" }
+moss-platform-jobs = { path = "../../module-host/bridges/jobs" }
+moss-sports-host = { path = "../../../modules/sports/host" }
+anyhow = "1"
+safety-core = { path = "../../safety-core" }
+uuid = "1"
+axum = "0.8"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "fs"] }
+tower-http = { version = "0.6", features = ["fs"] }
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+tokio-postgres = "0.7"
+async-trait = "0.1"
+moss-platform-contracts = { path = "../../module-host/bridges/contracts" }
+moss-platform-routing = { path = "../../module-host/bridges/routing" }
+moss-platform-adapters = { path = "../../module-host/bridges/adapters" }

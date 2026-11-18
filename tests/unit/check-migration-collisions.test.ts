@@ -396,6 +396,28 @@ describe("check-migration-collisions (Issue #2371)", () => {
       expect(found.every((f) => Boolean(f.checksum))).toBe(true);
     });
 
+    it("reserves module-package versions against core, base and open PR claims", async () => {
+      const root = await buildFixtureDir();
+      const modulePath = "modules/notes/sql/0360_notes_sync_checkpoints.sql";
+      await mkdir(join(root, "modules/notes/sql"), { recursive: true });
+      await mkdir(join(root, "infra/postgres/migrations"), { recursive: true });
+      await writeFile(join(root, modulePath), "SELECT 1;");
+      await writeFile(join(root, "infra/postgres/migrations/0360_collision.sql"), "SELECT 2;");
+      const files = await findLocalMigrationFiles(root);
+      expect(files).toHaveLength(2);
+      expect(checkLocalDuplicates(files)).toMatchObject([
+        { version: "0360", kind: "duplicate_local" }
+      ]);
+      const module = parseMigrationPath(modulePath)!;
+      const core = files.find((file) => file.path.startsWith("infra/"))!;
+      expect(checkBaseBranchCollisions([core], [module])).toMatchObject([
+        { kind: "main_collision" }
+      ]);
+      expect(checkCrossPrCollisions([{ label: "PR module", file: module }], [core])).toMatchObject([
+        { kind: "cross_pr_collision" }
+      ]);
+    });
+
     it("passes against the live repository tree with zero duplicate violations", async () => {
       const repoRoot = process.cwd();
       const files = await findLocalMigrationFiles(repoRoot);

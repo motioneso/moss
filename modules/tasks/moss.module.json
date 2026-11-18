@@ -1,0 +1,501 @@
+{
+  "schemaVersion": 2,
+  "id": "tasks",
+  "name": "Tasks",
+  "description": "Tasks component with package screens for lists, priority views, task editing, subtasks, tags, activity, focus, at-risk, overdue and summary reads. Full legacy parity remains unfinished.",
+  "publisher": "Moss",
+  "version": "0.1.4",
+  "requiresMoss": ">=0.1.0, <1.0.0",
+  "abi": "moss:module@1",
+  "capabilities": [
+    {
+      "port": "db",
+      "operations": ["query"],
+      "resources": [
+        "app.tasks",
+        "app.task_lists",
+        "app.task_tags",
+        "app.task_tag_assignments",
+        "app.task_activity",
+        "app.task_preferences"
+      ]
+    },
+    {
+      "port": "context",
+      "operations": ["read", "uuid", "local-date"],
+      "resources": ["call", "new", "account"]
+    },
+    {
+      "port": "tools",
+      "operations": ["offer", "run"],
+      "resources": [
+        "tasks.get",
+        "tasks.listLists",
+        "tasks.listTags",
+        "tasks.activity",
+        "tasks.create",
+        "tasks.update",
+        "tasks.updateStatus",
+        "tasks.breakDown",
+        "tasks.addActivity",
+        "tasks.assignTag",
+        "tasks.unassignTag",
+        "tasks.createList",
+        "tasks.renameList",
+        "tasks.createTag",
+        "tasks.renameTag",
+        "tasks.deleteTag",
+        "tasks.heartbeatWindow",
+        "tasks.list",
+        "tasks.deleteList",
+        "tasks.summary",
+        "tasks.focus",
+        "tasks.atRisk",
+        "tasks.overdue"
+      ]
+    },
+    {
+      "port": "ai",
+      "operations": ["generate"],
+      "resources": ["chat"]
+    },
+    {
+      "port": "jobs",
+      "operations": ["enqueue", "schedule"],
+      "resources": ["tasks-deferred-status", "tasks-recurrence"]
+    },
+    {
+      "port": "action-policy",
+      "operations": ["route-read", "route-write"],
+      "resources": ["task_changes"]
+    }
+  ],
+  "database": {
+    "ownedTables": [
+      "app.tasks",
+      "app.task_lists",
+      "app.task_tags",
+      "app.task_tag_assignments",
+      "app.task_activity",
+      "app.task_preferences"
+    ],
+    "migrations": [
+      "sql/0003_tasks_module.sql",
+      "sql/0006_tasks_drop_workspace_grants.sql",
+      "sql/0019_tasks_owner_or_share.sql",
+      "sql/0039_tasks_foundation.sql",
+      "sql/0062_task_tag_assignments_ownership.sql",
+      "sql/0063_tasks_fk_indexes.sql",
+      "sql/0075_tasks_worker_recurrence_grant.sql",
+      "sql/0140_task_status_suggested.sql",
+      "sql/0178_task_suggestion_metadata.sql"
+    ],
+    "ledger": "core-legacy"
+  },
+  "provides": {
+    "createMeetingTask": "1.0.0",
+    "getTaskReference": "1.0.0",
+    "listBriefingTasks": "1.0.0",
+    "prepareTaskAction": "1.0.0",
+    "prepareTaskRoute": "1.0.0"
+  },
+  "navigation": [
+    {
+      "id": "tasks",
+      "label": "Tasks",
+      "description": "View tasks in priority groups or a priority grid, include, show only or hide lists, combine tag filters, edit tasks, and manage subtasks, tags and comments. People, automatic assistant actions and full background-job parity remain unfinished.",
+      "path": "/tasks",
+      "icon": "CheckSquare",
+      "order": 30
+    }
+  ],
+  "settings": [
+    {
+      "id": "tasks.assistant-actions",
+      "label": "Task settings",
+      "path": "/tasks",
+      "scope": "user",
+      "description": "Open Task settings in Tasks to read or save your assistant task-change preference. Installed chat actions still require one-use approval until automatic-action integration is complete."
+    }
+  ],
+  "features": [
+    {
+      "id": "tasks.package-data",
+      "description": "Tasks component with validated task, list, tag, activity, view preference and ordered breakdown routes. Twenty-three tool handlers cover ten reads and thirteen task, list, tag, activity and breakdown actions. Full parity, automatic assistant actions and full background-job parity remain unfinished.",
+      "errors": [
+        {
+          "code": "tasks-invalid-input",
+          "class": "validation",
+          "description": "A request has missing or invalid fields. Correct the field named in the validation message and retry."
+        },
+        {
+          "code": "task-not-accessible",
+          "class": "permission",
+          "description": "A task or list is absent or unavailable to this account."
+        },
+        {
+          "code": "tasks-host-error",
+          "class": "bug",
+          "description": "A data operation failed; internal details are withheld from the response."
+        }
+      ]
+    },
+    {
+      "id": "tasks.package-screens",
+      "description": "Package screen using the shared UI kit, authored typography and parent bridge: task loading; priority groups (Critical through Someday, then No priority) and four-quadrant grid, each ordered by due date then title; status and text search; list inclusion, show-only and exclusion with counts after status and tags but before search; multiple tag filters matching any selected tag, individually removable; Clear filters resets to open tasks across all lists; quick-add a task by title with Enter or Add task in the sole Show only list, otherwise Personal, or choose Details to carry the title into the unsaved editor; create and edit tasks, including draft tags and editable subtasks before saving a new task, offering up to eight unselected tags from the chosen list and refreshing suggestions when switching lists; typed existing tags are reused in task details; retry acknowledged partial saves without recreating the parent, replaying unchanged completion or recurrence, or repeating completed child writes; completion and suggestion review; Do First, At risk and Done today focus presets in List and Grid, overriding status while retaining list, tag and search filters and updating list counts; Do First uses open high-priority tasks due within forty-eight hours, At risk uses open tasks overdue or due within two calendar days in the saved timezone, and Done today uses the saved timezone; opening the Tasks address with focus=priorities, focus=atrisk or focus=donetoday (for example /tasks?focus=atrisk) starts the screen with that preset and any other focus value is ignored; a removable focus chip, choosing a status or clearing filters leaves focus; an interpreted search that supplies a status leaves focus so the interpreted status applies; list creation and renaming; subtasks; tag creation and assignment; activity comments with Enter to post and Shift+Enter for a new line; independent subtask, list-tag and activity read retries preserving loaded details and drafts; assigned tags remain available when list tags fail to load; after detail actions, untouched editor fields follow the saved task, including parent completion from the last subtask, while unsaved fields and comments are kept; saved subtask actions do not trigger unsaved-draft prompts; saved default view. Open Choose lists for list choices; remove tag filters or clear filters to recover hidden tasks. Due and do dates use the saved account timezone. Selected dates save at local noon; unrelated edits preserve stored timestamps. Search due-day filters use the same zone. The screen waits for the saved timezone before opening a date editor. Full legacy screen and setting parity is unfinished. The task editor shows an Assigned to field with the signed-in name (plain \"You\" when the host gives none), and the assistant-created tasks footer uses the saved assistant name (Moss when none).",
+      "remediations": [
+        {
+          "id": "reload-tasks",
+          "description": "Retry loading Tasks after checking the connection. Quick capture keeps a failed title; after an acknowledged create with a failed refresh, use Refresh saved task to reload without creating a duplicate. Use Retry subtasks, Retry list tags or Retry activity after a failed detail read; previously loaded details remain shown and retries keep unsaved fields. Stale subtask controls stay unavailable until a successful read. Successful retries return focus to the panel input. A failed detail read does not hide the other panels. A rejected comment keeps its text; after an acknowledged post, retrying the activity read does not post again. Unsaved editor fields are retained on request failure. If a new task was created before a tag or subtask write failed, retry Save task to finish; its list and child drafts stay locked during that retry. If list tag suggestions fail to load, use Retry list tags or type a tag; other drafts are kept. If the account timezone cannot load, retry loading Tasks before editing dates. Change the saved timezone in Profile when the local day is incorrect.",
+          "path": "/tasks"
+        }
+      ],
+      "errors": [
+        {
+          "code": "tasks-screen-request-failed",
+          "class": "transient",
+          "description": "Tasks could not load or save a request. Check the connection and retry.",
+          "remediationRef": "reload-tasks"
+        }
+      ]
+    },
+    {
+      "id": "tasks.package-tag-management",
+      "description": "Manage lists opens each list's tags. Create or rename tags, then assign them from task details. Deleting requires confirmation and removes the tag from the list's tasks while keeping the tasks. Unsaved tag names are retained after request failures and protected when returning to lists. These controls use the existing account-scoped tag routes."
+    },
+    {
+      "id": "tasks.package-actions",
+      "description": "Task actions preserve tool-entered text, return legacy result summaries, and run in the account-scoped host transaction. Breakdown preserves step order and adds parent activity; the HTTP route trims steps. The host requires account approval for each tool invocation. Legacy automatic-action policies, presentations and installed chat integration remain unfinished.",
+      "errors": [
+        {
+          "code": "tasks-action-invalid-input",
+          "class": "validation",
+          "description": "A tool input has missing fields or incorrect types. Correct the action inputs and retry."
+        }
+      ]
+    },
+    {
+      "id": "tasks.package-queue",
+      "description": "Enqueue a status change for a visible task and apply it in the captured account context. The host supplies actor identity and metadata-only parameters. Repeating an owner's completed recurring status keeps the completed history and list position when its next occurrence already exists; a missing next occurrence is recreated. Both Tasks queues declare zero retries (legacy value) through the manifest; retention of finished jobs is not ported."
+    },
+    {
+      "id": "tasks.package-heartbeat",
+      "description": "Read up to twenty owned open tasks due within a bounded horizon, including overdue tasks, with material revisions and the next time boundary. Shared tasks are excluded and recurrence is never advanced. Background authorization and scheduler integration remain unfinished."
+    },
+    {
+      "id": "tasks.package-filtered-list",
+      "description": "The tasks.list tool filters visible persisted tasks by list, tag, status, priority, strict date/completion boundaries and priority quadrant, preserving updated-time/identifier ordering and tag data. Explicit shares remain visible; private tasks remain hidden from other accounts including admins. Stale recurring series first advance to the next occurrence on your local day. Installed chat integration remains unfinished. Correct invalid filter types or date text and retry."
+    },
+    {
+      "id": "tasks.package-list-deletion",
+      "description": "Manage lists offers confirmed deletion, optionally moving every task and subtask to another owned list. Tasks are kept and assignments to tags outside the destination are removed. The last list cannot be deleted, including by concurrent package requests. The same behavior is available through tasks.deleteList. Legacy automatic approvals and installed chat integration remain unfinished.",
+      "errors": [
+        {
+          "code": "tasks-list-delete-conflict",
+          "class": "validation",
+          "description": "The list is not empty or is the last list. Choose another list to keep the tasks, or create another list first."
+        }
+      ],
+      "remediations": [
+        {
+          "id": "tasks-list-delete-destination",
+          "description": "Choose a different owned list as the destination before confirming deletion of a nonempty list.",
+          "path": "/tasks"
+        }
+      ]
+    },
+    {
+      "id": "tasks.package-drift",
+      "description": "Focus, at-risk and overdue routes and tools, plus a bounded twelve-row summary tool, read persisted tasks in the signed-in account scope. Private tasks stay hidden from other accounts including admins. Focus returns no external readiness signals in the package, so no readiness cap is applied. Day boundaries and summary due labels use your saved account timezone, with the existing fallback when none is valid. Day boundaries follow daylight-saving changes. Stale recurring series first advance to the next occurrence on your local day."
+    },
+    {
+      "id": "tasks.package-search-interpretation",
+      "description": "In Tasks, type a phrase and choose Interpret search or press Enter to turn it into list, tag, status, effort, priority, quadrant and due-date filters using the AI service you chose. Queries are limited to 300 characters. Only your own lists and tags are kept in the answer, with a warning for anything unknown. Status moves to the regular picker; the other interpreted filters can be removed individually. Typing again clears the interpretation. Manual tag filters match any tag; interpreted tag filters require every named tag. Clear filters restores open tasks across all lists. If the AI service is unavailable, a message explains that title and description search still work. Dates and the interpretation prompt use your saved account timezone."
+    },
+    {
+      "id": "tasks.account_policy_routes",
+      "description": "Open Task settings in Tasks to read or change your account\u2019s task-change assistant preference. Canonical policy takes precedence over the older toggle; legacy opt-outs are preserved. The switch stays unavailable until a saved value loads, keeps the last confirmed value after failed refreshes or saves, and offers Retry loading. Installed chat actions still require one-use approval; this control saves the preference only.",
+      "errors": [
+        {
+          "code": "tasks-preference-unavailable",
+          "class": "transient",
+          "description": "The task action preference could not load or save. A failed initial read disables the switch; failed refreshes and saves keep the last confirmed value.",
+          "remediationRef": "tasks-retry-preference"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "tasks-retry-preference",
+          "description": "Open Task settings and choose Retry loading after checking your connection. If a save failed, change the switch again to retry.",
+          "path": "/tasks"
+        }
+      ]
+    }
+  ],
+  "screens": {
+    "/tasks": "ui/index.html"
+  },
+  "icons": ["icons/tasks.svg"],
+  "accounts": {
+    "supportsUserDisable": false,
+    "defaultEnabled": true
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/tasks/local-day",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/tasks",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/tasks/focus",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/tasks/at-risk",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/tasks/overdue",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/tasks/:id",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/tasks/:id/subtasks",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/tasks/preferences",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/tasks/lists",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/tasks/lists/:list_id/tags",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/tasks/:id/activity",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/tasks",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/tasks/lists",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/tasks/search/interpret",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/tasks/lists/:list_id/tags",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/tasks/:id/tags",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/tasks/:id/activity",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/tasks/:id",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/tasks/preferences",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/tasks/lists/:list_id",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/tasks/lists/:list_id/tags/:tag_id",
+      "signIn": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/tasks/:id/tags/:tag_id",
+      "signIn": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/tasks/lists/:list_id/tags/:tag_id",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/tasks/:id/breakdown",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/tasks/:id/deferred-status",
+      "signIn": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/tasks/lists/:list_id",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/tasks/agency-auto-execute",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/tasks/agency-auto-execute",
+      "signIn": true
+    }
+  ],
+  "tools": {
+    "tasks.get": {
+      "description": "Get a task with its subtasks and ten most recent activity entries.",
+      "risk": "read"
+    },
+    "tasks.listLists": {
+      "description": "List the account\u2019s task lists.",
+      "risk": "read"
+    },
+    "tasks.listTags": {
+      "description": "List tags in a task list.",
+      "risk": "read"
+    },
+    "tasks.activity": {
+      "description": "Read a task\u2019s activity.",
+      "risk": "read"
+    },
+    "tasks.create": {
+      "description": "Create a task owned by the signed-in account.",
+      "risk": "write"
+    },
+    "tasks.update": {
+      "description": "Update a visible task using the current account permissions.",
+      "risk": "write"
+    },
+    "tasks.updateStatus": {
+      "description": "Complete, archive or reopen a task.",
+      "risk": "write"
+    },
+    "tasks.breakDown": {
+      "description": "Break an owned task into ordered subtasks.",
+      "risk": "write"
+    },
+    "tasks.addActivity": {
+      "description": "Add a note or activity entry to a visible task.",
+      "risk": "write"
+    },
+    "tasks.assignTag": {
+      "description": "Assign an owned tag to an owned task.",
+      "risk": "write"
+    },
+    "tasks.unassignTag": {
+      "description": "Remove a tag from an owned task.",
+      "risk": "write"
+    },
+    "tasks.createList": {
+      "description": "Create a task list for the signed-in account.",
+      "risk": "write"
+    },
+    "tasks.renameList": {
+      "description": "Rename an owned task list.",
+      "risk": "write"
+    },
+    "tasks.createTag": {
+      "description": "Create a tag in an owned task list.",
+      "risk": "write"
+    },
+    "tasks.renameTag": {
+      "description": "Rename an owned task tag.",
+      "risk": "write"
+    },
+    "tasks.deleteTag": {
+      "description": "Delete an owned task tag.",
+      "risk": "write"
+    },
+    "tasks.heartbeatWindow": {
+      "description": "Read a bounded owner-only overdue/due-soon window and revision without advancing recurrence. Background scheduler integration remains unfinished.",
+      "risk": "read"
+    },
+    "tasks.list": {
+      "description": "List visible persisted tasks with list, tag, status, priority, date, completion and quadrant filters. Stale recurring series first advance to the next occurrence on your local day.",
+      "risk": "read"
+    },
+    "tasks.deleteList": {
+      "description": "Delete an owned task list, optionally moving its tasks to another owned list. The last list is kept; a nonempty list requires a destination.",
+      "risk": "write"
+    },
+    "tasks.summary": {
+      "description": "Read a bounded summary of today, overdue, upcoming, undated, completed or all tasks. Persisted occurrences only; this read never advances recurring series. Days use your saved account timezone.",
+      "risk": "read"
+    },
+    "tasks.focus": {
+      "description": "Get ranked overdue and at-risk tasks. Stale recurring series first advance to the next occurrence on your local day; days use your saved account timezone.",
+      "risk": "read"
+    },
+    "tasks.atRisk": {
+      "description": "Get tasks at risk of slipping (priority 3+, due within two days or do-date past, no completed subtask).",
+      "risk": "read"
+    },
+    "tasks.overdue": {
+      "description": "Get overdue open tasks, most overdue first.",
+      "risk": "read"
+    }
+  },
+  "jobRetries": {
+    "tasks-recurrence": 0,
+    "tasks-deferred-status": 0
+  },
+  "jobs": {
+    "tasks-recurrence": {},
+    "tasks-deferred-status": {
+      "task-id": {
+        "kind": "id"
+      },
+      "requested-status": {
+        "kind": "choice",
+        "choices": ["todo", "suggested", "done", "archived"]
+      }
+    }
+  },
+  "policyRoutes": {
+    "task_changes": {
+      "legacyBoolean": "agency_auto_execute",
+      "installTier": "trusted_auto"
+    }
+  }
+}

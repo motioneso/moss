@@ -21,7 +21,7 @@ function article(id: string, domain: string, patch: Record<string, unknown> = {}
     canonicalDomain: domain,
     headline: HEADLINE,
     url: `https://${domain}/${id}`,
-    publishedAt: "2026-11-04T10:00:00.000Z",
+    publishedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
     excerpt: "Secret excerpt text",
     imageUrl: null,
     topics: [] as string[],
