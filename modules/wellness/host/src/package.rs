@@ -17,6 +17,24 @@ pub fn files(root: &Path, component: &[u8]) -> Result<BTreeMap<String, Vec<u8>>>
         ("NOTICE".into(), include_bytes!("../../NOTICE").to_vec()),
         ("CHANGELOG.md".into(), include_bytes!("../../CHANGELOG.md").to_vec()),
     ]);
+    for (name, bytes) in [
+        ("index.html", include_bytes!("../../ui/index.html").as_slice()),
+        ("app.mjs", include_bytes!("../../ui/app.mjs")),
+        ("api.mjs", include_bytes!("../../ui/api.mjs")),
+        ("hero.mjs", include_bytes!("../../ui/hero.mjs")),
+        ("core.mjs", include_bytes!("../../ui/core.mjs")),
+        ("html.mjs", include_bytes!("../../ui/html.mjs")),
+        ("today.mjs", include_bytes!("../../ui/today.mjs")),
+        ("history.mjs", include_bytes!("../../ui/history.mjs")),
+        ("trends.mjs", include_bytes!("../../ui/trends.mjs")),
+        ("checkin-modal.mjs", include_bytes!("../../ui/checkin-modal.mjs")),
+        ("meds-form.mjs", include_bytes!("../../ui/meds-form.mjs")),
+        ("meds-view.mjs", include_bytes!("../../ui/meds-view.mjs")),
+        ("guest-bridge.mjs", include_bytes!("../../ui/guest-bridge.mjs")),
+        ("wellness.css", include_bytes!("../../ui/wellness.css")),
+    ] {
+        files.insert(format!("ui/{name}"), bytes.to_vec());
+    }
     for path in &manifest.database.migrations {
         let frozen = moss_module_host::legacy::entry("wellness", path)
             .ok_or_else(|| anyhow::anyhow!("Wellness SQL is not in the legacy inventory"))?;

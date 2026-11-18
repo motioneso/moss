@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "wellness",
   "name": "Wellness",
-  "description": "Private mood check-ins, medications with their schedules and dose records, therapy notes, a selective export of check-ins and therapy notes, and the choice of whether the assistant may use them. Insights worked out in code, two assistant tools that answer only while assistant access is on, and the choice of whether the assistant may use them. The screens are not built yet.",
+  "description": "Private mood check-ins, medications with their schedules and dose records, therapy notes, a selective export of check-ins and therapy notes, and the choice of whether the assistant may use them. Insights worked out in code, two assistant tools that answer only while assistant access is on, and the choice of whether the assistant may use them.",
   "publisher": "Moss",
   "version": "0.1.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
@@ -82,6 +82,11 @@
     }
   },
   "routes": [
+    {
+      "method": "GET",
+      "path": "/wellness/local-day",
+      "signIn": true
+    },
     {
       "method": "GET",
       "path": "/wellness/ai-consent",
@@ -194,8 +199,19 @@
     "bundled": true,
     "removable": true
   },
-  "screens": {},
-  "navigation": [],
+  "screens": {
+    "/wellness": "ui/index.html"
+  },
+  "navigation": [
+    {
+      "id": "wellness",
+      "label": "Wellness",
+      "description": "Today's medication and mood check-in, a history of check-ins, and a 14 or 30 day chart of mood and medication. Insights, therapy notes and export are on the same screen.",
+      "path": "/wellness",
+      "icon": "HeartPulse",
+      "order": 40
+    }
+  ],
   "settings": [
     {
       "id": "wellness.ai-consent",
@@ -229,7 +245,7 @@
     },
     {
       "id": "wellness.medications",
-      "description": "A person can keep a list of their medicines with dose, form and notes, and set a schedule of one of eight kinds (daily times, chosen weekdays, every few hours, repeating cycles, every few days, weeks or months, and monthly by date or by weekday). They see each day's doses with taken, skipped or pending, log a dose taken or skipped or an as-needed dose, and read thirty-day adherence counts. Each person sees only their own medicines. A reminder queue is declared but nothing sends reminders yet. The medication screens are not built yet.",
+      "description": "A person can keep a list of their medicines with dose, form and notes, and set a schedule of one of eight kinds (daily times, chosen weekdays, every few hours, repeating cycles, every few days, weeks or months, and monthly by date or by weekday). They see each day's doses with taken, skipped or pending, log a dose taken or skipped or an as-needed dose, and read thirty-day adherence counts. Each person sees only their own medicines. A reminder queue is declared but nothing sends reminders yet. The Wellness screen lists each day's doses, logs and corrects them, and adds, edits and removes medicines.",
       "errors": [
         {
           "code": "wellness_medication_invalid",

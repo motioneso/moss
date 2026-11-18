@@ -31,6 +31,7 @@ use serde_json::json;
 /// because host errors can carry request text.
 pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
     let result = match (request.method.as_str(), request.path.as_str()) {
+        ("GET", "/wellness/local-day") => medications::local_day(host),
         ("GET", "/wellness/ai-consent") => consent::get(host),
         ("PUT", "/wellness/ai-consent") => consent::put(host, &request),
         ("POST", "/wellness/checkins") => checkins::create(host, &request),

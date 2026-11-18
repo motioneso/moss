@@ -18,6 +18,12 @@ pub fn today<H: Host + ?Sized>(host: &H) -> Result<Value> {
     host.call("context", "local-date", "account", json!({}))
 }
 
+/// `GET /wellness/local-day`. The person's calendar day and zone, for the screen's date maths.
+pub fn local_day<H: Host + ?Sized>(host: &H) -> Result<Response> {
+    let day = today(host)?;
+    Ok(Response::new(200, json!({"date": day["date"], "timezone": day["timezone"]})))
+}
+
 fn date_text(row: &Value, key: &str) -> Value {
     row[key].as_str().map_or(Value::Null, |t| json!(t.get(..10).unwrap_or(t)))
 }
