@@ -28,6 +28,7 @@ export function homeScreen({ api, draw, go }) {
 
   async function search(more = false) {
     const mine = ++seq;
+    s.moreFailed = false;
     if (more) s.list.moreBusy = true;
     else {
       s.list = { ...s.list, phase: s.list.items.length ? "ready" : "loading" };
@@ -54,7 +55,13 @@ export function homeScreen({ api, draw, go }) {
           : error?.status === 400
             ? "toolong"
             : "failed";
-      s.list = { phase, items: [], next: null, moreBusy: false };
+      if (more && s.list.items.length) {
+        // Keep the rows already loaded and let the person try the next page again.
+        s.list = { ...s.list, moreBusy: false };
+        s.moreFailed = true;
+      } else {
+        s.list = { phase, items: [], next: null, moreBusy: false };
+      }
     }
     s.searching = false;
     draw();
@@ -99,6 +106,7 @@ ${list.phase === "loading" || s.searching ? status("Loading meetings…") : ""}
 ${failure ? `<p role="alert" class="jds-hint jds-hint--error">${failure} ${btn("Try again", "history-retry", { variant: "link" })}</p>` : ""}
 ${list.phase === "ready" && !list.items.length && !s.searching ? hint(q || s.typeId ? "No meetings match this search." : "No meetings yet. Start with Add recording or New meeting.") : ""}
 ${showTable ? `<div class="meetings-history-scroll"><table class="meetings-history-table"><thead><tr><th scope="col">Title</th><th scope="col">Date</th><th scope="col">Length</th><th scope="col">Attendees</th><th scope="col">Type</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
+${s.moreFailed ? `<p role="alert" class="jds-hint jds-hint--error">Couldn’t load older meetings.</p>` : ""}
 ${list.next && !s.searching && list.phase === "ready" ? btn(list.moreBusy ? "Loading more…" : "Load older meetings", "more", { variant: "secondary", disabled: list.moreBusy }) : ""}
 </section>`;
   }

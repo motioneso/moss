@@ -110,6 +110,9 @@ export function recordScreen(ctx) {
   }
 
   function start(id, params) {
+    // Leaving a meeting sends any pending note edit first.
+    clearTimeout(noteTimer);
+    if (ws.id && ws.id !== id && ws.notes) void saveNotes();
     Object.assign(ws, newWorkspace(), { id });
     ws.transcript.evidence = params;
     ws.tab = params && ws.narrow ? "transcript" : "notes";
@@ -212,7 +215,12 @@ export function recordScreen(ctx) {
     draw();
     try {
       const result = await api.putNotes(id, sent);
-      if (ws.id !== id || ws.notes.pending?.requestKey !== sent.requestKey) return;
+      if (ws.id !== id) return;
+      if (ws.notes.pending?.requestKey !== sent.requestKey) {
+        if (ws.notes.phase === "saving") ws.notes.phase = "idle";
+        draw();
+        return;
+      }
       ws.notes = { ...ws.notes, base: result.meeting, pending: null, phase: "idle", latest: null };
       ws.meeting = {
         ...ws.meeting,
