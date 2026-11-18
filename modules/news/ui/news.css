@@ -1,0 +1,683 @@
+/* News broadsheet page scaffolding: masthead, hero carousel, skeleton, empty state.
+   Tokens only — raw colors live in apps/web/src/styles/tokens.css. No serif: News uses the
+   app's sans and display faces like every other surface. */
+
+.nw-wrap {
+  min-width: 0;
+  /* #1185: match Sports' top offset above its masthead (sp-wrap's own space-6, stacked on the
+     shared .content-surface padding both pages already sit in) — News was missing this and
+     started noticeably higher on the page. */
+  padding-top: var(--space-6);
+  /* Side margins match the app's content area on the old screen. */
+  padding-inline: var(--space-6);
+}
+
+@media (max-width: 560px) {
+  .nw-wrap {
+    padding-inline: var(--space-3);
+  }
+}
+
+.nw-lede {
+  margin: var(--space-5) 0;
+}
+
+/* Reusable mono-caps section kicker (same voice as sports' .sp-col__kicker). */
+.nw-kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: var(--space-2);
+}
+
+/* "Continue reading →" jump line shared by hero/feature/mosaic articles. */
+.nw-more {
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  text-decoration: none;
+}
+.nw-more:hover {
+  text-decoration: underline;
+}
+
+/* ------------------------------------------------------------------ Masthead */
+
+/* Hairline-boxed section bar, the same broadsheet frame as sports' masthead — but these
+   chips are functional topic filters, not an inert preview nav. */
+.nw-mast {
+  padding-top: var(--space-3);
+  padding-bottom: var(--space-3);
+}
+
+.nw-mast__nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: var(--space-3);
+  padding: 0;
+}
+
+.nw-mast__chip {
+  appearance: none;
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+.nw-mast__chip:focus-visible {
+  outline-offset: 2px;
+}
+
+/* Top-front-page mode (no followed topics): a quiet centered nameplate keeps the band from
+   sitting empty between its two rules. */
+.nw-mast__plate {
+  margin: 0;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+
+/* ------------------------------------------------------------- Hero carousel */
+
+.nw-carousel {
+  margin-top: var(--space-6);
+}
+.nw-carousel__stage {
+  display: grid;
+}
+.nw-carousel__slide {
+  grid-area: 1 / 1;
+  min-width: 0;
+  opacity: 0;
+  visibility: hidden;
+  /* visibility flips after the fade completes so outgoing links leave the a11y tree without
+     popping out mid-crossfade */
+  transition:
+    opacity 360ms ease,
+    visibility 0s linear 360ms;
+}
+.nw-carousel__slide--active {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 360ms ease;
+}
+@keyframes nw-carousel-rise {
+  from {
+    transform: translateY(6px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .nw-carousel__slide--active .nw-hero__body {
+    animation: nw-carousel-rise 480ms ease both;
+  }
+}
+.nw-carousel__ctl {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding-bottom: var(--space-3);
+}
+.nw-carousel__nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: var(--space-1);
+}
+.nw-carousel__dots {
+  display: flex;
+  gap: var(--space-2);
+}
+.nw-carousel__dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* Split hero slide: art beside display headline + dek (the sports story-hero layout). */
+.nw-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 4fr);
+  gap: var(--space-5);
+  align-items: center;
+  padding-bottom: var(--space-4);
+}
+.nw-hero__photo {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  display: block;
+}
+.nw-hero__body {
+  min-width: 0;
+}
+.nw-hero__kicker {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-2);
+  padding-bottom: var(--space-1);
+}
+.nw-hero__kicker-desk {
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+.nw-hero__kicker-src {
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+.nw-hero__headline {
+  margin: 0;
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.nw-hero__link {
+  text-decoration: none;
+}
+.nw-hero__link:hover {
+  text-decoration: underline;
+}
+.nw-hero__dek {
+  margin: var(--space-3) 0;
+  line-height: 1.55;
+}
+
+@media (max-width: 720px) {
+  .nw-hero {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+  }
+}
+
+/* ------------------------------------------------------------------ Skeleton */
+
+.nw-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+}
+.nw-skel--hero {
+  height: 16rem;
+}
+.nw-skel--grid {
+  height: 24rem;
+}
+
+/* --------------------------------------------------------------- Empty state */
+
+/* Keep native heading semantics while inheriting the shared empty-state title skin. */
+.nw-wrap .jds-empty__title > h2 {
+  margin: 0;
+  font: inherit;
+}
+
+.nw-empty {
+  margin-top: var(--space-6);
+  padding: var(--space-7) var(--space-5);
+}
+.nw-empty__inner {
+  max-width: 34rem;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-3);
+}
+.nw-empty__title {
+  margin: 0;
+}
+.nw-empty__lede {
+  margin: 0;
+  line-height: 1.55;
+}
+.nw-empty__btn {
+  margin-top: var(--space-2);
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-4);
+  text-decoration: none;
+}
+.nw-empty__btn:hover {
+  opacity: 0.9;
+}
+
+.nw-mast > .jds-section-head {
+  margin-bottom: var(--space-4);
+}
+/* News broadsheet body: main/rail grid, feature, mosaic, briefs, source rail, /today list.
+   Tokens only — raw colors live in apps/web/src/styles/tokens.css. */
+
+/* ------------------------------------------------------------- Page grid */
+
+/* Broadsheet body: mosaic main well + keyline-separated source rail (the sports two-column
+   idiom). Collapses to a single column below 900px. */
+.nw-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--space-6);
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+}
+.nw-grid__main {
+  min-width: 0;
+}
+.nw-grid__rail {
+  min-width: 0;
+  padding-left: var(--space-6);
+}
+
+@media (max-width: 900px) {
+  .nw-grid {
+    grid-template-columns: 1fr;
+  }
+  .nw-grid__rail {
+    padding-left: 0;
+    padding-top: var(--space-5);
+  }
+}
+
+.nw-band {
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------- Feature */
+
+/* Full-width breakout above the mosaic: art beside display type, one rank down from the hero. */
+.nw-feature {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: center;
+  padding-bottom: var(--space-5);
+  margin-bottom: var(--space-5);
+}
+.nw-feature__img {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  display: block;
+}
+.nw-feature__body {
+  min-width: 0;
+}
+.nw-feature__kicker {
+  margin: 0 0 var(--space-2);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+.nw-feature__title {
+  margin: 0;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+.nw-feature__blurb {
+  margin: var(--space-2) 0 var(--space-3);
+  line-height: 1.55;
+}
+
+@media (max-width: 720px) {
+  .nw-feature {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+  }
+}
+
+/* ------------------------------------------------------------- Mosaic */
+
+/* Two-column card well; art-led majors span both columns so the grid keeps a clear big → small
+   read without a masonry library. */
+.nw-mosaic {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5) var(--space-6);
+}
+.nw-mosaic__art {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-bottom: var(--space-4);
+}
+.nw-mosaic__art--major {
+  grid-column: span 2;
+}
+.nw-mosaic__img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  display: block;
+  /* #1185: pull the kicker 4px closer than the flex `gap` gives the other internal spacing, so
+     the photo reads as bound to its own source/topic line (space-1 = 4px) more tightly than the
+     rest of the card's internal rhythm (space-2 = 8px) — and much tighter than the grid gap to a
+     neighboring card (space-5/6 = 20/24px), so the image can't be mistaken for that story's art. */
+  margin-bottom: calc(var(--space-1) - var(--space-2));
+}
+.nw-mosaic__artkicker {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+.nw-mosaic__title {
+  margin: 0;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+.nw-mosaic__blurb {
+  margin: 0;
+  line-height: 1.5;
+  /* Keep card heights broadsheet-even: three lines then an ellipsis. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+/* No-photo cards skip the 16:9 image, which left them noticeably shorter than their photo
+   neighbours — a ragged gap in the grid (Ben 2026-07-09 /news). #1185: drop the clamp entirely so
+   the full available sanitized summary shows before "Continue reading" — the feed's `summary` is
+   already sanitized and bounded server-side, so there's no unbounded-growth risk here. Photo
+   cards keep their 3-line clamp above (`.nw-mosaic__blurb`) unchanged. */
+.nw-mosaic__art--textonly .nw-mosaic__blurb {
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+
+@media (max-width: 640px) {
+  .nw-mosaic {
+    grid-template-columns: 1fr;
+  }
+  .nw-mosaic__art--major {
+    grid-column: auto;
+  }
+}
+
+/* ------------------------------------------------------------- In brief */
+
+.nw-briefs {
+  margin-top: var(--space-5);
+  padding-top: var(--space-3);
+}
+.nw-briefs__label {
+  margin: 0 0 var(--space-2);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+.nw-briefs__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  /* Single column: the tail now lives in the narrow right rail beneath "From your sources"
+     (Ben 2026-07-09 /news), where a 2-up split would give each link only a few characters.
+     It was 2 columns when this block sat under the wide mosaic. */
+  columns: 1;
+}
+.nw-briefs__item {
+  break-inside: avoid;
+  padding: var(--space-2) 0;
+}
+.nw-briefs__link {
+  text-decoration: none;
+  line-height: 1.4;
+}
+.nw-briefs__link:hover {
+  text-decoration: underline;
+}
+.nw-briefs__tag {
+  display: inline-block;
+  margin-right: var(--space-2);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+
+/* ------------------------------------------------------------- Source rail */
+
+.nw-rail__group {
+  padding: var(--space-3) 0;
+}
+.nw-rail__src {
+  display: inline-block;
+  margin-bottom: var(--space-2);
+  text-decoration: none;
+}
+.nw-rail__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nw-rail__item {
+  padding: var(--space-1) 0;
+}
+.nw-rail__link {
+  line-height: 1.4;
+  text-decoration: none;
+}
+.nw-rail__link:hover {
+  text-decoration: underline;
+}
+
+/* ------------------------------------------------------------- Degraded notice */
+
+.nw-degraded {
+  margin: var(--space-5) 0 0;
+}
+
+/* ------------------------------------------------------- /today widget lead (newspaper) */
+
+/* Broadsheet lead for the /today News desk (Ben 2026-07-09 "more newspaper style"): the top
+   story gets a photo + display headline, the same voice as the /news mosaic hero, scaled down for
+   the brief column. A bottom keyline sets it off from the headline list that follows. Whole block
+   is the link — hover underlines the headline only (the photo/dek shouldn't flicker). */
+.nw-twlead {
+  display: block;
+  /* Top margin sets the lead photo off from the "Top stories" title (Ben 2026-07-09 "add that
+     margin to the top story too") — matches the bottom margin so the lead sits evenly spaced. */
+  margin: var(--space-3) 0;
+  padding-bottom: var(--space-3);
+  text-decoration: none;
+}
+/* 16:9 frame of stacked layers: the photo, or the drawn topic art (lead-art.tsx). Every layer
+   fills the frame, so a later image can sit over the art and fade in. */
+.nw-twlead__frame {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  isolation: isolate;
+  margin-bottom: var(--space-2);
+}
+.nw-twlead__photo,
+.nw-leadart,
+.nw-leadart__svg {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.nw-twlead__photo {
+  object-fit: cover;
+}
+.nw-leadart__label {
+  position: absolute;
+  bottom: 12px;
+  left: 14px;
+  padding: 4px 7px;
+}
+@media (max-width: 720px) {
+  .nw-leadart__label {
+    bottom: 9px;
+    left: 9px;
+    padding: 3px 5px;
+  }
+}
+.nw-twlead__tag {
+  display: block;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  margin-bottom: 2px;
+}
+.nw-twlead__title {
+  display: block;
+  line-height: 1.14;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.nw-twlead:hover .nw-twlead__title {
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+/* One-line dek: a taste of the summary, clamped to two lines so a long feed blurb can't shove the
+   headline list below the fold. */
+.nw-twlead__dek {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  margin-top: var(--space-1);
+  line-height: 1.45;
+}
+
+/* ------------------------------------------------------------- /today widget list */
+
+.nw-twlist {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.nw-twlist__item {
+  padding: var(--space-2) 0;
+}
+.nw-twlist__link {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-decoration: none;
+}
+.nw-twlist__link:hover .nw-twlist__title {
+  text-decoration: underline;
+}
+.nw-twlist__tag {
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  /* Keeps the publisher icon (or, when it fails to load, the publisher name) clear of the headline
+     that follows it. The gap on .nw-twlist__link can't do this job: .nw-twlist__row's rule below
+     resets that link to display:block, and gap only applies in flex/grid. Margin here works in
+     either layout mode and covers the text fallback as well as the icon. */
+  margin-right: var(--space-2);
+}
+/* Icon on a light tile so a dark publisher mark still reads on the dark theme (#2290); the
+   tile's colour, ring and radius live in packages/ui components-news.css. */
+.nw-twlist__favicon-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  vertical-align: text-bottom;
+}
+.nw-twlist__favicon {
+  display: block;
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+}
+/* Secondary-story dek: one clamped line under the headline (T11). */
+.nw-twlist__dek {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  overflow: hidden;
+  line-height: 1.45;
+}
+
+.nw-twlist__title {
+  line-height: 1.4;
+}
+
+/* Story feedback overlay (Ben 2026-09-03, same rule as the Sports desk). A .nw-fbhost wraps one
+   story and parks the feedback dots in its top-right corner, over the photo when there is one, on
+   the same line as the text otherwise. Hidden until the story is hovered or holds focus; stays
+   while the menu or the reason form is open. Hover-less devices always show the dots. */
+.nw-fbhost {
+  position: relative;
+}
+.nw-fbhost > .nw-feedback {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.nw-fbhost:hover > .nw-feedback,
+.nw-fbhost:focus-within > .nw-feedback,
+.nw-fbhost > .nw-feedback:has([aria-expanded="true"]),
+.nw-fbhost > .nw-feedback:has(.nw-feedback__form),
+.nw-fbhost > .nw-feedback:has(.nw-feedback__receipt) {
+  opacity: 1;
+}
+@media (hover: none) {
+  .nw-fbhost > .nw-feedback {
+    opacity: 1;
+  }
+}
+/* Text-only rows keep the last words clear of the dots. */
+.nw-briefs__item > .nw-briefs__link,
+.nw-rail__item > .nw-rail__link,
+.nw-twlist__row > .nw-twlist__link {
+  display: block;
+  padding-right: var(--space-7);
+}
+.nw-briefs__item > .nw-feedback,
+.nw-rail__item > .nw-feedback,
+.nw-twlist__row > .nw-feedback {
+  top: 0;
+  right: 0;
+}
+.nw-feedback__form {
+  width: min(19rem, calc(100vw - 3rem));
+  padding: var(--space-3);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-md);
+}
+
+.nw-feedback__form label {
+  display: block;
+  margin-bottom: var(--space-1);
+}
+
+.nw-feedback__form textarea {
+  display: block;
+  width: 100%;
+  min-height: 4.5rem;
+  resize: vertical;
+}
+
+.nw-feedback__form [role="alert"] {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--danger-fg);
+}
+
+.nw-feedback__actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  margin-top: var(--space-2);
+}
+
+.nw-feedback__receipt {
+  width: min(19rem, calc(100vw - 3rem));
+  margin-top: var(--space-3);
+}

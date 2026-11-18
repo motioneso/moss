@@ -1,5 +1,9 @@
 # News package
 
+## 0.1.2
+
+- The News screen and the Today News widget now ship in the package. The screen has the front-page carousel, the mosaic, the source rail, the in-brief list, topic filters when topics exist, and the story menu with a reason form. Pictures and site icons load through the signed-in shell. Links open in a new tab.
+
 ## 0.1.1
 
 - Settings now has a News screen. It shows built-in sources, sources you added, subreddits, described topics, excluded publishers and story preferences.

@@ -52,6 +52,25 @@ fn the_package_builds_and_the_manifest_validates() {
 }
 
 #[test]
+fn the_screens_and_the_menu_entry_are_declared_and_shipped() {
+    let manifest = moss_news_host::package::manifest().unwrap();
+    let files = moss_news_host::package::files(&root(), &component()).unwrap();
+    assert_eq!(manifest.screens.get("/news").map(String::as_str), Some("ui/index.html"));
+    assert_eq!(
+        manifest.screens.get("/news/today-widget").map(String::as_str),
+        Some("ui/widget.html")
+    );
+    for file in manifest.screens.values() {
+        assert!(files.contains_key(file), "{file} missing from the package");
+    }
+    assert_eq!(manifest.navigation.len(), 1);
+    assert_eq!(manifest.navigation[0]["path"], "/news");
+    for helper in ["ui/screen-api.mjs", "ui/story-menu.mjs", "ui/app.mjs", "ui/widget.mjs", "ui/view.mjs", "ui/lead-art.mjs", "ui/news.css", "ui/widget.css"] {
+        assert!(files.contains_key(helper), "{helper} missing");
+    }
+}
+
+#[test]
 fn the_settings_screen_ships_with_every_file_it_loads() {
     let files = moss_news_host::package::files(&root(), &component()).unwrap();
     let manifest = moss_news_host::package::manifest().unwrap();
