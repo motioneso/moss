@@ -620,6 +620,13 @@ fn installed_wellness_package_serves_routes_from_the_real_server() {
     let (_, text) = call(Method::GET, "/wellness/insights", Some(&other), None);
     assert_eq!(json_of(&text), json!({"insights":[]}), "{text}");
     println!("PASS live tools: both chat tools refused with consent off, answered with it on, and insights worked over HTTPS for two people");
+    // Hold the server open so the screens can be used in a browser.
+    if let Ok(hold) = std::env::var("WELLNESS_LIVE_HOLD") {
+        fs::write(format!("{hold}/ready.txt"), format!("{origin}\nhttps://{address}:{}\n", port.0)).unwrap();
+        while !std::path::Path::new(&format!("{hold}/stop")).exists() {
+            std::thread::sleep(Duration::from_millis(500));
+        }
+    }
     let activity = serde_json::to_string(&services.activity("wellness", &access).unwrap()).unwrap();
     assert!(!activity.contains(MARK) && !activity.contains(MED_MARK) && !activity.contains(NOTE));
     assert!(!log().to_lowercase().contains(&MARK.to_lowercase()));

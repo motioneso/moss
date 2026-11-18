@@ -4,7 +4,7 @@
   "name": "Weather",
   "publisher": "Moss",
   "version": "0.1.0",
-  "description": "Shows today's weather and an hourly forecast for each person's saved place. With no saved place it guesses from where the request came from, then from the saved time zone. Each person's place and unit stay private account preferences. Outside services are Open-Meteo for forecasts and place search, Nominatim to name a browser position, and ipwho.is for the address guess. Forecasts are shared by everyone on the install and held for 30 minutes, with no person or place name. The visual forecast snapshot and the screens are not part of this package yet.",
+  "description": "Shows today's weather and an hourly forecast for each person's saved place. With no saved place it guesses from where the request came from, then from the saved time zone. Each person's place and unit stay private account preferences. Outside services are Open-Meteo for forecasts and place search, Nominatim to name a browser position, and ipwho.is for the address guess. Forecasts are shared by everyone on the install and held for 30 minutes, with no person or place name. The package also serves the Weather settings screen and a visual hourly forecast screen.",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
@@ -113,15 +113,18 @@
     "bundled": true,
     "removable": false
   },
-  "screens": {},
+  "screens": {
+    "/settings/weather": "ui/index.html",
+    "/forecast": "ui/forecast.html"
+  },
   "navigation": [],
   "settings": [
     {
       "id": "weather.location",
       "label": "Weather",
-      "path": "/settings?section=profile",
+      "path": "/settings/weather",
       "scope": "user",
-      "description": "The weather place and unit can be changed through the Weather routes and by asking in chat. The Settings page for them is not part of this package yet."
+      "description": "Choose Fahrenheit or Celsius and the place for Today and the briefing. Use your location, or search for a city, region or country."
     }
   ],
   "features": [
@@ -144,7 +147,7 @@
         {
           "id": "weather.location",
           "description": "Save a weather place in Profile, or name the city and region in the conversation.",
-          "path": "/settings?section=profile"
+          "path": "/settings/weather"
         },
         {
           "id": "weather.retry",
@@ -159,7 +162,7 @@
     },
     {
       "id": "weather.visual_forecast",
-      "description": "The visual forecast snapshot is not part of this package yet. The hourly forecast and today's reading are available as data."
+      "description": "The Forecast screen shows the hourly forecast for the saved place as a temperature curve with rain and wind, and says when the reading is stale or unavailable. Today's header shows the temperature, conditions, and the high and low."
     }
   ],
   "optionalRequires": {}

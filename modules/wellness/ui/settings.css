@@ -1,0 +1,94 @@
+/* Layout for the Wellness settings screen. Colours and type come from the shared Park Press sheet. */
+.wl-settings {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 30px 40px 80px;
+}
+@media (max-width: 620px) {
+  .wl-settings {
+    padding: 20px 16px 60px;
+  }
+}
+[hidden] {
+  display: none !important;
+}
+.pane__head {
+  margin-bottom: 4px;
+}
+.pane__title {
+  margin: 0;
+}
+.pane__desc {
+  line-height: 1.55;
+  margin: 8px 0 0;
+}
+.pane__card {
+  margin-top: 40px;
+  padding: 18px 0 0;
+}
+.pane__cardhead {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 0 0 6px;
+}
+.pane__cardheadmain {
+  flex: 1;
+  min-width: 0;
+}
+.pane__cardbody {
+  padding: 0;
+}
+.set-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  padding: 16px 0;
+  border-top: 1px solid var(--border-subtle);
+}
+.set-row:first-child {
+  border-top: none;
+}
+.set-row__main {
+  flex: 1;
+  min-width: 0;
+}
+.set-row__desc {
+  margin-top: 3px;
+  line-height: 1.5;
+  max-width: 58ch;
+}
+.set-row__control {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.set2-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 14px 2px 0;
+  line-height: 1.5;
+}
+.set2-note svg {
+  flex: none;
+  margin-top: 2px;
+}
+.wl-settings-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+@media (max-width: 620px) {
+  .set-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+  }
+  .set-row__control {
+    flex-wrap: wrap;
+  }
+}

@@ -48,6 +48,9 @@ fn the_package_builds_and_the_manifest_validates() {
     for needed in ["moss.module.json", "code/module.wasm", "LICENSE", "NOTICE", "CHANGELOG.md"] {
         assert!(files.contains_key(needed), "{needed} missing");
     }
+    for screen in ["ui/index.html", "ui/forecast.html", "ui/app.mjs", "ui/forecast.mjs", "ui/weather.css"] {
+        assert!(files.contains_key(screen), "{screen} missing");
+    }
     assert!(moss_weather_host::package::pack(&root(), &component()).is_ok());
 }
 

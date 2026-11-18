@@ -17,8 +17,8 @@ pub fn files(root: &Path, component: &[u8]) -> Result<BTreeMap<String, Vec<u8>>>
         ("NOTICE".into(), include_bytes!("../../NOTICE").to_vec()),
         ("CHANGELOG.md".into(), include_bytes!("../../CHANGELOG.md").to_vec()),
     ]);
-    for (name, bytes) in [
-        ("index.html", include_bytes!("../../ui/index.html").as_slice()),
+    let ui: [(&str, &[u8]); 22] = [
+        ("index.html", include_bytes!("../../ui/index.html")),
         ("app.mjs", include_bytes!("../../ui/app.mjs")),
         ("api.mjs", include_bytes!("../../ui/api.mjs")),
         ("hero.mjs", include_bytes!("../../ui/hero.mjs")),
@@ -30,9 +30,18 @@ pub fn files(root: &Path, component: &[u8]) -> Result<BTreeMap<String, Vec<u8>>>
         ("checkin-modal.mjs", include_bytes!("../../ui/checkin-modal.mjs")),
         ("meds-form.mjs", include_bytes!("../../ui/meds-form.mjs")),
         ("meds-view.mjs", include_bytes!("../../ui/meds-view.mjs")),
-        ("guest-bridge.mjs", include_bytes!("../../ui/guest-bridge.mjs")),
         ("wellness.css", include_bytes!("../../ui/wellness.css")),
-    ] {
+        ("settings.html", include_bytes!("../../ui/settings.html")),
+        ("settings.mjs", include_bytes!("../../ui/settings.mjs")),
+        ("settings.css", include_bytes!("../../ui/settings.css")),
+        ("dom.mjs", include_bytes!("../../ui/dom.mjs")),
+        ("insights.mjs", include_bytes!("../../ui/insights.mjs")),
+        ("notes.mjs", include_bytes!("../../ui/notes.mjs")),
+        ("export.mjs", include_bytes!("../../ui/export.mjs")),
+        ("wellness-extra.css", include_bytes!("../../ui/wellness-extra.css")),
+        ("guest-bridge.mjs", include_bytes!("../../ui/guest-bridge.mjs")),
+    ];
+    for (name, bytes) in ui {
         files.insert(format!("ui/{name}"), bytes.to_vec());
     }
     for path in &manifest.database.migrations {

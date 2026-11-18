@@ -49,6 +49,8 @@ try {
   document.title = screen.title;
   const screenUrl = new URL(screen.src, location.href);
   if (/^[a-z]{1,20}$/.test(focusParam)) screenUrl.searchParams.set("focus", focusParam);
+  // Weather's "Use my location" reads the browser position from inside the sandboxed frame.
+  if (moduleId === "weather") frame.setAttribute("allow", "geolocation *");
   openModuleFrame(frame, moduleId, screenUrl.href, {
     request,
     theme: () => ({ theme: "park-press", colorMode: dark ? "dark" : "light" }),
@@ -58,6 +60,16 @@ try {
     },
     chat: async () => {
       throw new Error();
+    },
+    save: async ({ filename, contentType, text }) => {
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(new Blob([text], { type: contentType }));
+      link.download = filename;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(link.href), 60_000);
+      return null;
     }
   });
 } catch {

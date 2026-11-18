@@ -12,6 +12,7 @@ use crate::{api, chat::ChatDrawer, focus, icons, today::TodayPage};
 
 /// In-app navigation for links rendered below the frame.
 #[derive(Clone, Copy)]
+#[allow(dead_code)]
 pub struct Navigate(pub Callback<String>);
 
 const WIDE_QUERY: &str = "(min-width: 1280px)";
@@ -166,7 +167,10 @@ pub fn App() -> impl IntoView {
 
 /// Puts installed modules' links into the navigation. A link whose path the shell already
 /// lists is replaced in place; the others go in a "Modules" section at the end.
-fn merge_modules(mut view: ShellView, modules: Vec<api::ModuleNav>) -> (ShellView, Vec<api::ModuleNav>) {
+fn merge_modules(
+    mut view: ShellView,
+    modules: Vec<api::ModuleNav>,
+) -> (ShellView, Vec<api::ModuleNav>) {
     let mut extra = Vec::new();
     for m in &modules {
         let link = NavLink {
@@ -188,7 +192,10 @@ fn merge_modules(mut view: ShellView, modules: Vec<api::ModuleNav>) -> (ShellVie
     if !extra.is_empty() {
         view.nav.insert(
             view.nav.len(),
-            moss_shell_contract::NavSection { label: Some("Modules".into()), links: extra },
+            moss_shell_contract::NavSection {
+                label: Some("Modules".into()),
+                links: extra,
+            },
         );
     }
     (view, modules)
