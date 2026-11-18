@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Briefings screens in the new app.** You can read your morning and evening briefings and change when they are prepared from the new Moss app, including on your phone. [PR #4349](https://github.com/motioneso/moss/pull/4349)
 - **Sports settings.** You can now choose the teams and leagues you follow, your news sources, and your standings leagues from the Sports settings page. [PR #4348](https://github.com/motioneso/moss/pull/4348)
 - **Sports screen.** The Sports page now shows live scores, your followed teams, standings and team news. [PR #4345](https://github.com/motioneso/moss/pull/4345)
 
