@@ -2,7 +2,7 @@ import { accessDenied, esc, lineLabel, transcriptTime } from "./format.mjs";
 import { btn, hint, input, note, sectionHead } from "./kit.mjs";
 
 /** Transcript pane: timeline, search, and the referenced-line lookup. */
-export function transcriptPane({ api, draw, focus }, ws) {
+export function transcriptPane({ api, draw }, ws) {
   async function load() {
     const id = ws.id;
     const t = ws.transcript;
@@ -14,7 +14,11 @@ export function transcriptPane({ api, draw, focus }, ws) {
       ws.transcript.phase = "ready";
     } catch (error) {
       if (ws.id !== id) return;
-      ws.transcript.phase = accessDenied(error) ? (error.status === 404 ? "notfound" : "denied") : "failed";
+      ws.transcript.phase = accessDenied(error)
+        ? error.status === 404
+          ? "notfound"
+          : "denied"
+        : "failed";
     }
     draw();
     scrollToReference();
@@ -26,7 +30,10 @@ export function transcriptPane({ api, draw, focus }, ws) {
     if (!ref) return;
     ws.transcript.evidenceState = "loading";
     try {
-      const reply = await api.evidence(id, new URLSearchParams(Object.entries(ref).map(([k, v]) => [k, String(v)])).toString());
+      const reply = await api.evidence(
+        id,
+        new URLSearchParams(Object.entries(ref).map(([k, v]) => [k, String(v)])).toString()
+      );
       if (ws.id !== id) return;
       ws.transcript.evidenceData = reply.evidence;
       ws.transcript.evidenceState = "ready";
@@ -42,9 +49,13 @@ export function transcriptPane({ api, draw, focus }, ws) {
     const t = ws.transcript;
     const exact = t.evidenceData?.segment;
     if (!exact) return;
-    const selected = t.data?.snapshot.segments.find((l) => l.segmentId === exact.segmentId && l.revision === exact.revision);
+    const selected = t.data?.snapshot.segments.find(
+      (l) => l.segmentId === exact.segmentId && l.revision === exact.revision
+    );
     setTimeout(() => {
-      const node = globalThis.document?.getElementById(selected ? `meeting-line-${exact.segmentId}` : `meeting-reference-${ws.id}`);
+      const node = globalThis.document?.getElementById(
+        selected ? `meeting-line-${exact.segmentId}` : `meeting-reference-${ws.id}`
+      );
       node?.scrollIntoView?.({ block: "center", behavior: "smooth" });
       node?.focus?.({ preventScroll: true });
     }, 0);
@@ -59,26 +70,41 @@ export function transcriptPane({ api, draw, focus }, ws) {
     const t = ws.transcript;
     const snap = t.data?.snapshot;
     const exact = t.evidenceState === "ready" ? t.evidenceData?.segment : undefined;
-    const selected = exact && snap?.segments.find((l) => l.segmentId === exact.segmentId && l.revision === exact.revision);
+    const selected =
+      exact &&
+      snap?.segments.find((l) => l.segmentId === exact.segmentId && l.revision === exact.revision);
     const asked = !!t.evidence || t.evidenceState === "failed";
     const q = (t.search ?? "").toLocaleLowerCase();
-    const lines = snap ? snap.segments.filter((l) => !q || l.text.toLocaleLowerCase().includes(q)) : [];
+    const lines = snap
+      ? snap.segments.filter((l) => !q || l.text.toLocaleLowerCase().includes(q))
+      : [];
     const denied = t.phase === "denied";
     let body = "";
-    if (denied) body = hint("Transcript access is unavailable. Return to Meetings or sign in again.", ' role="status"');
+    if (denied)
+      body = hint(
+        "Transcript access is unavailable. Return to Meetings or sign in again.",
+        ' role="status"'
+      );
     else if (snap) {
       body = `${snap.containsProvisional ? hint("Still being finalised") : ""}${
         snap.omittedSegments > 0
-          ? note(`${snap.omittedSegments} ${snap.omittedSegments === 1 ? "line" : "lines"} not shown.`)
+          ? note(
+              `${snap.omittedSegments} ${snap.omittedSegments === 1 ? "line" : "lines"} not shown.`
+            )
           : ""
       }<div class="meetings-transcript-timeline" aria-label="Transcript timeline">${lines
         .map((l) => {
           const live = l.finality === "provisional";
-          const text = l.segmentId === selected?.segmentId ? `<mark class="jds-highlight">${esc(l.text)}</mark>` : esc(l.text);
+          const text =
+            l.segmentId === selected?.segmentId
+              ? `<mark class="jds-highlight">${esc(l.text)}</mark>`
+              : esc(l.text);
           return `<article id="meeting-line-${esc(l.segmentId)}" tabindex="-1" class="meetings-transcript-turn${live ? " meetings-transcript-turn--live" : ""}" aria-label="Transcript at ${transcriptTime(l.startMs)}"><span class="jds-hint">${transcriptTime(l.startMs)}</span><div><span class="jds-label">${esc(lineLabel(l, t.data.sources))}</span><p class="meetings-transcript-text${live ? " jds-hint" : ""}">${text}</p></div></article>`;
         })
         .join("")}</div>${
-        t.search !== null && snap.segments.length && !lines.length ? hint("No loaded timeline lines match.") : ""
+        t.search !== null && snap.segments.length && !lines.length
+          ? hint("No loaded timeline lines match.")
+          : ""
       }<p class="jds-sr-only" role="status">${
         snap.segments.length
           ? `${snap.segments.length} transcript lines available, through ${transcriptTime(snap.throughMs ?? 0)}.`

@@ -1,5 +1,5 @@
 import { esc, meetingDate, meetingLength } from "./format.mjs";
-import { btn, field, hint, input, select, status, alertHint } from "./kit.mjs";
+import { btn, field, hint, input, select, status } from "./kit.mjs";
 
 const PAGE_SIZE = 30;
 
@@ -69,7 +69,9 @@ export function homeScreen({ api, draw, go }) {
           ? (types.list.find((t) => t.id === m.recording.typeId)?.name ?? m.recording.typeId)
           : null;
         return `<tr class="meetings-history-row"><td><button type="button" class="jds-rowbtn meetings-history-title" data-act="open" data-id="${esc(m.id)}">${esc(m.title)}</button></td><td><span>${esc(meetingDate(m.date.at))}</span><span class="jds-hint meetings-history-date-source">${m.date.source === "recorded" ? "Recorded" : "Added"}</span></td><td>${meetingLength(m.capture?.durationMs)}</td><td>—</td><td>${
-          type ? `<span class="jds-badge jds-badge--neutral jds-badge--pill">${esc(type)}</span>` : "—"
+          type
+            ? `<span class="jds-badge jds-badge--neutral jds-badge--pill">${esc(type)}</span>`
+            : "—"
         }${
           m.recording?.side
             ? `<span class="jds-hint meetings-history-side">${m.recording.side === "personal" ? "Personal" : "Work"}</span>`

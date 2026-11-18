@@ -5,12 +5,18 @@ export const chevron =
   '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m6 9 6 6 6-6"/></svg>';
 
 export function btn(label, act, opts = {}) {
-  const { variant = "primary", sm = false, disabled = false, data = "", id = "", type = "button" } = opts;
+  const {
+    variant = "primary",
+    sm = false,
+    disabled = false,
+    data = "",
+    id = "",
+    type = "button"
+  } = opts;
   return `<button type="${type}" class="jds-btn jds-btn--${variant}${sm ? " jds-btn--sm" : ""}" data-act="${act}"${id ? ` id="${id}"` : ""}${data ? ` ${data}` : ""}${disabled ? " disabled" : ""}>${label}</button>`;
 }
 
-export const hint = (text, extra = "") =>
-  `<p class="jds-hint"${extra}>${text}</p>`;
+export const hint = (text, extra = "") => `<p class="jds-hint"${extra}>${text}</p>`;
 export const status = (text) => `<p role="status" class="jds-hint">${text}</p>`;
 export const alertHint = (text) => `<p role="alert" class="jds-hint jds-hint--error">${text}</p>`;
 export const note = (text) => `<div class="jds-note jds-note--practical">${text}</div>`;
@@ -29,7 +35,15 @@ export function field(id, label, control, extra = "") {
 }
 
 export function input(id, value, opts = {}) {
-  const { type = "text", max, placeholder = "", label = "", model = id, described = "", disabled = false } = opts;
+  const {
+    type = "text",
+    max,
+    placeholder = "",
+    label = "",
+    model = id,
+    described = "",
+    disabled = false
+  } = opts;
   return `<input id="${id}" type="${type}" class="jds-input meetings-input" data-in="${model}" value="${esc(value)}"${
     max ? ` maxlength="${max}"` : ""
   }${placeholder ? ` placeholder="${esc(placeholder)}"` : ""}${label ? ` aria-label="${esc(label)}"` : ""}${
@@ -38,7 +52,16 @@ export function input(id, value, opts = {}) {
 }
 
 export function textarea(id, value, opts = {}) {
-  const { rows, max, placeholder = "", label = "", readonly = false, cls = "", model = id, disabled = false } = opts;
+  const {
+    rows,
+    max,
+    placeholder = "",
+    label = "",
+    readonly = false,
+    cls = "",
+    model = id,
+    disabled = false
+  } = opts;
   return `<textarea id="${id}" class="jds-textarea meetings-input${cls ? ` ${cls}` : ""}" data-in="${model}"${
     rows ? ` rows="${rows}"` : ""
   }${max ? ` maxlength="${max}"` : ""}${placeholder ? ` placeholder="${esc(placeholder)}"` : ""}${

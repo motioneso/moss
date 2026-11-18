@@ -22,9 +22,14 @@ export function meetingLength(durationMs) {
   return rest ? `${hours} hr ${rest} min` : `${hours} hr`;
 }
 
-export function meetingDate(value, options = { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) {
+export function meetingDate(
+  value,
+  options = { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }
+) {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "—" : new Intl.DateTimeFormat(undefined, options).format(date);
+  return Number.isNaN(date.getTime())
+    ? "—"
+    : new Intl.DateTimeFormat(undefined, options).format(date);
 }
 
 export function utf8Length(text) {
@@ -71,7 +76,9 @@ export function resolveSummary(content) {
 }
 
 export function lineLabel(segment, sources) {
-  const source = (sources ?? []).find((s) => s.sourceId === segment.sourceId && s.epoch === segment.epoch);
+  const source = (sources ?? []).find(
+    (s) => s.sourceId === segment.sourceId && s.epoch === segment.epoch
+  );
   if (source?.kind === "microphone") return "You";
   if (source?.kind === "output") return "Call audio";
   return source?.label || "Audio";
@@ -107,7 +114,9 @@ const FAILURES = {
     "Your model couldn’t complete the summary. Check its connection and try again. No other model was used.",
     "ai-providers"
   ],
-  meeting_output_timed_out: ["The summary took too long and was stopped. Try again when you’re ready."],
+  meeting_output_timed_out: [
+    "The summary took too long and was stopped. Try again when you’re ready."
+  ],
   meeting_output_route_changed: [
     "The summary model configuration changed during generation. Review it before generating again.",
     "ai-providers"
@@ -133,7 +142,10 @@ export function accessDenied(error) {
 /** Message and state for a failed write. */
 export function operationError(error) {
   if (accessDenied(error))
-    return { status: "denied", message: "Access is unavailable. Return to history or sign in again." };
+    return {
+      status: "denied",
+      message: "Access is unavailable. Return to history or sign in again."
+    };
   if (error?.code === "meeting_output_busy")
     return {
       status: "failed",
@@ -150,7 +162,10 @@ export function operationError(error) {
       status: "failed",
       message: "This request could not be completed. Review the inputs and try a new request."
     };
-  return { status: "retry", message: "The result could not be confirmed. Retry this same request." };
+  return {
+    status: "retry",
+    message: "The result could not be confirmed. Retry this same request."
+  };
 }
 
 export function exportStatus(receipt) {
@@ -158,7 +173,8 @@ export function exportStatus(receipt) {
     return "The saved note was changed or removed. It has not been overwritten. Save a new summary version instead.";
   if (receipt.writeStatus === "failed") return "The private note could not be saved.";
   if (receipt.writeStatus === "pending") return "The private note write is pending.";
-  if (receipt.indexStatus === "queued") return "Saved to Moss private vault. Search indexing queued.";
+  if (receipt.indexStatus === "queued")
+    return "Saved to Moss private vault. Search indexing queued.";
   if (receipt.indexStatus === "delayed")
     return "Saved to Moss private vault. Search indexing delayed; retry to request indexing again.";
   if (receipt.indexStatus === "conflict")

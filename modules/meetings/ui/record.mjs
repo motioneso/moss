@@ -33,10 +33,31 @@ export function recordScreen(ctx) {
       showDelete: false,
       del: { busy: false, error: "" },
       narrow: globalThis.matchMedia?.(NARROW).matches ?? false,
-      title: { editing: false, text: "", base: "", saving: false, error: null, conflict: undefined },
-      notes: { base: null, text: "", pending: null, phase: "idle", latest: null, loading: false, loadFailed: false },
+      title: {
+        editing: false,
+        text: "",
+        base: "",
+        saving: false,
+        error: null,
+        conflict: undefined
+      },
+      notes: {
+        base: null,
+        text: "",
+        pending: null,
+        phase: "idle",
+        latest: null,
+        loading: false,
+        loadFailed: false
+      },
       type: { state: "loading", data: null, busy: false, failed: false },
-      transcript: { phase: "loading", data: null, search: null, evidence: null, evidenceState: "none" },
+      transcript: {
+        phase: "loading",
+        data: null,
+        search: null,
+        evidence: null,
+        evidenceState: "none"
+      },
       outputs: { phase: "loading", data: null }
     };
   }
@@ -55,7 +76,10 @@ export function recordScreen(ctx) {
         ws.title.text = ws.title.base = meeting.title;
       }
       const n = ws.notes;
-      if (!n.base || (n.phase === "idle" && !dirty() && meeting.notesRevision > n.base.notesRevision)) {
+      if (
+        !n.base ||
+        (n.phase === "idle" && !dirty() && meeting.notesRevision > n.base.notesRevision)
+      ) {
         ws.notes = { ...ws.notes, base: meeting, text: meeting.personalNotes };
       }
     } catch (error) {
@@ -122,13 +146,23 @@ export function recordScreen(ctx) {
       const { meeting } = await api.putTitle(id, { title: sent, expectedTitle: t.base });
       if (ws.id !== id) return;
       ws.meeting = { ...ws.meeting, title: meeting.title, updatedAt: meeting.updatedAt };
-      Object.assign(t, { base: meeting.title, text: t.text.trim() === sent ? meeting.title : t.text, saving: false, error: null, editing: false });
+      Object.assign(t, {
+        base: meeting.title,
+        text: t.text.trim() === sent ? meeting.title : t.text,
+        saving: false,
+        error: null,
+        editing: false
+      });
     } catch (error) {
       if (ws.id !== id) return;
       if (error?.status === 409) {
         try {
           const latest = await api.record(id);
-          Object.assign(t, { saving: false, conflict: latest.meeting.title, error: "The title changed elsewhere. Your title is kept." });
+          Object.assign(t, {
+            saving: false,
+            conflict: latest.meeting.title,
+            error: "The title changed elsewhere. Your title is kept."
+          });
         } catch {
           Object.assign(t, { saving: false, error: "Couldn’t load the current title. Try again." });
         }
@@ -168,7 +202,11 @@ export function recordScreen(ctx) {
     if (!n.base || n.phase === "saving" || n.phase === "conflict") return;
     if (!n.pending && (notesProblem(n.text) || !dirty())) return;
     const id = ws.id;
-    n.pending ??= { expectedRevision: n.base.notesRevision, personalNotes: n.text, requestKey: randomKey() };
+    n.pending ??= {
+      expectedRevision: n.base.notesRevision,
+      personalNotes: n.text,
+      requestKey: randomKey()
+    };
     n.phase = "saving";
     const sent = n.pending;
     draw();
@@ -176,7 +214,11 @@ export function recordScreen(ctx) {
       const result = await api.putNotes(id, sent);
       if (ws.id !== id || ws.notes.pending?.requestKey !== sent.requestKey) return;
       ws.notes = { ...ws.notes, base: result.meeting, pending: null, phase: "idle", latest: null };
-      ws.meeting = { ...ws.meeting, personalNotes: result.meeting.personalNotes, notesRevision: result.meeting.notesRevision };
+      ws.meeting = {
+        ...ws.meeting,
+        personalNotes: result.meeting.personalNotes,
+        notesRevision: result.meeting.notesRevision
+      };
     } catch (error) {
       if (ws.id !== id) return;
       const conflict = error?.status === 409;
@@ -261,7 +303,13 @@ export function recordScreen(ctx) {
       esc(name),
       types
         .filter((x) => !x.retired)
-        .map((x) => ({ act: "type-pick", data: `data-type="${esc(x.id)}"`, label: esc(x.name), checked: x.id === t.data.metadata?.typeId, disabled: t.busy })),
+        .map((x) => ({
+          act: "type-pick",
+          data: `data-type="${esc(x.id)}"`,
+          label: esc(x.name),
+          checked: x.id === t.data.metadata?.typeId,
+          disabled: t.busy
+        })),
       ws.menuOpen === "meeting-type",
       { chip: true }
     );
@@ -366,7 +414,12 @@ ${
         { act: "tool", data: 'data-tool="versions"', label: "Earlier versions" },
         { act: "tool", data: 'data-tool="vault"', label: "Save to vault" },
         { act: "tool", data: 'data-tool="copy"', label: "Copy as Markdown" },
-        { act: "tool", data: 'data-tool="delete"', label: "Delete meeting", disabled: ws.notes.phase === "saving" }
+        {
+          act: "tool",
+          data: 'data-tool="delete"',
+          label: "Delete meeting",
+          disabled: ws.notes.phase === "saving"
+        }
       ],
       ws.menuOpen === "meeting-actions"
     );
@@ -426,12 +479,23 @@ ${ws.showDelete ? dialog() : ""}
       draw();
     },
     "title-keep": () => {
-      Object.assign(ws.title, { base: ws.title.conflict, conflict: undefined, error: null, editing: true });
+      Object.assign(ws.title, {
+        base: ws.title.conflict,
+        conflict: undefined,
+        error: null,
+        editing: true
+      });
       focus("meeting-title-input");
       draw();
     },
     "title-load": () => {
-      Object.assign(ws.title, { text: ws.title.conflict, base: ws.title.conflict, conflict: undefined, error: null, editing: false });
+      Object.assign(ws.title, {
+        text: ws.title.conflict,
+        base: ws.title.conflict,
+        conflict: undefined,
+        error: null,
+        editing: false
+      });
       draw();
     },
     "title-retry": () => {
@@ -475,7 +539,7 @@ ${ws.showDelete ? dialog() : ""}
           node.textContent = dirty() ? "Unsaved changes" : "Saved";
         }
         scheduleNotes();
-      } else transcript.input(name, value) || summary.input(name, value);
+      } else if (!transcript.input(name, value)) summary.input(name, value);
     },
     /** Returns true when the key was handled. */
     key(event, target) {
@@ -486,7 +550,13 @@ ${ws.showDelete ? dialog() : ""}
           return true;
         }
         if (event.key === "Escape") {
-          Object.assign(ws.title, { text: ws.meeting.title, base: ws.meeting.title, saving: false, error: null, editing: false });
+          Object.assign(ws.title, {
+            text: ws.meeting.title,
+            base: ws.meeting.title,
+            saving: false,
+            error: null,
+            editing: false
+          });
           draw();
           return true;
         }
@@ -494,7 +564,12 @@ ${ws.showDelete ? dialog() : ""}
       if (target.getAttribute?.("role") === "tab") {
         const tabsEls = [...target.parentElement.querySelectorAll('[role="tab"]')];
         const index = tabsEls.indexOf(target);
-        const next = { ArrowRight: (index + 1) % tabsEls.length, ArrowLeft: (index + tabsEls.length - 1) % tabsEls.length, Home: 0, End: tabsEls.length - 1 }[event.key];
+        const next = {
+          ArrowRight: (index + 1) % tabsEls.length,
+          ArrowLeft: (index + tabsEls.length - 1) % tabsEls.length,
+          Home: 0,
+          End: tabsEls.length - 1
+        }[event.key];
         if (next !== undefined) {
           event.preventDefault();
           ws.tab = tabsEls[next].dataset.tab;

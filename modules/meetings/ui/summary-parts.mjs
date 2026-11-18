@@ -13,7 +13,9 @@ export function evidenceHtml(evidence, artifact) {
       );
       const label = `Transcript${seg ? ` · ${transcriptTime(seg.startMs)}–${transcriptTime(seg.endMs)}` : ""}`;
       return `<div class="meetings-transcript-turn"><button type="button" class="jds-btn jds-btn--link" data-act="evidence" data-seg="${esc(ref.segmentId)}" data-rev="${ref.segmentRevision}" data-start="${ref.startCharacter}" data-end="${ref.endCharacter}">${label}</button>${
-        seg ? `<p class="meetings-transcript-text">${esc(seg.text.slice(ref.startCharacter, ref.endCharacter))}</p>` : ""
+        seg
+          ? `<p class="meetings-transcript-text">${esc(seg.text.slice(ref.startCharacter, ref.endCharacter))}</p>`
+          : ""
       }</div>`;
     })
     .join("")}</div>`;
@@ -34,13 +36,17 @@ export function artifactContent(artifact, typeId) {
         `<p role="status" class="jds-hint">${h.count} ${h.count === 1 ? "line" : "lines"} in ${PACK[h.source]} looked like ${h.count === 1 ? "an order" : "orders"} to the AI. The AI has no way to act on ${h.count === 1 ? "it" : "them"}, so check the summary.</p>`
     )
     .join("")}<p class="meetings-transcript-text">${esc(content.overview)}</p>${
-    artifact.content.recording?.ideaGroups.length ? `<h3 class="jds-eyebrow jds-eyebrow--strong">${groupHeading}</h3>` : ""
+    artifact.content.recording?.ideaGroups.length
+      ? `<h3 class="jds-eyebrow jds-eyebrow--strong">${groupHeading}</h3>`
+      : ""
   }${(artifact.content.recording?.ideaGroups ?? [])
     .map(
       (g) =>
         `<section class="meetings-section"><p class="jds-label">${esc(g.title)}</p><ul>${g.ideas.map((i) => `<li>${esc(i)}</li>`).join("")}</ul></section>`
     )
-    .join("")}${artifact.content.decisions.length ? '<h3 class="jds-eyebrow jds-eyebrow--strong">Decisions</h3>' : ""}${content.decisions
+    .join(
+      ""
+    )}${artifact.content.decisions.length ? '<h3 class="jds-eyebrow jds-eyebrow--strong">Decisions</h3>' : ""}${content.decisions
     .map(
       (c) =>
         `<article class="meetings-section"><hr class="jds-divider" /><p class="meetings-transcript-text">${esc(c.text)}</p>${evidenceHtml(c.evidence, artifact)}</article>`
@@ -61,7 +67,15 @@ export function editorHtml(artifact, headVersion, ed) {
   const listFields = (kind, prefix, label) =>
     c[kind]
       .map((item, i) =>
-        field(`output-${prefix}-${i}`, `${label} ${i + 1}`, textarea(`output-${prefix}-${i}`, item.text ?? item, { max: 2000, disabled: locked, model: `${prefix}:${i}` }))
+        field(
+          `output-${prefix}-${i}`,
+          `${label} ${i + 1}`,
+          textarea(`output-${prefix}-${i}`, item.text ?? item, {
+            max: 2000,
+            disabled: locked,
+            model: `${prefix}:${i}`
+          })
+        )
       )
       .join("");
   return `<div class="meetings-section">
@@ -86,13 +100,23 @@ export function candidateHtml(candidate, artifact, rv) {
   const done = rv.op?.status === "done";
   return `<article class="meetings-section"><hr class="jds-divider" />${
     result.reviewState === "pending"
-      ? field(`action-${id}`, "Suggested task", input(`action-${id}`, rv.title, { max: 500, model: `cand:${candidate.id}`, disabled: busy || rv.op?.status === "retry" }))
+      ? field(
+          `action-${id}`,
+          "Suggested task",
+          input(`action-${id}`, rv.title, {
+            max: 500,
+            model: `cand:${candidate.id}`,
+            disabled: busy || rv.op?.status === "retry"
+          })
+        )
       : `<p>${esc(result.reviewState === "accepted" ? (done && rv.op.input.decision === "accept" ? `Created as: ${rv.op.input.title} · Accepted` : `Original suggestion: ${p.text} · Accepted`) : `${p.text} · Dismissed`)}</p>`
   }<p class="jds-hint">${p.ownerPhrase ? `Owner mentioned: ${esc(p.ownerPhrase)}` : "Unassigned"} · ${p.duePhrase ? `Date mentioned: ${esc(p.duePhrase)}` : "No due date"}. Choose a due date in Tasks.</p>${evidenceHtml(p.evidence, artifact)}${
     result.reviewState === "pending"
       ? `${uncertain ? `<p class="jds-hint">Possible duplicate of ${candidate.possibleMatchIds.length} earlier suggestion(s). Add to Tasks creates a separate task.</p>` : ""}<div class="meetings-actions">${
           rv.op?.status === "retry"
-            ? btn("Retry review", "review", { data: `data-cand="${id}" data-decision="${rv.op.input.decision}"` })
+            ? btn("Retry review", "review", {
+                data: `data-cand="${id}" data-decision="${rv.op.input.decision}"`
+              })
             : `${btn("Add to Tasks", "review", { disabled: busy || !rv.title.trim() || rv.title.includes("\0"), data: `data-cand="${id}" data-decision="accept"` })}${btn("Dismiss", "review", { variant: "quiet", disabled: busy, data: `data-cand="${id}" data-decision="dismiss"` })}`
         }</div>`
       : result.acceptedTaskId
@@ -104,7 +128,8 @@ export function candidateHtml(candidate, artifact, rv) {
 export function vaultHtml(version, vault) {
   const receipt = vault.receipt ?? vault.receipts.list.find((r) => r.artifactVersion === version);
   const busy = vault.op?.status === "running";
-  const conflict = receipt?.writeStatus === "conflict" || receipt?.errorCode === "meeting_vault_conflict";
+  const conflict =
+    receipt?.writeStatus === "conflict" || receipt?.errorCode === "meeting_vault_conflict";
   return `<section class="meetings-section" aria-label="Save to vault">${sectionHead("Save to vault", { number: "03" })}
 ${note(`Save version ${version} as a new private note in Moss private vault. Later summary versions create separate notes.`)}
 ${btn(vault.op?.status === "retry" ? "Retry save" : receipt ? "Retry private save" : "Save new private version", "vault-save", { disabled: busy || conflict })}
@@ -117,4 +142,3 @@ ${receipt?.noteReference ? `<details><summary>Saved file details</summary><p cla
 export function copyHtml(body, omitted, statusText) {
   return `<div class="meetings-section">${field("meeting-markdown", "Meeting Markdown", textarea("meeting-markdown", body, { rows: 8, readonly: true, model: "markdown" }))}${omitted ? hint("This copy includes only the displayed transcript; some lines are outside its size limit.") : ""}${btn("Copy Markdown", "copy-md")}${statusText ? `<p role="status" class="jds-hint">${esc(statusText)}</p>` : ""}</div>`;
 }
-

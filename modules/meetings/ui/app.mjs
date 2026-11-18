@@ -119,7 +119,8 @@ root.addEventListener("focusout", (event) => {
   record.blur(event.target);
 });
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && route.view === "record" && record.closeMenu()) event.preventDefault();
+  if (event.key === "Escape" && route.view === "record" && record.closeMenu())
+    event.preventDefault();
 });
 document.addEventListener("pointerdown", (event) => {
   if (route.view === "record" && !event.target.closest?.("[data-menu-root]")) record.closeMenu();

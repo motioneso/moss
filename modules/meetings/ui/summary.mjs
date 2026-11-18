@@ -10,7 +10,13 @@ import {
   summaryFailure
 } from "./format.mjs";
 import { btn, eyebrow, field, hint, note, sectionHead, select, status } from "./kit.mjs";
-import { artifactContent, candidateHtml, copyHtml, editorHtml, vaultHtml } from "./summary-parts.mjs";
+import {
+  artifactContent,
+  candidateHtml,
+  copyHtml,
+  editorHtml,
+  vaultHtml
+} from "./summary-parts.mjs";
 
 const POLL_MS = 3000;
 const DENIED = "Summary access is unavailable. Return to history or sign in again.";
@@ -143,7 +149,7 @@ export function summaryPane(ctx, ws) {
 
   /* ---------- sources for suggested tasks ---------- */
 
-  function candidateShown(candidate, artifact, data) {
+  function candidateShown(candidate, artifact) {
     return (
       candidate.artifactVersion === artifact.version ||
       candidate.reviewState === "accepted" ||
@@ -315,7 +321,7 @@ export function summaryPane(ctx, ws) {
       const reply = await api.exports(id);
       if (!stillHere(id)) return;
       s.vault.receipts = { state: "ready", list: reply.receipts };
-    } catch (error) {
+    } catch {
       if (!stillHere(id)) return;
       s.vault.receipts = { state: "failed", list: [] };
     }
@@ -455,9 +461,10 @@ export function summaryPane(ctx, ws) {
   function artifactBlock(data, artifact, latest) {
     const tool = ws.tool;
     const typeId = ws.type.data?.metadata?.typeId ?? undefined;
-    const template = data.templates.find((t) => t.id === artifact.templateId)?.name ?? "Meeting summary";
+    const template =
+      data.templates.find((t) => t.id === artifact.templateId)?.name ?? "Meeting summary";
     const comparing = s.compare && latest && latest.version !== artifact.version;
-    const shown = data.candidates.filter((c) => candidateShown(c, artifact, data));
+    const shown = data.candidates.filter((c) => candidateShown(c, artifact));
     const vault = {
       ...s.vault,
       receipts: s.vault.receipts
@@ -495,7 +502,9 @@ export function summaryPane(ctx, ws) {
           sourceFailed: s.sources[c.artifactVersion]?.state === "failed"
         });
       })
-      .join("")}<div${tool === "vault" ? "" : " hidden"}>${vaultHtml(artifact.version, vault)}</div>`;
+      .join(
+        ""
+      )}<div${tool === "vault" ? "" : " hidden"}>${vaultHtml(artifact.version, vault)}</div>`;
   }
 
   function render() {

@@ -29,7 +29,8 @@ export function meetingsApi(client) {
     remove: (meetingId) => call("DELETE", `/records/${id(meetingId)}`),
     transcript: (meetingId) =>
       call("GET", `/records/${id(meetingId)}/transcript?maxSegments=500&maxCharacters=100000`),
-    evidence: (meetingId, query) => call("GET", `/records/${id(meetingId)}/transcript/evidence?${query}`),
+    evidence: (meetingId, query) =>
+      call("GET", `/records/${id(meetingId)}/transcript/evidence?${query}`),
     recording: (meetingId) => call("GET", `/records/${id(meetingId)}/recording`),
     putRecordingType: (meetingId, body) =>
       call("PUT", `/records/${id(meetingId)}/recording/type`, body),
