@@ -50,7 +50,11 @@ No network response was intercepted or rewritten.
 
 ## Not proven
 
-- A successful source add, because the add flow's candidate step needs a reachable site that passes
-  the model check on this box.
-- Described topics with web search on, because this box has none.
+- Described topics with web search on. The Rust News module reports web search as off on purpose
+  (`modules/news/src/personalization.rs`: "The host cannot say whether a model is set up ... Name
+  search and free-form topics need web search and stay off"), and adding a topic answers 503
+  "Topic discovery requires web search". A test server cannot turn it on, so the gate (disabled button
+  plus its reason) is what was proven.
 - Story preference rows with real data (the live test removes its feedback before the hold).
+- The fixes made after review (typing focus, retry on a failed load) were checked by lint and unit
+  tests only, not re-opened in a browser.

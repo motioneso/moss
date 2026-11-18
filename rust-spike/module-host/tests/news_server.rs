@@ -559,6 +559,30 @@ fn installed_news_package_serves_routes_from_the_real_server() {
 
     // Hold the server open so the real screen can be opened in a browser with the real data above.
     if let Ok(hold) = std::env::var("NEWS_LIVE_HOLD") {
+        // A real model through the local test endpoint with the person's own stored provider, so a
+        // new site can get its policy verdict from a model. The key is read from its config file and
+        // never printed.
+        let key_path = std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".config/cliproxyapi/client-key");
+        if let (Ok(model_name), Ok(key)) = (std::env::var("NEWS_LIVE_MODEL"), fs::read_to_string(&key_path)) {
+            let sealed = safety_core::secret::SecretCipher::ai(&[("JARVIS_AI_SECRET_KEY".into(), ai_key.clone())].into())
+                .unwrap()
+                .seal(&safety_core::secret::SecretFields::new().with("apiKey", safety_core::secret::Secret::new(key.trim())));
+            let provider: uuid::Uuid = uuid::Uuid::new_v4();
+            let model: uuid::Uuid = uuid::Uuid::new_v4();
+            runtime.block_on(async {
+                let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+                tokio::spawn(async move { let _ = connection.await; });
+                db.execute(
+                    "INSERT INTO app.ai_provider_configs(id,owner_user_id,provider_kind,display_name,base_url,encrypted_credential,is_instance_default) VALUES($1,$2,'openai-compatible','Test endpoint','http://127.0.0.1:5190',$3,true)",
+                    &[&provider, &owner, &sealed],
+                ).await.unwrap();
+                db.execute(
+                    "INSERT INTO app.ai_configured_models(id,provider_config_id,owner_user_id,provider_model_id,display_name,capabilities) VALUES($1,$2,$3,$4,'Test model',ARRAY['chat','json'])",
+                    &[&model, &provider, &owner, &model_name],
+                ).await.unwrap();
+            });
+            println!("news live: a real model ({model_name}) is set up for the hold");
+        }
         fs::write(format!("{hold}/ready.txt"), format!("{origin}\n{cookie}\n{origin}/module-frame?module=news&path=/settings/news\n")).unwrap();
         while !std::path::Path::new(&format!("{hold}/stop")).exists() {
             std::thread::sleep(Duration::from_millis(500));
