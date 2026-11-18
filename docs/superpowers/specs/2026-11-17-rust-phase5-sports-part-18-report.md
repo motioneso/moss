@@ -39,6 +39,15 @@ No network response was intercepted or rewritten. Screenshots are kept with the 
 - A stray word "null" printed under the headline when no follow needed a choice. The empty notice
   was passed straight to the browser's append. Fixed in `page.mjs`, re-checked live.
 
+## Found and fixed after review
+
+- The story carousel crashed on first paint when a story led the page (as with real data on a
+  quiet day), leaving only the notice lines. Its auto-advance told the carousel to paint controls
+  before the carousel finished being built. The first notice is now skipped and a test covers it.
+- The 2759-line stylesheet is split into four sheets by screen area (page and standings, ticker
+  and Today desk, broadsheet, news), joined byte for byte in the original order. Desktop and phone
+  re-checked live.
+
 ## Review round 1
 
 - Text links to Settings inside the screen (Manage, "Choose leagues in Settings", "Choose teams to

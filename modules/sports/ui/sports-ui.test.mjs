@@ -3,6 +3,7 @@ import test from "node:test";
 import { sportsApi } from "./api.mjs";
 import { demoteEarlyGameday, hasLiveGame, leadWidePhotoFirst } from "./gameday.mjs";
 import { buildStandingsPickerGroups } from "./picker.mjs";
+import { autoAdvance } from "./rotation.mjs";
 import { followedTeamIndex, isFollowed } from "./ranking.mjs";
 import { orderFollowedCards } from "./ticker.mjs";
 import {
@@ -197,4 +198,31 @@ test("the api turns failures into errors with a status and wraps the saved view"
   await api.resolveFollowTeam("f 1", "9");
   assert.deepEqual(seen[1], ["GET", "/standings?competitionKey=nfl", undefined]);
   assert.deepEqual(seen[2], ["POST", "/follows/f%201/team", { sourceTeamId: "9" }]);
+});
+
+test("a carousel's rotation can be built before it paints its controls", () => {
+  globalThis.window = {
+    matchMedia: () => ({ matches: false }),
+    setInterval: () => 1,
+    clearInterval: () => {}
+  };
+  try {
+    const root = { addEventListener() {}, contains: () => false };
+    let notified = 0;
+    const rotation = autoAdvance({
+      root,
+      count: () => 3,
+      advance: () => {},
+      intervalMs: 1000,
+      onChange: () => {
+        notified += 1;
+        assert.ok(rotation, "onChange must not run while the rotation is still being built");
+      }
+    });
+    assert.equal(notified, 0);
+    rotation.refresh();
+    assert.equal(notified, 1);
+  } finally {
+    delete globalThis.window;
+  }
 });

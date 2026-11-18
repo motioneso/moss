@@ -62,7 +62,7 @@ fn the_package_ships_the_sports_screens() {
     for page in manifest.screens.values() {
         assert!(files.contains_key(page), "{page} missing");
     }
-    for needed in ["ui/app.mjs", "ui/page.mjs", "ui/sports.css", "ui/today.css", "ui/guest-bridge.mjs"] {
+    for needed in ["ui/app.mjs", "ui/page.mjs", "ui/sports.css", "ui/sports-ticker.css", "ui/sports-broadsheet.css", "ui/sports-news.css", "ui/today.css", "ui/guest-bridge.mjs"] {
         assert!(files.contains_key(needed), "{needed} missing");
     }
 }

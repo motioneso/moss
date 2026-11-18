@@ -1,0 +1,548 @@
+/* Sports broadsheet skin (#829, child of epic #726) — ticker + hairline editorial grid.
+   Tokens only: colors via var(--*), spacing via --space-*, type via --text-*. */
+
+/* ============================================================= TICKER */
+.sp-ticker {
+  position: relative;
+  margin-top: var(--space-4);
+}
+/* Followed-teams section head (Task B / ticker note, Ben 2026-07-07): restores a titled head on
+   the strip and pulls Manage down out of the masthead folio (which Ben cleared). Label uses the
+   same sans section-head voice as the Standings rail head so the two grid sections read alike;
+   Manage is a lighter muted secondary link in that same sans face. Baseline row + thin rule under. */
+.sp-ticker__head {
+  display: flex;
+  align-items: center;
+  /* FOLLOWED | MANAGE sit together at the left, divider-separated, rather than Manage floating
+     at the far right of the band. */
+  justify-content: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3) 0 var(--space-2);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+.sp-ticker__label {
+  /* The accent "desk word", exactly like .sp-hero__kicker-desk ("TOP STORY"). Size/caps are
+     inherited from .sp-ticker__head so the two halves stay one typographic unit. */
+  margin: 0;
+}
+.sp-ticker__row {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-2);
+}
+.sp-ticker__row > .jds-iconbtn {
+  align-self: center;
+  flex: none;
+}
+.sp-ticker__row > .jds-iconbtn[hidden] {
+  display: none;
+}
+.sp-ticker__scroll {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  /* grab affordance pairs with the pointer drag-to-scroll handlers in sports-ticker.tsx —
+     the arrows still show; drag is the bonus for anyone who reaches for it */
+  cursor: grab;
+  /* overflow affordance: content fades at the right edge instead of clipping hard */
+  -webkit-mask-image: linear-gradient(to right, black calc(100% - 32px), transparent);
+  mask-image: linear-gradient(to right, black calc(100% - 32px), transparent);
+}
+.sp-ticker__scroll:active {
+  cursor: grabbing;
+}
+.sp-ticker__scroll:focus-visible {
+  outline-offset: 2px;
+}
+/* Followed strip cards: the Today card (sports-8-clippings.css), four across on wide screens
+   with the rest scrolling. Cards stretch to the row height, so every footer docks to one
+   shared baseline. The story feedback menu is hidden here (#2074), so headlines drop the
+   right padding reserved for it. The long selectors outrank the shared clippings rules. */
+.sp-ticker__scroll {
+  gap: 0 48px;
+}
+.sp-ticker__scroll > .sp-tk {
+  flex: 0 0 calc((100% - 3 * 48px) / 4);
+  min-width: 256px;
+}
+.sp-ticker .sp-ticker__row .sp-ticker__scroll .sp-tk__body:has(+ .sp-tk__next) {
+  margin-bottom: 18px;
+}
+.sp-ticker .sp-ticker__row .sp-ticker__scroll .sp-tk__next {
+  margin-top: auto;
+}
+.sp-ticker .sp-ticker__row .sp-ticker__scroll .sp-tk__lead > .sp-tk__newstx,
+.sp-ticker .sp-ticker__row .sp-ticker__scroll .sp-tk__stories > .sp-fbhost > .sp-tk__storylink {
+  padding-right: 0;
+}
+@media (max-width: 768px) {
+  .sp-ticker__scroll > .sp-tk {
+    flex-basis: 280px;
+    min-width: 0;
+  }
+}
+/* Followed-team card base (TickerTeam). Today's .sp-tkgrid and the /sports Followed strip
+   restyle it as flat clippings columns in sports-8-clippings.css. */
+.sp-tk {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  /* Bottom padding must stay space-3 to match .sp-tk__next's -space-3 bottom bleed (mrb7utbw). */
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  /* a card's content must never bleed past its frame — everything inside either ellipsizes
+     or line-clamps, and this is the backstop; it also clips the bled footer bar's corners
+     to the card radius */
+  overflow: hidden;
+}
+/* Identity header (V3): crest | name-over-standing | form pips right. The hairline under the
+   row separates identity from content (live feedback mrath2lh); the eyebrow row stays cut
+   (mratgoq4). Supersedes the mrawlzb7 standing/form sub-row. */
+.sp-tk__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+}
+.sp-tk__ident {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+}
+.sp-tk__hd {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.sp-tk__name {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sp-tk__live {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+/* Body (V3): lead-story art as a fixed-ratio left column, headline + bullets beside it.
+   Media is conditional — an artless card's text column simply runs full width. */
+.sp-tk__body {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-height: 20px;
+}
+.sp-tk__media {
+  flex: none;
+  width: 42%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+}
+.sp-tk__col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.sp-tk__score {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* #885: finished-game result row — both crests and the bare score, no "vs Blue Jays" text
+   tail. Center-align so the crest tracks the score, not its baseline. */
+.sp-tk__result {
+  display: flex;
+  align-items: center;
+  /* #2253: with no scorer lists there are no flex:1 spacers to balance the row, so
+     the crests and score packed against the left edge. Centring the row itself keeps
+     that group in the middle whether both, one, or neither team has scorer data. */
+  justify-content: center;
+  /* #2253 round 2: a tighter gap than the rest of the card on purpose — every pixel spent
+     between the logos and the score is a pixel the scorer names lose on a narrow card. */
+  gap: var(--space-1);
+}
+/* Goal-scorer names either side of the two crests (home list hugs the home crest on its outer
+   side, away list hugs the away crest on its outer side). flex:1 lets the two lists absorb the
+   row's spare width so the crests + score stay visually centered. */
+.sp-tk__scorers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+/* #2253: align with text-align, NOT align-items. A column flex container sizes its
+   items to their content on the cross axis, so align-items: flex-end made each name's
+   list item as wide as the full name — wider than the list — and it spilled out of the
+   row uncut. Stretched items take the list's width, which is what the ellipsis below
+   needs to bite on. */
+.sp-tk__scorers--home {
+  text-align: right;
+  align-items: stretch;
+}
+.sp-tk__scorers--away {
+  text-align: left;
+  align-items: stretch;
+}
+/* #2253 round 2: a scorer name must stay readable, not get cut to "Isa…". On the narrow
+   /sports strip these columns are only ~70px wide, and one-line-plus-dots ate even the short
+   target line ("Isak 6, 8"). Names now wrap onto a second line at caption size instead, and
+   `overflow-wrap: break-word` is the last-resort guard that keeps a single very long word inside
+   the card rather than pushing the logos off centre. */
+.sp-tk__scorers li {
+  min-width: 0;
+  max-width: 100%;
+}
+.sp-tk__scorers li > span {
+  display: block;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+/* Lead-story headline (V3 mockup 2026-07-09): the card's editorial anchor, so it's set bold in
+   text color at reading size — no longer the muted --text-xs caption the pre-V3 inline-thumb
+   layout used. Two-line clamp keeps every card the same height across the grid. */
+.sp-tk__newstx {
+  line-height: var(--leading-snug);
+  /* rendered as <a>: without this it picks up the UA's underline (global `a` only resets color) */
+  text-decoration: none;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.sp-tk__newstx:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+/* Storyless pre-game/idle card: muted italic placeholder, an honest "nothing here yet" (never
+   the matchup, mrawrk0e). */
+.sp-tk__newstx--empty {
+  font-style: italic;
+}
+.sp-tk__standing {
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* /today bleed: pin to the card base (auto top) and bleed to the edges. Sides = -space-4,
+   bottom = -space-3, matching .sp-tk's padding so the bar sits flush; overflow:hidden on the
+   card clips it to the radius. */
+.sp-tk__next {
+  margin: auto calc(-1 * var(--space-4)) calc(-1 * var(--space-3));
+}
+/* Visually hidden, screen-reader reachable — carries the opponent name the crest replaced
+   (mrawvc48). Scoped sp- utility; the app shell has no global sr-only class. */
+.sp-sronly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+/* Secondary story links beside the headline — bulleted list (V3 mockup 2026-07-09), a dot
+   marker per line so they read as the card's "more" rail under the lead. */
+.sp-tk__stories {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.sp-tk__stories li {
+  position: relative;
+  padding-left: var(--space-3);
+}
+/* Bullet as a pseudo-element (not list-style) so it aligns to the first line of a clamped,
+   possibly two-line title instead of centering on the whole li box. */
+.sp-tk__stories li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+.sp-tk__storylink {
+  line-height: 1.35;
+  text-decoration: none;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.sp-tk__storylink:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+/* Recent-results strip on the followed-LEAGUE card (Ben 2026-07-09) — the league card has no single
+   next fixture, so where a team card carries its Next-game bar, this carries the competition's
+   live/final games. Score line left, state chip right; a hairline divider sets it off from the news
+   column above (same --border-subtle keyline the card grid uses). */
+.sp-tk__scores {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: var(--space-2) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.sp-tk__scorerow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.sp-tk__scoreline {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* State chip: muted "Final" by default; the live variant borrows the card's live accent + the
+   inline LiveDot so an in-progress game reads at a glance, matching .sp-tk__live up top. */
+.sp-tk__scorechip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+/* pre-game matchup — body type, wraps; scores stay mono via .sp-tk__score */
+.sp-tk__matchup {
+  line-height: 1.3;
+}
+/* ---- Today widget grid (live feedback mrb4mhxt) ----
+   The Sports desk widget on /today renders the same TickerTeam cards as the desk ticker
+   (replacing the drifted FollowedCard copy), but in a wrapping grid instead of a scroll
+   strip: fixed strip width comes off, and each card gets /today's bordered-card idiom in
+   place of the strip's right-hand divider. */
+.sp-tkgrid {
+  display: grid;
+  /* 8px top margin sets the grid off from the widget's "Your teams, today" title with the same
+     rhythm the other /today briefing sections use between head and body (Ben 2026-07-09). */
+  margin-top: var(--space-2);
+  /* 300px floor, not the strip's 240px: at 240 the cards ran tall and skinny in /today's
+     main column and read cramped (live feedback mrb58wtq) — 300 lands two comfortable
+     columns in the widget area and one on narrow viewports. */
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--space-3);
+}
+
+/* --------------------------------------------- /today Sports desk: main story + brief list */
+
+/* World-of-sport lead + briefs (Ben 2026-07-09: the Sports desk opens like the News desk — a main
+   story, then other top sport headlines, before the followed-team cards). These mirror the news
+   widget's .nw-twlead/.nw-twlist look 1:1 so the two /today desks read as siblings, but live in the
+   sports module's own stylesheet — sports never depends on news's classes (module isolation). */
+.sp-lead {
+  display: block;
+  /* Top margin sets the lead photo off from the "Top stories" title (Ben 2026-07-09 "would need the
+     top margin brought back here too") — matches the bottom margin, mirrors the news lead. */
+  margin: var(--space-3) 0;
+  padding-bottom: var(--space-3);
+  text-decoration: none;
+}
+.sp-lead__photo {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  margin-bottom: var(--space-2);
+}
+.sp-lead__tag {
+  display: block;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  margin-bottom: 2px;
+}
+.sp-lead__title {
+  display: block;
+  line-height: 1.14;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.sp-lead:hover .sp-lead__title {
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+.sp-lead__dek {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  margin-top: var(--space-1);
+  line-height: 1.45;
+}
+.sp-brief {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sp-brief__item {
+  padding: var(--space-2) 0;
+}
+.sp-brief__link {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-decoration: none;
+}
+.sp-brief__link:hover .sp-brief__title {
+  text-decoration: underline;
+}
+.sp-brief__tag {
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+.sp-brief__title {
+  line-height: 1.4;
+}
+/* Story feedback overlay (Ben 2026-09-03). A .sp-fbhost wraps one story (the lead, or one brief
+   row) and parks the feedback dots in its top-right corner, over the photo when there is one, on
+   the same line as the text otherwise — never on a line of their own. The dots are hidden until
+   the story is hovered or holds focus, and stay while the menu or the reason editor is open, so a
+   page full of stories does not show a row of "..." everywhere. Pointer-less devices (touch) have
+   no hover, so they always show the dots. Mirrors the News desk's .nw-feedback placement without
+   depending on it (module isolation). */
+.sp-fbhost {
+  position: relative;
+}
+.sp-fbhost > .sp-feedback {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 2;
+  margin-top: 0;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.sp-fbhost:hover > .sp-feedback,
+.sp-fbhost:focus-within > .sp-feedback,
+.sp-fbhost > .sp-feedback:has([aria-expanded="true"]),
+.sp-fbhost > .sp-feedback:has(.sp-feedback__editor) {
+  opacity: 1;
+}
+@media (hover: none) {
+  .sp-fbhost > .sp-feedback {
+    opacity: 1;
+  }
+}
+/* Text-only hosts (list rows, card leads): keep the last words clear of the dots so a long
+   headline never runs underneath them. Photo hosts leave the image full-bleed on purpose. */
+.sp-brief__row > .sp-brief__link,
+.sp-tk__lead > .sp-tk__newstx,
+.sp-tk__stories > .sp-fbhost > .sp-tk__storylink,
+.sp-latest__item > .sp-hl,
+.sp-newsband__brief > .sp-newsband__brieflink {
+  padding-right: var(--space-7);
+}
+.sp-tk__stories > .sp-fbhost > .sp-feedback,
+.sp-newsband__brief > .sp-feedback,
+.sp-latest__item > .sp-feedback,
+.sp-tk__lead > .sp-feedback {
+  top: 0;
+  right: 0;
+}
+/* Inside a host the reason editor and the Saved/error notes float below the dots instead of
+   flowing inline, so opening them never reflows the story. */
+.sp-fbhost > .sp-feedback {
+  flex-direction: column;
+  align-items: flex-end;
+}
+/* The editor and the Saved note are jds-card--raised (the visual comes from the primitive; this
+   sheet only places them). */
+.sp-fbhost .sp-feedback__editor {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  width: min(19rem, calc(100vw - 3rem));
+}
+.sp-fbhost .sp-feedback__saved {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  white-space: nowrap;
+  padding: var(--space-1) var(--space-2);
+}
+.sp-fbhost > .sp-feedback > .sp-feedback__error {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  white-space: nowrap;
+}
+
+/* "Your teams" subhead: a mono-caps section label with a top keyline that splits the followed
+   cards off from the world-of-sport stories above (Ben: "before we see the your teams section"). */
+.sp-tksub {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  letter-spacing: var(--tracking-snug);
+  line-height: var(--leading-tight);
+}
+
+/* --------------------------------------------- /today Sports desk: scores + Tonight (T11) */
+
+.sp-scores {
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.sp-scores__row {
+  padding: var(--space-2) 0;
+}
+.sp-scores__sides {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sp-scores__status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: 2px;
+}
+
+.sp-tonight {
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.sp-tonight__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+}
+.sp-tonight__kicker {
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+.sp-tonight__matchup {
+  line-height: 1.4;
+}
+.sp-tonight__time {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sp-tonight__quiet {
+  margin: var(--space-2) 0 0;
+  line-height: 1.45;
+}

@@ -11,7 +11,7 @@ export function autoAdvance({ root, count, advance, intervalMs, onChange }) {
   const media = window.matchMedia("(prefers-reduced-motion: reduce)");
   const reduced = () => media.matches;
 
-  function sync() {
+  function sync(notify = true) {
     if (state.timer) window.clearInterval(state.timer);
     state.timer = null;
     const running =
@@ -20,7 +20,7 @@ export function autoAdvance({ root, count, advance, intervalMs, onChange }) {
       !reduced() &&
       count() >= 2;
     if (running) state.timer = window.setInterval(() => advance(), intervalMs);
-    onChange?.();
+    if (notify) onChange?.();
   }
 
   root.addEventListener("mouseenter", () => {
@@ -43,8 +43,8 @@ export function autoAdvance({ root, count, advance, intervalMs, onChange }) {
       sync();
     }
   });
-  media.addEventListener?.("change", sync);
-  sync();
+  media.addEventListener?.("change", () => sync());
+  sync(false);
 
   return {
     get paused() {
