@@ -26,6 +26,17 @@ export function h(tag, props, ...children) {
   return el;
 }
 
+/** Replaces an element's children, skipping empty values so they never print as text. */
+export function fill(el, ...children) {
+  el.replaceChildren(
+    ...children
+      .flat(Infinity)
+      .filter((c) => c !== null && c !== undefined && c !== false)
+      .map((c) => (c instanceof Node ? c : document.createTextNode(String(c))))
+  );
+  return el;
+}
+
 export function button(label, { variant = "primary", size = "md", ...rest } = {}) {
   const cls = ["jds-btn", `jds-btn--${variant}`, size !== "md" ? `jds-btn--${size}` : null]
     .filter(Boolean)

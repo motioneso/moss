@@ -1,4 +1,4 @@
-import { h, button, note } from "./dom.mjs";
+import { h, button, note, fill } from "./dom.mjs";
 import {
   PREVIEW_REQUEST_ERROR,
   addSourceErrorMessage,
@@ -130,7 +130,8 @@ export function addSourceFlow({ api, refresh }) {
     const message = preview ? previewOutcomeMessage(preview) : null;
     const errorText = message ?? confirmError ?? (previewError ? PREVIEW_REQUEST_ERROR : null);
     const candidates = preview ? zipPreviewCandidates(preview) : [];
-    root.replaceChildren(
+    fill(
+      root,
       h(
         "form",
         {

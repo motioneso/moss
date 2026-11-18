@@ -2,7 +2,7 @@
 
 import { moduleClient } from "./guest-bridge.mjs";
 import { newsApi } from "./api.mjs";
-import { h, button, badge, icon, note, PATHS } from "./dom.mjs";
+import { h, button, badge, icon, note, PATHS, fill } from "./dom.mjs";
 import {
   ADD_SOURCE_GATE,
   curatedTileState,
@@ -169,7 +169,8 @@ export function renderSettings(
 
   function paintPrefs() {
     const pending = !prefsReady() || writing;
-    prefsNotice.replaceChildren(
+    fill(
+      prefsNotice,
       !prefsReady()
         ? h(
             "p",
@@ -202,7 +203,8 @@ export function renderSettings(
       (state.prefs ?? []).filter((pref) => pref.kind === "topic").map((pref) => pref.key)
     );
     const catalogTopics = state.catalog?.topics ?? [];
-    sourcesChips.replaceChildren(
+    fill(
+      sourcesChips,
       groupHead("Topics from your sources", catalogTopics.length),
       h(
         "p",
@@ -244,7 +246,8 @@ export function renderSettings(
     );
     const enabled = sources.filter((s) => states.get(s.sourceKey) === "on").length;
     const anyExcluded = sources.some((s) => states.get(s.sourceKey) === "excluded");
-    builtin.replaceChildren(
+    fill(
+      builtin,
       groupHead("Built-in sources", sources.length),
       h(
         "div",
@@ -399,7 +402,8 @@ export function renderSettings(
       },
       buttons: [add]
     });
-    exclusionsArea.replaceChildren(
+    fill(
+      exclusionsArea,
       groupHead("Excluded publishers", exclusions.length || null),
       h(
         "p",
@@ -462,7 +466,8 @@ export function renderSettings(
         button("Add source", { variant: "secondary", size: "sm", disabled: true }),
         availability ? gate(ADD_SOURCE_GATE, navigate) : null
       );
-    addArea.replaceChildren(
+    fill(
+      addArea,
       h(
         "div",
         { class: "nw-set__add-section" },
@@ -507,7 +512,8 @@ export function renderSettings(
     const sourcesNeedAttention = customSources.some(
       (s) => s.validationStatus !== "approved" || s.healthStatus !== "healthy"
     );
-    topicsGroups.replaceChildren(
+    fill(
+      topicsGroups,
       h(
         "div",
         { class: "nw-set__group" },
@@ -538,7 +544,8 @@ export function renderSettings(
       )
     );
     if (ready) topics.paint();
-    mine.replaceChildren(
+    fill(
+      mine,
       state.loadingPers ? note("Loading personalized news settings…") : null,
       state.persError ? note("Could not load personalized news settings. Try again.") : null,
       ready && customSources.length > 0
@@ -586,7 +593,8 @@ export function renderSettings(
     paintBuiltin();
   }
 
-  root.replaceChildren(
+  fill(
+    root,
     h(
       "div",
       { class: "pane__head" },

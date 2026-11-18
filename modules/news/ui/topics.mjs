@@ -1,4 +1,4 @@
-import { h, button, badge, icon, PATHS } from "./dom.mjs";
+import { h, button, badge, icon, PATHS, fill } from "./dom.mjs";
 import { describedTopicsGate, topicErrorMessage } from "./domain.mjs";
 import { gate, status, failure, iconBox, textRow } from "./parts.mjs";
 
@@ -224,7 +224,8 @@ export function describedTopics({ api, navigate, state, refresh, retryRow }) {
   function paint() {
     const topics = state.pers?.customTopics ?? [];
     const needsAttention = topics.some((topic) => topic.validationStatus !== "approved");
-    root.replaceChildren(
+    fill(
+      root,
       topics.length > 0
         ? h("ul", { class: "nw-set__list" }, topics.map(row))
         : h("p", { class: "nw-set__hint" }, "News still uses your selected sources."),

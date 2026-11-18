@@ -1,4 +1,4 @@
-import { h, button, note } from "./dom.mjs";
+import { h, button, note, fill } from "./dom.mjs";
 import { failure, status } from "./parts.mjs";
 
 const stamp = (iso, locale) => {
@@ -167,10 +167,11 @@ export function storyPreferences({ api, refreshOverview, locale }) {
 
   function paint() {
     if (items.length === 0 && !notice && !loadFailed) {
-      root.replaceChildren();
+      fill(root);
       return;
     }
-    root.replaceChildren(
+    fill(
+      root,
       h(
         "section",
         { class: "nw-set", "aria-label": "Story preferences" },
