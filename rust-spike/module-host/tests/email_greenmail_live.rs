@@ -52,7 +52,7 @@ fn imap_account_on_greenmail_syncs_reads_and_refreshes_on_the_real_server() {
     // process with a clear message instead of blocking the gate.
     std::thread::spawn(|| {
         std::thread::sleep(Duration::from_secs(900));
-        eprintln!("WATCHDOG: the Connectors live test ran longer than 900s and was stopped");
+        eprintln!("WATCHDOG: the GreenMail live test ran longer than 900s and was stopped");
         // exit() skips the cleanup guards, so stop the server, fake Google and browser
         // runner and hand the port back here.
         let _ = Command::new("pkill").args(["-KILL", "-P", &std::process::id().to_string()]).status();

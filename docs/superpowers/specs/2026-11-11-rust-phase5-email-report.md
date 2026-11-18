@@ -643,14 +643,13 @@ responses are intercepted or rewritten.
 Proven against real mail:
 
 - Sign-in test: right password accepted, wrong password refused.
-- Sync: seven messages delivered by SMTP all appeared as saved messages.
+- Sync: the two messages the test delivers by SMTP appeared as saved messages, alongside mail left from earlier runs.
 - Read: one message opened by id with subject, sender and body.
-- Search: a body-text search over the saved list found exactly one message.
 - Refresh: a message delivered later arrived through a refresh.
 - The account password is absent from every response and the server log.
 - Host level: a reply reaches the recipient's real mailbox once, on the
   thread (In-Reply-To), with a copy in Sent. A draft lands in Drafts and is
-  delivered to nobody.
+  not delivered to its recipient.
 
 Defect found and fixed: GreenMail answers a partial message fetch without the
 space before the literal, which the IMAP parser rejects, so every message
@@ -661,6 +660,6 @@ Limits of this pass:
 
 - Send, reply and draft have no web route, so they were proven at host level.
   In that test Email is a recorded stand-in.
-- There is no IMAP search route. Search is over saved mail only.
+- There is no IMAP search route and nothing in Moss runs a search yet. The test filters its own copy of the saved list by body text, so search is not proven.
 - Google sign-in stays unproven. STARTTLS and TLS to a real provider were not
   exercised.

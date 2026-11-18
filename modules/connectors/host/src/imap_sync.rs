@@ -297,7 +297,7 @@ async fn fetch(login: &Login, uids: &[u32], validity: u64) -> std::result::Resul
         let fetched: Vec<_> = match stream.try_collect().await {
             Ok(fetched) => fetched,
             // Some servers (GreenMail) answer a partial fetch without the space before the
-            // literal, which the parser rejects. A whole-message fetch has no such form.
+            // literal, which surfaces as a read error. A whole-message fetch has no such form.
             // The broken answer leaves the connection unusable, so the retry signs in again.
             Err(async_imap::error::Error::Io(_) | async_imap::error::Error::Parse(_)) => {
                 let _ = session.logout().await;
@@ -319,6 +319,8 @@ async fn fetch(login: &Login, uids: &[u32], validity: u64) -> std::result::Resul
             seen.push(uid);
             let received = f.internal_date().map(|d| d.to_rfc3339());
             if let Some(raw) = f.body() {
+                // A whole-message retry still honours the per-message byte limit.
+                let raw = &raw[..raw.len().min(FETCH_BYTES)];
                 messages.push(parse(uid, f.size.unwrap_or(0), received.as_deref(), raw));
             }
         }
