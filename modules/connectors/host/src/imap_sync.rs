@@ -294,7 +294,25 @@ async fn fetch(login: &Login, uids: &[u32], validity: u64) -> std::result::Resul
         }
         let query = format!("(UID RFC822.SIZE INTERNALDATE BODY.PEEK[]<0.{FETCH_BYTES}>)");
         let stream = session.uid_fetch(uid_set(uids), query).await.map_err(unreachable)?;
-        let fetched: Vec<_> = stream.try_collect().await.map_err(unreachable)?;
+        let fetched: Vec<_> = match stream.try_collect().await {
+            Ok(fetched) => fetched,
+            // Some servers (GreenMail) answer a partial fetch without the space before the
+            // literal, which the parser rejects. A whole-message fetch has no such form.
+            // The broken answer leaves the connection unusable, so the retry signs in again.
+            Err(async_imap::error::Error::Io(_) | async_imap::error::Error::Parse(_)) => {
+                let _ = session.logout().await;
+                let mut again = open(login).await?;
+                again.examine(FOLDER).await.map_err(unreachable)?;
+                let stream = again
+                    .uid_fetch(uid_set(uids), "(UID RFC822.SIZE INTERNALDATE BODY.PEEK[])")
+                    .await
+                    .map_err(unreachable)?;
+                let all: Vec<_> = stream.try_collect().await.map_err(unreachable)?;
+                session = again;
+                all
+            }
+            Err(e) => return Err(unreachable(e)),
+        };
         let (mut messages, mut seen) = (vec![], vec![]);
         for f in &fetched {
             let Some(uid) = f.uid else { continue };

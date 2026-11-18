@@ -620,8 +620,10 @@ None added.
 
 - An upgrade from an older installed package version (only the data-shape
   check above ran).
-- One real Google account and one real IMAP account. That pass needs Ben. The
-  live pass above used stand-in servers on the real Rust server.
+- One real Google account. Google sign-in (OAuth) stays unproven. No
+  STARTTLS or TLS connection to a real mail provider was tried either.
+- The real IMAP pass now ran against a local GreenMail mail server (see
+  "GreenMail pass" below). It is a test server, not a hosted provider.
 - A model call with a real configured model. The tests use a fixed answer.
 - The two settings screen tests in the Notes package that were already
   failing before this part (settings_input). They fail the same way without
@@ -630,3 +632,35 @@ None added.
   which Email now requires, so it stops with "calendar missing". This
   predates part 13 and was left alone. The Connectors live command covers
   the same ground.
+
+## GreenMail pass
+
+Command: `pnpm test:rust-email-greenmail-live` (run through the gate script).
+It starts the real Rust server with the signed packages and connects an IMAP
+account to the local GreenMail container (plain IMAP 3143, SMTP 3025). No
+responses are intercepted or rewritten.
+
+Proven against real mail:
+
+- Sign-in test: right password accepted, wrong password refused.
+- Sync: seven messages delivered by SMTP all appeared as saved messages.
+- Read: one message opened by id with subject, sender and body.
+- Search: a body-text search over the saved list found exactly one message.
+- Refresh: a message delivered later arrived through a refresh.
+- The account password is absent from every response and the server log.
+- Host level: a reply reaches the recipient's real mailbox once, on the
+  thread (In-Reply-To), with a copy in Sent. A draft lands in Drafts and is
+  delivered to nobody.
+
+Defect found and fixed: GreenMail answers a partial message fetch without the
+space before the literal, which the IMAP parser rejects, so every message
+failed. The sync now retries that fetch as a whole-message fetch on a fresh
+connection.
+
+Limits of this pass:
+
+- Send, reply and draft have no web route, so they were proven at host level.
+  In that test Email is a recorded stand-in.
+- There is no IMAP search route. Search is over saved mail only.
+- Google sign-in stays unproven. STARTTLS and TLS to a real provider were not
+  exercised.

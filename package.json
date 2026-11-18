@@ -73,6 +73,7 @@
     "test:rust-email": "tsx modules/email/tools/gate.ts",
     "test:rust-email-live": "bash modules/email/tools/live.sh",
     "test:rust-connectors-live": "bash modules/connectors/tools/live.sh",
+    "test:rust-email-greenmail-live": "bash modules/connectors/tools/greenmail-live.sh",
     "test:rust-module-assembly": "tsx rust-spike/module-host/tools/assembly-gate.ts",
     "test:rust-public-web": "tsx rust-spike/module-host/tools/public-web-gate.ts",
     "test:rust-browser-live": "tsx rust-spike/module-host/tools/browser-live-gate.ts",
