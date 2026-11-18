@@ -469,14 +469,16 @@ fn finance_links_and_syncs_a_real_plaid_sandbox_bank() {
         let (status, text) = call(Method::POST, "/finance/connect/poll", Some(&cookie), Some(json!({})));
         clean("connect poll", &text);
         assert_eq!(status, 200, "{text}\n{}", log());
+        // The server's own chained poll job may finish the link first, so a stored account counts too.
         completed = json_of(&text)["completed"].as_i64().unwrap_or(0);
-        if completed == 1 {
+        if completed == 1 || !accounts_of(&cookie).is_empty() {
+            completed = 1;
             break;
         }
         std::thread::sleep(Duration::from_secs(3));
     }
     assert_eq!(completed, 1, "the bank link did not finish\n{}", log());
-    println!("PASS real link finished through the poll route");
+    println!("PASS real link finished (poll route or the server's own chained poll job)");
     let mut owned = accounts_of(&cookie);
     let mut tx = 0;
     for _ in 0..12 {

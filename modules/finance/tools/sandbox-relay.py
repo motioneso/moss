@@ -2,14 +2,29 @@
 """Loopback relay for the Finance live bank run with Plaid sandbox keys.
 
 The debug server sends bank calls to http://127.0.0.1:PORT/<host>/<path>. This forwards each one
-to https://sandbox.plaid.com/<path>. It never logs a request or reply body.
+to https://sandbox.plaid.com/<path>. It never logs a request or reply body. With RELAY_SHAPE_LOG set it records key paths and value types of replies, never values.
 """
 import http.server
+import json
+import os
 import socketserver
 import urllib.error
 import urllib.request
 
 UPSTREAM = "https://sandbox.plaid.com"
+
+
+def shape(value, path=""):
+    """Key paths and value types only. No value is ever read out."""
+    if isinstance(value, dict):
+        for key, inner in value.items():
+            yield from shape(inner, f"{path}.{key}")
+    elif isinstance(value, list):
+        yield f"{path}[] x{len(value)}"
+        for inner in value[:1]:
+            yield from shape(inner, f"{path}[]")
+    else:
+        yield f"{path}:{type(value).__name__}"
 
 
 class Relay(http.server.BaseHTTPRequestHandler):
@@ -24,6 +39,14 @@ class Relay(http.server.BaseHTTPRequestHandler):
                 status, data = reply.status, reply.read()
         except urllib.error.HTTPError as error:
             status, data = error.code, error.read()
+        log = os.environ.get("RELAY_SHAPE_LOG")
+        if log:
+            try:
+                lines = sorted(set(shape(json.loads(data))))
+            except ValueError:
+                lines = ["not-json"]
+            with open(log, "a") as out:
+                out.write(f"{path} {status}\n  " + "\n  ".join(lines) + "\n")
         self.send_response(status)
         self.send_header("content-type", "application/json")
         self.send_header("content-length", str(len(data)))
