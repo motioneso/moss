@@ -24,7 +24,7 @@ settings in `packages/sports/src/settings/` with no redesign (mockup approved 20
 
 | Claim                    | Check                                                                                                        | Result                                   |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------- |
-| Pure rules are right     | 10 new node tests (23 in the folder)                                                                         | pass                                     |
+| Pure rules are right     | 13 new node tests (26 in the folder)                                                                         | pass                                     |
 | Package ships the screen | `the_package_ships_the_sports_screens` extended                                                              | pass in the package gate                 |
 | Real screen, desktop     | Real HTTPS server, signed-in owner following NFL Dallas, NBA Lakers, NHL; live ESPN data; `/settings/sports` | follows, sources, standings render       |
 | Phone size               | same, 390 by 844                                                                                             | single column, no overlap                |
