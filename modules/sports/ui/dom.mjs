@@ -11,6 +11,8 @@ export function h(tag, props, ...children) {
       el.className = value;
     } else if (key === "style" && typeof value === "object") {
       for (const [name, v] of Object.entries(value)) el.style.setProperty(name, v);
+    } else if (key === "href" && !/^(https?:\/\/|\/)/i.test(String(value))) {
+      continue;
     } else if (value === true) {
       el.setAttribute(key, "");
     } else {
@@ -35,7 +37,12 @@ export function clear(el) {
 }
 
 export function button(label, { variant = "primary", size = "md", ...rest } = {}) {
-  const cls = ["jds-btn", `jds-btn--${variant}`, size !== "md" ? `jds-btn--${size}` : null, rest.class]
+  const cls = [
+    "jds-btn",
+    `jds-btn--${variant}`,
+    size !== "md" ? `jds-btn--${size}` : null,
+    rest.class
+  ]
     .filter(Boolean)
     .join(" ");
   return h("button", { type: "button", ...rest, class: cls }, label);

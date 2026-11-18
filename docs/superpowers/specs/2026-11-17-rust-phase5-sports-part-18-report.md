@@ -39,6 +39,15 @@ No network response was intercepted or rewritten. Screenshots are kept with the 
 - A stray word "null" printed under the headline when no follow needed a choice. The empty notice
   was passed straight to the browser's append. Fixed in `page.mjs`, re-checked live.
 
+## Review round 1
+
+- Text links to Settings inside the screen (Manage, "Choose leagues in Settings", "Choose teams to
+  follow") are kept. The legacy screen and the approved mockup have them, and the brief says no
+  redesign. Where they lead is not proven, because the Sports Settings pages are not in this
+  package yet. Moving them to the header cog is a follow-up decision for Ben.
+- Fixed: links now accept only web addresses and in-app paths, so a feed cannot plant a script
+  address. The two resize listeners now remove themselves when their strip leaves the page.
+
 ## Not proven
 
 - **Today sports desk in a browser.** The Rust shell has no widget slot on Today, so the desk page

@@ -15,7 +15,9 @@ export function nearNow(games) {
   const sorted = [...games].sort(byLiveness);
   const now = Date.now();
   if (sorted.some((g) => g.state === "live")) {
-    return sorted.filter((g) => g.state === "live" || Math.abs(startMs(g) - now) <= NEAR_GAME_WINDOW_MS);
+    return sorted.filter(
+      (g) => g.state === "live" || Math.abs(startMs(g) - now) <= NEAR_GAME_WINDOW_MS
+    );
   }
   const finals = sorted.filter((g) => g.state === "final");
   const pres = sorted.filter((g) => g.state === "pre");
@@ -26,7 +28,8 @@ export function nearNow(games) {
 }
 
 /** Soccer reads home first, every other competition visitor first. */
-export const orderGameSides = (game, soccer) => (soccer ? [game.home, game.away] : [game.away, game.home]);
+export const orderGameSides = (game, soccer) =>
+  soccer ? [game.home, game.away] : [game.away, game.home];
 
 function winnerKey(game) {
   if (game.state !== "final") return null;
@@ -39,13 +42,26 @@ function winnerKey(game) {
 function leagueMark(competitionKey) {
   const src = LEAGUE_LOGOS[competitionKey];
   if (!src) return null;
-  const img = h("img", { class: "sp-around__logo", src, alt: "", width: 16, height: 16, loading: "lazy" });
+  const img = h("img", {
+    class: "sp-around__logo",
+    src,
+    alt: "",
+    width: 16,
+    height: 16,
+    loading: "lazy"
+  });
   img.addEventListener("error", () => img.remove());
   return img;
 }
 
 function boardSide(side, pre, dim, followed) {
-  const cls = ["sp-board__side", dim ? "sp-board__side--dim" : null, followed ? "sp-board__side--you" : null].filter(Boolean).join(" ");
+  const cls = [
+    "sp-board__side",
+    dim ? "sp-board__side--dim" : null,
+    followed ? "sp-board__side--you" : null
+  ]
+    .filter(Boolean)
+    .join(" ");
   return h(
     "div",
     { class: cls },
@@ -62,20 +78,72 @@ function boardGame(game, soccer, locale, competitionKey, followed) {
   return h(
     "div",
     { class: "sp-board__game" },
-    h("p", { class: "sp-board__gstatus" }, game.state === "live" ? liveDot() : null, pre ? formatTime(game.startsAt, locale) : game.statusDetail),
-    boardSide(first, pre, winner !== null && winner !== first.teamKey, isFollowed(followed, competitionKey, first.sourceTeamId)),
-    boardSide(second, pre, winner !== null && winner !== second.teamKey, isFollowed(followed, competitionKey, second.sourceTeamId))
+    h(
+      "p",
+      { class: "sp-board__gstatus" },
+      game.state === "live" ? liveDot() : null,
+      pre ? formatTime(game.startsAt, locale) : game.statusDetail
+    ),
+    boardSide(
+      first,
+      pre,
+      winner !== null && winner !== first.teamKey,
+      isFollowed(followed, competitionKey, first.sourceTeamId)
+    ),
+    boardSide(
+      second,
+      pre,
+      winner !== null && winner !== second.teamKey,
+      isFollowed(followed, competitionKey, second.sourceTeamId)
+    )
   );
 }
 
-const chevron = (d) => svg({ viewBox: "0 0 24 24", width: 16, height: 16, fill: "none", stroke: "currentColor", "stroke-width": 2, "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true" }, d);
+const chevron = (d) =>
+  svg(
+    {
+      viewBox: "0 0 24 24",
+      width: 16,
+      height: 16,
+      fill: "none",
+      stroke: "currentColor",
+      "stroke-width": 2,
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round",
+      "aria-hidden": "true"
+    },
+    d
+  );
 
 /** Scores around the leagues, one wrapped column flow with a league nameplate between leagues. */
 export function aroundLeaguesBoard(groups, followed, ctx) {
   if (groups.length === 0) return null;
-  const scroll = h("div", { class: "sp-board__scroll sp-board__scroll--more", tabindex: "0", role: "region", "aria-label": "All scores, scrollable" });
-  const left = h("button", { type: "button", class: "sp-board__nav", "aria-label": "Scroll left", onClick: () => nudge(-1) }, chevron("M15 18l-6-6 6-6"));
-  const right = h("button", { type: "button", class: "sp-board__nav", "aria-label": "Scroll right", onClick: () => nudge(1) }, chevron("M9 18l6-6-6-6"));
+  const scroll = h("div", {
+    class: "sp-board__scroll sp-board__scroll--more",
+    tabindex: "0",
+    role: "region",
+    "aria-label": "All scores, scrollable"
+  });
+  const left = h(
+    "button",
+    {
+      type: "button",
+      class: "sp-board__nav",
+      "aria-label": "Scroll left",
+      onClick: () => nudge(-1)
+    },
+    chevron("M15 18l-6-6 6-6")
+  );
+  const right = h(
+    "button",
+    {
+      type: "button",
+      class: "sp-board__nav",
+      "aria-label": "Scroll right",
+      onClick: () => nudge(1)
+    },
+    chevron("M9 18l6-6-6-6")
+  );
   function edges() {
     const atStart = scroll.scrollLeft <= 1;
     const atEnd = scroll.scrollLeft + scroll.clientWidth >= scroll.scrollWidth - 1;
@@ -90,17 +158,39 @@ export function aroundLeaguesBoard(groups, followed, ctx) {
     const [firstGame, ...rest] = nearNow(group.games);
     const soccer = SOCCER_COMPETITIONS.has(group.competitionKey);
     scroll.append(
-      h("div", { class: "sp-board__lead" }, h("span", { class: "sp-board__league" }, leagueMark(group.competitionKey), group.competitionLabel), firstGame ? boardGame(firstGame, soccer, ctx.locale, group.competitionKey, followed) : null),
+      h(
+        "div",
+        { class: "sp-board__lead" },
+        h(
+          "span",
+          { class: "sp-board__league" },
+          leagueMark(group.competitionKey),
+          group.competitionLabel
+        ),
+        firstGame ? boardGame(firstGame, soccer, ctx.locale, group.competitionKey, followed) : null
+      ),
       ...rest.map((game) => boardGame(game, soccer, ctx.locale, group.competitionKey, followed))
     );
   }
   scroll.addEventListener("scroll", edges);
-  window.addEventListener("resize", edges);
+  const onResize = () => {
+    if (!scroll.isConnected) {
+      window.removeEventListener("resize", onResize);
+      return;
+    }
+    edges();
+  };
+  window.addEventListener("resize", onResize);
   window.setTimeout(edges, 0);
   return h(
     "section",
     { class: "sp-board", "aria-label": "Scores around the leagues" },
-    h("div", { class: "sp-board__hd" }, h("p", { class: "sp-col__kicker" }, "Around the leagues"), h("div", { class: "sp-board__navs" }, left, right)),
+    h(
+      "div",
+      { class: "sp-board__hd" },
+      h("p", { class: "sp-col__kicker" }, "Around the leagues"),
+      h("div", { class: "sp-board__navs" }, left, right)
+    ),
     h("div", { class: "sp-board__body" }, scroll)
   );
 }
