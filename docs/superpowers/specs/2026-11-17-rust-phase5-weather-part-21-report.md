@@ -11,7 +11,7 @@
 
 - Use my location saved "San Diego, California, United States" from a browser position (device position set through the browser's own location setting, not a faked response).
 - Search "Seattle", Use this place, Celsius and Fahrenheit saved and read back.
-- Today header showed 7°C, Clear sky, High 11° Low 4° (Celsius) and 45°F, High 51° Low 40° (Fahrenheit).
+- Today header showed 7°C and Clear sky (Celsius) and 45°F (Fahrenheit). The High/Low line was read from the first forecast day, which is tomorrow. Review found it, and it now reads the package's own range for today. The fixed line was not re-run live.
 - Forecast screen showed the evening window, curve, hours, rain and wind facts, source and update time.
 
 ## Not proven

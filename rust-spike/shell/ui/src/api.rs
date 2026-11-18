@@ -57,6 +57,9 @@ pub struct WeatherDay {
 /// The current reading from the Weather package.
 #[derive(serde::Deserialize, Clone, PartialEq)]
 pub struct WeatherToday {
+    /// Today's own range, when the package has one. The forecast list starts tomorrow.
+    #[serde(default)]
+    pub today: Option<WeatherDay>,
     pub temp: i64,
     pub condition: String,
     pub icon: String,

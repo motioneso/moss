@@ -31,10 +31,10 @@ pub fn unit_symbol(unit: &str) -> &'static str {
     }
 }
 
-/// The range line under the condition, or nothing when no forecast day came back.
+/// The range line under the condition, or nothing when today's range is missing.
 pub fn outlook_line(wx: &WeatherToday) -> Option<String> {
-    wx.forecast
-        .first()
+    wx.today
+        .as_ref()
         .map(|day| format!("High {}° · Low {}°", day.high, day.low))
 }
 
@@ -89,21 +89,22 @@ mod tests {
     use super::*;
     use crate::api::WeatherDay;
 
-    fn reading(forecast: Vec<WeatherDay>) -> WeatherToday {
+    fn reading(today: Option<WeatherDay>) -> WeatherToday {
         WeatherToday {
             temp: 68,
             condition: "Clear".into(),
             icon: "sun".into(),
             unit: "imperial".into(),
-            forecast,
+            today,
+            forecast: vec![],
         }
     }
 
     #[test]
-    fn the_range_line_uses_the_first_day() {
-        let wx = reading(vec![WeatherDay { high: 72, low: 58 }]);
+    fn the_range_line_uses_todays_range() {
+        let wx = reading(Some(WeatherDay { high: 72, low: 58 }));
         assert_eq!(outlook_line(&wx).as_deref(), Some("High 72° · Low 58°"));
-        assert_eq!(outlook_line(&reading(vec![])), None);
+        assert_eq!(outlook_line(&reading(None)), None);
     }
 
     #[test]
