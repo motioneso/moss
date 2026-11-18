@@ -2,31 +2,98 @@
 // Same values and rules as the application's shared wellness code.
 
 export const EMOTIONS = [
-  { core: "happy", polarity: 1.0, blurb: "open, warm, at ease", feelings: [
-    ["Joy", "Open", "Energetic"], ["Curious", "Awake", "Brow-furrow"], ["Proud", "Inflated", "Tall"],
-    ["Satisfied", "Soft", "Calm"], ["Courageous", "Jaw set", "Steady"], ["Peaceful", "Relaxed", "Still"],
-    ["Intimate", "Sensitive", "Warm"], ["Optimistic", "Light", "Buzzing"]] },
-  { core: "sad", polarity: -1.0, blurb: "heavy, slow, withdrawn", feelings: [
-    ["Guilt", "Looking down", "Empty"], ["Abandoned", "Curling up", "Slouching"], ["Despair", "Crying", "Body aches"],
-    ["Depressed", "Tiredness", "Hollow feeling"], ["Lonely", "Slow heart", "Heaviness"], ["Apathetic", "Weak", "Eye rolls"]] },
-  { core: "fear", polarity: -0.8, blurb: "braced, jittery, unsure", feelings: [
-    ["Scared", "Trembling", "Numb hands"], ["Anxious", "Fidgety", "Foot-tapping"], ["Insecure", "Racing heart", "Quiet"],
-    ["Inferior", "Frozen", "Tense"], ["Unwanted", "Cold", "Unsteady"], ["Embarrassed", "Blushing", "Tender"]] },
-  { core: "anger", polarity: -0.7, blurb: "hot, tight, pushed", feelings: [
-    ["Hurt", "Lip-tremble", "Limp"], ["Insecure", "Hiding", "Hot"], ["Hateful", "Scowl", "Turning away"],
-    ["Mad", "Loud words", "Flushed"], ["Aggressive", "Racing heart", "Clenching"], ["Irritated", "Tight jaw", "Headache"],
-    ["Distant", "Numb", "Gut-turning"], ["Critical", "Feeling hot", "Lip curled"]] },
-  { core: "disgust", polarity: -0.7, blurb: "recoiling, queasy, done", feelings: [
-    ["Disapproval", "Shuddering", "Writhing"], ["Disappointed", "Need to move", "Face-scrunched"],
-    ["Awful", "Nausea", "Lump in throat"], ["Aversion", "Queasy", "Turn away"]] },
-  { core: "surprise", polarity: 0.2, blurb: "wide-eyed, alert, struck", feelings: [
-    ["Shock", "Jumpy", "Sweaty palms"], ["Confusion", "Breathless", "Speechless"], ["Awe", "Jaw drop", "Eyebrows up"],
-    ["Excitement", "Electrified", "Jumpy"]] }
-].map((e) => ({ ...e, feelings: e.feelings.map(([label, ...sensations]) => ({ label, sensations })) }));
+  {
+    core: "happy",
+    polarity: 1.0,
+    blurb: "open, warm, at ease",
+    feelings: [
+      ["Joy", "Open", "Energetic"],
+      ["Curious", "Awake", "Brow-furrow"],
+      ["Proud", "Inflated", "Tall"],
+      ["Satisfied", "Soft", "Calm"],
+      ["Courageous", "Jaw set", "Steady"],
+      ["Peaceful", "Relaxed", "Still"],
+      ["Intimate", "Sensitive", "Warm"],
+      ["Optimistic", "Light", "Buzzing"]
+    ]
+  },
+  {
+    core: "sad",
+    polarity: -1.0,
+    blurb: "heavy, slow, withdrawn",
+    feelings: [
+      ["Guilt", "Looking down", "Empty"],
+      ["Abandoned", "Curling up", "Slouching"],
+      ["Despair", "Crying", "Body aches"],
+      ["Depressed", "Tiredness", "Hollow feeling"],
+      ["Lonely", "Slow heart", "Heaviness"],
+      ["Apathetic", "Weak", "Eye rolls"]
+    ]
+  },
+  {
+    core: "fear",
+    polarity: -0.8,
+    blurb: "braced, jittery, unsure",
+    feelings: [
+      ["Scared", "Trembling", "Numb hands"],
+      ["Anxious", "Fidgety", "Foot-tapping"],
+      ["Insecure", "Racing heart", "Quiet"],
+      ["Inferior", "Frozen", "Tense"],
+      ["Unwanted", "Cold", "Unsteady"],
+      ["Embarrassed", "Blushing", "Tender"]
+    ]
+  },
+  {
+    core: "anger",
+    polarity: -0.7,
+    blurb: "hot, tight, pushed",
+    feelings: [
+      ["Hurt", "Lip-tremble", "Limp"],
+      ["Insecure", "Hiding", "Hot"],
+      ["Hateful", "Scowl", "Turning away"],
+      ["Mad", "Loud words", "Flushed"],
+      ["Aggressive", "Racing heart", "Clenching"],
+      ["Irritated", "Tight jaw", "Headache"],
+      ["Distant", "Numb", "Gut-turning"],
+      ["Critical", "Feeling hot", "Lip curled"]
+    ]
+  },
+  {
+    core: "disgust",
+    polarity: -0.7,
+    blurb: "recoiling, queasy, done",
+    feelings: [
+      ["Disapproval", "Shuddering", "Writhing"],
+      ["Disappointed", "Need to move", "Face-scrunched"],
+      ["Awful", "Nausea", "Lump in throat"],
+      ["Aversion", "Queasy", "Turn away"]
+    ]
+  },
+  {
+    core: "surprise",
+    polarity: 0.2,
+    blurb: "wide-eyed, alert, struck",
+    feelings: [
+      ["Shock", "Jumpy", "Sweaty palms"],
+      ["Confusion", "Breathless", "Speechless"],
+      ["Awe", "Jaw drop", "Eyebrows up"],
+      ["Excitement", "Electrified", "Jumpy"]
+    ]
+  }
+].map((e) => ({
+  ...e,
+  feelings: e.feelings.map(([label, ...sensations]) => ({ label, sensations }))
+}));
 
 export const emotion = (core) => EMOTIONS.find((e) => e.core === core);
 export const coreLabel = (core) => core.charAt(0).toUpperCase() + core.slice(1);
-export const MOOD_BAND_LABELS = { bright: "Bright", lifted: "Lifted", even: "Even", low: "Low", heavy: "Heavy" };
+export const MOOD_BAND_LABELS = {
+  bright: "Bright",
+  lifted: "Lifted",
+  even: "Even",
+  low: "Low",
+  heavy: "Heavy"
+};
 
 export function moodIndex(core, intensity) {
   const e = emotion(core);
@@ -42,11 +109,18 @@ export function moodBand(index) {
 }
 
 export const emoVars = (core) =>
-  core ? `--em-soft:var(--wellness-${core}-soft);--em-tint:var(--wellness-${core}-tint);--em-ink:var(--wellness-${core}-ink)` : "";
+  core
+    ? `--em-soft:var(--wellness-${core}-soft);--em-tint:var(--wellness-${core}-tint);--em-ink:var(--wellness-${core}-ink)`
+    : "";
 
 export function localDay(value, timeZone = "UTC") {
   if (!value) return "";
-  return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(new Date(value));
 }
 
 export function localDayOffset(offsetDays, from) {
@@ -60,7 +134,12 @@ const stampOf = (c) => c.checkedInAt ?? c.createdAt ?? "";
 
 /** Consecutive completed days with a check-in, ending yesterday, up to 90. */
 export function computeStreak(checkins, today, timeZone) {
-  const seen = new Set(checkins.map(stampOf).filter(Boolean).map((t) => localDay(t, timeZone)));
+  const seen = new Set(
+    checkins
+      .map(stampOf)
+      .filter(Boolean)
+      .map((t) => localDay(t, timeZone))
+  );
   let streak = 0;
   for (let i = 1; i <= 90; i++) {
     if (seen.has(localDayOffset(i, today))) streak++;

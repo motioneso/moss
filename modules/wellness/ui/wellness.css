@@ -1486,3 +1486,5 @@
 .ghost-button:hover:not(:focus-visible),
 .icon-button:hover:not(:focus-visible) {
   background: var(--panel-subtle);
+  box-shadow: var(--shadow-sm);
+}

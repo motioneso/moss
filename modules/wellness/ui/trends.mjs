@@ -1,5 +1,13 @@
 // Section 03: the mood and medication chart.
-import { EMOTIONS, MOOD_BAND_LABELS, coreLabel, localDay, localDayOffset, moodBand, moodIndex } from "./core.mjs";
+import {
+  EMOTIONS,
+  MOOD_BAND_LABELS,
+  coreLabel,
+  localDay,
+  localDayOffset,
+  moodBand,
+  moodIndex
+} from "./core.mjs";
 import { button, esc, icons, sectionHead, signed } from "./html.mjs";
 
 const VW = 760;
@@ -16,10 +24,18 @@ const H = MARK_TOP + MARK_H + 18;
 const PLOT_W = VW - LEFT - RIGHT;
 
 export const avgMood = (cks) =>
-  cks.length === 0 ? null : Math.round((cks.reduce((s, c) => s + moodIndex(c.feelingCore, c.intensity ?? 3), 0) / cks.length) * 10) / 10;
+  cks.length === 0
+    ? null
+    : Math.round(
+        (cks.reduce((s, c) => s + moodIndex(c.feelingCore, c.intensity ?? 3), 0) / cks.length) * 10
+      ) / 10;
 
 function shortLabel(day, locale) {
-  return new Intl.DateTimeFormat(locale, { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${day}T12:00:00Z`));
+  return new Intl.DateTimeFormat(locale, {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC"
+  }).format(new Date(`${day}T12:00:00Z`));
 }
 
 /** One point per day in the window, oldest first. */
@@ -35,18 +51,29 @@ export function buildDays({ range, today, timeZone, checkins, adherence, locale 
     const s = summary.get(date);
     const list = byDay.get(date) ?? [];
     return {
-      date, label: shortLabel(date, locale), isToday: date === today,
-      checkin: list[0] ?? null, checkins: list,
+      date,
+      label: shortLabel(date, locale),
+      isToday: date === today,
+      checkin: list[0] ?? null,
+      checkins: list,
       medFrac: s && s.scheduledCount > 0 ? s.takenCount / s.scheduledCount : 0,
-      medTaken: s?.takenCount ?? 0, medDenom: s?.scheduledCount ?? 0, doses: s?.doses ?? []
+      medTaken: s?.takenCount ?? 0,
+      medDenom: s?.scheduledCount ?? 0,
+      doses: s?.doses ?? []
     };
   });
 }
 
 export function dayDescription(day) {
   const mood = avgMood(day.checkins);
-  const moodText = mood === null ? "No check-in" : `Mood index ${mood}. ${day.checkin?.feelingCore ?? ""}${day.checkin?.feelingSecondary ? `, ${day.checkin.feelingSecondary}` : ""}`;
-  const doses = (day.doses ?? []).filter((d) => !d.prn).map((d) => `${d.name}: ${d.status}`).join(". ");
+  const moodText =
+    mood === null
+      ? "No check-in"
+      : `Mood index ${mood}. ${day.checkin?.feelingCore ?? ""}${day.checkin?.feelingSecondary ? `, ${day.checkin.feelingSecondary}` : ""}`;
+  const doses = (day.doses ?? [])
+    .filter((d) => !d.prn)
+    .map((d) => `${d.name}: ${d.status}`)
+    .join(". ");
   return `${day.date}. ${moodText}. Medication: ${day.medTaken} of ${day.medDenom} taken${day.isToday ? " so far" : ""}.${doses ? ` ${doses}.` : ""}`;
 }
 
@@ -55,11 +82,18 @@ const moodY = (v) => MOOD_TOP + (1 - (v + 5) / 10) * MOOD_H;
 
 function tooltip(d, pinned) {
   const v = avgMood(d.checkins);
-  const top = d.checkin && v !== null
-    ? `<div class="big" style="display:flex;align-items:center;gap:7px"><span class="sw" style="width:9px;height:9px;border-radius:9px;background:var(--wellness-${d.checkin.feelingCore}-tint)"></span>${coreLabel(d.checkin.feelingCore)}${d.checkin.feelingSecondary ? ` · ${esc(d.checkin.feelingSecondary)}` : ""}</div>
+  const top =
+    d.checkin && v !== null
+      ? `<div class="big" style="display:flex;align-items:center;gap:7px"><span class="sw" style="width:9px;height:9px;border-radius:9px;background:var(--wellness-${d.checkin.feelingCore}-tint)"></span>${coreLabel(d.checkin.feelingCore)}${d.checkin.feelingSecondary ? ` · ${esc(d.checkin.feelingSecondary)}` : ""}</div>
        <div class="wl-tiprow" style="justify-content:space-between"><span>Mood index</span><strong style="font-variant-numeric:tabular-nums">${signed(v)} · ${MOOD_BAND_LABELS[moodBand(v)]}</strong></div>`
-    : `<div class="big">${d.isToday ? "No check-in yet" : "No check-in"}</div>`;
-  const doses = (d.doses ?? []).filter((x) => !x.prn).map((x) => `<div class="wl-tiprow" style="opacity:${x.status === "taken" ? 1 : 0.5}"><span>${esc(x.name)}</span><span style="text-transform:capitalize">${esc(x.status)}</span></div>`).join("");
+      : `<div class="big">${d.isToday ? "No check-in yet" : "No check-in"}</div>`;
+  const doses = (d.doses ?? [])
+    .filter((x) => !x.prn)
+    .map(
+      (x) =>
+        `<div class="wl-tiprow" style="opacity:${x.status === "taken" ? 1 : 0.5}"><span>${esc(x.name)}</span><span style="text-transform:capitalize">${esc(x.status)}</span></div>`
+    )
+    .join("");
   return `<div aria-hidden="true" class="wl-chart__tip is-on${pinned ? " is-pinned" : ""}" data-tip>
     <div class="d">${d.isToday ? `Today · ${esc(d.label)}` : esc(d.label)}</div>${top}<div class="wl-tipdiv"></div>
     <div class="wl-tiprow" style="justify-content:space-between"><span style="opacity:.75">Medication</span><strong style="font-variant-numeric:tabular-nums">${d.medTaken}/${d.medDenom}${d.isToday ? " so far" : " taken"}</strong></div>
@@ -71,22 +105,61 @@ export function chartView(days, chart) {
   const colW = PLOT_W / n;
   const active = chart.pinned ?? chart.hover;
   const step = n <= 16 ? 2 : 5;
-  const guides = [5, 2.5, 0, -2.5, -5].map((g) => `<line x1="${LEFT}" y1="${moodY(g)}" x2="${VW - RIGHT}" y2="${moodY(g)}" stroke="var(--border)" stroke-width="1" stroke-dasharray="${g === 0 ? "0" : "2 4"}" opacity="${g === 0 ? 1 : 0.7}"/>`).join("");
+  const guides = [5, 2.5, 0, -2.5, -5]
+    .map(
+      (g) =>
+        `<line x1="${LEFT}" y1="${moodY(g)}" x2="${VW - RIGHT}" y2="${moodY(g)}" stroke="var(--border)" stroke-width="1" stroke-dasharray="${g === 0 ? "0" : "2 4"}" opacity="${g === 0 ? 1 : 0.7}"/>`
+    )
+    .join("");
   const pts = days.map((d, i) => ({ i, d, v: avgMood(d.checkins) })).filter((p) => p.v !== null);
   const line = pts.map((p, k) => `${k ? "L" : "M"}${xOf(p.i, n)} ${moodY(p.v)}`).join(" ");
-  const dots = pts.map((p) => `<circle cx="${xOf(p.i, n)}" cy="${moodY(p.v)}" r="${active === p.i ? 6 : 4.4}" fill="var(--wellness-${p.d.checkin.feelingCore}-tint)" stroke="var(--surface)" stroke-width="1.5" opacity="${active == null || active === p.i ? 1 : 0.45}"/>`).join("");
-  const marks = days.map((d, i) => {
-    const op = d.isToday ? 0.5 : 1;
-    const mark = d.medFrac <= 0 ? "" : d.medFrac >= 0.999
-      ? `<circle cx="${xOf(i, n)}" cy="${MARK_MID}" r="3.7" fill="var(--accent-fg)" opacity="${op}"/>`
-      : `<circle cx="${xOf(i, n)}" cy="${MARK_MID}" r="3.3" fill="var(--accent-fg)" opacity="${(0.34 + 0.4 * d.medFrac) * op}"/>`;
-    return `<g opacity="${active != null && active !== i ? 0.34 : 1}">${mark}</g>`;
-  }).join("");
-  const labels = days.map((d, i) => (i % step === 0 || d.isToday ? `<text x="${xOf(i, n)}" y="${H - 3}" text-anchor="middle" class="wl-axislbl">${d.isToday ? "Today" : esc(d.label)}</text>` : "")).join("");
-  const cols = days.map((_, i) => `<rect x="${xOf(i, n) - colW / 2}" y="0" width="${colW}" height="${H}" fill="transparent" style="cursor:pointer" data-col="${i}"/>`).join("");
-  const band = active != null ? `<rect x="${xOf(active, n) - colW / 2}" y="${MOOD_TOP - 6}" width="${colW}" height="${H - MOOD_TOP}" rx="5" fill="var(--surface-2)"/>` : "";
-  const options = days.map((d, i) => `<option value="${i}"${chart.pinned === i ? " selected" : ""}>${d.date}${d.isToday ? " · Today" : ""}</option>`).join("");
-  const rows = days.map((d) => `<tr><th scope="row">${d.date}</th><td>${avgMood(d.checkins) ?? "No check-in"}</td><td>${d.medTaken} of ${d.medDenom}</td></tr>`).join("");
+  const dots = pts
+    .map(
+      (p) =>
+        `<circle cx="${xOf(p.i, n)}" cy="${moodY(p.v)}" r="${active === p.i ? 6 : 4.4}" fill="var(--wellness-${p.d.checkin.feelingCore}-tint)" stroke="var(--surface)" stroke-width="1.5" opacity="${active == null || active === p.i ? 1 : 0.45}"/>`
+    )
+    .join("");
+  const marks = days
+    .map((d, i) => {
+      const op = d.isToday ? 0.5 : 1;
+      const mark =
+        d.medFrac <= 0
+          ? ""
+          : d.medFrac >= 0.999
+            ? `<circle cx="${xOf(i, n)}" cy="${MARK_MID}" r="3.7" fill="var(--accent-fg)" opacity="${op}"/>`
+            : `<circle cx="${xOf(i, n)}" cy="${MARK_MID}" r="3.3" fill="var(--accent-fg)" opacity="${(0.34 + 0.4 * d.medFrac) * op}"/>`;
+      return `<g opacity="${active != null && active !== i ? 0.34 : 1}">${mark}</g>`;
+    })
+    .join("");
+  const labels = days
+    .map((d, i) =>
+      i % step === 0 || d.isToday
+        ? `<text x="${xOf(i, n)}" y="${H - 3}" text-anchor="middle" class="wl-axislbl">${d.isToday ? "Today" : esc(d.label)}</text>`
+        : ""
+    )
+    .join("");
+  const cols = days
+    .map(
+      (_, i) =>
+        `<rect x="${xOf(i, n) - colW / 2}" y="0" width="${colW}" height="${H}" fill="transparent" style="cursor:pointer" data-col="${i}"/>`
+    )
+    .join("");
+  const band =
+    active != null
+      ? `<rect x="${xOf(active, n) - colW / 2}" y="${MOOD_TOP - 6}" width="${colW}" height="${H - MOOD_TOP}" rx="5" fill="var(--surface-2)"/>`
+      : "";
+  const options = days
+    .map(
+      (d, i) =>
+        `<option value="${i}"${chart.pinned === i ? " selected" : ""}>${d.date}${d.isToday ? " · Today" : ""}</option>`
+    )
+    .join("");
+  const rows = days
+    .map(
+      (d) =>
+        `<tr><th scope="row">${d.date}</th><td>${avgMood(d.checkins) ?? "No check-in"}</td><td>${d.medTaken} of ${d.medDenom}</td></tr>`
+    )
+    .join("");
   return `<div class="wl-chart__plot" role="region" aria-label="Mood and medication chart" tabindex="0"><div class="wl-chart__canvas">
       <svg viewBox="0 0 ${VW} ${H}" role="img" aria-label="Mood trend with daily medication adherence">
         ${guides}
@@ -124,8 +197,11 @@ export function trendsView(state, days) {
   const retry = button("Try again", { act: "trends-retry", variant: "link", size: "md" });
   const status = t.error
     ? `<p role="status">${has ? "Couldn't refresh trend data. Showing the last loaded data." : "Couldn't load trend data."} ${retry}</p>`
-    : !has && t.loading ? `<p role="status">Loading trend data…</p>`
-    : !has ? `<p role="status">Trend data unavailable. ${retry}</p>` : "";
+    : !has && t.loading
+      ? `<p role="status">Loading trend data…</p>`
+      : !has
+        ? `<p role="status">Trend data unavailable. ${retry}</p>`
+        : "";
   const seg = `<div class="jds-segmented" role="group" aria-label="Chart range">${[14, 30].map((r) => `<button type="button" class="jds-segmented__opt" aria-pressed="${t.range === r}" data-act="range" data-range="${r}">${r} days</button>`).join("")}</div>`;
   const help = t.helpOpen
     ? `<div class="wl-help__scrim" data-act="help-toggle"></div><div class="wl-help__pop" role="dialog">

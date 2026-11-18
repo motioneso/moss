@@ -21,7 +21,9 @@ assert(process.env["JARVIS_GATE_RUN"] === "1", "Use scripts/run-gate.sh");
 const out = process.env["WELLNESS_UI_OUT"]!;
 mkdirSync(out, { recursive: true, mode: 0o700 });
 const port = Number(
-  execFileSync("devports", ["claim", `js329-wellness-ui-${process.pid}`], { encoding: "utf8" }).trim()
+  execFileSync("devports", ["claim", `js329-wellness-ui-${process.pid}`], {
+    encoding: "utf8"
+  }).trim()
 );
 let child: ReturnType<typeof spawn> | undefined;
 let exited: Promise<number | null> | undefined;
@@ -67,7 +69,11 @@ try {
   const log = openSync(join(out, "server.log"), "w", 0o600);
   child = spawn(binary, [], {
     stdio: ["ignore", log, log],
-    env: { ...process.env, WELLNESS_UI_BOOTSTRAP_URL: urls.bootstrap, WELLNESS_UI_PRODUCER_URL: urls.app }
+    env: {
+      ...process.env,
+      WELLNESS_UI_BOOTSTRAP_URL: urls.bootstrap,
+      WELLNESS_UI_PRODUCER_URL: urls.app
+    }
   });
   const running = new Promise<number | null>((done, fail) => {
     child!.once("exit", done);

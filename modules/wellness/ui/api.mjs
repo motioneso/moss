@@ -36,7 +36,10 @@ export function wellnessApi(client) {
       const items = [];
       let cursor = null;
       for (let page = 0; page < MAX_PAGES; page++) {
-        const body = await call("GET", `/wellness/checkins${query({ since, limit: PAGE, cursor })}`);
+        const body = await call(
+          "GET",
+          `/wellness/checkins${query({ since, limit: PAGE, cursor })}`
+        );
         items.push(...(body.checkins ?? []));
         cursor = body.nextCursor;
         if (!cursor) break;
