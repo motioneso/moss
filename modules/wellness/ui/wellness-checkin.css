@@ -1,0 +1,445 @@
+/* Wellness page styles - part 3: check-in dial, search and choices. */
+
+/* ---- RADIAL picker (original dial) ---- */
+.wl-dial {
+  position: relative;
+  width: 300px;
+  height: 300px;
+  flex: none;
+}
+.wl-dial__svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.wl-dial__seg {
+  cursor: pointer;
+  transition: opacity 0.16s ease;
+}
+.wl-dial__seg:hover {
+  opacity: 0.88;
+}
+.wl-dial__hub {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 170px;
+  height: 170px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+/* ---- dial centering wrapper ---- */
+.wl-dial-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 12px 0 0;
+}
+
+/* ---- feeling search bar ---- */
+.wl-search {
+  position: relative;
+  margin-bottom: 16px;
+}
+.wl-search__input {
+  width: 100%;
+  padding: 9px 14px;
+  box-sizing: border-box;
+  transition: border-color 0.12s;
+}
+.wl-search__results {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 10;
+  overflow: hidden;
+}
+.wl-search__item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  padding: 9px 14px;
+  cursor: pointer;
+  text-align: left;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wl-hdetail,
+  .wl-modal,
+  .wl-modal-scrim {
+    animation: none;
+  }
+}
+
+/* svg chart text */
+.wl-axislbl--med {
+  letter-spacing: 0.04em;
+}
+
+/* Shared Dialog owns interaction and visual styling; Wellness owns only width and scrolling. */
+.wl-dialog {
+  max-height: 90dvh;
+  display: flex;
+  flex-direction: column;
+}
+.wl-dialog--checkin {
+  max-width: 660px;
+}
+.wl-dialog--medications {
+  max-width: 540px;
+}
+.wl-dialog--export {
+  max-width: 480px;
+}
+.wl-dialog > .jds-dialog__body {
+  min-height: 0;
+  overflow-y: auto;
+  padding-block: var(--space-4);
+}
+.wl-dialog > .jds-dialog__foot {
+  flex-wrap: wrap;
+}
+.wl-dialog > .jds-dialog__foot > [role="alert"] {
+  flex-basis: 100%;
+}
+.wl-emotion-choices {
+  width: 100%;
+  margin-top: var(--space-3);
+}
+
+@media (max-width: 620px) {
+  /* The native choices retain their full labels when the pointer wheel would shrink them. */
+  .wl-dial {
+    display: none;
+  }
+  .wl-hrow__head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    gap: var(--space-2);
+  }
+  .wl-hrow__date,
+  .wl-hrow__emo {
+    width: auto;
+    min-width: 0;
+  }
+  .wl-hrow__feel {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    white-space: normal;
+  }
+  .wl-hrow__meta {
+    grid-column: 3;
+    grid-row: 1;
+    gap: var(--space-2);
+  }
+  .wl-hdetail {
+    padding: var(--space-3);
+  }
+  .wl-hdetail__foot {
+    flex-wrap: wrap;
+  }
+  .wl-dialog .wl-medrow__name {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+/* wellness-3.css — supplemental wellness styles: mobile chart legibility (#386) and the
+   as-needed (PRN) dose-entry affordance (#387).
+   Loaded AFTER wellness-1.css / wellness-2.css so these overrides win.
+   Kept in a separate file to respect the 1000-line per-file cap (wellness-1/-2 are near it).
+   Layout only — visual declarations for these selectors live in
+   packages/ui/src/styles/components-wellness-1.css and components-wellness-2.css (#1392). */
+
+/* ── PRN ("as needed") dose entry (#387) ── */
+.wl-prn {
+  padding: 7px 4px 7px 0;
+}
+.wl-prn__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.wl-prn__row .wl-medrow__name {
+  flex: 1;
+  min-width: 0;
+}
+.wl-prn__count {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.wl-prn__log {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  cursor: pointer;
+  transition: var(--transition-control);
+}
+.wl-prn__panel {
+  margin-top: 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.wl-prn__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.wl-prn__chip {
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: var(--transition-control);
+}
+.wl-prn__input {
+  width: 100%;
+  padding: 7px 10px;
+}
+.wl-prn__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ── Export modal form utilities (#509) ── */
+
+.wl-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wl-field__label {
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.wl-fieldset {
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wl-fieldset > legend {
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.wl-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  line-height: 1.4;
+}
+
+.wl-modal__desc {
+  line-height: 1.6;
+}
+
+.wl-modal__note {
+  line-height: 1.5;
+}
+
+.wl-consent-text {
+  line-height: 1.5;
+}
+
+.wl-modal__progress,
+.wl-modal__ready {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+/* ── Manage medications modal ── */
+
+.wl-medmodal__input {
+  padding: 8px 12px;
+}
+
+.wl-freqbtn {
+  flex: 1;
+  padding: 7px 0;
+  cursor: pointer;
+}
+
+.wl-medmodal__timeinput {
+  padding: 7px 12px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.wl-medmodal__error {
+  margin-top: 2px;
+}
+
+/* ── Add-a-medication builder (#1970) ── */
+
+.wl-medform__row2 {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 10px;
+}
+
+.wl-medform__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.wl-medform__stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wl-medform__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Six choices wrap rather than each stretching to an equal share of one line. */
+.wl-medform__choices .wl-freqbtn {
+  flex: 0 1 auto;
+  padding: 7px 12px;
+}
+
+.wl-medform__inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.wl-medform__num {
+  flex: 0 0 auto;
+  width: 72px;
+}
+
+.wl-medform__date {
+  width: fit-content;
+}
+
+.wl-medform__check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.wl-medform__times {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wl-medform__timerow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wl-medform__timerow .wl-medmodal__timeinput {
+  width: 140px;
+}
+
+.wl-medform__switchrow {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wl-medform__preview {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 14px;
+  padding: 10px 12px;
+}
+
+.wl-medform__previewdoses {
+  font-variant-numeric: tabular-nums;
+}
+
+.wl-medform__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+@media (max-width: 480px) {
+  .wl-medform__row2 {
+    grid-template-columns: 1fr;
+  }
+
+  .wl-medform__inline {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .wl-medform__num,
+  .wl-medform__date {
+    width: 100%;
+  }
+}
+
+.wl-export-boundaries {
+  margin-bottom: var(--space-3);
+}
+
+/* Buttons the web app defines outside the shared sheet. */
+.primary-button,
+.secondary-button,
+.ghost-button,
+.icon-button {
+  min-height: 2.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  padding: 0.55rem 0.85rem;
+  font-weight: 750;
+}
+
+.primary-button {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+
+.primary-button:hover {
+  background: var(--accent-strong);
+}
+
+.secondary-button,
+.ghost-button,
+.icon-button {
+  background: var(--surface-raised);
+  border-color: var(--border);
+  color: var(--ink);
+}
+
+.secondary-button:hover:not(:focus-visible),
+.ghost-button:hover:not(:focus-visible),
+.icon-button:hover:not(:focus-visible) {
+  background: var(--panel-subtle);
+  box-shadow: var(--shadow-sm);
+}

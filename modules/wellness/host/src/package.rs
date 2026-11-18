@@ -17,7 +17,7 @@ pub fn files(root: &Path, component: &[u8]) -> Result<BTreeMap<String, Vec<u8>>>
         ("NOTICE".into(), include_bytes!("../../NOTICE").to_vec()),
         ("CHANGELOG.md".into(), include_bytes!("../../CHANGELOG.md").to_vec()),
     ]);
-    let ui: [(&str, &[u8]); 22] = [
+    let ui: [(&str, &[u8]); 24] = [
         ("index.html", include_bytes!("../../ui/index.html")),
         ("app.mjs", include_bytes!("../../ui/app.mjs")),
         ("api.mjs", include_bytes!("../../ui/api.mjs")),
@@ -31,6 +31,8 @@ pub fn files(root: &Path, component: &[u8]) -> Result<BTreeMap<String, Vec<u8>>>
         ("meds-form.mjs", include_bytes!("../../ui/meds-form.mjs")),
         ("meds-view.mjs", include_bytes!("../../ui/meds-view.mjs")),
         ("wellness.css", include_bytes!("../../ui/wellness.css")),
+        ("wellness-history.css", include_bytes!("../../ui/wellness-history.css")),
+        ("wellness-checkin.css", include_bytes!("../../ui/wellness-checkin.css")),
         ("settings.html", include_bytes!("../../ui/settings.html")),
         ("settings.mjs", include_bytes!("../../ui/settings.mjs")),
         ("settings.css", include_bytes!("../../ui/settings.css")),

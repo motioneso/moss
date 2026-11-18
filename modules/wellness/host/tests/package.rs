@@ -68,7 +68,7 @@ fn the_screen_ships_with_every_file_it_loads() {
         assert!(files.contains_key(entry), "{entry} is not in the package");
     }
     let page = String::from_utf8(files["ui/index.html"].clone()).unwrap();
-    for linked in ["./wellness.css", "./app.mjs"] {
+    for linked in ["./wellness.css", "./wellness-history.css", "./wellness-checkin.css", "./app.mjs"] {
         assert!(page.contains(linked), "the page does not link {linked}");
         assert!(files.contains_key(&format!("ui/{}", linked.trim_start_matches("./"))));
     }
