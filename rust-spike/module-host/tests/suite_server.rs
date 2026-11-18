@@ -303,7 +303,7 @@ fn installed_news_sports_weather_and_briefings_work_together() {
             tokio::spawn(async move { let _ = connection.await; });
             db.batch_execute(&sql).await.unwrap();
             // The dev data holds no saved topic, so one is added the way the old app stored it.
-            db.execute("INSERT INTO app.news_custom_topics (id, owner_user_id, label, guidance, validation_status, validated_at) VALUES (gen_random_uuid(), $1, $2, 'upgrade check', 'valid', now())", &[&owner, &seeded_topic]).await.unwrap();
+            db.execute("INSERT INTO app.news_custom_topics (id, owner_user_id, label, guidance, validation_status, validation_fingerprint, validated_at) VALUES (gen_random_uuid(), $1, $2, 'upgrade check', 'approved', 'seeded', now())", &[&owner, &seeded_topic]).await.unwrap();
         });
     }
     private(
@@ -436,7 +436,7 @@ fn installed_news_sports_weather_and_briefings_work_together() {
     for attempt in 1..=4 {
         let (status, text) = call("sports", Method::POST, "/sources/preview", Some(json!({"url":"r/nfl","assignments":[{"target":{"kind":"sport","sportKey":"football"}}]})));
         let shown = json_of(&text);
-        println!("sports live: reddit preview attempt {attempt} -> {status} {}", shown["status"]);
+        println!("sports live: reddit preview attempt {attempt} -> {status} {}", text.chars().take(600).collect::<String>());
         if status == 200 && shown["status"] == "ok" {
             break;
         }
@@ -500,6 +500,9 @@ fn installed_news_sports_weather_and_briefings_work_together() {
         println!("briefing prompt mentions {name}: {}", lower.contains(word));
     }
     println!("briefing prompt length: {}", prompt.len());
+    for line in prompt.lines().filter(|l| { let l = l.to_lowercase(); l.contains("sport") || l.contains("follow") || l.contains("nfl") || l.contains("gap") }).take(12) {
+        println!("prompt sports line: {}", line.chars().take(240).collect::<String>());
+    }
     // Optional real-model pass through a local OpenAI-compatible proxy. The key comes from a file.
     if let (Ok(url), Ok(key_file), Ok(model_name)) = (std::env::var("BRIEFINGS_REAL_MODEL_URL"), std::env::var("BRIEFINGS_REAL_MODEL_KEY_FILE"), std::env::var("BRIEFINGS_REAL_MODEL_NAME")) {
         let real_key = fs::read_to_string(key_file).unwrap().trim().to_owned();
