@@ -1,0 +1,165 @@
+/* Sports desk on the Today screen. Rules copied from the app's Today desk sheet, with the
+   day-mode variants applied unscoped because this screen has no Today mode switch. */
+
+.jds-brief--sports {
+  background: transparent;
+  margin-top: 0;
+  padding: 25px 0 0;
+  border: none;
+  border-top: 1px solid var(--accent-rule);
+  border-radius: 0;
+  box-shadow: none;
+}
+.jds-brief--sports .desk-title {
+  position: relative;
+  top: 0;
+  font-weight: 900;
+}
+.jds-brief--sports .desk-head {
+  align-items: center;
+  margin-bottom: 23px;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+.jds-brief--sports .sp-board__team {
+  font-weight: 400;
+}
+.jds-brief--sports .sp-board__side--you .sp-board__team {
+  font-weight: 700;
+}
+.jds-brief--sports .sp-board__side--you {
+  background: transparent;
+}
+.jds-brief--sports .sp-tkgrid {
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
+}
+.jds-brief--sports .sp-tkgrid > * {
+  min-width: 0;
+}
+.today-wrap {
+  padding: 0 clamp(16px, 3vw, 32px) 32px;
+}
+
+.jds-brief--sports {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 32px;
+}
+.jds-brief--sports .desk-head {
+  grid-column: 1 / -1;
+}
+.jds-brief--sports .desk-scores {
+  grid-column: 1;
+  min-width: 0;
+}
+.jds-brief--sports .desk-stories {
+  grid-column: 2;
+  min-width: 0;
+}
+/* Stories alone take the full width when there are no scores. */
+.jds-brief--sports:not(:has(.desk-scores)) .desk-stories {
+  grid-column: 1 / -1;
+}
+.jds-brief--sports .desk-tonight {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.jds-brief--sports .desk-cards {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+
+
+/* --- Score rows: names, scores, status in three columns --- */
+.jds-brief--sports .sp-scores__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: baseline;
+  padding: 10px 0;
+}
+.jds-brief--sports .sp-scores__row + .sp-scores__row {
+  border-top: 1px solid var(--line);
+}
+.jds-brief--sports .sp-scores__sides {
+  display: contents;
+}
+.jds-brief--sports .sp-board__score {
+  text-align: right;
+}
+.jds-brief--sports .sp-scores__status {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* --- Tonight band: up to three cards per row --- */
+.jds-brief--sports .sp-tonight {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.jds-brief--sports .sp-tonight__row {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  border: 1px solid var(--line);
+  padding: 12px 14px;
+}
+.jds-brief--sports .sp-tonight__time {
+  margin-left: 0;
+}
+
+/* Feed headlines wrap anywhere: a long unbroken run (a team name plus a
+   publisher tag) must clip inside its card instead of pushing it wider. */
+.jds-brief--sports .sp-tk__newstx,
+.jds-brief--sports .sp-tk__storylink {
+  overflow-wrap: anywhere;
+}
+
+/* Phone: each story link is a 44px-tall tap area. Its padding takes the row
+   height, so stacked links sit 8px apart and never overlap. */
+@media (max-width: 680px) {
+  .jds-brief--sports .sp-tkgrid .sp-tk .sp-tk__stories {
+    gap: 8px;
+    padding-top: 0;
+  }
+
+  .jds-brief--sports .sp-tkgrid .sp-tk__storylink {
+    box-sizing: border-box;
+    min-height: 44px;
+    padding-block: 14px;
+  }
+}
+
+/* At phone widths the status column's nowrap text would starve the two sides
+   below crest-plus-score width, so the status takes its own full-width row.
+   DOM order is unchanged, so visual order still matches it. */
+@media (max-width: 400px) {
+  .jds-brief--sports .sp-scores__row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .jds-brief--sports .sp-scores__status {
+    grid-column: 1 / -1;
+    white-space: normal;
+  }
+}
+
+/* --- Single column at and below the Today rail breakpoint --- */
+@media (max-width: 1080px) {
+  .jds-brief--news .desk-cols {
+    grid-template-columns: 1fr;
+  }
+  .jds-brief--sports {
+    grid-template-columns: 1fr;
+  }
+  .jds-brief--sports .desk-scores,
+  .jds-brief--sports .desk-stories {
+    grid-column: 1 / -1;
+  }
+  .jds-brief--sports .sp-tonight {
+    grid-template-columns: 1fr;
+  }
+}
+
