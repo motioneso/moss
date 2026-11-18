@@ -2,6 +2,7 @@
 
 ## 0.1.0
 
+- The Wellness screen shows Today, History and Trends from the package, on desktop and phone: today's medicines and doses, the mood check-in, past check-ins and the mood and medicine trend chart. Managing medicines (add, change, remove) works in the same screen.
 - A Wellness settings screen shows the assistant-access switch. Insights, therapy notes and an export dialog (with a download that works from a phone) are ready to place on the Wellness page.
 - Insights work through the same route as before: up to five lines from your last 30 days, worked out in code, nothing sent to a model.
 - Two chat tools work as before: your 20 newest check-ins, and seven-day medication counts. With assistant access off, both answer only that access is off.
