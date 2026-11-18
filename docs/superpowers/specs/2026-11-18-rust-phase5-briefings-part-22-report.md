@@ -18,14 +18,24 @@ Task JS-336. Mockups approved 2026-11-17: the Rust screens reproduce the TypeScr
 - Live proof found and fixed one defect: tab labels were dark on the dark header.
 - `verify:static`: pass.
 
-## Not built (frame limits)
+## Follow-up checks (done)
 
-- Accept and dismiss on action rows, catch-up add task and dismiss, plan review, day-plan accept. These act on other modules and cannot run from a module frame, so rows are read-only. Reply goes through the chat bridge.
-- Email and calendar signal switches. Owned by the Calendar and Email settings.
+- Upgrade check: rows copied from the dev database (the dev owner, 2 definitions, 44 runs) were loaded into a throwaway database and read back through the real routes as that owner. Both definitions listed, run counts matched (30 morning, 14 evening), the newest run of each read as ready, and the reader opened with its earlier-reports list. Dev and prod were only read. The copy is deleted.
+- Switch toggle: the Morning news switch was clicked in a real browser and stayed off after a reload in a fresh browser session.
+- Real model: the router was pointed at the Codex sign-in through the local model proxy, on the cheapest Codex model it lists (gpt-5.6-luna). One morning briefing ran end to end through the real worker and router and came back ready in 5 seconds with model-written text. The test account has no calendar, tasks or mail, so the text says the day is open.
+
+## Follow-up work, not built
+
+These act on other modules, so a module frame cannot do them. Each needs a cross-module call from the owner named here.
+
+| Control                            | Owning module                                    |
+| ---------------------------------- | ------------------------------------------------ |
+| Accept and dismiss on action rows  | Tasks (for task rows) and Email (for reply rows) |
+| Catch-up add task and dismiss      | Tasks                                            |
+| Plan review and day-plan accept    | Tasks (the plan lives there), shown from Today   |
+| Email and calendar signal switches | Email and Calendar settings                      |
 
 ## Not proven
 
-- Real configured model: the live run uses a stand-in model that returns fixed text. A pass with one real model needs Ben.
-- Upgrade check on a copy of dev data: not run.
-- Settings toggle write was not exercised in the browser; the API write is covered by the package gate.
 - Today hero text still says "switched off" in the sample-data shell even when a briefing exists. The shell owns that text.
+- The model pass used a test account with no sources, so source-grounded wording was not judged.
