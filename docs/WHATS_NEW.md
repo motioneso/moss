@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-11-18
+
+#### Added
+
+- **Sports screen.** The Sports page now shows live scores, your followed teams, standings and team news. [PR #4345](https://github.com/motioneso/moss/pull/4345)
+
 ### 2026-11-17
 
 #### Added
