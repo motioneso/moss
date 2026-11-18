@@ -125,6 +125,11 @@ impl DeviceStore {
         })
     }
 
+    /// `check_device` for a sync caller.
+    pub fn check_device_blocking(&self, owner: Uuid, device: Uuid, use_: Use) -> Result<Check> {
+        self.block(move |s| Box::pin(async move { s.check_device(owner, device, use_).await }))
+    }
+
     /// Runs a store call from a sync port on a fresh thread with its own runtime.
     fn block<T: Send + 'static>(
         &self,

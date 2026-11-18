@@ -45,6 +45,12 @@ fn shaped(token: &str, prefix: &str) -> bool {
     })
 }
 
+/// The raw bearer credential, for the handlers that run before sign-in and so have no device
+/// in the per-request map. It goes straight to a hash and is never stored or logged.
+pub fn read_credential(headers: &HeaderMap) -> Option<String> {
+    read_bearer_token(headers)
+}
+
 pub fn digest(token: &str) -> String {
     URL_SAFE_NO_PAD.encode(Sha256::digest(token.as_bytes()))
 }
