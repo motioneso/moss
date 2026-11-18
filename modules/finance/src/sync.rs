@@ -10,7 +10,9 @@ use moss_module_sdk::{
 };
 use serde_json::{json, Value};
 
-const MAX_PAGES: u32 = 100;
+/// Pages read per run. A real bank holds hundreds of transactions and one call has 30 seconds, so a
+/// run stops early and the saved cursor lets the next run continue.
+const PAGES_PER_RUN: u32 = 2;
 const MAX_RESTARTS: u32 = 3;
 const MUTATION: &str = "TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION";
 
@@ -76,7 +78,7 @@ fn sync_item<H: Host + ?Sized>(host: &H, item: &Value, id: &str, day: &str, at: 
     let mut cursor = link["sync_cursor"].as_str().map(str::to_owned);
     let begin = cursor.clone();
     let (mut restarts, mut pages) = (0, 0);
-    while pages < MAX_PAGES {
+    while pages < PAGES_PER_RUN {
         match plaid::transactions_sync(host, &slot, cursor.as_deref())? {
             Ok(page) => {
                 if !apply(host, &page, &mut counts)? {

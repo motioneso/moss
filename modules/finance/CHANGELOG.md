@@ -2,7 +2,7 @@
 
 ## 0.5.1
 
-- Connecting a bank and syncing now have 30 seconds instead of 5, because a real bank sync makes several slow calls in a row.
+- Connecting a bank and syncing now have 30 seconds instead of 5, because a real bank sync makes several slow calls in a row. A long history is read two pages at a time, and each sync carries on where the last stopped.
 
 ## 0.5.0
 
