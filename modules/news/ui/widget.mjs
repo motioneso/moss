@@ -1,4 +1,4 @@
-/* global document, window */
+/* global document, window, Element */
 import { moduleClient } from "./guest-bridge.mjs";
 import { newsApi } from "./api.mjs";
 import { createImages } from "./images.mjs";

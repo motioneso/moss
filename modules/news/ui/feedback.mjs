@@ -1,3 +1,4 @@
+/* global document */
 // The "..." menu on each story, with the reason form and the saved receipt.
 import { ICONS, esc } from "./view.mjs";
 
