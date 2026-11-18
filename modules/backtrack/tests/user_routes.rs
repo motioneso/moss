@@ -71,3 +71,21 @@ fn bad_ranges_get_the_legacy_messages_and_delete_nothing() {
 fn unknown_routes_are_404() {
     assert_eq!(route(&Fake::default(), request("GET", "/nope", json!(null))).status, 404);
 }
+
+#[test]
+fn local_day_reports_the_account_day_and_refuses_bad_offsets() {
+    let host = Fake::default();
+    let r = route(&host, request("GET", "/local-day", json!(null)));
+    assert_eq!((r.status, r.body["timezone"].clone(), r.body["nextStart"].clone()), (200, json!("Europe/London"), json!("2026-11-13T00:00:00Z")));
+    assert_eq!(host.params("context.local-date").unwrap()["offsetDays"], 0);
+    let mut older = request("GET", "/local-day", json!(null));
+    older.query.insert("offsetDays".into(), json!("3"));
+    let host = Fake::default();
+    assert_eq!(route(&host, older).status, 200);
+    assert_eq!(host.params("context.local-date").unwrap()["offsetDays"], -3);
+    for bad in [json!("x"), json!(-1), json!(401), json!(true)] {
+        let mut r = request("GET", "/local-day", json!(null));
+        r.query.insert("offsetDays".into(), bad);
+        assert_eq!(route(&Fake::default(), r).status, 400);
+    }
+}

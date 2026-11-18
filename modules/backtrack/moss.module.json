@@ -34,8 +34,8 @@
     },
     {
       "port": "context",
-      "operations": ["read"],
-      "resources": ["call"]
+      "operations": ["read", "local-date"],
+      "resources": ["call", "account"]
     },
     {
       "port": "api",
@@ -63,6 +63,11 @@
     {
       "method": "GET",
       "path": "/status",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/local-day",
       "signIn": true
     },
     {

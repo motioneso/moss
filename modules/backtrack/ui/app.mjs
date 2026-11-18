@@ -9,6 +9,7 @@ const root = document.getElementById("root");
 
 const ui = {
   now: () => new Date(),
+  tz: { state: "loading", timezone: null, date: null },
   confirming: null,
   choosingDay: false,
   day: "",
@@ -44,6 +45,23 @@ async function load(quiet) {
   draw();
 }
 
+async function loadZone() {
+  ui.tz = { state: "loading", timezone: null, date: null };
+  try {
+    const day = await api.localDay(0);
+    ui.tz = { state: "ready", timezone: day.timezone, date: day.date };
+  } catch {
+    ui.tz = { state: "failed", timezone: null, date: null };
+  }
+  draw();
+}
+
+// The account's own midnight-to-midnight range for a day the server names.
+async function dayRange(offsetDays) {
+  const day = await api.localDay(offsetDays);
+  return { from: day.start, to: day.nextStart, timezone: day.timezone };
+}
+
 async function setPaused(paused) {
   ui.pausing = true;
   ui.pauseFailed = false;
@@ -72,19 +90,32 @@ async function remove(range) {
 }
 
 let range = null;
-function ask(kind) {
-  const now = ui.now();
-  if (kind === "hour") range = v.lastHourRange(now);
-  else if (kind === "today") range = v.todayRange(now);
-  else if (kind === "day") range = v.chosenDayRange(ui.day);
-  else range = {};
-  if (!range) return;
+async function ask(kind) {
+  try {
+    if (kind === "hour") range = v.lastHourRange(ui.now());
+    else if (kind === "today") range = await dayRange(0);
+    else if (kind === "day") {
+      const back = v.daysBack(ui.tz.date, ui.day);
+      if (back === undefined) return;
+      range = await dayRange(back);
+    } else range = {};
+  } catch {
+    ui.deleteFailed = true;
+    draw();
+    return;
+  }
+  ui.deleteFailed = false;
   ui.confirming = { kind, ...v.confirmation(kind, data, range) };
   draw();
+  document.getElementById("bt-cancel")?.focus();
 }
 
 const actions = {
-  retry: () => load(false),
+  retry: () => {
+    void loadZone();
+    return load(false);
+  },
+  "retry-tz": () => loadZone(),
   choose: () => {
     ui.choosingDay = !ui.choosingDay;
     draw();
@@ -97,14 +128,20 @@ const actions = {
     ui.confirming = null;
     draw();
   },
-  confirm: () => {
+  confirm: async () => {
     const { kind } = ui.confirming;
     ui.confirming = null;
-    // "Last hour" means the hour before the person pressed Delete.
-    const now = ui.now();
-    if (kind === "hour") range = v.lastHourRange(now);
-    else if (kind === "today") range = v.todayRange(now);
-    void remove(range);
+    try {
+      // "Last hour" and "Today" mean the span before the person pressed Delete.
+      if (kind === "hour") range = v.lastHourRange(ui.now());
+      else if (kind === "today") range = await dayRange(0);
+    } catch {
+      ui.deleteFailed = true;
+      draw();
+      return;
+    }
+    const { from, to } = range;
+    await remove(kind === "all" ? {} : { from, to });
   }
 };
 
@@ -120,4 +157,5 @@ root.addEventListener("change", (event) => {
   }
 });
 
+void loadZone();
 void load(false);

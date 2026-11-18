@@ -20,6 +20,7 @@ export function backtrackApi(client) {
   }
   return {
     status: () => call("GET", "/status"),
+    localDay: (offsetDays = 0) => call("GET", `/local-day?offsetDays=${offsetDays}`),
     setPaused: (paused) => call("PUT", "/preferences", { paused }),
     remove: (range) => call("DELETE", "/segments", range)
   };

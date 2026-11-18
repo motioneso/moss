@@ -3,7 +3,7 @@
 ## 0.1.1
 
 - Settings now has a Backtrack screen. It shows the recording switch that pauses every Mac, how many days and how much text are kept, and when a Mac last sent text.
-- The screen deletes the last hour, today, one chosen day or everything, and asks first every time.
+- The screen deletes the last hour, today, one chosen day or everything, and asks first every time. Days run midnight to midnight in the account time zone, which a new route reports.
 - It shows its own messages while loading, when loading fails, when no Mac is linked, and when an admin has not turned storage on.
 
 ## 0.1.0

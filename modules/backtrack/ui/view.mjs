@@ -14,7 +14,7 @@ export function formatBytes(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function formatReceived(iso) {
+export function formatReceived(iso, timeZone) {
   const date = new Date(iso);
   if (!iso || Number.isNaN(date.getTime())) return "Unknown";
   return date.toLocaleString(undefined, {
@@ -22,35 +22,32 @@ export function formatReceived(iso) {
     month: "short",
     day: "numeric",
     hour: "numeric",
-    minute: "2-digit"
+    minute: "2-digit",
+    timeZone
   });
 }
 
-/** [from, to) in ISO form. Days run midnight to midnight in this device's time zone. */
-const span = (from, to) => ({ from: from.toISOString(), to: to.toISOString() });
-export const lastHourRange = (now) => span(new Date(now.getTime() - HOUR_MS), now);
-function dayRange(year, month, day) {
-  return span(new Date(year, month - 1, day), new Date(year, month - 1, day + 1));
+/** [from, to) for the last hour. Days come from the server in the account's time zone. */
+export const lastHourRange = (now) =>
+  ({ from: new Date(now.getTime() - HOUR_MS).toISOString(), to: now.toISOString() });
+/** Whole days from the `YYYY-MM-DD` day `today` back to `chosen`; undefined for a bad or future day. */
+export function daysBack(today, chosen) {
+  const parse = (text) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text ?? "");
+    if (!m) return undefined;
+    const at = Date.UTC(+m[1], +m[2] - 1, +m[3]);
+    return new Date(at).getUTCDate() === +m[3] ? at : undefined;
+  };
+  const [t, c] = [parse(today), parse(chosen)];
+  if (t === undefined || c === undefined || c > t) return undefined;
+  return Math.round((t - c) / 86400000);
 }
-export const todayRange = (now) => dayRange(now.getFullYear(), now.getMonth() + 1, now.getDate());
-export function todayValue(now) {
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-}
-/** Parses a `type="date"` value; undefined when it is not a real day. */
-export function chosenDayRange(value) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value ?? "");
-  if (!match) return undefined;
-  const [year, month, day] = match.slice(1).map(Number);
-  const check = new Date(year, month - 1, day);
-  if (check.getMonth() !== month - 1 || check.getDate() !== day) return undefined;
-  return dayRange(year, month, day);
-}
-export const formatDay = (fromIso) =>
+export const formatDay = (fromIso, timeZone) =>
   new Date(fromIso).toLocaleDateString(undefined, {
     weekday: "long",
     month: "long",
-    day: "numeric"
+    day: "numeric",
+    timeZone
   });
 
 const head =
@@ -92,7 +89,7 @@ export function confirmation(kind, data, range) {
   }
   if (kind === "day") {
     return {
-      title: `Delete ${formatDay(range.from)}?`,
+      title: `Delete ${formatDay(range.from, range.timezone)}?`,
       description:
         "This removes what Backtrack kept on that day, midnight to midnight. It can't be undone.",
       action: "Delete the day"
@@ -112,29 +109,31 @@ function confirmBox(confirming) {
   )}</div><div class="bt-confirm__desc" id="bt-confirm-desc">${esc(confirming.description)}</div><div class="bt-actions">${button(
     "secondary",
     "Cancel",
-    "cancel"
+    "cancel",
+    ' id="bt-cancel"'
   )}${button("danger", confirming.action, "confirm")}</div></div>`;
 }
 
 function deleteGroup(ui, data) {
   const off = ui.pending ? " disabled" : "";
+  const dayOff = ui.pending || ui.tz.state !== "ready" ? " disabled" : "";
   const buttons = `<span class="bt-actions">${button("secondary", "Last hour", "hour", off)}${button(
     "secondary",
     "Today",
     "today",
-    off
-  )}${button("secondary", "Choose a day…", "choose", off)}${button("danger", "Everything…", "all", off)}</span>`;
+    dayOff
+  )}${button("secondary", "Choose a day…", "choose", dayOff)}${button("danger", "Everything…", "all", off)}</span>`;
   const dayRow = ui.choosingDay
     ? row(
         "Delete one day",
         "The day runs from midnight to midnight in your time zone.",
-        `<span class="bt-actions"><input type="date" class="jds-input" id="bt-day" aria-label="Day to delete" max="${esc(
-          todayValue(ui.now())
-        )}" value="${esc(ui.day)}">${button(
+        `<span class="bt-actions"><input type="date" class="jds-input" id="bt-day" aria-label="Day to delete" max="${esc(ui.tz.date ?? "")}" value="${esc(ui.day)}">${button(
           "danger",
           "Delete that day",
           "day",
-          ui.pending || chosenDayRange(ui.day) === undefined ? " disabled" : ""
+          ui.pending || ui.tz.state !== "ready" || daysBack(ui.tz.date, ui.day) === undefined
+            ? " disabled"
+            : ""
         )}</span>`,
         "set-row--stack-narrow"
       )
@@ -147,12 +146,16 @@ function deleteGroup(ui, data) {
         : note(`Deleted ${plural(ui.result.deleted, "stored segment", "stored segments")}.`);
   }
   if (ui.deleteFailed) result = note("Could not delete. Try again.", "alert");
+  const zone =
+    ui.tz.state === "failed"
+      ? `${note("Could not load your time zone, so deleting by day is off.", "alert")}<div class="bt-actions">${button("secondary", "Try again", "retry-tz")}</div>`
+      : "";
   return group(
     "Delete",
     "Deleting is permanent, and it works whether or not a Mac is linked.",
     `${row("Delete recent history", "Removes what Backtrack kept in that time, for you only.", buttons, "set-row--stack-narrow")}${dayRow}${confirmBox(
       ui.confirming
-    )}${result}`
+    )}${result}${zone}`
   );
 }
 
@@ -194,7 +197,7 @@ export function screen(data, ui) {
       `<span>${esc(formatBytes(data.bytes))}</span>`
     )}${
       data.lastReceivedAt
-        ? row("Last received", "", `<span>${esc(formatReceived(data.lastReceivedAt))}</span>`)
+        ? row("Last received", "", `<span>${esc(formatReceived(data.lastReceivedAt, ui.tz.timezone ?? undefined))}</span>`)
         : ""
     }`
   );
