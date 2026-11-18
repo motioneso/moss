@@ -47,6 +47,34 @@ pub async fn today() -> Result<TodayView, String> {
     get("/api/today").await
 }
 
+/// One forecast day from the Weather package.
+#[derive(serde::Deserialize, Clone, PartialEq)]
+pub struct WeatherDay {
+    pub high: i64,
+    pub low: i64,
+}
+
+/// The current reading from the Weather package.
+#[derive(serde::Deserialize, Clone, PartialEq)]
+pub struct WeatherToday {
+    pub temp: i64,
+    pub condition: String,
+    pub icon: String,
+    pub unit: String,
+    #[serde(default)]
+    pub forecast: Vec<WeatherDay>,
+}
+
+#[derive(serde::Deserialize)]
+struct WeatherTodayReply {
+    data: Option<WeatherToday>,
+}
+
+/// Today's weather for the signed-in person, or none when the package has no reading.
+pub async fn weather_today() -> Result<Option<WeatherToday>, String> {
+    get::<WeatherTodayReply>("/api/m/weather/today").await.map(|r| r.data)
+}
+
 pub async fn chat_thread() -> Result<ChatThread, String> {
     get("/api/chat/thread").await
 }

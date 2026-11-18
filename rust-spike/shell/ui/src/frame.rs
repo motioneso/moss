@@ -12,6 +12,7 @@ use crate::{api, chat::ChatDrawer, focus, icons, today::TodayPage};
 
 /// In-app navigation for links rendered below the frame.
 #[derive(Clone, Copy)]
+#[allow(dead_code)]
 pub struct Navigate(pub Callback<String>);
 
 const WIDE_QUERY: &str = "(min-width: 1280px)";
