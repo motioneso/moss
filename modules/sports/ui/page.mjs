@@ -2,7 +2,13 @@
 import { SOCCER_COMPETITIONS } from "./competitions.mjs";
 import { aroundLeaguesBoard } from "./board.mjs";
 import { button, clear, h } from "./dom.mjs";
-import { demoteEarlyGameday, gamedayHero, hasLiveGame, leadWidePhotoFirst, pageHeader } from "./gameday.mjs";
+import {
+  demoteEarlyGameday,
+  gamedayHero,
+  hasLiveGame,
+  leadWidePhotoFirst,
+  pageHeader
+} from "./gameday.mjs";
 import { heroCarousel, latestColumn, newsBand } from "./news.mjs";
 import { trophyIcon } from "./parts.mjs";
 import { followedTeamIndex } from "./ranking.mjs";
@@ -13,7 +19,13 @@ const LIVE_REFETCH_INTERVAL_MS = 60000;
 
 /** Mounts the Sports page into `root` and keeps it fresh. Returns a function that stops it. */
 export function mountSportsPage({ root, api, ctx }) {
-  const state = { data: null, error: false, activeGameId: null, resolving: null, resolveError: null };
+  const state = {
+    data: null,
+    error: false,
+    activeGameId: null,
+    resolving: null,
+    resolveError: null
+  };
   let timer = null;
   let disposers = [];
   let lastKey = "";
@@ -71,7 +83,12 @@ export function mountSportsPage({ root, api, ctx }) {
     if (!data) {
       wrap.append(
         state.error
-          ? h("p", { class: "sp-lede", role: "status" }, "Sports are unavailable right now. ", retry())
+          ? h(
+              "p",
+              { class: "sp-lede", role: "status" },
+              "Sports are unavailable right now. ",
+              retry()
+            )
           : h("p", { class: "sp-lede", role: "status" }, "Loading your teams…")
       );
       return;
@@ -89,25 +106,57 @@ export function mountSportsPage({ root, api, ctx }) {
     wrap.append(header);
 
     if (state.error) {
-      wrap.append(h("p", { class: "sp-lede", role: "status" }, "Could not refresh sports. Showing the last loaded scores and stories. ", retry()));
+      wrap.append(
+        h(
+          "p",
+          { class: "sp-lede", role: "status" },
+          "Could not refresh sports. Showing the last loaded scores and stories. ",
+          retry()
+        )
+      );
     }
-    wrap.append(ambiguousNotice(data.ambiguousFollows ?? []));
+    const ambiguous = ambiguousNotice(data.ambiguousFollows ?? []);
+    if (ambiguous) wrap.append(ambiguous);
     if (data.degraded) {
-      wrap.append(h("p", { class: "sp-lede", role: "status" }, "Some sports information could not be updated just now, so parts of this page may be missing."));
+      wrap.append(
+        h(
+          "p",
+          { class: "sp-lede", role: "status" },
+          "Some sports information could not be updated just now, so parts of this page may be missing."
+        )
+      );
     }
 
     const grid = (withTopStories) =>
       h(
         "div",
         { class: "sp-grid" },
-        h("div", { class: "sp-grid__main" }, withTopStories ? latestColumn(data.topStories) : null, aroundLeaguesBoard(data.scoreboard, followed, ctx)),
-        h("aside", { class: "sp-grid__rail" }, track(standingsRail({ groups: data.standings, followed, activeKeys: data.activeCompetitionKeys, api, ctx })))
+        h(
+          "div",
+          { class: "sp-grid__main" },
+          withTopStories ? latestColumn(data.topStories) : null,
+          aroundLeaguesBoard(data.scoreboard, followed, ctx)
+        ),
+        h(
+          "aside",
+          { class: "sp-grid__rail" },
+          track(
+            standingsRail({
+              groups: data.standings,
+              followed,
+              activeKeys: data.activeCompetitionKeys,
+              api,
+              ctx
+            })
+          )
+        )
       );
     const band = () => newsBand({ groups: data.leagueNews, followed });
 
     if (!hasFollows) {
       wrap.append(emptyState());
-      const hasSlate = data.topStories.length > 0 || data.standings.length > 0 || data.leagueNews.length > 0;
+      const hasSlate =
+        data.topStories.length > 0 || data.standings.length > 0 || data.leagueNews.length > 0;
       if (hasSlate) wrap.append(h("div", { class: "sp-emptyboard" }, grid(true), band()));
       return;
     }
@@ -128,7 +177,11 @@ export function mountSportsPage({ root, api, ctx }) {
         )
       );
     } else {
-      wrap.append(track(heroCarousel({ headlines: leadWidePhotoFirst(data.topStories), degraded: data.degraded })));
+      wrap.append(
+        track(
+          heroCarousel({ headlines: leadWidePhotoFirst(data.topStories), degraded: data.degraded })
+        )
+      );
     }
     wrap.append(sportsTicker(data.followed, ctx), grid(hero.mode === "gameday"), band());
   }
@@ -138,42 +191,60 @@ export function mountSportsPage({ root, api, ctx }) {
     return h(
       "section",
       { class: "sp-empty", "aria-label": "Saved teams that need a choice" },
-      h("div", { class: "sp-empty__inner" }, h("h2", { class: "sp-empty__title" }, "Which team did you mean?"), follows.map(ambiguousChoice))
+      h(
+        "div",
+        { class: "sp-empty__inner" },
+        h("h2", { class: "sp-empty__title" }, "Which team did you mean?"),
+        follows.map(ambiguousChoice)
+      )
     );
   }
 
   function ambiguousChoice(follow) {
     const savedName = follow.savedTeamKey.toUpperCase();
     if (!follow.teamListLoaded || follow.candidates.length === 0) {
-      return h("p", { class: "sp-empty__lede" }, `We saved a team called ${savedName}, but today's team list could not be loaded, so we cannot ask which team you meant. Scores and standings stay on hold for this team until the list is back.`);
+      return h(
+        "p",
+        { class: "sp-empty__lede" },
+        `We saved a team called ${savedName}, but today's team list could not be loaded, so we cannot ask which team you meant. Scores and standings stay on hold for this team until the list is back.`
+      );
     }
     const box = h("div", {});
     let saving = null;
     let failed = false;
     const paint = () => {
       clear(box).append(
-        h("p", { class: "sp-empty__lede" }, `We saved a team called ${savedName} before teams were pinned to a permanent number. Pick the right one and it comes straight back; until then its scores and standings are on hold.`),
+        h(
+          "p",
+          { class: "sp-empty__lede" },
+          `We saved a team called ${savedName} before teams were pinned to a permanent number. Pick the right one and it comes straight back; until then its scores and standings are on hold.`
+        ),
         follow.candidates.map((candidate) =>
-          button(saving === candidate.sourceTeamId ? `Saving ${candidate.name}...` : candidate.name, {
-            variant: "secondary",
-            disabled: saving !== null,
-            onClick: async () => {
-              saving = candidate.sourceTeamId;
-              failed = false;
-              paint();
-              try {
-                await api.resolveFollowTeam(follow.followId, candidate.sourceTeamId);
-                await load();
-              } catch {
-                failed = true;
-              } finally {
-                saving = null;
-                if (box.isConnected) paint();
+          button(
+            saving === candidate.sourceTeamId ? `Saving ${candidate.name}...` : candidate.name,
+            {
+              variant: "secondary",
+              disabled: saving !== null,
+              onClick: async () => {
+                saving = candidate.sourceTeamId;
+                failed = false;
+                paint();
+                try {
+                  await api.resolveFollowTeam(follow.followId, candidate.sourceTeamId);
+                  await load();
+                } catch {
+                  failed = true;
+                } finally {
+                  saving = null;
+                  if (box.isConnected) paint();
+                }
               }
             }
-          })
+          )
         ),
-        failed ? h("p", { class: "sp-empty__lede" }, "That choice could not be saved. Please try again.") : null
+        failed
+          ? h("p", { class: "sp-empty__lede" }, "That choice could not be saved. Please try again.")
+          : null
       );
     };
     paint();
@@ -189,8 +260,23 @@ export function mountSportsPage({ root, api, ctx }) {
         { class: "sp-empty__inner" },
         h("span", { class: "sp-empty__mark" }, trophyIcon()),
         h("h2", { class: "sp-empty__title" }, "Follow your teams"),
-        h("p", { class: "sp-empty__lede" }, "Pick the teams and competitions you care about — this page fills with their scores, results, and headlines."),
-        h("a", { class: "jds-btn jds-btn--secondary", href: SETTINGS_PATH, onClick: (event) => { event.preventDefault(); ctx.navigate(SETTINGS_PATH); } }, "Choose teams to follow")
+        h(
+          "p",
+          { class: "sp-empty__lede" },
+          "Pick the teams and competitions you care about — this page fills with their scores, results, and headlines."
+        ),
+        h(
+          "a",
+          {
+            class: "jds-btn jds-btn--secondary",
+            href: SETTINGS_PATH,
+            onClick: (event) => {
+              event.preventDefault();
+              ctx.navigate(SETTINGS_PATH);
+            }
+          },
+          "Choose teams to follow"
+        )
       )
     );
   }
