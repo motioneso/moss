@@ -22,8 +22,8 @@ export function indicator(status, label, live = false) {
   return `<span class="jds-indicator jds-indicator--${status}${live ? " jds-indicator--live" : ""}"><span class="jds-indicator__dot"></span><span>${label}</span></span>`;
 }
 
-export function sectionHead(title, { number, meta, level = 2 } = {}) {
-  return `<div class="jds-section-head jds-section-head--wrap">${
+export function sectionHead(title, { number, meta, level = 2, rule = false } = {}) {
+  return `<div class="jds-section-head jds-section-head--wrap${rule ? " jds-section-head--rule" : ""}">${
     number ? `<span class="jds-section-head__number">${number}</span>` : ""
   }<h${level} class="jds-section-head__title">${title}</h${level}>${
     meta ? `<span class="jds-section-head__meta">${meta}</span>` : ""
