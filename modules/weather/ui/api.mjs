@@ -25,7 +25,10 @@ export function weatherApi(client) {
     saveLocation: (place) => call("PUT", "/location", place),
     search: (query) => call("GET", `/location/search?query=${encodeURIComponent(query)}`),
     reverse: (lat, lon) =>
-      call("GET", `/location/reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`),
+      call(
+        "GET",
+        `/location/reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`
+      ),
     unit: () => call("GET", "/unit"),
     saveUnit: (unit) => call("PUT", "/unit", { unit }),
     forecast: (params) => {

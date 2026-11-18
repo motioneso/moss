@@ -72,7 +72,9 @@ struct WeatherTodayReply {
 
 /// Today's weather for the signed-in person, or none when the package has no reading.
 pub async fn weather_today() -> Result<Option<WeatherToday>, String> {
-    get::<WeatherTodayReply>("/api/m/weather/today").await.map(|r| r.data)
+    get::<WeatherTodayReply>("/api/m/weather/today")
+        .await
+        .map(|r| r.data)
 }
 
 pub async fn chat_thread() -> Result<ChatThread, String> {
@@ -144,9 +146,18 @@ async fn failure(response: gloo_net::http::Response) -> String {
     }
 }
 
-async fn post_pick<T: DeserializeOwned>(path: &str, module: &str, approve: bool, version: Option<&str>) -> Result<T, String> {
+async fn post_pick<T: DeserializeOwned>(
+    path: &str,
+    module: &str,
+    approve: bool,
+    version: Option<&str>,
+) -> Result<T, String> {
     let response = Request::post(path)
-        .json(&Pick { module, approve, version })
+        .json(&Pick {
+            module,
+            approve,
+            version,
+        })
         .map_err(|e| e.to_string())?
         .send()
         .await
@@ -217,7 +228,8 @@ pub async fn has_mail_account() -> bool {
         .await
         .map(|list| {
             list.accounts.iter().any(|a| {
-                a.status == "active" && (a.provider_id == "google" || a.provider_id.starts_with("imap-"))
+                a.status == "active"
+                    && (a.provider_id == "google" || a.provider_id.starts_with("imap-"))
             })
         })
         .unwrap_or(false)

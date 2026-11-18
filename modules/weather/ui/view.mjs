@@ -71,8 +71,7 @@ const zoneName = (at, zone) =>
     .format(at)
     .split(", ")
     .at(-1);
-const localDay = (at, zone) =>
-  new Intl.DateTimeFormat("en-CA", { timeZone: zone }).format(at);
+const localDay = (at, zone) => new Intl.DateTimeFormat("en-CA", { timeZone: zone }).format(at);
 
 /** Hour starts for the window, as milliseconds. Uses the intervals the server returned plus gaps. */
 function slots(v) {
@@ -123,7 +122,9 @@ export function forecastPresentation(v) {
 /** Icon name for a condition, using the evening variant between 18:00 and 06:00. */
 export function conditionIcon(condition, at, zone) {
   const hour = Number(
-    new Intl.DateTimeFormat("en-US", { hour: "numeric", hourCycle: "h23", timeZone: zone }).format(at)
+    new Intl.DateTimeFormat("en-US", { hour: "numeric", hourCycle: "h23", timeZone: zone }).format(
+      at
+    )
   );
   const night = hour >= 18 || hour < 6;
   const table = [

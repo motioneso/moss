@@ -41,7 +41,9 @@ test("position reads refuse without sharing support or a secure address", async 
     /https/
   );
   const got = await readBrowserPosition({
-    navigator: { geolocation: { getCurrentPosition: (ok) => ok({ coords: { latitude: 1, longitude: 2 } }) } },
+    navigator: {
+      geolocation: { getCurrentPosition: (ok) => ok({ coords: { latitude: 1, longitude: 2 } }) }
+    },
     isSecureContext: true
   });
   assert.equal(got.coords.latitude, 1);
@@ -72,9 +74,22 @@ test("the card shows each hour of the window and marks a missing one", () => {
 });
 
 test("labels and icons follow the local hour", () => {
-  assert.equal(intervalLabel(Date.parse("2026-11-18T02:00:00Z"), Date.parse("2026-11-18T03:00:00Z"), "America/Los_Angeles"), "6–7 PM");
-  assert.equal(conditionIcon("Clear", Date.parse("2026-11-18T02:00:00Z"), "America/Los_Angeles"), "moon");
-  assert.equal(conditionIcon("Clear", Date.parse("2026-11-17T20:00:00Z"), "America/Los_Angeles"), "sun");
+  assert.equal(
+    intervalLabel(
+      Date.parse("2026-11-18T02:00:00Z"),
+      Date.parse("2026-11-18T03:00:00Z"),
+      "America/Los_Angeles"
+    ),
+    "6–7 PM"
+  );
+  assert.equal(
+    conditionIcon("Clear", Date.parse("2026-11-18T02:00:00Z"), "America/Los_Angeles"),
+    "moon"
+  );
+  assert.equal(
+    conditionIcon("Clear", Date.parse("2026-11-17T20:00:00Z"), "America/Los_Angeles"),
+    "sun"
+  );
   assert.equal(conditionIcon("Light rain", Date.now(), "UTC"), "cloud-rain");
   assert.equal(conditionIcon("???", Date.now(), "UTC"), "circle-help");
 });

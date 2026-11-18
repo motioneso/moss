@@ -7,7 +7,10 @@ import { icon } from "./icons.mjs";
 const api = weatherApi(moduleClient());
 const root = document.getElementById("root");
 const esc = (s) =>
-  String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  String(s).replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]
+  );
 
 const unavailable = (text) => `<div class="weather-forecast" role="status">
   <div class="jds-empty"><div class="jds-empty__icon">${icon("cloud", 24)}</div>
@@ -42,7 +45,9 @@ export function card(v) {
       const it = h.item;
       const label = `${h.label}: ${it ? `${h.temperature}${degree}, ${it.condition}; rain ${it.rainProbability === null ? "unknown" : `${Math.round(it.rainProbability)}%`}; wind ${it.windSpeed === null ? "unknown" : `${Math.round(it.windSpeed)} ${v.windUnit}`}` : "unavailable"}`;
       return `<li aria-label="${esc(label)}"><strong>${h.temperature === null ? "—" : `${h.temperature}°`}</strong>${
-        it ? icon(conditionIcon(it.condition, Date.parse(it.startsAt), v.timeZone)) : `<span aria-hidden="true">—</span>`
+        it
+          ? icon(conditionIcon(it.condition, Date.parse(it.startsAt), v.timeZone))
+          : `<span aria-hidden="true">—</span>`
       }<small><time datetime="${new Date(h.at).toISOString()}">${esc(h.label)}</time></small></li>`;
     })
     .join("");
@@ -53,7 +58,16 @@ export function card(v) {
     <p>${esc(p.window)}${v.approximate ? " · Approximate location" : ""}</p>
     ${v.approximate ? "<p>Name another city and region in chat to correct it without saving Settings.</p>" : ""}
   </div>${icon(conditionIcon(p.condition, first, v.timeZone), 36)}</header>
-  ${partial ? `<div class="weather-forecast__coverage" role="status"><span class="jds-badge jds-badge--amber">Partial forecast</span><span>${esc(p.hours.filter((h) => !h.item).map((h) => h.label).join(", "))} unavailable</span></div>` : ""}
+  ${
+    partial
+      ? `<div class="weather-forecast__coverage" role="status"><span class="jds-badge jds-badge--amber">Partial forecast</span><span>${esc(
+          p.hours
+            .filter((h) => !h.item)
+            .map((h) => h.label)
+            .join(", ")
+        )} unavailable</span></div>`
+      : ""
+  }
   <div class="weather-forecast__summary"><strong>${p.min}–${p.max}<span>${degree}</span></strong><span>${esc(p.condition)}</span></div>
   <div class="weather-forecast__scroll" role="region" aria-label="Hourly forecast" tabindex="0">
     <div class="weather-forecast__curve" style="--weather-hours:${p.hours.length}">
@@ -62,8 +76,14 @@ export function card(v) {
     </div>
   </div>
   <dl class="weather-forecast__facts">
-    <div>${icon("droplets")}<div><dt>Rain chance · ${partial ? "known hours" : "peak"}</dt><dd>${p.peak(v.intervals.map((i) => i.rainProbability), "%")}</dd></div></div>
-    <div>${icon("wind")}<div><dt>Wind · ${partial ? "known hours" : "peak"}</dt><dd>${p.peak(v.intervals.map((i) => i.windSpeed), ` ${v.windUnit}`)}</dd></div></div>
+    <div>${icon("droplets")}<div><dt>Rain chance · ${partial ? "known hours" : "peak"}</dt><dd>${p.peak(
+      v.intervals.map((i) => i.rainProbability),
+      "%"
+    )}</dd></div></div>
+    <div>${icon("wind")}<div><dt>Wind · ${partial ? "known hours" : "peak"}</dt><dd>${p.peak(
+      v.intervals.map((i) => i.windSpeed),
+      ` ${v.windUnit}`
+    )}</dd></div></div>
   </dl>
   <hr class="jds-divider" />
   <footer class="weather-forecast__source">Open-Meteo · Updated <time datetime="${esc(v.retrievedAt)}">${esc(updatedTime(v))}</time>${v.stale ? " · Stale forecast" : ""}${v.observedAt === null ? " · Observation unavailable" : ""}</footer>

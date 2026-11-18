@@ -1,12 +1,7 @@
 /* global document */
 import { moduleClient } from "./guest-bridge.mjs";
 import { weatherApi } from "./api.mjs";
-import {
-  locationHint,
-  unitDescription,
-  savedMessage,
-  readBrowserPosition
-} from "./view.mjs";
+import { locationHint, unitDescription, savedMessage, readBrowserPosition } from "./view.mjs";
 
 const api = weatherApi(moduleClient());
 const root = document.getElementById("root");
@@ -26,7 +21,10 @@ const state = {
 };
 
 const esc = (s) =>
-  String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  String(s).replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]
+  );
 
 function render() {
   if (state.phase === "loading") {
@@ -71,7 +69,10 @@ function render() {
       </div>
       ${state.candidates
         .map(
-          (c, i) => `<div class="set-row"><div class="set-row__main"><div class="set-row__name">${esc(c.label)}</div></div>
+          (
+            c,
+            i
+          ) => `<div class="set-row"><div class="set-row__main"><div class="set-row__name">${esc(c.label)}</div></div>
           <div class="set-row__control"><button type="button" class="jds-btn jds-btn--sm" data-pick="${i}" ${state.busy ? "disabled" : ""}>Use this place</button></div></div>`
         )
         .join("")}

@@ -24,7 +24,11 @@ pub fn icon_for(name: &str) -> (&'static str, &'static str) {
 }
 
 pub fn unit_symbol(unit: &str) -> &'static str {
-    if unit == "metric" { "C" } else { "F" }
+    if unit == "metric" {
+        "C"
+    } else {
+        "F"
+    }
 }
 
 /// The range line under the condition, or nothing when no forecast day came back.
@@ -59,7 +63,8 @@ pub fn HeroWeather() -> impl IntoView {
                     <a href=WEATHER_SETTINGS>"Weather settings"</a>
                 </p>
             </div>
-        }.into_any(),
+        }
+        .into_any(),
         Phase::Ready(wx) => {
             let (svg, name) = icon_for(&wx.icon);
             let outlook = outlook_line(&wx);

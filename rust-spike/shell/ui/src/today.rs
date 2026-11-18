@@ -11,7 +11,6 @@ use moss_shell_contract::{
 use crate::api;
 use crate::email_refresh::EmailRefresh;
 
-
 #[component]
 pub fn TodayPage() -> impl IntoView {
     let today = RwSignal::new(None::<Result<TodayView, String>>);
