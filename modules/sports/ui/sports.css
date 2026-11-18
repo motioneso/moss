@@ -2752,3 +2752,8 @@
   left: -24px;
   border-left: 1px solid var(--border);
 }
+
+/* Wrapper added by the packaged screen; keeps the band children laid out as direct children. */
+.sp-newsband__body {
+  display: contents;
+}
