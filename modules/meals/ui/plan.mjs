@@ -1,5 +1,15 @@
+/* global document */
 import { noticeFor } from "./api.mjs";
-import { dateRange, esc, isWriting, PANTRY_LABEL, PAUSE_TEXT, plural, todayIso, tonight } from "./format.mjs";
+import {
+  dateRange,
+  esc,
+  isWriting,
+  PANTRY_LABEL,
+  PAUSE_TEXT,
+  plural,
+  todayIso,
+  tonight
+} from "./format.mjs";
 import { badge, btn, caption, dialog, empty, field, input, masthead, recovery } from "./kit.mjs";
 import { daySection } from "./plan-day.mjs";
 
@@ -124,7 +134,10 @@ export function planScreen(ctx) {
     },
     "confirm-replan": () => {
       s.dialog = null;
-      return control({ action: "replan", timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone });
+      return control({
+        action: "replan",
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      });
     },
     "confirm-quick": async () => {
       const maxMinutes = Number(s.quickMinutes);
@@ -181,28 +194,39 @@ export function planScreen(ctx) {
     const last = p.days[p.days.length - 1]?.date ?? p.startDate;
     const range = dateRange(p.startDate, last);
     const dinner = tonight(p, today);
-    const people = new Set(p.days.flatMap((d) => d.meals.flatMap((m) => m.eaters.map((e) => e.memberId))));
+    const people = new Set(
+      p.days.flatMap((d) => d.meals.flatMap((m) => m.eaters.map((e) => e.memberId)))
+    );
     const hasDaysToCome = p.days.some((d) => d.date >= today);
     const locked = p.days.reduce((sum, d) => sum + d.meals.filter((m) => m.locked).length, 0);
-    const lockedText = locked > 0 ? ` ${locked === 1 ? "1 locked meal stays" : `${locked} locked meals stay`}.` : "";
+    const lockedText =
+      locked > 0 ? ` ${locked === 1 ? "1 locked meal stays" : `${locked} locked meals stay`}.` : "";
     const done = p.progress.ready;
     const total = p.progress.total;
-    const current = p.days.find((d) => d.status === "writing") ?? p.days.find((d) => d.status === "pending");
+    const current =
+      p.days.find((d) => d.status === "writing") ?? p.days.find((d) => d.status === "pending");
     const lead = writing
       ? masthead({ eyebrow: `${esc(range)} · Moss is writing`, title: "Writing your plan" })
       : dinner !== null
         ? masthead({
             eyebrow: "Tonight · Dinner",
             title: esc(dinner.title),
-            lede: esc(`${dinner.cookMinutes !== null ? `${dinner.cookMinutes} minutes, for ` : "For "}${dinner.eaters.map((e) => e.name).join(" and ")}.`)
+            lede: esc(
+              `${dinner.cookMinutes !== null ? `${dinner.cookMinutes} minutes, for ` : "For "}${dinner.eaters.map((e) => e.name).join(" and ")}.`
+            )
           })
         : "";
-    const tools =
-      !writing
-        ? `<div class="mls-row">${p.replaceable > 0 ? btn("Regenerate", "open-regen", { variant: "secondary", sm: true, disabled: s.busy }) : ""}${
-            hasDaysToCome ? btn("Re-plan the rest of the week", "open-replan", { variant: "secondary", sm: true, disabled: s.busy }) : ""
-          }${btn("Delete plan", "delete-plan", { variant: "quiet", sm: true, disabled: s.busy })}</div>`
-        : "";
+    const tools = !writing
+      ? `<div class="mls-row">${p.replaceable > 0 ? btn("Regenerate", "open-regen", { variant: "secondary", sm: true, disabled: s.busy }) : ""}${
+          hasDaysToCome
+            ? btn("Re-plan the rest of the week", "open-replan", {
+                variant: "secondary",
+                sm: true,
+                disabled: s.busy
+              })
+            : ""
+        }${btn("Delete plan", "delete-plan", { variant: "quiet", sm: true, disabled: s.busy })}</div>`
+      : "";
     const progress = writing
       ? `<div class="mls-progress"><span class="jds-caption" role="status">${current ? `Writing day ${p.days.indexOf(current) + 1}, ` : ""}${done} of ${total} days done</span><div class="jds-progress" role="progressbar" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done}" aria-label="Days written"><div class="jds-progress__fill" style="width:${Math.round((done / Math.max(total, 1)) * 100)}%"></div></div>${btn("Stop", "stop", { variant: "quiet", sm: true, disabled: s.busy })}</div>`
       : "";
@@ -210,7 +234,11 @@ export function planScreen(ctx) {
       p.state !== "active" && p.days.some((d) => d.status === "pending")
         ? recovery(
             p.state === "stopped" ? "Writing stopped" : "Writing paused",
-            esc(p.state === "paused" && p.pausedReason !== null ? PAUSE_TEXT[p.pausedReason] : `${done} of ${total} days are written.`),
+            esc(
+              p.state === "paused" && p.pausedReason !== null
+                ? PAUSE_TEXT[p.pausedReason]
+                : `${done} of ${total} days are written.`
+            ),
             btn("Resume", "resume", { variant: "secondary", sm: true, disabled: s.busy }),
             "status"
           )
@@ -219,7 +247,16 @@ export function planScreen(ctx) {
       s.failed ? caption(esc(s.failed), ' role="alert"') : ""
     }<div class="mls-week">${p.days
       .map((day, index) =>
-        daySection({ day, index, today, planActive: p.state === "active", showSharing: people.size > 1, writes: true, busy: s.busy, ui: s.ui })
+        daySection({
+          day,
+          index,
+          today,
+          planActive: p.state === "active",
+          showSharing: people.size > 1,
+          writes: true,
+          busy: s.busy,
+          ui: s.ui
+        })
       )
       .join("")}</div>${dialogs(p, lockedText)}</div>`;
   }

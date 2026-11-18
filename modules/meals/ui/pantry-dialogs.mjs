@@ -1,7 +1,8 @@
 import { esc } from "./format.mjs";
 import { btn, caption, dialog, field, input } from "./kit.mjs";
 
-const problem = (text) => (text ? `<p class="jds-hint jds-hint--error" role="alert">${esc(text)}</p>` : "");
+const problem = (text) =>
+  text ? `<p class="jds-hint jds-hint--error" role="alert">${esc(text)}</p>` : "";
 const cancel = btn("Cancel", "dialog-close", { variant: "secondary" });
 
 /** An amount typed into the Amount box. Null when it is not a number above 0. */
@@ -22,7 +23,11 @@ export function itemForm(item) {
 export function itemDialog(item, form, busy) {
   const body = `<div class="mls-form">${field("f-name", "Item", input("f-name", form.name, { extra: 'maxlength="80" placeholder="Basmati rice"' }))}<div class="mls-form-grid">${field("f-amount", "Amount", input("f-amount", form.amount, { extra: 'inputmode="decimal" placeholder="Optional"' }))}${field("f-unit", "Unit", input("f-unit", form.unit, { extra: 'maxlength="24" placeholder="lb, can, bag"' }))}</div><p class="jds-hint">Leave the amount blank when you have some but no measured amount.</p>${problem(form.problem)}</div>`;
   const remove = item
-    ? btn("Remove", "remove-item", { variant: "danger", disabled: busy, data: `data-item="${esc(item.itemId)}"` })
+    ? btn("Remove", "remove-item", {
+        variant: "danger",
+        disabled: busy,
+        data: `data-item="${esc(item.itemId)}"`
+      })
     : "";
   return dialog({
     id: "mls-item",

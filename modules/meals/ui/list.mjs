@@ -1,10 +1,18 @@
-/* global document, navigator, window */
+/* global window */
 import { noticeFor } from "./api.mjs";
 import { amountText, esc, PANTRY_LABEL, todayIso } from "./format.mjs";
 import { badge, btn, caption, checkbox, dialog, empty, recovery } from "./kit.mjs";
 import {
-  addDialog, addInput, boughtDialog, boughtInput, boughtPicks, buyText, editDialog, editInput,
-  SECTION_LABELS, SECTION_ORDER
+  addDialog,
+  addInput,
+  boughtDialog,
+  boughtInput,
+  boughtPicks,
+  buyText,
+  editDialog,
+  editInput,
+  SECTION_LABELS,
+  SECTION_ORDER
 } from "./list-dialogs.mjs";
 
 const TOAST_MS = 8000;
@@ -18,8 +26,17 @@ function sourcesText(line) {
 /** The Shopping list area: lines by store section, ticking, add and edit, Bought, Undo. */
 export function listScreen(ctx) {
   const s = {
-    kind: "loading", list: null, plan: null, busy: false, failed: null, toast: null,
-    dialog: null, form: null, lineId: null, picks: {}, problem: null
+    kind: "loading",
+    list: null,
+    plan: null,
+    busy: false,
+    failed: null,
+    toast: null,
+    dialog: null,
+    form: null,
+    lineId: null,
+    picks: {},
+    problem: null
   };
   let toastTimer = null;
   let wake = null;
@@ -98,9 +115,12 @@ export function listScreen(ctx) {
     },
     tick: (el) => {
       const line = lineOf(el.dataset.line);
-      return run("meals.list.edit", { action: line.checkedAt === null ? "tick" : "untick", lineId: line.lineId });
+      return run("meals.list.edit", {
+        action: line.checkedAt === null ? "tick" : "untick",
+        lineId: line.lineId
+      });
     },
-    "hit": (el) => (s.busy ? undefined : acts.tick(el)),
+    hit: (el) => (s.busy ? undefined : acts.tick(el)),
     edit: (el) => {
       const line = lineOf(el.dataset.line);
       s.lineId = line.lineId;
@@ -167,7 +187,11 @@ export function listScreen(ctx) {
       s.busy = true;
       s.failed = null;
       ctx.draw();
-      const outcome = await ctx.api.write("meals.list.clear", { listId: s.list.listId }, { confirmed: true });
+      const outcome = await ctx.api.write(
+        "meals.list.clear",
+        { listId: s.list.listId },
+        { confirmed: true }
+      );
       s.busy = false;
       s.failed = noticeFor(outcome);
       await load();
@@ -211,7 +235,10 @@ export function listScreen(ctx) {
   function row(line) {
     const ticked = line.checkedAt !== null;
     const buy = buyText(line);
-    const need = !line.manual && line.quantity !== null && line.purchase !== null ? amountText(line.quantity, line.unit) : "";
+    const need =
+      !line.manual && line.quantity !== null && line.purchase !== null
+        ? amountText(line.quantity, line.unit)
+        : "";
     const meta = sourcesText(line);
     const hit = `data-act="hit" data-line="${esc(line.lineId)}"`;
     return `<li class="mls-line${ticked ? " mls-line--done" : ""}">${checkbox(`Got ${line.name}`, ticked, "tick", `data-line="${esc(line.lineId)}"`, s.busy)}<span class="mls-line__body mls-line__hit" ${hit}><span class="mls-line__name">${esc(line.name)}</span>${
@@ -223,7 +250,14 @@ export function listScreen(ctx) {
     }</span><span class="mls-line__amount mls-line__hit" ${hit}><span class="mls-num">${esc(buy)}</span>${
       need !== "" && need !== buy ? `<span class="jds-caption">Needs ${esc(need)}</span>` : ""
     }</span><span class="mls-line__tools">${btn("Edit", "edit", { variant: "quiet", sm: true, disabled: s.busy, data: `aria-label="Edit ${esc(line.name)}" data-line="${esc(line.lineId)}"` })}${
-      line.manual ? btn("Remove", "remove-line", { variant: "quiet", sm: true, disabled: s.busy, data: `aria-label="Remove ${esc(line.name)}" data-line="${esc(line.lineId)}"` }) : ""
+      line.manual
+        ? btn("Remove", "remove-line", {
+            variant: "quiet",
+            sm: true,
+            disabled: s.busy,
+            data: `aria-label="Remove ${esc(line.name)}" data-line="${esc(line.lineId)}"`
+          })
+        : ""
     }</span></li>`;
   }
 
@@ -235,7 +269,11 @@ export function listScreen(ctx) {
   function render() {
     if (s.kind === "loading") return caption("Loading the shopping list", ' role="status"');
     if (s.kind === "error") {
-      return recovery("Couldn't load the shopping list", "Check the connection, then try again.", btn("Try again", "retry-load", { variant: "secondary", sm: true }));
+      return recovery(
+        "Couldn't load the shopping list",
+        "Check the connection, then try again.",
+        btn("Try again", "retry-load", { variant: "secondary", sm: true })
+      );
     }
     const list = s.list;
     const lines = open();
@@ -244,8 +282,12 @@ export function listScreen(ctx) {
     const ticked = buying.filter((l) => l.checkedAt !== null);
     const percent = buying.length > 0 ? Math.round((ticked.length / buying.length) * 100) : 0;
     const offerBuild =
-      s.plan !== null && s.plan.planId !== list.planId && s.plan.days.some((d) => d.meals.some((m) => m.status === "ready"));
-    const build = offerBuild ? btn("Build from the plan", "build", { variant: "secondary", disabled: s.busy }) : "";
+      s.plan !== null &&
+      s.plan.planId !== list.planId &&
+      s.plan.days.some((d) => d.meals.some((m) => m.status === "ready"));
+    const build = offerBuild
+      ? btn("Build from the plan", "build", { variant: "secondary", disabled: s.busy })
+      : "";
     const controls = `${build}${btn("Add item", "add", { variant: "secondary" })}${btn("Clear list", "clear", { variant: "quiet", disabled: s.busy || list.lines.length === 0 })}${btn(ticked.length > 0 ? `Bought (${ticked.length})` : "Bought", "bought", { disabled: s.busy || lines.length === 0 })}`;
     let body;
     if (lines.length === 0) {
@@ -273,7 +315,8 @@ export function listScreen(ctx) {
       : "";
     let dlg = "";
     if (s.dialog === "add") dlg = addDialog(s.form, s.busy);
-    else if (s.dialog === "edit" && lineOf(s.lineId)) dlg = editDialog(lineOf(s.lineId), s.form, s.busy);
+    else if (s.dialog === "edit" && lineOf(s.lineId))
+      dlg = editDialog(lineOf(s.lineId), s.form, s.busy);
     else if (s.dialog === "bought") dlg = boughtDialog(buying, s.picks, s.problem, s.busy);
     else if (s.dialog === "clear") {
       dlg = dialog({

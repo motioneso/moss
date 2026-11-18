@@ -23,7 +23,8 @@ export function buyText(line) {
   return line.quantity !== null ? amountText(line.quantity, line.unit) : "";
 }
 
-const problem = (text) => (text ? `<p class="jds-hint jds-hint--error" role="alert">${esc(text)}</p>` : "");
+const problem = (text) =>
+  text ? `<p class="jds-hint jds-hint--error" role="alert">${esc(text)}</p>` : "";
 const cancel = btn("Cancel", "dialog-close", { variant: "secondary" });
 
 export function addDialog(form, busy) {
@@ -54,7 +55,8 @@ export function editDialog(line, form, busy) {
     !line.manual && needs !== "" && needs !== buyText(line)
       ? `<span class="jds-hint">Recipes need ${esc(needs)}</span>`
       : "";
-  const sources = line.sources.length > 0 ? `For ${line.sources.map((x) => x.label).join(", ")}` : "";
+  const sources =
+    line.sources.length > 0 ? `For ${line.sources.map((x) => x.label).join(", ")}` : "";
   return dialog({
     id: "mls-edit",
     title: `Edit ${esc(line.name)}`,
@@ -98,7 +100,15 @@ export function boughtDialog(lines, picks, problemText, busy) {
   return dialog({
     id: "mls-bought",
     title: "Bought",
-    body: `<div class="mls-stack">${group("Ticked", lines.filter((l) => l.checkedAt !== null), picks)}${group("Not ticked", lines.filter((l) => l.checkedAt === null), picks)}${problem(problemText)}</div>`,
+    body: `<div class="mls-stack">${group(
+      "Ticked",
+      lines.filter((l) => l.checkedAt !== null),
+      picks
+    )}${group(
+      "Not ticked",
+      lines.filter((l) => l.checkedAt === null),
+      picks
+    )}${problem(problemText)}</div>`,
     footer: `${cancel}${btn(chosen.length > 0 ? `Move ${chosen.length} to the Pantry` : "Move to the Pantry", "save-bought", { disabled: busy || chosen.length === 0 })}`
   });
 }
@@ -111,7 +121,8 @@ export function boughtInput(lines, picks) {
     const entry = { lineId: line.lineId };
     if (pick.amount.trim() !== buyText(line) && pick.amount.trim() !== "") {
       const parsed = parseAmount(pick.amount);
-      if (parsed === null) return { problem: `Start the amount for ${line.name} with a number, such as 2 or 500 g` };
+      if (parsed === null)
+        return { problem: `Start the amount for ${line.name} with a number, such as 2 or 500 g` };
       entry.quantity = parsed.quantity;
       if (parsed.unit !== null) entry.unit = parsed.unit;
     }

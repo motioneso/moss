@@ -90,7 +90,10 @@ export function recipeScreen(ctx) {
           changes.length === 0
             ? "Marked cooked. Nothing came out of the Pantry."
             : `Marked cooked. Took ${changes
-                .map((c) => `${c.name} ${quantity(c.before)} to ${quantity(c.after)}${c.unit ? ` ${c.unit}` : ""}`)
+                .map(
+                  (c) =>
+                    `${c.name} ${quantity(c.before)} to ${quantity(c.after)}${c.unit ? ` ${c.unit}` : ""}`
+                )
                 .join(", ")}.`,
         undo: result.undo,
         logOffer: result.logOffer
@@ -125,26 +128,38 @@ export function recipeScreen(ctx) {
     const base = recipe.baseServings ?? meal.servings;
     const shown = meal.servings;
     const busy = s.busy;
-    return `<section class="mls-cook">${sectionHead("Cooking", { number: "03", rule: true })}<div class="mls-cook__row"><span class="mls-cook__who">Servings</span>${btn("-", "servings-down", {
-      variant: "secondary",
-      sm: true,
-      disabled: busy || cooked || shown <= 0.5,
-      data: 'aria-label="Fewer servings"'
-    })}<span class="mls-num" role="status">${num(shown)}</span>${btn("+", "servings-up", {
+    return `<section class="mls-cook">${sectionHead("Cooking", { number: "03", rule: true })}<div class="mls-cook__row"><span class="mls-cook__who">Servings</span>${btn(
+      "-",
+      "servings-down",
+      {
+        variant: "secondary",
+        sm: true,
+        disabled: busy || cooked || shown <= 0.5,
+        data: 'aria-label="Fewer servings"'
+      }
+    )}<span class="mls-num" role="status">${num(shown)}</span>${btn("+", "servings-up", {
       variant: "secondary",
       sm: true,
       disabled: busy || cooked || shown >= 24,
       data: 'aria-label="More servings"'
     })}${
       recipe.servingsOverride !== null
-        ? btn(`Reset to ${num(base)}`, "servings-reset", { variant: "quiet", sm: true, disabled: busy || cooked })
+        ? btn(`Reset to ${num(base)}`, "servings-reset", {
+            variant: "quiet",
+            sm: true,
+            disabled: busy || cooked
+          })
         : ""
     }</div><div class="mls-cook__row">${
-      cooked ? '<span class="jds-caption" role="status">Cooked</span>' : btn("Mark cooked", "cooked", { disabled: busy })
+      cooked
+        ? '<span class="jds-caption" role="status">Cooked</span>'
+        : btn("Mark cooked", "cooked", { disabled: busy })
     }</div>${meal.eaters
       .map(
         (eater) =>
-          `<div class="mls-cook__row"><span class="mls-cook__who">${esc(eater.name)}</span><div class="mls-stars" role="group" aria-label="${esc(`Rating for ${eater.name}`)}">${[1, 2, 3, 4, 5]
+          `<div class="mls-cook__row"><span class="mls-cook__who">${esc(eater.name)}</span><div class="mls-stars" role="group" aria-label="${esc(`Rating for ${eater.name}`)}">${[
+            1, 2, 3, 4, 5
+          ]
             .map((stars) =>
               btn(String(stars), "rate", {
                 variant: eater.rating === stars ? "primary" : "secondary",
@@ -163,14 +178,17 @@ export function recipeScreen(ctx) {
       .join("")}${s.failed ? caption(esc(s.failed), ' role="alert"') : ""}${
       s.toast
         ? `<div class="jds-toast mls-toast" role="status"><div class="jds-toast__body"><div class="jds-toast__title">${esc(s.toast.text)}</div></div>${
-            s.toast.logOffer ? btn("Log my portion", "log-portion", { variant: "quiet", sm: true }) : ""
+            s.toast.logOffer
+              ? btn("Log my portion", "log-portion", { variant: "quiet", sm: true })
+              : ""
           }${s.toast.undo ? btn("Undo", "undo", { variant: "quiet", sm: true }) : ""}</div><div class="mls-toast-room"></div>`
         : ""
     }</section>`;
   }
 
   function render() {
-    if (s.kind === "loading") return `<div class="mls-stack">${back}${caption("Loading the recipe", ' role="status"')}</div>`;
+    if (s.kind === "loading")
+      return `<div class="mls-stack">${back}${caption("Loading the recipe", ' role="status"')}</div>`;
     if (s.kind === "error") {
       return `<div class="mls-stack">${back}${empty("Couldn't load this recipe", "", btn("Try again", "retry-load", { variant: "secondary" }))}</div>`;
     }
@@ -178,12 +196,18 @@ export function recipeScreen(ctx) {
     const meal = recipe.meal;
     if (meal.status !== "ready") {
       return `<div class="mls-stack">${back}${empty(
-        meal.status === "failed" ? "This meal could not be written" : "Moss is still writing this meal",
+        meal.status === "failed"
+          ? "This meal could not be written"
+          : "Moss is still writing this meal",
         esc(failureText(meal.failureReason) ?? "")
       )}</div>`;
     }
     const eaters = meal.eaters.map((e) => e.name).join(" and ");
-    const lede = [meal.cookMinutes !== null ? `${meal.cookMinutes} min` : null, `For ${eaters}`, `Serves ${num(meal.servings)}`]
+    const lede = [
+      meal.cookMinutes !== null ? `${meal.cookMinutes} min` : null,
+      `For ${eaters}`,
+      `Serves ${num(meal.servings)}`
+    ]
       .filter((part) => part !== null)
       .join(" · ");
     const missing = recipe.ingredients.filter((line) => line.missing);

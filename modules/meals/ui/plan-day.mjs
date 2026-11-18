@@ -41,7 +41,8 @@ function safety(meal) {
 function mealTools(meal, busy) {
   if (meal.cookedAt !== null || meal.kind !== "recipe") return "";
   const d = `data-meal="${esc(meal.mealId)}"`;
-  const tool = (label, act) => btn(label, act, { variant: "quiet", sm: true, disabled: busy, data: d });
+  const tool = (label, act) =>
+    btn(label, act, { variant: "quiet", sm: true, disabled: busy, data: d });
   return `<div class="mls-meal__tools">${tool(meal.locked ? "Unlock" : "Lock", meal.locked ? "unlock" : "lock")}${tool("Quick swap", "quick-swap")}${
     isReplaceable(meal) ? tool("Regenerate", "regen-meal") : ""
   }</div>`;
@@ -105,12 +106,16 @@ function dayTools(day, busy, ui) {
     { label: "Cook-time limit", disabled: busy, model: `limit:${day.dayId}` }
   )}${
     slots.length > 0 && people.size > 0
-      ? `${select(`slot-${day.dayId}`, slots.map((s) => [s, titleCase(s)]), slot, { label: "One-off meal slot", disabled: busy, model: `slot:${day.dayId}` })}${select(
-          `who-${day.dayId}`,
-          [...people.entries()],
-          member,
-          { label: "One-off meal for", disabled: busy, model: `who:${day.dayId}` }
-        )}${btn("Add One-off", "one-off", { variant: "quiet", sm: true, disabled: busy || member === "", data: `data-day="${esc(day.dayId)}"` })}`
+      ? `${select(
+          `slot-${day.dayId}`,
+          slots.map((s) => [s, titleCase(s)]),
+          slot,
+          { label: "One-off meal slot", disabled: busy, model: `slot:${day.dayId}` }
+        )}${select(`who-${day.dayId}`, [...people.entries()], member, {
+          label: "One-off meal for",
+          disabled: busy,
+          model: `who:${day.dayId}`
+        })}${btn("Add One-off", "one-off", { variant: "quiet", sm: true, disabled: busy || member === "", data: `data-day="${esc(day.dayId)}"` })}`
       : ""
   }</div>`;
 }
@@ -138,7 +143,11 @@ export function daySection({ day, index, today, planActive, showSharing, writes,
     });
     meta = meta ? `<span class="mls-row">${meta}${regen}</span>` : regen;
   }
-  const head = sectionHead(esc(title), { number: String(index + 1).padStart(2, "0"), meta, level: 3 });
+  const head = sectionHead(esc(title), {
+    number: String(index + 1).padStart(2, "0"),
+    meta,
+    level: 3
+  });
   const cls = isToday ? "mls-day mls-day--today" : "mls-day";
   const unwritten = day.meals.some((m) => m.status === "pending" || m.status === "writing");
   const dayCard =
@@ -147,7 +156,11 @@ export function daySection({ day, index, today, planActive, showSharing, writes,
           `Moss could not finish ${esc(title.split(",")[0])}`,
           failureText(day.failureReason),
           writes
-            ? btn("Retry", "retry-day", { variant: "secondary", sm: true, data: `data-day="${esc(day.dayId)}"` })
+            ? btn("Retry", "retry-day", {
+                variant: "secondary",
+                sm: true,
+                data: `data-day="${esc(day.dayId)}"`
+              })
             : ""
         )
       : "";
@@ -155,7 +168,9 @@ export function daySection({ day, index, today, planActive, showSharing, writes,
     return `<section class="${cls}" aria-label="${esc(title)}">${head}${dayCard}</section>`;
   }
   const totals = day.dayFit.flatMap((entry) => {
-    const name = day.meals.flatMap((m) => m.eaters).find((e) => e.memberId === entry.memberId)?.name;
+    const name = day.meals
+      .flatMap((m) => m.eaters)
+      .find((e) => e.memberId === entry.memberId)?.name;
     return name ? [{ name, fit: entry.fit }] : [];
   });
   const slots = groups(day.meals);

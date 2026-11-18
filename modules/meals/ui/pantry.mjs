@@ -14,8 +14,16 @@ const SOURCE_TEXT = {
 /** The Pantry area: what the household has on hand, find, add, edit, remove with Undo, and Staples. */
 export function pantryScreen(ctx) {
   const s = {
-    kind: "loading", pantry: null, busy: false, failed: null, toast: null,
-    dialog: null, itemId: null, form: null, find: "", staple: ""
+    kind: "loading",
+    pantry: null,
+    busy: false,
+    failed: null,
+    toast: null,
+    dialog: null,
+    itemId: null,
+    form: null,
+    find: "",
+    staple: ""
   };
   let toastTimer = null;
 
@@ -68,7 +76,10 @@ export function pantryScreen(ctx) {
 
   async function removeItem(id) {
     const item = itemOf(id);
-    const done = await run({ action: "remove", itemId: id }, (r) => ({ text: `Removed ${item.name}`, undo: r.undo }));
+    const done = await run({ action: "remove", itemId: id }, (r) => ({
+      text: `Removed ${item.name}`,
+      undo: r.undo
+    }));
     if (done) closeDialog();
     ctx.draw();
   }
@@ -117,7 +128,8 @@ export function pantryScreen(ctx) {
       if (await run({ action: "add", target: "staple", name })) s.staple = "";
       ctx.draw();
     },
-    "remove-staple": (el) => run({ action: "remove", target: "staple", stapleId: el.dataset.staple }),
+    "remove-staple": (el) =>
+      run({ action: "remove", target: "staple", stapleId: el.dataset.staple }),
     "dialog-close": () => {
       closeDialog();
       s.failed = null;
@@ -166,11 +178,18 @@ export function pantryScreen(ctx) {
   function render() {
     if (s.kind === "loading") return caption("Loading the Pantry", ' role="status"');
     if (s.kind === "error") {
-      return recovery("Couldn't load the Pantry", "Check the connection, then try again.", btn("Try again", "retry-load", { variant: "secondary", sm: true }));
+      return recovery(
+        "Couldn't load the Pantry",
+        "Check the connection, then try again.",
+        btn("Try again", "retry-load", { variant: "secondary", sm: true })
+      );
     }
     const pantry = s.pantry;
     const needle = s.find.trim().toLowerCase();
-    const shown = needle === "" ? pantry.items : pantry.items.filter((i) => i.name.toLowerCase().includes(needle));
+    const shown =
+      needle === ""
+        ? pantry.items
+        : pantry.items.filter((i) => i.name.toLowerCase().includes(needle));
     const add = btn("Add item", "add");
     let body;
     if (pantry.items.length === 0) {
@@ -189,7 +208,8 @@ export function pantryScreen(ctx) {
       : "";
     let dlg = "";
     if (s.dialog === "item") dlg = itemDialog(s.itemId ? itemOf(s.itemId) : null, s.form, s.busy);
-    else if (s.dialog === "staples") dlg = staplesDialog(pantry.staples, s.staple, s.busy, s.failed);
+    else if (s.dialog === "staples")
+      dlg = staplesDialog(pantry.staples, s.staple, s.busy, s.failed);
     return `<div class="mls-stack">${body}${s.failed && pantry.items.length === 0 && !s.dialog ? caption(esc(s.failed), ' role="alert"') : ""}${toast}${dlg}</div>`;
   }
 

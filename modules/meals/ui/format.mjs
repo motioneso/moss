@@ -150,4 +150,5 @@ const FAILURE_TEXT = {
 
 export const failureText = (reason) => (reason == null ? null : (FAILURE_TEXT[reason] ?? null));
 
-export const plural = (count, one, many = `${one}s`) => (count === 1 ? `1 ${one}` : `${count} ${many}`);
+export const plural = (count, one, many = `${one}s`) =>
+  count === 1 ? `1 ${one}` : `${count} ${many}`;
