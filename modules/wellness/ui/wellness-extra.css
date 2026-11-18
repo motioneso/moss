@@ -191,4 +191,5 @@
 }
 .wl-export-boundaries {
   margin-bottom: var(--space-3);
+  border-left: 0;
 }

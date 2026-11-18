@@ -77,7 +77,20 @@ export function renderSettings(root, { api }) {
   }
 
   const retry = (text) =>
-    h("div", { class: "wl-settings-status", role: "status" }, h("span", {}, text), button("Try again", { variant: "secondary", size: "sm", onclick: () => { loadFailed = false; paint(); void load(); } }));
+    h(
+      "div",
+      { class: "wl-settings-status", role: "status" },
+      h("span", {}, text),
+      button("Try again", {
+        variant: "secondary",
+        size: "sm",
+        onclick: () => {
+          loadFailed = false;
+          paint();
+          void load();
+        }
+      })
+    );
 
   function paint() {
     if (!consent) {
@@ -88,38 +101,77 @@ export function renderSettings(root, { api }) {
       );
       return;
     }
-    const input = h("input", { type: "checkbox", "aria-label": LABEL, checked: consent.effective === true, disabled: saving });
+    const input = h("input", {
+      type: "checkbox",
+      "aria-label": LABEL,
+      checked: consent.effective === true,
+      disabled: saving
+    });
     input.addEventListener("change", () => void choose(input.checked));
     const control = h(
       "div",
       { class: "set-row__control" },
-      consent.explicit === null ? h("span", { class: "jds-badge jds-badge--neutral" }, "Inherited") : null,
-      h("label", { class: "jds-switch" }, input, h("span", { class: "jds-switch__track" }, h("span", { class: "jds-switch__thumb" })))
+      consent.explicit === null
+        ? h("span", { class: "jds-badge jds-badge--neutral" }, "Inherited")
+        : null,
+      h(
+        "label",
+        { class: "jds-switch" },
+        input,
+        h("span", { class: "jds-switch__track" }, h("span", { class: "jds-switch__thumb" }))
+      )
     );
     body.replaceChildren(
-      h(
-        "section",
-        { class: "pane__card" },
-        h("header", { class: "pane__cardhead" }, h("div", { class: "pane__cardheadmain" }, h("h2", { class: "pane__cardtitle" }, "AI access"))),
+      ...[
         h(
-          "div",
-          { class: "pane__cardbody" },
+          "section",
+          { class: "pane__card" },
+          h(
+            "header",
+            { class: "pane__cardhead" },
+            h(
+              "div",
+              { class: "pane__cardheadmain" },
+              h("h2", { class: "pane__cardtitle" }, "AI access")
+            )
+          ),
           h(
             "div",
-            { class: "set-row" },
-            h("div", { class: "set-row__main" }, h("div", { class: "set-row__name" }, LABEL), h("div", { class: "set-row__desc" }, DESCRIPTION)),
-            control
+            { class: "pane__cardbody" },
+            h(
+              "div",
+              { class: "set-row" },
+              h(
+                "div",
+                { class: "set-row__main" },
+                h("div", { class: "set-row__name" }, LABEL),
+                h("div", { class: "set-row__desc" }, DESCRIPTION)
+              ),
+              control
+            )
+          )
+        ),
+        loadFailed
+          ? retry("Could not refresh Wellness AI access. Showing the last saved choice.")
+          : null,
+        saveFailed
+          ? h(
+              "div",
+              { class: "wl-settings-status", role: "alert" },
+              "Could not save Wellness AI access. Try again."
+            )
+          : null,
+        h(
+          "p",
+          { class: "set2-note" },
+          icon(INFO, { size: 13 }),
+          h(
+            "span",
+            {},
+            "Disabling this does not turn off the Wellness module itself - you'll still log check-ins and meds; your assistant just won't see them."
           )
         )
-      ),
-      loadFailed ? retry("Could not refresh Wellness AI access. Showing the last saved choice.") : null,
-      saveFailed ? h("div", { class: "wl-settings-status", role: "alert" }, "Could not save Wellness AI access. Try again.") : null,
-      h(
-        "p",
-        { class: "set2-note" },
-        icon(INFO, { size: 13 }),
-        h("span", {}, "Disabling this does not turn off the Wellness module itself - you'll still log check-ins and meds; your assistant just won't see them.")
-      )
+      ].filter(Boolean)
     );
   }
 

@@ -34,10 +34,13 @@ export function defaultRange(today) {
   return { from: addDays(today, -90), to: today };
 }
 
-function browserToday() {
-  const now = new Date();
+/** The export counts UTC days, so the default end date is the later of the local and UTC day.
+ * That keeps an entry made this evening inside the range for people west of UTC. */
+export function browserToday(now = new Date()) {
   const pad = (n) => String(n).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const local = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const utc = now.toISOString().slice(0, 10);
+  return local > utc ? local : utc;
 }
 
 // The choice of dates, categories and the running export survives closing the dialog.
@@ -45,7 +48,12 @@ function browserToday() {
 const draft = { from: null, to: null, categories: CATEGORIES.map(([key]) => key), jobId: null };
 
 export function resetExportDraft() {
-  Object.assign(draft, { from: null, to: null, categories: CATEGORIES.map(([key]) => key), jobId: null });
+  Object.assign(draft, {
+    from: null,
+    to: null,
+    categories: CATEGORIES.map(([key]) => key),
+    jobId: null
+  });
 }
 
 /** Opens the export dialog over the page. `api.call` reads and writes the Wellness routes.
@@ -89,7 +97,11 @@ export function openExportDialog({ api, save, today = browserToday(), returnFocu
       h("div", { class: "jds-dialog__desc", id: "wl-export-desc" }, "Share")
     ),
     body,
-    h("div", { class: "jds-dialog__foot" }, button("Close", { variant: "secondary", onclick: close }))
+    h(
+      "div",
+      { class: "jds-dialog__foot" },
+      button("Close", { variant: "secondary", onclick: close })
+    )
   );
   const scrim = h("div", { class: "jds-dialog-scrim" }, dialog);
   scrim.addEventListener("click", (event) => {
@@ -135,7 +147,11 @@ export function openExportDialog({ api, save, today = browserToday(), returnFocu
       "label",
       { class: "jds-check", style: extra.style },
       input,
-      h("span", { class: "jds-check__box" }, icon('<polyline points="2,7 5,10 11,3"/>', { size: 13 })),
+      h(
+        "span",
+        { class: "jds-check__box" },
+        icon('<polyline points="2,7 5,10 11,3"/>', { size: 13 })
+      ),
       label
     );
   }
@@ -143,7 +159,12 @@ export function openExportDialog({ api, save, today = browserToday(), returnFocu
   function field(id, label, value, { max, onchange, disabled }) {
     const input = h("input", { id, type: "date", class: "wl-input", value, max, disabled });
     input.addEventListener("change", () => onchange(input.value));
-    return h("div", { class: "wl-field", style: "margin-bottom: 12px" }, h("label", { for: id, class: "wl-field__label" }, label), input);
+    return h(
+      "div",
+      { class: "wl-field", style: "margin-bottom: 12px" },
+      h("label", { for: id, class: "wl-field__label" }, label),
+      input
+    );
   }
 
   function form() {
@@ -162,7 +183,11 @@ export function openExportDialog({ api, save, today = browserToday(), returnFocu
         { class: "wl-modal__desc", style: "margin-bottom: 14px" },
         "Generate a printable document of your wellness data for a date range and the categories you choose. Open it in a browser and print to PDF to share."
       ),
-      h("p", { class: "jds-note jds-note--practical wl-export-boundaries" }, "UTC days, up to 366."),
+      h(
+        "p",
+        { class: "jds-note jds-note--practical wl-export-boundaries" },
+        "UTC days, up to 366."
+      ),
       rangeValid ? null : h("p", { role: "alert" }, "Choose a date range of up to 366 days."),
       field("wlexport-from", "From", from(), {
         max: to(),
@@ -185,10 +210,17 @@ export function openExportDialog({ api, save, today = browserToday(), returnFocu
         { class: "wl-fieldset", style: "margin-bottom: 12px" },
         h("legend", { class: "wl-field__label" }, "Include"),
         CATEGORIES.map(([key, label]) =>
-          check(label, draft.categories.includes(key), (on) => {
-            draft.categories = on ? [...draft.categories, key] : draft.categories.filter((c) => c !== key);
-            paint();
-          }, starting)
+          check(
+            label,
+            draft.categories.includes(key),
+            (on) => {
+              draft.categories = on
+                ? [...draft.categories, key]
+                : draft.categories.filter((c) => c !== key);
+              paint();
+            },
+            starting
+          )
         )
       ),
       h(
@@ -202,11 +234,23 @@ export function openExportDialog({ api, save, today = browserToday(), returnFocu
           });
           return input;
         })(),
-        h("span", { class: "jds-check__box" }, icon('<polyline points="2,7 5,10 11,3"/>', { size: 13 })),
+        h(
+          "span",
+          { class: "jds-check__box" },
+          icon('<polyline points="2,7 5,10 11,3"/>', { size: 13 })
+        ),
         h("span", { class: "wl-consent-text" }, SENSITIVE_COPY)
       ),
       failedMessage
-        ? h("div", { class: "wl-modal__note wl-modal__note--error", role: "alert", style: "margin-bottom: 10px" }, failedMessage)
+        ? h(
+            "div",
+            {
+              class: "wl-modal__note wl-modal__note--error",
+              role: "alert",
+              style: "margin-bottom: 10px"
+            },
+            failedMessage
+          )
         : null,
       generate
     ];
@@ -224,7 +268,10 @@ export function openExportDialog({ api, save, today = browserToday(), returnFocu
   async function download() {
     downloadFailed = false;
     try {
-      const file = await api.call("GET", `/wellness/export/${encodeURIComponent(draft.jobId)}/download`);
+      const file = await api.call(
+        "GET",
+        `/wellness/export/${encodeURIComponent(draft.jobId)}/download`
+      );
       await save({ filename: file.filename, contentType: file.contentType, text: file.html });
     } catch {
       downloadFailed = true;
@@ -236,7 +283,8 @@ export function openExportDialog({ api, save, today = browserToday(), returnFocu
     const state = status?.status;
     const expiresAt = status?.expiresAt;
     const expired =
-      state === "expired" || (state === "ready" && expiresAt && Date.parse(expiresAt) <= Date.now());
+      state === "expired" ||
+      (state === "ready" && expiresAt && Date.parse(expiresAt) <= Date.now());
     if (!draft.jobId || state === "failed") return form();
     if (expired || status?.unavailable) {
       return [
@@ -249,21 +297,40 @@ export function openExportDialog({ api, save, today = browserToday(), returnFocu
       ];
     }
     if (statusFailed) {
-      return [h("p", { role: "alert" }, "Could not check your export. ", linkButton("Try again", () => void poll()))];
+      return [
+        h(
+          "p",
+          { role: "alert" },
+          "Could not check your export. ",
+          linkButton("Try again", () => void poll())
+        )
+      ];
     }
     if (state === "ready") {
       return [
         h(
           "div",
           { class: "wl-modal__ready", role: "status" },
-          h("p", { class: "wl-modal__note" }, "Your export is ready. Open it in a browser and print to PDF to share."),
+          h(
+            "p",
+            { class: "wl-modal__note" },
+            "Your export is ready. Open it in a browser and print to PDF to share."
+          ),
           downloadFailed
-            ? h("p", { class: "wl-modal__note wl-modal__note--error", role: "alert" }, "Could not download the export. Try again.")
+            ? h(
+                "p",
+                { class: "wl-modal__note wl-modal__note--error", role: "alert" },
+                "Could not download the export. Try again."
+              )
             : null,
           h(
             "div",
             { style: "display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap" },
-            button("Download", { size: "sm", iconPaths: PATHS.download, onclick: () => void download() }),
+            button("Download", {
+              size: "sm",
+              iconPaths: PATHS.download,
+              onclick: () => void download()
+            }),
             button("Start a new export", { variant: "quiet", size: "sm", onclick: reset })
           )
         )
