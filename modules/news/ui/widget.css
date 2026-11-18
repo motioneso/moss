@@ -1,0 +1,219 @@
+/* Today "News desk" widget, day mode. Flattened from the Today shell desk rules so the
+   widget frame carries its own look. */
+
+html,
+body {
+  background: transparent;
+}
+
+/* Side margins match the News page. */
+#root {
+  padding-inline: var(--space-6);
+}
+
+@media (max-width: 560px) {
+  #root {
+    padding-inline: var(--space-3);
+  }
+}
+
+.jds-brief--news {
+  background: color-mix(in srgb, var(--forest-soft) 25%, var(--paper));
+}
+.jds-brief--news {
+  background: transparent;
+}
+.jds-brief--news .desk-title {
+  position: relative;
+  top: -3px;
+}
+@media (max-width: 1080px) {
+  .jds-brief--news .desk-title {
+    top: -5px;
+  }
+}
+.jds-brief--news .desk-cols {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 32px;
+  margin-top: 4px;
+}
+.jds-brief--news .desk-leadcol,
+.jds-brief--news .desk-listcol {
+  min-width: 0;
+}
+.jds-brief--news .nw-twnote {
+  max-width: 290px;
+  margin-top: 19px;
+}
+.jds-brief--news .nw-twnote__text {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}
+.jds-brief--news .nw-twlead__title {
+  font-family: var(--font-display);
+  font-size: 23px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+.jds-brief--news .nw-twlead__dek {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.nw-twlead__tag-evening {
+  display: none;
+}
+.nw-twlead__tag-morning {
+  display: inline;
+}
+.nw-twlead__link {
+  display: inline-block;
+  margin-top: 12px;
+  color: var(--ink);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.jds-brief--news .nw-twlist__item {
+  padding: 10px 0;
+}
+.jds-brief--news .nw-twlist__item + .nw-twlist__item {
+  border-top: 1px solid var(--line);
+}
+@media (min-width: 1081px) {
+  > #news {
+    grid-row: 4;
+  }
+}
+@media (max-width: 1080px) {
+  .jds-brief--news .desk-cols {
+    grid-template-columns: 1fr;
+  }
+}
+.jds-brief--news {
+  margin-top: 43px;
+  padding: 25px 0 0;
+  border: none;
+  border-top: 1px solid var(--accent-rule);
+  border-radius: 0;
+  box-shadow: none;
+}
+.jds-brief--news .desk-head {
+  align-items: center;
+  margin-bottom: 23px;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+.jds-brief--news .desk-title {
+  top: 0;
+  font-weight: 900;
+}
+.jds-brief--news .desk-cols {
+  grid-template-columns: 1.12fr 1fr;
+  gap: 30px;
+  margin-top: 0;
+}
+.jds-brief--news .desk-leadcol {
+  padding-right: 30px;
+  border-right: 1px solid var(--line);
+}
+.jds-brief--news .nw-twlead {
+  margin: 0;
+  padding: 0;
+  color: var(--ink);
+}
+.jds-brief--news .nw-twlead__frame {
+  margin-bottom: 17px;
+}
+.jds-brief--news .nw-twlead__tag,
+.jds-brief--news .nw-twlist__tag {
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+.jds-brief--news .nw-twlead__title {
+  max-width: 480px;
+  margin-top: 12px;
+  font-family: var(--font-sans);
+  font-size: 29px;
+  font-weight: 700;
+  line-height: 1.12;
+  letter-spacing: -0.8px;
+}
+.jds-brief--news .nw-twlead__dek {
+  margin: 15px 0 0;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.jds-brief--news .nw-twlead__link {
+  margin-top: 18px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-fg);
+}
+.jds-brief--news .nw-twlist__item {
+  margin-bottom: 17px;
+  padding: 0 0 18px;
+  border-top: none;
+  border-bottom: 1px solid var(--line);
+}
+.jds-brief--news .nw-twlist__item:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+.jds-brief--news .nw-twlist__link {
+  color: var(--ink);
+}
+.jds-brief--news .nw-twlist__title {
+  display: block;
+  margin-top: 6px;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.2px;
+}
+.jds-brief--news .nw-twlist__dek {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 11px;
+}
+@media (max-width: 1080px) {
+  .jds-brief--news {
+    margin-top: 33px;
+    padding-top: 22px;
+  }
+  .jds-brief--news .desk-leadcol {
+    margin-bottom: 22px;
+    padding: 0 0 23px;
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+  }
+  .jds-brief--news .desk-cols {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .jds-brief--news .nw-twlist {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .jds-brief--news .nw-twlist__item {
+    margin: 0;
+    padding: 0;
+    border: none;
+  }
+  .jds-brief--news .nw-twlead__title {
+    font-size: 27px;
+  }
+  .jds-brief--news .nw-twlead__dek {
+    font-size: 12px;
+  }
+  .jds-brief--news .nw-twlist__title {
+    font-size: 16px;
+  }
+}

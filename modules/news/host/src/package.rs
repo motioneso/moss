@@ -18,6 +18,17 @@ pub fn files(root: &Path, component: &[u8]) -> Result<BTreeMap<String, Vec<u8>>>
         ("CHANGELOG.md".into(), include_bytes!("../../CHANGELOG.md").to_vec()),
     ]);
     for (name, bytes) in [
+        ("index.html", include_bytes!("../../ui/index.html").as_slice()),
+        ("widget.html", include_bytes!("../../ui/widget.html")),
+        ("app.mjs", include_bytes!("../../ui/app.mjs")),
+        ("widget.mjs", include_bytes!("../../ui/widget.mjs")),
+        ("view.mjs", include_bytes!("../../ui/view.mjs")),
+        ("lead-art.mjs", include_bytes!("../../ui/lead-art.mjs")),
+        ("screen-api.mjs", include_bytes!("../../ui/screen-api.mjs")),
+        ("images.mjs", include_bytes!("../../ui/images.mjs")),
+        ("story-menu.mjs", include_bytes!("../../ui/story-menu.mjs")),
+        ("news.css", include_bytes!("../../ui/news.css")),
+        ("widget.css", include_bytes!("../../ui/widget.css")),
         ("settings.html", include_bytes!("../../ui/settings.html").as_slice()),
         ("settings.mjs", include_bytes!("../../ui/settings.mjs")),
         ("topics.mjs", include_bytes!("../../ui/topics.mjs")),
