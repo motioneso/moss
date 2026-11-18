@@ -66,6 +66,14 @@ impl Database {
         self.role
     }
 
+    /// A raw connection on the auth role, for the pairing store. Refused on any other role.
+    pub async fn auth_client(&self) -> Result<Object, ApiError> {
+        if self.role != RuntimeRole::Auth {
+            return Err(ApiError::Internal("this store needs the auth role".into()));
+        }
+        self.client().await
+    }
+
     /// A raw connection, for the narrow stores in this crate (sign-in, the job queue).
     pub(crate) async fn client(&self) -> Result<Object, ApiError> {
         Ok(self.pool.get().await?)

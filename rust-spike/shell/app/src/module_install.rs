@@ -93,7 +93,7 @@ fn parse(raw: Vec<String>) -> Result<Args> {
 }
 
 /// The module tables each have one table that proves they exist, so a second run is a no-op.
-fn bootstrap_steps() -> [(&'static str, &'static str); 4] {
+fn bootstrap_steps() -> [(&'static str, &'static str); 5] {
     [
         (
             "moss_modules.catalog",
@@ -107,6 +107,10 @@ fn bootstrap_steps() -> [(&'static str, &'static str); 4] {
         (
             "moss_modules.paused_modules",
             moss_module_host::jobs::MIGRATION,
+        ),
+        (
+            "app.companion_devices_owner",
+            moss_module_host::companion_devices::MIGRATION,
         ),
     ]
 }
