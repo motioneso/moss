@@ -57,12 +57,13 @@ fn the_package_ships_the_sports_screens() {
     let manifest = moss_sports_host::package::manifest().unwrap();
     assert_eq!(manifest.screens["/sports"], "ui/index.html");
     assert_eq!(manifest.screens["/sports/today"], "ui/today.html");
+    assert_eq!(manifest.screens["/settings/sports"], "ui/settings.html");
     assert_eq!(manifest.navigation.len(), 1);
     assert_eq!(manifest.navigation[0]["path"], "/sports");
     for page in manifest.screens.values() {
         assert!(files.contains_key(page), "{page} missing");
     }
-    for needed in ["ui/app.mjs", "ui/page.mjs", "ui/sports.css", "ui/sports-ticker.css", "ui/sports-broadsheet.css", "ui/sports-news.css", "ui/today.css", "ui/guest-bridge.mjs"] {
+    for needed in ["ui/app.mjs", "ui/page.mjs", "ui/sports.css", "ui/sports-ticker.css", "ui/sports-broadsheet.css", "ui/sports-news.css", "ui/today.css", "ui/guest-bridge.mjs", "ui/settings.css", "ui/settings-follows.css", "ui/settings-sources.css", "ui/settings.mjs", "ui/follows.mjs", "ui/sources.mjs", "ui/standings-settings.mjs"] {
         assert!(files.contains_key(needed), "{needed} missing");
     }
 }
