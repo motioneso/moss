@@ -435,12 +435,12 @@
   color: var(--text);
 }
 
-/* Changed-overnight callout: square box, gold edge. */
+/* Changed-overnight callout: square box. */
 .brief-reader__callout {
   margin: 23px 0;
   padding: 17px 19px;
   background: var(--sage-light);
-  border-left: 3px solid var(--gold);
+  border: 1px solid var(--line);
 }
 .brief-reader__callout-kicker {
   margin: 0;
@@ -492,7 +492,7 @@
 .brief-reader__email-delay {
   margin: 18px 0;
   padding: 13px 16px;
-  border-left: 3px solid var(--gold);
+  border: 1px solid var(--line);
   background: var(--sage-light);
   color: var(--text);
   font-size: 13px;
@@ -699,7 +699,7 @@
   margin-bottom: 8px;
   padding: 12px 10px;
   border-top: 0;
-  border-left: 2px solid var(--accent-rule);
+  border-left: 0;
   background: var(--sage-light);
 }
 .brief-snapshot__time {

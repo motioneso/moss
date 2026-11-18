@@ -189,6 +189,7 @@ async function openRun(runId, jobId) {
 }
 
 async function loadKind() {
+  const kind = state.kind;
   stopPoll();
   state.detail = null;
   state.runs = [];
@@ -199,8 +200,10 @@ async function loadKind() {
   if (!definition) return render();
   try {
     const found = await api.runs(definition.id);
+    if (state.kind !== kind) return;
     state.runs = found.runs ?? [];
   } catch {
+    if (state.kind !== kind) return;
     state.phase = "error";
     return render();
   }
