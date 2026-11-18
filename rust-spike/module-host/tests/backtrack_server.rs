@@ -333,6 +333,15 @@ fn installed_backtrack_package_serves_routes_from_the_real_server() {
     while call(Method::GET, "/status", Some(&cookie), None).0 == 503 && started.elapsed() < std::time::Duration::from_secs(60) {
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
+    // MOSS_BACKTRACK_HOLD names a folder. The test then keeps the server up for a browser check,
+    // writes the address to url.txt, and waits for a file named finished in that folder.
+    if let Ok(hold) = std::env::var("MOSS_BACKTRACK_HOLD") {
+        fs::write(Path::new(&hold).join("url.txt"), &origin).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(3600);
+        while !Path::new(&hold).join("finished").exists() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(500));
+        }
+    }
     for who in [&cookie, &other] {
         let (status, text) = call(Method::GET, "/status", Some(who), None);
         assert_eq!(status, 200, "{text}\n{}", log());
