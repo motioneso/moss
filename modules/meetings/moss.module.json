@@ -503,7 +503,7 @@
   "features": [
     {
       "id": "meetings.records",
-      "description": "Each person keeps private meeting records with a title and personal notes. Titles are at most 240 bytes and notes at most 64,000 bytes. Notes save with a version check, so a stale edit is refused and returns the current notes. A repeated request key returns the original result. Deleting a meeting is permanent. Nobody else, including admins, can see them. Chat can read a meeting you own, its transcript and notes, and asks Meetings to delete the meeting chat threads before a meeting is deleted. If Chat refuses, the meeting stays so you can try again.",
+      "description": "Each person keeps private meeting records with a title and personal notes. Titles are at most 240 bytes and notes at most 64,000 bytes. Notes save with a version check, so a stale edit is refused and returns the current notes. A repeated request key returns the original result. Deleting a meeting is permanent. Nobody else, including admins, can see them. Chat can read a meeting you own, its transcript and notes, and asks Meetings to delete the meeting chat threads before a meeting is deleted. Deletion goes ahead even if Chat is missing or cannot answer.",
       "errors": [
         {
           "code": "meeting_invalid_input",

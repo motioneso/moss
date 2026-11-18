@@ -83,12 +83,10 @@ pub fn evidence<H: Host + ?Sized>(host: &H, parameters: &Value) -> Result<Value>
     Ok(json!({"evidence": found.map(|(segment, excerpt)| json!({"segment": segment, "excerpt": excerpt}))}))
 }
 
-/// Asks Chat to remove the meeting's threads before the record goes. Chat is optional, so a
-/// missing Chat module is not a failure. Any other refusal stops the delete, so a retry can finish.
+/// Asks Chat to remove the meeting's threads before the record goes. The host answers every
+/// module-call failure with one fixed message, so a missing Chat and a Chat that refuses look the
+/// same. The delete goes ahead either way, because Chat is optional and must not block deletion.
 pub fn delete_threads<H: Host + ?Sized>(host: &H, id: &str) -> Result<()> {
-    match Client(host).api("chat", "deleteMeetingChatThreads", json!({"meetingId": id})) {
-        Ok(_) => Ok(()),
-        Err(error) if error.to_string().contains("not installed") => Ok(()),
-        Err(error) => Err(error),
-    }
+    let _ = Client(host).api("chat", "deleteMeetingChatThreads", json!({"meetingId": id}));
+    Ok(())
 }

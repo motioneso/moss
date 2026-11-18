@@ -100,21 +100,10 @@ fn deleting_a_meeting_asks_chat_to_remove_its_threads_first() {
 }
 
 #[test]
-fn a_chat_refusal_keeps_the_meeting_so_a_retry_can_finish() {
+fn a_chat_failure_does_not_block_the_delete() {
     let f = Fake::new();
     let id = meeting(&f);
-    *f.chat_refuses.borrow_mut() = Some("Chat is busy".into());
-    assert_eq!(f.route("DELETE", "/records/:id", &[("id", &id)], Value::Null).0, 500);
-    assert_eq!(f.rows("app.meeting_records").len(), 1);
-    *f.chat_refuses.borrow_mut() = None;
+    *f.chat_refuses.borrow_mut() = Some("The host refused this module request".into());
     assert_eq!(f.route("DELETE", "/records/:id", &[("id", &id)], Value::Null).0, 204);
     assert!(f.rows("app.meeting_records").is_empty());
-}
-
-#[test]
-fn a_missing_chat_module_does_not_block_the_delete() {
-    let f = Fake::new();
-    let id = meeting(&f);
-    *f.chat_refuses.borrow_mut() = Some("Module chat is not installed".into());
-    assert_eq!(f.route("DELETE", "/records/:id", &[("id", &id)], Value::Null).0, 204);
 }

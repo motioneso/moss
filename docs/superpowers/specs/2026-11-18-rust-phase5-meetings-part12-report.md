@@ -15,7 +15,8 @@ Task JS-338. Follows part 11. Reproduces the current TypeScript screens with no 
 - Chat read API, provided by Meetings: availability, a transcript snapshot (8 segments, 12,000 characters,
   with personal notes and notes revision), and evidence for a citation. Owner only.
 - Deletion callback: deleting a meeting first asks Chat to delete that meeting's threads. A missing Chat is
-  ignored. A Chat refusal keeps the meeting so a retry can finish.
+  ignored. The host reduces every module-call failure to one fixed message, so a Chat that refuses cannot be told
+  apart from a missing one, and the delete goes ahead either way.
 - Manifest 0.2.0: settings screen, Chat in the allowed module calls (optional), three provided calls, and
   updated app-map feature text. Changelog entry added.
 
@@ -24,7 +25,7 @@ Task JS-338. Follows part 11. Reproduces the current TypeScript screens with no 
 | Proof                                                                                                  | Where                                           |
 | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
 | 22 pure-function tests (settings rules, capture status and wording)                                    | `modules/meetings/ui/*.test.mjs`                |
-| 8 tests replaying the old Chat caller shapes, plus the deletion call, refusal and missing Chat         | `modules/meetings/tests/chat_read.rs`           |
+| 7 tests replaying the old Chat caller shapes, plus the deletion call and a failing Chat                | `modules/meetings/tests/chat_read.rs`           |
 | Full Meetings gate: native, real component build, package tests, real database                         | `pnpm test:rust-meetings` (exit 0)              |
 | Real server over HTTPS, browser at 1280 and 390 wide: home, settings (change and reload), meeting page | `modules/meetings/tools/screen-live-part12.mjs` |
 | `pnpm verify:static`                                                                                   | exit 0                                          |
@@ -46,5 +47,7 @@ server settings), and a manifest test still expected no screens.
   pairing, so every Mac check is refused and the screens show the "could not be verified" state.
 - The cog in the Meetings header opening the settings screen. The screen was opened by its address.
 - Chat calling these APIs. Chat has not been ported. The shapes are replayed from the old caller.
+- Chat threads left behind when Chat is installed but fails. The old screen stopped the delete in that case.
+  A real server run showed a missing Chat made delete fail with a 500, so the delete no longer waits on Chat.
 - Chat picks transcript lines by the question. The Rust ledger has no relevance search, so the snapshot returns
   the first 8 segments and ignores the question.
