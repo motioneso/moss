@@ -17,6 +17,21 @@ pub fn files(root: &Path, component: &[u8]) -> Result<BTreeMap<String, Vec<u8>>>
         ("NOTICE".into(), include_bytes!("../../NOTICE").to_vec()),
         ("CHANGELOG.md".into(), include_bytes!("../../CHANGELOG.md").to_vec()),
     ]);
+    for (name, bytes) in [
+        ("settings.html", include_bytes!("../../ui/settings.html").as_slice()),
+        ("settings.mjs", include_bytes!("../../ui/settings.mjs")),
+        ("topics.mjs", include_bytes!("../../ui/topics.mjs")),
+        ("add-source.mjs", include_bytes!("../../ui/add-source.mjs")),
+        ("feedback.mjs", include_bytes!("../../ui/feedback.mjs")),
+        ("parts.mjs", include_bytes!("../../ui/parts.mjs")),
+        ("domain.mjs", include_bytes!("../../ui/domain.mjs")),
+        ("api.mjs", include_bytes!("../../ui/api.mjs")),
+        ("dom.mjs", include_bytes!("../../ui/dom.mjs")),
+        ("guest-bridge.mjs", include_bytes!("../../ui/guest-bridge.mjs")),
+        ("news-settings.css", include_bytes!("../../ui/news-settings.css")),
+    ] {
+        files.insert(format!("ui/{name}"), bytes.to_vec());
+    }
     for path in &manifest.database.migrations {
         let bytes = if let Some(frozen) = moss_module_host::legacy::entry("news", path) {
             let bytes = std::fs::read(root.join("packages/news").join(path))?;
