@@ -45,6 +45,7 @@
     "test:rust-wellness-live": "bash modules/wellness/tools/live.sh",
     "test:rust-finance": "tsx modules/finance/tools/gate.ts",
     "test:rust-finance-live": "bash modules/finance/tools/live.sh",
+    "test:rust-finance-plaid-live": "bash modules/finance/tools/plaid-live.sh",
     "test:rust-backtrack": "tsx modules/backtrack/tools/gate.ts",
     "test:rust-scratchpad": "tsx modules/scratchpad/tools/gate.ts",
     "test:rust-scratchpad-live": "bash modules/scratchpad/tools/live.sh",
