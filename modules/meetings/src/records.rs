@@ -227,6 +227,10 @@ impl<'a, H: Host + ?Sized> Records<'a, H> {
             Ok(id) => id,
             Err(failure) => return Ok(bad_request(failure)),
         };
+        // Chat removes its threads first. If it refuses, the record stays and a retry can finish.
+        if self.row(&id)?.is_some() {
+            crate::chat_read::delete_threads(self.host, &id)?;
+        }
         self.client().query(RECORDS, &Query::delete(Filter::eq("id", id)))?;
         Ok(Response::new(204, Value::Null))
     }

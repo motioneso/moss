@@ -1,6 +1,7 @@
 //! Meetings package core (part 1): owner-only records, personal notes and capture preferences.
 //! All effects cross the guest-safe SDK Host interface.
 pub mod approval;
+pub mod chat_read;
 pub mod context_pack;
 pub mod export_render;
 pub mod export_service;
@@ -153,6 +154,12 @@ fn api<H: Host + ?Sized>(host: &H, payload: &str) -> moss_module_sdk::Result<Str
         PrepareRoute(PrepareRoute),
         #[serde(rename = "collectMeetingsExportSection")]
         Export(#[allow(dead_code)] Value),
+        #[serde(rename = "meetingChatAvailable")]
+        ChatAvailable(Value),
+        #[serde(rename = "meetingChatSnapshot")]
+        ChatSnapshot(Value),
+        #[serde(rename = "meetingChatEvidence")]
+        ChatEvidence(Value),
     }
     #[derive(serde::Deserialize)]
     #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -171,6 +178,9 @@ fn api<H: Host + ?Sized>(host: &H, payload: &str) -> moss_module_sdk::Result<Str
             r.body_json.as_deref(),
         ),
         Api::Export(_) => json!({"ok":lifecycle::collect(host)?}),
+        Api::ChatAvailable(p) => chat_read::available(host, &p)?,
+        Api::ChatSnapshot(p) => chat_read::snapshot(host, &p)?,
+        Api::ChatEvidence(p) => chat_read::evidence(host, &p)?,
     }
     .to_string())
 }

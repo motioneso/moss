@@ -13,7 +13,7 @@
     {
       "port": "api",
       "operations": ["call"],
-      "resources": ["calendar", "memory", "notes", "people", "tasks"]
+      "resources": ["calendar", "chat", "memory", "notes", "people", "tasks"]
     },
     {
       "port": "db",
@@ -426,7 +426,13 @@
   },
   "provides": {
     "prepareMeetingRoute": "1.0.0",
-    "collectMeetingsExportSection": "1.0.0"
+    "collectMeetingsExportSection": "1.0.0",
+    "meetingChatAvailable": "1.0.0",
+    "meetingChatSnapshot": "1.0.0",
+    "meetingChatEvidence": "1.0.0"
+  },
+  "optionalRequires": {
+    "chat": ">=0.1.0, <1.0.0"
   },
   "icons": ["icons/meetings.svg"],
   "accounts": {
@@ -497,7 +503,7 @@
   "features": [
     {
       "id": "meetings.records",
-      "description": "Each person keeps private meeting records with a title and personal notes. Titles are at most 240 bytes and notes at most 64,000 bytes. Notes save with a version check, so a stale edit is refused and returns the current notes. A repeated request key returns the original result. Deleting a meeting is permanent. Nobody else, including admins, can see them.",
+      "description": "Each person keeps private meeting records with a title and personal notes. Titles are at most 240 bytes and notes at most 64,000 bytes. Notes save with a version check, so a stale edit is refused and returns the current notes. A repeated request key returns the original result. Deleting a meeting is permanent. Nobody else, including admins, can see them. Chat can read a meeting you own, its transcript and notes, and asks Meetings to delete the meeting chat threads before a meeting is deleted. If Chat refuses, the meeting stays so you can try again.",
       "errors": [
         {
           "code": "meeting_invalid_input",
@@ -548,7 +554,7 @@
     },
     {
       "id": "meetings.preferences",
-      "description": "Saves the default recording audio, the remembered recording source, automatic summaries on Stop, the summary style, the transcript language and best-effort vocabulary for the account. Reading never creates a default. The Meetings screen and Settings controls are not part of this package yet.",
+      "description": "Saves the default recording audio, the remembered recording source, automatic summaries on Stop, the summary style, the transcript language and best-effort vocabulary for the account. Reading never creates a default. The Meetings screen and Settings controls are not part of this package yet. The Meetings settings screen, opened from the cog in the Meetings header, shows the linked Macs, the audio source, the transcript language, the vocabulary list and the automatic summary switch, and saves each change to your account. A failed save shows an error with Retry.",
       "errors": [
         {
           "code": "meeting_capture_invalid_input",
@@ -858,7 +864,7 @@
     },
     {
       "id": "meetings.mac-link",
-      "description": "The Mac recorder app links to your account and reports which Macs can record. From a meeting you start recording on a Mac, or cancel a start that has not begun. A start needs a live Mac, a speech-to-text route and room under the start limits. Starting only reserves the recording and never begins capture by itself. The link is private to your account, and no admin can read it. The old relink routes answer that relinking is required. Audio upload, pause, resume, stop and source changes are handled with a 60 second finish window, and status reads show gaps. Pairing a Mac and the real device credential check are not part of this package yet.",
+      "description": "The Mac recorder app links to your account and reports which Macs can record. From a meeting you start recording on a Mac, or cancel a start that has not begun. A start needs a live Mac, a speech-to-text route and room under the start limits. Starting only reserves the recording and never begins capture by itself. The link is private to your account, and no admin can read it. The old relink routes answer that relinking is required. Audio upload, pause, resume, stop and source changes are handled with a 60 second finish window, and status reads show gaps. Pairing a Mac and the real device credential check are not part of this package yet. On a meeting, the recording panel shows Ready, Connecting, Recording, Paused and Stopped, with Record, Pause, Resume and Stop, and lists gaps in the transcript. Meetings home offers New meeting when a Mac is linked and a Link your Mac prompt when none is. Rewrite summary and Delete are unavailable while recording.",
       "errors": [
         {
           "code": "meeting_capture_busy",
