@@ -24,7 +24,23 @@ function go(next) {
   window.scrollTo?.(0, 0);
 }
 
-const ctx = { api, draw, go, focus, navigate: (path) => void client.navigate(path) };
+let admin = false;
+const ctx = {
+  api,
+  draw,
+  go,
+  focus,
+  isAdmin: () => admin,
+  navigate: (path) => void client.navigate(path)
+};
+// The host tells the screen whether the viewer is an instance admin.
+void client
+  .theme()
+  .then((theme) => {
+    admin = theme?.isAdmin === true;
+    draw();
+  })
+  .catch(() => {});
 const home = homeScreen(ctx);
 const manual = manualScreen(ctx);
 const record = recordScreen(ctx);

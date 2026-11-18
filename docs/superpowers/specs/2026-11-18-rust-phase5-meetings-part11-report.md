@@ -26,13 +26,26 @@ The browser pass ran 15 checks, all passing, on the held server. No network resp
 rewritten. It found one real defect (Add recording stayed disabled while typing), fixed in the same PR and
 re-run green.
 
+## Added after review
+
+- The shell now reports whether the signed-in person is an instance admin, and the screen reads it through
+  the host bridge. Admins see "Check your AI settings in Settings → AI providers." and members see "Ask an
+  admin to check the AI settings." The default-model recovery line is worded the same way.
+- History hides when there are no meetings, no search, no type filter and no linked Mac, as the old screen did.
+- Manifest declares a 30 second call limit, as the other model-using modules do. Without it a real model
+  call ended as a server error.
+- Real model: the test server's router points at the Codex sign-in through the local model proxy on
+  gpt-5.6-luna. A pasted transcript produced a real stored summary, shown on the Summary tab in a browser. The
+  key never reached the server log. The earlier automatic attempt, made before a model was set up, still shows
+  its failure notice above the new summary.
+
 ## Not proven
 
 - Mac-link card, New meeting and capture gaps (part 12).
 - Locale-based dates. The browser's own formatting is used.
-- Admin-only versus member wording of the AI-settings hint. Everyone sees the same hint.
-- History hiding when no Mac is linked.
 - A URL-driven transcript evidence reference. The frame gives no address parameters.
-- Summary generation with a real model. No model is configured on the test server, so a request ends as a
-  stored failure and the failure remediation text is what shows.
+- Admin wording of the AI-settings hint in a browser. The test server has no signed-in shell, so the
+  browser pass shows the member wording. The admin wording is the same code with the role flag set.
+- Mac linked case. Device pairing is parked, so the device list answers 401 and the screen treats the Mac
+  as not linked.
 - A second physical device. The phone-size pass is a narrow desktop window.

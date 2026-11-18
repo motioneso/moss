@@ -368,14 +368,22 @@ export function summaryPane(ctx, ws) {
 
   /* ---------- rendering ---------- */
 
+  const aiLink = () => btn("Settings → AI providers", "ai-settings", { variant: "link" });
+
+  // Admins can change the AI settings. Members are told to ask one.
   const settingsHint = () =>
     hint(
-      `Check your AI settings in ${btn("Settings → AI providers", "ai-settings", { variant: "link" })}.`
+      ctx.isAdmin?.()
+        ? `Check your AI settings in ${aiLink()}.`
+        : "Ask an admin to check the AI settings."
     );
 
   function modelRecovery() {
+    const lead = ctx.isAdmin?.()
+      ? `Check your default model in ${aiLink()}.`
+      : "Contact an instance admin to check your default model.";
     return hint(
-      `Check your default model in ${btn("Settings → AI providers", "ai-settings", { variant: "link" })}. Refresh summaries after the configuration is updated, then generate again.`
+      `${lead} Refresh summaries after the configuration is updated, then generate again.`
     );
   }
 

@@ -22,6 +22,7 @@ export function meetingsApi(client) {
   const id = encodeURIComponent;
   return {
     search: (body) => call("POST", "/history/search", body),
+    devices: () => call("GET", "/capture/devices"),
     recordingTypes: () => call("GET", "/recording-types"),
     record: (meetingId) => call("GET", `/records/${id(meetingId)}`),
     putTitle: (meetingId, body) => call("PUT", `/records/${id(meetingId)}/title`, body),

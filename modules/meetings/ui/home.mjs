@@ -67,6 +67,17 @@ export function homeScreen({ api, draw, go }) {
     draw();
   }
 
+  // A Mac counts as linked only when the host lists at least one paired device.
+  async function loadLink() {
+    try {
+      const reply = await api.devices();
+      s.macLinked = Array.isArray(reply?.devices) && reply.devices.length > 0;
+    } catch {
+      s.macLinked = false;
+    }
+    draw();
+  }
+
   function render() {
     const { list, types } = s;
     const q = s.query.trim();
@@ -94,6 +105,17 @@ export function homeScreen({ api, draw, go }) {
           : list.phase === "failed"
             ? "Couldn’t load meetings."
             : null;
+    // With no meetings and no linked Mac there is nothing to show, so History hides.
+    if (
+      list.phase === "ready" &&
+      !s.searching &&
+      !list.items.length &&
+      !q &&
+      !s.typeId &&
+      s.macLinked === false
+    ) {
+      return `<div class="meetings-list-heading">${btn("Add recording", "add")}</div>`;
+    }
     const showTable = list.phase === "ready" && !s.searching && list.items.length;
     return `<div class="meetings-list-heading">${btn("Add recording", "add")}</div>
 <section class="meetings-section" aria-label="Your meetings">
@@ -113,6 +135,7 @@ ${list.next && !s.searching && list.phase === "ready" ? btn(list.moreBusy ? "Loa
 
   return {
     start() {
+      void loadLink();
       if (s.types.state !== "ready") void loadTypes();
       void search();
     },
