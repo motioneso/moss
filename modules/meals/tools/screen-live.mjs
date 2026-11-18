@@ -60,14 +60,22 @@ for (const [name, width] of [
   await frame.locator('[data-act="open-recipe"]').first().click();
   await page.waitForTimeout(2000);
   body = await textOf(frame);
-  check(`${name} recipe opens with a way back`, body.includes("Back to the plan"), body.slice(0, 300));
+  check(
+    `${name} recipe opens with a way back`,
+    body.includes("Back to the plan"),
+    body.slice(0, 300)
+  );
   await page.screenshot({ path: `${out}/${name}-recipe.png`, fullPage: true });
   await frame.locator('[data-act="back"]').first().click();
   await page.waitForTimeout(1800);
 
   await tab(page, frame, "Shopping list");
   body = await textOf(frame);
-  check(`${name} list loads`, !body.includes("Couldn't load") && body.length > 80, body.slice(0, 300));
+  check(
+    `${name} list loads`,
+    !body.includes("Couldn't load") && body.includes("Add item"),
+    body.slice(0, 300)
+  );
   await page.screenshot({ path: `${out}/${name}-list.png`, fullPage: true });
 
   await tab(page, frame, "Pantry");
@@ -90,7 +98,11 @@ for (const [name, width] of [
   await frame.getByRole("button", { name: `Remove ${item}` }).click();
   await page.waitForTimeout(1800);
   body = await textOf(frame);
-  check(`${name} removal shows Undo`, body.includes(`Removed ${item}`) && body.includes("Undo"), body.slice(0, 400));
+  check(
+    `${name} removal shows Undo`,
+    body.includes(`Removed ${item}`) && body.includes("Undo"),
+    body.slice(0, 400)
+  );
   await frame.getByRole("button", { name: "Undo" }).click();
   await page.waitForTimeout(2000);
   body = await textOf(frame);

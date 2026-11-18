@@ -499,8 +499,8 @@ fn installed_meals_package_serves_routes_from_the_real_server() {
                SELECT '{owner}',kitchen_id,overlay(overlay(md5('live-recipe') placing '4' from 13) placing '8' from 17)::uuid,0,'2 cups milk','milk','milk',2,'cup','dairy_eggs' FROM app.meals_kitchens WHERE owner_user_id='{owner}';
              INSERT INTO app.meals_planned_meals(owner_user_id,kitchen_id,day_id,meal_id,slot_name,slot_position,kind,sharing,status,recipe_id)
                SELECT '{owner}',kitchen_id,overlay(overlay(md5('live-day') placing '4' from 13) placing '8' from 17)::uuid,overlay(overlay(md5('live-meal') placing '4' from 13) placing '8' from 17)::uuid,'dinner',0,'recipe','shared','ready',overlay(overlay(md5('live-recipe') placing '4' from 13) placing '8' from 17)::uuid FROM app.meals_kitchens WHERE owner_user_id='{owner}';
-             INSERT INTO app.meals_planned_meal_eaters(owner_user_id,kitchen_id,meal_id,member_id,portion)
-               SELECT '{owner}',kitchen_id,overlay(overlay(md5('live-meal') placing '4' from 13) placing '8' from 17)::uuid,member_id,1 FROM app.meals_household_members WHERE owner_user_id='{owner}' AND is_self;"
+             INSERT INTO app.meals_planned_meal_eaters(owner_user_id,kitchen_id,meal_id,member_id,portion,safety)
+               SELECT '{owner}',kitchen_id,overlay(overlay(md5('live-meal') placing '4' from 13) placing '8' from 17)::uuid,member_id,1,'pass' FROM app.meals_household_members WHERE owner_user_id='{owner}' AND is_self;"
         ))
         .await
         .unwrap();
