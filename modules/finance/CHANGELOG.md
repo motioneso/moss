@@ -1,5 +1,9 @@
 # Finance package
 
+## 0.5.1
+
+- Connecting a bank and syncing now have 30 seconds instead of 5, because a real bank sync makes several slow calls in a row.
+
 ## 0.5.0
 
 - You can share a bank account with your household. Other people see its name, balance and transactions with category and amount, never your notes, review state or bank link details. You can stop sharing at any time and the copy is removed.
