@@ -416,6 +416,15 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
         let (status, text) = call(m, &path, Some(&other), body);
         assert!(status == 404 && !text.contains(MARK), "another person gets 404: {path} {status} {text}");
     }
+    // MOSS_MEETINGS_HOLD names a folder. The test then keeps the server up for a browser check,
+    // writes the address to url.txt, and waits for a file named finished in that folder.
+    if let Ok(hold) = std::env::var("MOSS_MEETINGS_HOLD") {
+        fs::write(Path::new(&hold).join("url.txt"), &origin).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(3600);
+        while !Path::new(&hold).join("finished").exists() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(500));
+        }
+    }
     // Summaries through the real server. No model is configured here, so a request ends as a stored
     // failure and never as a server error.
     let (status, text) = call(Method::GET, &format!("/records/{pasted}/outputs"), Some(&cookie), None);
