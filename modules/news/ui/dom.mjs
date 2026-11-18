@@ -28,12 +28,24 @@ export function h(tag, props, ...children) {
 
 /** Replaces an element's children, skipping empty values so they never print as text. */
 export function fill(el, ...children) {
+  // Keep the caret in a text box that is rebuilt while someone types in it.
+  const active = document.activeElement;
+  const keep = active && active.id && el.contains(active) ? active : null;
+  const start = keep?.selectionStart ?? null;
+  const end = keep?.selectionEnd ?? null;
   el.replaceChildren(
     ...children
       .flat(Infinity)
       .filter((c) => c !== null && c !== undefined && c !== false)
       .map((c) => (c instanceof Node ? c : document.createTextNode(String(c))))
   );
+  if (keep && keep !== document.activeElement) {
+    const again = document.getElementById(keep.id);
+    if (again && el.contains(again)) {
+      again.focus();
+      if (start !== null && again.setSelectionRange) again.setSelectionRange(start, end);
+    }
+  }
   return el;
 }
 

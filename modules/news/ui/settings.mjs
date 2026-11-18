@@ -349,6 +349,7 @@ export function renderSettings(
   }
 
   async function submitExclusion() {
+    if (exclusionBusy) return;
     const normalized = normalizePublisherDomain(exclusionInput);
     if (!normalized.ok) {
       exclusionError = exclusionRejectionMessage(normalized.reason);
@@ -539,7 +540,22 @@ export function renderSettings(
               )
             )
           : null,
-        state.persError ? failure("Could not load personalized news settings. Try again.") : null,
+        state.persError
+          ? h(
+              "div",
+              { class: "nw-set__addrow" },
+              failure("Could not load personalized news settings."),
+              button("Retry", {
+                variant: "quiet",
+                size: "sm",
+                disabled: state.loadingPers,
+                onClick: () => {
+                  state.loadingPers = true;
+                  void loadPers();
+                }
+              })
+            )
+          : null,
         ready ? topics.el : null
       )
     );
@@ -547,7 +563,6 @@ export function renderSettings(
     fill(
       mine,
       state.loadingPers ? note("Loading personalized news settings…") : null,
-      state.persError ? note("Could not load personalized news settings. Try again.") : null,
       ready && customSources.length > 0
         ? h(
             "div",
