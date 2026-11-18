@@ -157,9 +157,19 @@ function prefsSection() {
 }
 
 function draw() {
-  const active = document.activeElement?.id;
+  const focused = document.activeElement;
+  const active = focused?.id;
+  let caret = null;
+  try {
+    caret = { start: focused?.selectionStart, end: focused?.selectionEnd };
+  } catch {
+    caret = null;
+  }
   root.innerHTML = `${sectionHead("Meetings")}${macsSection()}${prefsSection()}`;
-  if (active) document.getElementById(active)?.focus({ preventScroll: true });
+  const next = active ? document.getElementById(active) : null;
+  if (next) next.focus({ preventScroll: true });
+  if (next && caret && typeof caret.start === "number")
+    next.setSelectionRange?.(caret.start, caret.end);
   void client.resize(document.documentElement.scrollHeight).catch(() => {});
 }
 

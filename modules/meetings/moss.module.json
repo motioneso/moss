@@ -554,7 +554,7 @@
     },
     {
       "id": "meetings.preferences",
-      "description": "Saves the default recording audio, the remembered recording source, automatic summaries on Stop, the summary style, the transcript language and best-effort vocabulary for the account. Reading never creates a default. The Meetings screen and Settings controls are not part of this package yet. The Meetings settings screen, opened from the cog in the Meetings header, shows the linked Macs, the audio source, the transcript language, the vocabulary list and the automatic summary switch, and saves each change to your account. A failed save shows an error with Retry.",
+      "description": "Saves the default recording audio, the remembered recording source, automatic summaries on Stop, the summary style, the transcript language and best-effort vocabulary for the account. Reading never creates a default. The Meetings settings screen, opened from the cog in the Meetings header, shows the linked Macs, the audio source, the transcript language, the vocabulary list and the automatic summary switch, and saves each change to your account. A failed save shows an error with Retry.",
       "errors": [
         {
           "code": "meeting_capture_invalid_input",
