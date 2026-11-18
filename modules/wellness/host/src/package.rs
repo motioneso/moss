@@ -17,6 +17,20 @@ pub fn files(root: &Path, component: &[u8]) -> Result<BTreeMap<String, Vec<u8>>>
         ("NOTICE".into(), include_bytes!("../../NOTICE").to_vec()),
         ("CHANGELOG.md".into(), include_bytes!("../../CHANGELOG.md").to_vec()),
     ]);
+    let ui: [(&str, &[u8]); 9] = [
+        ("settings.html", include_bytes!("../../ui/settings.html")),
+        ("settings.mjs", include_bytes!("../../ui/settings.mjs")),
+        ("settings.css", include_bytes!("../../ui/settings.css")),
+        ("dom.mjs", include_bytes!("../../ui/dom.mjs")),
+        ("insights.mjs", include_bytes!("../../ui/insights.mjs")),
+        ("notes.mjs", include_bytes!("../../ui/notes.mjs")),
+        ("export.mjs", include_bytes!("../../ui/export.mjs")),
+        ("wellness-extra.css", include_bytes!("../../ui/wellness-extra.css")),
+        ("guest-bridge.mjs", include_bytes!("../../ui/guest-bridge.mjs")),
+    ];
+    for (name, bytes) in ui {
+        files.insert(format!("ui/{name}"), bytes.to_vec());
+    }
     for path in &manifest.database.migrations {
         let frozen = moss_module_host::legacy::entry("wellness", path)
             .ok_or_else(|| anyhow::anyhow!("Wellness SQL is not in the legacy inventory"))?;

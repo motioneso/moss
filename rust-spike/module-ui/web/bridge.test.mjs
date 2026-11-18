@@ -7,7 +7,8 @@ function setup({
   request = () => ({ saved: true }),
   keyed = true,
   connect = true,
-  theme = () => ({ theme: "sage" })
+  theme = () => ({ theme: "sage" }),
+  save
 } = {}) {
   let listener;
   const replies = [];
@@ -29,6 +30,7 @@ function setup({
       return request(...args);
     },
     theme,
+    ...(save ? { save } : {}),
     navigate: () => null,
     chat: () => null
   });
@@ -383,4 +385,36 @@ test("guest echoes only its initial document fragment token", () => {
   assert.equal(message.bootstrapToken, "0123456789abcdef0123456789abcdef");
   client.dispose();
   transport.close();
+});
+test("save hands a small named html file to the host and refuses anything else", async () => {
+  const saved = [];
+  const s = setup({ save: (file) => saved.push(file) });
+  const good = { filename: "wellness-2026-11-17.html", contentType: "text/html; charset=utf-8", text: "<p>hi</p>" };
+  await s.send({ type: "save", ...good });
+  assert.deepEqual(saved, [good]);
+  assert.equal(s.replies.at(-1).ok, true);
+  const bad = [
+    { ...good, filename: "../evil.html" },
+    { ...good, filename: "a b.html" },
+    { ...good, contentType: "application/zip" },
+    { ...good, text: 5 },
+    { ...good, text: "x".repeat(8 * 1024 * 1024 + 1) }
+  ];
+  for (const file of bad) {
+    await s.send({ type: "save", ...file });
+    assert.equal(s.replies.at(-1).ok, false);
+  }
+  assert.equal(saved.length, 1);
+  s.dispose();
+});
+test("save fails when the host provides no save callback", async () => {
+  const s = setup();
+  await s.send({
+    type: "save",
+    filename: "a.html",
+    contentType: "text/html; charset=utf-8",
+    text: "x"
+  });
+  assert.equal(s.replies.at(-1).ok, false);
+  s.dispose();
 });

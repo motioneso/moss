@@ -1,7 +1,7 @@
 /** Supply the verified screenUrl to bind and open the initial document. Commands use its
  * document's transferred port; later frame loads revoke the connection.
  * `request` runs the signed-in own-module route;
- * theme/navigation/chat callbacks belong to the host. Account session credentials stay there. */
+ * theme/navigation/chat/save callbacks belong to the host. Account session credentials stay there. */
 export function connectModuleFrame(
   frame,
   moduleId,
@@ -10,6 +10,7 @@ export function connectModuleFrame(
     theme,
     navigate,
     chat,
+    save,
     screenUrl,
     hostWindow = globalThis.window,
     bootstrapToken = null
@@ -100,6 +101,21 @@ export function connectModuleFrame(
         case "chat": {
           if (typeof message.text !== "string" || message.text.length > 16384) throw new Error();
           result = await chat(message.text);
+          break;
+        }
+        case "save": {
+          // A frame may not download for itself, so the host saves one small page it checks.
+          const { filename, contentType, text } = message;
+          if (
+            typeof save !== "function" ||
+            typeof filename !== "string" ||
+            !/^[A-Za-z0-9][A-Za-z0-9._-]{0,120}$/.test(filename) ||
+            contentType !== "text/html; charset=utf-8" ||
+            typeof text !== "string" ||
+            text.length > 8 * 1024 * 1024
+          )
+            throw new Error();
+          result = await save({ filename, contentType, text });
           break;
         }
         case "resize": {

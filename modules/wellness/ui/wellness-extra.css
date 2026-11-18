@@ -1,0 +1,194 @@
+/* Layout for the Wellness insights, therapy notes and export dialog. Colours and type come from the shared Park Press sheet. */
+.wl-insights {
+  padding-top: var(--space-5);
+}
+.wl-insights__body {
+  padding: var(--space-3) 0 0;
+}
+.wl-insight {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 13px 0;
+}
+.wl-insight__ic {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+.wl-insight__main {
+  flex: 1;
+  min-width: 0;
+}
+.wl-insight__tx {
+  line-height: 1.5;
+}
+.wl-insight__act {
+  margin-top: 7px;
+}
+.wl-therapy {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+.wl-therapy__intro {
+  line-height: 1.55;
+  max-width: 64ch;
+}
+.wl-tadd {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px 8px 8px 14px;
+  transition: var(--transition-control);
+}
+.wl-tadd__ic {
+  display: inline-flex;
+  margin-top: 9px;
+  flex: none;
+}
+.wl-tadd textarea {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  padding: 7px 0;
+  line-height: 1.5;
+  max-height: 140px;
+}
+.wl-tadd__btn {
+  flex: none;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+}
+.wl-tnotes {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.wl-tnote {
+  display: flex;
+  gap: 13px;
+  align-items: flex-start;
+  padding: 14px 15px;
+}
+.wl-tnote__mark {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+.wl-tnote__main {
+  flex: 1;
+  min-width: 0;
+}
+.wl-tnote__tx {
+  line-height: 1.55;
+}
+.wl-tnote__meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 7px;
+}
+.wl-tnote__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.wl-tnote__link .d {
+  width: 9px;
+  height: 9px;
+}
+.wl-tnote__x {
+  flex: none;
+  cursor: pointer;
+  padding: 4px;
+  display: inline-flex;
+  opacity: 0;
+  transition: var(--transition-control);
+}
+.wl-tnote:hover .wl-tnote__x {
+  opacity: 1;
+}
+.wl-tdone {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 2px;
+}
+.wl-tdone .ic {
+  display: inline-flex;
+}
+.wl-dialog {
+  max-height: 90dvh;
+  display: flex;
+  flex-direction: column;
+}
+.wl-dialog--export {
+  max-width: 480px;
+}
+.wl-dialog > .jds-dialog__body {
+  min-height: 0;
+  overflow-y: auto;
+  padding-block: var(--space-4);
+}
+.wl-dialog > .jds-dialog__foot {
+  flex-wrap: wrap;
+}
+.wl-dialog > .jds-dialog__foot > [role="alert"] {
+  flex-basis: 100%;
+}
+.wl-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.wl-field__label {
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.wl-fieldset {
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.wl-fieldset > legend {
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.wl-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  line-height: 1.4;
+}
+.wl-modal__desc {
+  line-height: 1.6;
+}
+.wl-modal__note {
+  line-height: 1.5;
+}
+.wl-consent-text {
+  line-height: 1.5;
+}
+.wl-modal__progress,
+.wl-modal__ready {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px 0;
+}
+.wl-export-boundaries {
+  margin-bottom: var(--space-3);
+}
