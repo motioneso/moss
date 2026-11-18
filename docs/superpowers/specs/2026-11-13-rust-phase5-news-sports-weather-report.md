@@ -1097,19 +1097,19 @@ rewritten. No code changed, because no run showed a defect in the package.
 
 ### Result
 
-| Item                                  | Check                                                                                        | Result                                                                    |
-| ------------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| Reddit source (14b)                   | Preview of r/nfl and, through the chat tool route, r/soccer, on three separate runs          | Refused every time ("not found"). Not proven                              |
-| Recipe model (14b), site with no feed | The FA news page with gpt-6.1-sol                                                            | Answered unsupported. No recipe saved. Not proven                         |
-| Recipe model, second site             | Wimbledon news page with glm-5.3                                                             | Answered unreachable. Not proven                                          |
-| Script-rendered page (16)             | Same two runs                                                                                | No recipe, and the run cannot show whether the browser opened. Not proven |
-| Tools that do work live               | List sources, remove with no approval, follow, facts, next fixtures, latest result, unfollow | All passed on the real server                                             |
-| Feed source, photos                   | Real feed preview, refresh, photo copies, photo serving, stopping photos                     | Passed on two of three runs                                               |
+| Item                                  | Check                                                                                                               | Result                                                                    |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Reddit source (14b)                   | Preview of r/nfl and, through the chat tool route, r/soccer, on three completed runs                                | Refused every time ("not found"). Not proven                              |
+| Recipe model (14b), site with no feed | The FA news page with gpt-6.1-sol                                                                                   | Answered unsupported. No recipe saved. Not proven                         |
+| Recipe model, second site             | Wimbledon news page with glm-5.3                                                                                    | Answered unreachable. Not proven                                          |
+| Script-rendered page (16)             | Same two attempts (FA page, Wimbledon page)                                                                         | No recipe, and the run cannot show whether the browser opened. Not proven |
+| Tools that do work live               | List sources, a removal asked for with no approval (refused), follow, facts, next fixtures, latest result, unfollow | All passed on the real server                                             |
+| Feed source, photos                   | Real feed preview, refresh, photo copies, photo serving, stopping photos                                            | Passed on the two runs that got that far                                  |
 
 ### Why Reddit stays unproven
 
 The same refusal happens outside Moss. From this machine a plain request to the subreddit feed
-answers 404 and the JSON listing answers 403, so Reddit is turning this address away. Getting
+answers 404 and the JSON listing answers 403, so Reddit appears to be refusing requests from this address. Getting
 past that would mean presenting the request as something other than Moss, which was not done.
 It needs either a Reddit app credential or a different network, and so a person. The part 14b
 Reddit path stays covered only by the tests that use recorded data.
@@ -1126,11 +1126,11 @@ Reddit path stays covered only by the tests that use recorded data.
 
 ### Flake notes
 
-- Run 1 failed at startup with HTTP 429 because the module host took 120 seconds to start on a
+- Four gate runs were made. Run 1 failed at startup with HTTP 429, most likely because the module host took 120 seconds to start on a
   cold debug build, and the test's waiting loop left requests queued until the server ran out of
-  request slots. A second run passed. The loop or the slot limit is worth tightening.
-- Run 3 failed when a retry of the real ESPN feed took more than the test's 30 second limit.
-  Run 2 passed the same step.
+  request slots. The next run passed. The loop or the slot limit is worth tightening before this gate is relied on.
+- Run 4 (MLS news page) failed when a retry of the real ESPN feed took more than the test's 30 second limit.
+  Runs 2 and 3 passed the same step.
 - The gate needs the Rust tool directory on the path and the cargo home variables set. Without
   them it fails at once with "cargo: command not found". A fresh worktree also needs a package
   install first.
@@ -1138,6 +1138,6 @@ Reddit path stays covered only by the tests that use recorded data.
 ### Model trial notes (Sonnet)
 
 - Read the real report and test first, ran the existing gate, and did not invent a new harness.
-- Spent three gate runs (about 7 minutes each) on site and model guesses without the gate
+- Spent three gate runs (about 7 minutes each) on site and model guesses (runs 2 to 4) without the gate
   printing the stage that failed. Better first move would have been to add that output.
 - Declined to spoof a browser identity for Reddit.
