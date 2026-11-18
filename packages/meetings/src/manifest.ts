@@ -399,7 +399,14 @@ export const meetingsModuleManifest = {
           countPredicate: "owner_user_id = $1::uuid"
         },
         { table: "app.meeting_stop_summaries", countPredicate: "owner_user_id = $1::uuid" },
-        { table: "app.meeting_capture_start_limits", countPredicate: "owner_user_id = $1::uuid" }
+        { table: "app.meeting_capture_start_limits", countPredicate: "owner_user_id = $1::uuid" },
+        { table: "app.companion_pair_attempts", countPredicate: "user_id = $1::uuid" },
+        { table: "app.companion_devices", countPredicate: "user_id = $1::uuid" },
+        {
+          table: "app.companion_recording_capabilities",
+          countPredicate: "owner_user_id = $1::uuid"
+        },
+        { table: "app.companion_recording_attempts", countPredicate: "owner_user_id = $1::uuid" }
       ]
     }
   }

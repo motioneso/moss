@@ -41,10 +41,10 @@
         "app.meeting_capture_start_cancellations",
         "app.meeting_stop_summaries",
         "app.meeting_capture_start_limits",
-      "app.companion_pair_attempts",
-      "app.companion_devices",
-      "app.companion_recording_capabilities",
-      "app.companion_recording_attempts"
+        "app.companion_pair_attempts",
+        "app.companion_devices",
+        "app.companion_recording_capabilities",
+        "app.companion_recording_attempts"
       ]
     },
     {
@@ -174,7 +174,11 @@
       "app.meeting_capture_connections",
       "app.meeting_capture_start_cancellations",
       "app.meeting_stop_summaries",
-      "app.meeting_capture_start_limits"
+      "app.meeting_capture_start_limits",
+      "app.companion_pair_attempts",
+      "app.companion_devices",
+      "app.companion_recording_capabilities",
+      "app.companion_recording_attempts"
     ],
     "ledger": "core-legacy"
   },
