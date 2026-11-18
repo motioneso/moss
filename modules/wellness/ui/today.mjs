@@ -177,10 +177,10 @@ export function moodCard(state) {
   return `<div class="wl-card wl-checkin" style="${emoVars(latest.feelingCore)}">
     ${header(`<span class="r" style="display:flex;align-items:center;gap:8px">${chip}${ghost("checkin-open", icons.plus(), "Check in again")}${ghost("checkin-edit-today", icons.pencil(), "Edit")}</span>`)}
     <div class="wl-done"><p class="wl-fs12 wl-text-subtle">Saved today</p>
-      <div class="wl-done__top"><span class="wl-done__chip"><span class="d"></span>${coreLabel(latest.feelingCore)}</span>
+      <div class="wl-done__top"><span class="wl-done__chip"><span class="d"></span>${esc(coreLabel(latest.feelingCore))}</span>
         <span class="wl-done__feeling">${esc(latest.feelingSecondary ?? "")}</span>
         <span class="wl-done__mood"><span class="k">${many ? "Now" : "Mood"}</span><span class="v">${signed(v)}</span></span>
-        ${many ? `<span class="wl-done__mood"><span class="k">Avg</span><span class="v">${signed(avg)}</span><span class="k">${moodBand(avg)}</span></span>` : ""}
+        ${many ? `<span class="wl-done__mood"><span class="k">Avg</span><span class="v">${signed(avg)}</span><span class="k">${esc(moodBand(avg))}</span></span>` : ""}
       </div>${tags}
       <div class="wl-intens"><span class="wl-intens__lbl">Intensity</span><span class="wl-intens__track">${pips}</span></div>
       ${latest.note ? `<div class="wl-hdetail__note">${esc(latest.note)}</div>` : ""}

@@ -206,7 +206,7 @@
     {
       "id": "wellness",
       "label": "Wellness",
-      "description": "Today's medication and mood check-in, a history of check-ins, and a 14 or 30 day chart of mood and medication. Insights, therapy notes and export are on the same screen.",
+      "description": "Today's medication and mood check-in, a history of check-ins, and a 14 or 30 day chart of mood and medication.",
       "path": "/wellness",
       "icon": "HeartPulse",
       "order": 40

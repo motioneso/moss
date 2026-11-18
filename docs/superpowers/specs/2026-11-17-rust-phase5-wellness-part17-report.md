@@ -42,4 +42,5 @@ Fixture: `modules/wellness/tools/ui-gate.sh` (run through the gate; `pnpm test:r
 - History paging, editing an old check-in, 30-day trends and removing a medicine were not clicked live.
 - On the phone, the right-most date label under the chart is clipped and the Settings button sits mid-row. Not compared with the web screen.
 - Part 18 pieces (insights, notes, export, settings) are not in this change. Their files fail to load here and the screen ignores that.
-- The manifest's settings entry still points at the old path.
+- The Settings button now opens the same settings page the web screen uses, but it was not clicked live.
+- Accepted gap against the web screen: the medicine form's schedule sentence and "Next:" doses.

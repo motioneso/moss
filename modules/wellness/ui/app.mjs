@@ -461,7 +461,7 @@ function onAct(act, el) {
     med = state.med;
   switch (act) {
     case "open-settings":
-      void client.navigate("/settings/wellness").catch(() => {});
+      void client.navigate("/settings?section=modules&module=wellness").catch(() => {});
       return;
     case "checkins-retry":
       void loadSummary();
