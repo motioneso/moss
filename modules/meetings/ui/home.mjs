@@ -72,8 +72,9 @@ export function homeScreen({ api, draw, go }) {
     try {
       const reply = await api.devices();
       s.macLinked = Array.isArray(reply?.devices) && reply.devices.length > 0;
-    } catch {
-      s.macLinked = false;
+    } catch (error) {
+      // Only a refusal means no Mac. Any other failure leaves History visible.
+      s.macLinked = error?.status === 401 || error?.status === 403 ? false : undefined;
     }
     draw();
   }
