@@ -46,14 +46,21 @@ Recorded on the task.
 
 ## Not proven
 
-- **The partial-search notice live.** Searching real ESPN data never hit the cold-roster limit, so
-  "Still covering more leagues" did not appear. It is covered by the node tests only.
+- **The partial-search notice in a live browser.** The server only reports partial when a search
+  meets leagues whose club lists are not cached yet, and stops after five live fetches. In the live
+  run the lists were already cached by the earlier steps, so searching real, united, city and fc
+  never returned partial. The live server was one throwaway test run and is gone. Instead, three
+  new jsdom tests (`follows.test.mjs`) mount the real search block and answer it with the exact
+  shape the server writes for a partial search. They show the notice with no matches, the notice
+  with matches, and the plain "no match" line for a complete search. The Rust test for partial
+  search now also asserts that the wire answer carries `partial: true`, so both ends are pinned.
 - **Add and edit source against a real publisher, rebuild, photo opt-out.** Not run live, because
   that needs a real publisher feed and writes to it. Covered by node tests and route tests.
 - **Story preferences.** The package has no story-feedback route, so the section is omitted.
 - **Crests and icons from other sites.** The shared frame allows images only from its own origin,
   so initials and glyph fallbacks show. The browser logged the blocked ESPN logo loads.
 - **The package live test.** It failed at the existing check for exactly one featured story with
-  a real body (`sports_server.rs:469`), on live ESPN data. That check belongs to part 18 and does
-  not touch this screen. Three live runs held the server for the browser proof and each reached
-  that point. The package gate passed.
+  a real body (`sports_server.rs:469`). The failing answer's lead items were ESPN video clips
+  (`/video/clip/` addresses), which have no article text, so no story had a body. That reads as
+  ESPN's feed changing, not a Sports bug, but the check assumes the lead is an article, so it is
+  brittle on a clip-heavy day. It is part 18's and untouched here. The package gate passed.
