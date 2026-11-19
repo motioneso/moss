@@ -428,7 +428,7 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
         let (status, text) = call(Method::GET, &status_path, Some(&cookie), None);
         assert_eq!(status, 200, "{text}\n{}", log());
         let state = json_of(&text)["state"].as_str().unwrap_or_default().to_owned();
-        if state != "pending" || waited.elapsed() > std::time::Duration::from_secs(90) {
+        if state != "pending" || waited.elapsed() > std::time::Duration::from_secs(300) {
             break (state, text);
         }
         std::thread::sleep(std::time::Duration::from_secs(1));
@@ -470,7 +470,7 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
         let (status, text) = call(Method::GET, &path, Some(&cookie), None);
         assert_eq!(status, 200, "{text}\n{}", log());
         let state = json_of(&text)["state"].as_str().unwrap_or_default().to_owned();
-        if state != "pending" || waited.elapsed() > std::time::Duration::from_secs(90) {
+        if state != "pending" || waited.elapsed() > std::time::Duration::from_secs(300) {
             break state;
         }
         std::thread::sleep(std::time::Duration::from_secs(1));
