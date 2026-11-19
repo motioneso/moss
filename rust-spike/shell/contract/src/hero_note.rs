@@ -94,6 +94,7 @@ pub fn hero_note(
     match latest.map(|r| r.status.as_str()) {
         Some("failed") => return Some(FAILED_NOTE.into()),
         Some("blocked") => return Some(BLOCKED_NOTE.into()),
+        Some("pending" | "running" | "queued") => return Some(GATHERING_NOTE.into()),
         _ => {}
     }
     let target = morning_target_minutes(defs);
@@ -174,6 +175,15 @@ mod tests {
         let r = run("blocked", "  ");
         let note = hero_note(&[def("morning", true, Some("07:00"))], Some(&r), 600);
         assert_eq!(note.as_deref(), Some(BLOCKED_NOTE));
+    }
+
+    #[test]
+    fn run_in_progress_says_gathering() {
+        for status in ["pending", "running", "queued"] {
+            let r = run(status, "");
+            let note = hero_note(&[def("morning", true, Some("07:00"))], Some(&r), 600);
+            assert_eq!(note.as_deref(), Some(GATHERING_NOTE));
+        }
     }
 
     #[test]
