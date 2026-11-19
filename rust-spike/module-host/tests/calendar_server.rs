@@ -446,7 +446,7 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
             ids.push(task);
         }
         // The second account saves its own switches, so a leaked owner write would show.
-        db.execute("INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'sourceBehaviors','{\"calendar.briefings\":false,\"calendar.planning\":false}')", &[&other]).await.unwrap();
+        db.execute("INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'sourceBehaviors','{\"calendar.briefings\":true,\"calendar.planning\":false}')", &[&other]).await.unwrap();
         (ids[0], ids[1])
     });
     // The owner turns one switch off and must not reach the second account's saved switches.
@@ -464,7 +464,7 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
             .unwrap()
             .get(0)
     });
-    assert_eq!(other_switches, json!({"calendar.briefings":false,"calendar.planning":false}), "an owner switch write reached another account");
+    assert_eq!(other_switches, json!({"calendar.briefings":true,"calendar.planning":false}), "an owner switch write reached another account");
     // Put the owner's switch back so the browser check starts from the defaults.
     let (status, restored) = call(Method::PATCH, "/source-behaviors", Some(&cookie), Some(json!({"briefings":true})));
     assert_eq!((status, &restored), (200, &json!({"briefings":true,"planning":true})), "{restored}");

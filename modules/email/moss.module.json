@@ -223,7 +223,7 @@
       "label": "Email",
       "path": "/settings/email",
       "scope": "user",
-      "description": "Briefings, task capture and drafted replies for your mail. The Include in briefings switch is also readable and changeable by Briefings through Email's own public calls, and always acts on your own account."
+      "description": "Briefings, task capture and drafted replies for your mail. Briefings can also change the Include in briefings switch, and only for your own account."
     }
   ]
 }
