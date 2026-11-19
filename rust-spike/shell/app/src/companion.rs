@@ -120,6 +120,7 @@ where
     let db = data.platform.auth.auth_client().await.map_err(|_| unavailable())?;
     let ready: bool = db.query_one("SELECT to_regclass('app.companion_devices_owner') IS NOT NULL", &[])
         .await.map_err(|_| unavailable())?.get(0);
+    drop(db);
     if !ready { return Err(unavailable()); }
     let runtime = tokio::runtime::Handle::current();
     tokio::task::spawn_blocking(move || {
