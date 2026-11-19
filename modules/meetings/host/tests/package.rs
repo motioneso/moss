@@ -59,10 +59,12 @@ fn the_package_serves_the_meetings_screen() {
     for name in [
         "index.html", "app.mjs", "api.mjs", "format.mjs", "kit.mjs", "home.mjs", "manual.mjs",
         "record.mjs", "transcript.mjs", "summary.mjs", "summary-parts.mjs", "guest-bridge.mjs",
-        "meetings.css", "meetings-record.css",
+        "meetings.css", "meetings-record.css", "settings.html", "settings.mjs", "settings-logic.mjs",
+        "settings.css", "capture.mjs", "capture-logic.mjs",
     ] {
         assert!(files.contains_key(&format!("ui/{name}")), "ui/{name} missing");
     }
+    assert_eq!(manifest.screens["/settings/meetings"], "ui/settings.html");
     let nav = &manifest.navigation[0];
     assert_eq!(nav["path"], "/meetings");
     assert!(manifest.screens.contains_key(nav["path"].as_str().unwrap()));

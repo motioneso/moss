@@ -1,5 +1,13 @@
 # Meetings package
 
+## 0.2.0
+
+- The Meetings settings screen is part of the package. It sets the audio source, transcript language and vocabulary and the automatic summary switch, and lists your linked Macs.
+- A meeting shows a recording panel. It starts, pauses, resumes and stops a recording on a linked Mac, shows the recording status and time, and lists missing audio ranges.
+- Meetings has a New meeting button when a Mac is linked, and a Link your Mac prompt when none is.
+- Chat can read a meeting's transcript through the package, and is asked to remove a meeting's chat threads when the meeting is deleted. Deleting does not wait on Chat.
+- Unlink Mac, the calendar link and Coming up are not part of this package yet.
+
 ## 0.1.1
 
 - The Meetings screen is part of the package. It lists meetings with search and a type filter, adds a pasted transcript, and opens each meeting with its transcript, notes and summary.
