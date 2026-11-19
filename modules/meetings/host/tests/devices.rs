@@ -357,3 +357,32 @@ fn a_deactivated_accounts_credential_is_never_extended() {
         assert!(read().await.0 > before.0, "an active account's credential should slide");
     });
 }
+
+#[test]
+#[ignore]
+fn unlink_removes_only_the_owners_device_and_ends_its_credential() {
+    let w = world();
+    w.fx.rt.block_on(async {
+        let (device, credential) = pair(&w, w.fx.a, "macos").await;
+        let hash = digest(&credential);
+        let live = || async {
+            w.fx
+                .root
+                .query("SELECT 1 FROM app.resolve_companion_device($1)", &[&hash])
+                .await
+                .unwrap()
+                .len()
+        };
+        assert_eq!(live().await, 1);
+
+        // Another person guessing the id removes nothing and learns nothing.
+        assert!(!w.pairing.unlink(w.fx.b, device).await.unwrap());
+        assert!(w.devices.get(w.fx.a, device).await.unwrap().is_some());
+        assert_eq!(live().await, 1);
+
+        assert!(w.pairing.unlink(w.fx.a, device).await.unwrap());
+        assert!(w.devices.get(w.fx.a, device).await.unwrap().is_none());
+        assert_eq!(live().await, 0);
+        assert!(!w.pairing.unlink(w.fx.a, device).await.unwrap());
+    });
+}
