@@ -26,7 +26,12 @@ Card JS-346. Plan: `2026-11-11-rust-phase5-meetings-briefings-plan.md`, section 
 | Device store names the refusal reason                        | `tests/devices.rs`             | yes                                     |
 | Admin revoke removes devices and sessions in one transaction | `tests/devices.rs`             | yes (devices committed before sessions) |
 | A deactivated account's credential is never extended         | `tests/devices.rs`             | yes (status check removed)              |
+| Moved migrations are skipped on an existing install          | `tests/devices.rs` (database)  | yes (one moved file's bytes altered)    |
 | Pre-sign-in rate limiter drops old entries                   | `companion.rs` unit test       | yes (sweep disabled)                    |
+
+## Migration move decision
+
+Kept the move of migrations 0238, 0239, 0287 and 0330 into `packages/meetings/sql`; did not revert. The Rust installer applies only module folders, so a Rust install with the files left in the shared folder would have no device tables. The move follows the precedent of other modules (AI, Tasks) and the plan's section 4a. The bytes are unchanged and the ledger stays `core-legacy`, so an existing install's applied rows still match. The test `moved_companion_migrations_are_not_rerun_on_an_existing_install` runs the real package against a database whose core ledger already holds all of its migrations, and shows nothing re-runs, checksums and tables are untouched, and changed bytes are refused. The collision checker change only allows a same-name, same-bytes move. Other open branches that still carry the files in the shared folder will see a path difference on those four numbers until they rebase.
 
 ## Not proven
 

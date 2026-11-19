@@ -357,3 +357,66 @@ fn a_deactivated_accounts_credential_is_never_extended() {
         assert!(read().await.0 > before.0, "an active account's credential should slide");
     });
 }
+
+/// An install that already holds the four moved migrations in its core ledger must skip them.
+/// Re-running would fail on CREATE TABLE, and changed bytes would fail the hash check.
+#[test]
+#[ignore = "Only through scripts/run-gate.sh"]
+fn moved_companion_migrations_are_not_rerun_on_an_existing_install() {
+    use moss_module_host::{archive::Package, migrations::PostgresLifecycle, store::Lifecycle};
+    use safety_core::secret::Secret;
+    let moved = [
+        "0238_companion_devices.sql",
+        "0239_companion_device_pair_attempt.sql",
+        "0287_companion_recording_capabilities.sql",
+        "0330_android_companion_linking.sql",
+    ];
+    let fx = Fixture::new();
+    let url = std::env::var("JS48_BOOTSTRAP_URL").unwrap();
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let mut package = Package {
+        manifest: moss_meetings_host::package::manifest().unwrap(),
+        files: moss_meetings_host::package::files(&root, b"\0asm").unwrap(),
+        digest: String::new(),
+    };
+    let ledger = |fx: &Fixture| -> (Vec<String>, Vec<u32>) {
+        fx.rt.block_on(async {
+            let (db, conn) = tokio_postgres::connect(&url, tokio_postgres::NoTls).await.unwrap();
+            tokio::spawn(async move {
+                let _ = conn.await;
+            });
+            let mut sums = Vec::new();
+            for name in moved {
+                let version = name.split('_').next().unwrap();
+                let row = db
+                    .query_one(
+                        "SELECT checksum FROM app.schema_migrations WHERE version=$1 AND name=$2",
+                        &[&version, &name],
+                    )
+                    .await
+                    .expect("the core ledger already holds this migration");
+                sums.push(row.get::<_, String>(0));
+            }
+            let oids = db
+                .query(
+                    "SELECT 'app.companion_devices'::regclass::oid UNION ALL SELECT 'app.companion_pair_attempts'::regclass::oid",
+                    &[],
+                )
+                .await
+                .unwrap()
+                .iter()
+                .map(|r| r.get::<_, u32>(0))
+                .collect();
+            (sums, oids)
+        })
+    };
+    let before = ledger(&fx);
+    let data = tempfile::tempdir().unwrap();
+    let lifecycle = PostgresLifecycle::new(Secret::new(url.clone()), fx.db.clone(), data.path()).unwrap();
+    lifecycle.migrate(&package, None).unwrap();
+    lifecycle.audit(&package).unwrap();
+    assert_eq!(ledger(&fx), before, "checksums and tables are untouched");
+    let first = format!("sql/{}", moved[0]);
+    package.files.get_mut(&first).unwrap().push(b' ');
+    assert!(lifecycle.migrate(&package, None).is_err(), "changed bytes are refused");
+}
