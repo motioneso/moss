@@ -80,3 +80,7 @@ path = "../tests/tools.rs"
 [[test]]
 name = "hidden"
 path = "../tests/hidden.rs"
+
+[[test]]
+name = "today"
+path = "../tests/today.rs"
