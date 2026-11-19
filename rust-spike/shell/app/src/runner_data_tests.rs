@@ -50,43 +50,53 @@ fn duplicate_wire_names_prevent_a_turn_from_opening() {
 }
 #[cfg(unix)]
 #[test]
-fn socket_bridge_returns_real_executor_results_and_errors() {
+fn socket_bridge_forwards_results_and_explicit_conversation_boundary() {
     use std::os::unix::net::UnixListener;
     let root = std::env::temp_dir().join(format!("js368-socket-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir(&root).unwrap();
     std::fs::write(root.join("runner.secret"), "test-only-hello").unwrap();
     let listener = UnixListener::bind(root.join("runner.sock")).unwrap();
     let task = std::thread::spawn(move || {
-        let (mut socket, _) = listener.accept().unwrap();
-        let mut lines = BufReader::new(socket.try_clone().unwrap()).lines();
-        let _hello = lines.next().unwrap().unwrap();
-        let chat: Value = serde_json::from_str(&lines.next().unwrap().unwrap()).unwrap();
-        assert_eq!(chat["account"], "signed-in-user");
-        for (n, name, ok) in [
-            (1, "scratchpad_read", true),
-            (2, "scratchpad_append", false),
-        ] {
-            let call = json!({"event":"tool_call", "call_id":format!("{}:{n}",chat["turn_id"].as_str().unwrap()),"name":name,"arguments":{}});
-            writeln!(socket, "{call}").unwrap();
-            let reply: Value = serde_json::from_str(&lines.next().unwrap().unwrap()).unwrap();
-            assert_eq!(reply["op"], "tool_result");
-            assert_eq!(reply["call_id"], call["call_id"]);
-            assert_eq!(reply["ok"], ok);
-            if ok {
-                assert_eq!(reply["text"], "scratchpad:scratchpad.read");
+        for fresh in [false, true] {
+            let (mut socket, _) = listener.accept().unwrap();
+            let mut lines = BufReader::new(socket.try_clone().unwrap()).lines();
+            let _hello = lines.next().unwrap().unwrap();
+            let chat: Value = serde_json::from_str(&lines.next().unwrap().unwrap()).unwrap();
+            assert_eq!(chat["account"], "signed-in-user");
+            assert_eq!(chat["fresh_conversation"], fresh);
+            for (n, name, ok) in [
+                (1, "scratchpad_read", true),
+                (2, "scratchpad_append", false),
+            ] {
+                let call = json!({"event":"tool_call", "call_id":format!("{}:{n}",chat["turn_id"].as_str().unwrap()),"name":name,"arguments":{}});
+                writeln!(socket, "{call}").unwrap();
+                let reply: Value = serde_json::from_str(&lines.next().unwrap().unwrap()).unwrap();
+                assert_eq!(reply["op"], "tool_result");
+                assert_eq!(reply["call_id"], call["call_id"]);
+                assert_eq!(reply["ok"], ok);
+                if ok {
+                    assert_eq!(reply["text"], "scratchpad:scratchpad.read");
+                }
             }
+            writeln!(socket, "{}", json!({"event":"done","text":"read complete"})).unwrap();
         }
-        writeln!(socket, "{}", json!({"event":"done","text":"read complete"})).unwrap();
     });
     let data = RunnerShellData::new(
         root.clone(),
         "signed-in-user".into(),
         Arc::new(Tools(AtomicUsize::new(0))),
     );
-    assert_eq!(
-        data.ask_runner("read my scratchpad").unwrap(),
-        ("read complete".into(), 0)
-    );
+    // Legacy clients continue the conversation; an explicit API request starts fresh.
+    let continued: SendMessage =
+        serde_json::from_value(json!({"text":"read my scratchpad"})).unwrap();
+    assert!(!continued.fresh_conversation);
+    assert_eq!(data.send_message(&continued).text, "read complete");
+    let fresh: SendMessage =
+        serde_json::from_value(json!({"text":"read it again", "fresh_conversation":true})).unwrap();
+    assert_eq!(data.send_message(&fresh).text, "read complete");
+    let messages = data.chat_thread().messages;
+    assert_eq!(messages.len(), 2);
+    assert_eq!(messages[0].text, "read it again");
     task.join().unwrap();
     std::fs::remove_dir_all(root).unwrap();
 }

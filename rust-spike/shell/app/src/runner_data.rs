@@ -9,7 +9,9 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use moss_shell_contract::stub::StubShellData;
-use moss_shell_contract::{ChatMessage, ChatRole, ChatThread, ShellData, ShellView, TodayView};
+use moss_shell_contract::{
+    ChatMessage, ChatRole, ChatThread, SendMessage, ShellData, ShellView, TodayView,
+};
 use serde_json::{json, Value};
 
 pub struct RunnerShellData {
@@ -34,7 +36,7 @@ impl RunnerShellData {
     }
 
     #[cfg(unix)]
-    fn ask_runner(&self, text: &str) -> Result<(String, usize), String> {
+    fn ask_runner(&self, message: &SendMessage) -> Result<(String, usize), String> {
         let secret = std::fs::read_to_string(self.root.join("runner.secret"))
             .map_err(|e| format!("cannot read the runner secret: {e}"))?;
         let stream = std::os::unix::net::UnixStream::connect(self.root.join("runner.sock"))
@@ -52,7 +54,7 @@ impl RunnerShellData {
         let tools = self.tools.list()?;
         let mut turn = ToolTurn::new(tools.clone())?;
         send(
-            json!({"op": "chat", "account": self.account, "text": text, "tools": tools, "turn_id": turn.id}),
+            json!({"op": "chat", "account": self.account, "text": message.text, "tools": tools, "turn_id": turn.id, "fresh_conversation": message.fresh_conversation}),
         )?;
 
         let mut refused = 0;
@@ -92,7 +94,7 @@ impl RunnerShellData {
     }
 
     #[cfg(not(unix))]
-    fn ask_runner(&self, _: &str) -> Result<(String, usize), String> {
+    fn ask_runner(&self, _: &SendMessage) -> Result<(String, usize), String> {
         Err("the runner is not built for this system yet".into())
     }
 }
@@ -114,19 +116,22 @@ impl ShellData for RunnerShellData {
         }
     }
 
-    fn send_message(&self, text: &str) -> ChatMessage {
+    fn send_message(&self, message: &SendMessage) -> ChatMessage {
         let _turn = self.turn_lock.lock().expect("turn lock");
         let n = {
             let mut m = self.messages.lock().expect("chat lock");
+            if message.fresh_conversation {
+                m.clear();
+            }
             let n = m.len();
             m.push(ChatMessage {
                 id: format!("m{}", n + 1),
                 role: ChatRole::User,
-                text: text.to_string(),
+                text: message.text.clone(),
             });
             n + 1
         };
-        let text = match self.ask_runner(text) {
+        let text = match self.ask_runner(message) {
             Ok((reply, 0)) => reply,
             Ok((reply, refused)) => format!(
                 "{reply}\n\n({refused} action(s) needed your approval. Approvals are not in this \

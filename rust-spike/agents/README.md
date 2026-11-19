@@ -50,8 +50,10 @@ Approval-required tools remain unavailable until the later approval-card parts.
 
 Claude adopts changed lists in the retained session. Codex retains its starting list: send
 `fresh_conversation: true` in a chat op to explicitly end the previous conversation and start a
-new one with the current list. This waits for any active account turn to finish. The regular
-chat drawer does not request a reset; adding a module never silently discards its conversation.
+new one with the current list. `POST /api/chat/messages` accepts the same optional
+`fresh_conversation` boolean and clears that account's displayed history under its turn lock.
+This waits for any active account turn to finish. The regular chat drawer does not request a
+reset; adding a module never silently discards its conversation.
 A removed tool is still refused by the server's current offered list. Manifest installation
 requires every `mcp__moss__`-prefixed name to fit the measured 110-byte limit.
 
