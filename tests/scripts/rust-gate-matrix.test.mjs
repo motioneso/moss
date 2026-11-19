@@ -49,6 +49,17 @@ test("Connectors partitions prerequisite files and database files without its PR
   assert.ok(entries.every(({ gates }) => gates === "test:rust-connectors"));
 });
 
+test("manual runs retain the Connectors speed benchmark in its own entry", () => {
+  const pr = rustGateEntries(["connectors"]);
+  const manual = rustGateEntries(["connectors"], "workflow_dispatch");
+  assert.deepEqual(manual.slice(0, -1), pr);
+  assert.deepEqual(manual.at(-1), {
+    module: "connectors",
+    suite: "sync_speed",
+    gates: "test:rust-connectors"
+  });
+});
+
 test("other modules keep their original gates and every command exists", () => {
   const modules = [
     "backtrack",

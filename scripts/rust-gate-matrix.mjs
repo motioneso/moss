@@ -1,7 +1,7 @@
 import { pathToFileURL } from "node:url";
 
 // A suite is a Cargo test file, not a test-name filter. Keep companion gates separate too.
-export function rustGateEntries(modules) {
+export function rustGateEntries(modules, event = "pull_request") {
   return modules.flatMap((module) => {
     const entry = (suite, gates = `test:rust-${module}`) => ({ module, suite, gates });
     switch (module) {
@@ -14,7 +14,7 @@ export function rustGateEntries(modules) {
       case "news":
         return [entry("installed"), entry("reader", "test:rust-news-reader")];
       case "connectors":
-        // sync_speed retains its existing PR opt-out; the full local gate still includes it.
+        // Preserve the existing PR opt-out and full manual-run benchmark coverage.
         return [
           "package",
           "registry",
@@ -25,7 +25,8 @@ export function rustGateEntries(modules) {
           "imap",
           "refresh",
           "outlook",
-          "writes"
+          "writes",
+          ...(event === "pull_request" ? [] : ["sync_speed"])
         ].map((suite) => entry(suite));
       case "finance":
         return [entry("full", "test:rust-finance test:rust-finance-ui-unit")];
@@ -42,5 +43,5 @@ export function rustGateEntries(modules) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  console.log(JSON.stringify(rustGateEntries(JSON.parse(process.argv[2]))));
+  console.log(JSON.stringify(rustGateEntries(JSON.parse(process.argv[2]), process.argv[3])));
 }

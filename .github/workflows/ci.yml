@@ -64,7 +64,7 @@ jobs:
           ALL_MODULES='["backtrack","briefings","calendar","commitments","connectors","email","finance","goals","meals","meetings","memory","news","notes","people","scratchpad","sports","tasks","weather","web-research","wellness"]'
           emit_modules() {
             echo "rust_modules=$1" >> "$GITHUB_OUTPUT"
-            echo "rust_entries=$(node scripts/rust-gate-matrix.mjs "$1")" >> "$GITHUB_OUTPUT"
+            echo "rust_entries=$(node scripts/rust-gate-matrix.mjs "$1" "$EVENT_NAME")" >> "$GITHUB_OUTPUT"
           }
           # Unknown file list on a pull request or manual run gates every covered module.
           # A push gates none, so the shadow job never spends minutes on main.

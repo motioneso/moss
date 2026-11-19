@@ -63,6 +63,7 @@ fixture checks, and the guest build remain prerequisites of every entry. The ful
 is unchanged; `CONNECTORS_TESTS` still works when `CONNECTORS_SUITE` is unset or empty.
 Unknown non-empty `CONNECTORS_SUITE` values fail before building. Selecting `sync_speed`
 explicitly while also skipping it fails rather than silently testing nothing.
+Manual workflow runs retain `sync_speed` as an additional entry; pull requests omit it.
 
 `scripts/rust-gate-matrix.mjs` expands the existing touched-module list. Unrelated modules keep
 their existing commands. The jobs remain optional shadow jobs outside `ci-gate`'s `needs`.
