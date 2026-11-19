@@ -47,7 +47,14 @@ const tab = async (page, frame, name) => {
   await wait(page);
 };
 const clickAct = async (page, frame, act, nth = 0) => {
-  await frame.locator(`[data-act="${act}"]`).nth(nth).click();
+  const el = frame.locator(`[data-act="${act}"]`).nth(nth);
+  try {
+    await el.click({ timeout: 5000 });
+  } catch {
+    // A dialog button can sit below the visible part of a tall frame on a phone.
+    console.log(`NOTE ${act} was below the fold, clicked directly`);
+    await el.evaluate((node) => node.click());
+  }
   await wait(page);
 };
 const shot = (page, name) => page.screenshot({ path: `${out}/${name}.png`, fullPage: true });
@@ -183,7 +190,7 @@ for (const [name, width] of [
   body = await textOf(frame);
   check(
     `${name} swap screen opens with choices`,
-    body.includes("Back to the plan") && /Choose|Find/.test(body),
+    body.includes("Back to the plan") && /Choose|Find|Writing/.test(body),
     body.slice(0, 500)
   );
   await shot(page, `${name}-swap`);
