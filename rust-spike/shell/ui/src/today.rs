@@ -73,10 +73,23 @@ fn Hero(hero: TodayHero) -> impl IntoView {
             <hr class="today-hero__hairline" />
             <crate::weather::HeroWeather />
             <div class="today-hero__prepared">
-                <span class="today-hero__not-ready">{hero.briefing_note}</span>
+                <HeroNote />
                 <HeroBriefing />
             </div>
         </section>
+    }
+}
+
+/// Why there is no morning briefing yet, from the caller's saved Briefings records.
+/// Hidden while loading, when Briefings is not installed, or when a readable run exists.
+#[component]
+fn HeroNote() -> impl IntoView {
+    let note = RwSignal::new(None::<String>);
+    spawn_local(async move { note.set(crate::hero_briefing::load_note().await) });
+    move || {
+        note.get().map(|text| {
+            view! { <span class="today-hero__not-ready" role="status">{text}</span> }
+        })
     }
 }
 

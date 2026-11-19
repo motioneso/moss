@@ -17,6 +17,11 @@ async fn get<T: DeserializeOwned>(path: &str) -> Result<T, String> {
     response.json().await.map_err(|e| e.to_string())
 }
 
+/// GET a JSON route on the Moss server.
+pub async fn get_json<T: DeserializeOwned>(path: &str) -> Result<T, String> {
+    get(path).await
+}
+
 pub async fn shell() -> Result<ShellView, String> {
     get("/api/shell").await
 }
