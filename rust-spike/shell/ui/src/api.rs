@@ -1,7 +1,7 @@
 //! Calls to the Moss server. Same origin in the browser and in the desktop window.
 
 use gloo_net::http::Request;
-use moss_shell_contract::{ChatMessage, ChatThread, SendMessage, ShellView, TodayView};
+use moss_shell_contract::{ChatThread, SendMessage, ShellView, TodayView};
 use serde::de::DeserializeOwned;
 
 async fn get<T: DeserializeOwned>(path: &str) -> Result<T, String> {

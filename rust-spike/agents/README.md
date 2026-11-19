@@ -48,11 +48,20 @@ still run in the runner. The server selects the module from its offered snapshot
 wire name (`_` back to `.`), and calls the validated host API with the signed-in account context.
 Approval-required tools remain unavailable until the later approval-card parts.
 
+Agent permission asks become approval records (pending, approved, used, declined, timed out,
+voided). `POST /api/chat/approvals/{id}` with `{"decision":"approve"|"reject"}` answers one as
+its owner (404 for another account or an unknown id, 409 once closed, expired or voided). Records
+expire after 10 minutes, the runner refuses an unanswered ask after 11, and every open record is
+voided when its turn ends. Module-tool approvals are refused until part 3b adds cards.
+
 Claude adopts changed lists in the retained session. Codex retains its starting list: send
 `fresh_conversation: true` in a chat op to explicitly end the previous conversation and start a
 new one with the current list. `POST /api/chat/messages` accepts the same optional
-`fresh_conversation` boolean and clears that account's displayed history under its turn lock.
-This waits for any active account turn to finish. The regular chat drawer does not request a
+`fresh_conversation` boolean and clears that account's displayed history. It returns 202 with the
+thread and runs the turn in the background, or returns 409 while the account already has a turn
+running. The drawer polls `GET /api/chat/thread` (`running`, `approvals`) every 1.5 seconds. A
+turn holds one runner socket and ends after 15 minutes, or after 300 seconds with no activity
+and no pending approval. The regular chat drawer does not request a
 reset; adding a module never silently discards its conversation.
 A removed tool is still refused by the server's current offered list. Manifest installation
 requires every `mcp__moss__`-prefixed name to fit the measured 110-byte limit.
