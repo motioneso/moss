@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Review commitments on Today.** Review things you said you would do on Today, then accept, reject or snooze each suggestion. [PR #4378](https://github.com/motioneso/moss/pull/4378)
 - **A scratchpad beside chat.** Keep notes beside chat or in a full phone screen, with automatic saving, a personal shortcut, and a choice to reload when another tab changes your note. [PR #4379](https://github.com/motioneso/moss/pull/4379)
 
 ### 2026-11-18
