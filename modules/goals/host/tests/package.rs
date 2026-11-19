@@ -31,21 +31,13 @@ fn the_component_loads_with_the_real_host() {
 
 #[test]
 fn an_unknown_route_is_a_plain_404() {
-    let out = call(
-        "route",
-        r#"{"method":"GET","path":"/nope","params":{},"query":{},"body":null}"#,
-    )
-    .unwrap();
+    let out = call("route", r#"{"method":"GET","path":"/nope","params":{},"query":{},"body":null}"#).unwrap();
     assert_eq!(serde_json::from_str::<Value>(&out).unwrap()["status"], 404);
 }
 
 #[test]
 fn an_unsupported_invocation_leaks_no_request_text() {
-    let err = call(
-        "job",
-        &json!({"queue":"goals-x","payload":{"title":"SECRET-TITLE"}}).to_string(),
-    )
-    .unwrap_err();
+    let err = call("job", &json!({"queue":"goals-x","payload":{"title":"SECRET-TITLE"}}).to_string()).unwrap_err();
     assert!(!format!("{err:#}").contains("SECRET-TITLE"));
 }
 
@@ -53,13 +45,7 @@ fn an_unsupported_invocation_leaks_no_request_text() {
 fn the_package_builds_and_the_manifest_validates() {
     let files = moss_goals_host::package::files(&root(), &component()).unwrap();
     assert_eq!(files.keys().filter(|k| k.starts_with("sql/")).count(), 3);
-    for needed in [
-        "moss.module.json",
-        "code/module.wasm",
-        "LICENSE",
-        "NOTICE",
-        "CHANGELOG.md",
-    ] {
+    for needed in ["moss.module.json", "code/module.wasm", "LICENSE", "NOTICE", "CHANGELOG.md"] {
         assert!(files.contains_key(needed), "{needed} missing");
     }
     for path in moss_goals_host::package::manifest()
@@ -79,15 +65,11 @@ fn the_package_builds_and_the_manifest_validates() {
 fn the_package_asks_only_for_its_own_resources() {
     let manifest = moss_goals_host::package::manifest().unwrap();
     let ask = |port: &str, operation: &str, resource: &str| {
-        authorize(
-            &manifest,
-            port,
-            &Request {
-                operation: operation.into(),
-                resource: resource.into(),
-                parameters: json!({"kind":"select"}),
-            },
-        )
+        authorize(&manifest, port, &Request {
+            operation: operation.into(),
+            resource: resource.into(),
+            parameters: json!({"kind":"select"}),
+        })
     };
     assert!(ask("db", "query", "app.moss_goals").is_ok());
     assert!(ask("db", "query", "app.moss_goal_evidence").is_ok());
@@ -105,11 +87,7 @@ fn changing_one_byte_of_the_legacy_sql_stops_the_build() {
     let from = root().join("packages/goals");
     let to = copy.join("packages/goals");
     std::fs::create_dir_all(to.join("sql")).unwrap();
-    for name in [
-        "0123_long_running_goals.sql",
-        "0182_moss_rename_goals.sql",
-        "0300_goals_id_defaults.sql",
-    ] {
+    for name in ["0123_long_running_goals.sql", "0182_moss_rename_goals.sql", "0300_goals_id_defaults.sql"] {
         let mut bytes = std::fs::read(from.join("sql").join(name)).unwrap();
         if name.starts_with("0123") {
             bytes.push(b'\n');

@@ -148,7 +148,7 @@
       "errors": [
         {
           "code": "goals-screen-request-failed",
-          "class": "unavailable",
+          "class": "transient",
           "description": "Your goals could not be loaded. Retry the request, or reload Today if the screen itself could not open."
         }
       ]
