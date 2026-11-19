@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Finance start, reports, upcoming bills and settings.** Finance now has a start page that works without a bank connection, a reports page for net worth and spending, an upcoming bills page, and a settings page. [PR #4369](https://github.com/motioneso/moss/pull/4369)
 - **Finance screens in the new app.** You can now see your budget, transactions and accounts, assign money and sort transactions, and a bank that needs you to sign in again shows a Reconnect button. [PR #4362](https://github.com/motioneso/moss/pull/4362)
 - **Meals screen.** The Meals page now shows your meal plan, shopping list, pantry and staples, and works on your phone. [PR #4360](https://github.com/motioneso/moss/pull/4360)
 - **News settings in the new app.** The News settings page now opens in the new app, with your sources, topics, excluded publishers and story preferences. [PR #4355](https://github.com/motioneso/moss/pull/4355)
