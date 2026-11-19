@@ -119,10 +119,12 @@ for (const [name, width] of [
     ).status();
   const codeOf = (made) => new URLSearchParams(made.approvalPath.split("#")[1]).get("code");
 
-  // Start clean: remove devices left by earlier passes on the held server.
+  // Start clean: remove devices this script made in earlier passes on the held server.
   await page.evaluate(async () => {
     const list = await (await fetch("/api/m/meetings/devices")).json().catch(() => ({}));
-    for (const d of list.devices ?? [])
+    for (const d of (list.devices ?? []).filter((x) =>
+      ["Studio Mac", "Desk Mac", "Pixel 9"].includes(x.displayName)
+    ))
       await fetch(`/api/m/meetings/devices/${d.id}`, { method: "DELETE" });
   });
 
