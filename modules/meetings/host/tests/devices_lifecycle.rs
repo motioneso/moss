@@ -142,6 +142,27 @@ fn reinstall_after_purge_pairs_a_new_device_without_reviving_the_old_one() {
     });
 }
 
+#[test]
+#[ignore = "Only through verify-gate"]
+fn snapshot_recovery_after_purge_restores_the_legacy_trigger() {
+    use moss_module_host::{migrations::PostgresLifecycle, store::Lifecycle};
+    use safety_core::secret::Secret;
+    let w = world();
+    let installed = install(&w);
+    let lifecycle = PostgresLifecycle::new(
+        Secret::new(std::env::var("JS48_BOOTSTRAP_URL").unwrap()),
+        w.fx.db.clone(),
+        &installed.app.installer.data_path(),
+    ).unwrap();
+    let snapshot = lifecycle.snapshot("meetings").unwrap();
+    lifecycle.purge("meetings").unwrap();
+    lifecycle.restore("meetings", &snapshot).expect("recovery must be able to recreate the legacy trigger");
+    lifecycle.discard_snapshot("meetings", &snapshot).unwrap();
+    w.fx.rt.block_on(async {
+        assert!(w.fx.root.query_one("SELECT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='app.meeting_records'::regclass AND tgname='meeting_record_creation_title')", &[]).await.unwrap().get::<_, bool>(0));
+    });
+}
+
 struct Refuse;
 impl PurgeHook for Refuse {
     fn purge(&self) -> anyhow::Result<()> {

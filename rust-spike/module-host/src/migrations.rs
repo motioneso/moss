@@ -171,6 +171,7 @@ impl Lifecycle for PostgresLifecycle {
                 let legacy=crate::legacy::entry(id,path).is_some_and(|f| f.raw==crate::trust::digest(&new.files[path]));
                 let role=if legacy {"jarvis_migration_owner"}else{&owner};
                 tx.batch_execute(&format!("SET LOCAL ROLE {role}")).await?;
+                if legacy {crate::legacy::prepare_replay(&tx,id,path).await?;}
                 tx.batch_execute(std::str::from_utf8(&new.files[path])?).await?;
                 crate::legacy::backfill(&tx,new,path).await?;
                 tx.batch_execute("RESET ROLE").await?;
@@ -253,7 +254,6 @@ impl Lifecycle for PostgresLifecycle {
             let mut client=self.privileged().await?;let tx=client.transaction().await?;
             let tables:Vec<String>=tx.query("SELECT name FROM moss_modules.owned_tables WHERE module_id=$1",&[&id]).await?.iter().map(|r|r.get(0)).collect();
             if !tables.is_empty(){tx.batch_execute(&format!("DROP TABLE {}",tables.join(","))).await?;}
-            crate::legacy::purge_auxiliaries(&tx, id).await?;
             for row in tx.query("SELECT path,checksum FROM moss_modules.migrations WHERE module_id=$1",&[&id]).await? {
                 let path:String=row.get(0);let checksum:String=row.get(1);let version=crate::legacy::version(&path)?;
                 tx.execute("DELETE FROM app.schema_migrations WHERE version=$1 AND name=$2 AND checksum=$3",&[&version,&&path[4..],&checksum]).await?;

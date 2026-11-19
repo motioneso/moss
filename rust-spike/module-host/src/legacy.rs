@@ -43,10 +43,14 @@ pub fn owns(module: &str, table: &str) -> bool {
         .is_some_and(|t| t.iter().any(|t| t == table))
 }
 
-/// Auxiliary objects from frozen legacy SQL which outlive their owning table. Remove
-/// these in the same transaction as the tables so the original migration can run again.
-pub(crate) async fn purge_auxiliaries(tx: &tokio_postgres::Transaction<'_>, module: &str) -> Result<()> {
-    if module == "meetings" {
+/// A legacy trigger function survives table removal. Keep it available for snapshot
+/// recovery, then clear it only when its frozen migration is actually replayed.
+pub(crate) async fn prepare_replay(
+    tx: &tokio_postgres::Transaction<'_>,
+    module: &str,
+    path: &str,
+) -> Result<()> {
+    if module == "meetings" && path == "sql/0292_meeting_minimal.sql" {
         tx.batch_execute("DROP FUNCTION IF EXISTS app.meeting_record_creation_title()")
             .await?;
     }

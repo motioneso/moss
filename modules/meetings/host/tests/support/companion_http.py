@@ -39,7 +39,7 @@ try:
             server = subprocess.Popen([str(target / "moss-shell"), "--network", str(root / "network.json"), "--modules", str(root / "modules.json")], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=log)
             deadline = time.monotonic() + 60
             while True:
-                assert server.poll() is None, "server exited before health"
+                assert server.poll() is None, f"server exited before health (exit {server.returncode})"
                 assert time.monotonic() < deadline, "server health deadline"
                 try:
                     with opener.open(origin + "/api/hello", timeout=2) as response:
