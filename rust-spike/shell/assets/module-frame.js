@@ -16,6 +16,25 @@ function fail() {
   failure.hidden = false;
 }
 
+function scratchpadShell(action, extra = {}) {
+  if (moduleId === "scratchpad" && window.parent !== window) {
+    window.parent.postMessage(
+      { channel: "moss.scratchpad.shell", action, ...extra },
+      location.origin
+    );
+  }
+}
+if (moduleId === "scratchpad") {
+  window.addEventListener("message", (event) => {
+    if (
+      event.source !== window.parent ||
+      event.origin !== location.origin ||
+      event.data?.channel !== "moss.scratchpad.visibility"
+    )
+      return;
+    frame.contentWindow?.postMessage(event.data, "*");
+  });
+}
 async function request(method, path, body) {
   const response = await fetch(path, {
     method,
@@ -47,7 +66,10 @@ async function request(method, path, body) {
     throw Object.assign(new Error(), { status: response.status, body: parsed });
   }
   if (!text) return null;
-  return JSON.parse(text);
+  const result = JSON.parse(text);
+  if (moduleId === "scratchpad" && typeof result?.shortcut === "string")
+    scratchpadShell("shortcut", { shortcut: result.shortcut });
+  return result;
 }
 
 try {
@@ -73,8 +95,25 @@ try {
   if (moduleId === "weather") frame.setAttribute("allow", "geolocation *");
   openModuleFrame(frame, moduleId, screenUrl.href, {
     request,
-    theme: () => ({ theme: "park-press", colorMode: dark ? "dark" : "light", isAdmin }),
+    theme: () => ({
+      theme: "park-press",
+      colorMode: dark ? "dark" : "light",
+      isAdmin,
+      phone: moduleId === "scratchpad" && window.parent.matchMedia("(max-width: 720px)").matches
+    }),
     navigate: async (path) => {
+      if (
+        moduleId === "scratchpad" &&
+        window.parent !== window &&
+        ["/scratchpad-close", "/scratchpad-settings"].includes(path)
+      ) {
+        scratchpadShell(path === "/scratchpad-close" ? "close" : "settings");
+        return null;
+      }
+      if (moduleId === "scratchpad" && window.parent !== window) {
+        scratchpadShell("navigate", { path });
+        return null;
+      }
       (globalThis.top ?? globalThis).location.assign(path);
       return null;
     },
