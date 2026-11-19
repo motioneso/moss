@@ -265,8 +265,10 @@ fn main() {
         let network = Network::new(platform.clone(), config, args.network)?;
         // The registry and file-import paths do not run install-module. Prepare the core
         // device lookup before loading modules or accepting a pairing request.
-        companion_startup::prepare(&platform.auth, modules_path.as_deref(), args.instance.as_deref())
-            .await?;
+        if companion_startup::prepare(&platform.auth, modules_path.as_deref(), args.instance.as_deref())
+            .await.is_err() {
+            eprintln!("moss-shell: device lookup is unavailable; linking stays disabled until module installation or a successful restart");
+        }
         // The host opens in the background, last: errors above must not drop its runtimes on
         // this executor, and a module installed later is picked up without a restart.
         let modules: modules::Slot = Arc::new(Mutex::new(None));
@@ -333,6 +335,7 @@ fn main() {
             Some(admin) => private.merge(module_admin::routes(admin)),
             None => private,
         };
+        let private = private.layer(Extension(modules.clone()));
         let app = web::router(network, private, args.web);
         Ok::<_, String>((listener, acceptor, app, running, modules, loader))
     });

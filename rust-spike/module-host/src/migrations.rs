@@ -253,6 +253,7 @@ impl Lifecycle for PostgresLifecycle {
             let mut client=self.privileged().await?;let tx=client.transaction().await?;
             let tables:Vec<String>=tx.query("SELECT name FROM moss_modules.owned_tables WHERE module_id=$1",&[&id]).await?.iter().map(|r|r.get(0)).collect();
             if !tables.is_empty(){tx.batch_execute(&format!("DROP TABLE {}",tables.join(","))).await?;}
+            crate::legacy::purge_auxiliaries(&tx, id).await?;
             for row in tx.query("SELECT path,checksum FROM moss_modules.migrations WHERE module_id=$1",&[&id]).await? {
                 let path:String=row.get(0);let checksum:String=row.get(1);let version=crate::legacy::version(&path)?;
                 tx.execute("DELETE FROM app.schema_migrations WHERE version=$1 AND name=$2 AND checksum=$3",&[&version,&&path[4..],&checksum]).await?;

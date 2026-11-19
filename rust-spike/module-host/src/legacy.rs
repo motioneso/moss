@@ -42,6 +42,16 @@ pub fn owns(module: &str, table: &str) -> bool {
         .get(module)
         .is_some_and(|t| t.iter().any(|t| t == table))
 }
+
+/// Auxiliary objects from frozen legacy SQL which outlive their owning table. Remove
+/// these in the same transaction as the tables so the original migration can run again.
+pub(crate) async fn purge_auxiliaries(tx: &tokio_postgres::Transaction<'_>, module: &str) -> Result<()> {
+    if module == "meetings" {
+        tx.batch_execute("DROP FUNCTION IF EXISTS app.meeting_record_creation_title()")
+            .await?;
+    }
+    Ok(())
+}
 /// Reviewed pre-package sharing identity. It cannot be chosen by downloaded SQL.
 pub fn sharing(module: &str, table: &str, resource: &str, key: &str) -> bool {
     matches!(

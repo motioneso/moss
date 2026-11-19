@@ -926,19 +926,30 @@
     },
     {
       "id": "meetings.device-data-removal",
-      "description": "Removing Meetings while keeping its data keeps linked devices. Removing Meetings with its data forgets linked devices and pending link requests for every account. Reinstalling requires linking devices again. If device cleanup fails, removal stops so it can be retried.",
+      "description": "Removing Meetings while keeping its data keeps linked devices. Removing Meetings with its data forgets linked devices and pending link requests for every account. Reinstalling requires linking devices again. Linking waits for removal and is unavailable while Meetings is absent or device lookup preparation is unavailable. If device cleanup fails, removal stops so it can be retried. If a later data-removal step fails, devices have already been forgotten and must be linked again.",
       "errors": [
         {
           "code": "module-removal-failed",
           "class": "transient",
           "description": "Device cleanup could not finish, so Meetings was not removed",
           "remediationRef": "retry-device-removal"
+        },
+        {
+          "code": "companion-unavailable",
+          "class": "transient",
+          "description": "Linking returns unavailable while Meetings is absent, being removed, or its device lookup is not ready",
+          "remediationRef": "restore-device-linking"
         }
       ],
       "remediations": [
         {
           "id": "retry-device-removal",
           "description": "Restore the database connection and retry removing Meetings with its data",
+          "path": "/settings/modules"
+        },
+        {
+          "id": "restore-device-linking",
+          "description": "Install Meetings if it was removed. If device lookup preparation failed, restore the database connection and elevated install access, then restart the server or install Meetings again",
           "path": "/settings/modules"
         }
       ]

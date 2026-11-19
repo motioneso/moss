@@ -949,6 +949,15 @@ impl Installer {
         }
         Ok(report)
     }
+    /// Hold the same fences as removal while a trusted host operation uses a module's data.
+    /// The callback must not call another Installer method.
+    pub fn while_installed<T>(&self, id: &str, action: impl FnOnce() -> Result<T>) -> Result<T> {
+        let _fence = self.fence.read().map_err(|_| anyhow::anyhow!("Module changes are busy"))?;
+        let _disk_lock = self.disk_lock(false)?;
+        ensure!(self.catalog.load()?.installed.contains_key(id), "This module is not installed");
+        action()
+    }
+
     pub fn export_list(&self) -> Result<ModuleList> {
         Ok(ModuleList {
             modules: self

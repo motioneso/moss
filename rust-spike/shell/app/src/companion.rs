@@ -108,6 +108,25 @@ fn devices(data: &Accounts) -> DeviceStore {
     DeviceStore::new(data.platform.app.clone())
 }
 
+/// Pairing and removal share the installer's read/write and on-disk fences. A request
+/// queued behind removal rechecks the catalog and cannot recreate purged devices.
+async fn while_meetings<T, F>(data: &Accounts, slot: crate::modules::Slot, action: F) -> Result<T, ApiError>
+where
+    T: Send + 'static,
+    F: std::future::Future<Output = anyhow::Result<T>> + Send + 'static,
+{
+    let unavailable = || ApiError::http(503, "Meetings is not ready for linking");
+    let application = crate::modules::host(&slot).ok_or_else(unavailable)?;
+    let db = data.platform.auth.auth_client().await.map_err(|_| unavailable())?;
+    let ready: bool = db.query_one("SELECT to_regclass('app.companion_devices_owner') IS NOT NULL", &[])
+        .await.map_err(|_| unavailable())?.get(0);
+    if !ready { return Err(unavailable()); }
+    let runtime = tokio::runtime::Handle::current();
+    tokio::task::spawn_blocking(move || {
+        application.installer.while_installed("meetings", || runtime.block_on(action))
+    }).await.map_err(|_| unavailable())?.map_err(|_| unavailable())
+}
+
 fn internal(e: anyhow::Error) -> ApiError {
     ApiError::Internal(format!("companion: {e}"))
 }
@@ -142,6 +161,7 @@ pub struct CreateAttempt {
 pub async fn pair(
     State(data): State<Arc<Accounts>>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    Extension(slot): Extension<crate::modules::Slot>,
     body: Result<Json<CreateAttempt>, JsonRejection>,
 ) -> Reply {
     if !allow("pair", peer.ip(), 20) {
@@ -161,8 +181,9 @@ pub async fn pair(
     {
         return Err(ApiError::framework(400, "Request body is invalid"));
     }
-    let created = pairing(&data)
-        .create(NewAttempt {
+    let store = pairing(&data);
+    let created = while_meetings(&data, slot, async move {
+        store.create(NewAttempt {
             verifier_hash: b.verifier_hash,
             device_name: b.device_name,
             platform: b.platform,
@@ -172,7 +193,7 @@ pub async fn pair(
             recording_policy_version: b.recording_policy_version,
         })
         .await
-        .map_err(internal)?;
+    }).await?;
     Ok(Json(json!({
         "attemptId": created.attempt_id,
         "approvalPath": created.approval_path,
@@ -235,6 +256,7 @@ pub struct Decide {
 
 pub async fn decide(
     State(data): State<Arc<Accounts>>,
+    Extension(slot): Extension<crate::modules::Slot>,
     headers: HeaderMap,
     body: Result<Json<Decide>, JsonRejection>,
 ) -> Reply {
@@ -268,7 +290,7 @@ pub async fn decide(
         }
     }
     let approve = b.decision == "approve";
-    match store.decide(&b.code, approve, actor, session, b.recording_policy_version).await.map_err(internal)? {
+    match while_meetings(&data, slot, async move { store.decide(&b.code, approve, actor, session, b.recording_policy_version).await }).await? {
         Decision::Done => Ok(Json(json!({"status": if approve {"approved"} else {"denied"}})).into_response()),
         Decision::NotPending => Err(ApiError::http(409, "That link request was already answered")),
         Decision::Unknown => Err(ApiError::http(404, "That link request is no longer open")),
@@ -285,13 +307,15 @@ pub struct Attempt {
 pub async fn redeem(
     State(data): State<Arc<Accounts>>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    Extension(slot): Extension<crate::modules::Slot>,
     body: Result<Json<Attempt>, JsonRejection>,
 ) -> Reply {
     if !allow("redeem", peer.ip(), 120) {
         return Err(limited());
     }
     let b = json_body(body)?;
-    Ok(match pairing(&data).redeem(b.attempt_id, &b.verifier).await.map_err(internal)? {
+    let store = pairing(&data);
+    Ok(match while_meetings(&data, slot, async move { store.redeem(b.attempt_id, &b.verifier).await }).await? {
         Redeemed::Issued(i) => no_store(
             Json(json!({
                 "status": "issued",

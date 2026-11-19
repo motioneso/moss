@@ -151,6 +151,38 @@ impl PurgeHook for Refuse {
 
 #[test]
 #[ignore = "Only through verify-gate"]
+fn pairing_work_finishes_before_purge_and_cannot_run_after_removal() {
+    use std::{sync::mpsc, time::Duration};
+    let w = world();
+    let installed = install(&w);
+    let installer = installed.app.installer.clone();
+    let access = w.fx.access(w.fx.a);
+    let (entered_tx, entered_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    let (removed_tx, removed_rx) = mpsc::channel();
+    std::thread::scope(|scope| {
+        let lease = installer.clone();
+        scope.spawn(move || lease.while_installed("meetings", || {
+            entered_tx.send(()).unwrap();
+            release_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+            Ok(())
+        }).unwrap());
+        entered_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+        scope.spawn(move || {
+            removed_tx.send(installer.remove(&access, "meetings", Some("Meetings"))).unwrap();
+        });
+        assert!(matches!(removed_rx.recv_timeout(Duration::from_millis(200)), Err(mpsc::RecvTimeoutError::Timeout)));
+        release_tx.send(()).unwrap();
+        removed_rx.recv_timeout(Duration::from_secs(30)).unwrap().unwrap();
+    });
+    let result: anyhow::Result<()> = installed.app.installer.while_installed("meetings", || anyhow::bail!("pairing ran after removal"));
+    let error = format!("{:#}", result.unwrap_err());
+    assert!(error.contains("not installed"), "{error}");
+    assert_empty(&w);
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
 fn cleanup_failure_stops_removal_before_any_module_table_is_dropped() {
     let w = world();
     let installed = install(&w);

@@ -12,6 +12,7 @@ import tempfile
 import time
 import urllib.parse
 import urllib.request
+import urllib.error
 
 data = json.load(sys.stdin)
 target = Path(os.environ.get("CARGO_TARGET_DIR", "/tmp/moss-meetings-host")) / "debug"
@@ -60,14 +61,26 @@ try:
             cookie = "better-auth.session_token=" + urllib.parse.quote(data["session"] + "." + signature, safe="")
             verifier = "fresh-reinstall-verifier"
             verifier_hash = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
-            created = post("/api/companion/pair", {"deviceName": "Reinstalled Mac", "platform": "macos", "appVersion": "1", "osVersion": "14", "verifierHash": verifier_hash})
+            deadline = time.monotonic() + float(os.environ.get("JS353_PAIR_TIMEOUT", "180"))
+            while True:
+                try:
+                    created = post("/api/companion/pair", {"deviceName": "Reinstalled Mac", "platform": "macos", "appVersion": "1", "osVersion": "14", "verifierHash": verifier_hash})
+                    break
+                except urllib.error.HTTPError as error:
+                    if error.code != 503 or time.monotonic() >= deadline:
+                        raise
+                    time.sleep(0.2)
             code = urllib.parse.parse_qs(urllib.parse.urlparse(created["approvalPath"]).fragment)["code"][0]
             assert post("/api/companion/pair/decide", {"code": code, "decision": "approve"}, cookie)["status"] == "approved"
             issued = post("/api/companion/pair/redeem", {"attemptId": created["attemptId"], "verifier": verifier})
             assert issued["status"] == "issued"
             print(issued["device"]["id"])
             server.terminate()
-            server.wait(timeout=15)
+            try:
+                server.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                server.kill()
+                server.wait()
             server = None
 finally:
     if server is not None:
