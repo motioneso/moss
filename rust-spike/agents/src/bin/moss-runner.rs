@@ -374,10 +374,15 @@ mod tests {
             .write_all(b"{\"op\":\"hello\",\"secret\":\"wrong\"}\n")
             .await
             .unwrap();
-        write.shutdown().await.unwrap();
         let mut lines = BufReader::new(read).lines();
+        // Keep the write half open: an EOF would abort the server writer before a weakened
+        // hello check can flush its ready event, making this assertion pass either way.
+        let first = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
+            .await
+            .expect("hello check did not close or answer")
+            .unwrap();
         assert!(
-            lines.next_line().await.unwrap().is_none(),
+            first.is_none(),
             "wrong hello secret opened a turn socket"
         );
         task.await.unwrap().unwrap();
