@@ -134,8 +134,7 @@ export function createUpcoming({ api, root, render }) {
       );
     }
     if (d.kind === "match") {
-      const id =
-        value("transactionId") || root.querySelector('[data-field="transactionId"]:checked')?.value;
+      const id = root.querySelector('[data-field="transactionId"]:checked')?.value;
       if (!id) return bad("Choose a charge.");
       return write(
         "/finance/bills/decide",

@@ -50,6 +50,20 @@ fn delete_removes_the_callers_rows_drops_bank_tokens_and_spares_others() {
 }
 
 #[test]
+fn delete_clears_transfer_links_first_and_drops_tokens_last() {
+    let f = Fake::new();
+    seed_person(&f, A, "a");
+    f.as_actor(A);
+    call(&f, "deleteFinanceAccountData");
+    let calls = f.calls.borrow();
+    let first_db = calls.iter().position(|c| c.2 == "app.finance_transactions").expect("transactions touched");
+    assert_eq!(calls[first_db].3["kind"], "update", "transfer links must be cleared before any delete");
+    let forget = calls.iter().position(|c| c.1 == "forget").expect("forget");
+    let last_delete = calls.iter().rposition(|c| c.1 == "query" && c.3["kind"] == "delete").expect("delete");
+    assert!(forget > last_delete, "tokens must outlive a refused row delete");
+}
+
+#[test]
 fn account_calls_refuse_parameters_and_unknown_names() {
     let f = Fake::new();
     f.as_actor(A);

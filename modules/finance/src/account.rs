@@ -92,17 +92,26 @@ fn collect<H: Host + ?Sized>(host: &H) -> Result<Value> {
     Ok(Value::Object(out))
 }
 
-/// Drops each stored bank token, then every owned row.
+/// Removes every owned row, then drops each stored bank token. Rows go first so a refused delete
+/// leaves the tokens in place for a retry.
+///
+/// Transaction rows point at transfers without deferral, and transfers point back with deferral.
+/// Clearing the transaction side first lets the transfers go before the transactions.
 fn delete_all<H: Host + ?Sized>(host: &H) -> Result<Value> {
     let client = Client(host);
-    for link in read_table(&client, bank::LINKS, &["item_id"])? {
-        if let Some(slot) = link["slot"].as_str().filter(|s| !s.is_empty()) {
-            plaid::forget(host, slot)?;
-        }
-    }
+    let slots: Vec<String> = read_table(&client, bank::LINKS, &["item_id"])?
+        .iter()
+        .filter_map(|link| link["slot"].as_str().filter(|s| !s.is_empty()).map(str::to_owned))
+        .collect();
+    let mut unlink = std::collections::BTreeMap::new();
+    unlink.insert("transfer_id".to_owned(), Value::Null);
+    client.query("app.finance_transactions", &Query::update(Filter::Owned, unlink))?;
     let mut removed = 0;
     for (table, _) in TABLES {
         removed += client.query(table, &Query::delete(Filter::Owned))?.len();
+    }
+    for slot in slots {
+        plaid::forget(host, &slot)?;
     }
     Ok(json!({"deleted": removed}))
 }
