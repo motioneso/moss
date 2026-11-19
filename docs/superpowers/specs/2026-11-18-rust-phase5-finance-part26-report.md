@@ -22,7 +22,13 @@ and served by the Rust server. The screens reproduce the approved TypeScript scr
 | Screen unit tests (16, node)                                              | Pass                    |
 | Static gate `pnpm verify:static` (lint, format, file size, design checks) | Pass, exit 0            |
 | Package test `the_screen_ships_with_every_file_it_loads`                  | Pass                    |
-| Finance host tests, the rest                                              | See "Gate result" below |
+| Finance host tests, the rest                                              | 9 of 10 pass; see below |
+
+## Gate result
+
+One installed-package test, `a_bank_connects_syncs_fails_and_reconnects`, fails at
+`tests/installed.rs:404` (left 1, right 2). It fails the same way on a clean checkout of main, so it
+is not caused by this change. It was run twice on the branch and once on main.
 
 ## Live proof
 
