@@ -44,7 +44,7 @@ fn a_job_is_refused_with_fixed_text() {
 #[test]
 fn the_package_builds_and_the_manifest_validates() {
     let files = moss_meetings_host::package::files(&root(), &component()).unwrap();
-    assert_eq!(files.keys().filter(|k| k.starts_with("sql/")).count(), 17);
+    assert_eq!(files.keys().filter(|k| k.starts_with("sql/")).count(), 21);
     for needed in ["moss.module.json", "code/module.wasm", "LICENSE", "NOTICE", "CHANGELOG.md"] {
         assert!(files.contains_key(needed), "{needed} missing");
     }
