@@ -32,6 +32,8 @@ jobs:
     outputs:
       docs_only: ${{ steps.scope.outputs.docs_only }}
       rust_only: ${{ steps.scope.outputs.rust_only }}
+      rust_modules: ${{ steps.scope.outputs.rust_modules }}
+      host_changed: ${{ steps.scope.outputs.host_changed }}
 
     steps:
       - name: Classify changed paths
@@ -50,6 +52,16 @@ jobs:
           # Both outputs default to the full gate; any early exit below keeps them false.
           echo "docs_only=false" >> "$GITHUB_OUTPUT"
           echo "rust_only=false" >> "$GITHUB_OUTPUT"
+          echo "host_changed=false" >> "$GITHUB_OUTPUT"
+          # Modules the shadow rust-modules job gates. Step 2 of the rollout covers two.
+          ALL_MODULES='["finance","tasks"]'
+          # Unknown file list on a pull request or manual run gates every covered module.
+          # A push gates none, so the shadow job never spends minutes on main.
+          if [ "$EVENT_NAME" = "push" ]; then
+            echo "rust_modules=[]" >> "$GITHUB_OUTPUT"
+          else
+            echo "rust_modules=$ALL_MODULES" >> "$GITHUB_OUTPUT"
+          fi
           # Push events have no pull request file list, so look up the PR that produced the
           # commit. That PR only covers the whole push when the push is exactly one commit
           # (squash merges), so a longer range, a failed compare or an empty lookup runs the
@@ -81,6 +93,22 @@ jobs:
             echo "No changed files listed — running the full gate."
             exit 0
           fi
+          # Touched modules: a path under the module or its SQL, or a change to the shared
+          # host crates or this workflow (which runs every covered module).
+          host_re='^(rust-spike/(module-host|module-sdk|access-context|safety-core|module-ui|network|standins|vault|parity|ui/bindgen)/|infra/postgres/migrations/|scripts/run-gate\.sh$|\.github/workflows/ci\.yml$)'
+          host_changed=false
+          if grep -qE "$host_re" files.txt; then host_changed=true; fi
+          touched=""
+          for m in $(echo "$ALL_MODULES" | jq -r '.[]'); do
+            if [ "$host_changed" = true ] || grep -qE "^(modules/$m/|packages/$m/sql/)" files.txt; then
+              touched="$touched $m"
+            fi
+          done
+          rust_modules=$(printf '%s\n' $touched | jq -R . | jq -sc 'map(select(length>0))')
+          if [ "$EVENT_NAME" = "push" ]; then rust_modules='[]'; fi
+          echo "host_changed=$host_changed" >> "$GITHUB_OUTPUT"
+          echo "rust_modules=$rust_modules" >> "$GITHUB_OUTPUT"
+          echo "Rust module gates: $rust_modules (host changed: $host_changed)"
           # rust_only == every changed path is docs or Rust. Rust means everything under
           # rust-spike/, every path inside a module package under modules/ (each one there is
           # a Rust package with a Cargo.toml: moss.module.json, ui/, tools/, tests and so on), and
@@ -303,6 +331,101 @@ jobs:
       - name: Stop database
         if: always()
         run: docker compose -f infra/docker-compose.yml down -v
+
+  # Shadow job (rollout step 2 of docs/superpowers/plans/2026-11-18-rust-module-gates-in-ci.md).
+  # Runs the Finance and Tasks package gates through scripts/run-gate.sh. Not listed in
+  # ci-gate's needs, so a red run here never blocks a merge.
+  rust-modules:
+    name: Rust gate (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: changes
+    if: needs.changes.outputs.rust_modules != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJSON(needs.changes.outputs.rust_modules) }}
+    env:
+      CARGO_HOME: ${{ github.workspace }}/.rust-gate/cargo
+      RUSTUP_HOME: ${{ github.workspace }}/.rust-gate/rustup
+      CARGO_TARGET_DIR: ${{ github.workspace }}/.rust-gate/target
+      # Keep target folders small enough for a hosted runner disk.
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_TERM_COLOR: never
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Disk before
+        run: df -h / /tmp
+
+      - name: Provision the declared Rust toolchain and target
+        run: rustup toolchain install 1.95.0 --profile minimal --target wasm32-unknown-unknown
+
+      - name: Restore the shared Cargo home
+        id: cargo-home
+        uses: actions/cache/restore@v4
+        with:
+          path: .rust-gate/cargo
+          key: cargo-home-${{ hashFiles('modules/**/Cargo.lock', 'rust-spike/**/Cargo.lock') }}
+          restore-keys: cargo-home-
+
+      # The gates run with --offline, so every crate of both covered modules is fetched here.
+      - name: Fetch crates
+        run: |
+          set -euo pipefail
+          for lock in modules/finance/*/Cargo.lock modules/tasks/*/Cargo.lock; do
+            cargo +1.95.0 fetch --locked --manifest-path "$(dirname "$lock")/Cargo.toml"
+          done
+          du -sh "$CARGO_HOME"
+
+      - name: Save the shared Cargo home
+        if: steps.cargo-home.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .rust-gate/cargo
+          key: cargo-home-${{ hashFiles('modules/**/Cargo.lock', 'rust-spike/**/Cargo.lock') }}
+
+      - name: Run the module gate
+        env:
+          MODULE: ${{ matrix.module }}
+        run: |
+          set -uo pipefail
+          case "$MODULE" in
+            finance) gate=test:rust-finance ;;
+            tasks) gate=test:rust-tasks ;;
+            *) echo "Unknown module $MODULE"; exit 1 ;;
+          esac
+          scripts/run-gate.sh start --gate "$gate" | tee "$RUNNER_TEMP/start.out"
+          log=$(sed -n 's/^LOG=//p' "$RUNNER_TEMP/start.out" | head -1)
+          if [ -z "$log" ]; then echo "run-gate start gave no log path"; exit 1; fi
+          scripts/run-gate.sh wait --follow --log "$log"
+          rc=$?
+          echo "GATE_EXIT=$rc"
+          exit $rc
+
+      - name: Disk after
+        if: always()
+        run: |
+          df -h / /tmp
+          du -sh "$CARGO_TARGET_DIR" "$CARGO_HOME" 2>/dev/null || true
 
   browser:
     name: Verify web and browser tests (${{ matrix.shard }}/2)
