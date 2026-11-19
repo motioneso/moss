@@ -1,5 +1,6 @@
 /** The old News choice, personalization and topic routes on the disposable gate database. */
 import assert from "node:assert/strict";
+import { mock } from "node:test";
 import Fastify from "fastify";
 import { createDatabase, DataContextRunner, getMossDatabaseUrls } from "@moss/db";
 import { setMossErrorHandler } from "../../../apps/api/src/error-handling.js";
@@ -114,7 +115,22 @@ export async function routesOracle(
 if (process.argv[1]?.endsWith("routes-oracle.ts")) {
   let input = "";
   for await (const chunk of process.stdin) input += String(chunk);
-  const { actor, steps, vars }: { actor: string; steps: Step[]; vars?: Record<string, string> } =
-    JSON.parse(input);
-  console.log(JSON.stringify(await routesOracle(actor, steps, vars)));
+  const {
+    actor,
+    steps,
+    vars,
+    now
+  }: {
+    actor: string;
+    steps: Step[];
+    vars?: Record<string, string>;
+    now?: string | null;
+  } = JSON.parse(input);
+  // Only this oracle process uses the fixed clock; normal callers retain the real clock.
+  if (now) mock.timers.enable({ apis: ["Date"], now: new Date(now) });
+  try {
+    console.log(JSON.stringify(await routesOracle(actor, steps, vars)));
+  } finally {
+    if (now) mock.timers.reset();
+  }
 }
