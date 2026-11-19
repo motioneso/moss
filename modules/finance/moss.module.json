@@ -947,7 +947,10 @@
     }
   },
   "requires": {},
-  "provides": {},
+  "provides": {
+    "collectFinanceExportSection": "1.0.0",
+    "deleteFinanceAccountData": "1.0.0"
+  },
   "icons": ["icons/finance.svg"],
   "accounts": {
     "supportsUserDisable": true,

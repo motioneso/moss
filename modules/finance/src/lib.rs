@@ -12,6 +12,7 @@ macro_rules! ask {
     };
 }
 
+pub mod account;
 pub mod accounts;
 pub mod activity;
 pub mod archive;
@@ -222,6 +223,11 @@ pub fn handle<H: Host + ?Sized>(
             };
             sync_household(host);
             Ok(done.to_string())
+        }
+        "api" => {
+            let call = account::execute(host, serde_json::from_str(payload)?)
+                .map_err(|_| moss_module_sdk::Error::new("Finance account operation failed"))?;
+            Ok(serde_json::to_string(&call)?)
         }
         "tool" => {
             let request: tools::Request = serde_json::from_str(payload)?;
