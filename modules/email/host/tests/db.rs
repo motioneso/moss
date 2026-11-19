@@ -257,12 +257,14 @@ fn source_switch_keeps_other_entries_and_draft_policy_round_trips() {
     assert_eq!(f.call(f.a, "get", "email.source-behaviors", json!({})), json!({}));
     f.sql(&format!(
         "INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES('{}','sourceBehaviors','{{\"calendar.briefings\":false}}')", f.a));
+    // The second account has its own saved switch, which the first account's write must leave alone.
+    f.call(f.b, "set", "email.source-behaviors", json!({"enabled":true}));
     f.call(f.a, "set", "email.source-behaviors", json!({"enabled":false}));
     assert_eq!(f.call(f.a, "get", "email.source-behaviors", json!({})), json!({"enabled":false}));
     let stored: Value = f.rt.block_on(f.root.query_one(
         "SELECT value_json FROM app.preferences WHERE owner_user_id=$1 AND key='sourceBehaviors'", &[&f.a])).unwrap().get(0);
     assert_eq!(stored, json!({"calendar.briefings":false,"email.briefings":false}));
-    assert_eq!(f.call(f.b, "get", "email.source-behaviors", json!({})), json!({}), "a write changed another account");
+    assert_eq!(f.call(f.b, "get", "email.source-behaviors", json!({})), json!({"enabled":true}), "a write changed another account");
     assert_eq!(f.call(f.a, "get", "email.draft-policy", json!({})), json!({}));
     f.call(f.a, "set", "email.draft-policy", json!({"tier":"trusted_auto"}));
     assert_eq!(f.call(f.a, "get", "email.draft-policy", json!({})), json!({"tier":"trusted_auto"}));
