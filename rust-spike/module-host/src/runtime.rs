@@ -86,10 +86,6 @@ pub struct Request {
 /// for DataContext/VaultContext and honor scope.remaining() for blocking I/O. No raw handles
 /// are returned through this interface. Missing services fail closed.
 pub trait Ports: Send + Sync {
-    /// Trusted host access only; not an operation exposed through the guest linker.
-    fn chat_services(&self) -> Result<&crate::services::ServicePorts> {
-        bail!("Chat services are not connected")
-    }
     fn invoke(&self, scope: &CallScope, port: &str, request: &Request) -> Result<Value>;
     /// Opt-in finalization. Wrappers must forward this to their downstream services.
     /// A false result means guest failure, trap, or an unsuccessful route response.

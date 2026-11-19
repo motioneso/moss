@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
-    sync::{Arc, RwLock},
+    sync::{Arc, RwLock, Weak},
 };
 
 #[derive(Clone, Default, Serialize, Deserialize)]
@@ -80,6 +80,7 @@ pub struct Installer {
     pub(crate) lifecycle: Arc<dyn Lifecycle>,
     pub(crate) host: Host,
     pub(crate) ports: Arc<dyn Ports>,
+    pub(crate) chat_services: RwLock<Weak<crate::services::ServicePorts>>,
     pub(crate) moss: Version,
     pub(crate) inventory: LegacyInventory,
     pub(crate) fence: RwLock<()>,
@@ -140,6 +141,7 @@ impl Installer {
             lifecycle,
             host,
             ports,
+            chat_services: RwLock::new(Weak::new()),
             moss,
             inventory,
             fence: RwLock::new(()),

@@ -93,7 +93,7 @@ fn normalize_card(manifest: &Manifest, tool: &Tool, raw: Value) -> Result<Approv
     let target = format!("{}: {}", manifest.name, tool.description);
     ensure!(target.len() <= 1024, "Card target too long");
     Ok(ApprovalCardRecord {
-        title: "Approve action".into(),
+        title: "Action request".into(),
         target,
         fields,
         version,
@@ -102,13 +102,20 @@ fn normalize_card(manifest: &Manifest, tool: &Tool, raw: Value) -> Result<Approv
     })
 }
 impl Installer {
+    fn chat_services(&self) -> Result<std::sync::Arc<crate::services::ServicePorts>> {
+        self.chat_services
+            .read()
+            .map_err(|_| anyhow::anyhow!("Chat services are busy"))?
+            .upgrade()
+            .context("Chat services are not connected")
+    }
     pub fn chat_tools(&self, access: &AccessContext) -> Result<Vec<ChatToolDef>> {
         let _fence = self
             .fence
             .read()
             .map_err(|_| anyhow::anyhow!("Module changes are busy"))?;
         let _disk = self.disk_lock(false)?;
-        let services = self.ports.chat_services()?;
+        let services = self.chat_services()?;
         let state = self.catalog.load()?;
         let mut names = BTreeSet::new();
         let mut out = Vec::new();
@@ -212,7 +219,7 @@ impl Installer {
             .map_err(|_| anyhow::anyhow!("Module changes are busy"))?;
         let _disk = self.disk_lock(false)?;
         let (manifest, tool) = self.chat_manifest(module, name, &params)?;
-        let services = self.ports.chat_services()?;
+        let services = self.chat_services()?;
         let rule = chat_tool_rule(&tool, services.chat_policy(module, access, name)?);
         let payload = match (rule, approved) {
             (ChatToolRule::Card { .. }, None) => {
@@ -260,8 +267,7 @@ impl Installer {
             let raw: Value = serde_json::from_str(&result)?;
             let card = normalize_card(&manifest, &tool, raw)?;
             let mut value = serde_json::to_value(&card)?;
-            self.ports
-                .chat_services()?
+            self.chat_services()?
                 .sanitize_chat(&manifest, access, &mut value)?;
             let clean: ApprovalCardRecord = serde_json::from_value(value)?;
             ensure!(

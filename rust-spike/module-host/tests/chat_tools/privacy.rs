@@ -178,13 +178,47 @@ fn chat_tool_reads_use_the_actor_under_real_rls_including_admin() {
     let db = rt.block_on(async {
         let (db,c) = tokio_postgres::connect(&std::env::var("JS43_BOOTSTRAP_URL").unwrap(),tokio_postgres::NoTls).await.unwrap();
         tokio::spawn(async move { let _ = c.await; });
-        db.batch_execute(moss_module_host::postgres::MIGRATION).await.unwrap();
-        db.batch_execute(moss_module_host::migrations::MIGRATION).await.unwrap();
-        for (access,email,is_admin) in [(&a,"chat-a@example.test",true),(&b,"chat-b@example.test",false),(&admin,"chat-admin@example.test",true)] {
+        // Removal controls repeat this test in the same disposable gate database.
+        let initialized: bool = db.query_one("SELECT to_regnamespace('moss_modules') IS NOT NULL", &[]).await.unwrap().get(0);
+        if !initialized {
+            db.batch_execute(moss_module_host::postgres::MIGRATION).await.unwrap();
+            db.batch_execute(moss_module_host::migrations::MIGRATION).await.unwrap();
+            db.batch_execute(moss_module_host::jobs::QUEUE_MIGRATION).await.unwrap();
+            db.batch_execute(moss_module_host::jobs::MIGRATION).await.unwrap();
+        }
+        let admin_email = format!("chat-{}@example.test", admin.actor_user_id());
+        for (access,email,is_admin) in [(&a,"chat-a@example.test",true),(&b,"chat-b@example.test",false),(&admin,admin_email.as_str(),true)] {
             db.execute("INSERT INTO app.users(id,email,name,is_instance_admin) VALUES($1,$2,'Chat fixture',$3) ON CONFLICT(id) DO NOTHING",&[&access.actor_user_id(),&email,&is_admin]).await.unwrap();
         }
         Database::connect(&std::env::var("JS43_APP_URL").unwrap(),4,RuntimeRole::App).await.unwrap()
     });
+    // Exercise the real server assembly, including its outer transaction and adapter layers.
+    let assembled_data = tempfile::tempdir().unwrap();
+    let assembled = moss_module_host::application::Application::open_extended_with(
+        assembled_data.path(),
+        db.clone(),
+        a.clone(),
+        moss_module_host::application::Configuration {
+            migrations: Secret::new(std::env::var("JS43_BOOTSTRAP_URL").unwrap()),
+            producer: Secret::new(std::env::var("JS43_APP_URL").unwrap()),
+            cipher: Arc::new(
+                safety_core::secret::SecretCipher::connectors(&Default::default()).unwrap(),
+            ),
+            intelligence: Arc::new(NoAi),
+            version: "0.1.0".parse().unwrap(),
+            compiled_cache: None,
+            fuel_ceiling: None,
+            browser_dir: None,
+        },
+        |services| {
+            Ok(Arc::new(moss_module_host::context::ContextPorts::new(
+                services,
+            )))
+        },
+    )
+    .unwrap();
+    assert!(assembled.installer.chat_tools(&a).unwrap().is_empty());
+    drop(assembled);
     let data = tempfile::tempdir().unwrap();
     let next = Arc::new(
         DatabasePorts::new(db.clone(), Arc::new(LocalPorts::new(data.path()).unwrap())).unwrap(),

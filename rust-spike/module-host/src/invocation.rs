@@ -12,6 +12,26 @@ impl Installer {
         payload: &str,
     ) -> Result<String> {
         ensure!(kind != "tool", "Use the validated chat tool entry points");
+        self.call_fenced(id, access, kind, payload)
+    }
+    /// Installed-package parity harness only. Production builds expose no raw tool entry.
+    #[cfg(feature = "test-tool-dispatch")]
+    #[doc(hidden)]
+    pub fn call_tool_for_test(
+        &self,
+        id: &str,
+        access: AccessContext,
+        payload: &str,
+    ) -> Result<String> {
+        self.call_fenced(id, access, "tool", payload)
+    }
+    fn call_fenced(
+        &self,
+        id: &str,
+        access: AccessContext,
+        kind: &str,
+        payload: &str,
+    ) -> Result<String> {
         let _fence = self
             .fence
             .read()

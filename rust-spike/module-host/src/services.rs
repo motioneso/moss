@@ -140,7 +140,11 @@ impl ServicePorts {
         let _lock = self.credential_lock(module, access.actor_user_id(), name)?;
         self.write(module, access, &format!("credential-{name}"), &Value::Null)
     }
-    pub fn bind(&self, installer: &Arc<Installer>) {
+    pub fn bind(self: &Arc<Self>, installer: &Arc<Installer>) {
+        *installer
+            .chat_services
+            .write()
+            .expect("chat service binding") = Arc::downgrade(self);
         *self.installer.write().expect("host binding") = Arc::downgrade(installer);
     }
     pub(crate) fn account(&self, id: &str, access: &AccessContext) -> Result<VaultContext> {
@@ -506,9 +510,6 @@ impl ServicePorts {
     }
 }
 impl Ports for ServicePorts {
-    fn chat_services(&self) -> Result<&ServicePorts> {
-        Ok(self)
-    }
     fn invoke(&self, scope: &CallScope, port: &str, r: &Request) -> Result<Value> {
         crate::runtime::authorize(scope.module(), port, r)?;
         let result = self.invoke_service(scope, port, r);

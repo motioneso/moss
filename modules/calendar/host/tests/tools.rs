@@ -131,10 +131,9 @@ impl Installed {
         }
     }
     fn call(&self, actor: Uuid, tool: &str, parameters: Value) -> Value {
-        match self.app.installer.call(
+        match self.app.installer.call_tool_for_test(
             "calendar",
             self.f.access(actor),
-            "tool",
             &json!({"tool":tool,"parameters":parameters}).to_string(),
         ) {
             Ok(result) => json!({"ok":serde_json::from_str::<Value>(&result).unwrap()}),

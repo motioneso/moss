@@ -205,7 +205,7 @@ fn card_fixed_parts_come_from_host_and_manifest() {
         .chat_tool_card(&f.a, MODULE, "sample.erase", &json!({"text":"MODEL VALUE"}))
         .unwrap()
         .unwrap();
-    assert_eq!(card.title, "Approve action");
+    assert_eq!(card.title, "Action request");
     assert_eq!(card.target, "Sample counter: Change saved item");
     assert_eq!(card.fields[0].label, "Item");
     assert_eq!(card.fields[0].value, "MODEL VALUE");
@@ -222,6 +222,9 @@ fn malformed_missing_failed_and_oversized_cards_deny() {
         Value::Null,
         json!({}),
         json!({"fields":"bad"}),
+        json!({"fields":[]}),
+        json!({"fields":[],"version":null}),
+        json!({"fields":[],"version":""}),
         json!({"fields":[{"label":"x","value":3}]}),
         json!({"fields":[],"target":"x".repeat(4097)}),
         json!({"fields":[],"version":"x".repeat(257)}),

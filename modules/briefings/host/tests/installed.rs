@@ -140,7 +140,7 @@ impl World {
         if let Some(v) = version {
             payload["approvalVersion"] = json!(v);
         }
-        let out = self.app.installer.call("briefings", self.f.access(actor), "tool", &payload.to_string()).unwrap();
+        let out = self.app.installer.call_tool_for_test("briefings", self.f.access(actor), &payload.to_string()).unwrap();
         serde_json::from_str(&out).unwrap()
     }
     fn card_version(&self, actor: uuid::Uuid, input: Value) -> String {

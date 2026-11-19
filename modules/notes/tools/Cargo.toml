@@ -29,6 +29,7 @@ base64 = "0.22"
 tempfile = "3"
 
 [dev-dependencies]
+moss-module-host = { path = "../../../rust-spike/module-host", features = ["test-tool-dispatch"] }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
 moss-memory-host = { path = "../../memory/host" }
 

@@ -38,6 +38,8 @@ moss-platform-adapters = { path = "bridges/adapters" }
 async-trait = "0.1"
 
 [features]
+# Downstream package parity tests only; never enable in application dependencies.
+test-tool-dispatch = []
 # Proof only. Adds controls that weaken the browser's isolation so tests can see each guard fail.
 browser-proof = []
 
