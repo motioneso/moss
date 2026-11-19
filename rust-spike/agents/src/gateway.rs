@@ -128,6 +128,21 @@ impl GatewayHost {
             changed,
         })
     }
+
+    /// Keep the library available to the Windows shell without claiming socket support there.
+    #[cfg(not(unix))]
+    pub fn start(
+        _account: &str,
+        _dir: &Path,
+        _host: Arc<dyn ToolHost>,
+        _confirm: Confirm,
+        _facts: CallFactsFn,
+    ) -> std::io::Result<Self> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "The agent tool gateway requires Unix sockets",
+        ))
+    }
 }
 
 #[cfg(unix)]
