@@ -1,6 +1,6 @@
 /* global document, ResizeObserver, window, requestAnimationFrame */
 import { moduleClient } from "./guest-bridge.mjs";
-import { bindMenus } from "/module-shared/menu.mjs";
+import { bindMenus } from "./menu.mjs";
 import { commitmentsApi } from "./api.mjs";
 import { reviewController } from "./controller.mjs";
 import { sectionHtml } from "./view.mjs";

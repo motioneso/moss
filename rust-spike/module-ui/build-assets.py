@@ -30,7 +30,6 @@ def build(out: Path) -> None:
     css = css.replace('url("/fonts/', 'url("/module-shared/fonts/')
     (out / "park-press.css").write_text(css)
     shutil.copytree(ROOT / "apps/web/public/fonts", out / "fonts", dirs_exist_ok=True)
-    shutil.copy(ROOT / "rust-spike/module-ui/web/menu.mjs", out / "menu.mjs")
 
 
 if __name__ == "__main__":

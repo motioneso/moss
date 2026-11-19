@@ -23,6 +23,10 @@ pub fn files(root: &Path, component: &[u8]) -> Result<BTreeMap<String, Vec<u8>>>
             include_bytes!("../../ui/index.html").as_slice(),
         ),
         ("today.mjs", include_bytes!("../../ui/today.mjs").as_slice()),
+        (
+            "menu.mjs",
+            include_bytes!("../../../../rust-spike/module-ui/web/menu.mjs").as_slice(),
+        ),
         ("today.css", include_bytes!("../../ui/today.css").as_slice()),
         ("api.mjs", include_bytes!("../../ui/api.mjs").as_slice()),
         ("view.mjs", include_bytes!("../../ui/view.mjs").as_slice()),
