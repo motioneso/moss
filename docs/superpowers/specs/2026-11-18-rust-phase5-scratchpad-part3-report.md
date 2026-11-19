@@ -50,6 +50,8 @@ The first read-only Claude review found two major issues. Both were reproduced i
 - Ctrl+M now switches Tab between indentation and moving among controls. A visible keyboard hint appears when Tab indentation is used, and the textarea also describes the shortcut to assistive technology. Escape still closes the pad.
 - Appended text wraps and scrolls into view. Subsequent refreshes preserve the reader's scroll position, and returning to the textarea keeps the preview's position.
 
+Round two found an additional major case: an append received while the pad was closed. The live reproduction confirmed zero layout height while hidden, an off-screen append after reopening, and focus left outside the pad. The correction keeps the scroll pending until the preview has layout and focuses the visible preview when opening. The same live case now passes with the appended line visible and focus in the preview; all six frames and the earlier keyboard/scroll checks passed again. Both allowed review rounds have been used; this last correction requires another independent review before the task can be marked ready.
+
 The following review findings remain below the required major/blocker fix threshold:
 
 - Connections is the canonical destination required by the approved mockup, but its full Rust screen is not ported yet. The link currently reaches the shell's not-ported placeholder; building Connections is outside this part.
@@ -57,6 +59,8 @@ The following review findings remain below the required major/blocker fix thresh
 - The persistent hidden guest still checks for changes every two seconds.
 - Shortcuts in another package's focused iframe remain unverified, as noted below.
 - The package source/test changes include the repository formatter's surrounding Rust layout changes.
+- A saved Ctrl+M shortcut conflicts with the editor's Tab-mode toggle; Ctrl+Shift+M also triggers the toggle.
+- Formatting controls operate on the textarea's selection while the appended-text preview is shown.
 
 ## Repeating the live setup
 

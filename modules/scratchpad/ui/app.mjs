@@ -16,11 +16,19 @@ text.setAttribute("aria-description", text.title);
 text.setAttribute("aria-keyshortcuts", "Control+M");
 const preview = document.createElement("div");
 let previewText = null;
+let pendingAppendScroll = false;
 preview.className = "jds-textarea sc-pad__text sc-pad__text--lines";
 preview.tabIndex = 0;
 preview.hidden = true;
 preview.setAttribute("aria-label", "Appended scratchpad text; click to edit");
 text.after(preview);
+function revealAppend() {
+  // A hidden ancestor gives the guest no layout. Keep the scroll pending until it opens.
+  if (pendingAppendScroll && preview.clientHeight > 0) {
+    preview.scrollTop = preview.scrollHeight;
+    pendingAppendScroll = false;
+  }
+}
 function resumeEditing() {
   const scrollTop = preview.scrollTop;
   model.dismissNotice();
@@ -40,7 +48,7 @@ const failure = root.querySelector("#failure");
 const notice = root.querySelector("#notice");
 const count = root.querySelector("#count");
 const model = padModel(scratchpadApi(client), (state) => {
-  let scrollToAppend = false;
+  const wasEditing = document.activeElement === text;
   // Do not replace the textarea when the user is typing; keep selection and undo intact.
   if (text.value !== state.text) text.value = state.text;
   text.disabled = !state.loaded;
@@ -62,9 +70,10 @@ const model = padModel(scratchpadApi(client), (state) => {
     }
     preview.hidden = false;
     text.hidden = true;
-    scrollToAppend = changed;
+    if (changed) pendingAppendScroll = true;
   } else {
     previewText = null;
+    pendingAppendScroll = false;
     preview.hidden = true;
     text.hidden = false;
   }
@@ -74,7 +83,8 @@ const model = padModel(scratchpadApi(client), (state) => {
   count.textContent = `${state.text.length.toLocaleString()} / 64,000 characters`;
   count.classList.toggle("sc-pad__count--near", state.text.length > 60000);
   // Measure after the notice/count have their final layout, and leave manual scrolling alone.
-  if (scrollToAppend) preview.scrollTop = preview.scrollHeight;
+  revealAppend();
+  if (wasEditing && !preview.hidden && preview.clientHeight > 0) preview.focus();
 });
 text.addEventListener("input", () => model.edit(text.value));
 text.addEventListener("blur", () => void model.save());
@@ -197,8 +207,12 @@ window.addEventListener("message", (event) => {
     return;
   document.documentElement.dataset.phone = String(event.data.phone === true);
   if (event.data.open) {
-    void model.read();
-    text.focus();
+    void model.read().then(() =>
+      globalThis.requestAnimationFrame(() => {
+        revealAppend();
+        (preview.hidden ? text : preview).focus();
+      })
+    );
   } else void model.save();
 });
 window.addEventListener("beforeunload", (event) => {
