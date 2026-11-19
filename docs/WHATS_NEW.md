@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Needs you on Today.** Today now lists the things your morning briefing flagged for you, so you can accept or dismiss each suggested task right there. [PR #4421](https://github.com/motioneso/moss/pull/4421)
 - **Manage linked devices in Meetings.** You can now see, rename and unlink the Macs and phones linked to Meetings, and approve a new device from a simple question on screen. [PR #4387](https://github.com/motioneso/moss/pull/4387)
 - **Review commitments on Today.** Review things you said you would do on Today, then accept, reject or snooze each suggestion. [PR #4378](https://github.com/motioneso/moss/pull/4378)
 - **A scratchpad beside chat.** Keep notes beside chat or in a full phone screen, with automatic saving, a personal shortcut, and a choice to reload when another tab changes your note. [PR #4379](https://github.com/motioneso/moss/pull/4379)
