@@ -288,7 +288,17 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
         &root.join("modules.json"),
         &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"ai_key":"cd".repeat(32)}),
     );
+    runtime.block_on(async {
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(async move { let _ = connection.await; });
+        assert!(!db.query_one("SELECT to_regclass('app.companion_devices_owner') IS NOT NULL", &[]).await.unwrap().get::<_,bool>(0), "registry installation must not accidentally supply the lookup");
+    });
     let _server = start(true);
+    runtime.block_on(async {
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(async move { let _ = connection.await; });
+        assert!(db.query_one("SELECT to_regclass('app.companion_devices_owner') IS NOT NULL", &[]).await.unwrap().get::<_,bool>(0), "server startup supplies the lookup after a registry install");
+    });
     // Setup allows one owner over HTTP, so the second person is made in the database with the
     // owner's password hash and then signs in through the real route.
     let other = {
