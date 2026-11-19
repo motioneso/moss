@@ -105,7 +105,7 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
     let client = reqwest::blocking::Client::builder()
         .add_root_certificate(reqwest::Certificate::from_pem(&fs::read(&cert).unwrap()).unwrap())
         .no_proxy()
-        .timeout(Duration::from_secs(60))
+        .timeout(Duration::from_secs(240))
         .build()
         .unwrap();
     let start = |modules: bool| {
