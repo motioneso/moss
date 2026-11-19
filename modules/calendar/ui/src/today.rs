@@ -232,7 +232,6 @@ fn TimelineRow(item: Item, zone: chrono_tz::Tz, twelve: bool) -> impl IntoView {
 fn Review(snapshot: Snapshot, on_close: Callback<()>) -> impl IntoView {
     let rows = snapshot.items();
     let zone = snapshot.zone();
-    let twelve = snapshot.twelve();
     let wide = web_sys::window()
         .unwrap()
         .inner_width()
@@ -264,7 +263,7 @@ fn Review(snapshot: Snapshot, on_close: Callback<()>) -> impl IntoView {
                     <h3 class="brief-reader__headline">"Make the plan fit."</h3>
                     <p class="plan-review__lede">"Meetings, lunch, and travel stay in place. Adjust the task blocks around them."</p>
                     {pending.then(||view! {<div class="plan-review__accept"><Button disabled=true>"Accept all time blocks"</Button></div>})}
-                    <ul class="plan-review__rows">{ordered.into_iter().filter_map(|b|rows.iter().find(|i|i.id==format!("block:{}",b["id"].as_str().unwrap_or_default())).cloned()).map(|item|view! {<ReviewRow item=item zone=zone twelve=twelve />}).collect_view()}</ul>
+                    <ul class="plan-review__rows">{ordered.into_iter().filter_map(|b|rows.iter().find(|i|i.id==format!("block:{}",b["id"].as_str().unwrap_or_default())).cloned()).map(|item|view! {<ReviewRow item=item zone=zone />}).collect_view()}</ul>
                     <div class="plan-review__changes"><h3 class="plan-review__changes-title">"What will change"</h3><p class="plan-review__empty">"No changes selected."</p></div>
                 </div>
                 {wide.then(||view! {<ReviewSchedule snapshot=snapshot.clone() />})}
@@ -303,7 +302,7 @@ fn ReviewSchedule(snapshot: Snapshot) -> impl IntoView {
     }
 }
 #[component]
-fn ReviewRow(item: Item, zone: chrono_tz::Tz, twelve: bool) -> impl IntoView {
+fn ReviewRow(item: Item, zone: chrono_tz::Tz) -> impl IntoView {
     let time = item
         .start
         .and_then(chrono::DateTime::from_timestamp_millis)
@@ -324,7 +323,6 @@ fn ReviewRow(item: Item, zone: chrono_tz::Tz, twelve: bool) -> impl IntoView {
     } else {
         label.to_owned()
     };
-    let _ = twelve;
     view! {<li class="plan-review__row"><div><div class="plan-review__title">{item.title.clone()}</div><div class="plan-review__meta">{meta}</div></div>
         {(!item.unavailable).then(||view! {<div class="plan-review__fields">
             {item.minutes.is_some().then(||view! {<div class="plan-review__field"><label class="plan-review__label plan-review__label--time" for=format!("{id}-time")>"Time"</label><input class="plan-review__time plan-review__field--time" type="time" id=format!("{id}-time") aria-label=format!("{}: start time",item.title) value=time disabled /></div>})}

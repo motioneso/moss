@@ -27,7 +27,6 @@ async function mount(slot) {
       surface.className = "package-section-host";
       surface.setAttribute("role", "presentation");
       surface.setAttribute("open", "");
-      surface.addEventListener("cancel", (event) => event.preventDefault());
       surface.append(frame);
       slot.append(surface);
       let overflow;
@@ -45,6 +44,11 @@ async function mount(slot) {
           frame.contentWindow.focus();
         }
       };
+      // Escape must also release the host if a package fails to close its own modal.
+      surface.addEventListener("cancel", (event) => {
+        event.preventDefault();
+        present(false);
+      });
       const disconnect = openModuleFrame(frame, moduleId, screen.src, {
         minimumHeight: 0,
         present,
