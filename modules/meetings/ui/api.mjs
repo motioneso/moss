@@ -23,6 +23,12 @@ export function meetingsApi(client) {
   return {
     search: (body) => call("POST", "/history/search", body),
     devices: () => call("GET", "/capture/devices"),
+    deviceList: () => call("GET", "/devices"),
+    renameDevice: (deviceId, displayName) =>
+      call("PATCH", `/devices/${id(deviceId)}`, { displayName }),
+    unlinkDevice: (deviceId) => call("DELETE", `/devices/${id(deviceId)}`),
+    linkAttempt: (code) => call("POST", "/link/attempt", { code }),
+    linkDecide: (body) => call("POST", "/link/decide", body),
     recordingTypes: () => call("GET", "/recording-types"),
     preferences: () => call("GET", "/preferences"),
     putPreferences: (body) => call("PUT", "/preferences", body),

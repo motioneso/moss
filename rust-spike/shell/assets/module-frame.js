@@ -8,6 +8,20 @@ const moduleId = params.get("module") ?? "";
 const screenPath = params.get("path") ?? "";
 // A Today or chat link may carry a short lowercase preset for the screen to open with.
 const focusParam = params.get("focus") ?? "";
+// A Mac or phone asking to link opens Meetings with its one-time code after the "#". The code is
+// read once, taken out of the address bar, and never sent to the server.
+const topWindow = globalThis.top ?? globalThis;
+let linkCode = null;
+if (moduleId === "meetings") {
+  linkCode = new URLSearchParams(topWindow.location.hash.replace(/^#/, "")).get("code");
+  if (linkCode) {
+    topWindow.history.replaceState(
+      null,
+      "",
+      topWindow.location.pathname + topWindow.location.search
+    );
+  }
+}
 const frame = document.getElementById("frame");
 const failure = document.getElementById("failure");
 
@@ -73,9 +87,14 @@ try {
   if (moduleId === "weather") frame.setAttribute("allow", "geolocation *");
   openModuleFrame(frame, moduleId, screenUrl.href, {
     request,
-    theme: () => ({ theme: "park-press", colorMode: dark ? "dark" : "light", isAdmin }),
+    theme: () => ({
+      theme: "park-press",
+      colorMode: dark ? "dark" : "light",
+      isAdmin,
+      ...(linkCode ? { linkCode } : {})
+    }),
     navigate: async (path) => {
-      (globalThis.top ?? globalThis).location.assign(path);
+      topWindow.location.assign(path);
       return null;
     },
     open: async (url) => {

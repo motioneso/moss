@@ -4,6 +4,8 @@ import { meetingsApi } from "./api.mjs";
 import { homeScreen } from "./home.mjs";
 import { manualScreen } from "./manual.mjs";
 import { recordScreen } from "./record.mjs";
+import { linkDialog } from "./link.mjs";
+import { codeFromHash } from "./devices-logic.mjs";
 
 const client = moduleClient();
 const api = meetingsApi(client);
@@ -39,6 +41,13 @@ void client
   .theme()
   .then((theme) => {
     admin = theme?.isAdmin === true;
+    // A Mac or phone that asks to link opens Moss at this screen with its code in the address.
+    const code = codeFromHash(`#code=${theme?.linkCode ?? ""}`);
+    if (code)
+      void linkDialog({
+        api,
+        onLinked: () => void client.navigate("/settings/meetings?focus=linked")
+      }).open(code);
     draw();
   })
   .catch(() => {});
