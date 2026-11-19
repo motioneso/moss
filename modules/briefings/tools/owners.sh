@@ -25,3 +25,16 @@ CARGO_TARGET_DIR="$eguest" RUSTFLAGS="$wasm_flags" cargo +1.95.0 build --locked 
 CARGO_TARGET_DIR="$eguest" cargo +1.95.0 run --locked --offline --manifest-path modules/email/host/Cargo.toml \
   --bin email-package -- "$eguest/wasm32-unknown-unknown/release/moss_email.wasm" "$CARGO_TARGET_DIR/email.mosspkg"
 export JS378_EMAIL_PACKAGE="$CARGO_TARGET_DIR/email.mosspkg"
+
+# Optional. With BRIEFINGS_SCREEN=1 the held-open server also serves the built app, so a browser can
+# open the settings screens.
+if [[ "${BRIEFINGS_SCREEN:-}" == 1 ]]; then
+  export MOSS_SHELL_WEB_DIR="$CARGO_TARGET_DIR/screen-web"
+  cargo +1.95.0 build --locked --offline --release --manifest-path rust-spike/ui/bindgen/Cargo.toml
+  cargo +1.95.0 build --locked --offline --release --manifest-path rust-spike/shell/Cargo.toml -p moss-shell-ui --target wasm32-unknown-unknown
+  mkdir -p "$MOSS_SHELL_WEB_DIR"
+  "$CARGO_TARGET_DIR/release/ui-bindgen" "$CARGO_TARGET_DIR/wasm32-unknown-unknown/release/moss-shell-ui.wasm" "$MOSS_SHELL_WEB_DIR" app
+  python3 rust-spike/shell/assets/build-assets.py "$MOSS_SHELL_WEB_DIR"
+  python3 rust-spike/module-ui/build-assets.py "$MOSS_SHELL_WEB_DIR/module-shared"
+  cp rust-spike/shell/assets/index.html "$MOSS_SHELL_WEB_DIR/index.html"
+fi

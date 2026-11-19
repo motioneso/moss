@@ -83,11 +83,17 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
             .unwrap();
         assert!(status.success());
     }
-    fs::write(
-        root.join("web/index.html"),
-        "<!doctype html><title>Briefings HTTP fixture</title>",
-    )
-    .unwrap();
+    if let Ok(shell_web) = std::env::var("MOSS_SHELL_WEB_DIR") {
+        // The built app, so a held-open run can show the settings screens.
+        let status = Command::new("cp").args(["-r", &format!("{shell_web}/.")]).arg(root.join("web")).status().unwrap();
+        assert!(status.success());
+    } else {
+        fs::write(
+            root.join("web/index.html"),
+            "<!doctype html><title>Briefings HTTP fixture</title>",
+        )
+        .unwrap();
+    }
     let app_url = std::env::var("JS43_APP_URL").unwrap();
     let worker_url = std::env::var("JS43_WORKER_URL").unwrap();
     let bootstrap_url = std::env::var("JS43_BOOTSTRAP_URL").unwrap();
