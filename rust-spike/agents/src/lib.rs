@@ -15,4 +15,5 @@ pub mod runner;
 pub mod session;
 pub mod terminal;
 pub mod transport;
+pub mod tool_bridge;
 mod turn_tools;

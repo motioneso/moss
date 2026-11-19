@@ -93,7 +93,10 @@ pub async fn chat_thread() -> Result<ChatThread, String> {
 
 pub async fn send_message(text: String) -> Result<ChatMessage, String> {
     let response = Request::post("/api/chat/messages")
-        .json(&SendMessage { text })
+        .json(&SendMessage {
+            text,
+            ..Default::default()
+        })
         .map_err(|e| e.to_string())?
         .send()
         .await

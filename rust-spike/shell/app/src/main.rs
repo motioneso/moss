@@ -135,7 +135,7 @@ fn router(data: Arc<Accounts>, web: PathBuf) -> Router {
                 |State(d): State<Arc<Accounts>>, Extension(access): Extension<AccessContext>, Json(body): Json<SendMessage>| async move {
                     // A chat turn can take minutes, so it waits off the request threads.
                     let data = d.for_actor(&access);
-                    match tokio::task::spawn_blocking(move || data.send_message(&body.text)).await {
+                    match tokio::task::spawn_blocking(move || data.send_message(&body)).await {
                         Ok(m) => Json::<ChatMessage>(m).into_response(),
                         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
                     }

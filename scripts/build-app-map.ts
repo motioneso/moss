@@ -6,6 +6,7 @@ import type { MossModuleManifest } from "@moss/module-sdk";
 import { getBuiltInModuleManifests } from "@moss/module-registry";
 import {
   CORE_APP_ERRORS,
+  CORE_APP_FEATURES,
   CORE_APP_REMEDIATIONS,
   CORE_APP_SCREENS,
   CORE_APP_SETTINGS,
@@ -73,7 +74,7 @@ export function buildAppMap(input: BuildAppMapInput) {
     build: { version: input.version, buildId: input.buildId },
     screens: [...coreScreens.map((surface) => ({ moduleId: "core", ...surface })), ...screens],
     settings: [...coreSettings.map((surface) => ({ moduleId: "core", ...surface })), ...settings],
-    features,
+    features: [...CORE_APP_FEATURES.filter(belongs), ...features],
     errors: [
       ...(input.coreErrors ?? []).filter(belongs).map((error) => ({ moduleId: "core", ...error })),
       ...features.flatMap((feature) =>

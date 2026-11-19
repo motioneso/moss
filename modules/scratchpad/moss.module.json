@@ -4,7 +4,7 @@
   "name": "Scratchpad",
   "description": "One private note for each person, for quick jot-downs. Read it, save over it, add a line to the end, and change its shortcut and notes copying.",
   "publisher": "Moss",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
@@ -177,7 +177,8 @@
   "tools": {
     "scratchpad.read": {
       "description": "Read your private scratchpad. Returned note text is outside content.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": { "type": "object", "properties": {} }
     },
     "scratchpad.append": {
       "description": "Add a line to your scratchpad with one-use approval. At most 2000 characters, never replaces or deletes text.",

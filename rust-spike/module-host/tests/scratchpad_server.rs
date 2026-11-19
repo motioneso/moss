@@ -136,6 +136,9 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
         if modules {
             command.arg("--modules").arg(root.join("modules.json"));
         }
+        if let Some(runner) = std::env::var_os("MOSS_CHAT_BRIDGE_RUNNER") {
+            command.arg("--runner").arg(runner);
+        }
         let log = fs::OpenOptions::new()
             .create(true)
             .append(true)
@@ -631,6 +634,14 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
     if let Ok(hold) = std::env::var("MOSS_SCRATCHPAD_HOLD") {
         let hold = Path::new(&hold);
         fs::write(hold.join("url.txt"), remote.as_ref().unwrap_or(&origin)).unwrap();
+        if std::env::var_os("MOSS_CHAT_BRIDGE_RUNNER").is_some() {
+            let other_id: uuid::Uuid = runtime.block_on(async {
+                let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+                tokio::spawn(async move { let _ = connection.await; });
+                db.query_one("SELECT id FROM app.users WHERE email='scratchpad-other@example.test'", &[]).await.unwrap().get(0)
+            });
+            private(&hold.join("bridge.json"), &json!({"root":root,"owner":owner,"other":other_id,"origin":origin,"remote":remote,"server_pid":_server.0.id()}));
+        }
         let deadline = Instant::now() + Duration::from_secs(3600);
         while !hold.join("finished").exists() && Instant::now() < deadline {
             // A browser proof can ask the trusted fixture to approve and execute a real append.

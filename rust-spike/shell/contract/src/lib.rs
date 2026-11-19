@@ -129,9 +129,12 @@ pub struct ChatThread {
     pub messages: Vec<ChatMessage>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct SendMessage {
     pub text: String,
+    /// Explicitly ends the previous agent conversation before adopting the current tool list.
+    #[serde(default)]
+    pub fresh_conversation: bool,
 }
 
 /// The seam Phase 2/3 fill in. Each call is made on behalf of one signed-in account.
@@ -140,7 +143,7 @@ pub trait ShellData: Send + Sync + 'static {
     fn today(&self) -> TodayView;
     fn chat_thread(&self) -> ChatThread;
     /// Stores the person's message and returns the assistant's reply.
-    fn send_message(&self, text: &str) -> ChatMessage;
+    fn send_message(&self, message: &SendMessage) -> ChatMessage;
 }
 
 /// Fixed sample data, so the frame and the first two screens can be built and checked before

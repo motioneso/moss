@@ -158,15 +158,18 @@ impl ShellData for StubShellData {
         }
     }
 
-    fn send_message(&self, text: &str) -> ChatMessage {
+    fn send_message(&self, message: &SendMessage) -> ChatMessage {
         let mut messages = self.messages.lock().expect("stub lock");
+        if message.fresh_conversation {
+            messages.clear();
+        }
         let mut next_id = self.next_id.lock().expect("stub lock");
         let n = *next_id;
         *next_id += 2;
         messages.push(ChatMessage {
             id: format!("m{}", n + 1),
             role: ChatRole::User,
-            text: text.to_string(),
+            text: message.text.clone(),
         });
         let reply = ChatMessage {
             id: format!("m{}", n + 2),
@@ -196,7 +199,10 @@ mod tests {
     fn send_appends_both_turns() {
         let data = StubShellData::default();
         let before = data.chat_thread().messages.len();
-        let reply = data.send_message("hello");
+        let reply = data.send_message(&SendMessage {
+            text: "hello".into(),
+            ..Default::default()
+        });
         let thread = data.chat_thread();
         assert_eq!(thread.messages.len(), before + 2);
         assert_eq!(thread.messages[before].text, "hello");
@@ -208,7 +214,10 @@ mod tests {
     fn history_keeps_the_newest_messages() {
         let data = StubShellData::default();
         for i in 0..STUB_HISTORY_LIMIT {
-            data.send_message(&format!("note {i}"));
+            data.send_message(&SendMessage {
+                text: format!("note {i}"),
+                ..Default::default()
+            });
         }
         let messages = data.chat_thread().messages;
         assert_eq!(messages.len(), STUB_HISTORY_LIMIT);

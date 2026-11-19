@@ -111,3 +111,22 @@ fn integer_bounds_do_not_round_large_values_into_range() {
         )
         .is_err());
 }
+
+#[test]
+fn prefixed_tool_names_fit_the_measured_claude_limit() {
+    let mut m = manifest();
+    let tool = m.tools.remove("sample.read").unwrap();
+    let name = format!("sample.{}", "a".repeat(92));
+    assert_eq!("mcp__moss__".len() + name.len(), 110);
+    m.tools.insert(name.clone(), tool.clone());
+    m.validate(&"0.1.0".parse().unwrap()).unwrap();
+    m.tools.remove(&name);
+    m.tools.insert(format!("{name}a"), tool);
+    let bytes = moss_module_host::archive::pack(&crate::common::files(&m)).unwrap();
+    assert!(moss_module_host::archive::Package::read(
+        &bytes,
+        &moss_module_host::trust::digest(&bytes),
+        &"0.1.0".parse().unwrap()
+    )
+    .is_err());
+}
