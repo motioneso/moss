@@ -24,6 +24,7 @@ use safety_core::access::AccessContext;
 use tower_http::services::ServeDir;
 
 mod companion;
+mod companion_owner;
 mod companion_startup;
 mod companion_links;
 mod desktop_notices;
@@ -35,12 +36,14 @@ mod module_install;
 mod modules;
 mod proactive_feedback;
 mod runner_data;
+mod chat_tools;
 
 type Data = Arc<dyn ShellData>;
 
 struct Accounts {
     platform: Arc<safety_core::http::Platform>,
     runner: Option<PathBuf>,
+    modules: modules::Slot,
     /// True when the server has an instance folder the module installer can work in.
     can_install_modules: bool,
     data: Mutex<HashMap<uuid::Uuid, Data>>,
@@ -56,6 +59,7 @@ impl Accounts {
                 Some(root) => Arc::new(runner_data::RunnerShellData::new(
                     root.clone(),
                     access.actor_user_id().to_string(),
+                    chat_tools::source(self.modules.clone(), access.clone()),
                 )) as Data,
                 None => Arc::new(StubShellData::default()) as Data,
             })
@@ -101,6 +105,14 @@ fn router(data: Arc<Accounts>, web: PathBuf) -> Router {
         .route("/api/companion/pair/decide", post(companion::decide))
         .route("/api/companion/pair/redeem", post(companion::redeem))
         .route("/api/companion/pair/cancel", post(companion::cancel))
+        // The Meetings Devices screen reaches these through its own module path.
+        .route("/api/m/meetings/devices", get(companion_owner::list))
+        .route(
+            "/api/m/meetings/devices/{id}",
+            axum::routing::patch(companion_owner::rename).delete(companion_owner::unlink),
+        )
+        .route("/api/m/meetings/link/attempt", post(companion::attempt))
+        .route("/api/m/meetings/link/decide", post(companion::decide))
         .route("/api/companion/heartbeat", post(companion::heartbeat))
         .route("/api/companion/device", axum::routing::patch(companion::rename))
         .route("/api/companion/logout", post(companion::logout))
@@ -286,6 +298,7 @@ fn main() {
             platform: platform.clone(),
             can_install_modules: args.instance.is_some(),
             runner: args.runner,
+            modules: modules.clone(),
             data: Mutex::new(HashMap::new()),
         });
         companion::register_revoker(&data);

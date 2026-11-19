@@ -12,12 +12,18 @@ People requests 200M fuel in its manifest (60M fails the 1,005-contact paging ca
 all 29), so large-account parity holds under that request.
 Response conversion reuses database field-name buffers and moves formatted confidence
 and timestamp strings into JSON values; this does not establish a larger supported limit.
-With the task-owned build environment and generated component prepared as below, reproduce
+With the task-owned build environment prepared as below, reproduce
 through verify-gate:
 
 ```sh
-JS50_PEOPLE_COMPONENT=/tmp/moss-people-component.wasm scripts/run-gate.sh start --gate modules/people/tools/large-data-gate.sh
+JS177_PEOPLE_FUEL=200000000 scripts/run-gate.sh start --gate test:rust-people-large
 ```
+
+The large-account gate builds its generated component in `CARGO_TARGET_DIR` when
+`JS50_PEOPLE_COMPONENT` is unset. An explicit component path still selects an
+existing artifact for focused checks. The diagnostic's fuel override above matches
+the manifest's existing 200M request; without it, the test uses the smaller default
+host budget.
 
 The [delivery report](../../docs/superpowers/specs/2026-11-08-rust-phase5-people-report.md)
 records each delivered slice and the exact remaining continuation work.
@@ -207,6 +213,14 @@ render test or standalone screen preview is not proof of installed Settings, cha
 second physical device. See the report for the remaining acceptance work.
 
 ## Part six installed-dispatch checkpoint
+
+The server gates `test:rust-people-server`, `test:rust-module-bootstrap` and
+`test:rust-install-endpoints` build their own People component, UI and unsigned package.
+Run them through `scripts/run-gate.sh start --gate <script>`, then
+`scripts/run-gate.sh wait --follow`. Set `CARGO_HOME`, `RUSTUP_HOME` (Rust 1.95.0 with
+`wasm32-unknown-unknown`) and `CARGO_TARGET_DIR`; no `JS50_PEOPLE_COMPONENT` or
+`JS73_PEOPLE_PACKAGE` setup is needed. Generated packages live under
+`CARGO_TARGET_DIR/server-packages/people` and are rebuilt on each gate run.
 
 Build the component, UI and unsigned package using the commands above, then run:
 

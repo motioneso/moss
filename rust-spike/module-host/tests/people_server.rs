@@ -2,6 +2,8 @@
 mod common;
 #[path = "people_routes/installed.rs"]
 mod installed;
+#[path = "people_routes/readiness.rs"]
+mod readiness;
 use access_context::AccessContext;
 use safety_core::db::{Database, RuntimeRole};
 use serde_json::{json, Value};
@@ -232,12 +234,7 @@ fn installed_people_package_serves_routes_from_the_real_server() {
         (status, response.json::<Value>().unwrap_or(Value::Null))
     };
     use reqwest::Method;
-    // The module host opens in the background; wait until it answers.
-    let ready = Instant::now() + Duration::from_secs(90);
-    while call(Method::GET, "/people", Some(&cookie), None).0 == 503 {
-        assert!(Instant::now() < ready, "module host never became ready");
-        std::thread::sleep(Duration::from_millis(500));
-    }
+    readiness::wait_for_people(&client, &origin, &cookie, 200, &root.join("server.log"));
     assert_eq!(call(Method::GET, "/people", None, None).0, 401);
     let (status, list) = call(Method::GET, "/people", Some(&cookie), None);
     assert_eq!(status, 200, "{list}");
@@ -254,6 +251,28 @@ fn installed_people_package_serves_routes_from_the_real_server() {
         "{}\n{}",
         saved.1,
         fs::read_to_string(root.join("server.log")).unwrap_or_default()
+    );
+    assert!(folder.is_dir(), "saving prepares the account notes folder");
+    assert_eq!(saved.1["folder"], json!(folder));
+    let suggestions = call(
+        Method::GET,
+        "/people/note-suggestions",
+        Some(&cookie),
+        None,
+    );
+    assert_eq!(suggestions, (200, json!({"enabled":true})));
+    assert_eq!(
+        call(
+            Method::PUT,
+            "/people/note-suggestions",
+            Some(&cookie),
+            Some(json!({"enabled":false})),
+        ),
+        (200, json!({"enabled":false}))
+    );
+    assert_eq!(
+        call(Method::GET, "/people/note-suggestions", Some(&cookie), None),
+        (200, json!({"enabled":false}))
     );
     let created = call(
         Method::POST,
@@ -278,6 +297,7 @@ fn installed_people_package_serves_routes_from_the_real_server() {
     assert!(mine.to_string().contains("Ada Lovelace"), "{mine}");
     let (status, settings) = call(Method::GET, "/people/notes-settings", Some(&cookie), None);
     assert_eq!(status, 200, "{settings}");
+    assert_eq!(settings["folder"], json!(folder));
     println!("PASS installed People package served over HTTPS: sign-in required, create writes a note in the account folder, list, notes settings reachable");
 
     // The signed-in account gets the verified screen address. The screen's own files are

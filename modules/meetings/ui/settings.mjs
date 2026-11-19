@@ -3,6 +3,7 @@ import { moduleClient } from "./guest-bridge.mjs";
 import { meetingsApi } from "./api.mjs";
 import { esc } from "./format.mjs";
 import { alertHint, btn, field, hint, select, sectionHead, status, textarea } from "./kit.mjs";
+import { devicesSection } from "./devices.mjs";
 import { audioOptions, checkVocabulary, languageOptions, savedMode } from "./settings-logic.mjs";
 
 const root = document.getElementById("root");
@@ -14,7 +15,6 @@ const languages = languageOptions((code) => names.of(code));
 const s = {
   prefs: null,
   phase: "loading",
-  macs: { phase: "loading", list: [] },
   vocab: "",
   vocabDirty: false,
   busy: false,
@@ -22,6 +22,11 @@ const s = {
   vocabMessage: "",
   vocabError: ""
 };
+
+const linked = new URLSearchParams(document.location?.search).get("focus") === "linked";
+const devices = devicesSection({ api, draw: () => draw(), linked });
+
+const backLink = `<button type="button" class="jds-btn jds-btn--quiet pair-back" data-act="back"><svg aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="18" height="18"><path d="M15 18l-6-6 6-6"/></svg><span>Recordings</span></button>`;
 
 const failedAccess = (error) => error?.status === 401 || error?.status === 403;
 
@@ -34,18 +39,6 @@ async function loadPrefs() {
     s.phase = "ready";
   } catch (error) {
     s.phase = failedAccess(error) ? "denied" : "failed";
-  }
-  draw();
-}
-
-async function loadMacs() {
-  s.macs = { phase: "loading", list: s.macs.list };
-  draw();
-  try {
-    const reply = await api.devices();
-    s.macs = { phase: "ready", list: reply.devices ?? [] };
-  } catch (error) {
-    s.macs = { phase: failedAccess(error) ? "denied" : "unavailable", list: s.macs.list };
   }
   draw();
 }
@@ -86,27 +79,6 @@ function vocabularyProblem() {
   } catch (error) {
     return error.message;
   }
-}
-
-function macsSection() {
-  if (s.macs.phase === "denied")
-    return alertHint("Mac access could not be verified. Sign in again.");
-  if (s.macs.phase === "loading" && !s.macs.list.length) return status("Checking your linked Mac…");
-  const unavailable = s.macs.phase === "unavailable";
-  const rows = s.macs.list
-    .map(
-      (mac) =>
-        `<div><div class="meeting-settings-mac"><strong>${esc(mac.deviceName)}</strong><span class="jds-badge jds-badge--${unavailable ? "amber" : "forest"}">${unavailable ? "Link status unconfirmed" : "Linked"}</span></div><hr class="jds-divider" /></div>`
-    )
-    .join("");
-  const none =
-    !s.macs.list.length && !unavailable
-      ? hint("No Mac linked. Open Trail Marker and follow its linking instructions.")
-      : "";
-  const again = unavailable
-    ? `<p role="status" class="jds-hint">Couldn’t confirm the latest Mac connection. ${btn("Check again", "macs", { variant: "link" })}</p>`
-    : "";
-  return `<div class="meeting-settings-macs">${rows}${none}</div>${again}`;
 }
 
 function prefsSection() {
@@ -165,8 +137,13 @@ function draw() {
   } catch {
     caret = null;
   }
-  root.innerHTML = `${sectionHead("Meetings")}${macsSection()}${prefsSection()}`;
-  const next = active ? document.getElementById(active) : null;
+  root.innerHTML = `${backLink}${devices.render()}${sectionHead("Meetings")}${prefsSection()}${devices.dialog()}`;
+  const wanted = devices.takeFocus();
+  const next = wanted
+    ? document.getElementById(wanted)
+    : active
+      ? document.getElementById(active)
+      : null;
   if (next) next.focus({ preventScroll: true });
   if (next && caret && typeof caret.start === "number")
     next.setSelectionRange?.(caret.start, caret.end);
@@ -177,7 +154,8 @@ root.addEventListener("click", (event) => {
   const target = event.target.closest?.("[data-act]");
   if (!target || target.disabled) return;
   const act = target.dataset.act;
-  if (act === "macs") void loadMacs();
+  if (devices.acts[act]) devices.acts[act](target);
+  else if (act === "back") void client.navigate("/meetings");
   else if (act === "reload") void loadPrefs();
   else if (act === "retry") void s.retry?.();
   else if (act === "vocab-save") {
@@ -192,8 +170,23 @@ root.addEventListener("click", (event) => {
     }
   } else if (act === "vocab-clear") void save({ transcriptVocabulary: [] }, { vocabulary: true });
 });
+root.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") devices.escape();
+  else if (event.key === "Tab" && devices.isOpen()) {
+    const buttons = [...root.querySelectorAll(".jds-dialog button:not(:disabled)")];
+    const at = buttons.indexOf(document.activeElement);
+    if (buttons.length && (at === -1 || (event.shiftKey ? at === 0 : at === buttons.length - 1))) {
+      event.preventDefault();
+      buttons[event.shiftKey ? buttons.length - 1 : 0].focus();
+    }
+  } else if (event.key === "Enter" && event.target.id === "device-name") {
+    event.preventDefault();
+    devices.submit();
+  }
+});
 root.addEventListener("input", (event) => {
-  if (event.target.dataset?.in === "vocab") {
+  if (event.target.dataset?.in === "device-name") devices.input("device-name", event.target.value);
+  else if (event.target.dataset?.in === "vocab") {
     s.vocab = event.target.value;
     s.vocabDirty = true;
     s.vocabMessage = "";
@@ -209,4 +202,4 @@ root.addEventListener("change", (event) => {
 });
 
 void loadPrefs();
-void loadMacs();
+void devices.start();

@@ -126,7 +126,7 @@ impl Fixture {
         manifest
             .jobs
             .insert("notes.sync".into(), Default::default());
-        Self {
+        let fixture = Self {
             rt,
             bootstrap,
             oracle,
@@ -134,6 +134,65 @@ impl Fixture {
             host: Host::new(Limits::default()).unwrap(),
             wasm: std::fs::read(std::env::var_os("NOTES_TOOL_COMPONENT").unwrap()).unwrap(),
             manifest: Arc::new(manifest),
+        };
+        fixture.prepare_database();
+        fixture
+    }
+    fn prepare_database(&self) {
+        use moss_module_host::{
+            archive::{pack, Package},
+            migrations::PostgresLifecycle,
+            store::Lifecycle,
+            trust,
+        };
+        use safety_core::secret::Secret;
+
+        // The aggregate's export fixture installs these first. Standalone ingest
+        // gets a fresh database and must prepare its own existing prerequisites.
+        let missing_notes = self.rt.block_on(async {
+            let catalog: Option<String> = self
+                .bootstrap
+                .query_one("SELECT to_regclass('moss_modules.catalog')::text", &[])
+                .await
+                .unwrap()
+                .get(0);
+            if catalog.is_none() {
+                for migration in [
+                    moss_module_host::postgres::MIGRATION,
+                    moss_module_host::migrations::MIGRATION,
+                    moss_platform_jobs::MIGRATION,
+                    moss_module_host::jobs::MIGRATION,
+                ] {
+                    self.bootstrap.batch_execute(migration).await.unwrap();
+                }
+            }
+            self.bootstrap
+                .query_one(
+                    "SELECT to_regclass('app.notes_sync_checkpoints') IS NULL",
+                    &[],
+                )
+                .await
+                .unwrap()
+                .get::<_, bool>(0)
+        });
+        if missing_notes {
+            let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
+            let files = moss_notes_checks::package_files(&root, self.wasm.clone()).unwrap();
+            let bytes = pack(&files).unwrap();
+            let package =
+                Package::read(&bytes, &trust::digest(&bytes), &"0.1.0".parse().unwrap()).unwrap();
+            let data = tempfile::tempdir().unwrap();
+            PostgresLifecycle::new(
+                Secret::new(std::env::var("JS55_BOOTSTRAP_URL").unwrap()),
+                self.database("app"),
+                data.path(),
+            )
+            .unwrap()
+            .migrate(&package, None)
+            .unwrap();
+            println!(
+                "PASS standalone ingest installed existing host and Notes schema prerequisites"
+            );
         }
     }
     fn database(&self, role: &str) -> Database {

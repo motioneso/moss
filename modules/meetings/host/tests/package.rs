@@ -61,6 +61,7 @@ fn the_package_serves_the_meetings_screen() {
         "record.mjs", "transcript.mjs", "summary.mjs", "summary-parts.mjs", "guest-bridge.mjs",
         "meetings.css", "meetings-record.css", "settings.html", "settings.mjs", "settings-logic.mjs",
         "settings.css", "capture.mjs", "capture-logic.mjs",
+        "devices.mjs", "devices-logic.mjs", "devices.css", "link.mjs",
     ] {
         assert!(files.contains_key(&format!("ui/{name}")), "ui/{name} missing");
     }

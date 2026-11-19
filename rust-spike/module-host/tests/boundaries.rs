@@ -243,6 +243,8 @@ fn approval_describes_changed_credential_tool_and_install_scope() {
         "save".into(),
         Tool {
             approval_version: false,
+            input_schema: None,
+            card: None,
             description: "Save".into(),
             risk: "destructive".into(),
         },
@@ -277,6 +279,8 @@ fn target_approval_requirement_changes_are_visible_to_install_approval() {
             description: "Save".into(),
             risk: "write".into(),
             approval_version: false,
+            input_schema: None,
+            card: None,
         },
     );
     let mut versioned = old.clone();

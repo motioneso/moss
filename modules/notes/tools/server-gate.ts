@@ -1,14 +1,13 @@
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { getMossDatabaseUrls } from "@moss/db";
+import { prepareNotesToolComponent } from "./tool-component.js";
 
 if (process.env.JARVIS_GATE_RUN !== "1") throw new Error("Use verify-gate");
-for (const name of ["NOTES_TOOL_COMPONENT"]) {
-  if (!process.env[name]) throw new Error(`Set ${name}`);
-}
 for (const name of ["CARGO_HOME", "RUSTUP_HOME", "CARGO_TARGET_DIR"]) {
   if (!process.env[name]) throw new Error(`Use task-owned ${name}`);
 }
+prepareNotesToolComponent();
 const urls = getMossDatabaseUrls();
 function cargo(args: string[], extra: Record<string, string> = {}) {
   const result = spawnSync("cargo", ["+1.95.0", ...args], {

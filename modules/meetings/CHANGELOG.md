@@ -1,5 +1,11 @@
 # Meetings package
 
+## 0.3.0
+
+- The Meetings settings screen has a Devices section. It lists your linked Macs and phones with when each was last seen, renames a device in place, and unlinks one after a confirmation. An unlinked device can no longer upload.
+- A Mac or phone that asks to link opens Meetings and asks whether you recognise it. Link finishes the pairing. Decline links nothing. A request that is closed, answered or expired says so.
+- The old approval address keeps working and lands on Meetings.
+
 ## 0.2.0
 
 - The Meetings settings screen is part of the package. It sets the audio source, transcript language and vocabulary and the automatic summary switch, and lists your linked Macs.

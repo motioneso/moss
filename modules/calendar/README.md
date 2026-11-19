@@ -1,5 +1,13 @@
 # Calendar Rust package: cached-event screens and two chat tools
 
+`test:rust-calendar-server` builds the Calendar UI/core and packages both Calendar and
+its Tasks dependency before running the installed HTTPS server/browser checks. Use
+`scripts/run-gate.sh start --gate test:rust-calendar-server`, then
+`scripts/run-gate.sh wait --follow`, with `CARGO_HOME`, `RUSTUP_HOME` (Rust 1.95.0 with
+`wasm32-unknown-unknown`) and `CARGO_TARGET_DIR` set. No `JS181_CALENDAR_PACKAGE`,
+`JS220_TASKS_PACKAGE` or `CALENDAR_UI_DIR` setup is needed. Generated packages live under
+`CARGO_TARGET_DIR/server-packages/calendar` and are rebuilt on each gate run.
+
 Part of #4027. This is the package and data foundation, **not the full Calendar port**.
 The existing TypeScript app stays in place. Version 0.5.0 connects event links at
 `/calendar?event=<id>` through the signed-in Calendar composition, restores duration,

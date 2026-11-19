@@ -37,6 +37,7 @@ tower = { version = "0.5", features = ["util"], optional = true }
 tower-http = { version = "0.6", features = ["fs"], optional = true }
 
 [dev-dependencies]
+moss-module-host = { path = "../../../rust-spike/module-host", features = ["test-tool-dispatch"] }
 moss-platform-jobs = { path = "../../../rust-spike/module-host/bridges/jobs" }
 base64 = "0.22"
 ring = "0.17"

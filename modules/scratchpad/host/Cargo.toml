@@ -16,6 +16,7 @@ tokio = { version = "1", features = ["rt-multi-thread"] }
 tokio-postgres = { version = "0.7", features = ["with-serde_json-1", "with-uuid-1"] }
 
 [dev-dependencies]
+moss-module-host = { path = "../../../rust-spike/module-host", features = ["test-tool-dispatch"] }
 moss-module-sdk = { path = "../../../rust-spike/module-sdk" }
 access-context = { path = "../../../rust-spike/access-context" }
 moss-scratchpad-module = { path = "../src" }
