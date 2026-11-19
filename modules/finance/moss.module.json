@@ -1117,7 +1117,7 @@
     },
     {
       "id": "finance.bank-sync",
-      "description": "Balances and transactions for every connected bank are pulled every six hours and on request. Each bank is handled on its own, so one failing bank never stops the others. A bank that needs a new sign-in is marked as needing a reconnect and keeps its saved data. A person's own category and note on a bank transaction are kept, and manual entries are never overwritten. Categorizing new transactions is not built yet.",
+      "description": "Balances and transactions for every connected bank are pulled every six hours and on request. Each bank is handled on its own, so one failing bank never stops the others. If the bank changes its pages during a read, Moss retries from the start of that read, up to three times. A bank that needs a new sign-in is marked as needing a reconnect and keeps its saved data. A person's own category and note on a bank transaction are kept, and manual entries are never overwritten. Categorizing new transactions is not built yet.",
       "errors": []
     },
     {
