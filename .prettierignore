@@ -125,3 +125,5 @@ modules/sports/tests/fixtures/overview-routes.golden.json
 # Oracle fixtures, kept on one line so the files stay under the size limit.
 rust-spike/integrations/fixtures/sorting-cases.json
 rust-spike/integrations/fixtures/view-cases.json
+# Scratchpad 3 and Commitments 9 mockups (JS-352): static pages, frozen for review.
+docs/superpowers/specs/mockups/scratchpad-commitments/
