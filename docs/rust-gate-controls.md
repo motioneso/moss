@@ -48,3 +48,23 @@ scripts/run-gate.sh wait --follow
 
 `CONNECTORS_TESTS` continues to select the database suites independently. These controls do
 not add CI jobs or change which gates are required.
+
+## Per-file shadow CI entries
+
+Memory now runs `db`, `dashboard`, `recording`, `reembed`, and `account` as separate entries,
+with `index` and `oracle` in their own jobs. News separates `installed` from `reader`.
+Each database entry still builds and checks its own module prerequisites.
+
+Connectors uses `CONNECTORS_SUITE` to select one host test file in **both** the prerequisite
+check and the ignored database phase. Its entries are `package`, `registry`, `mail_probe`,
+`db`, `google_sync`, `google`, `imap`, `refresh`, `outlook`, and `writes`. This prevents each
+entry from repeating every other file's non-ignored tests. Native/UI tests, parity oracles,
+fixture checks, and the guest build remain prerequisites of every entry. The full local gate
+is unchanged; `CONNECTORS_TESTS` still works when `CONNECTORS_SUITE` is unset or empty.
+Unknown non-empty `CONNECTORS_SUITE` values fail before building. Selecting `sync_speed`
+explicitly while also skipping it fails rather than silently testing nothing.
+
+`scripts/rust-gate-matrix.mjs` expands the existing touched-module list. Unrelated modules keep
+their existing commands. The jobs remain optional shadow jobs outside `ci-gate`'s `needs`.
+Each job prints `GATE_RESULT` with its module and entry, then bounded Cargo compile and test
+file timing summaries, including on cancellation. Setup time is included in the job wall time.

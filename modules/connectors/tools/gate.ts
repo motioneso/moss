@@ -1,6 +1,21 @@
 import { spawnSync } from "node:child_process";
 import { getMossDatabaseUrls } from "@moss/db";
 if (process.env.JARVIS_GATE_RUN !== "1") throw new Error("Use verify-gate");
+const selected = process.env.CONNECTORS_SUITE;
+const available = [
+  "package",
+  "registry",
+  "mail_probe",
+  "sync_speed",
+  "db",
+  "google_sync",
+  "google",
+  "imap",
+  "refresh",
+  "outlook",
+  "writes"
+];
+if (selected && !available.includes(selected)) throw new Error("Unknown Connectors test suite");
 const urls = getMossDatabaseUrls();
 const checks = spawnSync("modules/connectors/tools/check.sh", {
   stdio: "inherit",
@@ -9,9 +24,11 @@ const checks = spawnSync("modules/connectors/tools/check.sh", {
 if (checks.status !== 0) process.exit(checks.status ?? 1);
 const target = process.env.CARGO_TARGET_DIR ?? "/tmp/moss-connectors-host";
 const wasm = `${target}/connectors-guest/wasm32-unknown-unknown/release/moss_connectors.wasm`;
-const suites = (
-  process.env.CONNECTORS_TESTS ?? "db,google_sync,google,imap,refresh,outlook,writes"
-).split(",");
+const suites = selected
+  ? [selected]
+  : (process.env.CONNECTORS_TESTS ?? "db,google_sync,google,imap,refresh,outlook,writes").split(
+      ","
+    );
 const run = spawnSync(
   "cargo",
   [
