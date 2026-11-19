@@ -22,6 +22,11 @@ pub fn mask(value: &mut Value) {
 
 /// The old server's answers for one person's steps.
 pub fn old_routes(actor: uuid::Uuid, steps: &[Value], vars: Value) -> Vec<Value> {
+    old_routes_at(actor, steps, vars, None)
+}
+
+/// The old server with an optional fixed clock, shared with stored-date package tests.
+pub fn old_routes_at(actor: uuid::Uuid, steps: &[Value], vars: Value, now: Option<&str>) -> Vec<Value> {
     let mut child = Command::new("pnpm")
         .args(["exec", "tsx", "modules/news/tools/routes-oracle.ts"])
         .current_dir(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.."))
@@ -34,7 +39,7 @@ pub fn old_routes(actor: uuid::Uuid, steps: &[Value], vars: Value) -> Vec<Value>
         .stdin
         .take()
         .unwrap()
-        .write_all(json!({"actor":actor,"steps":steps,"vars":vars}).to_string().as_bytes())
+        .write_all(json!({"actor":actor,"steps":steps,"vars":vars,"now":now}).to_string().as_bytes())
         .unwrap();
     let out = child.wait_with_output().unwrap();
     assert!(out.status.success(), "Old route oracle failed: {}", String::from_utf8_lossy(&out.stderr));

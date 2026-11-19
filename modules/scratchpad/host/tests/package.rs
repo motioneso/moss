@@ -4,7 +4,10 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 
 fn component() -> Vec<u8> {
-    std::fs::read(std::env::var("SCRATCHPAD_COMPONENT_WASM").expect("Run modules/scratchpad/tools/check.sh")).unwrap()
+    std::fs::read(
+        std::env::var("SCRATCHPAD_COMPONENT_WASM").expect("Run modules/scratchpad/tools/check.sh"),
+    )
+    .unwrap()
 }
 fn root() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..")
@@ -27,13 +30,21 @@ fn the_component_loads_with_the_real_host() {
 
 #[test]
 fn an_unknown_route_is_a_plain_404() {
-    let out = call("route", r#"{"method":"GET","path":"/nope","params":{},"query":{},"body":null}"#).unwrap();
+    let out = call(
+        "route",
+        r#"{"method":"GET","path":"/nope","params":{},"query":{},"body":null}"#,
+    )
+    .unwrap();
     assert_eq!(serde_json::from_str::<Value>(&out).unwrap()["status"], 404);
 }
 
 #[test]
 fn a_job_failure_never_repeats_the_payload() {
-    let err = call("job", &json!({"queue":"scratchpad.x","payload":{"body":"SECRET-NOTE-TEXT"}}).to_string()).unwrap_err();
+    let err = call(
+        "job",
+        &json!({"queue":"scratchpad.x","payload":{"body":"SECRET-NOTE-TEXT"}}).to_string(),
+    )
+    .unwrap_err();
     assert!(!format!("{err:#}").contains("SECRET-NOTE-TEXT"));
 }
 
@@ -41,7 +52,18 @@ fn a_job_failure_never_repeats_the_payload() {
 fn the_package_builds_and_the_manifest_validates() {
     let files = moss_scratchpad_host::package::files(&root(), &component()).unwrap();
     assert_eq!(files.keys().filter(|k| k.starts_with("sql/")).count(), 1);
-    for needed in ["moss.module.json", "code/module.wasm", "NOTICE", "CHANGELOG.md"] {
+    for needed in [
+        "moss.module.json",
+        "code/module.wasm",
+        "NOTICE",
+        "CHANGELOG.md",
+        "ui/index.html",
+        "ui/app.mjs",
+        "ui/settings.html",
+        "ui/settings.mjs",
+        "ui/model.mjs",
+        "ui/scratchpad.css",
+    ] {
         assert!(files.contains_key(needed), "{needed} missing");
     }
     assert!(moss_scratchpad_host::package::pack(&root(), &component()).is_ok());
@@ -51,7 +73,16 @@ fn the_package_builds_and_the_manifest_validates() {
 fn the_package_asks_only_for_its_own_resources() {
     let manifest = moss_scratchpad_host::package::manifest().unwrap();
     let ask = |port: &str, operation: &str, resource: &str| {
-        authorize(&manifest, port, &Request { operation: operation.into(), resource: resource.into(), parameters: json!({}) }).is_ok()
+        authorize(
+            &manifest,
+            port,
+            &Request {
+                operation: operation.into(),
+                resource: resource.into(),
+                parameters: json!({}),
+            },
+        )
+        .is_ok()
     };
     assert!(ask("kv", "append", "scratchpad.store"));
     assert!(!ask("kv", "insert", "meetings.store"));
@@ -67,10 +98,20 @@ fn changing_one_byte_of_the_legacy_sql_stops_the_build() {
     let to = copy.join("packages/scratchpad/sql");
     std::fs::create_dir_all(&to).unwrap();
     let target = to.join("0216_scratchpads.sql");
-    std::fs::copy(root().join("packages/scratchpad/sql/0216_scratchpads.sql"), &target).unwrap();
-    assert!(moss_scratchpad_host::package::files(copy, &component()).is_ok(), "untouched copy builds");
+    std::fs::copy(
+        root().join("packages/scratchpad/sql/0216_scratchpads.sql"),
+        &target,
+    )
+    .unwrap();
+    assert!(
+        moss_scratchpad_host::package::files(copy, &component()).is_ok(),
+        "untouched copy builds"
+    );
     let mut bytes = std::fs::read(&target).unwrap();
     bytes.push(b' ');
     std::fs::write(&target, bytes).unwrap();
-    assert!(moss_scratchpad_host::package::files(copy, &component()).is_err(), "a changed byte must stop the build");
+    assert!(
+        moss_scratchpad_host::package::files(copy, &component()).is_err(),
+        "a changed byte must stop the build"
+    );
 }
