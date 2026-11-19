@@ -1,5 +1,9 @@
 # Tasks package changes
 
+## 0.1.6
+
+- Extend the existing `getTaskReference` response with title, do time and effort, matching Calendar's existing saved-plan summary contract. No new call or permission; the caller's visibility still controls the read.
+
 ## 0.1.5
 
 - Add the public `setBriefingTaskStatus` call. It moves the caller's own suggested task to open or archived, and an open task to archived. Done tasks and other people's tasks are refused or reported as not found.

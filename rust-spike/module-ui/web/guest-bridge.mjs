@@ -63,6 +63,7 @@ export function moduleClient({ guestWindow = globalThis.window, timeoutMs = 3000
     theme: () => call("theme"),
     navigate: (path) => call("navigate", { path }),
     chat: (text = "") => call("chat", { text }),
+    present: (modal) => call("present", { modal }),
     resize: (height) => call("resize", { height }),
     save: (file) => call("save", file),
     dispose() {

@@ -3,6 +3,19 @@ use crate::ButtonSize;
 use leptos::prelude::*;
 
 #[component]
+pub fn DisclosureToggle(
+    expanded: Signal<bool>,
+    #[prop(into)] controls: String,
+    #[prop(optional, into)] class: String,
+    on_click: Callback<leptos::ev::MouseEvent>,
+    children: Children,
+) -> impl IntoView {
+    view! {<button type="button" class=format!("jds-disclosure {class}")
+    aria-expanded=move||expanded.get() aria-controls=controls
+    on:click=move|event|on_click.run(event)>{children()}</button>}
+}
+
+#[component]
 pub fn Segmented(
     #[prop(into)] aria_label: String,
     value: Signal<String>,

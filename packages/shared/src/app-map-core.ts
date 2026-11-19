@@ -79,7 +79,7 @@ export const RUST_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
     runtime: "rust",
     label: "Rust Moss - Today",
     description:
-      "Under the greeting, Today says where your morning briefing stands, taken from your saved Briefings records. It says the briefing is switched off, failed to run, was blocked, or when it runs (for example It runs at 7:00 AM, or It should have run at 7:00 AM once that time has passed). It shows nothing when you have no morning briefing, when Briefings is not installed, or when today's briefing is ready to read. Read your briefing opens the reader.",
+      "Under the greeting, Today says where your morning briefing stands, taken from your saved Briefings records. It says the briefing is switched off, failed to run, was blocked, or when it runs (for example It runs at 7:00 AM, or It should have run at 7:00 AM once that time has passed). It shows nothing when you have no morning briefing, when Briefings is not installed, or when today's briefing is ready to read. Read your briefing opens the reader. Calendar owns the saved schedule and read-only task-block review through its calendar.today-plan feature, including the Proposed and Flexible labels, unavailable tasks, schedule gaps and phone disclosure. Those details belong to Calendar rather than core.",
     path: "/",
     scope: "user"
   },

@@ -4,9 +4,7 @@
 
 use leptos::prelude::*;
 use leptos::task::spawn_local;
-use moss_shell_contract::{
-    QuickActionControl, QuickActionGroup, SlotKind, TimelineSlot, TodayHero, TodayView,
-};
+use moss_shell_contract::{QuickActionControl, QuickActionGroup, TodayHero, TodayView};
 
 use crate::api;
 use crate::email_refresh::EmailRefresh;
@@ -41,7 +39,7 @@ fn Today(view: TodayView) -> impl IntoView {
                 {view.quick_actions.map(|group| view! { <QuickActions group=group /> })}
                 <div class="cmd-main">
                     <EmailRefresh />
-                    <Timeline slots=view.timeline closing=view.timeline_closing />
+                    <div data-module-section="calendar" data-screen-path="/today"></div>
                     {view.quiet_line.map(|line| view! {
                         <section class="today-quiet-line" id="start-here" aria-label="Your day so far">
                             <p class="cmd-empty today-quiet-line__text" role="status">{line}</p>
@@ -136,82 +134,5 @@ fn QuickActions(group: QuickActionGroup) -> impl IntoView {
                 }).collect_view()}
             </div>
         </section>
-    }
-}
-
-#[component]
-fn Timeline(slots: Vec<TimelineSlot>, closing: Option<String>) -> impl IntoView {
-    view! {
-        <section class="jds-brief jds-brief--timeline" id="schedule">
-            <div class="jds-section-head jds-section-head--center tl-head">
-                <span class="jds-section-head__number">"01"</span>
-                <h2 class="jds-section-head__title tl-title">"Your day, laid out"</h2>
-            </div>
-            <div class="tl-legend">
-                <span><i class="tl-legend__filled" aria-hidden="true"></i>"Moss-planned task"</span>
-                <span><i class="tl-legend__open" aria-hidden="true"></i>"Calendar commitment"</span>
-            </div>
-            <div class="day-list">
-                {slots.into_iter().map(|slot| view! { <DaySlot item=slot /> }).collect_view()}
-            </div>
-            {closing.map(|line| view! { <p class="tl-closing">{line}</p> })}
-        </section>
-    }
-}
-
-/// Matches the current app's wording: "45 min", "90 min", "1 hour", "2 hours".
-fn length_label(minutes: u32) -> String {
-    match minutes {
-        m if m % 60 != 0 => format!("{m} min"),
-        60 => "1 hour".into(),
-        m => format!("{} hours", m / 60),
-    }
-}
-
-#[component]
-fn DaySlot(item: TimelineSlot) -> impl IntoView {
-    let slot = item;
-    let time = view! {
-        <div class="day-ev__t tl-time">{slot.start}<small>{slot.end}</small></div>
-    };
-    match slot.kind {
-        SlotKind::Event => view! {
-            <div class="day-ev tl-slot tl-slot--event">
-                {time}
-                <div class="tl-body">
-                    <div class="tl-block">
-                        <div class="day-ev__title">{slot.title}</div>
-                        <div class="day-ev__where">
-                            {length_label(slot.duration_minutes)}
-                            {slot.detail.map(|d| format!(" · {d}"))}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        }
-        .into_any(),
-        kind => {
-            let (state, state_text) = match kind {
-                SlotKind::Proposed => ("proposed", "Proposed"),
-                _ => ("committed", "Planned"),
-            };
-            view! {
-                <div class=format!("jds-task tl-slot tl-slot--{state}") data-state=state>
-                    {time}
-                    <div class="tl-body">
-                        <div class="jds-task__main">
-                            <div class="jds-task__title">{slot.title}</div>
-                            <div class="jds-task__meta">
-                                <span class="tl-meta-len">{length_label(slot.duration_minutes)}</span>
-                                <span class="tl-meta-divider" aria-hidden="true">"·"</span>
-                                {slot.detail.map(|d| view! { <span class="jds-task__source">{d}</span> })}
-                                <span class="jds-task__state">{state_text}</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            }
-            .into_any()
-        }
     }
 }

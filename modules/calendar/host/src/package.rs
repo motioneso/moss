@@ -137,6 +137,7 @@ pub fn files(root: &Path, core: &[u8]) -> Result<BTreeMap<String, Vec<u8>>> {
     for name in [
         "index.html",
         "settings.html",
+        "today.html",
         "boot.mjs",
         "bridge.mjs",
         "guest-bridge.mjs",

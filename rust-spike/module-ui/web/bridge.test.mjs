@@ -11,7 +11,8 @@ function setup({
   opened = [],
   save,
   minimumHeight,
-  resized
+  resized,
+  present
 } = {}) {
   let listener;
   const replies = [];
@@ -35,6 +36,7 @@ function setup({
     theme,
     minimumHeight,
     resized,
+    present,
     ...(save ? { save } : {}),
     navigate: () => null,
     open: (url) => {
@@ -476,4 +478,19 @@ test("embedded sections opt into zero height while keeping the upper bound", asy
   assert.equal(s.replies.at(-1).ok, false);
   assert.deepEqual(heights, [0, 10000]);
   s.dispose();
+});
+
+test("a module can enter and leave the host's modal presentation", async () => {
+  const modes = [];
+  const s = setup({
+    present: (modal) => {
+      modes.push(modal);
+      return null;
+    }
+  });
+  await s.send({ type: "present", modal: true });
+  assert.equal(s.replies.at(-1).ok, true);
+  await s.send({ type: "present", modal: false });
+  assert.equal(s.replies.at(-1).ok, true);
+  assert.deepEqual(modes, [true, false]);
 });
