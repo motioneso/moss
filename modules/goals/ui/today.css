@@ -1,0 +1,21 @@
+html,
+body {
+  background: transparent;
+}
+.loose {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--space-1);
+}
+.jds-task__main {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.goals-status {
+  margin: 0;
+  padding-block: var(--space-5);
+  color: var(--text-muted);
+}
+.goals-status button {
+  margin-top: var(--space-3);
+}
