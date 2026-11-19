@@ -57,6 +57,8 @@ export function bindMenus(root, changed = () => {}, owner = root.ownerDocument) 
       choices[index]?.focus();
     }
   }
+  const leaveFrame = () => close();
+  owner.defaultView?.addEventListener("blur", leaveFrame);
   root.addEventListener("click", click);
   root.addEventListener("keydown", key);
   owner.addEventListener("pointerdown", outside);
@@ -65,5 +67,6 @@ export function bindMenus(root, changed = () => {}, owner = root.ownerDocument) 
     root.removeEventListener("click", click);
     root.removeEventListener("keydown", key);
     owner.removeEventListener("pointerdown", outside);
+    owner.defaultView?.removeEventListener("blur", leaveFrame);
   };
 }
