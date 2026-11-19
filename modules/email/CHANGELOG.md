@@ -1,5 +1,9 @@
 # Email package
 
+## 0.5.0
+
+- Add public calls `getBriefingSource` and `setBriefingSource` so Briefings can read and change the signed-in person's Include in briefings switch. They share storage with the Email settings screen and touch only the caller's own preference.
+
 ## 0.1.0
 
 - Add the Email package: the cached mail messages of the signed-in person (and messages shared with them), and the Email settings.

@@ -756,3 +756,26 @@ fn source_switches_read_the_saved_choices_and_default_to_on() {
     assert_eq!(read(json!({"planning":false})), json!({"briefings":true,"planning":false}));
     assert!(ask(json!({}), json!({"x":1})).is_err());
 }
+
+#[test]
+fn set_source_switches_writes_only_valid_boolean_switches() {
+    struct Writes(std::cell::RefCell<Vec<Value>>);
+    impl Host for Writes {
+        fn call(&self, port: &str, operation: &str, resource: &str, body: Value) -> Result<Value> {
+            assert_eq!((port, operation, resource), ("kv", "set", "calendar.source-behaviors"));
+            self.0.borrow_mut().push(body);
+            Ok(json!({"briefings":false,"planning":true}))
+        }
+    }
+    let host = Writes(Default::default());
+    let ask = |parameters: Value| {
+        handle(&host, "api", &json!({"name":"setSourceSwitches","parameters":parameters}).to_string())
+    };
+    let saved: Value = serde_json::from_str(&ask(json!({"briefings":false})).unwrap()).unwrap();
+    assert_eq!(saved, json!({"briefings":false,"planning":true}));
+    assert_eq!(*host.0.borrow(), [json!({"briefings":false})]);
+    for bad in [json!({}), json!({"planning":"off"}), json!({"writeback":true}), json!([true]), json!(null)] {
+        assert!(ask(bad).is_err());
+    }
+    assert_eq!(host.0.borrow().len(), 1, "a refused call reached the host");
+}

@@ -135,6 +135,7 @@ fn api(host: &impl Host, name: &str, input: Value) -> Result<Value> {
         "reserveAutoPlan" => Ok(json!({"reservation":auto_plan::reserve(host, serde_json::from_value(input)?)?})),
         "findUnfinishedBatch" => auto_plan::find_unfinished(host, serde_json::from_value(input)?),
         "getSourceSwitches" => source_switches(host, &input),
+        "setSourceSwitches" => set_source_switches(host, input),
         "upsertCachedEvent" => cache::upsert(host, &input),
         "pruneCachedEvents" => cache::prune(host, &input),
         "importCalendarMirror" => mirror::import(host, &input),
@@ -151,6 +152,19 @@ fn source_switches(host: &impl Host, input: &Value) -> Result<Value> {
     let stored = host.call("kv", "get", "calendar.source-behaviors", json!({}))?;
     let on = |key: &str| stored[key].as_bool().unwrap_or(true);
     Ok(json!({"briefings": on("briefings"), "planning": on("planning")}))
+}
+/// Writes the caller's own source switches. At least one of `briefings` and `planning` must
+/// be present, each a boolean, and nothing else is accepted. The host merges the write.
+fn set_source_switches(host: &impl Host, input: Value) -> Result<Value> {
+    let valid = input.as_object().is_some_and(|o| {
+        !o.is_empty()
+            && o.iter()
+                .all(|(k, v)| matches!(k.as_str(), "briefings" | "planning") && v.is_boolean())
+    });
+    if !valid {
+        return Err(Error::new(400, "Invalid calendar source switches"));
+    }
+    Ok(host.call("kv", "set", "calendar.source-behaviors", input)?)
 }
 /// The original HTTP routes name the day `date` and resolve a missing
 /// timezone from the account. Installed callers already send `localDay`.
@@ -262,15 +276,7 @@ fn route(host: &impl Host, request: RouteRequest) -> Result<Value> {
             json!({}),
         )?),
         ("PATCH", "/source-behaviors") => {
-            let object = request.body.as_object().filter(|o| {
-                !o.is_empty()
-                    && o.iter()
-                        .all(|(k, v)| matches!(k.as_str(), "briefings" | "planning") && v.is_boolean())
-            });
-            if object.is_none() {
-                return Err(Error::new(400, "Invalid calendar source switches"));
-            }
-            Ok(host.call("kv", "set", "calendar.source-behaviors", request.body)?)
+            set_source_switches(host, request.body)
         }
         ("GET", "/display-settings") => display::read(host),
         ("PATCH", "/display-settings") => display::save(host, request.body),

@@ -86,3 +86,18 @@ fn a_large_mailbox_lists_completely_in_bounded_pages() {
     assert_eq!(body["messages"].as_array().map(Vec::len), Some(450));
     assert_eq!(body["messages"][449]["id"], "m449");
 }
+#[test]
+fn briefing_source_public_calls_share_the_route_storage() {
+    let host = Fake::default();
+    let api = |name: &str, parameters: Value| {
+        handle(&host, "api", &json!({"name":name,"parameters":parameters}).to_string())
+            .map(|out| serde_json::from_str::<Value>(&out).unwrap())
+    };
+    assert_eq!(api("getBriefingSource", json!({})).unwrap(), json!({"enabled":true}));
+    assert_eq!(api("setBriefingSource", json!({"enabled":false})).unwrap(), json!({"enabled":false}));
+    assert_eq!(api("getBriefingSource", json!({})).unwrap(), json!({"enabled":false}));
+    assert_eq!(call(&host, "GET", "/briefing-source", None, Value::Null).1, json!({"enabled":false}));
+    assert!(api("getBriefingSource", json!({"x":1})).is_err());
+    assert!(api("setBriefingSource", json!({})).is_err());
+    assert!(api("setBriefingSource", json!({"enabled":"no"})).is_err());
+}
