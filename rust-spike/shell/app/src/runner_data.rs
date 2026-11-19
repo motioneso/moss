@@ -262,7 +262,7 @@ impl Inner {
     /// Stores a record for an agent permission ask. Returns false for anything else, which the
     /// caller refuses: module tool cards have no builder until part 3b.
     fn raise_approval(&self, m: &Value, turn: &str) -> bool {
-        if m["source"].as_str() != Some("agent") {
+        if m["card"]["source"].as_str() != Some("agent") {
             return false;
         }
         let Some(runner_id) = m["id"].as_u64() else {
