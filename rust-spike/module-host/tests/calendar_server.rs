@@ -109,7 +109,7 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
     );
     private(
         &root.join("network.json"),
-        &json!({"listen":format!("0.0.0.0:{}",port.0),"origins":origins,"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
+        &json!({"listen":format!("0.0.0.0:{}",port.0),"origins":origins,"sharing":true,"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
     );
     let client = reqwest::blocking::Client::builder()
         .add_root_certificate(reqwest::Certificate::from_pem(&fs::read(&cert).unwrap()).unwrap())
