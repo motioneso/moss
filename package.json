@@ -26,6 +26,7 @@
     "test:rust-briefings": "tsx modules/briefings/tools/gate.ts",
     "test:rust-news-reader": "bash modules/news/reader/tools/check.sh",
     "test:rust-briefings-live": "bash modules/briefings/tools/live.sh",
+    "test:rust-today-hero-live": "bash rust-spike/shell/tools/hero-live.sh",
     "test:rust-sports": "tsx modules/sports/tools/gate.ts",
     "test:rust-sports-live": "bash modules/sports/tools/live.sh",
     "test:rust-weather": "tsx modules/weather/tools/gate.ts",
