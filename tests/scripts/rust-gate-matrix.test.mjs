@@ -3,6 +3,10 @@ import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { rustGateEntries } from "../../scripts/rust-gate-matrix.mjs";
+import {
+  memoryControlArgs,
+  memoryGuardControls
+} from "../../modules/memory/tools/control-selection.ts";
 
 test("only touched modules produce entries, including an empty change", () => {
   assert.deepEqual(rustGateEntries([]), []);
@@ -12,7 +16,7 @@ test("only touched modules produce entries, including an empty change", () => {
 });
 
 test("Memory and News retain every database file and companion gate", () => {
-  const entries = rustGateEntries(["memory", "news"]);
+  const entries = rustGateEntries(["memory", "news"], "workflow_dispatch");
   assert.deepEqual(
     entries.map(({ module, suite }) => `${module}/${suite}`),
     [
@@ -110,4 +114,60 @@ test("the CLI emits the JSON consumed by the workflow", () => {
   );
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(JSON.parse(result.stdout), rustGateEntries(["memory", "news", "connectors"]));
+});
+
+test("kill tier moves only measured slow files and Memory controls off PRs", () => {
+  const pr = rustGateEntries(["memory", "news"]);
+  assert.deepEqual(
+    pr.map(({ module, suite }) => `${module}/${suite}`),
+    [
+      "memory/dashboard",
+      "memory/recording",
+      "memory/reembed",
+      "memory/account",
+      "memory/index",
+      "memory/oracle",
+      "news/reader"
+    ]
+  );
+  assert.ok(
+    pr
+      .filter(({ gates }) => gates === "test:rust-memory")
+      .every(({ controls }) => controls === "skip")
+  );
+  const push = rustGateEntries(["memory", "news", "connectors", "tasks"], "push");
+  assert.deepEqual(
+    push.map(({ module, suite }) => `${module}/${suite}`),
+    ["memory/db", "memory/account", "memory/recording", "memory/reembed", "news/installed"]
+  );
+  assert.ok(
+    push
+      .filter(({ suite }) => suite !== "db" && suite !== "installed")
+      .every(({ controls }) => controls === "only")
+  );
+  assert.deepEqual(rustGateEntries(["tasks", "connectors"], "push"), []);
+  assert.deepEqual(rustGateEntries([], "push"), []);
+});
+
+test("Memory PR and push filters partition existing test functions without losing controls", () => {
+  for (const [suite, control] of Object.entries(memoryGuardControls)) {
+    const source = readFileSync(
+      new URL(`../../modules/memory/host/tests/${suite}.rs`, import.meta.url),
+      "utf8"
+    );
+    const names = [...source.matchAll(/#\[test\][\s\S]*?fn (\w+)\(/g)].map((m) => m[1]);
+    assert.ok(names.includes(control), `${suite}: control must exist`);
+    const only = memoryControlArgs(suite, "only");
+    const skip = memoryControlArgs(suite, "skip");
+    assert.deepEqual(only, [control, "--exact"]);
+    assert.deepEqual(skip, ["--skip", control, "--exact"]);
+    const onPush = names.filter((name) => name === only[0]);
+    const onPr = names.filter((name) => name !== skip[1]);
+    assert.equal(onPush.length, 1);
+    assert.equal(new Set([...onPush, ...onPr]).size, names.length);
+    assert.deepEqual(memoryControlArgs(suite), []);
+  }
+  assert.throws(() => memoryControlArgs("account", "unknown"));
+  assert.throws(() => memoryControlArgs("dashboard", "only"));
+  assert.deepEqual(memoryControlArgs("dashboard", "skip"), []);
 });

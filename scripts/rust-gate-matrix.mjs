@@ -4,15 +4,41 @@ import { pathToFileURL } from "node:url";
 export function rustGateEntries(modules, event = "pull_request") {
   return modules.flatMap((module) => {
     const entry = (suite, gates = `test:rust-${module}`) => ({ module, suite, gates });
+    // Measured kill tier: these files exceeded 30m after splitting on PR #4420.
+    if (event === "push") {
+      if (module === "news") return [entry("installed")];
+      if (module === "memory") {
+        return [
+          entry("db"),
+          ...["account", "recording", "reembed"].map((suite) => ({
+            ...entry(suite),
+            controls: "only"
+          }))
+        ];
+      }
+      return [];
+    }
     switch (module) {
       case "memory":
         return [
-          ...["db", "dashboard", "recording", "reembed", "account"].map((suite) => entry(suite)),
+          ...[
+            ...(event === "pull_request" ? [] : ["db"]),
+            "dashboard",
+            "recording",
+            "reembed",
+            "account"
+          ].map((suite) => ({
+            ...entry(suite),
+            controls: event === "pull_request" ? "skip" : "all"
+          })),
           entry("index", "test:rust-memory-index"),
           entry("oracle", "test:rust-memory-oracle")
         ];
       case "news":
-        return [entry("installed"), entry("reader", "test:rust-news-reader")];
+        return [
+          ...(event === "pull_request" ? [] : [entry("installed")]),
+          entry("reader", "test:rust-news-reader")
+        ];
       case "connectors":
         // Preserve the existing PR opt-out and full manual-run benchmark coverage.
         return [

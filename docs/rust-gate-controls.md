@@ -51,8 +51,22 @@ not add CI jobs or change which gates are required.
 
 ## Per-file shadow CI entries
 
-Memory now runs `db`, `dashboard`, `recording`, `reembed`, and `account` as separate entries,
-with `index` and `oracle` in their own jobs. News separates `installed` from `reader`.
+Memory splits its five database files, with `index` and `oracle` in their own jobs.
+News separates `installed` from `reader`.
+
+The first real per-file PR run (#4420, run 44601271371) still exceeded 30 minutes in
+Memory's `db` and News's `installed`. Under the plan's kill rule, those whole files now run
+on main pushes. News's guard-removal controls are in `installed`. Memory also moves the
+existing guard-removal test in each of `account`, `recording`, and `reembed` to its own
+main-push entry. PRs keep all other tests in those files, plus `dashboard`, `index`, `oracle`,
+and News's `reader`. Main pushes respect the same touched-module/shared-host path filter;
+unknown push scope conservatively runs both promoted modules. Other modules gain no push jobs.
+
+`MEMORY_CONTROLS=skip` excludes exactly those three named tests; `only` selects the control
+in the chosen file with an exact test-name filter. The names live in
+`modules/memory/tools/control-selection.ts`. Unset or `all` retains the full local gate;
+manual workflow runs also retain all files and controls. Unknown control modes fail before
+building. No test assertions or fixture behavior change.
 Each database entry still builds and checks its own module prerequisites.
 
 Connectors uses `CONNECTORS_SUITE` to select one host test file in **both** the prerequisite
