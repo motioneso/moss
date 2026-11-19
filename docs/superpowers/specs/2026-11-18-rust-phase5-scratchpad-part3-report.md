@@ -43,6 +43,21 @@ The browser uses this task's Herdr session. Real note text is entered through th
 
 The live check found a fixed-position panel trapped by the topbar backdrop filter. Moving the persistent panel into a body portal restored its viewport position. The isolated guest's narrow viewport also triggered the shared phone control minimums on desktop; desktop layout now retains the authored small buttons while the actual phone layout keeps its phone controls.
 
+## Independent review corrections
+
+The first read-only Claude review found two major issues. Both were reproduced in the actual installed package: Ctrl+M followed by Tab stayed in the textarea, and a long note's appended line was clipped below a non-scrolling preview.
+
+- Ctrl+M now switches Tab between indentation and moving among controls. A visible keyboard hint appears when Tab indentation is used, and the textarea also describes the shortcut to assistive technology. Escape still closes the pad.
+- Appended text wraps and scrolls into view. Subsequent refreshes preserve the reader's scroll position, and returning to the textarea keeps the preview's position.
+
+The following review findings remain below the required major/blocker fix threshold:
+
+- Connections is the canonical destination required by the approved mockup, but its full Rust screen is not ported yet. The link currently reaches the shell's not-ported placeholder; building Connections is outside this part.
+- With copying already enabled and the notes folder later disconnected, the missing-folder switch remains disabled until a folder is connected again. The default no-folder state matches the approved mockup.
+- The persistent hidden guest still checks for changes every two seconds.
+- Shortcuts in another package's focused iframe remain unverified, as noted below.
+- The package source/test changes include the repository formatter's surrounding Rust layout changes.
+
 ## Repeating the live setup
 
 From `~/Jarv1s`, set `CARGO_HOME`, `RUSTUP_HOME` and `CARGO_TARGET_DIR`, then run the live gate through `scripts/run-gate.sh start --gate test:rust-scratchpad-live`. Optional screen-proof variables:

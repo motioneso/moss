@@ -57,10 +57,12 @@ export const padMarkup = `
   <textarea
     class="jds-textarea sc-pad__text"
     aria-label="Scratchpad text"
+    aria-describedby="keyboard-help"
     placeholder="Jot something down…"
     disabled
   ></textarea>
   <p id="count" class="jds-hint sc-pad__count" hidden></p>
+  <p id="keyboard-help" class="jds-hint sc-pad__count" role="status" hidden>Tab indents. Press Ctrl+M to let Tab move between controls.</p>
   <div class="sc-pad__tools" role="toolbar" aria-label="Formatting">
     <button
       class="jds-iconbtn jds-iconbtn--sm"

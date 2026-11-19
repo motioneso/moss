@@ -9,15 +9,23 @@ const client = moduleClient();
 const root = document.getElementById("root");
 root.innerHTML = padMarkup;
 const text = root.querySelector("textarea");
+const keyboardHelp = root.querySelector("#keyboard-help");
+let tabIndents = true;
+text.title = "Tab indents. Press Ctrl+M to let Tab move between controls.";
+text.setAttribute("aria-description", text.title);
+text.setAttribute("aria-keyshortcuts", "Control+M");
 const preview = document.createElement("div");
+let previewText = null;
 preview.className = "jds-textarea sc-pad__text sc-pad__text--lines";
 preview.tabIndex = 0;
 preview.hidden = true;
 preview.setAttribute("aria-label", "Appended scratchpad text; click to edit");
 text.after(preview);
 function resumeEditing() {
+  const scrollTop = preview.scrollTop;
   model.dismissNotice();
   text.focus();
+  text.scrollTop = scrollTop;
 }
 preview.addEventListener("click", resumeEditing);
 preview.addEventListener("keydown", (event) => {
@@ -32,6 +40,7 @@ const failure = root.querySelector("#failure");
 const notice = root.querySelector("#notice");
 const count = root.querySelector("#count");
 const model = padModel(scratchpadApi(client), (state) => {
+  let scrollToAppend = false;
   // Do not replace the textarea when the user is typing; keep selection and undo intact.
   if (text.value !== state.text) text.value = state.text;
   text.disabled = !state.loaded;
@@ -40,13 +49,22 @@ const model = padModel(scratchpadApi(client), (state) => {
   failure.hidden = !state.error;
   root.querySelector("#error-text").textContent = state.error;
   if (state.notice && !state.conflict && state.status === "Saved") {
-    const mark = document.createElement("span");
-    mark.className = "jds-highlight";
-    mark.textContent = state.text.slice(state.appendedFrom);
-    preview.replaceChildren(document.createTextNode(state.text.slice(0, state.appendedFrom)), mark);
+    const changed = previewText !== state.text;
+    if (changed) {
+      const mark = document.createElement("span");
+      mark.className = "jds-highlight";
+      mark.textContent = state.text.slice(state.appendedFrom);
+      preview.replaceChildren(
+        document.createTextNode(state.text.slice(0, state.appendedFrom)),
+        mark
+      );
+      previewText = state.text;
+    }
     preview.hidden = false;
     text.hidden = true;
+    scrollToAppend = changed;
   } else {
+    previewText = null;
     preview.hidden = true;
     text.hidden = false;
   }
@@ -55,6 +73,8 @@ const model = padModel(scratchpadApi(client), (state) => {
   count.hidden = state.text.length <= 50000;
   count.textContent = `${state.text.length.toLocaleString()} / 64,000 characters`;
   count.classList.toggle("sc-pad__count--near", state.text.length > 60000);
+  // Measure after the notice/count have their final layout, and leave manual scrolling alone.
+  if (scrollToAppend) preview.scrollTop = preview.scrollHeight;
 });
 text.addEventListener("input", () => model.edit(text.value));
 text.addEventListener("blur", () => void model.save());
@@ -69,15 +89,28 @@ function apply(result) {
 }
 text.addEventListener("keydown", (event) => {
   if (event.isComposing) return;
+  if (event.ctrlKey && !event.altKey && !event.metaKey && event.key.toLowerCase() === "m") {
+    event.preventDefault();
+    event.stopPropagation();
+    tabIndents = !tabIndents;
+    text.title = tabIndents
+      ? "Tab indents. Press Ctrl+M to let Tab move between controls."
+      : "Tab moves between controls. Press Ctrl+M to indent with Tab again.";
+    text.setAttribute("aria-description", text.title);
+    keyboardHelp.textContent = text.title;
+    keyboardHelp.hidden = false;
+    return;
+  }
   let result;
-  if (event.key === "Tab")
+  if (event.key === "Tab" && tabIndents) {
+    keyboardHelp.hidden = false;
     result = format(
       text.value,
       text.selectionStart,
       text.selectionEnd,
       event.shiftKey ? "outdent" : "indent"
     );
-  else if (event.key === "Enter")
+  } else if (event.key === "Enter")
     result = continueList(text.value, text.selectionStart, text.selectionEnd);
   else if (
     (event.metaKey || event.ctrlKey) &&

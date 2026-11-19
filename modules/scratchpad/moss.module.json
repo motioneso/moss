@@ -115,7 +115,7 @@
     },
     {
       "id": "scratchpad.save",
-      "description": "The plain Markdown editor saves after 800 ms, on blur and on close, with Saved, Saving and failure status. Changed elsewhere preserves local text and pauses saving until you choose Reload. Bullet, numbered and checkbox lists continue on Enter; Tab/Shift+Tab indent, and Ctrl/Cmd+B or I format the selection. The limit is 64,000 characters; a count appears above 50,000.",
+      "description": "The plain Markdown editor saves after 800 ms, on blur and on close, with Saved, Saving and failure status. Changed elsewhere preserves local text and pauses saving until you choose Reload. Bullet, numbered and checkbox lists continue on Enter; Tab/Shift+Tab indent, Ctrl+M switches Tab to moving between controls, and Ctrl/Cmd+B or I format the selection. The limit is 64,000 characters; a count appears above 50,000.",
       "errors": [
         {
           "code": "scratchpad_conflict",

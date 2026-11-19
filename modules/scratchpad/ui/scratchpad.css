@@ -42,8 +42,9 @@ body {
 .sc-pad__text--lines {
   display: flex;
   flex-direction: column;
-  white-space: pre;
-  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: auto;
 }
 .sc-pad__tools {
   display: flex;
