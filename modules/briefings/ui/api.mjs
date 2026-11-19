@@ -32,6 +32,8 @@ export function briefingsApi(client) {
         "GET",
         `/definitions/${id(definitionId)}/runs/${id(runId)}${jobId ? `?jobId=${id(jobId)}` : ""}`
       ),
+    sourceSignals: () => call("GET", "/source-signals"),
+    setSourceSignals: (body) => call("PATCH", "/source-signals", body),
     start: (definitionId, idempotencyKey) =>
       call("POST", `/definitions/${id(definitionId)}/run`, { idempotencyKey })
   };

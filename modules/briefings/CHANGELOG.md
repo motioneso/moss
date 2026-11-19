@@ -14,3 +14,4 @@
 - Chat can re-run your own briefing after you approve it, and can check whether a run is ready, still going or failed. It never touches anyone else's briefing, and a second re-run while one is going is refused. The briefing text it reads back is treated as outside text.
 - The briefing shows the top news stories from News when the news tool is selected. With no stored page the briefing shows a news gap.
 - The briefing shows today's facts for followed teams and leagues from Sports, in the person's time zone, when the sports tool is selected. If Sports cannot answer, the briefing shows a sports gap.
+- Briefings settings now show Include email signal and Include calendar signal. Each one changes the same switch the Email or Calendar settings screen shows, only for you, and is hidden when that module is not installed. Briefings now asks to call Email as well.
