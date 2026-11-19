@@ -225,9 +225,13 @@ impl Intelligence for SplitIntelligence {
     }
 }
 
-/// Sports keeps its standings choices, and Weather its place and unit, in fixed account
-/// preference keys. Weather's keys are the ones the old Settings routes wrote.
-fn module_preferences(database: Database, next: Arc<dyn Ports>) -> Result<Arc<dyn Ports>> {
+/// One preference adapter owns all fixed module bindings; stacking adapters would hide
+/// inner bindings because each adapter handles every preference operation.
+fn module_preferences(
+    database: Database,
+    notes_base: Option<PathBuf>,
+    next: Arc<dyn Ports>,
+) -> Result<Arc<dyn Ports>> {
     let mut bindings = weather_bindings();
     bindings.extend(wellness_bindings());
     bindings.extend([
@@ -246,20 +250,8 @@ fn module_preferences(database: Database, next: Arc<dyn Ports>) -> Result<Arc<dy
                 },
             ),
         ]);
-    Ok(Arc::new(AccountPreferencesPorts::new(database, bindings, next)?))
-}
-
-/// Account preference and linked-notes ports for People. Keys, resources and roots are
-/// fixed here, never chosen by the guest.
-fn linked_notes(
-    database: Database,
-    base: PathBuf,
-    private_base: PathBuf,
-    next: Arc<dyn Ports>,
-) -> Result<Arc<dyn Ports>> {
-    let preferences = AccountPreferencesPorts::new(
-        database.clone(),
-        BTreeMap::from([
+    if notes_base.is_some() {
+        bindings.extend([
             (
                 ("people".into(), "people-folder".into()),
                 Binding::Folder {
@@ -275,10 +267,23 @@ fn linked_notes(
                     default: true,
                 },
             ),
-        ]),
-        next,
-    )?
-    .with_account_base(base.clone());
+        ]);
+    }
+    let preferences = AccountPreferencesPorts::new(database, bindings, next)?;
+    Ok(Arc::new(match notes_base {
+        Some(base) => preferences.with_account_base(base),
+        None => preferences,
+    }))
+}
+
+/// Linked-notes ports for People. Keys, resources and roots are fixed here,
+/// never chosen by the guest.
+fn linked_notes(
+    database: Database,
+    base: PathBuf,
+    private_base: PathBuf,
+    next: Arc<dyn Ports>,
+) -> Result<Arc<dyn Ports>> {
     let folders = PreferenceFolders::new(
         database.clone(),
         BTreeMap::from([
@@ -303,7 +308,7 @@ fn linked_notes(
     .with_private_export("notes", "private-export", private_base);
     let linked: Arc<dyn Ports> = Arc::new(LinkedNotesPorts::new(
         Arc::new(folders),
-        Arc::new(preferences),
+        next,
     ));
     // Notes folder browse, link and status. The setting keys are fixed here.
     Ok(Arc::new(
@@ -472,7 +477,7 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
             browser_dir: settings.browser_dir.clone(),
         },
         |services| {
-            let services = match notes_base {
+            let services = match notes_base.clone() {
             Some(base) => {
                 let services = memory(
                     preferences_database.clone(),
@@ -497,7 +502,7 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
                 Ok(Arc::new(LinkedNotesPorts::new(Arc::new(folders), services)) as Arc<dyn Ports>)
             }
             }?;
-            let services = module_preferences(preferences_database_sports, services)?;
+            let services = module_preferences(preferences_database_sports, notes_base, services)?;
             // Sports source photos: the host re-encodes pictures and keeps the private copies.
             let services = Arc::new(
                 moss_sports_host::SportsPorts::new(services)
