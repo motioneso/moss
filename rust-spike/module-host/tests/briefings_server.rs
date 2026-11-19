@@ -501,7 +501,7 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
                     ("Book the room for Dana's leaving drinks", "Dana is waiting on the room booking.", "needs_action", json!("https://mail.example.test/thread/dana")),
                 ] {
                     let metadata = json!({"version":1,"category":category,"sourceLabel":"Email","sourceHref":href,"cacheMessageId":uuid::Uuid::new_v4().to_string(),"subjectSignature":title,"computedAt":"2026-11-19T08:00:00.000Z","resurfaceReason":null});
-                    db.execute("INSERT INTO app.tasks(owner_user_id,list_id,title,description,status,source,source_ref,suggestion_metadata) VALUES($1,$2,$3,$4,'suggested','email',$5,$6)", &[&owner, &list, &title, &note, &format!("email:{title}"), &metadata]).await.unwrap();
+                    db.execute("INSERT INTO app.tasks(id,owner_user_id,list_id,title,description,status,source,source_ref,suggestion_metadata) VALUES(gen_random_uuid(),$1,$2,$3,$4,'suggested','email',$5,$6)", &[&owner, &list, &title, &note, &format!("email:{title}"), &metadata]).await.unwrap();
                 }
             });
             let (status, text) = call(Method::POST, &format!("/definitions/{id}/run"), Some(&cookie), Some(json!({})));
