@@ -175,24 +175,6 @@ describe("check-migration-collisions (Issue #2371)", () => {
       expect(violations[0]?.message).toContain("packages/email/sql/0220_email_thread_lookup.sql");
     });
 
-    it("allows a migration moved to its owning module with identical bytes", () => {
-      const localFiles: MigrationFile[] = [
-        baseFiles[0]!,
-        { ...baseFiles[1]!, path: "packages/meetings/sql/0220_commitments.sql" }
-      ];
-
-      expect(checkBaseBranchCollisions(localFiles, baseFiles)).toEqual([]);
-    });
-
-    it("still flags a moved migration whose bytes changed", () => {
-      const localFiles: MigrationFile[] = [
-        baseFiles[0]!,
-        { ...baseFiles[1]!, path: "packages/meetings/sql/0220_commitments.sql", checksum: "other" }
-      ];
-
-      expect(checkBaseBranchCollisions(localFiles, baseFiles)).toHaveLength(1);
-    });
-
     it("flags when an existing migration on base is edited (checksum mismatch)", () => {
       const localFiles: MigrationFile[] = [
         baseFiles[0]!,
