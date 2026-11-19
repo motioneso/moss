@@ -34,8 +34,8 @@ impl ToolHost for BuiltinTools {
                     .as_secs();
                 Ok(format!("Unix time {secs} (UTC)."))
             }),
-            // Only debug builds used by the live kill gate can execute its challenge tool.
-            #[cfg(debug_assertions)]
+            // Explicitly opted-in debug builds used by the live kill gate.
+            #[cfg(all(debug_assertions, feature = "live-proof"))]
             name if name.starts_with("proof_") => Box::pin(async {
                 Ok(format!(
                     "Live runner challenge: {}",

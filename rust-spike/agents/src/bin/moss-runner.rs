@@ -15,7 +15,7 @@
 //! Every connection opens with `{"op":"hello","secret":...}`; a wrong secret closes it.
 //! Then, one line of JSON each way:
 //!
-//!   -> {"op":"chat","account":"local","text":"..."}
+//!   -> {"op":"chat","account":"<signed-in-user-id>","text":"...","tools":[...]}
 //!   <- {"event":"text","delta":"..."} | {"event":"tool_started",...} | {"event":"tool_finished",...}
 //!   <- {"event":"approval","id":1,"card":{"tool":...,"title":...,"input":...}}
 //!   -> {"op":"answer","id":1,"allow":true}

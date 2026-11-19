@@ -11,8 +11,8 @@ pub type Source = Arc<dyn Fn() -> Result<Vec<ToolDef>, String> + Send + Sync>;
 
 pub fn source(modules: crate::modules::Slot, access: AccessContext) -> Source {
     Arc::new(move || {
-        // A debug-only real-data fixture for the live runner kill gate, never a release input.
-        #[cfg(debug_assertions)]
+        // An opt-in debug fixture for the live runner kill gate, never a release input.
+        #[cfg(all(debug_assertions, feature = "live-proof"))]
         if let Some(path) = std::env::var_os("MOSS_CHAT_TEST_TOOLS_FILE") {
             return serde_json::from_slice(&std::fs::read(path).map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string());

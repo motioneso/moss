@@ -8,7 +8,23 @@ use std::sync::{mpsc, Arc, Mutex};
 use serde_json::{json, Value};
 
 type Output = Arc<Mutex<Box<dyn Write + Send>>>;
-type Pending = Arc<Mutex<HashMap<u64, mpsc::Sender<Value>>>>;
+type Pending = Arc<Mutex<Waiters>>;
+
+#[derive(Default)]
+struct Waiters {
+    replies: HashMap<u64, mpsc::Sender<Value>>,
+    closed: bool,
+}
+
+impl Waiters {
+    fn register(&mut self, id: u64, tx: mpsc::Sender<Value>) -> Result<(), ()> {
+        if self.closed {
+            return Err(());
+        }
+        self.replies.insert(id, tx);
+        Ok(())
+    }
+}
 
 fn main() {
     let socket =
@@ -97,7 +113,7 @@ fn read_replies(
             continue;
         };
         if let Some(id) = reply["id"].as_u64() {
-            if let Some(tx) = pending.lock().unwrap().remove(&id) {
+            if let Some(tx) = pending.lock().unwrap().replies.remove(&id) {
                 let _ = tx.send(reply);
             }
         } else if reply["event"] == "list_changed" {
@@ -115,7 +131,9 @@ fn read_replies(
         }
     }
     // Dropping the senders wakes every request on disconnect, including a pending tool call.
-    pending.lock().unwrap().clear();
+    let mut pending = pending.lock().unwrap();
+    pending.closed = true;
+    pending.replies.clear();
 }
 
 struct Host {
@@ -160,7 +178,8 @@ impl Host {
         let id = self.next.fetch_add(1, Ordering::Relaxed);
         value["id"] = json!(id);
         let (tx, rx) = mpsc::channel();
-        self.pending.lock().unwrap().insert(id, tx);
+        self.pending.lock().unwrap().register(id, tx)
+            .unwrap_or_else(|_| die("lost the connection to Moss"));
         if write_line(&mut self.writer, &value).is_err() {
             die("lost the connection to Moss");
         }
