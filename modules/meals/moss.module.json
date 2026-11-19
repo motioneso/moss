@@ -2,9 +2,9 @@
   "schemaVersion": 2,
   "id": "meals",
   "name": "Meals",
-  "description": "Private kitchen and household for meal planning, with meal plans written day by day in the background, under the host's approval rules. Shopping lists, the pantry, cooking a meal, ratings, undo and the food log work through chat, and a background job estimates each logged meal. Recipes beyond plans and the wider pantry maths are not part of this package yet. The Plan, Shopping list and Pantry screens work from any signed-in device; the Household, Log and settings screens come later.",
+  "description": "Private kitchen and household for meal planning, with meal plans written day by day in the background, under the host's approval rules. Shopping lists, the pantry, cooking a meal, ratings, undo and the food log work through chat, and a background job estimates each logged meal. Recipes beyond plans and the wider pantry maths are not part of this package yet. The Plan, Shopping list, Pantry, Household and Log screens work from any signed-in device; the Household, Log and settings screens, and the swap, move, eaters, text and new plan pages, work there too.",
   "publisher": "Moss",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "callLimitMs": 30000,
@@ -233,7 +233,8 @@
     "removable": true
   },
   "screens": {
-    "/meals": "ui/index.html"
+    "/meals": "ui/index.html",
+    "/settings/meals": "ui/settings.html"
   },
   "navigation": [
     {
@@ -242,16 +243,16 @@
       "path": "/meals",
       "icon": "utensils",
       "order": 38,
-      "description": "Plan, Shopping list and Pantry in one place. The Plan shows tonight's dinner and each day's meals as Moss writes them; lock a meal, swap it for a quick option, regenerate a meal or a day, stop and resume writing, or delete the plan. Open a meal to read its recipe, mark it cooked, set servings, rate it and favourite it, with Undo. The Shopping list groups lines by store section; tick lines, add or edit, mark them Bought to move them to the Pantry, build the list from the plan, or clear it. The Pantry lists what you have on hand with find, add, edit, remove and Staples. Household, Log and settings are not on screen yet."
+      "description": "Plan, Shopping list, Pantry, Household and Log in one place. The Plan shows tonight's dinner and each day's meals as Moss writes them; lock a meal, swap it (pick from options or a quick swap), move it to another day or slot, change who eats it, replace it with your own text, start a new plan, regenerate a meal or a day, stop and resume writing, or delete the plan. Open a meal to read its recipe, mark it cooked, set servings, rate it and favourite it, with Undo. The Shopping list groups lines by store section; tick lines, add or edit, mark them Bought to move them to the Pantry, build the list from the plan, or clear it. The Pantry lists what you have on hand with find, add, edit, remove and Staples. Household lists the people you cook for with their never-serve list, likes, targets and meals of the day, with add, edit and remove. Log shows what was eaten day by day with add, edit, re-estimate and delete."
     }
   ],
   "settings": [
     {
       "id": "meals.module-settings",
       "label": "Meals",
-      "path": "/settings?section=modules&module=meals",
+      "path": "/settings/meals",
       "scope": "user",
-      "description": "Kitchen units, the default pantry mode and the shared or solo rule for each meal are read and saved through chat. The Meals screen has no settings page yet."
+      "description": "Kitchen units (US or Metric) and the default pantry mode for new plans are set on this page. The shared or solo rule for each meal is set on the Plan and through chat."
     }
   ],
   "features": [
@@ -380,7 +381,7 @@
     },
     {
       "id": "meals.screen",
-      "description": "The Meals screen has three areas. The Plan shows tonight's dinner and each day's meals, with lock, quick swap, regenerate, stop, resume, re-plan and delete. A meal opens as a recipe with servings, Mark cooked, ratings and favourites. The Shopping list groups lines by store section with tick, add, edit, Bought, build from the plan and clear. The Pantry lists what is on hand with find, add, edit, remove and Staples. Every change is made by the person clicking it, so it needs no chat approval. Removing a person, a plan or a log entry, and clearing a list, ask for confirmation first. The screen shows only the signed-in person's own rows. An empty week and an empty Pantry each have their own start screen.",
+      "description": "The Meals screen has five areas. The Plan shows tonight's dinner and each day's meals, with lock, swap, quick swap, move, eaters, text, regenerate, stop, resume, re-plan, new plan and delete. A meal opens as a recipe with servings, Mark cooked, ratings and favourites. The Shopping list groups lines by store section with tick, add, edit, Bought, build from the plan and clear. The Pantry lists what is on hand with find, add, edit, remove and Staples. Household lists the people with add, edit and remove. Log shows each day's meals with add, edit, re-estimate and delete. Every change is made by the person clicking it, so it needs no chat approval. Removing a person, a plan or a log entry, and clearing a list, ask for confirmation first. The screen shows only the signed-in person's own rows. An empty week and an empty Pantry each have their own start screen.",
       "errors": [
         {
           "code": "invalid_input",

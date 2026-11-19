@@ -74,6 +74,17 @@ export function planScreen(ctx) {
   const dayOf = (el) => el.dataset.day;
 
   const acts = {
+    swap: async (el) => {
+      const outcome = await run("meals.meal.swap", {
+        mealId: el.dataset.meal,
+        action: "request_choices"
+      });
+      if (outcome?.kind === "succeeded") ctx.go({ view: "swap", id: el.dataset.meal });
+    },
+    move: (el) => ctx.go({ view: "move", id: el.dataset.meal }),
+    eaters: (el) => ctx.go({ view: "eaters", id: el.dataset.meal }),
+    text: (el) => ctx.go({ view: "text", id: el.dataset.meal }),
+    "new-plan": () => ctx.go({ view: "new" }),
     "open-recipe": (el) => ctx.go({ view: "recipe", id: el.dataset.meal }),
     lock: (el) => run("meals.meal.edit", { mealId: el.dataset.meal, action: "lock" }),
     unlock: (el) => run("meals.meal.edit", { mealId: el.dataset.meal, action: "unlock" }),
@@ -180,7 +191,7 @@ export function planScreen(ctx) {
       );
     }
     if (s.kind === "empty") {
-      return `${empty("Plan your first week", "", `<div class="mls-row">${btn("Plan with Moss", "ask-moss")}</div>`)}${
+      return `${empty("Plan your first week", "", `<div class="mls-row">${btn("Plan with Moss", "ask-moss")}${btn("Start a plan", "new-plan", { variant: "secondary" })}</div>`)}${
         s.notice ? caption(esc(s.notice), ' role="status"') : ""
       }`;
     }
@@ -225,7 +236,7 @@ export function planScreen(ctx) {
                 disabled: s.busy
               })
             : ""
-        }${btn("Delete plan", "delete-plan", { variant: "quiet", sm: true, disabled: s.busy })}</div>`
+        }${btn("New plan", "new-plan", { variant: "quiet", sm: true })}${btn("Delete plan", "delete-plan", { variant: "quiet", sm: true, disabled: s.busy })}</div>`
       : "";
     const progress = writing
       ? `<div class="mls-progress"><span class="jds-caption" role="status">${current ? `Writing day ${p.days.indexOf(current) + 1}, ` : ""}${done} of ${total} days done</span><div class="jds-progress" role="progressbar" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done}" aria-label="Days written"><div class="jds-progress__fill" style="width:${Math.round((done / Math.max(total, 1)) * 100)}%"></div></div>${btn("Stop", "stop", { variant: "quiet", sm: true, disabled: s.busy })}</div>`

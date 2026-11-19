@@ -38,11 +38,11 @@ export function masthead({ eyebrow, title, lede, aside }) {
   }</div>${aside ? `<div class="jds-masthead__aside">${aside}</div>` : ""}</div></header>`;
 }
 
-export function segmented(label, options, value) {
+export function segmented(label, options, value, act = "tab") {
   return `<div class="jds-segmented" role="group" aria-label="${esc(label)}">${options
     .map(
       ([v, text]) =>
-        `<button type="button" class="jds-segmented__opt" aria-pressed="${v === value}" data-act="tab" data-tab="${v}">${text}</button>`
+        `<button type="button" class="jds-segmented__opt" aria-pressed="${v === value}" data-act="${act}" data-tab="${v}">${text}</button>`
     )
     .join("")}</div>`;
 }
@@ -82,10 +82,10 @@ export function select(id, options, value, opts = {}) {
     .join("")}</select><span class="jds-selectwrap__chev">${chevron}</span></span>`;
 }
 
-export function checkbox(label, checked, act, data = "", disabled = false) {
+export function checkbox(label, checked, act, data = "", disabled = false, text = "") {
   return `<label class="jds-check jds-checkbox"><input type="checkbox" aria-label="${esc(label)}" data-act="${act}"${
     data ? ` ${data}` : ""
-  }${checked ? " checked" : ""}${disabled ? " disabled" : ""} /><span class="jds-check__box" aria-hidden="true">${tick}</span></label>`;
+  }${checked ? " checked" : ""}${disabled ? " disabled" : ""} /><span class="jds-check__box" aria-hidden="true">${tick}</span>${text ? `<span>${text}</span>` : ""}</label>`;
 }
 
 export function dialog({ id, title, body, footer, closeAct = "dialog-close" }) {
@@ -93,3 +93,19 @@ export function dialog({ id, title, body, footer, closeAct = "dialog-close" }) {
     footer ? `<div class="jds-dialog__foot">${footer}</div>` : ""
   }</div></div>`;
 }
+
+export const avatar = (name) => {
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0].toUpperCase())
+    .join("");
+  return `<span class="jds-avatar" aria-hidden="true">${esc(initials || "?")}</span>`;
+};
+
+export const eyebrow = (text) => `<span class="jds-eyebrow jds-eyebrow--strong">${text}</span>`;
+
+export const hint = (text) => `<p class="jds-hint jds-hint--error" role="alert">${esc(text)}</p>`;
+
+export const backLink = '<a class="mls-back" href="#" data-act="back">Back to the plan</a>';
