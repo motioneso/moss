@@ -40,7 +40,7 @@ work in a part, never assumed.
 | Callers cannot supply actor, role or database connection                                  | yes    | `runtime.rs` `reject_context`                                                                                                         |
 | Grant bound to actor, module, tool, exact parameters, 300 s, single use, optional version | yes    | `rust-spike/module-host/src/services.rs:245` `approve_tool`, `approve_tool_at_version`, `save_tool_approval` `:270` (write at `:284`) |
 | Per-person action policy read and write                                                   | yes    | `services.rs` `action-policy` read, `set_action_policy`                                                                               |
-| Public call into a module with the caller's access                                        | yes    | `rust-spike/module-host/src/store.rs:608` `Installer::call`, `:622` `call_unfenced`                                                   |
+| Public call into a module with the caller's access                                        | yes    | `rust-spike/module-host/src/store.rs:608` `Installer::call`, `:621` `call_unfenced`                                                   |
 | Module switched off for this account is refused                                           | yes    | `store.rs` about `:640-645`                                                                                                           |
 | Installed + enabled filter per account                                                    | yes    | `rust-spike/module-host/src/frame.rs:116` `navigation(access)`                                                                        |
 | Credential-exchange replies redacted before a guest sees them                             | yes    | `rust-spike/module-host/src/credentials.rs:435` `sanitize_with`, called at `:174` and `:255` only                                     |
@@ -96,7 +96,7 @@ the fallback only.
 - Add optional `inputSchema` to manifest `Tool` (`input` is already used by the Finance
   credential-exchange declaration, `modules/finance/moss.module.json:1480`): a JSON Schema in a restricted subset (object, string,
   number, integer, boolean, array, enum, required, maxLength, maxItems, minimum, maximum,
-  description).
+  description, examples).
 - The host rejects schemas outside the subset at install.
 - The server validates arguments against `inputSchema` before any guest code runs.
 - A tool with no `inputSchema` is not offered to the model.
@@ -121,7 +121,9 @@ what a tool accepts.
 - The server normalizes the reply into `ApprovalCardRecord` (§4.3) and checks sizes.
 - No card, a malformed card or a failed call means **deny**.
 - Code builds every title, target, label, button and outcome line. The server sets the title from
-  fixed text and the target from the module's display name and the tool's manifest description. Values the model wrote (a recipient, a
+  fixed text and the target from the module's display name and the tool's manifest description.
+  Whatever the card builder returns as its own target (Commitments returns the item title) becomes
+  the first field, labelled "Item". Values the model wrote (a recipient, a
   subject, a note body) appear only as labelled field values, taken from the validated parameters
   or the stored record. They never become a title, label or button.
 - Agent permission cards take their title from a fixed server table, never from the agent's own
@@ -130,8 +132,11 @@ what a tool accepts.
 
 ### 3.5 When a card is required
 
-From Ben's rulings (§10). Installing a module grants normal use. Only deleting, sending outside the
-account, or a version-pinned action asks.
+From Ben's rulings (§10). Installing a module grants normal use. Deleting, sending outside the
+account and version-pinned actions ask. A plain write asks only if the person has switched it to
+ask, which is an explicit action policy of `true`. That maps to stored tier `AlwaysConfirm`; an
+absent or `false` policy maps to `TrustedAuto`. Chat deliberately differs from the `tools.run`
+port, which treats an absent policy as `true` (`services.rs:372-374`).
 
 | Tool                                | Card                                                              | Runner facts                                                                                                                             |
 | ----------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
@@ -168,13 +173,15 @@ sending tool follows this.
 6. The runner resumes and sends the `tool_call`. The server matches it to the approved record by
    turn, module, tool and exact parameters. That record match is the real gate, and §6 tests it.
    The server then calls `run_approved_chat_tool` with the record's shown version. The host mints
-   the grant at that version, checks it, consumes it and runs the tool under one `serial_lock`, as
-   `tools.run` does (`services.rs:378-390`). It forwards `approvalVersion` in the payload, which
+   the grant at that version, then checks and consumes it under one `serial_lock` and releases the
+   lock before invoking the tool, as `tools.run` does (`services.rs:378-395`). Holding it across the
+   invoke would risk a re-entrant deadlock. It forwards `approvalVersion` in the payload, which
    pinned handlers read (`modules/commitments/src/tools.rs:129`, `modules/notes/src/write_tools.rs:16`).
    The version comes from the card the person saw, so this matches `services.rs:255`, where the
    trusted approval surface supplies it. An approved record is single use.
 7. A reject answers `allow:false`. A pending record expires after 10 minutes, moves to
-   `timed_out`, and the server answers the runner `allow:false` at that moment.
+   `timed_out`, and the server answers the runner `allow:false` at that moment. The server's answer
+   is the normal path. The runner's own timer (§4.2) is a backstop set one minute later.
 8. When the turn ends, any approved record not yet used is voided. No grant outlives its turn.
 9. The server's 300 s socket read timeout (`runner_data.rs:39`) is lifted while an approval is
    pending. A hard turn limit of 15 minutes still ends any turn.
@@ -183,6 +190,8 @@ Turn shape:
 
 - `POST /api/chat/messages` starts the turn and returns at once.
 - The drawer polls `GET /api/chat/thread` about every 1.5 s while a turn runs.
+- A second message while a turn runs gets `409`, and the drawer keeps its send button disabled
+  until `running` is false. The runner already serialises turns per account (`runner.rs:296`).
 - The thread carries pending and decided approval records.
 
 Rejected: server-sent events. Steelman — instant updates, no polling. It loses for now because the
@@ -232,7 +241,12 @@ pub struct ChatToolDef {
     pub module: String, pub tool: String, pub wire_name: String,
     pub description: String, pub input_schema: serde_json::Value,
     pub risk: String, pub rule: ChatToolRule,
-    pub facts: ToolFacts,                  // derived from `rule` by `ChatToolRule::facts`
+}
+
+pub struct ApprovalCardRecord {
+    pub title: String, pub target: String,  // both set by the host from fixed text and the manifest
+    pub fields: Vec<CardField>,             // {label, value}, each size-capped
+    pub version: Option<String>, pub content: Option<String>, pub danger: bool,
 }
 
 impl Installer {
@@ -247,13 +261,17 @@ impl Installer {
 }
 ```
 
-- `run_chat_tool` validates `params` against `inputSchema`, applies `chat_tool_rule`, checks and consumes
-  the grant when a card is required, then invokes the `tool` handler through `Installer::call`
-  (`store.rs:608`). `call` takes the module fence and disk lock, then runs `call_unfenced`, which
+- Crate placement: module-host does not depend on the agents crate, so `ChatToolDef` carries the
+  rule, not `ToolFacts`. The server, which depends on both, maps `ChatToolRule` to `ToolFacts`
+  (`rust-spike/agents/src/approvals.rs:35`) in one function beside the bridge.
+- `run_chat_tool` validates `params` against `inputSchema`, applies `chat_tool_rule`, and refuses
+  any tool whose rule needs a card. `run_approved_chat_tool` does the same validation, then mints,
+  checks and consumes the grant (§3.6 step 6). Both invoke the `tool` handler through
+  `Installer::call` (`store.rs:608`). `call` takes the module fence and disk lock, then runs `call_unfenced`, which
   refuses a module switched off for the account (`store.rs:640-645`).
-- `run_chat_tool` refuses any tool whose rule needs a card. `Installer::call` with kind `tool`
-  would bypass grants, so the server reaches tools only through these two functions. A shell test
-  fails if server code calls `Installer::call` with kind `tool`.
+- `Installer::call` with kind `tool` would bypass grants. Part 1 makes that kind reachable only
+  inside module-host (`pub(crate)` path), so the server can reach tools only through these two
+  functions.
 - Before anything leaves the host, `run_chat_tool`, `chat_tool_card` and `chat_tools` pass their
   output through `credentials::sanitize_with` with the account's stored secrets for that module.
   Today that redaction covers only credential-exchange replies (`credentials.rs:174`, `:255`).
@@ -277,30 +295,29 @@ Runner → server:
 
 - Existing `text`, `tool_started`, `tool_finished`, `done` and `error` events stay.
 - `ToolHost` becomes account-aware: `fn tools(&self, account: &str) -> Vec<ToolDef>`.
-- `ToolFacts` gain `Deserialize` so facts travel in the chat op.
+- `ToolFacts` already derive `Deserialize` (`approvals.rs:34`), so facts can travel in the chat op.
 - A `tool_call` with no `tool_result` inside the turn's timeout returns an error text to the agent.
 - Runner-side asks end on their own. Each pending ask gets a 10-minute timer that answers Deny,
   and a dropped connection answers Deny for every ask it holds. Today the ask closure awaits
-  `rx.await` with no timer, and the pending map dies with the connection unanswered.
+  `rx.await` with no timer (`moss-runner.rs:200-206`). The pending map is shared into the chat task,
+  so after a disconnect the ask hangs, and because `chat()` holds the account lock
+  (`runner.rs:296`), every later turn for that account blocks too.
 - The server holds one socket for the whole turn, in the background task that runs it, so the
   `answer` reaches the connection that asked (`runner_data.rs:39-45` opens one per message).
 - The runner answers `tools/list` from the account's current list. When the chat op's list
   digest differs from the last one, it pushes a `ListChanged` line on the gateway socket.
 - None of this exists today. `moss-tool-gateway.rs` `initialize` answers `{"tools": {}}` and its
   stdin loop is request and reply only. Part 2a adds `tools: {listChanged: true}`, the push line,
-  and one shared stdout writer, so the gateway writes `notifications/tools/list_changed` to the
-  agent between replies.
+  a socket reader thread in the gateway, and one shared stdout writer. Today `Host::ask` reads the
+  next socket line as the reply to its own request (`moss-tool-gateway.rs:100-111`), so a push
+  would be taken as an answer. The reader thread routes lines by request id to the waiting call
+  and sends id-less pushes to the writer, which emits `notifications/tools/list_changed`.
 - The runner's approval id stays its own `u64` (`Op::Answer`). The server maps it to the record's
   `Uuid` and never shows it to the browser.
 
 ### 4.3 Server (`rust-spike/shell/app`)
 
 ```rust
-pub struct ApprovalCardRecord {
-    pub title: String, pub target: String,  // both set by the server, never by the guest
-    pub fields: Vec<CardField>,          // {label, value}, each size-capped
-    pub version: Option<String>, pub content: Option<String>, pub danger: bool,
-}
 pub struct PendingApproval {
     pub id: Uuid, pub actor: Uuid, pub turn: Uuid, pub source: ApprovalSource,
     pub module: Option<String>, pub tool: String, pub parameters: serde_json::Value,
@@ -331,16 +348,18 @@ Routes:
 - Outcome lines ("Approved", "You declined", "Timed out") render from record state.
 - A module never injects turns into chat.
 - The model has two jobs: choose a tool and its arguments, and write the reply text.
-- The repo's four guards for model-written values are schema field descriptions, a prompt
-  contract with a worked example, a boundary validator, and a per-item before/after diff. This plan
-  keeps the first and third: `inputSchema` descriptions and validation in the host.
-- It swaps the other two on purpose. A card-required call shows the person every value before it
-  runs, which is the per-item acceptance for that one call. Plain writes run without review by
-  Ben's install ruling (§10), so they get no diff. No prompt contract is added because the
-  guidance budget below adds no prompt text. If plain writes start writing wrong values, add the
-  worked example to the tool description first.
-- Guidance budget: no new prompt text. Tool descriptions come from manifests and stay under 60 words
-  each.
+- The repo's four guards for model-written values, and how each is met:
+  - Schema field descriptions: every `inputSchema` property carries a `description`.
+  - Prompt contract with a worked example: every write or destructive tool's schema carries one
+    worked example (JSON Schema `examples`, in the allowed subset). Each module part writes them
+    up front, not after a failure.
+  - Boundary validator: `run_chat_tool` and `run_approved_chat_tool` validate before any guest code.
+  - Per-item before/after acceptance: card-required calls show every value before they run. Plain
+    writes run without asking, by Ben's install ruling (§10), so their acceptance is after the fact.
+    Each write tool returns `changed: [{label, before, after}]`, and the drawer shows it as a fixed
+    "Done" row drawn from that result. This is the one deliberate deviation, recorded in §10.
+- Guidance budget: no new system prompt text. Tool descriptions come from manifests and stay
+  under 60 words each, examples included.
 
 ## 6. Security properties
 
@@ -351,7 +370,7 @@ Each needs a test observed failing with the protection removed, per the repo rul
 | Calls run as the signed-in user, under RLS | User A's Scratchpad tool call cannot read user B's notes                                                                                         | pass a fixed access instead of the turn's          |
 | No admin bypass                            | An admin cannot read another user's data through a tool, or approve another user's card                                                          | drop the actor check on `/api/chat/approvals/{id}` |
 | Switched-off module refused                | Disable Scratchpad for A; its tools vanish from A's list and a forged call is refused                                                            | skip `call_unfenced`'s enabled check               |
-| Card-required call needs a grant           | A destructive call claimed as auto-run by a forged runner reply is refused                                                                       | skip the grant check in `run_chat_tool`            |
+| Card-required call needs a grant           | A destructive call claimed as auto-run by a forged runner reply is refused                                                                       | let `run_chat_tool` run card-required tools        |
 | Grant binds exact parameters               | Approve a card, then call with one changed field; refused                                                                                        | digest only the tool name                          |
 | No grant outlives its turn                 | Approve, end the turn without the call, then send the same call in a new turn; a card is asked again                                             | skip voiding approved records at turn end          |
 | Runner cannot name unoffered tools         | A forged `tool_call` for a tool not offered to the account, or a `call_id` from another turn, is refused                                         | skip the offered-list check                        |
@@ -366,18 +385,18 @@ Each needs a test observed failing with the protection removed, per the repo rul
 
 Each part is one builder session. Proof is live on the Rust server unless a part says otherwise.
 
-| Part | Scope                                                                                                                                                                           | Depends on | Proof                                                                                                                                                                              |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | Manifest `inputSchema` and `card`, install checks, `chat_tool_rule`, `chat_tools`, `run_chat_tool`, `run_approved_chat_tool`, `chat_tool_card`, chat-path redaction; host tests | —          | Host tests pass; each §6 host row seen failing with its protection removed                                                                                                         |
-| 2a   | Per-account runner, tool list in the chat op, account-aware `ToolHost`, list-changed notice; kill-gate measurements with built-in tools                                         | 1          | Live chat on desktop: change the offered list mid-conversation, the agent uses the new tool and still remembers the earlier turn. §8 recorded                                      |
-| 2b   | `tool_call` / `tool_result`, server bridge, wire-name mapping, offered-list and `call_id` checks; Scratchpad declares `inputSchema` for its read tool                           | 2a         | Playwright e2e against the live Rust server, desktop: ask Moss to read the scratchpad, see a real tool call and the real content                                                   |
-| 3a   | Approval records and states, `/api/chat/approvals/{id}`, async turn with one held socket, drawer polling, runner and server expiry, turn-end voiding, hard turn limit           | 2b         | Playwright e2e on the live server: a chat turn runs with polling on desktop and phone width; an agent permission ask is answered through the approvals route as the signed-in user |
-| 3b   | Drawer card ported from the TypeScript card, agent permission card, class-parity test; Commitments schemas and card adapter (it already prepares its card from a saved record)  | 3a         | Playwright e2e, desktop and phone width: approve a real `commitments.accept` card and reject another; outcome lines shown; screenshots on the PR; closes JS-356's chat proof       |
-| 4a   | Schemas and card adapters: Scratchpad, News                                                                                                                                     | 3b         | Scratchpad append runs without a card; `news.refreshNews` asks with a pinned card                                                                                                  |
-| 4b   | Sports, Wellness, Weather, Briefings                                                                                                                                            | 3b         | One read and one version-pinned approval (e.g. `sports.confirmSource` or `briefings.rerun`) live                                                                                   |
-| 4c   | Tasks, Notes, Memory, Goals                                                                                                                                                     | 3b         | `notes.delete` shows the danger card and runs only after approve                                                                                                                   |
-| 4d   | Meals, Calendar, Connectors, Web research; check every sending tool declares `destructive`                                                                                      | 3b         | One tool per module live; `email.sendReply` card shows recipient and subject as field values                                                                                       |
-| 4e   | Finance (57 tools). The builder may split it by tool area if it does not fit one session                                                                                        | 3b         | One read, one write and one destructive tool live                                                                                                                                  |
+| Part | Scope                                                                                                                                                                                                       | Depends on | Proof                                                                                                                                                                              |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | Manifest `inputSchema` and `card`, install checks, `chat_tool_rule`, `chat_tools`, `run_chat_tool`, `run_approved_chat_tool`, `chat_tool_card`, chat-path redaction; host tests                             | —          | Host tests pass; each §6 host row seen failing with its protection removed                                                                                                         |
+| 2a   | Per-account runner, tool list in the chat op, account-aware `ToolHost`, gateway reader thread and list-changed push; kill-gate measurements                                                                 | 1          | Playwright e2e on the live server, desktop: change the offered list mid-conversation; the agent uses a new runner-local built-in tool and still remembers the earlier turn         |
+| 2b   | `tool_call` / `tool_result`, server bridge, wire-name mapping, offered-list and `call_id` checks; Scratchpad declares `inputSchema` for its read tool                                                       | 2a         | Playwright e2e against the live Rust server, desktop: ask Moss to read the scratchpad, see a real tool call and the real content                                                   |
+| 3a   | Approval records and states, `/api/chat/approvals/{id}`, async turn with one held socket, drawer polling, runner and server expiry, turn-end voiding, hard turn limit                                       | 2b         | Playwright e2e on the live server: a chat turn runs with polling on desktop and phone width; an agent permission ask is answered through the approvals route as the signed-in user |
+| 3b   | Drawer card ported from the TypeScript card, agent permission card, "Done" row for plain writes, class-parity test; Commitments schemas and card adapter (it already prepares its card from a saved record) | 3a         | Playwright e2e, desktop and phone width: approve a real `commitments.accept` card and reject another; outcome lines shown; screenshots on the PR; closes JS-356's chat proof       |
+| 4a   | Schemas and card adapters: Scratchpad, News (`news.refreshNews` needs an `inputSchema` with no properties, because its card is built only for empty input)                                                  | 3b         | Playwright e2e, desktop and phone: Scratchpad append runs without a card and shows its Done row; `news.refreshNews` asks with a pinned card                                        |
+| 4b   | Sports, Wellness, Weather, Briefings                                                                                                                                                                        | 3b         | Playwright e2e, desktop and phone: one read and one version-pinned approval (e.g. `sports.confirmSource` or `briefings.rerun`)                                                     |
+| 4c   | Tasks, Notes, Memory, Goals                                                                                                                                                                                 | 3b         | Playwright e2e, desktop and phone: `notes.delete` shows the danger card and runs only after approve                                                                                |
+| 4d   | Meals, Calendar, Connectors, Web research; check every sending tool declares `destructive`                                                                                                                  | 3b         | Playwright e2e, desktop and phone: one tool per module; `email.sendReply` card shows recipient and subject as field values                                                         |
+| 4e   | Finance (57 tools). The builder may split it by tool area if it does not fit one session                                                                                                                    | 3b         | Playwright e2e, desktop and phone: one read, one write and one destructive tool                                                                                                    |
 
 - Parts 4a-4e can run in parallel once part 3b merges.
 - Email, People, Meetings and Backtrack declare no chat tools today, so no part covers them.
@@ -402,7 +421,8 @@ Module parts also run each touched module's own package gate, unpiped, expected 
 
 ## 8. Kill gates
 
-Evaluated after part 2a, before part 2b starts. Owner: the coordinator, escalating to Ben. The
+Rows 1, 2 and 4 are evaluated after part 2a, before 2b starts. Row 3 is evaluated after 2b,
+before 3a starts. Owner: the coordinator, escalating to Ben. The
 report names the Claude and Codex CLI versions measured, because whether each honours
 `tools/list_changed` cannot be read from the tree.
 
@@ -423,34 +443,37 @@ Declared in the same PR as the behaviour.
   actions; you approve or reject the card in the chat drawer." Errors: approval timed out,
   approval no longer available. Remediation: ask Moss again.
 - Part 2b, core chat feature: "Moss can use the chat tools of modules you have installed and switched
-  on." Requirement: module installed and enabled for the account.
+  on." Until 3b ships, only tools that need no approval appear. Requirement: module installed and enabled for the account.
 - Parts 4a-4e: each module's manifest `features` gains or updates a chat entry naming what Moss can
   do there and which actions ask first.
 
 ## 10. Rulings ledger
 
-| Ruling or fact                                                                              | Source                                                             |
-| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| Installing a module grants normal use; only destructive actions confirm at use time         | Ben, 2026-08-19 (Food)                                             |
-| Ask only for deleting something or sending outside the account                              | Ben, 2026-10-29                                                    |
-| Classifier tools on by default; no per-tool manual review                                   | Ben, issue 2984                                                    |
-| YOLO on means marked chats still run writes; destructive still asks                         | Ben                                                                |
-| Phone chat stays a drawer                                                                   | Ben                                                                |
-| Cards are drawn from the stored record, never model text                                    | `2026-11-13-rust-phase5-news-sports-weather-plan.md` §3.5          |
-| No module manifest declares an input schema today                                           | grep of `modules/*/moss.module.json`, 2026-11-18                   |
-| No manifest uses `risk: outbound`                                                           | same grep                                                          |
-| `_` never appears in a tool name, so `.`→`_` reverses                                       | `rust-spike/module-host/src/tool_names.rs`                         |
-| Generic tool replies are not redacted today; only credential-exchange replies are           | `credentials.rs:174`, `:255`, `:435` (review round 1)              |
-| `runner.rs:348` copies the agent's own title into the card                                  | review round 1                                                     |
-| A restarted agent loses its conversation; context lives in the `session/new` session        | `rust-spike/agents/src/acp.rs:57` (review round 1)                 |
-| Some TypeScript card classes have no CSS selector (`action-request-outcome`, `-notice`)     | grep of `apps/web/src/styles` (review round 1)                     |
-| The tool gateway advertises no `listChanged` and cannot push today                          | `moss-tool-gateway.rs` `initialize` (review round 2)               |
-| Pinned handlers read `approvalVersion` from the payload                                     | `modules/commitments/src/tools.rs:129` and others (review round 2) |
-| Runner asks have no timer and die unanswered with the connection                            | `moss-runner.rs` ask closure (review round 2)                      |
-| `Installer::call` accepts kind `tool` with no grant check                                   | `store.rs:608` (review round 2)                                    |
-| Email, People, Meetings, Backtrack declare no chat tools                                    | grep of their manifests, 2026-11-18                                |
-| `tools.run` port defaults `requiresApproval` to true, which blocks reads if reused for chat | `services.rs` about `:357-399`                                     |
-| Commitments package already prepares its review card from a saved record                    | PR 4378 body                                                       |
+| Ruling or fact                                                                                             | Source                                                             |
+| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Installing a module grants normal use; only destructive actions confirm at use time                        | Ben, 2026-08-19 (Food)                                             |
+| Ask only for deleting something or sending outside the account                                             | Ben, 2026-10-29                                                    |
+| Classifier tools on by default; no per-tool manual review                                                  | Ben, issue 2984                                                    |
+| YOLO on means marked chats still run writes; destructive still asks                                        | Ben                                                                |
+| Phone chat stays a drawer                                                                                  | Ben                                                                |
+| Cards are drawn from the stored record, never model text                                                   | `2026-11-13-rust-phase5-news-sports-weather-plan.md` §3.5          |
+| No module manifest declares an input schema today                                                          | grep of `modules/*/moss.module.json`, 2026-11-18                   |
+| No manifest uses `risk: outbound`                                                                          | same grep                                                          |
+| `_` never appears in a tool name, so `.`→`_` reverses                                                      | `rust-spike/module-host/src/tool_names.rs`                         |
+| Generic tool replies are not redacted today; only credential-exchange replies are                          | `credentials.rs:174`, `:255`, `:435` (review round 1)              |
+| `runner.rs:348` copies the agent's own title into the card                                                 | review round 1                                                     |
+| A restarted agent loses its conversation; context lives in the `session/new` session                       | `rust-spike/agents/src/acp.rs:57` (review round 1)                 |
+| Some TypeScript card classes have no CSS selector (`action-request-outcome`, `-notice`)                    | grep of `apps/web/src/styles` (review round 1)                     |
+| The tool gateway advertises no `listChanged` and cannot push today                                         | `moss-tool-gateway.rs` `initialize` (review round 2)               |
+| Pinned handlers read `approvalVersion` from the payload                                                    | `modules/commitments/src/tools.rs:129` and others (review round 2) |
+| Runner asks have no timer and die unanswered with the connection                                           | `moss-runner.rs` ask closure (review round 2)                      |
+| `Installer::call` accepts kind `tool` with no grant check                                                  | `store.rs:608` (review round 2)                                    |
+| Plain writes are accepted after the fact (Done row), not before: deviation from the plan-build four guards | Ben's install ruling 2026-08-19; review round 3                    |
+| `Host::ask` reads the next socket line as its own reply                                                    | `moss-tool-gateway.rs:100-111` (review round 3)                    |
+| `tools.run` releases `serial_lock` before invoking the tool                                                | `services.rs:393-395` (review round 3)                             |
+| Email, People, Meetings, Backtrack declare no chat tools                                                   | grep of their manifests, 2026-11-18                                |
+| `tools.run` port defaults `requiresApproval` to true, which blocks reads if reused for chat                | `services.rs` about `:357-399`                                     |
+| Commitments package already prepares its review card from a saved record                                   | PR 4378 body                                                       |
 
 ## 11. Not covered
 
