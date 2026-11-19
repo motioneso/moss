@@ -44,6 +44,9 @@ pub struct Fake {
     pub ai_reply: RefCell<Option<std::result::Result<String, String>>>,
     /// Every router call as (resource, parameters).
     pub ai_calls: RefCell<Vec<(String, Value)>>,
+    /// Active ratings as (person, target kind, rating kind, target ref). The feedback port
+    /// answers from the caller's own rows only.
+    pub ratings: RefCell<Vec<(String, String, String, String)>>,
     ids: Cell<u32>,
 }
 
@@ -66,8 +69,17 @@ impl Fake {
             api_calls: RefCell::new(vec![]),
             ai_reply: RefCell::new(None),
             ai_calls: RefCell::new(vec![]),
+            ratings: RefCell::new(vec![]),
             ids: Cell::new(0),
         }
+    }
+    /// Records an active rating for a person, as the feedback owner would store it.
+    pub fn rate(&self, person: &str, target_kind: &str, kind: &str, target_ref: &str) {
+        self.ratings.borrow_mut().push((person.into(), target_kind.into(), kind.into(), target_ref.into()));
+    }
+    /// Takes the rating back, as Undo does.
+    pub fn unrate(&self, person: &str, target_kind: &str, kind: &str, target_ref: &str) {
+        self.ratings.borrow_mut().retain(|r| r != &(person.into(), target_kind.into(), kind.into(), target_ref.into()));
     }
     pub fn as_actor(&self, actor: &'static str) {
         self.actor.set(actor);
@@ -324,6 +336,16 @@ impl Host for Fake {
                     None if resource == "calendar" && name == "getSourceSwitches" => Ok(json!({"briefings": true, "planning": true})),
                     _ => Err(moss_module_sdk::Error::new("Public call unavailable")),
                 }
+            }
+            ("feedback", "active") => {
+                let actor = self.actor.get();
+                let (surface, kind) = (parameters["surface"].as_str().unwrap_or(""), parameters["kind"].as_str().unwrap_or(""));
+                assert_eq!(surface, "briefing");
+                let refs: Vec<String> = self.ratings.borrow().iter()
+                    .filter(|(p, t, k, _)| p == actor && t == resource && k == kind)
+                    .map(|(_, _, _, r)| r.clone())
+                    .collect();
+                Ok(json!({"refs": refs}))
             }
             ("ai", "generate") => {
                 self.ai_calls.borrow_mut().push((resource.into(), parameters));

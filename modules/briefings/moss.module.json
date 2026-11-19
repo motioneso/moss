@@ -47,6 +47,11 @@
       "resources": ["summarization"]
     },
     {
+      "port": "feedback",
+      "operations": ["active"],
+      "resources": ["briefing_run", "briefing_item"]
+    },
+    {
       "port": "tools",
       "operations": ["offer", "run"],
       "resources": ["briefings.rerun", "briefings.getRunStatus"]
@@ -208,7 +213,7 @@
     },
     {
       "id": "briefings.history",
-      "description": "List past briefing runs newest first, or read one run by id. Earlier reports stay dated and read-only. A run written without AI returns empty summary text, so its source list is never shown. Only the owner sees runs, even for a definition shared with someone else.",
+      "description": "List past briefing runs newest first, or read one run by id. Earlier reports stay dated and read-only. A run written without AI returns empty summary text, so its source list is never shown. Only the owner sees runs, even for a definition shared with someone else. A run, an item or a catch-up entry the person dismissed stays hidden, and a catch-up entry they turned into a task is hidden too; undoing the rating brings it back.",
       "errors": [
         {
           "code": "briefing_run_not_available",

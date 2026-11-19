@@ -11,6 +11,7 @@ use moss_module_sdk::{
 use serde::Deserialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
+use std::collections::HashSet;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -130,4 +131,17 @@ pub fn verify<H: Host + ?Sized>(host: &H, request: &Verify) -> Value {
         Ok(record) => json!({"ok":record}),
         Err(_) => json!({"error":{"statusCode":503,"error":"Briefings service is unavailable"}}),
     }
+}
+
+/// The refs the caller has an active rating of this kind on, for the briefing surface. The
+/// host fills in the caller. A refused or failed read hides nothing, so a rating that cannot
+/// be read never takes the reader down.
+pub(crate) fn active_refs<H: Host + ?Sized>(host: &H, target_kind: &str, rating: &str) -> HashSet<String> {
+    host.call("feedback", "active", target_kind, json!({"surface":"briefing","kind":rating}))
+        .ok()
+        .and_then(|reply| reply["refs"].as_array().cloned())
+        .into_iter()
+        .flatten()
+        .filter_map(|r| r.as_str().map(str::to_owned))
+        .collect()
 }
