@@ -266,3 +266,13 @@ pub async fn start_email_refresh(key: &str) -> Result<String, String> {
 pub async fn email_refresh_state(id: &str) -> Result<RefreshState, String> {
     get(&format!("/api/connectors/email-refresh/{id}")).await
 }
+
+/// The package owns shortcut settings; the shell only listens for the chosen combination.
+pub async fn scratchpad_shortcut() -> Option<String> {
+    get::<serde_json::Value>("/api/m/scratchpad/note")
+        .await
+        .ok()?
+        .get("shortcut")?
+        .as_str()
+        .map(str::to_owned)
+}

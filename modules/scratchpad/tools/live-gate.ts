@@ -7,6 +7,13 @@ if (process.env.JARVIS_GATE_RUN !== "1") throw new Error("Use verify-gate");
 for (const name of ["CARGO_HOME", "RUSTUP_HOME", "CARGO_TARGET_DIR", "JS286_SCRATCHPAD_PACKAGE"]) {
   if (!process.env[name]) throw new Error(`Set ${name}`);
 }
+if (process.env.MOSS_SCRATCHPAD_SCREEN_WEB) {
+  const build = spawnSync("bash", ["modules/scratchpad/tools/screen-build.sh"], {
+    stdio: "inherit",
+    env: process.env
+  });
+  if (build.status !== 0) process.exit(build.status ?? 1);
+}
 const urls = getMossDatabaseUrls();
 const target = process.env.CARGO_TARGET_DIR!;
 const sharedDir = join(target, "scratchpad-shared");

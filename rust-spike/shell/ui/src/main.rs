@@ -5,6 +5,7 @@ mod focus;
 mod frame;
 mod icons;
 mod modules_page;
+mod scratchpad;
 mod today;
 mod weather;
 
