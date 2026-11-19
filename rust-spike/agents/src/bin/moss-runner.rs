@@ -15,10 +15,12 @@
 //! Every connection opens with `{"op":"hello","secret":...}`; a wrong secret closes it.
 //! Then, one line of JSON each way:
 //!
-//!   -> {"op":"chat","account":"<signed-in-user-id>","text":"...","tools":[...]}
+//!   -> {"op":"chat","account":"<signed-in-user-id>","text":"...","tools":[...],"turn_id":"<uuid>"}
 //!   <- {"event":"text","delta":"..."} | {"event":"tool_started",...} | {"event":"tool_finished",...}
 //!   <- {"event":"approval","id":1,"card":{"tool":...,"title":...,"input":...}}
 //!   -> {"op":"answer","id":1,"allow":true}
+//!   <- {"event":"tool_call","call_id":"<turn>:1","name":"scratchpad_read","arguments":{}}
+//!   -> {"op":"tool_result","call_id":"<turn>:1","ok":true,"text":"..."}
 //!   <- {"event":"done","text":"...","tools_used":[...]} | {"event":"error","message":"..."}
 
 use std::collections::HashMap;
@@ -30,6 +32,7 @@ use moss_agents::builtins::BuiltinTools;
 use moss_agents::driver::*;
 use moss_agents::gateway::ToolDef;
 use moss_agents::runner::*;
+use moss_agents::tool_bridge::ToolBridge;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -65,6 +68,15 @@ enum Op {
         account: String,
         text: String,
         tools: Vec<ToolDef>,
+        turn_id: String,
+        #[serde(default)]
+        fresh_conversation: bool,
+    },
+    #[serde(rename = "tool_result")]
+    ToolResult {
+        call_id: String,
+        ok: bool,
+        text: String,
     },
     Answer {
         id: u64,
@@ -176,7 +188,8 @@ async fn serve(
 
     let pending: Arc<Mutex<HashMap<u64, oneshot::Sender<Answer>>>> = Arc::default();
     let next_id = Arc::new(AtomicU64::new(1));
-    while let Some(line) = lines.next_line().await? {
+    let active: Arc<Mutex<Option<Arc<ToolBridge>>>> = Arc::default();
+    while let Ok(Some(line)) = lines.next_line().await {
         match serde_json::from_str::<Op>(&line) {
             Ok(Op::Chat { ref account, .. }) if !accounts.contains_key(account) => {
                 let _ = out_tx.send(json!({"event": "error", "message": "This runner has no agent for that account."}));
@@ -185,7 +198,23 @@ async fn serve(
                 account,
                 text,
                 tools,
+                turn_id,
+                fresh_conversation,
             }) => {
+                if active.lock().unwrap().is_some() {
+                    let _ = out_tx.send(
+                        json!({"event":"error", "message":"A turn is already open on this socket"}),
+                    );
+                    continue;
+                }
+                let sender = out_tx.clone();
+                let bridge = Arc::new(ToolBridge::new(
+                    account.clone(),
+                    turn_id,
+                    Arc::new(move |event| sender.send(event).is_ok()),
+                ));
+                *active.lock().unwrap() = Some(bridge.clone());
+                let active_turn = active.clone();
                 let setup = Arc::new(accounts[&account].clone());
                 let (runner, setup, out, pending, next_id) = (
                     runner.clone(),
@@ -209,7 +238,16 @@ async fn serve(
                         Box::pin(async move { rx.await.unwrap_or(Answer::Deny) })
                     });
                     let reply = match runner
-                        .chat(&account, &setup, &text, &events, ask, tools)
+                        .chat_with_bridge(
+                            &account,
+                            &setup,
+                            &text,
+                            &events,
+                            ask,
+                            tools,
+                            Some(bridge.clone()),
+                            fresh_conversation,
+                        )
                         .await
                     {
                         Ok(t) => {
@@ -224,8 +262,20 @@ async fn serve(
                             json!({"event": "error", "message": "The agent stopped with an error. Details are in the Moss log."})
                         }
                     };
+                    bridge.close();
+                    *active_turn.lock().unwrap() = None;
                     let _ = out.send(reply);
                 });
+            }
+            Ok(Op::ToolResult { call_id, ok, text }) => {
+                let accepted = active
+                    .lock()
+                    .unwrap()
+                    .as_ref()
+                    .is_some_and(|b| b.result(&call_id, ok, text));
+                if !accepted {
+                    eprintln!("moss-runner: refused unmatched tool result");
+                }
             }
             Ok(Op::Answer { id, allow }) => {
                 if let Some(tx) = pending.lock().unwrap().remove(&id) {
@@ -237,8 +287,12 @@ async fn serve(
             }
         }
     }
+    if let Some(bridge) = active.lock().unwrap().take() {
+        bridge.close();
+    }
+    pending.lock().unwrap().clear();
     drop(out_tx);
-    let _ = writer.await;
+    writer.abort();
     Ok(())
 }
 
@@ -332,7 +386,7 @@ mod tests {
     #[test]
     fn chat_op_carries_tools_and_config_has_distinct_account_setups() {
         let tools = vec![moss_agents::builtins::current_time()];
-        let op = json!({"op":"chat", "account":"alice", "text":"hello", "tools":tools});
+        let op = json!({"op":"chat", "account":"alice", "text":"hello", "tools":tools, "turn_id":"turn-a"});
         let Op::Chat { account, tools, .. } = serde_json::from_value(op).unwrap() else {
             panic!("chat")
         };

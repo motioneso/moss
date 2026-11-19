@@ -77,6 +77,16 @@ export const RUST_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
   ...DESKTOP_APP_SCREENS
 ];
 
+export const CORE_APP_FEATURES: readonly AppMapItem[] = [
+  {
+    moduleId: "core",
+    id: "rust-module-chat",
+    runtime: "rust",
+    description:
+      "Moss can use the chat tools of modules you have installed and switched on for your account. Only tools with a declared input schema that need no approval appear until chat approval cards are available. Scratchpad can read your private note through chat."
+  }
+];
+
 export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "today",

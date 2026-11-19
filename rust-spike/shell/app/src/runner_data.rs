@@ -18,6 +18,7 @@ pub struct RunnerShellData {
     sample: StubShellData,
     messages: Mutex<Vec<ChatMessage>>,
     tools: crate::chat_tools::Source,
+    turn_lock: Mutex<()>,
 }
 
 impl RunnerShellData {
@@ -28,6 +29,7 @@ impl RunnerShellData {
             sample: StubShellData::default(),
             messages: Mutex::new(Vec::new()),
             tools,
+            turn_lock: Mutex::new(()),
         }
     }
 
@@ -47,8 +49,11 @@ impl RunnerShellData {
             writer.write_all(&line).map_err(|e| e.to_string())
         };
         send(json!({"op": "hello", "secret": secret.trim()}))?;
-        let tools = (self.tools)()?;
-        send(json!({"op": "chat", "account": self.account, "text": text, "tools": tools}))?;
+        let tools = self.tools.list()?;
+        let mut turn = ToolTurn::new(tools.clone())?;
+        send(
+            json!({"op": "chat", "account": self.account, "text": text, "tools": tools, "turn_id": turn.id}),
+        )?;
 
         let mut refused = 0;
         for line in BufReader::new(stream).lines() {
@@ -57,6 +62,16 @@ impl RunnerShellData {
                 continue;
             };
             match m["event"].as_str() {
+                Some("tool_call") => {
+                    let result = turn.dispatch(&m, &*self.tools);
+                    let (ok, text) = match result {
+                        Ok(text) => (true, text),
+                        Err(e) => (false, e),
+                    };
+                    send(
+                        json!({"op":"tool_result", "call_id":m["call_id"], "ok":ok, "text":text}),
+                    )?;
+                }
                 Some("approval") => {
                     refused += 1;
                     send(json!({"op": "answer", "id": m["id"], "allow": false}))?;
@@ -100,6 +115,7 @@ impl ShellData for RunnerShellData {
     }
 
     fn send_message(&self, text: &str) -> ChatMessage {
+        let _turn = self.turn_lock.lock().expect("turn lock");
         let n = {
             let mut m = self.messages.lock().expect("chat lock");
             let n = m.len();
@@ -127,3 +143,55 @@ impl ShellData for RunnerShellData {
         reply
     }
 }
+
+/// The socket owns this snapshot for exactly one turn. Only definitions sent in its chat op
+/// can select a module; the runner never supplies a module id or an actor.
+struct ToolTurn {
+    id: String,
+    offered: std::collections::HashMap<String, String>,
+    used: std::collections::HashSet<String>,
+}
+impl ToolTurn {
+    fn new(tools: Vec<moss_agents::gateway::ToolDef>) -> Result<Self, String> {
+        let mut names = std::collections::HashSet::new();
+        let mut offered = std::collections::HashMap::new();
+        for def in tools {
+            if !names.insert(def.name.clone()) {
+                return Err("Duplicate offered tool name".into());
+            }
+            if let Some(module) = def.module {
+                offered.insert(def.name, module);
+            }
+        }
+        Ok(Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            offered,
+            used: Default::default(),
+        })
+    }
+    fn dispatch(
+        &mut self,
+        event: &Value,
+        tools: &dyn crate::chat_tools::ChatTools,
+    ) -> Result<String, String> {
+        let id = event["call_id"].as_str().unwrap_or_default();
+        let valid_id = id
+            .strip_prefix(&format!("{}:", self.id))
+            .and_then(|n| n.parse::<u64>().ok())
+            .is_some_and(|n| n > 0);
+        if !valid_id || !self.used.insert(id.to_owned()) {
+            eprintln!("moss-shell: refused invalid or repeated chat call id");
+            return Err("Tool call does not belong to this open turn".into());
+        }
+        let name = event["name"].as_str().unwrap_or_default();
+        let module = self.offered.get(name).ok_or_else(|| {
+            eprintln!("moss-shell: refused unoffered chat tool");
+            "Tool was not offered for this turn".to_string()
+        })?;
+        tools.run(module, &name.replace('_', "."), event["arguments"].clone())
+    }
+}
+
+#[cfg(test)]
+#[path = "runner_data_tests.rs"]
+mod tests;
