@@ -332,6 +332,37 @@ jobs:
         if: always()
         run: docker compose -f infra/docker-compose.yml down -v
 
+  # EXPERIMENT (remove before merge): builds the shared host crates once for a seed cache.
+  rust-host-seed:
+    name: Rust host seed
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: changes
+    if: needs.changes.outputs.rust_modules != '[]'
+    env:
+      CARGO_HOME: ${{ github.workspace }}/.rust-gate/cargo
+      RUSTUP_HOME: ${{ github.workspace }}/.rust-gate/rustup
+      CARGO_TARGET_DIR: ${{ github.workspace }}/.rust-gate/target
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup toolchain install 1.95.0 --profile minimal --target wasm32-unknown-unknown
+      - uses: actions/cache/restore@v4
+        with:
+          path: .rust-gate/cargo
+          key: cargo-home-${{ hashFiles('modules/**/Cargo.lock', 'rust-spike/**/Cargo.lock') }}
+          restore-keys: cargo-home-
+      - run: |
+          cargo +1.95.0 fetch --locked --manifest-path rust-spike/module-host/Cargo.toml
+          time cargo +1.95.0 test --no-run --locked --manifest-path rust-spike/module-host/Cargo.toml
+          du -sh "$CARGO_TARGET_DIR"
+      - uses: actions/cache/save@v4
+        with:
+          path: .rust-gate/target
+          key: host-seed-${{ hashFiles('rust-spike/module-host/Cargo.lock') }}-${{ github.run_id }}
+
   # Shadow job (rollout step 2 of docs/superpowers/plans/2026-11-18-rust-module-gates-in-ci.md).
   # Runs the Finance and Tasks package gates through scripts/run-gate.sh. Not listed in
   # ci-gate's needs, so a red run here never blocks a merge.
@@ -339,8 +370,8 @@ jobs:
     name: Rust gate (${{ matrix.module }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    needs: changes
-    if: needs.changes.outputs.rust_modules != '[]'
+    needs: [changes, rust-host-seed]
+    if: always() && needs.changes.outputs.rust_modules != '[]'
     strategy:
       fail-fast: false
       matrix:
@@ -402,6 +433,13 @@ jobs:
         with:
           path: .rust-gate/cargo
           key: cargo-home-${{ hashFiles('modules/**/Cargo.lock', 'rust-spike/**/Cargo.lock') }}
+
+      - name: Restore host seed (experiment)
+        uses: actions/cache/restore@v4
+        with:
+          path: .rust-gate/target
+          key: host-seed-none
+          restore-keys: host-seed-${{ hashFiles('rust-spike/module-host/Cargo.lock') }}-
 
       - name: Run the module gate
         env:
