@@ -47,6 +47,7 @@ fn Today(view: TodayView) -> impl IntoView {
                             <p class="cmd-empty today-quiet-line__text" role="status">{line}</p>
                         </section>
                     })}
+                    <div data-module-section="commitments" data-screen-path="/today"></div>
                     <div id="needs-you"></div>
                 </div>
                 <aside class="cmd-aside" aria-label="Today widgets">

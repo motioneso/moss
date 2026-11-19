@@ -1,0 +1,64 @@
+.commitments-section {
+  margin: 0;
+  padding-bottom: var(--space-7);
+}
+.commitments-row {
+  align-items: center;
+  flex-wrap: wrap;
+  row-gap: var(--space-3);
+}
+.commitments-row .jds-task__main {
+  flex: 1;
+  min-width: 0;
+}
+.commitments-row .jds-task__title {
+  overflow-wrap: anywhere;
+}
+.commitments-row .jds-task__meta {
+  margin-top: var(--space-1);
+  column-gap: var(--space-3);
+}
+.commitments-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+.commitments-date {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  flex-basis: 100%;
+  padding-left: calc(15px + var(--space-3));
+}
+.commitments-date .jds-input {
+  width: auto;
+}
+.commitments-feedback {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  margin-block: var(--space-3);
+}
+.commitments-feedback p {
+  margin: 0;
+}
+.commitments-section > .jds-caption {
+  margin-block: var(--space-3);
+}
+.commitments-row .jds-menu__list {
+  z-index: var(--z-dropdown, 30);
+}
+[hidden] {
+  display: none !important;
+}
+@media (max-width: 700px) {
+  .commitments-row .commitments-actions {
+    flex-basis: 100%;
+    padding-left: calc(15px + var(--space-3));
+  }
+  .commitments-actions .jds-btn {
+    min-height: 44px;
+  }
+}

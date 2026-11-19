@@ -51,3 +51,5 @@ for folder in ["fonts", "textures"]:
     shutil.copytree(WEB / "public" / folder, out / folder, dirs_exist_ok=True)
 shutil.copy(WEB / "public/boot-theme.js", out / "boot-theme.js")
 shutil.copy(WEB / "public/icons/icon.svg", out / "icon.svg")
+
+shutil.copy(Path(__file__).parent / "package-sections.js", out / "package-sections.js")
