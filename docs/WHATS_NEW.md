@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Meals screen.** The Meals page now shows your meal plan, shopping list, pantry and staples, and works on your phone. [PR #4360](https://github.com/motioneso/moss/pull/4360)
 - **News settings in the new app.** The News settings page now opens in the new app, with your sources, topics, excluded publishers and story preferences. [PR #4355](https://github.com/motioneso/moss/pull/4355)
 - **Briefings screens in the new app.** You can read your morning and evening briefings and change when they are prepared from the new Moss app, including on your phone. [PR #4349](https://github.com/motioneso/moss/pull/4349)
 - **Sports settings.** You can now choose the teams and leagues you follow, your news sources, and your standings leagues from the Sports settings page. [PR #4348](https://github.com/motioneso/moss/pull/4348)
