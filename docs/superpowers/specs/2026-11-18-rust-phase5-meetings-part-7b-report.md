@@ -12,14 +12,14 @@
 ## Proof
 
 - UI logic tests: 28 pass. Host test for unlink (owner scoped, credential ends, repeat is false): pass.
-- Live browser pass on the real Rust server over HTTPS, desktop (1280) and phone (390) widths, no intercepted or rewritten responses. 20 checks per width, all pass: empty list, approval ask, link, redeem, check-in, Connected, rename and reload, unlink, check-in refused after unlink, decline, declined phone cannot redeem, closed request, linked phone.
+- Live browser pass on the real Rust server over HTTPS, desktop (1280) and phone (390) widths, no intercepted or rewritten responses. 21 checks per width, including refusal of a device credential, no sign-in and a foreign origin on unlink and rename, all pass: empty list, approval ask, link, redeem, check-in, Connected, rename and reload, unlink, check-in refused after unlink, decline, declined phone cannot redeem, closed request, linked phone.
 - Script: `modules/meetings/tools/screen-live-part7b.mjs`.
 
 ## Not proven
 
 - Linking the real Mac (Trail Marker.app over SSH). The fake Mac in the script uses the real pairing routes, but the installed app was not driven. Needs the Mac to trust and reach the server.
 - A linked device reaching the Meetings upload routes. On this server those routes answer 403 "Open Moss to manage your account" to a companion credential both before and after unlink, so refusal after unlink is shown only on check-in (200 before, 401 after).
-- Owner routes with Meetings turned off.
+- Owner routes with Meetings turned off, and another owner's device id returning 404 (needs a second account; the store test covers it). Rate limits on rename and unlink are not added.
 - The cog opening `/settings/meetings` on the full shell. The live test server serves no shell screens, so screens were opened through the module frame.
 - The Mac and Android Get-app buttons. Both stay disabled because no download links exist yet.
 - `/link/trail-marker` redirect in a real browser.

@@ -21,6 +21,8 @@ fn unknown() -> ApiError {
     ApiError::http(404, "That device is not linked")
 }
 
+/// Listing, renaming and unlinking stay available when Meetings is off, so an owner can always
+/// remove a device.
 pub async fn list(State(data): State<Arc<Accounts>>, headers: HeaderMap) -> Reply {
     let owner = browser_actor(&data, &headers).await?.actor_user_id();
     let found = devices(&data).list(owner).await.map_err(internal)?;
@@ -42,11 +44,11 @@ pub async fn rename(
     body: Result<Json<Rename>, JsonRejection>,
 ) -> Reply {
     let name = json_body(body)?.display_name.trim().to_owned();
+    trusted_origin(&data, &headers)?;
+    let owner = browser_actor(&data, &headers).await?.actor_user_id();
     if name.is_empty() || name.chars().count() > 64 {
         return Err(ApiError::http(400, "Pick a name between 1 and 64 characters"));
     }
-    trusted_origin(&data, &headers)?;
-    let owner = browser_actor(&data, &headers).await?.actor_user_id();
     if !devices(&data).rename(owner, id, &name).await.map_err(internal)? {
         return Err(unknown());
     }

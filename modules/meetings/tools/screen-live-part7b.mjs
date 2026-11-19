@@ -185,6 +185,30 @@ for (const [name, width] of [
   frame = await open("/settings/meetings");
   check(`${name} rename survives a reload`, (await text(frame)).includes("Desk Mac"));
 
+  // Owner routes refuse a device credential, no sign-in, and a foreign origin.
+  const devs = await page.evaluate(async () => (await fetch("/api/m/meetings/devices")).json());
+  const target = devs.devices[0].id;
+  const refusals = async (method, extra = {}) =>
+    (
+      await bare.fetch(`${url}/api/m/meetings/devices/${target}`, {
+        method,
+        headers: { "content-type": "application/json", origin: url, ...extra },
+        data: method === "PATCH" ? { displayName: "x" } : undefined
+      })
+    ).status();
+  check(
+    `${name} a device credential cannot unlink`,
+    [401, 403].includes(await refusals("DELETE", { authorization: `Bearer ${issued.credential}` }))
+  );
+  check(
+    `${name} a request with no sign-in cannot unlink or rename`,
+    (await refusals("DELETE")) === 401 && (await refusals("PATCH")) === 401
+  );
+  check(
+    `${name} a foreign origin cannot unlink`,
+    (await refusals("DELETE", { origin: "https://evil.example" })) === 403
+  );
+
   // Unlink.
   await frame.getByRole("button", { name: "Unlink" }).first().click();
   await page.waitForTimeout(600);
