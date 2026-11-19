@@ -208,6 +208,14 @@ second physical device. See the report for the remaining acceptance work.
 
 ## Part six installed-dispatch checkpoint
 
+The server gates `test:rust-people-server`, `test:rust-module-bootstrap` and
+`test:rust-install-endpoints` build their own People component, UI and unsigned package.
+Run them through `scripts/run-gate.sh start --gate <script>`, then
+`scripts/run-gate.sh wait --follow`. Set `CARGO_HOME`, `RUSTUP_HOME` (Rust 1.95.0 with
+`wasm32-unknown-unknown`) and `CARGO_TARGET_DIR`; no `JS50_PEOPLE_COMPONENT` or
+`JS73_PEOPLE_PACKAGE` setup is needed. Generated packages live under
+`CARGO_TARGET_DIR/server-packages/people` and are rebuilt on each gate run.
+
 Build the component, UI and unsigned package using the commands above, then run:
 
 ```sh
