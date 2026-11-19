@@ -60,8 +60,8 @@ const clickAct = async (page, frame, act, nth = 0) => {
 const shot = (page, name) => page.screenshot({ path: `${out}/${name}.png`, fullPage: true });
 
 for (const [name, width] of [
-  ["desktop", 1280],
-  ["phone", 390]
+  ["phone", 390],
+  ["desktop", 1280]
 ]) {
   const { context, page, frame } = await open(width, "meals-owner@example.test");
   let body;
