@@ -61,7 +61,7 @@ try:
                     return json.load(response)
 
             signature = base64.b64encode(hmac.new(secret.encode(), data["session"].encode(), hashlib.sha256).digest()).decode()
-            cookie = "better-auth.session_token=" + urllib.parse.quote(data["session"] + "." + signature, safe="")
+            cookie = "__Secure-better-auth.session_token=" + urllib.parse.quote(data["session"] + "." + signature, safe="")
             verifier = "fresh-reinstall-verifier"
             verifier_hash = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
             deadline = time.monotonic() + float(os.environ.get("JS353_PAIR_TIMEOUT", "180"))
