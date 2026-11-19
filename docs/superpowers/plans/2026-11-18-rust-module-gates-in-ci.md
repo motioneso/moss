@@ -42,9 +42,9 @@ Runs the module's own non-live gate through `scripts/run-gate.sh start --gate <s
 
 | Module                                                                                                        | Scripts                                                                         |
 | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| tasks                                                                                                         | `test:rust-tasks`, `test:rust-tasks-privacy`, `test:rust-tasks-jobs`            |
-| people                                                                                                        | `test:rust-people-large`                                                        |
-| notes                                                                                                         | `test:rust-notes-server`, `test:rust-notes-ingest`                              |
+| tasks                                                                                                         | `test:rust-tasks`                                                               |
+| people                                                                                                        | `test:rust-people-large` (needs a prebuilt component, see below)                |
+| notes                                                                                                         | `modules/notes/tools/gate.sh` (needs prebuilt components, see below)            |
 | calendar                                                                                                      | `test:rust-calendar-server` (folds in `rust-calendar.yml`'s `check.sh`)         |
 | finance                                                                                                       | `test:rust-finance`, `test:rust-finance-ui-unit`                                |
 | wellness                                                                                                      | `test:rust-wellness`                                                            |
@@ -54,6 +54,15 @@ Runs the module's own non-live gate through `scripts/run-gate.sh start --gate <s
 | briefings, sports, weather, web-research, goals, meals, commitments, backtrack, scratchpad, connectors, email | `test:rust-<m>`                                                                 |
 
 `test:rust-memory-recording` is a subset of `test:rust-memory` and is not run separately.
+`test:rust-tasks-privacy` and `test:rust-tasks-jobs` are inner steps of `test:rust-tasks`; run
+alone, `tasks-privacy` exits 1 by design (`modules/tasks/tools/tests/privacy.rs:214`, `TASKS_COMPONENT`).
+
+Notes and People are the only modules whose gates do not build their own component. Notes'
+`gate.sh:9` needs `NOTES_COMPONENT` and `NOTES_TOOL_COMPONENT`; `test:rust-notes-server`,
+`test:rust-notes-ingest` and `test:rust-people-large` (`JS50_PEOPLE_COMPONENT`,
+`rust-spike/module-host/tools/people-gate.ts:10`) exit 1 without them. Until a fix task makes
+them self-building, the CI job runs each module's `tools/build-component.sh` first, as the module
+READMEs do.
 `test:rust-wellness-fixtures` is a TypeScript integration test and already runs in the
 `integration` job, which runs all of `tests/integration` (`ci.yml:296`).
 
@@ -129,7 +138,7 @@ Estimate per module job on a hosted runner: setup 1 min, plus the local warm tim
 
 ## Red on `main` today
 
-Run once each on `main` at `5354313`, clean tree, through `scripts/run-gate.sh`. Each failure
+Run once each on `main` at `535431302`, clean tree, through `scripts/run-gate.sh`. Each failure
 becomes its own fix task; none is fixed here.
 
 RED_TABLE
