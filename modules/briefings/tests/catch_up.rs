@@ -17,6 +17,7 @@ fn setup() -> Fake {
         ]
     }}});
     fake.seed_run(&id, A, RUN, "2026-11-11T07:00:00.000Z", metadata);
+    *fake.tasks.borrow_mut() = Some(vec![]);
     fake
 }
 
@@ -36,8 +37,8 @@ fn add_creates_a_follow_up_and_records_more_like_this_with_the_run() {
     assert_eq!(status, 200);
     assert_eq!(out["status"], "added");
     assert_eq!(fake.open_tasks(A), 1);
-    assert_eq!(fake.tasks.borrow()[0]["title"], "Follow up with Sam");
-    assert_eq!(fake.tasks.borrow()[0]["description"], "Contract question");
+    assert_eq!(fake.tasks.borrow().as_ref().unwrap()[0]["title"], "Follow up with Sam");
+    assert_eq!(fake.tasks.borrow().as_ref().unwrap()[0]["description"], "Contract question");
     assert_eq!(fake.ratings.borrow().len(), 1);
     assert_eq!(fake.ratings.borrow()[0].2, "more_like_this");
 }
@@ -102,13 +103,13 @@ fn another_accounts_run_or_item_returns_404_and_creates_nothing() {
     for action in ["add", "dismiss", "undo"] {
         assert_eq!(post(&fake, RUN, "catch-1", action, json!({"feedbackId": "x"})).0, 404);
     }
-    assert!(fake.tasks.borrow().is_empty() && fake.ratings.borrow().is_empty());
+    assert!(fake.tasks.borrow().as_ref().unwrap().is_empty() && fake.ratings.borrow().is_empty());
     fake.as_actor(A);
     for item in ["catch-3", "../x"] {
         assert_eq!(post(&fake, RUN, item, "add", json!({})).0, 404);
     }
     assert_eq!(post(&fake, "not-a-run", "catch-1", "add", json!({})).0, 404);
-    assert!(fake.tasks.borrow().is_empty() && fake.ratings.borrow().is_empty());
+    assert!(fake.tasks.borrow().as_ref().unwrap().is_empty() && fake.ratings.borrow().is_empty());
 }
 
 #[test]

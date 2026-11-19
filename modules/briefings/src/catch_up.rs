@@ -75,7 +75,7 @@ fn archive<H: Host + ?Sized>(host: &H, task_id: &str) -> Result<Option<()>> {
 /// True when the task is one of the caller's own open tasks.
 fn own_open_task<H: Host + ?Sized>(host: &H, task_id: &str) -> Result<bool> {
     let reply = api(host, "tasks", "listBriefingTasks", json!({"status": "todo", "ids": [task_id]}))?;
-    Ok(reply["items"].as_array().is_some_and(|items| items.iter().any(|t| t["id"].as_str() == Some(task_id))))
+    Ok(reply["items"].as_array().is_some_and(|items| items.iter().any(|t| t["id"].as_str() == Some(task_id) && t["status"] == "todo")))
 }
 
 fn body_text(request: &RouteRequest, key: &str) -> Option<String> {
