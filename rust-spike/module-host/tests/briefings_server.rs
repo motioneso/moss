@@ -202,7 +202,12 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
     // canonical installer, as the server would find it.
     let keys = Keys::new();
     fs::create_dir_all(root.join("registry/packages")).unwrap();
-    let artifacts: Vec<Artifact> = [("JS235_BRIEFINGS_PACKAGE", "briefings")]
+    // The Today proof also installs Tasks, which owns the suggested tasks the section acts on.
+    let mut packages = vec![("JS235_BRIEFINGS_PACKAGE", "briefings")];
+    if std::env::var("BRIEFINGS_WITH_TASKS").is_ok() {
+        packages.push(("JS220_TASKS_PACKAGE", "tasks"));
+    }
+    let artifacts: Vec<Artifact> = packages
     .iter()
     .map(|(variable, id)| {
         let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
@@ -484,6 +489,36 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
     if let Ok(hold) = std::env::var("BRIEFINGS_HOLD_OPEN") {
         // Held-open mode for browser proof. Writes the origin and owner cookie to the hold file,
         // then keeps the real server and its stand-in model up until the stop file appears.
+        if std::env::var("BRIEFINGS_SEED_SUGGESTED").is_ok() {
+            // Two suggested tasks as the email suggestion pipeline saves them, then a real
+            // morning run that reads them through Tasks. Only the inputs are inserted.
+            runtime.block_on(async {
+                let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+                tokio::spawn(async move { let _ = connection.await; });
+                let list: uuid::Uuid = db.query_one("INSERT INTO app.task_lists(owner_user_id,name) VALUES($1,'Personal') ON CONFLICT (owner_user_id, lower(name)) DO UPDATE SET name=excluded.name RETURNING id", &[&owner]).await.unwrap().get(0);
+                for (title, note, category, href) in [
+                    ("Send Priya the budget draft", "Priya asked for the budget draft by Friday.", "needs_reply", Value::Null),
+                    ("Book the room for Dana's leaving drinks", "Dana is waiting on the room booking.", "needs_action", json!("https://mail.example.test/thread/dana")),
+                ] {
+                    let metadata = json!({"version":1,"category":category,"sourceLabel":"Email","sourceHref":href,"cacheMessageId":uuid::Uuid::new_v4().to_string(),"subjectSignature":title,"computedAt":"2026-11-19T08:00:00.000Z","resurfaceReason":null});
+                    db.execute("INSERT INTO app.tasks(owner_user_id,list_id,title,description,status,source,source_ref,suggestion_metadata) VALUES($1,$2,$3,$4,'suggested','email',$5,$6)", &[&owner, &list, &title, &note, &format!("email:{title}"), &metadata]).await.unwrap();
+                }
+            });
+            let (status, text) = call(Method::POST, &format!("/definitions/{id}/run"), Some(&cookie), Some(json!({})));
+            assert_eq!(status, 202, "{text}");
+            let queued = json_of(&text);
+            let (job, run) = (queued["jobId"].as_str().unwrap().to_owned(), queued["runId"].as_str().unwrap().to_owned());
+            let waited = std::time::Instant::now();
+            loop {
+                let (_, t) = call(Method::GET, &format!("/definitions/{id}/runs/{run}?jobId={job}"), Some(&cookie), None);
+                if json_of(&t)["state"] != "pending" { break; }
+                assert!(waited.elapsed() < std::time::Duration::from_secs(120), "seeded morning run did not finish");
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            }
+            let (_, t) = call(Method::GET, "/today", Some(&cookie), None);
+            let rows = json_of(&t)["rows"].as_array().map(|r| r.len()).unwrap_or(0);
+            assert_eq!(rows, 2, "the morning run should list both suggested tasks: {t}");
+        }
         fs::write(&hold, json!({"origin":origin,"cookie":cookie,"otherCookie":other,"certificate":cert}).to_string()).unwrap();
         let mut extras = json!({});
         // Real-model pass. Points the router at a real OpenAI-compatible endpoint and runs one
