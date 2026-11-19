@@ -14,7 +14,7 @@ The coordinator resolved the original scope question: general Rust chat runner t
 
 ## Live proof
 
-The final live gate ran the signed packages from code commit `bb70cb6df` over non-loopback HTTPS on a reserved devports port. Four fictional email threads entered through the installed Email API, passed the unchanged debounce and production judgement worker, and became four saved pending suggestions using the local Codex sign-in proxy (`gpt-6.1-sol`). No intercepted or substituted network responses were used.
+The first completed live pass ran the signed packages from code commit `bb70cb6df` over non-loopback HTTPS on a reserved devports port. Four fictional email threads entered through the installed Email API, passed the unchanged debounce and production judgement worker, and became four saved pending suggestions using the local Codex sign-in proxy (`gpt-6.1-sol`). No intercepted or substituted network responses were used.
 
 At 1440 × 1000, Today displayed all four rows, metadata and actions using the shipped styles. At 390 × 844, actions wrapped below each title without horizontal overflow; measured Accept, Snooze and Reject buttons were each 44px tall. Real browser captures are in the accompanying proof artifact.
 
@@ -29,14 +29,22 @@ Two real failures were reproduced and fixed during proof:
 
 Live gate receipt: `task_356_rust_port_phase_5_commitments_p-20261118-234827-RrIhMc.log`, one passed, final `rc=0`; the follow waiter returned exit `0`. The initial waiter process had ended with `143`; a fresh wrapper wait read the completed gate sentinel and returned `0`. Browser closed, fixture stopped and its port released.
 
+## Corrected live repeat
+
+The final code `fcc917e37` passed a fresh installed-server run (`task_356_rust_port_phase_5_commitments_p-20261119-001822-6AEMQw.log`, one passed, final `rc=0`, wrapper waiter exit `0`). It again produced four suggestions through the installed Email API and real Codex proxy worker. Fresh desktop and phone captures show the Email source on every row and no horizontal overflow. The empty state was measured before demo processing (`pending: 0`, hidden section, height zero) and captured at both sizes.
+
+To exercise the exact expired-snooze bug without changing time or intercepting responses, a model-created Priya record was set through the real status API to `snoozed` until `2026-01-01T00:00:00.000Z`. The saved detail retained `snoozed`, while the pending list returned `pending_review`. After reload, Today rendered all four rows including Priya; the phone capture and actual rendered text verify that the saved expired snooze returned. The API write returned `200`. Priya was then accepted through the real button; rejecting the remaining rows brought the pending count down to zero.
+
+A final reload's empty capture was attempted before loading finished; those captures are excluded from proof. The valid empty captures for this repeat are the initial zero-record state; the earlier complete pass separately verified the final empty state after saved actions and reload. No screenshot is claimed as evidence of keyboard handling or write persistence; the actual browser observations and API reads establish those behaviors.
+
 ## Checks
 
 All checks below passed; actual exit codes were read, with no command piped through a filter.
 
-- Commitments package gate at `bb70cb6df`, clean tree: **45 passed** — seven UI, twenty-eight native Rust, six package and four installed tests. Includes separately preparing and rendering Accept, Reject and Snooze from a saved record. Receipt: `task_356_rust_port_phase_5_commitments_p-20261118-234827-YUyw2q.log`, final `rc=0` and waiter exit `0`.
-- `node --test modules/commitments/ui/screen.test.mjs rust-spike/module-ui/web/bridge.test.mjs`: **28 passed** (seven screen plus twenty-one bridge), exit `0`, after the package menu fix; `/tmp/js356-node-final.log`.
-- `pnpm exec eslint modules/commitments/ui/today.mjs --max-warnings=0`: exit `0` after the menu import fix.
-- Full un-piped `pnpm verify:static`: exit `0`, `/tmp/js356-static-current.log`. Started on `7b2a5911f`, completed after the menu packaging change; focused lint, Node and full package checks above cover that final change. Includes lint, format, file sizes, design-system catalogue/classes/tokens, dependencies, migration checks, TypeScript and app-map generation. Earlier full static also returned `0` (`/tmp/js356-static-stable.log`).
+- Commitments package gate at `fcc917e37`, clean tree: **47 passed** — nine UI, twenty-eight native Rust, six package and four installed tests. Includes separately preparing and rendering Accept, Reject and Snooze from a saved record. Receipt: `task_356_rust_port_phase_5_commitments_p-20261119-001902-g8rUxl.log`, final `rc=0` and waiter exit `0`.
+- `node --test modules/commitments/ui/screen.test.mjs rust-spike/module-ui/web/bridge.test.mjs`: **30 passed** (nine screen plus twenty-one bridge), exit `0`, after the snooze and Email-label fixes; `/tmp/js356-node-corrected.log`.
+- Focused ESLint: `today.mjs` passed after the menu fix; `api.mjs`, `view.mjs` and `screen.test.mjs` passed after the final review corrections (`/tmp/js356-lint-corrected.log`).
+- Full un-piped `pnpm verify:static` on corrected code `fcc917e37`: **exit `0`**, `/tmp/js356-static-durable.log`, with the command's own exit receipt `/tmp/js356-static-durable.exit`. The receipt was read by a command that returned the same exit code. Includes lint, format, file sizes, design-system catalogue/classes/tokens, dependencies, migration checks, TypeScript and app-map generation. The preceding integrated static command reached the last step but its tool session returned `143`, so it is not counted as a pass; the durable rerun is the final verification. Earlier complete static runs also returned `0`.
 - Real server screen gate: **one passed**, exit `0`, as detailed above. CI remains separate from these local results.
 
 Repeat locally from `~/Jarv1s`: set `CARGO_HOME`, `RUSTUP_HOME` and an external `CARGO_TARGET_DIR`; launch the package or screen gate through `scripts/run-gate.sh start --gate test:rust-commitments` or `--gate test:rust-commitments-screen`, then use its printed log with `scripts/run-gate.sh wait --follow --log`. For browser proof only, set `COMMITMENTS_SCREEN_HOLD` to an outside-repository directory before starting the screen gate. The fixture writes `url.txt` there after real suggestions exist; finish the browser check, then create `finished` in that directory. The hold is bounded and opt-in; unattended checks finish themselves.
@@ -68,4 +76,14 @@ Claude Sonnet, high effort, read-only round one reviewed the integrated commit `
 | Minor: unattended proof hold                                | Browser hold is opt-in through `COMMITMENTS_SCREEN_HOLD`; unattended real-model checks can finish.                                                                     |
 | Minor: Rust formatting noise                                | Removed the unrelated package-constructor formatting.                                                                                                                  |
 
-Round two reviews this final committed report and code. Its result is recorded on the reviewed commit with `herdr-task reviewed` and in the PR, so recording it does not modify the reviewed tree.
+Claude Sonnet, high effort, read-only round two reviewed `82cac75ed`, after main was integrated. It found one major and two minors:
+
+| Finding                                                                                                     | Disposition                                                                                                                                                                                                                          |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Major: expired snoozes disappear because list normalizes status but detail retains `snoozed`                | Fixed in `fcc917e37`. Detail reads retain already-due snoozes and still skip a newly moved future snooze. A regression reproduces the real list/detail contract.                                                                     |
+| Minor: Email source missing for judged threads without evidence rows                                        | Fixed in `fcc917e37`. A stored `threadRef` supplies the Email label without duplicating an existing evidence label.                                                                                                                  |
+| Minor: generic Today host uses a Commitments-specific error identifier and lacks its own automated DOM test | Accepted below the must-fix bar: Commitments is the only section mounted by this host in this part. Generalizing another module's integration is outside this part; the real installed-package browser flow covers the current path. |
+
+The same two regression checks fail against the original `82cac75ed` code and pass against `fcc917e37` (actual exits `1` then `0`). These isolated API/render tests do not replace the real browser proof. The interrupted earlier attempt produced no verdict and is not counted as a completed round.
+
+The coordinator added a third review round. It reviews the final committed report and code. Its result is recorded on the reviewed commit with `herdr-task reviewed` and in the PR, so recording it does not modify the reviewed tree.
