@@ -120,11 +120,18 @@ physical second-device HTTPS proof is claimed.
 Read `.claude/skills/verify-gate/SKILL.md`. Never run the database tests directly.
 
 ```sh
-NOTES_COMPONENT=/tmp/notes.wasm NOTES_TOOL_COMPONENT=/tmp/notes-tools.wasm CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=/tmp/notes-host scripts/run-gate.sh start --gate ./modules/notes/tools/gate.sh
+CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=/tmp/notes-host scripts/run-gate.sh start --gate ./modules/notes/tools/gate.sh
 scripts/run-gate.sh wait --follow
 CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=/tmp/notes-parity PARITY_OUT=/tmp/notes-parity-result scripts/run-gate.sh start --gate ./modules/notes/tools/parity-gate.sh
 scripts/run-gate.sh wait --follow
 ```
+
+The aggregate gate builds both Notes components in `CARGO_TARGET_DIR` when their
+paths are not supplied. `test:rust-notes-server` and `test:rust-notes-ingest` also
+build their write-tools component when `NOTES_TOOL_COMPONENT` is unset. Prepare
+the pinned toolchain, targets and offline dependencies as described above; no
+component prebuild is needed. Explicit component paths remain available for
+focused checks.
 
 The first gate retains the earlier SQL privacy and linked-folder checks, then
 compares the compiled Notes export against the real TypeScript collector on the
@@ -779,7 +786,7 @@ disposable job's due time lets the installed dispatcher complete that same job.
 The existing other-owner/admin checkpoint controls still remove RLS, observe
 otherwise denied read/update/delete access, restore it and repeat the denials.
 
-Run the aggregate Notes gate through `scripts/run-gate.sh` with both built guests,
+Run the aggregate Notes gate through `scripts/run-gate.sh`, which builds both guests,
 as described above. Document and query embeddings remain the named deterministic
 test provider. This is installed service/queue integration, not assembled chat,
 a production worker loop, scheduled sync, a real configured model or second-device
