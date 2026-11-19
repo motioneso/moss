@@ -23,20 +23,29 @@ fn public(k: &Ed25519KeyPair) -> String {
 fn sign(k: &Ed25519KeyPair, b: &[u8]) -> String {
     STANDARD.encode(k.sign(b).as_ref())
 }
-pub fn publish(folder: &Path, bytes: &[u8]) -> (String, String, Vec<Artifact>) {
+pub fn publish(folder: &Path, bytes: &[u8]) -> (String, String, Artifact) {
+    let (key, publisher, mut artifacts) = publish_packages(folder, &[(bytes, "calendar")]);
+    (key, publisher, artifacts.pop().unwrap())
+}
+
+pub fn publish_with_tasks(folder: &Path, bytes: &[u8]) -> (String, String, Vec<Artifact>) {
     // Keep the dependency first so callers install it before Calendar.
     let tasks = std::fs::read(
         std::env::var("CALENDAR_TASKS_PACKAGE").expect("Run modules/calendar/tools/gate.sh"),
     )
     .unwrap();
+    publish_packages(folder, &[(tasks.as_slice(), "tasks"), (bytes, "calendar")])
+}
+
+fn publish_packages(folder: &Path, packages: &[(&[u8], &str)]) -> (String, String, Vec<Artifact>) {
     std::fs::create_dir(folder.join("packages")).unwrap();
     // Ephemeral keys generated for this disposable registry; no production credentials.
     let root = key();
     let index = key();
     let publisher = key();
-    let artifacts: Vec<Artifact> = [tasks.as_slice(), bytes]
-        .into_iter()
-        .zip(["tasks", "calendar"])
+    let artifacts: Vec<Artifact> = packages
+        .iter()
+        .copied()
         .map(|(bytes, id)| {
             let digest = trust::digest(bytes);
             let package =

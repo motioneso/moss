@@ -55,7 +55,7 @@ fn signed_rust_package_reuses_data_and_commits_only_successful_drafts() {
     let registry = tempfile::tempdir().unwrap();
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let bytes = moss_calendar_host::package::pack(&root, &f.core()).unwrap();
-    let (key, publisher, artifacts) = registry::publish(registry.path(), &bytes);
+    let (key, publisher, artifacts) = registry::publish_with_tasks(registry.path(), &bytes);
     let database = f.db.clone();
     let preview_refs = preview_seeded.references.clone();
     let captured = Arc::new(kv_guard::Captured::default());
