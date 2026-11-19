@@ -17,7 +17,7 @@ use moss_shell_contract::{
     ApprovalKind, ApprovalState, ChatError, ChatMessage, ChatRole, ChatThread, Decision,
     SendMessage, ShellData, ShellView, TodayView,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// How long a turn may run, however busy the agent is.
 const TURN_LIMIT: Duration = Duration::from_secs(15 * 60);
@@ -57,6 +57,7 @@ struct State {
     messages: Vec<ChatMessage>,
     turn: Option<OpenTurn>,
     book: Book,
+    completed: Vec<moss_shell_contract::CompletedWrite>,
 }
 
 struct Inner {
@@ -118,6 +119,7 @@ impl Inner {
             messages: st.messages.clone(),
             running: st.turn.is_some(),
             approvals: st.book.views(&self.account),
+            completed: st.completed.clone(),
         }
     }
 
@@ -215,10 +217,36 @@ impl Inner {
             last_heard = Instant::now();
             match m["event"].as_str() {
                 Some("tool_call") => {
-                    let (ok, text) = match turn.dispatch(&m, &*self.tools) {
-                        Ok(text) => (true, text),
-                        Err(e) => (false, e),
-                    };
+                    let (ok, text) =
+                        match turn.dispatch_with(&m, &*self.tools, |module, tool, parameters| {
+                            self.state.lock().expect("chat lock").book.consume(
+                                &self.account,
+                                &turn_id,
+                                module,
+                                tool,
+                                parameters,
+                            )
+                        }) {
+                            Ok(text) => {
+                                if turn
+                                    .plain_writes
+                                    .contains(m["name"].as_str().unwrap_or_default())
+                                {
+                                    if let Some(done) = crate::chat_completed::from_reply(
+                                        m["call_id"].as_str().unwrap_or_default(),
+                                        &text,
+                                    ) {
+                                        let mut st = self.state.lock().expect("chat lock");
+                                        st.completed.push(done);
+                                        if st.completed.len() > 200 {
+                                            st.completed.remove(0);
+                                        }
+                                    }
+                                }
+                                (true, text)
+                            }
+                            Err(e) => (false, e),
+                        };
                     if let Err(e) = send_line(
                         &writer,
                         &json!({"op":"tool_result", "call_id":m["call_id"], "ok":ok, "text":text}),
@@ -227,7 +255,7 @@ impl Inner {
                     }
                 }
                 Some("approval") => {
-                    if !self.raise_approval(&m, &turn.id) {
+                    if !self.raise_approval(&m, &turn) {
                         refused += 1;
                         if let Err(e) = send_line(
                             &writer,
@@ -259,26 +287,70 @@ impl Inner {
         Err("the runner is not built for this system yet".into())
     }
 
-    /// Stores a record for an agent permission ask. Returns false for anything else, which the
-    /// caller refuses: module tool cards have no builder until part 3b.
-    fn raise_approval(&self, m: &Value, turn: &str) -> bool {
-        if m["card"]["source"].as_str() != Some("agent") {
-            return false;
-        }
+    /// Store only a card built by the host for a tool offered in this open turn, or a fixed
+    /// agent permission disclosure. Failure is answered with a refusal by the caller.
+    fn raise_approval(&self, m: &Value, turn: &ToolTurn) -> bool {
         let Some(runner_id) = m["id"].as_u64() else {
             return false;
         };
         let tool = m["card"]["tool"].as_str().unwrap_or("unknown");
-        let fields = chat_approvals::permission_fields(tool, &m["card"]["input"]);
+        let parameters = &m["card"]["input"];
+        let (kind, title, target, fields, content, danger, action) =
+            match m["card"]["source"].as_str() {
+                Some("agent") => (
+                    ApprovalKind::Permission,
+                    chat_approvals::PERMISSION_TITLE.into(),
+                    "Your agent is asking to use a tool.".into(),
+                    chat_approvals::permission_fields(tool, parameters),
+                    None,
+                    false,
+                    None,
+                ),
+                Some("moss") => {
+                    let Some(module) = turn.offered.get(tool) else {
+                        return false;
+                    };
+                    let name = tool.replace('_', ".");
+                    let Ok(card) = self.tools.card(module, &name, parameters) else {
+                        return false;
+                    };
+                    let action = chat_approvals::Action {
+                        module: module.clone(),
+                        tool: name,
+                        parameters: parameters.clone(),
+                        version: card.version,
+                    };
+                    (
+                        ApprovalKind::Action,
+                        card.title,
+                        card.target,
+                        card.fields
+                            .into_iter()
+                            .map(|f| moss_shell_contract::CardField {
+                                label: f.label,
+                                value: f.value,
+                            })
+                            .collect(),
+                        card.content,
+                        card.danger,
+                        Some(action),
+                    )
+                }
+                _ => return false,
+            };
         let mut st = self.state.lock().expect("chat lock");
         st.book.add(Record {
             id: uuid::Uuid::new_v4(),
             actor: self.account.clone(),
-            turn: turn.to_owned(),
-            kind: ApprovalKind::Permission,
+            turn: turn.id.clone(),
+            kind,
             runner_id,
-            title: chat_approvals::PERMISSION_TITLE.into(),
+            title,
+            target,
             fields,
+            content,
+            danger,
+            action,
             expires: Instant::now() + self.limits.approval_ttl,
             state: ApprovalState::Pending,
         });
@@ -289,7 +361,7 @@ impl Inner {
         let text = match result {
             Ok((reply, 0)) => reply,
             Ok((reply, refused)) => format!(
-                "{reply}\n\n({refused} action(s) needed an approval card Moss cannot show yet, so \
+                "{reply}\n\n({refused} action(s) needed a complete approval card, so \
                  they were declined.)"
             ),
             Err(e) => format!("Moss could not reach your agent: {e}"),
@@ -330,6 +402,7 @@ impl ShellData for RunnerShellData {
             if message.fresh_conversation {
                 st.messages.clear();
                 st.book.clear();
+                st.completed.clear();
             }
             let n = st.messages.len();
             st.messages.push(ChatMessage {
@@ -365,12 +438,17 @@ struct ToolTurn {
     id: String,
     offered: std::collections::HashMap<String, String>,
     used: std::collections::HashSet<String>,
+    plain_writes: std::collections::HashSet<String>,
 }
 impl ToolTurn {
     fn new(tools: Vec<moss_agents::gateway::ToolDef>, id: String) -> Result<Self, String> {
         let mut names = std::collections::HashSet::new();
         let mut offered = std::collections::HashMap::new();
+        let mut plain_writes = std::collections::HashSet::new();
         for def in tools {
+            if def.facts.risk == moss_agents::approvals::Risk::Write && def.facts.execution_auto {
+                plain_writes.insert(def.name.clone());
+            }
             if !names.insert(def.name.clone()) {
                 return Err("Duplicate offered tool name".into());
             }
@@ -382,12 +460,22 @@ impl ToolTurn {
             id,
             offered,
             used: Default::default(),
+            plain_writes,
         })
     }
+    #[cfg(test)]
     fn dispatch(
         &mut self,
         event: &Value,
         tools: &dyn crate::chat_tools::ChatTools,
+    ) -> Result<String, String> {
+        self.dispatch_with(event, tools, |_, _, _| None)
+    }
+    fn dispatch_with(
+        &mut self,
+        event: &Value,
+        tools: &dyn crate::chat_tools::ChatTools,
+        approved: impl FnOnce(&str, &str, &Value) -> Option<chat_approvals::Action>,
     ) -> Result<String, String> {
         let id = event["call_id"].as_str().unwrap_or_default();
         let valid_id = id
@@ -403,7 +491,13 @@ impl ToolTurn {
             eprintln!("moss-shell: refused unoffered chat tool");
             "Tool was not offered for this turn".to_string()
         })?;
-        tools.run(module, &name.replace('_', "."), event["arguments"].clone())
+        let tool = name.replace('_', ".");
+        let parameters = event["arguments"].clone();
+        if let Some(action) = approved(module, &tool, &parameters) {
+            tools.run_approved(module, &tool, parameters, action.version.as_deref())
+        } else {
+            tools.run(module, &tool, parameters)
+        }
     }
 }
 

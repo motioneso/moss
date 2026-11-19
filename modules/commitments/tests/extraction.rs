@@ -1,6 +1,6 @@
 mod common;
-use common::{Fake, A, B};
-use serde_json::{json, Value};
+use common::{A, B, Fake};
+use serde_json::{Value, json};
 
 const CAND: &str = "app.commitment_candidates";
 const MSG: &str = "00000000-0000-4000-8000-0000000000f1";
@@ -75,7 +75,12 @@ fn a_source_with_no_provider_warns_and_returns() {
 #[test]
 fn the_extract_route_queues_a_job_with_the_source_kind_only() {
     let f = fake();
-    let (status, body) = f.route("POST", "/extract", &[], json!({"sourceKind":"notes","text":"I will pay the bill"}));
+    let (status, body) = f.route(
+        "POST",
+        "/extract",
+        &[],
+        json!({"sourceKind":"notes","text":"I will pay the bill"}),
+    );
     assert_eq!((status, body), (202, json!({"queued":true})));
     let asked = f.jobs_asked();
     assert_eq!(asked.len(), 1);
@@ -88,8 +93,14 @@ fn the_extract_route_queues_a_job_with_the_source_kind_only() {
 }
 
 fn thread(f: &Fake, newest_from_user: bool, newest_id: &str) {
-    f.api_says("email.replyContext", json!({"threadId":"th-1","accountId":"acc","externalId":"e1"}));
-    f.api_says("email.emailTriageContext", json!({"today":"2026-11-10","ownAddresses":["me@example.test"]}));
+    f.api_says(
+        "email.replyContext",
+        json!({"threadId":"th-1","accountId":"acc","externalId":"e1"}),
+    );
+    f.api_says(
+        "email.emailTriageContext",
+        json!({"today":"2026-11-10","ownAddresses":["me@example.test"]}),
+    );
     f.api_says("email.listThreadMessages", json!({"messages":[
         {"externalId":"e1","fromIsUser":true,"fromAddress":"me@example.test","subject":"Budget","receivedAt":"2026-11-09T08:00:00.000Z","bodyExcerpt":"Hello"},
         {"externalId":newest_id,"fromIsUser":newest_from_user,"fromAddress":"sarah@example.test","subject":"Re: Budget","receivedAt":"2026-11-09T09:00:00.000Z","bodyExcerpt":"Please send it by Friday. SECRET-BODY"}]}));
@@ -227,7 +238,12 @@ fn review_tools_need_a_current_approval_and_change_only_the_owners_rows() {
     assert!(f.tool("commitments.accept", json!({"candidateId":id}), Some("[]")).is_err());
     assert_eq!(f.rows(CAND)[0]["status"], "pending_review");
 
-    let card = f.api("prepareCommitmentAction", json!({"candidateId":id,"action":"accept"})).unwrap();
+    let card = f
+        .api(
+            "prepareCommitmentAction",
+            json!({"candidateId":id,"action":"accept"}),
+        )
+        .unwrap();
     assert_eq!(card["target"], "Send budget");
     let version = card["version"].as_str().unwrap().to_owned();
     // Another person cannot use that card.
@@ -236,7 +252,13 @@ fn review_tools_need_a_current_approval_and_change_only_the_owners_rows() {
     assert_eq!(f.tool("commitments.list", json!({}), None).unwrap()["data"]["items"], json!([]));
     assert_eq!(f.tool("commitments.get", json!({"candidateId":id}), None).unwrap()["data"]["error"], "Not found");
     f.as_actor(A);
-    let done = f.tool("commitments.accept", json!({"candidateId":id}), Some(&version)).unwrap();
+    let done = f
+        .tool(
+            "commitments.accept",
+            json!({"candidateId":id}),
+            Some(&version),
+        )
+        .unwrap();
     assert_eq!(done["data"], json!({"id":id,"status":"accepted"}));
     // The old card is stale now.
     assert!(f.tool("commitments.reject", json!({"candidateId":id}), Some(&version)).is_err());
@@ -246,15 +268,42 @@ fn review_tools_need_a_current_approval_and_change_only_the_owners_rows() {
 fn snooze_needs_a_date_and_get_shows_evidence_without_the_resolution_ref() {
     let f = fake();
     let id = accepted(&f, A, "Send budget", "2026-11-11", json!("task:9"));
-    f.seed("app.commitment_candidate_sources", A, json!({"candidate_id":id,"source_kind":"notes","source_ref":"n1",
-        "source_version":0,"evidence_excerpt":"I will","occurred_at":null}));
-    let got = f.tool("commitments.get", json!({"candidateId":id}), None).unwrap();
+    f.seed(
+        "app.commitment_candidate_sources",
+        A,
+        json!({"candidate_id":id,"source_kind":"notes","source_ref":"n1",
+        "source_version":0,"evidence_excerpt":"I will","occurred_at":null}),
+    );
+    let got = f
+        .tool("commitments.get", json!({"candidateId":id}), None)
+        .unwrap();
     assert_eq!(got["data"]["hasResolutionRef"], true);
     assert_eq!(got["data"]["evidence"][0]["evidenceExcerpt"], "I will");
     assert!(!got.to_string().contains("task:9"));
-    let version = f.api("prepareCommitmentAction", json!({"candidateId":id,"action":"snooze","snoozedUntil":"2026-12-01T00:00:00.000Z"})).unwrap()["version"].as_str().unwrap().to_owned();
-    assert!(f.tool("commitments.snooze", json!({"candidateId":id}), Some(&version)).is_err());
-    let done = f.tool("commitments.snooze", json!({"candidateId":id,"snoozedUntil":"2026-12-01T00:00:00.000Z"}), Some(&version)).unwrap();
+    let version = f
+        .api(
+            "prepareCommitmentAction",
+            json!({"candidateId":id,"action":"snooze","snoozedUntil":"2026-12-01T00:00:00.000Z"}),
+        )
+        .unwrap()["version"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert!(
+        f.tool(
+            "commitments.snooze",
+            json!({"candidateId":id}),
+            Some(&version)
+        )
+        .is_err()
+    );
+    let done = f
+        .tool(
+            "commitments.snooze",
+            json!({"candidateId":id,"snoozedUntil":"2026-12-01T00:00:00.000Z"}),
+            Some(&version),
+        )
+        .unwrap();
     assert_eq!(done["data"]["snoozedUntil"], "2026-12-01T00:00:00.000Z");
 }
 
@@ -263,8 +312,17 @@ fn thread_judgements_report_outcomes_for_the_owner_only() {
     let f = fake();
     f.seed("app.commitment_email_thread_judgements", A, json!({"thread_ref":"t1","last_judged_external_id":"e","outcome":"item","judged_at":"2026-11-09T10:00:00.000Z"}));
     f.seed("app.commitment_email_thread_judgements", B, json!({"thread_ref":"t2","last_judged_external_id":"e","outcome":"item","judged_at":"2026-11-09T10:00:00.000Z"}));
-    let out = f.tool("commitments.threadJudgements", json!({"threadRefs":["t1","t2"]}), None).unwrap();
-    assert_eq!(out["data"]["threads"], json!([{"threadRef":"t1","judgedAt":"2026-11-09T10:00:00.000Z","outcome":"item"}]));
+    let out = f
+        .tool(
+            "commitments.threadJudgements",
+            json!({"threadRefs":["t1","t2"]}),
+            None,
+        )
+        .unwrap();
+    assert_eq!(
+        out["data"]["threads"],
+        json!([{"threadRef":"t1","judgedAt":"2026-11-09T10:00:00.000Z","outcome":"item"}])
+    );
 }
 
 #[test]
@@ -293,4 +351,36 @@ fn the_chat_list_counts_a_finished_snooze_as_pending_review() {
     assert_eq!(listed["data"]["items"][0]["id"], id.as_str());
     let snoozed = f.tool("commitments.list", json!({"status":"snoozed"}), None).unwrap();
     assert_eq!(snoozed["data"]["items"], json!([]));
+}
+
+#[test]
+fn chat_card_adapts_the_common_envelope_to_the_saved_suggestion() {
+    let f = fake();
+    let id = f.seed(CAND, A, json!({"title":"Saved suggestion","status":"pending_review","updated_at":"2026-11-10T12:00:00.000Z"}));
+    for (tool, label) in [
+        ("accept", "Accept suggestion"),
+        ("reject", "Reject suggestion"),
+        ("snooze", "Snooze suggestion"),
+    ] {
+        let card = f.api("prepareChatAction", json!({"tool":format!("commitments.{tool}"),"parameters":{"candidateId":id,"snoozedUntil":"2026-12-01T09:00:00.000Z"}})).unwrap();
+        assert_eq!(card["target"], "Saved suggestion");
+        assert_eq!(card["fields"][0], json!({"label":"Action","value":label}));
+        assert!(card["version"].as_str().unwrap().contains(&id));
+    }
+    assert!(
+        f.api(
+            "prepareChatAction",
+            json!({"tool":"commitments.get","parameters":{"candidateId":id}})
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn chat_snooze_card_requires_a_valid_timestamp_before_it_can_be_shown() {
+    let f = fake();
+    let id = f.seed(CAND, A, json!({"title":"Saved suggestion","status":"pending_review","updated_at":"2026-11-10T12:00:00.000Z"}));
+    for parameters in [json!({"candidateId":id}), json!({"candidateId":id,"snoozedUntil":"next week"})] {
+        assert!(f.api("prepareChatAction", json!({"tool":"commitments.snooze","parameters":parameters})).is_err());
+    }
 }

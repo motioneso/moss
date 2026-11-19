@@ -13,6 +13,14 @@ use uuid::Uuid;
 const MAX_RECORDS: usize = 50;
 const FIELD_CAP: usize = 500;
 
+#[derive(Clone, Debug)]
+pub struct Action {
+    pub module: String,
+    pub tool: String,
+    pub parameters: Value,
+    pub version: Option<String>,
+}
+
 pub struct Record {
     pub id: Uuid,
     pub actor: String,
@@ -22,6 +30,10 @@ pub struct Record {
     pub runner_id: u64,
     pub title: String,
     pub fields: Vec<CardField>,
+    pub target: String,
+    pub content: Option<String>,
+    pub danger: bool,
+    pub action: Option<Action>,
     pub expires: Instant,
     pub state: ApprovalState,
 }
@@ -99,12 +111,32 @@ impl Book {
     /// Ends every record of a finished turn that was not used. No approval outlives its turn.
     pub fn void_turn(&mut self, turn: &str) {
         for r in &mut self.records {
-            if r.turn == turn
-                && matches!(r.state, ApprovalState::Pending | ApprovalState::Approved)
+            if r.turn == turn && matches!(r.state, ApprovalState::Pending | ApprovalState::Approved)
             {
                 r.state = ApprovalState::Voided;
             }
         }
+    }
+
+    /// Only the exact approved action in the current actor's open turn can mint a host grant.
+    pub fn consume(
+        &mut self,
+        actor: &str,
+        turn: &str,
+        module: &str,
+        tool: &str,
+        parameters: &Value,
+    ) -> Option<Action> {
+        let record = self.records.iter_mut().find(|r| {
+            r.actor == actor
+                && r.turn == turn
+                && r.state == ApprovalState::Approved
+                && r.action.as_ref().is_some_and(|a| {
+                    a.module == module && a.tool == tool && a.parameters == *parameters
+                })
+        })?;
+        record.state = ApprovalState::Used;
+        record.action.clone()
     }
 
     pub fn views(&self, actor: &str) -> Vec<ApprovalView> {
@@ -117,7 +149,9 @@ impl Book {
                 state: r.state,
                 title: r.title.clone(),
                 fields: r.fields.clone(),
-                danger: false,
+                danger: r.danger,
+                target: r.target.clone(),
+                content: r.content.clone(),
             })
             .collect()
     }

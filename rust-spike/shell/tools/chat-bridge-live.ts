@@ -1,4 +1,4 @@
-/** Holds a real installed Scratchpad server and disposable DB for the desktop bridge proof. */
+/** Holds a real installed server and disposable DB for chat bridge and approval UI proof. */
 import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
@@ -23,6 +23,15 @@ run(join(target, "debug/scratchpad-package"), [
   join(target, "module.wasm"),
   join(target, "scratchpad.mosspkg")
 ]);
+if (process.env.MOSS_CHAT_COMMITMENTS_PROOF === "1") {
+  run("bash", ["modules/commitments/tools/build-component.sh", join(target, "commitments.wasm")]);
+  cargo("modules/commitments/host/Cargo.toml", ["build", "--bin", "commitments-package"]);
+  run(join(target, "debug/commitments-package"), [
+    join(target, "commitments.wasm"),
+    join(target, "commitments.mosspkg")
+  ]);
+  process.env.JS383_COMMITMENTS_PACKAGE = join(target, "commitments.mosspkg");
+}
 cargo("rust-spike/shell/Cargo.toml", ["build", "-p", "moss-shell", "--features", "live-proof"]);
 cargo("rust-spike/agents/Cargo.toml", ["build", "--bins"]);
 cargo("rust-spike/network/Cargo.toml", ["build", "--bin", "moss-network"]);

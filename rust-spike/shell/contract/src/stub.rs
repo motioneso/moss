@@ -155,6 +155,7 @@ impl ShellData for StubShellData {
             messages: self.messages.lock().expect("stub lock").clone(),
             running: false,
             approvals: Vec::new(),
+            completed: Vec::new(),
         }
     }
 
