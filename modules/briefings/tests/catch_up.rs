@@ -141,3 +141,24 @@ fn undo_with_another_accounts_feedback_or_task_id_changes_nothing() {
     assert_eq!(fake.open_tasks(A), 1);
     assert_eq!(fake.open_tasks(B), 1);
 }
+
+#[test]
+fn today_lists_unhandled_entries_and_drops_added_or_dismissed_ones() {
+    let fake = setup();
+    let (status, today) = fake.route("GET", "/today", &[], Value::Null);
+    assert_eq!(status, 200, "{today}");
+    assert_eq!(today["run"]["id"], RUN);
+    assert_eq!(today["catchUp"]["entries"].as_array().unwrap().len(), 2);
+    post(&fake, RUN, "catch-1", "add", json!({}));
+    post(&fake, RUN, "catch-2", "dismiss", json!({}));
+    let (_, today) = fake.route("GET", "/today", &[], Value::Null);
+    assert!(today["catchUp"].is_null(), "{today}");
+}
+
+#[test]
+fn another_accounts_handled_entries_do_not_hide_mine() {
+    let fake = setup();
+    fake.rate(B, "briefing_item", "dismiss", "catch-1");
+    let (_, today) = fake.route("GET", "/today", &[], Value::Null);
+    assert_eq!(today["catchUp"]["entries"].as_array().unwrap().len(), 2);
+}

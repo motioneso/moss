@@ -17,6 +17,7 @@ export function briefingsApi(client) {
       );
       failure.status = reply.status;
       failure.code = reply.body?.code;
+      failure.taskId = reply.body?.taskId;
       throw failure;
     }
     return reply.body;
@@ -34,6 +35,8 @@ export function briefingsApi(client) {
       ),
     today: () => call("GET", "/today"),
     triage: (taskId, action) => call("POST", `/today/rows/${id(taskId)}`, { action }),
+    catchUp: (runId, itemId, action, body = {}) =>
+      call("POST", `/today/runs/${id(runId)}/catch-up/${id(itemId)}/${action}`, body),
     start: (definitionId, idempotencyKey) =>
       call("POST", `/definitions/${id(definitionId)}/run`, { idempotencyKey })
   };

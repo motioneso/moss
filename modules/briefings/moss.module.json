@@ -313,6 +313,24 @@
       ]
     },
     {
+      "id": "briefings.today-catch-up",
+      "description": "Under Needs you, Today shows a Catch-up list of emails from the latest morning briefing that have not been handled, with Open, Reply, Add task and Dismiss on each. Add task creates a task named Follow up with the sender and marks the email as useful; Dismiss hides the email. Either one reads Added to your tasks or Dismissed with an Undo, which takes the rating back and archives the new task. After a reload, handled emails stay hidden. If a change does not save, the list says so and Add task can be tried again without creating a second task. Another person's briefing or email is not found and changes nothing.",
+      "errors": [
+        {
+          "code": "catch_up_entry_not_found",
+          "class": "not_found",
+          "description": "The email is missing from the briefing, or belongs to someone else."
+        }
+      ],
+      "remediations": [
+        {
+          "id": "briefings.today-catch-up.reload",
+          "description": "Reload Today to read which emails are still waiting.",
+          "path": "/today"
+        }
+      ]
+    },
+    {
       "id": "briefings.day-plan",
       "description": "A succeeded run that found calendar signals asks Calendar to reserve blocks on the person's own day plan, only when the person's Use for planning switch on Calendar is on. A calendar the person left out of briefings with the Include in briefings switch is not read at all. Briefings reads the saved day plan for context and shows overnight changes for review. Calendar owns the plan, the blocks and the revision check. The run keeps only ids and a batch key. Applying the blocks to the connected calendar is not part of this package yet."
     }
