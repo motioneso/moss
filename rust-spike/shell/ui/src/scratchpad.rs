@@ -4,7 +4,7 @@ use crate::{
     frame::{Icon, Navigate},
     icons,
 };
-use leptos::{html, prelude::*, task::spawn_local};
+use leptos::{html, portal::Portal, prelude::*, task::spawn_local};
 use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 
 #[component]
@@ -153,10 +153,12 @@ pub fn Scratchpad(
             node_ref=button on:click=move |_| { if open.get_untracked() { close(); } else { open.set(true); } }>
             <Icon svg=icons::PENCIL name="pencil" size=18 />
         </button>
+        <Portal>
         <div class=move || if chat_open.get() && !phone.get() { "scratchpad-slot scratchpad-slot--beside" } else { "scratchpad-slot" }
             hidden=move || !open.get() role=move || phone.get().then_some("dialog")
             aria-modal=move || phone.get().then_some("true") aria-label="Scratchpad">
             <iframe node_ref=panel title="Scratchpad panel" src="/module-frame?module=scratchpad&path=%2Fscratchpad"></iframe>
         </div>
+        </Portal>
     }
 }

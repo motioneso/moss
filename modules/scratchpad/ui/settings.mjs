@@ -5,13 +5,12 @@ const client = moduleClient();
 const api = scratchpadApi(client);
 const root = document.getElementById("root");
 root.innerHTML = `<div class="sc-settings">
-<button class="jds-btn jds-btn--quiet sc-back" id="back">‹ Modules</button>
+<button class="jds-btn jds-btn--quiet sc-back" id="back"><svg aria-hidden="true" width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg><span>Modules</span></button>
 <div class="jds-section-head jds-section-head--rule"><h2 class="jds-section-head__title">Scratchpad</h2></div>
 <p id="state" role="status">Loading your settings…</p>
-<div id="controls" hidden>
-<div class="set-row"><div class="set-row__main"><div class="sc-row-title">Shortcut</div></div><div class="set-row__control sc-controls"><button class="jds-btn jds-btn--secondary sc-kbd" id="shortcut" aria-label="Change Scratchpad shortcut"></button><button class="jds-btn jds-btn--link" id="reset">Reset to default</button></div></div>
-<div class="set-row"><div class="set-row__main"><div class="sc-row-title">Copy to my notes folder</div><div class="set-row__desc" id="folder"></div></div><div class="set-row__control"><label class="jds-switch"><input type="checkbox" id="sync" aria-label="Copy to my notes folder"/><span class="jds-switch__track"><span class="jds-switch__thumb"></span></span></label></div></div>
-</div><button class="jds-btn jds-btn--secondary" id="retry" hidden>Try again</button></div>`;
+<div class="set-row" hidden><div class="set-row__main"><div class="sc-row-title">Shortcut</div></div><div class="set-row__control sc-controls"><button class="jds-btn jds-btn--secondary sc-kbd" id="shortcut" aria-label="Change Scratchpad shortcut"></button><button class="jds-btn jds-btn--link" id="reset">Reset to default</button></div></div>
+<div class="set-row" hidden><div class="set-row__main"><div class="sc-row-title">Copy to my notes folder</div><div class="set-row__desc" id="folder"></div></div><div class="set-row__control"><label class="jds-switch"><input type="checkbox" id="sync" aria-label="Copy to my notes folder"/><span class="jds-switch__track"><span class="jds-switch__thumb"></span></span></label></div></div>
+<button class="jds-btn jds-btn--secondary" id="retry" hidden>Try again</button></div>`;
 const state = root.querySelector("#state");
 const shortcut = root.querySelector("#shortcut");
 const sync = root.querySelector("#sync");
@@ -23,9 +22,14 @@ const label = (value) =>
     .split("+")
     .map(
       (p) =>
-        ({ mod: "Ctrl / Cmd", ctrl: "Ctrl", cmd: "Cmd", meta: "Cmd", shift: "Shift", alt: "Alt" })[
-          p
-        ] ?? p.toUpperCase()
+        ({
+          mod: /Mac/.test(globalThis.navigator?.platform ?? "") ? "Cmd" : "Ctrl",
+          ctrl: "Ctrl",
+          cmd: "Cmd",
+          meta: "Cmd",
+          shift: "Shift",
+          alt: "Alt"
+        })[p] ?? p.toUpperCase()
     )
     .join(" + ");
 function render() {
@@ -40,7 +44,7 @@ async function load() {
   root.querySelector("#retry").hidden = true;
   try {
     note = await api.read();
-    root.querySelector("#controls").hidden = false;
+    for (const row of root.querySelectorAll(".set-row")) row.hidden = false;
     root.querySelector("#folder").textContent = note.notesFolderConfigured
       ? "Keep a copy in your connected notes folder."
       : "No notes folder connected. ";
@@ -55,8 +59,10 @@ async function load() {
       root.querySelector("#folder").append(connect);
     }
     state.textContent = "";
+    state.hidden = true;
     render();
   } catch {
+    state.hidden = false;
     state.textContent = "Couldn't load your settings.";
     root.querySelector("#retry").hidden = false;
   }
@@ -66,6 +72,7 @@ async function save(settings) {
   busy = true;
   recording = false;
   render();
+  state.hidden = false;
   state.textContent = "Saving…";
   try {
     Object.assign(note, await api.settings(settings));
@@ -104,6 +111,7 @@ shortcut.addEventListener("keydown", (event) => {
   if (event.altKey) parts.push("alt");
   if (event.shiftKey) parts.push("shift");
   if (!event.ctrlKey && !event.metaKey && !event.altKey) {
+    state.hidden = false;
     state.textContent = "Use Ctrl, Cmd or Alt plus a key.";
     return;
   }
