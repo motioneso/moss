@@ -54,16 +54,16 @@ Out of scope:
 
 ### 2.2 What is missing
 
-| Gap                                                                                                                                                                   | Evidence                                                                                                                                                             | Fixed by                 |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| Tasks has no public call that changes a task's status or creates a general task                                                                                       | `modules/tasks/moss.module.json` provides                                                                                                                            | Part 2                   |
-| `listBriefingTasks` never returns archived tasks, so a dismissed row cannot show "Dismissed"                                                                          | `modules/tasks/src/lib.rs:77-82`                                                                                                                                     | Part 2                   |
-| A module cannot record a rating for the caller or read the caller's active ratings. The old server let Briefings do both (`packages/briefings/src/routes.ts:301-345`) | no feedback port in `rust-spike/module-host/src/services.rs:304-440`; feedback store lives in the shell app (`rust-spike/shell/app/src/proactive_feedback.rs:28-43`) | Part 4                   |
-| Briefings runs route does not hide dismissed items or handled catch-up                                                                                                | `modules/briefings/src/runs.rs` has no feedback read                                                                                                                 | Part 5                   |
-| Email has no public call for its briefing switch                                                                                                                      | `modules/email/moss.module.json` provides                                                                                                                            | Part 7                   |
-| Calendar switch is read only to other modules                                                                                                                         | `modules/calendar/src/lib.rs:145-153`                                                                                                                                | Part 7                   |
-| Briefings cannot call Email at all                                                                                                                                    | `email` missing from `optionalRequires` and from the `api` resources (`modules/briefings/moss.module.json:20`)                                                       | Part 8                   |
-| No module draws the Today schedule; the timeline is sample data                                                                                                       | `rust-spike/shell/ui/src/today.rs:43`; `runner_data.rs:107-109`                                                                                                      | Open question, section 8 |
+| Gap                                                                                                                                                                   | Evidence                                                                                                                                                             | Fixed by          |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| Tasks has no public call that changes a task's status or creates a general task                                                                                       | `modules/tasks/moss.module.json` provides                                                                                                                            | Part 2            |
+| `listBriefingTasks` never returns archived tasks, so a dismissed row cannot show "Dismissed"                                                                          | `modules/tasks/src/lib.rs:77-82`                                                                                                                                     | Part 2            |
+| A module cannot record a rating for the caller or read the caller's active ratings. The old server let Briefings do both (`packages/briefings/src/routes.ts:301-345`) | no feedback port in `rust-spike/module-host/src/services.rs:304-440`; feedback store lives in the shell app (`rust-spike/shell/app/src/proactive_feedback.rs:28-43`) | Part 4            |
+| Briefings runs route does not hide dismissed items or handled catch-up                                                                                                | `modules/briefings/src/runs.rs` has no feedback read                                                                                                                 | Part 5            |
+| Email has no public call for its briefing switch                                                                                                                      | `modules/email/moss.module.json` provides                                                                                                                            | Part 7            |
+| Calendar switch is read only to other modules                                                                                                                         | `modules/calendar/src/lib.rs:145-153`                                                                                                                                | Part 7            |
+| Briefings cannot call Email at all                                                                                                                                    | `email` missing from `optionalRequires` and from the `api` resources (`modules/briefings/moss.module.json:20`)                                                       | Part 8            |
+| No module draws the Today schedule; the timeline is sample data                                                                                                       | `rust-spike/shell/ui/src/today.rs:43`; `runner_data.rs:107-109`                                                                                                      | Part 9 (Calendar) |
 
 No step below adds an owner's call inside Briefings. Each owner adds its own call first.
 
@@ -288,9 +288,9 @@ Each security test must be observed failing with the check removed.
 - App map: Briefings settings entry lists the two switches with their labels.
 - Mockup: none. Reproduces `settings-source-behaviors.ts`.
 
-### Part 9: day plan and review, read only (pending section 8)
+### Part 9: day plan and review, read only
 
-- Owner: Calendar, if Ben agrees. Waits on the section 8 answer.
+- Owner: Calendar (Ben, 2026-11-19, section 8). Waits on nothing.
 - Calendar ships `"/today": "ui/today.html"` showing the day plan and the review panel from
   `GET /day-plan`, mounted where the sample timeline sits.
 - Mockup: this replaces sample content, so the reference screen must be named before the build. The
@@ -354,10 +354,11 @@ After Part 3 ships, Ben checks the Needs you section on the phone. If a framed s
 feels slower or looks different from the rest of Today, stop and re-plan the rest around option B
 before Part 6. Owner: Ben.
 
-## 8. Open questions for Ben
+## 8. Ben's ruling
 
-1. Do Briefings and Calendar each own their Today section (option A), with Calendar replacing the
-   sample schedule? This resolves the Open item at meetings-briefings plan 3.4. Recommendation: yes.
+Ben, 2026-11-19: Briefings and Calendar each own their own section on Today (option A), and
+Calendar's section replaces the sample schedule. This resolves the Open item at
+meetings-briefings plan 3.4.
 
 ## 9. Rulings ledger
 
