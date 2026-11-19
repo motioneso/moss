@@ -47,6 +47,11 @@
       "resources": ["summarization"]
     },
     {
+      "port": "feedback",
+      "operations": ["active"],
+      "resources": ["briefing_run", "briefing_item"]
+    },
+    {
       "port": "tools",
       "operations": ["offer", "run"],
       "resources": ["briefings.rerun", "briefings.getRunStatus"]
@@ -103,6 +108,16 @@
     {
       "method": "POST",
       "path": "/definitions/:id/run",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/today",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/today/rows/:task_id",
       "signIn": true
     }
   ],
@@ -167,7 +182,8 @@
   },
   "screens": {
     "/settings/briefings": "ui/index.html",
-    "/briefing": "ui/briefing.html"
+    "/briefing": "ui/briefing.html",
+    "/today": "ui/today.html"
   },
   "navigation": [],
   "settings": [
@@ -208,7 +224,7 @@
     },
     {
       "id": "briefings.history",
-      "description": "List past briefing runs newest first, or read one run by id. Earlier reports stay dated and read-only. A run written without AI returns empty summary text, so its source list is never shown. Only the owner sees runs, even for a definition shared with someone else.",
+      "description": "List past briefing runs newest first, or read one run by id. Earlier reports stay dated and read-only. A run written without AI returns empty summary text, so its source list is never shown. Only the owner sees runs, even for a definition shared with someone else. A dismissed run leaves the history list but still opens by its link, a dismissed item stays hidden, a dismissed catch-up entry stays hidden, and a catch-up entry they turned into a task is hidden too; undoing the rating brings it back.",
       "errors": [
         {
           "code": "briefing_run_not_available",
@@ -270,6 +286,18 @@
       ]
     },
     {
+      "id": "briefings.today-actions",
+      "description": "The Needs you section on Today lists the suggested-task rows from the person's latest morning briefing, or the suggested tasks themselves when no briefing has run. Each row shows its live state from Tasks. Suggested rows offer Accept and Dismiss, plus Reply or View when the row has one, and read Accepted or Dismissed once changed, also after a reload. Accept sets the task to todo and Dismiss archives it, through the Tasks public call, so another person's task cannot be changed. Without Tasks the rows show without buttons.",
+      "errors": [],
+      "remediations": [
+        {
+          "id": "briefings.today-actions.reload",
+          "description": "Reload Today to read the current state of the rows.",
+          "path": "/today"
+        }
+      ]
+    },
+    {
       "id": "briefings.day-plan",
       "description": "A succeeded run that found calendar signals asks Calendar to reserve blocks on the person's own day plan, only when the person's Use for planning switch on Calendar is on. A calendar the person left out of briefings with the Include in briefings switch is not read at all. Briefings reads the saved day plan for context and shows overnight changes for review. Calendar owns the plan, the blocks and the revision check. The run keeps only ids and a batch key. Applying the blocks to the connected calendar is not part of this package yet."
     }
@@ -277,7 +305,7 @@
   "optionalRequires": {
     "calendar": ">=0.29.0, <1.0.0",
     "connectors": ">=0.5.0, <1.0.0",
-    "tasks": ">=0.1.4, <1.0.0",
+    "tasks": ">=0.1.5, <1.0.0",
     "news": ">=0.1.0, <1.0.0",
     "sports": ">=0.1.0, <1.0.0",
     "weather": ">=0.1.0, <1.0.0"

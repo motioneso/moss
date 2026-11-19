@@ -46,6 +46,9 @@ impl Application {
         if let Some(dir) = config.browser_dir {
             services = services.with_browser(dir);
         }
+        services = services.with_feedback(Arc::new(crate::feedback_port::PostgresFeedback::new(
+            database.clone(),
+        )?));
         if let Some(transport) = crate::network::test_transport() {
             services = services.with_network(transport);
         }

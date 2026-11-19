@@ -24,6 +24,7 @@ pub struct ServicePorts {
     pub(crate) ai: Arc<dyn crate::ai::Intelligence>,
     pub(crate) network: Arc<dyn crate::network::Transport>,
     public_web: Arc<crate::public_web::PublicWeb>,
+    feedback: Arc<dyn crate::feedback_port::Feedback>,
     browser: Option<crate::browser::BrowserPort>,
     /// Proof only. Files every person's service data under one shared folder.
     #[cfg(feature = "browser-proof")]
@@ -45,6 +46,7 @@ impl ServicePorts {
             ai,
             network: Arc::new(crate::network::Network),
             public_web: Arc::default(),
+            feedback: Arc::new(crate::feedback_port::NoFeedback),
             browser: None,
             #[cfg(feature = "browser-proof")]
             pooled: false,
@@ -94,6 +96,11 @@ impl ServicePorts {
             launcher,
             self.public_web.clone(),
         ));
+        self
+    }
+    /// Supplies the store behind the `feedback` port.
+    pub fn with_feedback(mut self, feedback: Arc<dyn crate::feedback_port::Feedback>) -> Self {
+        self.feedback = feedback;
         self
     }
     pub fn with_network(mut self, transport: Arc<dyn crate::network::Transport>) -> Self {
@@ -306,6 +313,7 @@ impl ServicePorts {
         let access = scope.access();
         match port {
             "credentials" => self.broker(scope, r),
+            "feedback" => crate::feedback_port::invoke(self.feedback.as_ref(), scope, r),
             "fetch" if r.resource == crate::public_web::PUBLIC_WEB => {
                 Ok(self
                     .public_web

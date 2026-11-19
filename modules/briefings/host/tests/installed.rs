@@ -721,3 +721,79 @@ fn chat_tools_act_only_for_the_signed_in_person_and_leave_no_text_in_any_side_ta
         assert_eq!(hits, 0, "{table} holds the written text");
     }
 }
+
+/// Rates as the person through the host's own feedback store, the way the Today controls will.
+fn rate(w: &World, who: uuid::Uuid, kind: &str, target_ref: &str, rating: &str) -> String {
+    use moss_module_host::feedback_port::{Feedback, PostgresFeedback, Record};
+    PostgresFeedback::new(w.f.db.clone())
+        .unwrap()
+        .record(
+            &w.f.access(who),
+            kind,
+            &Record {
+                target_ref: target_ref.into(),
+                surface: "briefing".into(),
+                kind: rating.into(),
+                source_kind: Some("briefing".into()),
+                source_label: Some("Briefing".into()),
+                metadata: json!({}),
+            },
+        )
+        .unwrap()
+}
+
+fn unrate(w: &World, who: uuid::Uuid, kind: &str, id: &str) {
+    use moss_module_host::feedback_port::{Feedback, PostgresFeedback};
+    PostgresFeedback::new(w.f.db.clone()).unwrap().undo(&w.f.access(who), kind, id).unwrap();
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn dismissed_items_stay_hidden_for_their_owner_only_and_undo_brings_them_back() {
+    let w = World::new("UTC");
+    let (a, b) = (w.f.a, w.f.b);
+    let id = make_definition(&w, a, "manual");
+    let (def, run) = (id.parse::<uuid::Uuid>().unwrap(), uuid::Uuid::new_v4());
+    w.f.rt
+        .block_on(w.f.root.execute(
+            "INSERT INTO app.briefing_runs(id,definition_id,owner_user_id,status,run_kind,briefing_type,summary_text,source_metadata) \
+             VALUES($1,$2,$3,'succeeded','manual','morning','Text',$4)",
+            &[&run, &def, &a, &json!({
+                "aiModel": {"provider": "p", "model": "m"},
+                "calendarSignals": [{"type": "meeting", "summary": "Standup", "score": 70}],
+                "structuredPayload": {"version": 1, "actionRows": [], "catchUp": {"itemCount": 2, "entries": [
+                    {"id": "catch-1", "summary": "One"}, {"id": "catch-2", "summary": "Two"}]}}
+            })],
+        ))
+        .unwrap();
+    let read = |who| w.call(who, "GET", &format!("/definitions/{id}/runs"), Value::Null)["body"]["runs"].clone();
+    let items = |runs: &Value| runs[0]["feedbackItems"].as_array().unwrap().len();
+    let entries = |runs: &Value| runs[0]["structuredPayload"]["catchUp"]["entries"].as_array().map_or(0, |e| e.len());
+    let first = read(a);
+    assert_eq!((items(&first), entries(&first)), (1, 2));
+    let item = first[0]["feedbackItems"][0]["feedbackItemId"].as_str().unwrap().to_owned();
+
+    // B dismisses the same refs. A still sees everything.
+    rate(&w, b, "briefing_item", &item, "dismiss");
+    rate(&w, b, "briefing_item", "catch-1", "dismiss");
+    rate(&w, b, "briefing_run", &run.to_string(), "dismiss");
+    let after_b = read(a);
+    assert_eq!((after_b.as_array().unwrap().len(), items(&after_b), entries(&after_b)), (1, 1, 2));
+    println!("GREEN: B's dismissals of the same item, entry and run hide nothing for A");
+
+    // A's own ratings hide them, and Undo brings them back.
+    let dismissed = rate(&w, a, "briefing_item", &item, "dismiss");
+    let added = rate(&w, a, "briefing_item", "catch-1", "more_like_this");
+    let hidden = read(a);
+    assert_eq!((items(&hidden), entries(&hidden)), (0, 1));
+    println!("GREEN: A's dismissed item and added catch-up entry are hidden");
+    unrate(&w, a, "briefing_item", &dismissed);
+    unrate(&w, a, "briefing_item", &added);
+    let back = read(a);
+    assert_eq!((items(&back), entries(&back)), (1, 2));
+    let run_rating = rate(&w, a, "briefing_run", &run.to_string(), "dismiss");
+    assert_eq!(read(a).as_array().unwrap().len(), 0);
+    unrate(&w, a, "briefing_run", &run_rating);
+    assert_eq!(read(a).as_array().unwrap().len(), 1);
+    println!("GREEN: Undo brings the item, the entry and the run back");
+}

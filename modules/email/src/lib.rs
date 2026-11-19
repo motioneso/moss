@@ -83,6 +83,13 @@ fn api(host: &impl Host, name: &str, input: &Value) -> Result<Value> {
         }
         "replyContext" => kv(host, "get", "email.thread", json!({
             "mode":"reply","cacheMessageId":input["cacheMessageId"]})),
+        "getBriefingSource" => {
+            if !input.as_object().is_some_and(|o| o.is_empty()) {
+                return Err(Error::new(400, "Invalid email request"));
+            }
+            settings::source(host)
+        }
+        "setBriefingSource" => settings::put_source(host, input),
         "recordTriageFeedback" => kv(host, "set", "email.triage-feedback", input.clone()),
         "triageFeedbackCounts" => kv(host, "get", "email.triage-feedback", json!({})),
         "listActionSuppression" => kv(host, "get", "email.suppression", input.clone()),

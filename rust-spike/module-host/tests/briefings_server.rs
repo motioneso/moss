@@ -202,7 +202,12 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
     // canonical installer, as the server would find it.
     let keys = Keys::new();
     fs::create_dir_all(root.join("registry/packages")).unwrap();
-    let artifacts: Vec<Artifact> = [("JS235_BRIEFINGS_PACKAGE", "briefings")]
+    // The Today proof also installs Tasks, which owns the suggested tasks the section acts on.
+    let mut packages = vec![("JS235_BRIEFINGS_PACKAGE", "briefings")];
+    if std::env::var("BRIEFINGS_WITH_TASKS").is_ok() {
+        packages.push(("JS220_TASKS_PACKAGE", "tasks"));
+    }
+    let artifacts: Vec<Artifact> = packages
     .iter()
     .map(|(variable, id)| {
         let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
@@ -260,7 +265,7 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
     }
     let installer = installed::reopen(
         &root.join("data"),
-        app,
+        app.clone(),
         &access,
         std::sync::Arc::new(moss_module_host::runtime::DenyPorts),
     );
@@ -484,6 +489,36 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
     if let Ok(hold) = std::env::var("BRIEFINGS_HOLD_OPEN") {
         // Held-open mode for browser proof. Writes the origin and owner cookie to the hold file,
         // then keeps the real server and its stand-in model up until the stop file appears.
+        if std::env::var("BRIEFINGS_SEED_SUGGESTED").is_ok() {
+            // Two suggested tasks as the email suggestion pipeline saves them, then a real
+            // morning run that reads them through Tasks. Only the inputs are inserted.
+            runtime.block_on(async {
+                let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+                tokio::spawn(async move { let _ = connection.await; });
+                let list: uuid::Uuid = db.query_one("INSERT INTO app.task_lists(owner_user_id,name) VALUES($1,'Personal') ON CONFLICT (owner_user_id, lower(name)) DO UPDATE SET name=excluded.name RETURNING id", &[&owner]).await.unwrap().get(0);
+                for (title, note, category, href) in [
+                    ("Send Priya the budget draft", "Priya asked for the budget draft by Friday.", "needs_reply", Value::Null),
+                    ("Book the room for Dana's leaving drinks", "Dana is waiting on the room booking.", "needs_action", json!("https://mail.example.test/thread/dana")),
+                ] {
+                    let metadata = json!({"version":1,"category":category,"sourceLabel":"Email","sourceHref":href,"cacheMessageId":uuid::Uuid::new_v4().to_string(),"subjectSignature":title,"computedAt":"2026-11-19T08:00:00.000Z","resurfaceReason":null});
+                    db.execute("INSERT INTO app.tasks(id,owner_user_id,list_id,title,description,status,source,source_ref,suggestion_metadata) VALUES(gen_random_uuid(),$1,$2,$3,$4,'suggested','email',$5,$6)", &[&owner, &list, &title, &note, &format!("email:{title}"), &metadata]).await.unwrap();
+                }
+            });
+            let (status, text) = call(Method::POST, &format!("/definitions/{id}/run"), Some(&cookie), Some(json!({})));
+            assert_eq!(status, 202, "{text}");
+            let queued = json_of(&text);
+            let (job, run) = (queued["jobId"].as_str().unwrap().to_owned(), queued["runId"].as_str().unwrap().to_owned());
+            let waited = std::time::Instant::now();
+            loop {
+                let (_, t) = call(Method::GET, &format!("/definitions/{id}/runs/{run}?jobId={job}"), Some(&cookie), None);
+                if json_of(&t)["state"] != "pending" { break; }
+                assert!(waited.elapsed() < std::time::Duration::from_secs(120), "seeded morning run did not finish");
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            }
+            let (_, t) = call(Method::GET, "/today", Some(&cookie), None);
+            let rows = json_of(&t)["rows"].as_array().map(|r| r.len()).unwrap_or(0);
+            assert_eq!(rows, 2, "the morning run should list both suggested tasks: {t}");
+        }
         fs::write(&hold, json!({"origin":origin,"cookie":cookie,"otherCookie":other,"certificate":cert}).to_string()).unwrap();
         let mut extras = json!({});
         // Real-model pass. Points the router at a real OpenAI-compatible endpoint and runs one
@@ -552,9 +587,46 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
             extras["upgrade"] = json!({"signIn": sign_status, "listStatus": list_status, "definitions": defs.len(), "perDefinition": runs});
             extras["devCookie"] = json!(dev_cookie);
         }
+        // Browser proof of hidden items. Seeds a newest morning run with three catch-up entries,
+        // then applies each command the proof script writes to `{hold}.cmd` through the host's
+        // own feedback store: {"op":"rate"|"undo","kind":"dismiss","ref":"catch-1"}.
+        let seeded = uuid::Uuid::new_v4();
+        runtime.block_on(async {
+            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+            tokio::spawn(async move { let _ = connection.await; });
+            let entries: Vec<Value> = (1..=3).map(|n| json!({"id": format!("catch-{n}"), "senderName": format!("Sender {n}"), "summary": format!("Catch-up email number {n}"), "reason": "important"})).collect();
+            let metadata = json!({"aiModel": {"provider": "p", "model": "m"}, "structuredPayload": {"version": 1, "actionRows": [], "catchUp": {"itemCount": 3, "since": "2026-11-18T07:00:00.000Z", "leftOutCount": 0, "entries": entries}}});
+            let def: uuid::Uuid = id.parse().unwrap();
+            db.execute(
+                "INSERT INTO app.briefing_runs(id,definition_id,owner_user_id,status,run_kind,briefing_type,summary_text,source_metadata,created_at) \
+                 VALUES($1,$2,$3,'succeeded','manual','morning','Seeded morning briefing',$4, now() + interval '1 minute')",
+                &[&seeded, &def, &owner, &metadata],
+            ).await.unwrap();
+        });
+        fs::write(format!("{hold}.seed.json"), json!({"runId": seeded, "definitionId": id}).to_string()).unwrap();
+        let feedback = moss_module_host::feedback_port::PostgresFeedback::new(app.clone()).unwrap();
+        let mut ratings: std::collections::HashMap<String, String> = Default::default();
         fs::write(format!("{hold}.extras.json"), extras.to_string()).unwrap();
         while !Path::new(&format!("{hold}.stop")).exists() {
-            std::thread::sleep(std::time::Duration::from_millis(500));
+            if let Ok(text) = fs::read_to_string(format!("{hold}.cmd")) {
+                use moss_module_host::feedback_port::{Feedback, Record};
+                let cmd = json_of(&text);
+                let (kind, target) = (cmd["kind"].as_str().unwrap().to_owned(), cmd["ref"].as_str().unwrap().to_owned());
+                let key = format!("{kind}:{target}");
+                let access = AccessContext::new(owner, "briefings-hold");
+                if cmd["op"] == "rate" {
+                    let rating = feedback.record(&access, "briefing_item", &Record {
+                        target_ref: target, surface: "briefing".into(), kind: cmd["rating"].as_str().unwrap().into(),
+                        source_kind: Some("briefing".into()), source_label: Some("Briefing".into()), metadata: json!({}),
+                    }).unwrap();
+                    ratings.insert(key, rating);
+                } else if let Some(rating) = ratings.remove(&key) {
+                    feedback.undo(&access, "briefing_item", &rating).unwrap();
+                }
+                fs::remove_file(format!("{hold}.cmd")).unwrap();
+                fs::write(format!("{hold}.cmd.done"), "done").unwrap();
+            }
+            std::thread::sleep(std::time::Duration::from_millis(300));
         }
     }
 }

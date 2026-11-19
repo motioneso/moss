@@ -445,8 +445,29 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
             db.execute("INSERT INTO app.tasks(id,owner_user_id,list_id,title,status) VALUES($1,$2,$3,'Gate task','todo')", &[&task, &user, &list]).await.unwrap();
             ids.push(task);
         }
+        // The second account saves its own switches, so a leaked owner write would show.
+        db.execute("INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'sourceBehaviors','{\"calendar.briefings\":true,\"calendar.planning\":false}')", &[&other]).await.unwrap();
         (ids[0], ids[1])
     });
+    // The owner turns one switch off and must not reach the second account's saved switches.
+    let (status, saved) = call(Method::PATCH, "/source-behaviors", Some(&cookie), Some(json!({"briefings":false})));
+    assert_eq!((status, &saved), (200, &json!({"briefings":false,"planning":true})), "{saved}");
+    let (status, sources) = call(Method::GET, "/source-behaviors", Some(&cookie), None);
+    assert_eq!((status, &sources), (200, &json!({"briefings":false,"planning":true})));
+    let other_switches: Value = runtime.block_on(async {
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        db.query_one("SELECT value_json FROM app.preferences WHERE owner_user_id=(SELECT id FROM app.users WHERE email='calendar-other@example.test') AND key='sourceBehaviors'", &[])
+            .await
+            .unwrap()
+            .get(0)
+    });
+    assert_eq!(other_switches, json!({"calendar.briefings":true,"calendar.planning":false}), "an owner switch write reached another account");
+    // Put the owner's switch back so the browser check starts from the defaults.
+    let (status, restored) = call(Method::PATCH, "/source-behaviors", Some(&cookie), Some(json!({"briefings":true})));
+    assert_eq!((status, &restored), (200, &json!({"briefings":true,"planning":true})), "{restored}");
     // The first call into Tasks compiles its package, which a debug build does slowly. Warm it
     // so the day plan checks below run inside the module time limit.
     let warm = client

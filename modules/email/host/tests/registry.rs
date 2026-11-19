@@ -91,7 +91,7 @@ fn email_downloads_from_a_signed_folder_registry() {
     let chosen = catalog.select("email", None, &"0.1.0".parse().unwrap(), &installed, &seen).unwrap();
     let package = catalog.download(chosen, &"0.1.0".parse().unwrap()).unwrap();
     assert_eq!(package.manifest.id, "email");
-    assert_eq!(package.manifest.version, "0.4.0".parse().unwrap());
+    assert_eq!(package.manifest.version, "0.5.0".parse().unwrap());
     assert!(package.files.contains_key("code/module.wasm"));
     moss_module_host::sql::check(&package, &Default::default()).unwrap();
 
