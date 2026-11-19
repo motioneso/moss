@@ -21,7 +21,9 @@ test("a suggested row offers Reply, Accept and Dismiss", () => {
 });
 
 test("accepted and dismissed rows show a label and no buttons", () => {
-  const html = sectionHtml(ready([row({ status: "accepted" }), row({ taskId: "t2", status: "dismissed" })]));
+  const html = sectionHtml(
+    ready([row({ status: "accepted" }), row({ taskId: "t2", status: "dismissed" })])
+  );
   assert.match(html, /Accepted/);
   assert.match(html, /Dismissed/);
   assert.doesNotMatch(html, /data-act="accept"/);

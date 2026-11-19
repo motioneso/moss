@@ -33,8 +33,7 @@ export function briefingsApi(client) {
         `/definitions/${id(definitionId)}/runs/${id(runId)}${jobId ? `?jobId=${id(jobId)}` : ""}`
       ),
     today: () => call("GET", "/today"),
-    triage: (taskId, action) =>
-      call("POST", `/today/rows/${id(taskId)}`, { action }),
+    triage: (taskId, action) => call("POST", `/today/rows/${id(taskId)}`, { action }),
     start: (definitionId, idempotencyKey) =>
       call("POST", `/definitions/${id(definitionId)}/run`, { idempotencyKey })
   };
