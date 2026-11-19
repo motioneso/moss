@@ -31,15 +31,19 @@ function run(command: string, args: string[], extra: Record<string, string> = {}
 function cargo(args: string[], extra: Record<string, string> = {}) {
   run("cargo", ["+1.95.0", ...args], extra);
 }
-cargo([
-  "test",
-  "--offline",
-  "--locked",
-  "--manifest-path",
-  "modules/tasks/src/Cargo.toml",
-  "--test",
-  "reference"
-]);
+// Keep the standalone Tasks test graph separate from the host workspace's SDK artifacts.
+cargo(
+  [
+    "test",
+    "--offline",
+    "--locked",
+    "--manifest-path",
+    "modules/tasks/src/Cargo.toml",
+    "--test",
+    "reference"
+  ],
+  { CARGO_TARGET_DIR: join(target, "tasks-reference") }
+);
 run("bash", ["modules/calendar/tools/build-ui.sh"], {
   CALENDAR_UI_DIR: calendarUi,
   CALENDAR_UI_TARGET: join(target, "calendar-ui"),
