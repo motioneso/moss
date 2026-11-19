@@ -20,6 +20,10 @@ if (process.env.JS368_REMOVALS === "1") {
   run("python3", ["rust-spike/module-host/tools/chat-host-removals.py"]);
   process.exit(0);
 }
+if (process.env.JS370_REMOVALS === "1") {
+  run("python3", ["rust-spike/shell/tools/chat-approvals-removals.py"]);
+  process.exit(0);
+}
 run("pnpm", ["test:rust-chat-host"]);
 run("cargo", [
   "+1.95.0",

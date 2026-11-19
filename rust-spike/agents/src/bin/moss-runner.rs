@@ -17,7 +17,7 @@
 //!
 //!   -> {"op":"chat","account":"<signed-in-user-id>","text":"...","tools":[...],"turn_id":"<uuid>"}
 //!   <- {"event":"text","delta":"..."} | {"event":"tool_started",...} | {"event":"tool_finished",...}
-//!   <- {"event":"approval","id":1,"card":{"tool":...,"title":...,"input":...}}
+//!   <- {"event":"approval","id":1,"card":{"source":"agent"|"moss","tool":...,"title":...,"input":...}}
 //!   -> {"op":"answer","id":1,"allow":true}
 //!   <- {"event":"tool_call","call_id":"<turn>:1","name":"scratchpad_read","arguments":{}}
 //!   -> {"op":"tool_result","call_id":"<turn>:1","ok":true,"text":"..."}
@@ -189,6 +189,7 @@ async fn serve(
     let pending: Arc<Mutex<HashMap<u64, oneshot::Sender<Answer>>>> = Arc::default();
     let next_id = Arc::new(AtomicU64::new(1));
     let active: Arc<Mutex<Option<Arc<ToolBridge>>>> = Arc::default();
+    let mut chat_task: Option<(String, tokio::task::JoinHandle<()>)> = None;
     while let Ok(Some(line)) = lines.next_line().await {
         match serde_json::from_str::<Op>(&line) {
             Ok(Op::Chat { ref account, .. }) if !accounts.contains_key(account) => {
@@ -223,19 +224,28 @@ async fn serve(
                     pending.clone(),
                     next_id.clone(),
                 );
-                tokio::spawn(async move {
+                let account_name = account.clone();
+                let task = tokio::spawn(async move {
                     let sink_out = out.clone();
                     let events: EventSink = Arc::new(move |e| {
                         let _ = sink_out.send(event_json(&e));
                     });
                     let ask_out = out.clone();
+                    let ask_pending = pending.clone();
                     let ask: AskPerson = Arc::new(move |card| {
+                        let pending = ask_pending.clone();
                         let id = next_id.fetch_add(1, Ordering::Relaxed);
                         let (tx, rx) = oneshot::channel();
                         pending.lock().unwrap().insert(id, tx);
                         let _ = ask_out.send(json!({"event": "approval", "id": id, "card": card}));
-                        // No answer (the app went away) counts as no.
-                        Box::pin(async move { rx.await.unwrap_or(Answer::Deny) })
+                        // No answer (the app went away or never replied) counts as no. The
+                        // server expires an ask first, at 10 minutes; this is the backstop.
+                        let pending = pending.clone();
+                        Box::pin(async move {
+                            let answer = await_answer(rx, ASK_LIMIT).await;
+                            pending.lock().unwrap().remove(&id);
+                            answer
+                        })
                     });
                     let reply = match runner
                         .chat_with_bridge(
@@ -266,6 +276,7 @@ async fn serve(
                     *active_turn.lock().unwrap() = None;
                     let _ = out.send(reply);
                 });
+                chat_task = Some((account_name, task));
             }
             Ok(Op::ToolResult { call_id, ok, text }) => {
                 let accepted = active
@@ -291,9 +302,29 @@ async fn serve(
         bridge.close();
     }
     pending.lock().unwrap().clear();
+    // The server closed the socket mid-turn (its hard turn limit, or it went away). The turn
+    // ends here too, and the agent restarts fresh next time.
+    if let Some((account, task)) = chat_task.take() {
+        if !task.is_finished() {
+            task.abort();
+            let _ = task.await;
+            runner.stop(&account).await;
+        }
+    }
     drop(out_tx);
     writer.abort();
     Ok(())
+}
+
+/// The server expires an ask at 10 minutes. The runner waits one minute longer.
+const ASK_LIMIT: std::time::Duration = std::time::Duration::from_secs(11 * 60);
+
+/// An ask with no answer inside `limit`, or whose sender is dropped, is a refusal.
+async fn await_answer(rx: oneshot::Receiver<Answer>, limit: std::time::Duration) -> Answer {
+    match tokio::time::timeout(limit, rx).await {
+        Ok(Ok(answer)) => answer,
+        _ => Answer::Deny,
+    }
 }
 
 fn event_json(e: &AgentEvent) -> Value {
@@ -386,6 +417,25 @@ mod tests {
             "wrong hello secret opened a turn socket"
         );
         task.await.unwrap().unwrap();
+    }
+
+    #[tokio::test]
+    async fn an_unanswered_ask_is_refused_when_its_timer_runs_out() {
+        let (tx, rx) = oneshot::channel::<Answer>();
+        let answer = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            await_answer(rx, std::time::Duration::from_millis(20)),
+        )
+        .await
+        .expect("the ask waited past its own timer");
+        assert_eq!(answer, Answer::Deny);
+        drop(tx);
+        let (tx, rx) = oneshot::channel();
+        tx.send(Answer::Allow).unwrap();
+        assert_eq!(
+            await_answer(rx, std::time::Duration::from_secs(5)).await,
+            Answer::Allow
+        );
     }
 
     #[test]

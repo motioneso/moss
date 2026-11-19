@@ -155,10 +155,16 @@ impl ShellData for StubShellData {
             status: "Sample replies only".into(),
             model_label: "Sample model".into(),
             messages: self.messages.lock().expect("stub lock").clone(),
+            running: false,
+            approvals: Vec::new(),
         }
     }
 
-    fn send_message(&self, message: &SendMessage) -> ChatMessage {
+    fn decide_approval(&self, _: &str, _: &str, _: Decision) -> Result<ChatThread, ChatError> {
+        Err(ChatError::NotFound)
+    }
+
+    fn send_message(&self, message: &SendMessage) -> Result<ChatThread, ChatError> {
         let mut messages = self.messages.lock().expect("stub lock");
         if message.fresh_conversation {
             messages.clear();
@@ -171,13 +177,12 @@ impl ShellData for StubShellData {
             role: ChatRole::User,
             text: message.text.clone(),
         });
-        let reply = ChatMessage {
+        messages.push(ChatMessage {
             id: format!("m{}", n + 2),
             role: ChatRole::Assistant,
             text: "This is a sample reply. Real answers arrive when the chat runner is ported."
                 .into(),
-        };
-        messages.push(reply.clone());
+        });
         if messages.len() > STUB_HISTORY_LIMIT {
             let excess = messages.len() - STUB_HISTORY_LIMIT;
             messages.drain(..excess);
@@ -187,7 +192,9 @@ impl ShellData for StubShellData {
                 );
             }
         }
-        reply
+        drop(next_id);
+        drop(messages);
+        Ok(self.chat_thread())
     }
 }
 
@@ -199,11 +206,13 @@ mod tests {
     fn send_appends_both_turns() {
         let data = StubShellData::default();
         let before = data.chat_thread().messages.len();
-        let reply = data.send_message(&SendMessage {
-            text: "hello".into(),
-            ..Default::default()
-        });
-        let thread = data.chat_thread();
+        let thread = data
+            .send_message(&SendMessage {
+                text: "hello".into(),
+                ..Default::default()
+            })
+            .unwrap();
+        let reply = thread.messages.last().unwrap().clone();
         assert_eq!(thread.messages.len(), before + 2);
         assert_eq!(thread.messages[before].text, "hello");
         assert_eq!(thread.messages[before + 1], reply);
@@ -217,7 +226,8 @@ mod tests {
             data.send_message(&SendMessage {
                 text: format!("note {i}"),
                 ..Default::default()
-            });
+            })
+            .unwrap();
         }
         let messages = data.chat_thread().messages;
         assert_eq!(messages.len(), STUB_HISTORY_LIMIT);
