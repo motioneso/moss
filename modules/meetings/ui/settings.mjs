@@ -139,7 +139,11 @@ function draw() {
   }
   root.innerHTML = `${backLink}${devices.render()}${sectionHead("Meetings")}${prefsSection()}${devices.dialog()}`;
   const wanted = devices.takeFocus();
-  const next = wanted ? document.getElementById(wanted) : active ? document.getElementById(active) : null;
+  const next = wanted
+    ? document.getElementById(wanted)
+    : active
+      ? document.getElementById(active)
+      : null;
   if (next) next.focus({ preventScroll: true });
   if (next && caret && typeof caret.start === "number")
     next.setSelectionRange?.(caret.start, caret.end);

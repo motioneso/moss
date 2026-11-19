@@ -27,7 +27,11 @@ export function linkDialog({ api, onLinked }) {
   function draw() {
     if (s.phase === "idle") return;
     if (s.phase === "checking") {
-      host.innerHTML = frame("Checking the request…", `<p role="status" class="jds-hint">One moment.</p>`, "");
+      host.innerHTML = frame(
+        "Checking the request…",
+        `<p role="status" class="jds-hint">One moment.</p>`,
+        ""
+      );
       return;
     }
     if (s.phase === "closed")
@@ -75,7 +79,12 @@ export function linkDialog({ api, onLinked }) {
       s.attempt = attempt;
       s.phase = attempt.status === "pending" ? "ask" : "closed";
     } catch (error) {
-      s.phase = error?.status === 404 ? "closed" : error?.status === 401 || error?.status === 403 ? "signin" : "failed";
+      s.phase =
+        error?.status === 404
+          ? "closed"
+          : error?.status === 401 || error?.status === 403
+            ? "signin"
+            : "failed";
     }
     draw();
   }
@@ -115,7 +124,10 @@ export function linkDialog({ api, onLinked }) {
     else if (event.key === "Tab") {
       const buttons = [...host.querySelectorAll("button:not(:disabled)")];
       const at = buttons.indexOf(document.activeElement);
-      if (buttons.length && (at === -1 || (event.shiftKey ? at === 0 : at === buttons.length - 1))) {
+      if (
+        buttons.length &&
+        (at === -1 || (event.shiftKey ? at === 0 : at === buttons.length - 1))
+      ) {
         event.preventDefault();
         buttons[event.shiftKey ? buttons.length - 1 : 0].focus();
       }

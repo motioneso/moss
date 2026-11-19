@@ -10,20 +10,34 @@ import {
 } from "./devices-logic.mjs";
 
 const now = Date.parse("2026-11-18T12:00:00Z");
-const mac = { platform: "macos", createdAt: "2026-11-03T09:00:00Z", lastContactAt: "2026-11-18T11:58:00Z" };
-const phone = { platform: "android", createdAt: "2026-10-28T09:00:00Z", lastContactAt: "2026-11-17T09:00:00Z" };
+const mac = {
+  platform: "macos",
+  createdAt: "2026-11-03T09:00:00Z",
+  lastContactAt: "2026-11-18T11:58:00Z"
+};
+const phone = {
+  platform: "android",
+  createdAt: "2026-10-28T09:00:00Z",
+  lastContactAt: "2026-11-17T09:00:00Z"
+};
 
 test("a recent heartbeat reads Connected, an old one Last seen", () => {
   assert.deepEqual(presence(mac, now), { tone: "ready", text: "Connected" });
   assert.deepEqual(presence(phone, now), { tone: "idle", text: "Last seen yesterday" });
-  assert.equal(presence({ ...phone, lastContactAt: "2026-11-03T09:00:00Z" }, now).text, "Last seen Nov 3");
+  assert.equal(
+    presence({ ...phone, lastContactAt: "2026-11-03T09:00:00Z" }, now).text,
+    "Last seen Nov 3"
+  );
   assert.equal(presence({ ...phone, lastContactAt: null }, now).text, "Not seen yet");
 });
 
 test("detail lines name the kind and the link date", () => {
   assert.equal(detailLine(mac, now), "macOS · Linked Nov 3");
   assert.equal(detailLine(phone, now), "Android · Ring linked · Linked Oct 28");
-  assert.equal(detailLine({ ...mac, createdAt: "2026-11-18T11:59:00Z" }, now), "macOS · Linked just now");
+  assert.equal(
+    detailLine({ ...mac, createdAt: "2026-11-18T11:59:00Z" }, now),
+    "macOS · Linked just now"
+  );
 });
 
 test("rename trims and limits the name", () => {
@@ -36,7 +50,10 @@ test("rename trims and limits the name", () => {
 test("approval wording differs for a Mac and a phone", () => {
   const m = approvalCopy({ deviceName: "Desk", recordingPolicyVersion: 1 });
   assert.equal(m.title, "Do you recognise this Mac?");
-  assert.deepEqual(m.can, ["Record meetings when you choose Start", "Send screen history to Backtrack"]);
+  assert.deepEqual(m.can, [
+    "Record meetings when you choose Start",
+    "Send screen history to Backtrack"
+  ]);
   assert.equal(m.link, "Link Mac");
   const p = approvalCopy({ deviceName: "Pixel", platform: "android" });
   assert.equal(p.deny, "Not this phone");
@@ -50,8 +67,14 @@ test("linking a Mac that asked for recording names the policy version", () => {
     decision: "approve",
     recordingPolicyVersion: 1
   });
-  assert.deepEqual(decisionBody("c", false, { recordingPolicyVersion: 1 }), { code: "c", decision: "deny" });
-  assert.deepEqual(decisionBody("c", true, { platform: "android" }), { code: "c", decision: "approve" });
+  assert.deepEqual(decisionBody("c", false, { recordingPolicyVersion: 1 }), {
+    code: "c",
+    decision: "deny"
+  });
+  assert.deepEqual(decisionBody("c", true, { platform: "android" }), {
+    code: "c",
+    decision: "approve"
+  });
 });
 
 test("the code is read only when it has the right shape", () => {

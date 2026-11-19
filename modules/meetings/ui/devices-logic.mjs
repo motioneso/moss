@@ -17,7 +17,9 @@ export function shortDate(iso, now = Date.now()) {
   if (t === null) return "";
   const d = new Date(t);
   const base = `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
-  return d.getUTCFullYear() === new Date(now).getUTCFullYear() ? base : `${base}, ${d.getUTCFullYear()}`;
+  return d.getUTCFullYear() === new Date(now).getUTCFullYear()
+    ? base
+    : `${base}, ${d.getUTCFullYear()}`;
 }
 
 export const isAndroid = (device) => device.platform === "android";
@@ -37,14 +39,16 @@ export function presence(device, now = Date.now()) {
   const days = Math.floor((now - t) / 86_400_000);
   const day = (n) => new Date(n).getUTCDate();
   if (days <= 0 && day(t) === day(now)) return { tone: "idle", text: "Last seen today" };
-  if (days <= 1 && day(t) === day(now - 86_400_000)) return { tone: "idle", text: "Last seen yesterday" };
+  if (days <= 1 && day(t) === day(now - 86_400_000))
+    return { tone: "idle", text: "Last seen yesterday" };
   return { tone: "idle", text: `Last seen ${shortDate(device.lastContactAt, now)}` };
 }
 
 /** "macOS · Linked Nov 3" or "Android · Ring linked · Linked Oct 28". */
 export function detailLine(device, now = Date.now()) {
   const created = when(device.createdAt);
-  const linked = created !== null && now - created < 120_000 ? "just now" : shortDate(device.createdAt, now);
+  const linked =
+    created !== null && now - created < 120_000 ? "just now" : shortDate(device.createdAt, now);
   return isAndroid(device)
     ? `Android · Ring linked · Linked ${linked}`
     : `${device.platform === "macos" ? "macOS" : "Mac"} · Linked ${linked}`;

@@ -27,7 +27,9 @@ export function devicesSection({ api, draw, linked = false }) {
       s.list = (await api.deviceList()).devices ?? [];
       s.phase = "ready";
       if (s.justLinked) {
-        const newest = [...s.list].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
+        const newest = [...s.list].sort(
+          (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)
+        )[0];
         s.notice = newest ? `${newest.displayName} is linked.` : "";
         s.newId = newest?.id;
       }
@@ -58,7 +60,10 @@ export function devicesSection({ api, draw, linked = false }) {
       href
         ? `<a class="jds-btn jds-btn--secondary" href="${esc(href)}" target="_blank" rel="noopener noreferrer">${label}</a>`
         : btn(label, "no-link", { variant: "secondary", disabled: true });
-    return [link("Get the Mac app", APP_LINKS.mac), link("Get the Android app", APP_LINKS.android)].join("");
+    return [
+      link("Get the Mac app", APP_LINKS.mac),
+      link("Get the Android app", APP_LINKS.android)
+    ].join("");
   }
 
   function render() {
@@ -76,8 +81,7 @@ export function devicesSection({ api, draw, linked = false }) {
     const problem = s.problem
       ? `<p role="alert" class="jds-hint jds-hint--error">${esc(s.problem)}</p>`
       : "";
-    if (!s.list.length)
-      return `${head}${problem}${empty("No devices linked", "", getApps())}`;
+    if (!s.list.length) return `${head}${problem}${empty("No devices linked", "", getApps())}`;
     return `${head}${note}${problem}<div>${s.list.map(row).join("")}</div><div class="pair-get">${getApps()}</div>`;
   }
 
@@ -110,7 +114,10 @@ export function devicesSection({ api, draw, linked = false }) {
       s.notice = "";
     } catch (error) {
       r.busy = false;
-      r.error = error?.status === 404 ? "That device is no longer linked." : "Couldn’t save the name. Try again.";
+      r.error =
+        error?.status === 404
+          ? "That device is no longer linked."
+          : "Couldn’t save the name. Try again.";
     }
     draw();
   }
