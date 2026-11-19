@@ -12,12 +12,18 @@ People requests 200M fuel in its manifest (60M fails the 1,005-contact paging ca
 all 29), so large-account parity holds under that request.
 Response conversion reuses database field-name buffers and moves formatted confidence
 and timestamp strings into JSON values; this does not establish a larger supported limit.
-With the task-owned build environment and generated component prepared as below, reproduce
+With the task-owned build environment prepared as below, reproduce
 through verify-gate:
 
 ```sh
-JS50_PEOPLE_COMPONENT=/tmp/moss-people-component.wasm scripts/run-gate.sh start --gate modules/people/tools/large-data-gate.sh
+JS177_PEOPLE_FUEL=200000000 scripts/run-gate.sh start --gate test:rust-people-large
 ```
+
+The large-account gate builds its generated component in `CARGO_TARGET_DIR` when
+`JS50_PEOPLE_COMPONENT` is unset. An explicit component path still selects an
+existing artifact for focused checks. The diagnostic's fuel override above matches
+the manifest's existing 200M request; without it, the test uses the smaller default
+host budget.
 
 The [delivery report](../../docs/superpowers/specs/2026-11-08-rust-phase5-people-report.md)
 records each delivered slice and the exact remaining continuation work.
