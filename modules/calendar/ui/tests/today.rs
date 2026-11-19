@@ -3,6 +3,19 @@ use moss_calendar_ui::today_model::{gaps, items};
 use serde_json::json;
 
 #[test]
+fn fresh_accounts_use_the_calendar_timezone_fallback() {
+    use moss_calendar_ui::today_model::display_zone;
+    assert_eq!(
+        display_zone(&json!({"timezone":null})),
+        chrono_tz::America::Los_Angeles
+    );
+    assert_eq!(
+        display_zone(&json!({"timezone":"Europe/London"})),
+        chrono_tz::Europe::London
+    );
+}
+
+#[test]
 fn saved_proposals_and_actual_blocks_keep_the_typescript_labels_and_order() {
     let saved = json!({"plan":{"eveningIntent":null,"blocks":[
         {"id":"actual","kind":"focus","position":0,"taskId":"a","title":"Old title","actualPlacement":{"startsAt":"2030-05-26T19:00:00Z","durationMinutes":30},"pendingChange":null},

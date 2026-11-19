@@ -3,6 +3,14 @@ use chrono::{DateTime, NaiveDate, Utc};
 use chrono_tz::Tz;
 use serde_json::Value;
 
+/// Match the Calendar screen when a fresh account has no saved timezone yet.
+pub fn display_zone(display: &Value) -> Tz {
+    display["timezone"]
+        .as_str()
+        .and_then(crate::model::zone)
+        .unwrap_or(chrono_tz::America::Los_Angeles)
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Item {
     pub id: String,

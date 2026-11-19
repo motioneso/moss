@@ -35,10 +35,7 @@ struct Snapshot {
 }
 impl Snapshot {
     fn zone(&self) -> chrono_tz::Tz {
-        self.display["timezone"]
-            .as_str()
-            .and_then(model::zone)
-            .unwrap_or(chrono_tz::America::Los_Angeles)
+        plan::display_zone(&self.display)
     }
     fn twelve(&self) -> bool {
         model::twelve(self.display["dateFormat"].as_str())
@@ -100,10 +97,7 @@ pub fn Today() -> impl IntoView {
                             .ok_or(())?,
                     );
                 }
-                let zone = display["timezone"]
-                    .as_str()
-                    .and_then(model::zone)
-                    .ok_or(())?;
+                let zone = plan::display_zone(&display);
                 let day = model::today(display["now"].as_str().ok_or(())?, zone).ok_or(())?;
                 let saved = get(&format!("/day-plan?date={day}&timeZone={zone}"))
                     .await

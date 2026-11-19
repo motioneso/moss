@@ -137,7 +137,9 @@ pub fn seed(
         .unwrap();
     assert_eq!(response.status(), 200);
     let display: Value = response.json().unwrap();
-    let zone = display["timezone"].as_str().unwrap();
+    let zone = display["timezone"]
+        .as_str()
+        .unwrap_or("America/Los_Angeles");
     let (day, other)=runtime.block_on(async {
         let (db, connection)=tokio_postgres::connect(bootstrap,tokio_postgres::NoTls).await.unwrap();
         tokio::spawn(async move {let _=connection.await;});
