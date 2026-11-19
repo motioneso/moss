@@ -37,6 +37,10 @@ feature that is not present in the image you are running.
 - **Review commitments on Today.** Review things you said you would do on Today, then accept, reject or snooze each suggestion. [PR #4378](https://github.com/motioneso/moss/pull/4378)
 - **A scratchpad beside chat.** Keep notes beside chat or in a full phone screen, with automatic saving, a personal shortcut, and a choice to reload when another tab changes your note. [PR #4379](https://github.com/motioneso/moss/pull/4379)
 
+#### Changed
+
+- **Today shows your morning briefing status.** The Today screen now tells you whether your morning briefing is switched off, running, failed, or still due, instead of showing placeholder text. [PR #4410](https://github.com/motioneso/moss/pull/4410)
+
 ### 2026-11-18
 
 #### Added
