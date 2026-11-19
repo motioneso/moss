@@ -24,6 +24,7 @@ use safety_core::access::AccessContext;
 use tower_http::services::ServeDir;
 
 mod companion;
+mod companion_owner;
 mod companion_startup;
 mod companion_links;
 mod desktop_notices;
@@ -104,6 +105,14 @@ fn router(data: Arc<Accounts>, web: PathBuf) -> Router {
         .route("/api/companion/pair/decide", post(companion::decide))
         .route("/api/companion/pair/redeem", post(companion::redeem))
         .route("/api/companion/pair/cancel", post(companion::cancel))
+        // The Meetings Devices screen reaches these through its own module path.
+        .route("/api/m/meetings/devices", get(companion_owner::list))
+        .route(
+            "/api/m/meetings/devices/{id}",
+            axum::routing::patch(companion_owner::rename).delete(companion_owner::unlink),
+        )
+        .route("/api/m/meetings/link/attempt", post(companion::attempt))
+        .route("/api/m/meetings/link/decide", post(companion::decide))
         .route("/api/companion/heartbeat", post(companion::heartbeat))
         .route("/api/companion/device", axum::routing::patch(companion::rename))
         .route("/api/companion/logout", post(companion::logout))

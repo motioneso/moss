@@ -97,6 +97,15 @@ fn current_path() -> String {
         .location()
         .pathname()
         .unwrap_or_else(|_| "/".into());
+    // Mac and Android apps already in the field open the old approval address. It now lands on
+    // Meetings, which keeps the one-time code after the "#" and asks for the approval.
+    if path == "/link/trail-marker" {
+        let to = format!("/meetings{}", window().location().hash().unwrap_or_default());
+        let _ = window().history().and_then(|h| {
+            h.replace_state_with_url(&wasm_bindgen::JsValue::NULL, "", Some(&to))
+        });
+        return "/meetings".into();
+    }
     if path == "/" || path.is_empty() {
         let _ = window().history().and_then(|h| {
             h.replace_state_with_url(&wasm_bindgen::JsValue::NULL, "", Some("/today"))

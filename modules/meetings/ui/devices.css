@@ -1,0 +1,102 @@
+.pair-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.pair-back {
+  align-self: flex-start;
+}
+.pair-row,
+.set-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  padding: var(--space-4) 0;
+  border-top: 1px solid var(--border-subtle);
+}
+.set-row:first-child {
+  border-top: none;
+}
+.set-row__main {
+  flex: 1;
+  min-width: 0;
+}
+.set-row__control {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.pair-icon {
+  display: inline-flex;
+  color: var(--text-muted);
+}
+.pair-name {
+  font-weight: var(--weight-semibold);
+  overflow-wrap: anywhere;
+}
+.pair-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+.pair-actions,
+.pair-get {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.pair-get {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+.pair-row .jds-field {
+  max-width: 360px;
+}
+.pair-row .jds-input {
+  width: 100%;
+  min-height: 44px;
+}
+.pair-status {
+  font-size: var(--text-sm);
+}
+.pair-row--new .pair-name::after {
+  content: " · New";
+  font-weight: var(--weight-regular);
+  color: var(--accent-fg);
+}
+.pair-dialog {
+  width: min(480px, calc(100vw - 2 * var(--space-4)));
+}
+.pair-ask {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.pair-can-title {
+  margin-top: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+.pair-can {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding-left: var(--space-5);
+  font-size: var(--text-sm);
+}
+@media (max-width: 640px) {
+  .pair-row {
+    gap: var(--space-2) var(--space-4);
+  }
+  .pair-actions {
+    flex-basis: 100%;
+    padding-left: calc(22px + var(--space-4));
+  }
+}
