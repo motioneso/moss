@@ -1,6 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { getMossDatabaseUrls } from "@moss/db";
 if (process.env.JARVIS_GATE_RUN !== "1") throw new Error("Use verify-gate");
+const suites = ["installed"];
+const selected = process.env.NEWS_SUITE;
+if (selected && !suites.includes(selected)) throw new Error("Unknown News test suite");
 const urls = getMossDatabaseUrls();
 const checks = spawnSync("modules/news/tools/check.sh", {
   stdio: "inherit",
@@ -17,7 +20,7 @@ const run = spawnSync(
     "--manifest-path",
     "modules/news/host/Cargo.toml",
     "--test",
-    "installed",
+    selected || "installed",
     "--",
     "--ignored",
     "--nocapture",

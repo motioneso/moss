@@ -1,13 +1,16 @@
 import { spawnSync } from "node:child_process";
 import { getMossDatabaseUrls } from "@moss/db";
 if (process.env.JARVIS_GATE_RUN !== "1") throw new Error("Use verify-gate");
+const suites = ["installed", "part25"];
+const selected = process.env.FINANCE_SUITE;
+if (selected && !suites.includes(selected)) throw new Error("Unknown Finance test suite");
 const urls = getMossDatabaseUrls();
 const checks = spawnSync("modules/finance/tools/check.sh", {
   stdio: "inherit",
   env: process.env
 });
 if (checks.status !== 0) process.exit(checks.status ?? 1);
-for (const suite of ["installed", "part25"]) {
+for (const suite of selected ? [selected] : suites) {
   const run = spawnSync(
     "cargo",
     [
@@ -37,6 +40,9 @@ for (const suite of ["installed", "part25"]) {
   );
   if (run.status !== 0) process.exit(run.status ?? 1);
 }
+
+// These controls exercise installed; a different selected suite must run alone.
+if (selected && selected !== "installed") process.exit(0);
 
 // Run security assertions with each guard removed, then restore and run the protected tests.
 const controls = spawnSync("python3", ["modules/finance/tools/privacy-controls.py"], {
