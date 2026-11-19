@@ -747,6 +747,7 @@ impl Installer {
         }
         let outcome = (|| -> Result<()> {
             if delete_data.is_some() {
+                crate::purge_hooks::purge(id)?;
                 self.lifecycle.purge(id)?;
                 state.retained.remove(id);
             } else {

@@ -371,6 +371,21 @@ impl PairingStore {
         Ok(Some(RingSession { owner, device_id: r.get(1) }))
     }
 
+    /// Meetings data removal: delete devices for every account, including expired ones, and
+    /// unclaimed pairing attempts. Recording capabilities and attempts cascade from devices.
+    /// Browser sessions and the core tables remain intact.
+    pub async fn revoke_all_devices(&self) -> Result<u64> {
+        let mut c = self.client().await?;
+        let tx = c.transaction().await?;
+        // Wait for in-flight redeems before taking the delete snapshot. Otherwise a device
+        // inserted by a redeem while DELETE waits on its attempt could escape the purge.
+        tx.batch_execute("LOCK TABLE app.companion_pair_attempts, app.companion_devices IN ACCESS EXCLUSIVE MODE").await?;
+        let devices = tx.execute("DELETE FROM app.companion_devices", &[]).await?;
+        let attempts = tx.execute("DELETE FROM app.companion_pair_attempts", &[]).await?;
+        tx.commit().await?;
+        Ok(devices + attempts)
+    }
+
     /// Admin sign-out. Removes every device and every browser session of one account in one
     /// transaction, so a failure leaves both untouched.
     pub async fn revoke_all_for(&self, user: Uuid) -> Result<u64> {

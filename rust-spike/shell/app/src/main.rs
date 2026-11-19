@@ -24,6 +24,7 @@ use safety_core::access::AccessContext;
 use tower_http::services::ServeDir;
 
 mod companion;
+mod companion_startup;
 mod companion_links;
 mod desktop_notices;
 mod integrations;
@@ -262,6 +263,10 @@ fn main() {
             None => None,
         };
         let network = Network::new(platform.clone(), config, args.network)?;
+        // The registry and file-import paths do not run install-module. Prepare the core
+        // device lookup before loading modules or accepting a pairing request.
+        companion_startup::prepare(&platform.auth, modules_path.as_deref(), args.instance.as_deref())
+            .await?;
         // The host opens in the background, last: errors above must not drop its runtimes on
         // this executor, and a module installed later is picked up without a restart.
         let modules: modules::Slot = Arc::new(Mutex::new(None));

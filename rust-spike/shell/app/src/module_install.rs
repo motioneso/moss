@@ -122,7 +122,7 @@ EXECUTE format('ALTER SEQUENCE %I.%I OWNER TO jarvis_migration_owner', r.s, r.n)
 
 /// The device lookup functions need the companion tables from the core migrations, so they go in after the
 /// installs and only when those tables exist. Safe to repeat.
-async fn ensure_device_sql(migrations_url: &str) -> Result<()> {
+pub(crate) async fn ensure_device_sql(migrations_url: &str) -> Result<()> {
     let (db, connection) = tokio_postgres::connect(migrations_url, tokio_postgres::NoTls)
         .await
         .map_err(|_| anyhow::anyhow!("Cannot reach the instance database"))?;

@@ -420,6 +420,12 @@ pub async fn rename(
 struct Revoker(PairingStore);
 
 impl safety_core::admin::DeviceRevoker for Revoker {
+    fn revoke_all_devices<'a>(
+        &'a self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<u64, ApiError>> + Send + 'a>> {
+        Box::pin(async move { self.0.revoke_all_devices().await.map_err(internal) })
+    }
+
     fn revoke_all_for<'a>(
         &'a self,
         user: Uuid,
@@ -430,5 +436,7 @@ impl safety_core::admin::DeviceRevoker for Revoker {
 
 /// Hands the admin sign-out the store that owns the device rows.
 pub fn register_revoker(data: &Accounts) {
-    safety_core::admin::set_device_revoker(Arc::new(Revoker(pairing(data))));
+    let revoker = Arc::new(Revoker(pairing(data)));
+    safety_core::admin::set_device_revoker(revoker.clone());
+    moss_module_host::purge_hooks::set_purge_hook("meetings", Arc::new(pairing(data)));
 }

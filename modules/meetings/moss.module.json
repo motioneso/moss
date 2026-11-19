@@ -923,6 +923,25 @@
           "description": "The Mac connection is missing, expired or revoked"
         }
       ]
+    },
+    {
+      "id": "meetings.device-data-removal",
+      "description": "Removing Meetings while keeping its data keeps linked devices. Removing Meetings with its data forgets linked devices and pending link requests for every account. Reinstalling requires linking devices again. If device cleanup fails, removal stops so it can be retried.",
+      "errors": [
+        {
+          "code": "module-removal-failed",
+          "class": "transient",
+          "description": "Device cleanup could not finish, so Meetings was not removed",
+          "remediationRef": "retry-device-removal"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "retry-device-removal",
+          "description": "Restore the database connection and retry removing Meetings with its data",
+          "path": "/settings/modules"
+        }
+      ]
     }
   ],
   "screens": {

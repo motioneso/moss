@@ -43,6 +43,10 @@ pub fn routes() -> Router<Arc<Platform>> {
 /// Signs one account out everywhere in a single transaction: companion devices and browser
 /// sessions. The pairing store owns the device rows, so the shell registers it here at start-up.
 pub trait DeviceRevoker: Send + Sync {
+    fn revoke_all_devices<'a>(
+        &'a self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<u64, ApiError>> + Send + 'a>>;
+
     fn revoke_all_for<'a>(
         &'a self,
         user: Uuid,
