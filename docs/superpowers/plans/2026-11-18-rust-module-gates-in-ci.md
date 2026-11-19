@@ -28,9 +28,10 @@ workflow runs any of the 75 `test:rust-*` scripts in `package.json`.
 | Disk-lean cargo settings already used in CI           | `rust-local-locks.yml:24-31` (`CARGO_HOME`, `CARGO_INCREMENTAL=0`, debug 0)                     |
 | No workflow caches cargo today                        | no `actions/cache` in `.github/workflows/`                                                      |
 
-Open question (owner: the build task for rollout step 1): `run-gate.sh` has never run on a hosted
-runner. It assumes Docker, a free local port and `/tmp`. Step 1 proves it or swaps in a service
-container.
+Open question (owner: the build task for rollout step 2): `run-gate.sh` has never run on a hosted
+runner. It assumes Docker, a free local port and `/tmp`. Step 2 proves it or swaps in a service
+container. Each job must also set `RUSTUP_HOME`, as `rust-local-locks.yml:24-25` does. Five host
+gates failed in about a minute here until the sweep set it, then passed.
 
 ## Gate tiers
 
@@ -44,8 +45,8 @@ Runs the module's own non-live gate through `scripts/run-gate.sh start --gate <s
 | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | tasks                                                                                                         | `test:rust-tasks`                                                               |
 | people                                                                                                        | `test:rust-people-large` (needs a prebuilt component, see below)                |
-| notes                                                                                                         | `modules/notes/tools/gate.sh` (needs prebuilt components, see below)            |
-| calendar                                                                                                      | `modules/calendar/tools/gate.sh` (folds in `rust-calendar.yml`'s `check.sh`)    |
+| notes                                                                                                         | `modules/notes/tools/gate.sh`, `test:rust-notes-server`, `-notes-ingest` (S1)   |
+| calendar                                                                                                      | `modules/calendar/tools/gate.sh`, `test:rust-calendar-server` (S2)              |
 | finance                                                                                                       | `test:rust-finance`, `test:rust-finance-ui-unit`                                |
 | wellness                                                                                                      | `test:rust-wellness`                                                            |
 | memory                                                                                                        | `test:rust-memory`, `test:rust-memory-index`, `test:rust-memory-oracle`         |
@@ -57,8 +58,8 @@ Runs the module's own non-live gate through `scripts/run-gate.sh start --gate <s
 `test:rust-tasks-privacy` and `test:rust-tasks-jobs` are inner steps of `test:rust-tasks`; run
 alone, `tasks-privacy` exits 1 by design (`modules/tasks/tools/tests/privacy.rs:214`, `TASKS_COMPONENT`).
 
-Three gates do not build the components they test. Notes and People are the only modules whose
-main gate needs them prebuilt, and `test:rust-calendar-server` needs `JS181_CALENDAR_PACKAGE` and
+Five gates do not build what they test. Notes and People are the only modules whose main gate
+needs components prebuilt, and `test:rust-calendar-server` needs `JS181_CALENDAR_PACKAGE` and
 `JS220_TASKS_PACKAGE` (`modules/calendar/tools/server-gate.ts:8-15`). Notes'
 `gate.sh:9` needs `NOTES_COMPONENT` and `NOTES_TOOL_COMPONENT`; `test:rust-notes-server`,
 `test:rust-notes-ingest` and `test:rust-people-large` (`JS50_PEOPLE_COMPONENT`,
@@ -71,11 +72,15 @@ READMEs do.
 ### Shared host change (PR runs host gates; full module matrix runs on main)
 
 Trigger paths: `rust-spike/module-host/**`, `module-sdk/**`, `access-context/**`, `safety-core/**`,
-`module-ui/**`, `network/**`, `standins/**`, `vault/**`, `parity/**`, `ui/bindgen/**`.
+`module-ui/**`, `network/**`, `standins/**`, `vault/**`, `parity/**`, `ui/bindgen/**`,
+`infra/postgres/migrations/**`, `scripts/run-gate.sh`.
 
 - On the PR: `test:rust-module-bootstrap`, `-install-endpoints`, `-module-assembly`, `-public-web`,
   `-tasks-server`, `-people-server`, `-proactive-server`, `-proactive-feedback`,
-  `-weather-preferences`, `-module-ai`, `-integrations`, `-standins`.
+  `-weather-preferences`, `-module-ai`, `-integrations`, `-standins`, plus Calendar's
+  `modules/calendar/tools/check.sh`, which keeps what `rust-calendar.yml:4-10` covers today.
+  `-people-server`, `-module-bootstrap` and `-install-endpoints` wait on S2, and
+  `-weather-preferences` on R6.
 - On the push to `main`: every module gate above.
 - Rejected option: the whole module matrix on every host PR. It catches a host break before merge,
   but it fans out to about 20 jobs of 5 to 20 minutes each and starves the free plan's concurrent
@@ -108,11 +113,14 @@ Trigger paths: `rust-spike/module-host/**`, `module-sdk/**`, `access-context/**`
   `host_changed` flag. One `rust-modules` job runs a matrix over that list, `fail-fast: false`.
 - **Toolchain.** `rustup toolchain install 1.95.0 --profile minimal --target wasm32-unknown-unknown`,
   as `rust-calendar.yml` does.
-- **Cargo home.** `CARGO_HOME: ${{ github.workspace }}/.cargo-home`. Cache it with
-  `actions/cache`, key on `hashFiles('modules/<m>/**/Cargo.lock', 'rust-spike/**/Cargo.lock')`.
-- **Target cache.** One target folder per module, cached on module + lockfile hash, restore-key
-  on the shared host lock. Because all hosts pin the same wasmtime, a nightly warm job that builds
-  `rust-spike/module-host` saves a shared seed every module job restores first.
+- **Cache budget.** GitHub keeps 10 GB of cache per repository and evicts the oldest past that.
+  Seventeen module target folders of 2.4 to 3.2 GB would evict each other, so the budget is:
+  - one shared Cargo home (`CARGO_HOME: ${{ github.workspace }}/.cargo-home`), keyed on
+    `hashFiles('modules/**/Cargo.lock', 'rust-spike/**/Cargo.lock')`;
+  - one shared host seed, built nightly from `rust-spike/module-host`. All hosts pin the same
+    wasmtime, so every module job restores it as its starting target folder;
+  - no per-module target cache. Step 2 measures the miss cost on Finance and Tasks before any
+    module earns one.
 - **Shared Wasm build.** The nightly warm job also builds the shared screen assets
   (`rust-spike/module-ui/build-assets.py`) and `rust-spike/ui/bindgen` once and uploads them as an
   artifact for live gates. The per-module component build stays inside each gate, because the gate
@@ -132,6 +140,9 @@ Cold runs (fresh target folder, load about 9):
 | ------------------- | ------ | --------- | ------------- |
 | `test:rust-finance` | pass   | 21 min    | 3.2 GB        |
 | `test:rust-tasks`   | red    | 13 min    | 2.4 GB        |
+
+Finance ran again at the end of the sweep, reusing a shared target folder at load 30 to 55. It
+passed in 32 minutes.
 
 Sweep runs (two lanes in parallel, each lane reusing one target folder, load 30 to 55 from other
 work on the box). Treat these as upper bounds.
@@ -154,7 +165,7 @@ work on the box). Treat these as upper bounds.
 
 Connectors' time is one test. `one_sync_step_fits_the_manifest_budget_at_every_mailbox_size`
 (`modules/connectors/host/tests/sync_speed.rs`) ran 55 minutes alone. It belongs in the nightly
-tier, not the per-PR tier.
+tier, not the per-PR tier, so Connectors' gate needs a switch to skip it on PRs.
 
 Two shared target folders reached 22 GB and 11 GB across the sweep. A hosted runner cannot hold
 one target folder shared across modules, so each module job keeps its own.
@@ -169,12 +180,13 @@ Estimate per module job on a hosted runner: setup 1 min, plus the local time, pl
 for compiling on 4 cores when the cache misses. Most modules land at 5 to 25 minutes. Finance's
 cold run (21 min at low load) is the best measured large case.
 
-Memory, News, Meals, Meetings and Sports already ran 30 minutes or more locally. Their tests run
-one at a time against Postgres (`--test-threads=1`), so more cores do not help. Run each of those
-five as one matrix job per test file from the first rollout step that includes them. That needs
+Memory, News, Meals, Meetings, Sports and Finance ran 30 minutes or more locally (Finance in its
+second run). Their tests run one at a time against Postgres (`--test-threads=1`), so more cores do
+not help. Run each of those six as one matrix job per test file from the first rollout step that includes them. That needs
 a suite filter in each of those gates, as People's gate already has (`JS50_PEOPLE_SUITE`,
 `modules/people/README.md:115`). Memory's files alone measured 45, 20 and 19 minutes for `installed`,
-`recording` and `reembed`.
+`recording` and `reembed`. That is a floor, because the run was stopped at 90 minutes with
+files still left.
 
 Today's full CI on `main` takes 20 to 25 minutes, so the split modules set the long pole.
 
@@ -214,14 +226,15 @@ Expected non-zero exits, by design: `test:rust-tasks-privacy` run alone, and the
 ## Rollout
 
 1. **Fix the red gates and setup gaps** (R1-R7, S1-S2, one task each). Nothing becomes required
-   while its gate is red. Add the suite filter to Memory, News, Meals, Meetings and Sports.
+   while its gate is red. Add the suite filter to Memory, News, Meals, Meetings, Sports and
+   Finance, and a PR-skip switch for Connectors' `sync_speed` test.
 2. **Shadow job, two modules.** Add `rust-modules` with Finance and Tasks only, not in `ci-gate`'s
    `needs`. Proves `run-gate.sh` on a hosted runner, the caches and the disk headroom.
-3. **All modules, still shadow.** Extend the matrix. Delete `rust-calendar.yml` once Calendar runs
-   in the matrix.
+3. **All modules, still shadow.** Extend the matrix.
 4. **Required.** Add `rust-modules` to `ci-gate`'s `needs` and result loop (`ci.yml:500-512`).
    Skipped stays a pass, so a PR that touches no module is unaffected.
-5. **Host gates on PR, matrix on main push.**
+5. **Host gates on PR, matrix on main push.** Needs S2 and R6 closed. Delete `rust-calendar.yml`
+   here, once host PRs run Calendar's `check.sh`.
 6. **Nightly** full matrix plus stand-in live gates, one live gate promoted at a time.
 
 ## Kill gate
@@ -231,8 +244,9 @@ Owner: the CI rollout coordinator. Observe after step 3, over the first ten PRs 
 - If any module job's median wall time exceeds **30 minutes** after the per-file split, that
   module's per-PR tier drops its guard-removal controls and slowest test file to the `main` push;
   the PR keeps the rest. Memory is the likely first case.
-- If the median `rust-modules` wall time for a single-module PR exceeds **25 minutes** after that,
-  stop at shadow mode and bring the measurements back to Ben before making it required.
+- If any job's median still exceeds 30 minutes after that, stop at shadow mode and bring the
+  measurements back to Ben before making it required. One limit applies throughout: 30 minutes
+  per job, measured on the slowest job a PR waits for.
 - If a cached run still runs out of disk, split the module's suites across two jobs.
 
 ## Verification for each build step
