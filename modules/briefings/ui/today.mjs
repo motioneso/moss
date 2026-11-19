@@ -1,4 +1,4 @@
-/* global document, ResizeObserver, window, requestAnimationFrame, navigator, CSS */
+/* global document, ResizeObserver, window, navigator, CSS */
 import { moduleClient } from "./guest-bridge.mjs";
 import { briefingsApi } from "./api.mjs";
 import { sectionHtml } from "./today-view.mjs";
@@ -11,20 +11,21 @@ const locale = navigator.language || undefined;
 const state = { phase: "loading", data: null, busy: "", error: "" };
 let lastHeight = -1;
 
+// Measured at once rather than on the next frame, because the browser does not run frames for a
+// frame that sits below the fold, which would leave its rows clipped until scrolled into view.
 function resize() {
-  requestAnimationFrame(() => {
-    const height = Math.ceil(root.getBoundingClientRect().bottom + window.scrollY);
-    if (height !== lastHeight) {
-      lastHeight = height;
-      void client.resize(height).catch(() => {});
-    }
-  });
+  const height = Math.ceil(root.getBoundingClientRect().bottom + window.scrollY);
+  if (height !== lastHeight) {
+    lastHeight = height;
+    void client.resize(height).catch(() => {});
+  }
 }
 
 function draw() {
   const focused = document.activeElement?.closest?.("[data-task]")?.dataset.task;
   root.innerHTML = sectionHtml(state, locale);
-  if (focused && !state.busy) root.querySelector(`[data-task="${CSS.escape(focused)}"] [data-act]`)?.focus();
+  if (focused && !state.busy)
+    root.querySelector(`[data-task="${CSS.escape(focused)}"] [data-act]`)?.focus();
   resize();
 }
 
