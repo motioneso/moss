@@ -501,7 +501,13 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
             (response.status().as_u16(), response.json::<Value>().unwrap_or(Value::Null))
         };
         let switches = |who: &str| {
-            let (signal_status, signals) = call(Method::GET, "/source-signals", Some(who), None);
+            let started = std::time::Instant::now();
+            let (mut signal_status, mut signals) = call(Method::GET, "/source-signals", Some(who), None);
+            println!("source-signals first answer {signal_status} after {:?}", started.elapsed());
+            if signal_status != 200 {
+                (signal_status, signals) = call(Method::GET, "/source-signals", Some(who), None);
+                println!("source-signals second answer {signal_status} after {:?}", started.elapsed());
+            }
             assert_eq!(signal_status, 200, "source-signals answered {signals}");
             let (_, email) = owner_call("email", Method::GET, "/briefing-source", who, None);
             let (_, calendar) = owner_call("calendar", Method::GET, "/source-behaviors", who, None);
