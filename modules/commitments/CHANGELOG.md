@@ -2,6 +2,8 @@
 
 ## 0.1.1
 
+- Email judgement uses the same bounded model-call window as the other model-backed package screens.
+
 - Review saved suggestions on Today: accept, reject, or snooze until tomorrow, next week or a chosen date. Nothing is shown when there is nothing to review.
 - The package includes extraction and email judgement jobs, review tools, the heartbeat source, and a reusable approval card rendered from saved records. Live Rust chat review waits on the Rust chat tools and approval cards task.
 

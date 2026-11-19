@@ -140,10 +140,18 @@ pub fn run(
         if reply.as_array().is_some_and(|r| r.len() >= 4) {
             break;
         }
-        assert!(
-            Instant::now() < deadline,
-            "real email judgement did not produce four review suggestions; inspect the job state"
-        );
+        if Instant::now() >= deadline {
+            // Queue state and fixed failure codes only: never print prompts, payloads or credentials.
+            rt.block_on(async {
+                let (db, connection) = tokio_postgres::connect(bootstrap, tokio_postgres::NoTls).await.unwrap();
+                tokio::spawn(async move { let _ = connection.await; });
+                let module = moss_module_host::jobs::module_key("commitments");
+                for row in db.query("SELECT state::text, coalesce(failure_code,''), count(*) FROM moss_queue.jobs WHERE payload->>'moduleId'=$1 GROUP BY state,failure_code", &[&module]).await.unwrap() {
+                    eprintln!("Commitments queue: state={} code={} count={}", row.get::<_,String>(0), row.get::<_,String>(1), row.get::<_,i64>(2));
+                }
+            });
+            panic!("real email judgement did not produce four review suggestions");
+        }
         std::thread::sleep(Duration::from_secs(3));
     }
     println!("PASS live demo: four email threads inserted through Email's API, judged by the real Codex proxy model and saved as pending review by the worker");
