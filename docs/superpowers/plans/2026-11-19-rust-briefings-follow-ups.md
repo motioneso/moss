@@ -3,8 +3,8 @@
 Board task JS-371 (from JS-339). Source: the "Follow-up work, not built" and "Not proven" sections
 of `docs/superpowers/specs/2026-11-18-rust-phase5-briefings-part-22-report.md` (lines 27-41).
 Parent plan: `docs/superpowers/specs/2026-11-11-rust-phase5-meetings-briefings-plan.md`, which
-lists these Today pieces as Open, owner Ben (lines 239-240). This plan resolves that Open item with
-Ben's ruling of 2026-11-19 (section 8).
+lists these Today pieces as Open, owner Ben (lines 239-240). This plan proposes an answer to that Open item:
+the coordinator's decision of 2026-11-19, still awaiting Ben's confirmation (section 8).
 
 Every screen reproduces the current TypeScript behaviour. No redesign.
 
@@ -69,7 +69,7 @@ No step below adds an owner's call inside Briefings. Each owner adds its own cal
 
 ## 3. Design fork: where the Today controls live
 
-### 3.1 Option A (chosen, Ben 2026-11-19): each module owns its Today section
+### 3.1 Option A (chosen by the coordinator, pending Ben): each module owns its Today section
 
 - Briefings ships a `/today` screen with the action rows and the catch-up. Today mounts it inside
   the existing "Needs you" anchor, the same way Commitments mounts today.
@@ -290,7 +290,7 @@ Each security test must be observed failing with the check removed.
 
 ### Part 9: day plan and review, read only
 
-- Owner: Calendar (Ben, 2026-11-19, section 8). Waits on nothing.
+- Owner: Calendar (chosen by the coordinator, pending Ben; section 8). Waits on nothing.
 - Calendar ships `"/today": "ui/today.html"` showing the day plan and the review panel from
   `GET /day-plan`, mounted where the sample timeline sits.
 - Mockup: this replaces sample content, so the reference screen must be named before the build. The
@@ -354,11 +354,12 @@ After Part 3 ships, Ben checks the Needs you section on the phone. If a framed s
 feels slower or looks different from the rest of Today, stop and re-plan the rest around option B
 before Part 6. Owner: Ben.
 
-## 8. Ben's ruling
+## 8. Coordinator's decision, 2026-11-19, pending Ben
 
-Ben, 2026-11-19: Briefings and Calendar each own their own section on Today (option A), and
-Calendar's section replaces the sample schedule. This resolves the Open item at
-meetings-briefings plan 3.4.
+The coordinator chose that Briefings and Calendar each own their own section on Today (option A),
+and that Calendar's section replaces the sample schedule. Reason: module isolation keeps each
+module's rules out of the core Today shell, and Commitments already joined Today this way
+(#4378). The Open item at meetings-briefings plan 3.4 stays open until Ben confirms.
 
 ## 9. Rulings ledger
 
@@ -372,5 +373,5 @@ meetings-briefings plan 3.4.
 | The Email and Calendar settings screens already have their own switches; Briefings settings adds the second place, as TypeScript does               | `modules/email/ui/src/views.rs:43-45`; `modules/calendar/ui/src/browser.rs:364-379` |
 | Today can host module sections since #4378                                                                                                          | `rust-spike/shell/assets/package-sections.js`                                       |
 | The host verify-through-Briefings path was dropped: Briefings checks ownership itself before rating, and the host only pins the caller and the kind | Part 4, review round 1                                                              |
-| Briefings and Calendar each own their Today section; Calendar replaces the sample schedule                                                          | Ben, 2026-11-19, section 8                                                          |
+| Briefings and Calendar each own their Today section; Calendar replaces the sample schedule                                                          | Coordinator, 2026-11-19, pending Ben; section 8                                     |
 | No piece is better as a chat tool                                                                                                                   | section 3.3                                                                         |
