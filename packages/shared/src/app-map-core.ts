@@ -86,7 +86,7 @@ export const CORE_APP_FEATURES: readonly (AppMapItem & {
     id: "rust-module-chat",
     runtime: "rust",
     description:
-      "Moss can use the chat tools of modules you have installed and switched on for your account. Only tools with a declared input schema that need no approval appear until chat approval cards are available. Scratchpad can read your private note through chat."
+      "Moss can use the chat tools of modules you have installed and switched on for your account. Only tools with a declared input schema that need no approval appear until chat approval cards are available. Scratchpad can read your private note through chat. Codex keeps its starting tool list until a fresh conversation."
   }
 ];
 
