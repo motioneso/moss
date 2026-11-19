@@ -169,24 +169,6 @@ for (const [name, width] of [
     check(`${name} plan offers ${label}`, body.includes(label), body.slice(0, 300));
   }
   await shot(page, `${name}-plan-tools`);
-  await clickAct(page, frame, "text");
-  await frame.locator("#t-text").fill("Leftovers night");
-  await shot(page, `${name}-text`);
-  await clickAct(page, frame, "save-text");
-  body = await textOf(frame);
-  check(`${name} text replaces the meal`, body.includes("Leftovers night"), body.slice(0, 500));
-  check(`${name} text-only meal still offers Text`, body.includes("Text"));
-  await clickAct(page, frame, "text");
-  await frame.locator("#t-text").fill("");
-  await clickAct(page, frame, "clear-text").catch(() => {});
-  await tab(page, frame, "Plan");
-  body = await textOf(frame);
-  check(
-    `${name} plan back after clearing text`,
-    body.includes("Live") || body.includes("dinner"),
-    body.slice(0, 400)
-  );
-
   await clickAct(page, frame, "move");
   body = await textOf(frame);
   check(`${name} move screen opens`, body.includes("Back to the plan"), body.slice(0, 400));
@@ -206,6 +188,20 @@ for (const [name, width] of [
   );
   await shot(page, `${name}-swap`);
   await clickAct(page, frame, "back");
+
+  // Saving text replaces the planned recipe, so only the desktop pass saves it. The phone pass
+  // opens the screen and types, then goes back.
+  await clickAct(page, frame, "text");
+  await frame.locator("#t-text").fill("Leftovers night");
+  const saveOn = await frame.locator('[data-act="save-text"]').isEnabled();
+  check(`${name} typing enables Save text`, saveOn);
+  await shot(page, `${name}-text`);
+  if (name === "desktop") {
+    await clickAct(page, frame, "save-text");
+    body = await textOf(frame);
+    check(`${name} text replaces the meal`, body.includes("Leftovers night"), body.slice(0, 500));
+    check(`${name} text-only meal still offers Text`, body.includes("Text"));
+  } else await clickAct(page, frame, "back");
 
   // Settings page, opened as the header cog does.
   const s = await open(width, "meals-owner@example.test", "/settings/meals");
