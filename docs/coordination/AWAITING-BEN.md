@@ -75,14 +75,6 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
-### JS-355: one additional review round — 2026-11-18
-
-Both allowed review rounds are recorded for [PR #4379](https://github.com/motioneso/moss/pull/4379).
-The second round found a closed-pad append issue. Its correction is committed, passes the
-real desktop/phone proof, the Scratchpad package gate and the full static check, but needs
-independent review before Ready. Recommend adding one round through the Assistant; the
-alternative is to leave the task unready. Proof: `rust-port-phase-5-scratc-e9db`, version two.
-
 No open Outlook calendar decision. Ben approved the
 [calendar-first design](../superpowers/specs/2026-10-21-outlook-browser-calendar-sync.md)
 on 2026-10-21. Implementation and isolated-dev verification are authorized;
