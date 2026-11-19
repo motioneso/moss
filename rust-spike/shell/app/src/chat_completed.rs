@@ -4,7 +4,11 @@ use serde_json::Value;
 
 pub fn from_reply(id: &str, reply: &str) -> Option<CompletedWrite> {
     let value: Value = serde_json::from_str(reply).ok()?;
-    let fields = value.get("changed")?.as_array()?;
+    let fields = value
+        .get("data")
+        .and_then(|data| data.get("changed"))
+        .or_else(|| value.get("changed"))?
+        .as_array()?;
     if fields.is_empty() || fields.len() > 32 {
         return None;
     }
@@ -42,7 +46,15 @@ mod tests {
         )
         .unwrap();
         assert_eq!(done.changed[0].after, "New");
-        assert!(from_reply("t:2", r#"{"data":{"changed":[{"label":"Fake"}]}}"#).is_none());
+        assert_eq!(
+            from_reply(
+                "t:2",
+                r#"{"data":{"changed":[{"label":"Note","before":"Old","after":"New"}]}}"#
+            )
+            .unwrap()
+            .changed,
+            done.changed
+        );
         assert!(from_reply("t:3", r#"{"changed":[{"label":"Note","after":"New"}]}"#).is_none());
     }
 }

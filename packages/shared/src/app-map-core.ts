@@ -1,4 +1,5 @@
 import type { AiModelCapability, AiModelTier } from "./ai-types.js";
+import { RUST_CHAT_ERRORS, RUST_CHAT_REMEDIATIONS } from "./app-map-rust-chat.js";
 import {
   DESKTOP_APP_ERRORS,
   DESKTOP_APP_REMEDIATIONS,
@@ -639,6 +640,7 @@ export const CORE_APP_ERRORS: readonly CoreAppErrorDeclaration[] = [
     description: "Rust Moss reached its sign-in attempt or concurrent password-check limit."
   },
   ...DESKTOP_APP_ERRORS,
+  ...RUST_CHAT_ERRORS,
   {
     code: "core.page.page_load_failed",
     class: "transient",
@@ -850,6 +852,7 @@ export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
     scope: "user"
   },
   ...DESKTOP_APP_REMEDIATIONS,
+  ...RUST_CHAT_REMEDIATIONS,
   {
     id: "core.page.reload_page",
     description:

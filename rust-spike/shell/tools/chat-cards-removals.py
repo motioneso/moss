@@ -25,6 +25,9 @@ controls = [
     ("record-single-use", book, r'record.state = ApprovalState::Used;', '', exact),
     ("record-voided", book, r'if r\.turn == turn\s*&&', 'if false &&', "chat_approvals::tests::voided_action_cannot_be_used_in_a_later_turn"),
     ("record-dispatch", runner, r'if let Some\(action\) = approved\(module, &tool, &parameters\)', 'if let Some(action) = None::<chat_approvals::Action>', roundtrip),
+    ("approval-offered", runner, r'turn.offered.get\(tool\)', 'turn.offered.get(tool).or_else(|| turn.offered.values().next())', "runner_data::tests::socket::an_unoffered_action_is_refused_even_when_its_card_builder_would_succeed"),
+    ("card-failure", runner, r'let Ok\(card\) = self.tools.card\(module, &name, parameters\) else \{\s*return false;\s*\};', 'let card = self.tools.card(module, &name, parameters).unwrap_or(moss_module_host::chat_tools::ApprovalCardRecord { title: "Action request".into(), target: "Fallback".into(), fields: vec![], version: None, content: None, danger: false });', "runner_data::tests::socket::an_offered_action_with_a_failed_card_builder_is_refused"),
+    ("module-fixed-title", runner, r'                        card.title,', '                        m["card"]["title"].as_str().unwrap_or_default().to_string(),', roundtrip),
     ("shown-version", runner, r'action.version.as_deref\(\)', 'None', roundtrip),
 ]
 

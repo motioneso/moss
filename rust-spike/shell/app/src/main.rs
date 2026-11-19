@@ -380,9 +380,7 @@ fn main() {
         Ok(parts) => parts,
         Err(reason) => {
             // The reasons are fixed messages that never carry secrets.
-            eprintln!(
-                "moss-shell: could not start secure HTTPS ({reason}); check private configuration, certificates and runtime database roles"
-            );
+            eprintln!("moss-shell: could not start secure HTTPS ({reason}); check private configuration, certificates and runtime database roles");
             std::process::exit(1);
         }
     };

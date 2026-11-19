@@ -23,28 +23,18 @@ fn bad() -> Error {
 }
 
 fn candidate_id(input: &Value) -> Result<&str> {
-    input["candidateId"]
-        .as_str()
-        .filter(|id| is_uuid(id))
-        .ok_or_else(bad)
+    input["candidateId"].as_str().filter(|id| is_uuid(id)).ok_or_else(bad)
 }
 
 /// The version an approval card names. A later change to the row makes the old approval stale.
 fn version_of(row: &Value) -> Result<String> {
-    Ok(format!(
-        "[[\"{}\",\"{}\"]]",
-        row["id"].as_str().ok_or_else(bad)?,
-        iso(&row["updated_at"])?
-    ))
+    Ok(format!("[[\"{}\",\"{}\"]]", row["id"].as_str().ok_or_else(bad)?, iso(&row["updated_at"])?))
 }
 
 fn list<H: Host + ?Sized>(host: &H, input: &Value) -> Result<Value> {
     let status = match input.get("status") {
         None | Some(Value::Null) => "pending_review",
-        Some(v) => v
-            .as_str()
-            .filter(|s| LIST_STATUSES.contains(s))
-            .ok_or_else(bad)?,
+        Some(v) => v.as_str().filter(|s| LIST_STATUSES.contains(s)).ok_or_else(bad)?,
     };
     let clock = now(host)?;
     let mut query = Query::select(crate::candidates::status_filter(Some(status), &clock));
@@ -149,10 +139,7 @@ fn change<H: Host + ?Sized>(
             ]),
         ),
     )?;
-    let row = updated
-        .into_iter()
-        .next()
-        .ok_or_else(|| Error::new("The candidate changed since approval"))?;
+    let row = updated.into_iter().next().ok_or_else(|| Error::new("The candidate changed since approval"))?;
     let mut data = json!({"id": row["id"], "status": row["status"]});
     if let Some(until) = until {
         data["snoozedUntil"] = json!(until);
@@ -212,7 +199,7 @@ pub fn prepare_chat<H: Host + ?Sized>(host: &H, input: &Value) -> Result<Value> 
     let mut parameters = input["parameters"].as_object().ok_or_else(bad)?.clone();
     parameters.insert("action".into(), json!(action));
     if action == "snooze" {
-        chrono::DateTime::parse_from_rfc3339(parameters["snoozedUntil"].as_str().ok_or_else(bad)?)
+        chrono::DateTime::parse_from_rfc3339(parameters.get("snoozedUntil").and_then(Value::as_str).ok_or_else(bad)?)
             .map_err(|_| bad())?;
     }
     let mut card = prepare(host, &Value::Object(parameters))?;

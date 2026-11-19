@@ -70,18 +70,16 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
         .ok()
         .map(|host| format!("https://{host}:{}", port.0));
     let cert = root.join("tls/certificate.pem");
-    assert!(
-        Command::new(std::env::var("JS170_CERTIFICATE").unwrap())
-            .args(["local-certificate"])
-            .arg(root.join("tls"))
-            .arg(&origin)
-            .args(&remote)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .unwrap()
-            .success()
-    );
+    assert!(Command::new(std::env::var("JS170_CERTIFICATE").unwrap())
+        .args(["local-certificate"])
+        .arg(root.join("tls"))
+        .arg(&origin)
+        .args(&remote)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .unwrap()
+        .success());
     fs::create_dir(root.join("web")).unwrap();
     if let Ok(shared) = std::env::var("MOSS_MODULE_SHARED_DIR") {
         // Generated shared styles and fonts, which the sandboxed screens load.
@@ -98,14 +96,12 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
     )
     .unwrap();
     if let Ok(web) = std::env::var("MOSS_SCRATCHPAD_SCREEN_WEB") {
-        assert!(
-            Command::new("cp")
-                .args(["-r", &format!("{web}/.")])
-                .arg(root.join("web"))
-                .status()
-                .unwrap()
-                .success()
-        );
+        assert!(Command::new("cp")
+            .args(["-r", &format!("{web}/.")])
+            .arg(root.join("web"))
+            .status()
+            .unwrap()
+            .success());
     }
     let app_url = std::env::var("JS43_APP_URL").unwrap();
     let worker_url = std::env::var("JS43_WORKER_URL").unwrap();
@@ -516,9 +512,7 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
         json_of(&text)["data"]["body"],
         format!("owner {MARK}\nsecond\nchat {MARK}")
     );
-    println!(
-        "scratchpad live: stored-record approval, denied unapproved/other-account/replay, approved chat append through HTTPS"
-    );
+    println!("scratchpad live: stored-record approval, denied unapproved/other-account/replay, approved chat append through HTTPS");
     // The other person sees none of it, and cannot save over it.
     let (_, text) = call(Method::GET, "/note", Some(&other), None);
     let seen = json_of(&text);
@@ -622,12 +616,10 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
         200
     );
     let (_, text) = call(Method::GET, "/account/export", Some(&cookie), None);
-    assert!(
-        json_of(&text)["scratchpad"]["body"]
-            .as_str()
-            .unwrap()
-            .contains(MARK)
-    );
+    assert!(json_of(&text)["scratchpad"]["body"]
+        .as_str()
+        .unwrap()
+        .contains(MARK));
     let (status, text) = call(Method::DELETE, "/account/data", Some(&cookie), None);
     assert_eq!(status, 200);
     assert_eq!(json_of(&text)["deleted"], 1);
@@ -638,14 +630,10 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
             .unwrap()
             .contains(MARK)
     );
-    println!(
-        "scratchpad live: account export and deletion run through HTTPS, activity and server log contain no planted text"
-    );
+    println!("scratchpad live: account export and deletion run through HTTPS, activity and server log contain no planted text");
     // Nothing the test sent reached the server log.
     assert!(!log().contains(MARK));
-    println!(
-        "scratchpad live: read, save, conflict, append and settings worked over HTTPS for two people"
-    );
+    println!("scratchpad live: read, save, conflict, append and settings worked over HTTPS for two people");
     // Keep the real server and the gate's isolated database alive for browser proof.
     if let Ok(hold) = std::env::var("MOSS_SCRATCHPAD_HOLD") {
         let hold = Path::new(&hold);

@@ -25,18 +25,16 @@ fn forged_names_old_turns_and_repeated_ids_do_not_dispatch() {
     let tools = Tools(AtomicUsize::new(0));
     let mut turn = ToolTurn::new(vec![read()], uuid::Uuid::new_v4().to_string()).unwrap();
     let event = |id: String, name: &str| json!({"call_id":id,"name":name,"arguments":{}});
-    assert!(
-        turn.dispatch(
+    assert!(turn
+        .dispatch(
             &event(format!("{}:1", turn.id), "scratchpad_append"),
             &tools
         )
-        .is_err()
-    );
+        .is_err());
     let old = ToolTurn::new(vec![read()], uuid::Uuid::new_v4().to_string()).unwrap();
-    assert!(
-        turn.dispatch(&event(format!("{}:2", old.id), "scratchpad_read"), &tools)
-            .is_err()
-    );
+    assert!(turn
+        .dispatch(&event(format!("{}:2", old.id), "scratchpad_read"), &tools)
+        .is_err());
     assert_eq!(tools.0.load(Ordering::SeqCst), 0);
     let call = event(format!("{}:3", turn.id), "scratchpad_read");
     assert_eq!(
@@ -153,8 +151,7 @@ mod socket {
                     (2, "scratchpad_append", false),
                 ] {
                     let id = format!("{}:{n}", runner.chat["turn_id"].as_str().unwrap());
-                    runner
-                        .send(json!({"event":"tool_call","call_id":id,"name":name,"arguments":{}}));
+                    runner.send(json!({"event":"tool_call","call_id":id,"name":name,"arguments":{}}));
                     let reply = runner.next().unwrap();
                     assert_eq!(reply["op"], "tool_result");
                     assert_eq!(reply["call_id"], id);
@@ -286,6 +283,72 @@ mod socket {
     }
 
     #[test]
+    fn an_unoffered_action_is_refused_even_when_its_card_builder_would_succeed() {
+        let rig = Rig::new();
+        let tools = Arc::new(ActionTools(Arc::new(AtomicUsize::new(0))));
+        let mut offered = tools.list().unwrap();
+        offered[0].name = "commitments_reject".into();
+        let turn = ToolTurn::new(offered, "turn".into()).unwrap();
+        let data = RunnerShellData::with_limits(rig.root.clone(), ME.into(), tools, Limits::default());
+        assert!(!data.inner.raise_approval(&json!({"id":4,"card":{"source":"moss","tool":"commitments_accept","input":{"candidateId":"one"}}}), &turn));
+        assert!(data.chat_thread().approvals.is_empty());
+    }
+
+    struct FailedCardTools;
+    impl ChatTools for FailedCardTools {
+        fn list(&self) -> Result<Vec<ToolDef>, String> {
+            ActionTools(Arc::new(AtomicUsize::new(0))).list()
+        }
+        fn run(&self, _: &str, _: &str, _: Value) -> Result<String, String> {
+            panic!("A failed card must never dispatch")
+        }
+    }
+    #[test]
+    fn an_offered_action_with_a_failed_card_builder_is_refused() {
+        let rig = Rig::new();
+        let tools = Arc::new(FailedCardTools);
+        let turn = ToolTurn::new(tools.list().unwrap(), "turn".into()).unwrap();
+        let data = RunnerShellData::with_limits(rig.root.clone(), ME.into(), tools, Limits::default());
+        assert!(!data.inner.raise_approval(&json!({"id":4,"card":{"source":"moss","tool":"commitments_accept","input":{"candidateId":"one"}}}), &turn));
+        assert!(data.chat_thread().approvals.is_empty());
+    }
+
+    struct ChangedTools;
+    impl ChatTools for ChangedTools {
+        fn list(&self) -> Result<Vec<ToolDef>, String> {
+            let mut write = read();
+            write.name = "scratchpad_append".into();
+            write.facts.risk = moss_agents::approvals::Risk::Write;
+            write.facts.execution_auto = true;
+            Ok(vec![read(), write])
+        }
+        fn run(&self, _: &str, _: &str, args: Value) -> Result<String, String> {
+            if args["fail"] == true { return Err("Write failed".into()); }
+            Ok(json!({"data":{"changed":[{"label":"Note","before":"Old","after":"New"}]}}).to_string())
+        }
+    }
+    #[test]
+    fn only_a_successful_plain_write_adds_a_done_row_from_the_wrapped_reply() {
+        let rig = Rig::new();
+        let listener = rig.listener.try_clone().unwrap();
+        let task = std::thread::spawn(move || {
+            let mut runner = Runner::accept(&listener);
+            for (n, name, fail) in [(1, "scratchpad_read", false), (2, "scratchpad_append", true), (3, "scratchpad_append", false)] {
+                runner.send(json!({"event":"tool_call","call_id":format!("{}:{n}",runner.chat["turn_id"].as_str().unwrap()),"name":name,"arguments":{"fail":fail}}));
+                assert_eq!(runner.next().unwrap()["ok"], !fail);
+            }
+            runner.send(json!({"event":"done","text":"finished"}));
+        });
+        let data = RunnerShellData::with_limits(rig.root.clone(), ME.into(), Arc::new(ChangedTools), Limits::default());
+        data.send_message(&SendMessage{text:"go".into(),..Default::default()}).unwrap();
+        let t = wait_for(&data, "write finished", |t| !t.running);
+        assert_eq!(t.completed.len(), 1);
+        assert_eq!(t.completed[0].changed, vec![moss_shell_contract::ChangedField{label:"Note".into(),before:"Old".into(),after:"New".into()}]);
+        assert!(t.approvals.is_empty());
+        task.join().unwrap();
+    }
+
+    #[test]
     fn a_second_message_while_a_turn_runs_is_refused() {
         let rig = Rig::new();
         let listener = rig.listener.try_clone().unwrap();
@@ -328,26 +391,20 @@ mod socket {
         let card = &t.approvals[0];
         assert_eq!(card.state, moss_shell_contract::ApprovalState::Pending);
         assert_eq!(card.title, "Permission request");
-        assert!(
-            card.fields
-                .iter()
-                .any(|f| f.label == "Command" && f.value == "ls /tmp")
-        );
+        assert!(card
+            .fields
+            .iter()
+            .any(|f| f.label == "Command" && f.value == "ls /tmp"));
         let id = card.id.clone();
         assert_eq!(
             data.decide_approval("someone-else", &id, Decision::Approve)
                 .unwrap_err(),
             ChatError::NotFound
         );
-        assert!(
-            data.chat_thread().approvals[0].state == moss_shell_contract::ApprovalState::Pending
-        );
+        assert!(data.chat_thread().approvals[0].state == moss_shell_contract::ApprovalState::Pending);
         data.decide_approval(ME, &id, Decision::Approve).unwrap();
         let t = wait_for(&data, "turn end", |t| !t.running);
-        assert_eq!(
-            t.approvals[0].state,
-            moss_shell_contract::ApprovalState::Used
-        );
+        assert_eq!(t.approvals[0].state, moss_shell_contract::ApprovalState::Used);
         assert_eq!(t.messages[1].text, "ok");
         task.join().unwrap();
     }
@@ -376,8 +433,7 @@ mod socket {
         let t = wait_for(&data, "pending card", |t| !t.approvals.is_empty());
         // The person takes longer than the idle limit to answer.
         std::thread::sleep(Duration::from_millis(900));
-        data.decide_approval(ME, &t.approvals[0].id, Decision::Approve)
-            .unwrap();
+        data.decide_approval(ME, &t.approvals[0].id, Decision::Approve).unwrap();
         let t = wait_for(&data, "turn end", |t| !t.running);
         assert_eq!(t.messages[1].text, "finished", "{:?}", t.messages);
         task.join().unwrap();
@@ -404,14 +460,10 @@ mod socket {
         })
         .unwrap();
         let t = wait_for(&data, "turn end", |t| !t.running && !t.approvals.is_empty());
-        assert_eq!(
-            t.approvals[0].state,
-            moss_shell_contract::ApprovalState::TimedOut
-        );
+        assert_eq!(t.approvals[0].state, moss_shell_contract::ApprovalState::TimedOut);
         let id = t.approvals[0].id.clone();
         assert_eq!(
-            data.decide_approval(ME, &id, Decision::Approve)
-                .unwrap_err(),
+            data.decide_approval(ME, &id, Decision::Approve).unwrap_err(),
             ChatError::Closed
         );
         task.join().unwrap();
@@ -480,19 +532,11 @@ mod socket {
         })
         .unwrap();
         let t = wait_for(&data, "turn limit", |t| !t.running);
-        assert!(
-            t.messages[1].text.contains("15 minute limit"),
-            "{:?}",
-            t.messages
-        );
-        assert_eq!(
-            t.approvals[0].state,
-            moss_shell_contract::ApprovalState::Voided
-        );
+        assert!(t.messages[1].text.contains("15 minute limit"), "{:?}", t.messages);
+        assert_eq!(t.approvals[0].state, moss_shell_contract::ApprovalState::Voided);
         let id = t.approvals[0].id.clone();
         assert_eq!(
-            data.decide_approval(ME, &id, Decision::Approve)
-                .unwrap_err(),
+            data.decide_approval(ME, &id, Decision::Approve).unwrap_err(),
             ChatError::Closed
         );
         task.join().unwrap();
