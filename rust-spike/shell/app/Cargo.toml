@@ -5,7 +5,11 @@ edition.workspace = true
 publish.workspace = true
 description = "The Moss server: serves the UI shell to browsers, phones and the desktop app"
 
+[features]
+live-proof = ["moss-agents/live-proof"]
+
 [dependencies]
+moss-agents = { path = "../../agents" }
 moss-shell-contract = { path = "../contract", features = ["stub"] }
 moss-network = { path = "../../network" }
 moss-module-host = { path = "../../module-host" }

@@ -2,6 +2,7 @@
 
 pub mod acp;
 pub mod approvals;
+pub mod builtins;
 pub mod claude;
 pub mod codex;
 pub mod confine;
@@ -14,3 +15,4 @@ pub mod runner;
 pub mod session;
 pub mod terminal;
 pub mod transport;
+mod turn_tools;
