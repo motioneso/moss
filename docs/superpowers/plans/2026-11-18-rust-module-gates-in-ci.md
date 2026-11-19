@@ -45,7 +45,7 @@ Runs the module's own non-live gate through `scripts/run-gate.sh start --gate <s
 | tasks                                                                                                         | `test:rust-tasks`                                                               |
 | people                                                                                                        | `test:rust-people-large` (needs a prebuilt component, see below)                |
 | notes                                                                                                         | `modules/notes/tools/gate.sh` (needs prebuilt components, see below)            |
-| calendar                                                                                                      | `test:rust-calendar-server` (folds in `rust-calendar.yml`'s `check.sh`)         |
+| calendar                                                                                                      | `modules/calendar/tools/gate.sh` (folds in `rust-calendar.yml`'s `check.sh`)    |
 | finance                                                                                                       | `test:rust-finance`, `test:rust-finance-ui-unit`                                |
 | wellness                                                                                                      | `test:rust-wellness`                                                            |
 | memory                                                                                                        | `test:rust-memory`, `test:rust-memory-index`, `test:rust-memory-oracle`         |
@@ -57,7 +57,9 @@ Runs the module's own non-live gate through `scripts/run-gate.sh start --gate <s
 `test:rust-tasks-privacy` and `test:rust-tasks-jobs` are inner steps of `test:rust-tasks`; run
 alone, `tasks-privacy` exits 1 by design (`modules/tasks/tools/tests/privacy.rs:214`, `TASKS_COMPONENT`).
 
-Notes and People are the only modules whose gates do not build their own component. Notes'
+Three gates do not build the components they test. Notes and People are the only modules whose
+main gate needs them prebuilt, and `test:rust-calendar-server` needs `JS181_CALENDAR_PACKAGE` and
+`JS220_TASKS_PACKAGE` (`modules/calendar/tools/server-gate.ts:8-15`). Notes'
 `gate.sh:9` needs `NOTES_COMPONENT` and `NOTES_TOOL_COMPONENT`; `test:rust-notes-server`,
 `test:rust-notes-ingest` and `test:rust-people-large` (`JS50_PEOPLE_COMPONENT`,
 `rust-spike/module-host/tools/people-gate.ts:10`) exit 1 without them. Until a fix task makes
@@ -124,7 +126,31 @@ Trigger paths: `rust-spike/module-host/**`, `module-sdk/**`, `access-context/**`
 Local box, 16 cores, shared with other work (load about 9), one gate at a time, through
 `scripts/run-gate.sh`.
 
-MEASURED_TABLE
+Cold runs (fresh target folder, load about 9):
+
+| Gate                | Result | Wall time | Target folder |
+| ------------------- | ------ | --------- | ------------- |
+| `test:rust-finance` | pass   | 21 min    | 3.2 GB        |
+| `test:rust-tasks`   | red    | 13 min    | 2.4 GB        |
+
+Sweep runs (two lanes in parallel, each lane reusing one target folder, load 30 to 55 from other
+work on the box). Treat these as upper bounds.
+
+| Gate                      | Wall time                             | Gate                           | Wall time |
+| ------------------------- | ------------------------------------- | ------------------------------ | --------- |
+| `test:rust-memory`        | over 90 min (stopped, 42 tests green) | `test:rust-goals`              | 8 min     |
+| `test:rust-news`          | 44 min                                | `test:rust-wellness`           | 8 min     |
+| `test:rust-meals`         | 36 min                                | `test:rust-proactive-server`   | 8 min     |
+| `test:rust-meetings`      | 33 min                                | `test:rust-module-assembly`    | 5 min     |
+| `test:rust-sports`        | 30 min                                | `test:rust-tasks-server`       | 4 min     |
+| `test:rust-tasks` (rerun) | 16 min                                | `test:rust-module-ai`          | 4 min     |
+| `test:rust-briefings`     | 12 min                                | `test:rust-proactive-feedback` | 3 min     |
+| `test:rust-scratchpad`    | 2 min                                 | `test:rust-memory-index`       | 3 min     |
+| `test:rust-web-research`  | 2 min                                 | `test:rust-public-web`         | 2 min     |
+| `test:rust-commitments`   | 2 min                                 | `test:rust-weather`            | 1 min     |
+
+Two shared target folders reached 22 GB and 11 GB across the sweep. A hosted runner cannot hold
+one target folder shared across modules, so each module job keeps its own.
 
 Most of each gate is test run time, not compiling. Finance's installed suite alone ran 494 s with
 `--test-threads=1`, and its guard-removal controls about 4 minutes. A cache cannot shrink that.
@@ -132,20 +158,56 @@ Most of each gate is test run time, not compiling. Finance's installed suite alo
 Real CI reference: `rust-calendar.yml` runs Calendar's `check.sh` uncached in 6 to 8 minutes wall
 time on `ubuntu-latest`, about 50 s of it setup (last six runs, 2026-11-18).
 
-Estimate per module job on a hosted runner: setup 1 min, plus the local warm time, plus up to
-100% for compiling on 4 cores when the cache misses. Finance is the worst case at about 22 to
-30 minutes. Today's full CI on `main` takes 20 to 25 minutes, so Finance becomes the long pole.
+Estimate per module job on a hosted runner: setup 1 min, plus the local time, plus up to 100%
+for compiling on 4 cores when the cache misses. Most modules land at 5 to 25 minutes. Finance's
+cold run (21 min at low load) is the best measured large case.
+
+Memory, News, Meals, Meetings and Sports already ran 30 minutes or more locally. Their tests run
+one at a time against Postgres (`--test-threads=1`), so more cores do not help. Run each of those
+five as one matrix job per test file from the first rollout step that includes them. That needs
+a suite filter in each of those gates, as People's gate already has (`JS50_PEOPLE_SUITE`,
+`modules/people/README.md:115`). Memory's files alone measured 45, 20 and 19 minutes for `installed`,
+`recording` and `reembed`.
+
+Today's full CI on `main` takes 20 to 25 minutes, so the split modules set the long pole.
 
 ## Red on `main` today
 
 Run once each on `main` at `535431302`, clean tree, through `scripts/run-gate.sh`. Each failure
 becomes its own fix task; none is fixed here.
 
-RED_TABLE
+Real failures, one fix task each:
+
+| #   | Gate                            | Failure                                                                                                                                                       | Evidence                                                                                                                  |
+| --- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| R1  | `test:rust-tasks`               | With row security removed, the briefing read still shows the second account nothing, so the removal control never goes red. Failed 2 of 2 runs.               | `modules/tasks/tools/tests/privacy/briefing.rs:48`                                                                        |
+| R2  | `test:rust-backtrack`           | Installed test does not compile: missing field `browser_dir`, added to the host by #4287.                                                                     | `modules/backtrack/host/tests/support/install.rs:81`                                                                      |
+| R3  | `test:rust-news-reader`         | The reader's own privacy check forbids in-source tests; #4285 added a `#[cfg(test)]` block.                                                                   | `modules/news/reader/tests/privacy.rs:86`, `modules/news/reader/src/html.rs:203`                                          |
+| R4  | `test:rust-recording-oracle`    | Old-code output no longer matches the stored cases (last written by #4244), from the first scenario. Cause not traced.                                        | `modules/meetings/tools/recording-oracle.ts:477`                                                                          |
+| R5  | `test:rust-news`                | Overview returns no stories for a stored page. Likely the fixed 2026-11-11 story dates aged out of a seven-day window; not traced.                            | `modules/news/host/tests/installed.rs:580`                                                                                |
+| R6  | `test:rust-weather-preferences` | The checked-in Weather declaration lists 2 resources; the host binds 3.                                                                                       | `rust-spike/module-host/tests/weather_preferences_database.rs:56`, `rust-spike/module-host/src/account_preferences.rs:92` |
+| R7  | Calendar `gate.sh`              | Installed test installs Calendar alone; the manifest requires Tasks since #4224, so install fails with "A required module is missing or incompatible: tasks". | `modules/calendar/host/tests/installed.rs:103`, `modules/calendar/moss.module.json:185-186`                               |
+
+Setup gaps, not test failures. Each becomes a fix task too, because CI cannot run these gates
+until it is closed:
+
+| #   | Gates                                                                                    | Gap                                                                                   |
+| --- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| S1  | Notes `gate.sh`, `test:rust-notes-server`, `-notes-ingest`, `-people-large`              | Need a prebuilt component; every other module's gate builds its own.                  |
+| S2  | `test:rust-people-server`, `-module-bootstrap`, `-install-endpoints`, `-calendar-server` | Need a hand-packed module package (`modules/people/README.md:200-214`). Not run here. |
+
+Seen once and not counted: `search::compiled_search_uses_saved_account_day_in_prompt` in
+`test:rust-tasks` hit "Module rollback deadline exceeded" at load about 50 and passed in the cold
+run. A gate that runs on a shared runner needs that deadline checked under load (owner: R1's
+fix task).
+
+Expected non-zero exits, by design: `test:rust-tasks-privacy` run alone, and the interactive
+`-tasks-ui` and `-wellness-ui` gates, stopped once they started.
 
 ## Rollout
 
-1. **Fix the red gates** (one task each, above). Nothing becomes required while its gate is red.
+1. **Fix the red gates and setup gaps** (R1-R7, S1-S2, one task each). Nothing becomes required
+   while its gate is red. Add the suite filter to Memory, News, Meals, Meetings and Sports.
 2. **Shadow job, two modules.** Add `rust-modules` with Finance and Tasks only, not in `ci-gate`'s
    `needs`. Proves `run-gate.sh` on a hosted runner, the caches and the disk headroom.
 3. **All modules, still shadow.** Extend the matrix. Delete `rust-calendar.yml` once Calendar runs
@@ -159,8 +221,9 @@ RED_TABLE
 
 Owner: the CI rollout coordinator. Observe after step 3, over the first ten PRs that run the job.
 
-- If any module job's median wall time exceeds **30 minutes**, that module's per-PR tier drops its
-  guard-removal controls and slowest installed suite to the `main` push; the PR keeps the rest.
+- If any module job's median wall time exceeds **30 minutes** after the per-file split, that
+  module's per-PR tier drops its guard-removal controls and slowest test file to the `main` push;
+  the PR keeps the rest. Memory is the likely first case.
 - If the median `rust-modules` wall time for a single-module PR exceeds **25 minutes** after that,
   stop at shadow mode and bring the measurements back to Ben before making it required.
 - If a cached run still runs out of disk, split the module's suites across two jobs.
