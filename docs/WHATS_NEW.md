@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Long-term goals on Today.** Today shows your active long-term goals, priorities and desired outcomes. [PR #4376](https://github.com/motioneso/moss/pull/4376)
 - **Household, Log and settings in Meals.** Meals now has a Household list, a daily Log, a settings page, and tools to swap, move or rewrite a planned meal. [PR #4368](https://github.com/motioneso/moss/pull/4368)
 - **Finance start, reports, upcoming bills and settings.** Finance now has a start page that works without a bank connection, a reports page for net worth and spending, an upcoming bills page, and a settings page. [PR #4369](https://github.com/motioneso/moss/pull/4369)
 - **Finance screens in the new app.** You can now see your budget, transactions and accounts, assign money and sort transactions, and a bank that needs you to sign in again shows a Reconnect button. [PR #4362](https://github.com/motioneso/moss/pull/4362)
