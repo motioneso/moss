@@ -213,7 +213,12 @@ fn installed_commitments_package_serves_routes_from_the_real_server() {
     fs::create_dir_all(root.join("registry/packages")).unwrap();
     let mut packages = vec![("JS293_COMMITMENTS_PACKAGE", "commitments")];
     if std::env::var("COMMITMENTS_SCREEN_LIVE").is_ok() {
-        packages.extend([("JS224_CONNECTORS_PACKAGE", "connectors"), ("JS225_EMAIL_PACKAGE", "email")]);
+        packages.extend([
+            ("JS220_TASKS_PACKAGE", "tasks"),
+            ("JS181_CALENDAR_PACKAGE", "calendar"),
+            ("JS225_EMAIL_PACKAGE", "email"),
+            ("JS224_CONNECTORS_PACKAGE", "connectors"),
+        ]);
     }
     let artifacts: Vec<Artifact> = packages
     .iter()
