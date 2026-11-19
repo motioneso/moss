@@ -415,8 +415,8 @@ Needs hardware or a real account (so needs Ben, never claimed by CI):
 
 | Piece                                                                                                                                        | Today                                                                             | Rust owner                                |
 | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------- |
-| Tables `companion_pair_attempts`, `companion_devices`                                                                                        | core migrations 0238, 0239, 0330                                                  | Meetings (ledger move, bytes unchanged)   |
-| Tables `companion_recording_capabilities`, `companion_recording_attempts`                                                                    | core migration 0287                                                               | Meetings                                  |
+| Tables `companion_pair_attempts`, `companion_devices`                                                                                        | core migrations 0238, 0239, 0330                                                  | core SQL, stays put (section 4b)          |
+| Tables `companion_recording_capabilities`, `companion_recording_attempts`                                                                    | core migration 0287                                                               | core SQL, stays put (section 4b)          |
 | Routes `/api/companion/*` (protocol, pair, attempt, decide, redeem, cancel, heartbeat, device, logout, ring-session, ring-logout, backtrack) | `apps/api/src/companion-routes.ts:200-530`                                        | Meetings host crate, mounted by the shell |
 | Ring path allow-list                                                                                                                         | `apps/api/src/ring-recording-auth.ts`                                             | network gate, list supplied by Meetings   |
 | Device list and approval screens                                                                                                             | `apps/web/src/companion/link-trail-marker-page.tsx`, Settings, Active sessions    | Meetings screens (7b)                     |
@@ -564,6 +564,132 @@ redirects for Mac and Android apps already in the field; 7a confirms with the ap
   same device record and the same `checkDevice` call. The approval shrinks to one confirm inside the
   app. Nothing in 7a or 7b blocks that, and JS-333 is not designed here.
 
+## 4b. Device tables on a Rust-only install (part 7c)
+
+Planned under JS-351. Answers the two open items in the 7a report
+(`2026-11-18-rust-phase5-meetings-part-7a-report.md`, Not proven): no device tables on a Rust-only
+install, and device rows not deleted with Meetings.
+
+### 4b.1 What the tree says today
+
+- Every Rust install already runs the core folder. `moss-db up` runs
+  `infra/postgres/migrations` first, then every built-in module folder
+  (`rust-spike/bundled-db/src/migrate.rs:18-46`, called at `rust-spike/bundled-db/src/main.rs:191`).
+  The four files 0238, 0239, 0287 and 0330 sit in that folder, so a `moss-db` instance has the
+  tables. The install rules keep that folder as the platform schema
+  (`2026-11-06-rust-port-data-and-install-rules.md:70`).
+- An install with no core run cannot exist, because `app.users` and sessions come from the same
+  folder. **Guess**, proven first in 7c: the 7a report's "Rust-only install with no device tables"
+  case does not occur on the supported path. The real gaps are the two below.
+- The device lookup SQL (`rust-spike/module-host/sql/0004_companion_devices.sql`) goes in only
+  through `moss-shell install-module` (`rust-spike/shell/app/src/module_install.rs:123-145`).
+  Meetings installed any other way has the tables but no lookup, so pairing fails.
+- Removing Meetings with its data drops only the tables in `moss_modules.owned_tables`
+  (`rust-spike/module-host/src/migrations.rs:251-267`). The four device tables are not owned by
+  Meetings, so their rows survive. A reinstall would bring every old device back to life.
+- Module package SQL allows one statement per file and only CREATE TABLE, CREATE INDEX, UPDATE,
+  DELETE and two ALTER forms (`rust-spike/module-host/src/sql.rs:39-56`). The device tables need
+  FORCE RLS, an auth-runtime-only policy and grants (`0238_companion_devices.sql:56-74`,
+  `0287_companion_recording_capabilities.sql:43-50`). The package subset cannot express them.
+- A new file in an old number fails on any install that already applied a later Meetings file
+  ("A new migration must follow every applied migration", `migrations.rs:170`).
+
+### 4b.2 Where the tables come from (ranked)
+
+1. **B1, chosen. Keep the four files as core SQL and add no migration.** The core run creates
+   the tables on a fresh install and has already created them on an existing one. Ownership in
+   the product sense moves to Meetings through code (the pairing store, the purge step in 4b.4),
+   not through the migration ledger. Cost: the tables stay listed as host schema, so the module
+   isolation rule has one known exception, already accepted for the resolver in 4a.3.
+2. **B2, rejected. New Meetings package files with new numbers, create-if-missing.** Steelman:
+   Meetings would carry its own schema, which is the cleanest module boundary and survives a
+   future core that drops these files. It fails on four walls. The package subset cannot set
+   FORCE RLS, the auth-runtime policy or the grants (`sql.rs:39-56`). Package tables must carry
+   the Meetings prefix or sit in the frozen inventory (`manifest.rs:409-421`). A module-ledger table
+   gets the generated owner-only policy (`migrations.rs:190`), which would hand credential hashes
+   to the owner's role. A fresh install and an upgraded one would end with two different
+   definitions of the same table.
+3. **B3, fallback. Host SQL that creates the tables if missing.** A new file
+   `rust-spike/module-host/sql/0005_companion_tables.sql`, applied with 0004. Steelman: host SQL
+   can carry policies and functions, so it matches 0238 exactly, and it works even if a future core
+   run stops carrying these files. Rejected for now because it writes a second copy of DDL that
+   already runs everywhere, and the two copies can drift. It becomes the plan only if the kill gate
+   in 4b.7 fires.
+4. **B4, rejected by 7a. Move the applied files into `packages/meetings/sql`.** It changed applied
+   files' paths, tripped the collision check for every open PR, and was reverted (7a report,
+   "Migration move decision"). `CLAUDE.md` forbids moving an applied migration.
+
+### 4b.3 Existing installs
+
+- B1 adds no migration, so an existing install has nothing new to apply. Its ledger keeps 238,
+  239, 287 and 330 as applied, and `moss-db up` skips them by checksum.
+- The device lookup SQL is `CREATE OR REPLACE` and guarded by "tables present, view absent"
+  (`module_install.rs:132-141`). 7c moves that guard into server start-up so it runs on every
+  path, not only the install command. Running it twice is a no-op.
+- Proof: a copy of the dev data upgrades with exit 0, and `pg_class` shows one row per table name.
+
+### 4b.4 Account delete and Meetings removal
+
+| Event                              | Rows that go                                                                                         | How                                                                                                                       |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Account delete                     | that person's devices, pair attempts, recording capabilities and recording attempts                  | `ON DELETE CASCADE` on `app.users` (`0238:23,38`, `0287:16,27`); no new code                                              |
+| Meetings removed, data kept        | none; devices reach nothing while Meetings is off (section 4a.3)                                     | as 7a                                                                                                                     |
+| Meetings removed with its data     | every device row and every pair attempt on the instance; capabilities and attempts follow by cascade | a host purge step calls the pairing store before the owned tables drop; if it fails, removal fails and nothing is dropped |
+| Meetings reinstalled after a purge | none; the tables are still there and empty                                                           | the tables are never dropped, so the core ledger and the tables agree                                                     |
+
+- The manifest does not list the four tables in `ownedTables`. Listing them would make purge drop
+  them (`migrations.rs:254-255`). That drop fails while the host view depends on the table, and if
+  forced it leaves the core ledger saying 238 is applied with no table, so a reinstall breaks.
+- Rust has no account-delete route yet (only tests delete `app.users`). The cascade covers it when
+  that route lands. **Open**, owner the account-delete port: confirm it deletes the `app.users` row.
+- New signatures, decisions only:
+
+```rust
+// rust-spike/safety-core/src/admin.rs, next to DeviceRevoker.
+// Deletes every companion device and pair attempt on the instance. Returns rows deleted.
+fn revoke_all_devices<'a>(&'a self) -> Pin<Box<dyn Future<Output = Result<u64, ApiError>> + Send + 'a>>;
+
+// rust-spike/module-host/src/lifecycle.rs. The shell registers one hook per module id;
+// purge runs it first and stops on error.
+pub fn set_purge_hook(module_id: &'static str, hook: Arc<dyn PurgeHook>);
+```
+
+### 4b.5 Staying clear of the collision check
+
+- B1 adds no file under any path the checker reads (`scripts/check-migration-collisions.ts:19-20`
+  matches `infra/postgres/migrations`, `packages/*/sql`, `packages/*/src/sql` and `modules/*/sql`).
+- The device lookup SQL lives in `rust-spike/module-host/sql/`, which the checker does not read.
+  The B3 fallback file would go there too, so even the fallback claims no shared number.
+- The checker stays unchanged. 7c's PR must show the collision job green with no edit to the
+  script.
+
+### 4b.6 Tests, each seen failing with its change removed
+
+1. A fresh `moss-db up` instance has all four tables and ledger rows 238, 239, 287 and 330. Fails
+   if any of the four files leaves the core folder.
+2. Server start-up on an instance where Meetings came from the registry, not the install command,
+   creates `app.companion_devices_owner`. Fails with the start-up step removed.
+3. Removing Meetings with its data leaves zero rows in all four tables and leaves the tables in
+   place. Fails with the purge hook removed (rows remain) and fails if the tables join
+   `ownedTables` (tables gone).
+4. Reinstalling Meetings after test 3 pairs a new device through the real pairing routes. Fails if
+   the tables were dropped.
+
+```bash
+cargo test --manifest-path rust-spike/Cargo.toml -p moss-module-host companion > /tmp/7c-host.log 2>&1; echo "EXIT=$?"   # expect EXIT=0
+cargo test --manifest-path modules/meetings/host/Cargo.toml --test devices > /tmp/7c-meet.log 2>&1; echo "EXIT=$?"     # expect EXIT=0
+```
+
+The builder confirms the exact crate and test names against the tree before running.
+
+### 4b.7 Live proof and kill gate
+
+- Live, on a fresh `moss-db` instance on the Rust server: install Meetings from the registry,
+  pair a real Mac, see it in the device list, remove Meetings with its data, see the rows gone,
+  reinstall, pair again. Then the same upgrade on a copy of the dev data.
+- **Kill gate**, owner the 7c builder, decision Ben: if test 1 shows a supported Rust install
+  without the four tables, B1 is wrong. Switch to B3 and report before building on.
+
 ## 5. Keeping private data private
 
 1. **Owner-only.** Meetings and Backtrack tables all have owner-only row level security
@@ -645,8 +771,9 @@ proven. Each names its e2e proof.
 | 4   | Meetings  | Structured model port and summaries: templates, escaped prompt, 65,536 byte cap, validation and citation check, immutable versions, stale marks, long-meeting pieces, `meetings.stop-summary` job, automatic summary on stop.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | L    | Canned model output through every refusal; piece method matches the design's examples; job payload inspection; no prompt or text in logs                                                                                                                                                                                                         |
 | 5   | Meetings  | Action review into Tasks (public API), private export through the Notes port, account export section with all 18 collections (a round trip must keep ready-import audio, both as verified chunk bytes with hashes in base64 and as a retained legacy bundle, `data-lifecycle.ts:62,77`), deletion service with the chat cleanup callback. Deletion fences the source, cleans its managed Notes recording blocks and Memory recording episodes and search documents, seals the cleanup, and only then deletes the meeting. Incomplete or conflicting cleanup refuses deletion (`deletion-service.ts:57`, `managed-deletion-runtime.ts:62`, `recording-contribution-cleanup.ts:199`, `recording-memory-cleanup.ts:78`). Independent exported note copies survive. Tests assert no searchable recording content remains in Notes or Memory, and that a cleanup conflict keeps the meeting. Needs the Notes and Memory cleanup ports (**Guess** that they do not exist in Rust yet; confirm first). | M    | Task acceptance and regeneration deduplication; create-only export conflicts; survivors after delete; export archive holds all collections                                                                                                                                                                                                       |
 | 6   | Meetings  | Recording reading and filing (type, title, side, ideas), context pack from Calendar, People and Memory, Memory recording-facts hook. Confirm what is built first (section 3.7).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | M    | Fixed-model reading tests; work never writes to personal and the reverse; low confidence surfaces a chat message                                                                                                                                                                                                                                 |
-| 7a  | Meetings  | Device store and pairing server (section 4a): ledger move of the four companion tables, the resolver function, the gate's bearer check and per-request device map, the `/api/companion/*` routes (before-sign-in ones mounted by the shell), heartbeat with Backtrack's `deviceState`, rename, logout, ring credential issue, `checkDevice` public API, the two typed stores, admin revoke moved onto the shell-owned pairing store.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | L    | Replay of recorded Mac and Android requests; the ring 403 allow-list test with a route that must fail; Backtrack refused when `checkDevice` says no, seen failing when the check is removed; two-person isolation on the owner-only device view; the resolver returns a live row and fails with its policy removed; neither store exposes a hash |
+| 7a  | Meetings  | Device store and pairing server (section 4a): the four companion tables (ledger move tried and reverted, section 4b), the resolver function, the gate's bearer check and per-request device map, the `/api/companion/*` routes (before-sign-in ones mounted by the shell), heartbeat with Backtrack's `deviceState`, rename, logout, ring credential issue, `checkDevice` public API, the two typed stores, admin revoke moved onto the shell-owned pairing store.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | L    | Replay of recorded Mac and Android requests; the ring 403 allow-list test with a route that must fail; Backtrack refused when `checkDevice` says no, seen failing when the check is removed; two-person isolation on the owner-only device view; the resolver returns a live row and fails with its policy removed; neither store exposes a hash |
 | 7b  | Meetings  | **Screen.** Devices list behind the Meetings cog, rename, unlink, the approval dialog and its outcomes, phone width. Mockups approved 2026-11-18 (`mockups/meetings-pairing/`). App map entries.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | M    | Live on the Rust server: link a real Mac and phone from the Meetings screen, unlink, and see uploads refused; desktop and phone width                                                                                                                                                                                                            |
+| 7c  | Meetings  | Device tables on a Rust-only install (section 4b). No new migration file. Prove a fresh Rust install already gets the four tables from the core run, apply the device lookup SQL at server start, delete every device row when Meetings is removed with its data, and keep the tables so a reinstall works. Lands before 7b's live proof.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | M    | Fresh `moss-db up` instance with Meetings from the registry pairs a real Mac; a dev-data copy upgrades with no error and no second table; the four tests in section 4b.6, each seen failing with its change removed                                                                                                                              |
 | 8   | Meetings  | Ring receivers (`RingDevices` from 7a replaces `AnyDevice`): resumable uploads, imports, voice enablement and voice recordings, audio validation of the supplied WAV (no Opus decoding), `meetings.recording-import` job. Voice requests keep the legacy Chat hand-off (automatic dispatch only when voice commands are enabled, confirmation gives ready-to-send, recovery as legacy); the Chat side waits for Chat to port, so part 8 stores and exposes them through a Chat port (**Guess** at its shape).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | L    | Fixture bundles from the old code; resume after a cut; hash and size limits (120 s, 1 MiB packet, 64 KiB sidecar, 8 MiB request); **needs Ben for a real ring**, paired from the 7b screen                                                                                                                                                       |
 | 9   | Meetings  | Mac link (`CaptureAuthority` from 7a; the recording permission is approved in 7a's decide step): links, grants, receipts, connection, start, cancel-start, revocation, the 410 routes, maintenance job, start limits. Port the mutation controls.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | L    | The control scripts rebuilt in Rust, each guard seen failing when removed; fixed clock tests; replay of Trail Marker requests                                                                                                                                                                                                                    |
 | 10  | Meetings  | Mac audio and control: audio route with its byte cap, chunk transcription windows, gaps, pause, resume and stop with the 60 second finalization, status, `meetings.recording-notice` job, capture completeness.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | L    | Generated-audio capture with the fake speech server; proxy test; **needs Ben for real hardware**                                                                                                                                                                                                                                                 |
