@@ -6,7 +6,9 @@
 
 -- Resolves a presented credential hash to its device before any actor is known. Refreshes
 -- last_contact_at and slides the inactivity expiry (90 days, never past the absolute cap).
--- A revoked device has no row, and an expired row is refused.
+-- A revoked device has no row, and an expired row is refused. A pending or deactivated
+-- account's device still resolves, so the caller can name the state, but its expiry and last
+-- contact time are never extended.
 CREATE OR REPLACE FUNCTION app.resolve_companion_device(p_hash text)
   RETURNS TABLE(user_id uuid, device_id uuid, platform text, capability_revision integer, expires_at timestamptz)
   LANGUAGE sql
@@ -16,8 +18,10 @@ CREATE OR REPLACE FUNCTION app.resolve_companion_device(p_hash text)
 AS $$
   WITH hit AS (
     UPDATE companion_devices d
-       SET last_contact_at = now(),
-           expires_at = LEAST(now() + interval '90 days', d.absolute_expires_at)
+       SET last_contact_at = CASE WHEN COALESCE((SELECT u.status FROM users u WHERE u.id = d.user_id), '') NOT IN ('pending', 'deactivated') THEN now() ELSE d.last_contact_at END,
+           expires_at = CASE WHEN COALESCE((SELECT u.status FROM users u WHERE u.id = d.user_id), '') NOT IN ('pending', 'deactivated')
+                             THEN LEAST(now() + interval '90 days', d.absolute_expires_at)
+                             ELSE d.expires_at END
      WHERE d.credential_hash = p_hash
        AND d.expires_at > now()
        AND d.absolute_expires_at > now()

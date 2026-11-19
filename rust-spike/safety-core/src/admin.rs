@@ -40,8 +40,8 @@ pub fn routes() -> Router<Arc<Platform>> {
         .route("/api/admin/users/{id}/reject", post(reject))
 }
 
-/// Removes every companion device of one account. The pairing store owns the device rows, so
-/// the shell registers it here at start-up.
+/// Signs one account out everywhere in a single transaction: companion devices and browser
+/// sessions. The pairing store owns the device rows, so the shell registers it here at start-up.
 pub trait DeviceRevoker: Send + Sync {
     fn revoke_all_for<'a>(
         &'a self,
@@ -55,8 +55,8 @@ pub fn set_device_revoker(revoker: Arc<dyn DeviceRevoker>) {
     let _ = DEVICE_REVOKER.set(revoker);
 }
 
-/// Signs a user out everywhere: linked companion devices and browser sessions. With no
-/// revoker registered the call fails, so a device is never left linked by a silent skip.
+/// Signs a user out everywhere. With no revoker registered the call fails, so a device is never
+/// left linked by a silent skip.
 pub async fn revoke_user_sessions(auth: &Database, user_id: Uuid) -> Result<u64, ApiError> {
     if auth.role() != RuntimeRole::Auth {
         return Err(ApiError::Internal("revoking sessions needs the auth role".into()));
@@ -64,11 +64,7 @@ pub async fn revoke_user_sessions(auth: &Database, user_id: Uuid) -> Result<u64,
     let revoker = DEVICE_REVOKER
         .get()
         .ok_or_else(|| ApiError::Internal("device revoker is not registered".into()))?;
-    let companion = revoker.revoke_all_for(user_id).await?;
-    let client = auth.client().await?;
-    let browser =
-        client.execute("DELETE FROM app.better_auth_sessions WHERE user_id = $1", &[&user_id]).await?;
-    Ok(browser + companion)
+    revoker.revoke_all_for(user_id).await
 }
 
 /// `assertAdminUser`. An actor with no user row is signed out; a member is refused.

@@ -371,17 +371,20 @@ impl PairingStore {
         Ok(Some(RingSession { owner, device_id: r.get(1) }))
     }
 
-    /// Admin revoke. Removes every device of one account and fails whole on any error.
+    /// Admin sign-out. Removes every device and every browser session of one account in one
+    /// transaction, so a failure leaves both untouched.
     pub async fn revoke_all_for(&self, user: Uuid) -> Result<u64> {
         let mut c = self.client().await?;
         let tx = c.transaction().await?;
-        // With Meetings never installed the table does not exist, and there is nothing to revoke.
+        // With Meetings never installed the table does not exist, and there are no devices.
         let present: bool = tx.query_one("SELECT to_regclass('app.companion_devices') IS NOT NULL", &[]).await?.get(0);
-        if !present {
-            return Ok(0);
-        }
-        let n = tx.execute("DELETE FROM app.companion_devices WHERE user_id = $1", &[&user]).await?;
+        let devices = if present {
+            tx.execute("DELETE FROM app.companion_devices WHERE user_id = $1", &[&user]).await?
+        } else {
+            0
+        };
+        let sessions = tx.execute("DELETE FROM app.better_auth_sessions WHERE user_id = $1", &[&user]).await?;
         tx.commit().await?;
-        Ok(n)
+        Ok(devices + sessions)
     }
 }

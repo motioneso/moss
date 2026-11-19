@@ -24,10 +24,13 @@ Card JS-346. Plan: `2026-11-11-rust-phase5-meetings-briefings-plan.md`, section 
 | Backtrack refuses a request with no resolved device          | `companion_links.rs` unit test | yes                                     |
 | A deactivated account gets no ring session                   | `tests/devices.rs`             | yes                                     |
 | Device store names the refusal reason                        | `tests/devices.rs`             | yes                                     |
+| Admin revoke removes devices and sessions in one transaction | `tests/devices.rs`             | yes (devices committed before sessions) |
+| A deactivated account's credential is never extended         | `tests/devices.rs`             | yes (status check removed)              |
+| Pre-sign-in rate limiter drops old entries                   | `companion.rs` unit test       | yes (sweep disabled)                    |
 
 ## Not proven
 
-- Review findings left open, to fix later: the pre-sign-in rate limiter keys on the connection address and never drops old entries, so many people behind one proxy share a limit. Resolving a credential extends its expiry before the account-status check. Admin revoke deletes devices and sessions in two steps, not one transaction. The device store opens a thread and runtime per lookup. Heartbeat uses three transactions. The credential shape and hash are defined twice. The four device tables are listed as module database resources although only the auth role can read them.
+- Review findings left open, to fix later: the pre-sign-in rate limiter keys on the connection address, so many people behind one proxy share a limit. The device store opens a thread and runtime per lookup. Heartbeat uses three transactions. The credential shape and hash are defined twice. The four device tables are listed as module database resources although only the auth role can read them.
 - Meetings installed through any path other than the install command does not get the device lookup SQL until the next install run.
 - No paused-account state exists in the data, so the paused path is untested.
 - Routes are mounted by the shell, not by the Meetings guest module.

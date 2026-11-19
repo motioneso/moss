@@ -289,3 +289,71 @@ fn a_deactivated_account_gets_no_ring_session() {
         assert!(w.pairing.ring_session(&credential).await.unwrap().is_none());
     });
 }
+
+#[test]
+#[ignore]
+fn admin_revoke_removes_devices_and_sessions_together_or_not_at_all() {
+    let w = world();
+    w.fx.rt.block_on(async {
+        // An android pairing leaves one live browser session for the owner.
+        let (device, _) = pair(&w, w.fx.b, "android").await;
+        let count = |sql: &'static str| {
+            let root = &w.fx.root;
+            let id = w.fx.b;
+            async move { root.query_one(sql, &[&id]).await.unwrap().get::<_, i64>(0) }
+        };
+        let devices = "SELECT count(*) FROM app.companion_devices WHERE user_id = $1";
+        let sessions = "SELECT count(*) FROM app.better_auth_sessions WHERE user_id = $1";
+        assert_eq!((count(devices).await, count(sessions).await), (1, 1));
+        // A failing session delete must undo the device delete.
+        w.fx.root
+            .batch_execute(
+                "CREATE FUNCTION app.refuse_session_delete() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'session delete refused'; END $$;
+                 CREATE TRIGGER refuse_session_delete BEFORE DELETE ON app.better_auth_sessions FOR EACH ROW EXECUTE FUNCTION app.refuse_session_delete();",
+            )
+            .await
+            .unwrap();
+        assert!(w.pairing.revoke_all_for(w.fx.b).await.is_err());
+        assert_eq!((count(devices).await, count(sessions).await), (1, 1), "a failed revoke changed something");
+        w.fx.root
+            .batch_execute("DROP TRIGGER refuse_session_delete ON app.better_auth_sessions; DROP FUNCTION app.refuse_session_delete();")
+            .await
+            .unwrap();
+        assert_eq!(w.pairing.revoke_all_for(w.fx.b).await.unwrap(), 2);
+        assert_eq!((count(devices).await, count(sessions).await), (0, 0));
+        let _ = device;
+    });
+}
+
+#[test]
+#[ignore]
+fn a_deactivated_accounts_credential_is_never_extended() {
+    let w = world();
+    w.fx.rt.block_on(async {
+        let (device, credential) = pair(&w, w.fx.a, "macos").await;
+        let soon = "now() + interval '10 days'";
+        w.fx
+            .root
+            .execute(&format!("UPDATE app.companion_devices SET expires_at = {soon} WHERE id = $1"), &[&device])
+            .await
+            .unwrap();
+        let read = || async {
+            let r = w
+                .fx
+                .root
+                .query_one("SELECT expires_at, last_contact_at FROM app.companion_devices WHERE id = $1", &[&device])
+                .await
+                .unwrap();
+            (r.get::<_, chrono::DateTime<chrono::Utc>>(0), r.get::<_, Option<chrono::DateTime<chrono::Utc>>>(1))
+        };
+        let before = read().await;
+        w.fx.root.execute("UPDATE app.users SET status = 'deactivated' WHERE id = $1", &[&w.fx.a]).await.unwrap();
+        // The device still resolves so the caller can name the state, but nothing is extended.
+        let rows = w.fx.root.query("SELECT * FROM app.resolve_companion_device($1)", &[&digest(&credential)]).await.unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(read().await, before, "a deactivated account's credential was extended");
+        w.fx.root.execute("UPDATE app.users SET status = 'active' WHERE id = $1", &[&w.fx.a]).await.unwrap();
+        w.fx.root.query("SELECT * FROM app.resolve_companion_device($1)", &[&digest(&credential)]).await.unwrap();
+        assert!(read().await.0 > before.0, "an active account's credential should slide");
+    });
+}

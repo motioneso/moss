@@ -31,18 +31,60 @@ const POLL_SECONDS: u64 = 3;
 
 type Reply = Result<Response, ApiError>;
 
-/// One fixed window per route and peer address. The credential is not resolved yet, so only
-/// the connecting address can key a bucket.
-fn allow(route: &'static str, ip: IpAddr, max: u32) -> bool {
-    static BUCKETS: OnceLock<Mutex<HashMap<(&'static str, IpAddr), (Instant, u32)>>> = OnceLock::new();
-    let mut map = BUCKETS.get_or_init(Default::default).lock().expect("rate buckets");
-    let now = Instant::now();
+const WINDOW: Duration = Duration::from_secs(60);
+const SWEEP_ABOVE: usize = 1024;
+
+type Buckets = HashMap<(&'static str, IpAddr), (Instant, u32)>;
+
+/// Counts one hit in the route's fixed window for this address. Once the map passes
+/// `SWEEP_ABOVE` entries, every bucket older than the window is dropped, so memory follows
+/// recent traffic and not the number of addresses ever seen.
+fn hit(map: &mut Buckets, now: Instant, route: &'static str, ip: IpAddr, max: u32) -> bool {
+    if map.len() > SWEEP_ABOVE {
+        map.retain(|_, (start, _)| now.duration_since(*start) < WINDOW);
+    }
     let entry = map.entry((route, ip)).or_insert((now, 0));
-    if now.duration_since(entry.0) >= Duration::from_secs(60) {
+    if now.duration_since(entry.0) >= WINDOW {
         *entry = (now, 0);
     }
     entry.1 += 1;
     entry.1 <= max
+}
+
+/// The credential is not resolved yet, so only the connecting address can key a bucket.
+fn allow(route: &'static str, ip: IpAddr, max: u32) -> bool {
+    static BUCKETS: OnceLock<Mutex<Buckets>> = OnceLock::new();
+    let mut map = BUCKETS.get_or_init(Default::default).lock().expect("rate buckets");
+    hit(&mut map, Instant::now(), route, ip, max)
+}
+
+#[cfg(test)]
+mod limiter_tests {
+    use super::*;
+
+    #[test]
+    fn old_buckets_are_dropped_so_the_map_stays_bounded() {
+        let mut map = Buckets::new();
+        let start = Instant::now();
+        for n in 0..(SWEEP_ABOVE as u32 + 200) {
+            let ip = IpAddr::from(std::net::Ipv4Addr::from(n));
+            hit(&mut map, start, "r", ip, 5);
+        }
+        assert!(map.len() > SWEEP_ABOVE);
+        let later = start + WINDOW + Duration::from_secs(1);
+        hit(&mut map, later, "r", IpAddr::from(std::net::Ipv4Addr::new(9, 9, 9, 9)), 5);
+        assert_eq!(map.len(), 1);
+    }
+
+    #[test]
+    fn the_limit_still_applies_inside_one_window() {
+        let mut map = Buckets::new();
+        let now = Instant::now();
+        let ip = IpAddr::from(std::net::Ipv4Addr::LOCALHOST);
+        assert!(hit(&mut map, now, "r", ip, 2));
+        assert!(hit(&mut map, now, "r", ip, 2));
+        assert!(!hit(&mut map, now, "r", ip, 2));
+    }
 }
 
 fn limited() -> ApiError {
