@@ -16,6 +16,15 @@ export function rustGateEntries(modules, event = "pull_request") {
           }))
         ];
       }
+      if (module === "connectors") {
+        return [
+          entry("refresh"),
+          ...["db", "google_sync", "google", "imap", "writes"].map((suite) => ({
+            ...entry(suite),
+            controls: "only"
+          }))
+        ];
+      }
       return [];
     }
     switch (module) {
@@ -49,11 +58,14 @@ export function rustGateEntries(modules, event = "pull_request") {
           "google_sync",
           "google",
           "imap",
-          "refresh",
+          ...(event === "pull_request" ? [] : ["refresh"]),
           "outlook",
           "writes",
           ...(event === "pull_request" ? [] : ["sync_speed"])
-        ].map((suite) => entry(suite));
+        ].map((suite) => ({
+          ...entry(suite),
+          controls: event === "pull_request" ? "skip" : "all"
+        }));
       case "finance":
         return [entry("full", "test:rust-finance test:rust-finance-ui-unit")];
       case "meetings":

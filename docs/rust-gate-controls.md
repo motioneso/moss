@@ -60,7 +60,7 @@ on main pushes. News's guard-removal controls are in `installed`. Memory also mo
 existing guard-removal test in each of `account`, `recording`, and `reembed` to its own
 main-push entry. PRs keep all other tests in those files, plus `dashboard`, `index`, `oracle`,
 and News's `reader`. Main pushes respect the same touched-module/shared-host path filter;
-unknown push scope conservatively runs both promoted modules. Other modules gain no push jobs.
+unknown push scope conservatively runs all promoted modules. Other modules gain no push jobs.
 
 `MEMORY_CONTROLS=skip` excludes exactly those three named tests; `only` selects the control
 in the chosen file with an exact test-name filter. The names live in
@@ -78,6 +78,15 @@ is unchanged; `CONNECTORS_TESTS` still works when `CONNECTORS_SUITE` is unset or
 Unknown non-empty `CONNECTORS_SUITE` values fail before building. Selecting `sync_speed`
 explicitly while also skipping it fails rather than silently testing nothing.
 Manual workflow runs retain `sync_speed` as an additional entry; pull requests omit it.
+
+The next real PR run (44615887769) measured Connectors `refresh` at 31.07 minutes, so its
+whole file now runs on main pushes. Its guard-removal control moves with it. The eight
+existing guard-removal tests in `db`, `google_sync`, `google`, `imap`, and `writes` also
+move to main-only entries. This includes the whole upgrade test, which contains a removal
+control; its assertions are unchanged. PRs keep the other nine entries with
+`CONNECTORS_CONTROLS=skip`. Main-only control entries use `only`; unset or `all` retains
+full local/manual coverage. Exact test names live in
+`modules/connectors/tools/control-selection.ts`. Unknown control modes fail before building.
 
 `scripts/rust-gate-matrix.mjs` expands the existing touched-module list. Unrelated modules keep
 their existing commands. The jobs remain optional shadow jobs outside `ci-gate`'s `needs`.

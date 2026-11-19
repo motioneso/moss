@@ -7,6 +7,10 @@ import {
   memoryControlArgs,
   memoryGuardControls
 } from "../../modules/memory/tools/control-selection.ts";
+import {
+  connectorsControlArgs,
+  connectorsGuardControls
+} from "../../modules/connectors/tools/control-selection.ts";
 
 test("only touched modules produce entries, including an empty change", () => {
   assert.deepEqual(rustGateEntries([]), []);
@@ -46,7 +50,6 @@ test("Connectors partitions prerequisite files and database files without its PR
     "mail_probe",
     "outlook",
     "package",
-    "refresh",
     "registry",
     "writes"
   ]);
@@ -56,11 +59,19 @@ test("Connectors partitions prerequisite files and database files without its PR
 test("manual runs retain the Connectors speed benchmark in its own entry", () => {
   const pr = rustGateEntries(["connectors"]);
   const manual = rustGateEntries(["connectors"], "workflow_dispatch");
-  assert.deepEqual(manual.slice(0, -1), pr);
+  assert.deepEqual(
+    manual
+      .filter(({ suite }) => suite !== "refresh" && suite !== "sync_speed")
+      .map(({ suite }) => suite),
+    pr.map(({ suite }) => suite)
+  );
+  assert.ok(manual.some(({ suite }) => suite === "refresh"));
+  assert.ok(manual.every(({ controls }) => controls === "all"));
   assert.deepEqual(manual.at(-1), {
     module: "connectors",
     suite: "sync_speed",
-    gates: "test:rust-connectors"
+    gates: "test:rust-connectors",
+    controls: "all"
   });
 });
 
@@ -135,7 +146,7 @@ test("kill tier moves only measured slow files and Memory controls off PRs", () 
       .filter(({ gates }) => gates === "test:rust-memory")
       .every(({ controls }) => controls === "skip")
   );
-  const push = rustGateEntries(["memory", "news", "connectors", "tasks"], "push");
+  const push = rustGateEntries(["memory", "news", "tasks"], "push");
   assert.deepEqual(
     push.map(({ module, suite }) => `${module}/${suite}`),
     ["memory/db", "memory/account", "memory/recording", "memory/reembed", "news/installed"]
@@ -145,7 +156,7 @@ test("kill tier moves only measured slow files and Memory controls off PRs", () 
       .filter(({ suite }) => suite !== "db" && suite !== "installed")
       .every(({ controls }) => controls === "only")
   );
-  assert.deepEqual(rustGateEntries(["tasks", "connectors"], "push"), []);
+  assert.deepEqual(rustGateEntries(["tasks"], "push"), []);
   assert.deepEqual(rustGateEntries([], "push"), []);
 });
 
@@ -170,4 +181,55 @@ test("Memory PR and push filters partition existing test functions without losin
   assert.throws(() => memoryControlArgs("account", "unknown"));
   assert.throws(() => memoryControlArgs("dashboard", "only"));
   assert.deepEqual(memoryControlArgs("dashboard", "skip"), []);
+});
+
+test("Connectors kill tier moves refresh and its existing removal controls to main", () => {
+  const pr = rustGateEntries(["connectors"]);
+  assert.equal(pr.length, 9);
+  assert.ok(pr.every(({ suite, controls }) => suite !== "refresh" && controls === "skip"));
+  const push = rustGateEntries(["connectors"], "push");
+  assert.deepEqual(
+    push.map(({ suite }) => suite),
+    ["refresh", "db", "google_sync", "google", "imap", "writes"]
+  );
+  assert.ok(push.slice(1).every(({ controls }) => controls === "only"));
+  assert.equal(push[0].controls, undefined);
+});
+
+test("Connectors PR/push filters preserve every existing test and every removal control", () => {
+  const manual = rustGateEntries(["connectors"], "workflow_dispatch");
+  for (const { suite } of manual) {
+    const source = readFileSync(
+      new URL(`../../modules/connectors/host/tests/${suite}.rs`, import.meta.url),
+      "utf8"
+    );
+    const tests = [...source.matchAll(/#\[test\][\s\S]*?fn (\w+)\([\s\S]*?(?=\n#\[test\]|$)/g)];
+    const names = tests.map((m) => m[1]);
+    const controls = connectorsGuardControls[suite] ?? [];
+    for (const control of controls)
+      assert.ok(names.includes(control), `${suite}: missing ${control}`);
+    for (const test of tests) {
+      if (test[0].includes("DISABLE ROW LEVEL SECURITY")) {
+        assert.ok(
+          suite === "refresh" || controls.includes(test[1]),
+          `${suite}: unpartitioned removal control ${test[1]}`
+        );
+      }
+    }
+    const only = suite === "refresh" ? names : names.filter((name) => controls.includes(name));
+    const skip = suite === "refresh" ? [] : names.filter((name) => !controls.includes(name));
+    assert.equal(new Set([...only, ...skip]).size, names.length);
+    assert.deepEqual(connectorsControlArgs(suite), []);
+    if (controls.length) {
+      assert.deepEqual(connectorsControlArgs(suite, "only"), [...controls, "--exact"]);
+      assert.deepEqual(connectorsControlArgs(suite, "skip"), [
+        ...controls.flatMap((name) => ["--skip", name]),
+        "--exact"
+      ]);
+    } else {
+      assert.deepEqual(connectorsControlArgs(suite, "skip"), []);
+      assert.throws(() => connectorsControlArgs(suite, "only"));
+    }
+  }
+  assert.throws(() => connectorsControlArgs("google", "unknown"));
 });

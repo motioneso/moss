@@ -67,7 +67,7 @@ jobs:
             echo "rust_entries=$(node scripts/rust-gate-matrix.mjs "$1" "$EVENT_NAME")" >> "$GITHUB_OUTPUT"
           }
           # Unknown file list on a pull request or manual run gates every covered module.
-          # Pushes retain only the measured Memory/News kill tier in the matrix helper.
+          # Pushes retain only the measured Memory/News/Connectors kill tier in the helper.
           emit_modules "$ALL_MODULES"
           # Push events have no pull request file list, so look up the PR that produced the
           # commit. That PR only covers the whole push when the push is exactly one commit
@@ -419,6 +419,7 @@ jobs:
           SUITE: ${{ matrix.suite }}
           GATES: ${{ matrix.gates }}
           MEMORY_CONTROLS: ${{ matrix.controls || 'all' }}
+          CONNECTORS_CONTROLS: ${{ matrix.controls || 'all' }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
           set -uo pipefail
