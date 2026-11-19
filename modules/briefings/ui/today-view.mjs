@@ -72,15 +72,18 @@ function entryHtml(entry, mark, pending, now, locale) {
 }
 
 /** The catch-up block. Empty text when no entries remain. */
-export function catchUpHtml(catchUp, { marks = {}, expanded = false, pending = false, failed = "" }, now, locale) {
+export function catchUpHtml(
+  catchUp,
+  { marks = {}, expanded = false, pending = false, failed = "" },
+  now,
+  locale
+) {
   const entries = Array.isArray(catchUp?.entries) ? catchUp.entries : [];
   if (entries.length === 0) return "";
   const shown = expanded ? entries : entries.slice(0, VISIBLE_LIMIT);
   const more = entries.length - shown.length;
   const count = `${entries.length} ${entries.length === 1 ? "email" : "emails"} ${sinceLabel(catchUp.since, now, locale)}`;
-  const error = failed
-    ? `<p class="jds-hint jds-hint--error" role="alert">${esc(failed)}</p>`
-    : "";
+  const error = failed ? `<p class="jds-hint jds-hint--error" role="alert">${esc(failed)}</p>` : "";
   return `<div class="briefing-catchup">
     <div class="briefing-catchup__head"><span class="jds-brief__kicker">Catch-up</span><span class="jds-caption">${esc(count)}</span></div>
     ${error}
@@ -92,8 +95,15 @@ export function catchUpHtml(catchUp, { marks = {}, expanded = false, pending = f
 }
 
 /** The whole section. Empty text hides the frame. */
-export function sectionHtml({ phase, data, busy = "", error = "", catchState = {} }, locale, now = Date.now()) {
-  const catchUp = phase === "ready" ? catchUpHtml(data.catchUp, { ...catchState, pending: busy !== "" }, now, locale) : "";
+export function sectionHtml(
+  { phase, data, busy = "", error = "", catchState = {} },
+  locale,
+  now = Date.now()
+) {
+  const catchUp =
+    phase === "ready"
+      ? catchUpHtml(data.catchUp, { ...catchState, pending: busy !== "" }, now, locale)
+      : "";
   if (phase === "ready" && data.state === "none" && !error && !catchUp) return "";
   const rows = data?.rows ?? [];
   const waiting = rows.filter((r) => r.status === "suggested").length;

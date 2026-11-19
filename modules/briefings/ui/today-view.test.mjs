@@ -94,7 +94,13 @@ test("a handled email shows its state and Undo, and an error shows its text", ()
 });
 
 test("an email's text is escaped", () => {
-  const evil = { ...catchUp, entries: [{ id: "x", senderName: "<img onerror=1>", summary: "<b>hi</b>" }] };
-  const html = sectionHtml({ phase: "ready", data: { state: "none", rows: [], catchUp: evil } }, "en");
+  const evil = {
+    ...catchUp,
+    entries: [{ id: "x", senderName: "<img onerror=1>", summary: "<b>hi</b>" }]
+  };
+  const html = sectionHtml(
+    { phase: "ready", data: { state: "none", rows: [], catchUp: evil } },
+    "en"
+  );
   assert.doesNotMatch(html, /<img onerror|<b>hi/);
 });
