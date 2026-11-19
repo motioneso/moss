@@ -88,7 +88,15 @@ export const MODULE_STYLES = `
 .fnm-end { align-items: flex-end; }
 .fnm-inline { display: inline-flex; align-items: center; gap: var(--space-2); }
 .fnm-rail { display: flex; flex-direction: column; gap: var(--space-6); }
-.fnm-stat-pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+.fnm-strip { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-3); }
+.fnm-strip > * { min-width: 0; }
+.fnm-hero-acts { display: flex; align-items: center; gap: var(--space-4); flex-wrap: wrap; }
+.fnm-attn-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--space-8); }
+.fnm-attn-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-4); padding: var(--space-3) 0; border-bottom: var(--border-w) solid var(--border-subtle); }
+.fnm-attn-text { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.fnm-attn-what { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.fnm-attn-acts { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-2); }
+.fnm-attn-row--done .fnm-attn-what { opacity: 0.7; }
 .fnm-fixed { table-layout: fixed; width: 100%; }
 .fnm-col-name { width: 34%; }
 .fnm-cell-stack { display: flex; flex-direction: column; gap: var(--space-2); min-width: 9rem; }
@@ -148,6 +156,12 @@ export const MODULE_STYLES = `
 @media (max-width: 720px) {
   .fnm-root { padding: 1rem 0.75rem 5rem; }
   .fnm-page { grid-template-columns: minmax(0, 1fr); gap: var(--space-7); }
+  .fnm-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fnm-strip > :first-child { grid-column: 1 / -1; }
+  .fnm-attn-list { grid-template-columns: minmax(0, 1fr); }
+  .fnm-attn-row { grid-template-columns: minmax(0, 1fr); gap: var(--space-2); }
+  .fnm-attn-acts { justify-content: flex-start; }
+  .fnm-attn-acts .jds-btn { min-height: 44px; }
   .fnm-desktop-only { display: none; }
   .fnm-phone-only { display: block; }
   .fnm-chips { max-width: 100%; }

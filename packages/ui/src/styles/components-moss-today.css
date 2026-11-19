@@ -188,6 +188,13 @@
   text-align: left;
   cursor: pointer;
 }
+.jds-stat-tile--static {
+  cursor: default;
+}
+.jds-stat-tile__sub {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
 .jds-stat-tile--warn {
   border-color: var(--warn);
 }

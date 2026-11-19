@@ -189,11 +189,14 @@ async function describe(row: ActivityRecord, names: Names): Promise<string> {
       return `Moved ${money(num(p.amountCents) ?? 0, names.currency)} from ${fromName} to ${names.category(str(p.toCategoryId))}`;
     }
     case "transaction.categorize":
+    case "transaction.unconfirm":
     case "transaction.confirm": {
       const tx = await names.transaction(p);
       const what = tx ? `${tx.name}, ${money(tx.amountCents, tx.isoCurrency)}` : "a purchase";
       const category = names.category(str(p.categoryId));
       if (row.kind === "transaction.confirm") return `Confirmed ${what} as ${category}`;
+      if (row.kind === "transaction.unconfirm")
+        return `Undid the confirm of ${what} as ${category}`;
       return p.previousCategoryId === null || p.previousCategoryId === undefined
         ? `Sorted ${what} into ${category}`
         : `Changed ${what} to ${category}`;

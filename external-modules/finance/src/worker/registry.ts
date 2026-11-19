@@ -14,7 +14,8 @@ import { historyExportHandler } from "./handlers/history-export.js";
 import { reportsTransactionsHandler } from "./handlers/report-details.js";
 import {
   transactionsBulkCategoryHandler,
-  transactionsConfirmHandler
+  transactionsConfirmHandler,
+  transactionsUnconfirmHandler
 } from "./handlers/transaction-bulk.js";
 import { flexPreviewHandler, flexConfigureHandler, flexAssignHandler } from "./handlers/flex.js";
 import {
@@ -125,6 +126,7 @@ export const HANDLERS: Readonly<Record<string, ToolFactory>> = {
   "transactions.export": historyExportHandler,
   "transactions.bulk-category": transactionsBulkCategoryHandler,
   "transactions.confirm": transactionsConfirmHandler,
+  "transactions.unconfirm": transactionsUnconfirmHandler,
   "transaction.categorize": transactionCategorizeHandler,
   "transaction.categorize-new": transactionCategorizeNewHandler,
   "categorize.apply": categorizeApplyHandler,
