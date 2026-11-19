@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Scratchpad 3: the scratchpad beside chat · Moss design review</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="../../../../../apps/web/src/styles/tokens.css" />
+    <link rel="stylesheet" href="../../../../../packages/ui/src/styles.css" />
+    <link rel="stylesheet" href="../../../../../apps/web/src/styles/kit-chat.css" />
+    <link rel="stylesheet" href="../../../../../apps/web/src/styles/components-forms.css" />
+    <link rel="stylesheet" href="../../../../../apps/web/src/styles/settings.css" />
+    <link rel="stylesheet" href="../../../../../apps/web/src/styles/texture.css" />
+    <link rel="stylesheet" href="mockups.css" />
+  </head>
+  <body class="sc-board">
+    <h1>Scratchpad 3: the scratchpad beside chat</h1>
+    <p class="sc-board__lede">New screen, no TypeScript version exists. Follows the 2026-09-04 scratchpad design: a pencil button in the top bar opens a small pad on every page, Ctrl or Cmd + Shift + S toggles it, it saves as you type, and Moss can only add lines after you approve. Two changes from that design: the pad moves beside the chat drawer when both are open, and settings open from a cog in the pad header instead of a three-dot menu.</p>
+    <div class="sc-board__row">
+      <figure><figcaption>1. Pad open on desktop<span>Pencil in the top bar; status word, cog and close in the pad header; list buttons under the text</span></figcaption><iframe src="pad-open.html" width="1280" height="800" title="1. Pad open on desktop"></iframe></figure>
+      <figure><figcaption>2. Add from chat<span>Both open, the pad beside the chat drawer. Chat shows the existing approval card</span></figcaption><iframe src="pad-with-chat.html" width="1280" height="800" title="2. Add from chat"></iframe></figure>
+    </div>
+    <div class="sc-board__row">
+      <figure><figcaption>3. After Approve<span>The new line lands at the end, briefly highlighted</span></figcaption><iframe src="pad-appended.html" width="1280" height="800" title="3. After Approve"></iframe></figure>
+      <figure><figcaption>4. Settings, from the pad's cog<span>Shortcut, and the notes-folder copy (off until a notes folder is connected)</span></figcaption><iframe src="pad-settings.html" width="1280" height="800" title="4. Settings, from the pad's cog"></iframe></figure>
+    </div>
+    <div class="sc-board__row">
+      <figure><figcaption>5. Phone<span>Full-screen sheet; opening chat closes it</span></figcaption><iframe src="pad-phone.html" width="390" height="844" title="5. Phone"></iframe></figure>
+      <figure><figcaption>6. Changed elsewhere<span>Edited in another tab; nothing is overwritten</span></figcaption><iframe src="pad-phone-conflict.html" width="390" height="844" title="6. Changed elsewhere"></iframe></figure>
+    </div>
+  </body>
+</html>
