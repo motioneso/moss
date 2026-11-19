@@ -23,7 +23,11 @@
   Escape, remove. Log add, edit, previous and next day, delete. Plan tools, Move, Eaters, Swap,
   Text. Settings saves for Units and Pantry mode. New plan form. Empty plan, Log and Household for
   the second person. Nothing intercepted or rewritten.
-- `pnpm verify:static` exited 0.
+- `pnpm verify:static` passes every step except the migration-number check, which fails on another
+  pull request (#4367, Meetings), not on this branch.
+- `pnpm test:rust-meals` through the gate script at the final commit (1cacf02), exit 0: module tests
+  111 passed (44, 16, 9, 11, 8, 22, 1), package tests 7 passed, installed-package tests 13 passed.
+  The shell test `meals_server` is ignored outside the live gate, so the live pass above is its run.
 
 ## Fixes found by the live pass
 
@@ -40,4 +44,6 @@
 - The log estimate from the screen was not checked against a model. It stayed Estimating.
 - On a phone, dialog buttons sit below the visible part of the tall frame until you scroll. The
   script clicked them directly. Part 34's dialogs behave the same way.
+- The review fixes (one key per Add dialog, dropped late loads, no polling after leaving) came after
+  the live pass and were checked by lint, the static gate and the package tests only, not live.
 - Screenshots come from a scripted browser, and no check from a separate phone on the home network.
