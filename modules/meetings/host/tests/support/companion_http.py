@@ -23,6 +23,8 @@ try:
     origin = f"https://localhost:{port}"
     with tempfile.TemporaryDirectory(prefix="js353-http-") as folder:
         root = Path(folder)
+        (root / "web").mkdir()
+        (root / "web/index.html").write_text("<html><body>Companion lifecycle test</body></html>")
         subprocess.run([str(target / "moss-network"), "local-certificate", str(root / "tls"), origin], check=True, stdout=subprocess.DEVNULL)
         secret = "disposable-device-reinstall-session-signing-key"
 
@@ -36,7 +38,7 @@ try:
         context = ssl.create_default_context(cafile=str(root / "tls/certificate.pem"))
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPSHandler(context=context))
         with open(root / "server.log", "w") as log:
-            server = subprocess.Popen([str(target / "moss-shell"), "--network", str(root / "network.json"), "--modules", str(root / "modules.json")], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=log)
+            server = subprocess.Popen([str(target / "moss-shell"), "--network", str(root / "network.json"), "--modules", str(root / "modules.json"), "--web", str(root / "web")], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=log)
             deadline = time.monotonic() + 60
             while True:
                 assert server.poll() is None, f"server exited before health (exit {server.returncode})"
