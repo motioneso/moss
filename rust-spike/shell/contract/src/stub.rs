@@ -94,8 +94,6 @@ impl ShellData for StubShellData {
                 headline_accent: "DAY".into(),
                 summary: "Two things on the plan and 1 event on the calendar.".into(),
                 weather_note: Some("Weather isn't set up yet.".into()),
-                briefing_note: "Briefing not ready yet. Your morning briefing is switched off."
-                    .into(),
             },
             timeline: vec![
                 TimelineSlot {

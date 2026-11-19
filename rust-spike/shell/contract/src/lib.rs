@@ -52,7 +52,6 @@ pub struct TodayHero {
     pub summary: String,
     /// Shown when weather is not set up or not available.
     pub weather_note: Option<String>,
-    pub briefing_note: String,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -215,6 +214,8 @@ pub trait ShellData: Send + Sync + 'static {
         decision: Decision,
     ) -> Result<ChatThread, ChatError>;
 }
+
+pub mod hero_note;
 
 /// Fixed sample data, so the frame and the first two screens can be built and checked before
 /// the database and chat runner exist. Every word here is invented; nothing is personal.

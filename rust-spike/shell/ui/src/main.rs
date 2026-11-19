@@ -3,6 +3,7 @@ mod chat;
 mod email_refresh;
 mod focus;
 mod frame;
+mod hero_briefing;
 mod icons;
 mod modules_page;
 mod scratchpad;
