@@ -2,11 +2,16 @@
 import { moduleClient } from "./guest-bridge.mjs";
 import { mealsApi } from "./api.mjs";
 import { esc } from "./format.mjs";
+import { eatersScreen, moveScreen, textScreen } from "./arrange.mjs";
+import { householdScreen } from "./household.mjs";
 import { caption, segmented } from "./kit.mjs";
 import { listScreen } from "./list.mjs";
+import { logScreen } from "./log.mjs";
 import { pantryScreen } from "./pantry.mjs";
 import { planScreen } from "./plan.mjs";
+import { planNewScreen } from "./plan-new.mjs";
 import { recipeScreen } from "./recipe.mjs";
+import { swapScreen } from "./swap.mjs";
 
 const client = moduleClient();
 const api = mealsApi(client);
@@ -15,8 +20,13 @@ const root = document.getElementById("root");
 const TABS = [
   ["plan", "Plan"],
   ["list", "Shopping list"],
-  ["pantry", "Pantry"]
+  ["pantry", "Pantry"],
+  ["household", "Household"],
+  ["log", "Log"]
 ];
+
+// Views reached from the Plan highlight the Plan tab.
+const PLAN_VIEWS = ["recipe", "swap", "move", "eaters", "text", "new"];
 
 let route = { view: "plan" };
 let pendingFocus = null;
@@ -26,7 +36,7 @@ function draw() {
   const active = document.activeElement;
   const keep = pendingFocus ?? (active && active !== document.body ? active.id : null);
   const caret = !pendingFocus && active ? caretOf(active) : null;
-  const tab = route.view === "recipe" ? "plan" : route.view;
+  const tab = PLAN_VIEWS.includes(route.view) ? "plan" : route.view;
   root.innerHTML = `<div class="mls-tabs">${segmented("Meals areas", TABS, tab)}</div>${
     notice ? caption(esc(notice), ' role="status"') : ""
   }${screen().render()}`;
@@ -77,7 +87,14 @@ const screens = {
   plan: planScreen(ctx),
   list: listScreen(ctx),
   pantry: pantryScreen(ctx),
-  recipe: recipeScreen(ctx)
+  household: householdScreen(ctx),
+  log: logScreen(ctx),
+  recipe: recipeScreen(ctx),
+  swap: swapScreen(ctx),
+  move: moveScreen(ctx),
+  eaters: eatersScreen(ctx),
+  text: textScreen(ctx),
+  new: planNewScreen(ctx)
 };
 const screen = () => screens[route.view];
 

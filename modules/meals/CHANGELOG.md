@@ -1,5 +1,13 @@
 # Meals package
 
+## 0.3.0
+
+- The Meals screen gains Household and Log areas, and a settings page opened from the Meals cog.
+- Household lists the people you cook for with add, edit and remove. Removing asks you to confirm.
+- Log shows what was eaten day by day, with totals, add, edit, re-estimate and delete.
+- Settings sets Units (US or Metric) and the default pantry mode for new plans.
+- The Plan gains Swap with choices, Move, Eaters, Text and New plan.
+
 ## 0.2.0
 
 - Meals has a screen with three areas: the Plan, the Shopping list and the Pantry, plus a recipe page for each planned meal.
@@ -8,7 +16,6 @@
 - The Shopping list groups lines by store section. Tick lines, add or edit them, mark them Bought to move them to the Pantry, build the list from the plan, or clear it. Undo works after a removal or a Bought.
 - The Pantry lists what you have on hand with find, add, edit, remove and Staples.
 - Changes made on the screen need no chat approval because you click them. Removing data asks you to confirm first.
-- Household, Log and settings screens, and the swap, move, eaters and text helpers, are not on the screen yet.
 
 ## 0.1.0
 
