@@ -23,6 +23,7 @@ pub const PORTS: &[&str] = &[
     "tools",
     "action-policy",
     "context",
+    "feedback",
 ];
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -340,6 +341,22 @@ impl Manifest {
             );
             for op in &cap.operations {
                 ensure!(identifier(op), "Invalid permission operation");
+            }
+            if cap.port == "feedback" {
+                ensure!(
+                    cap.operations
+                        .iter()
+                        .all(|op| matches!(op.as_str(), "record" | "undo" | "active")),
+                    "Unknown feedback operation"
+                );
+                ensure!(
+                    !cap.resources.is_empty()
+                        && cap
+                            .resources
+                            .iter()
+                            .all(|r| crate::feedback_port::MODULE_TARGET_KINDS.contains(&r.as_str())),
+                    "A module may rate only its own kinds of target"
+                );
             }
             if matches!(cap.port.as_str(), "fetch" | "credentials" | "browser") {
                 for host in &cap.resources {
@@ -662,6 +679,7 @@ impl Manifest {
                     "vault" | "attachments" => ("files", "Read the files you give this module"),
                     "fetch" | "credentials" => ("network", "Contact approved services"),
                     "ai" | "embed" | "transcribe" => ("AI", "Use your chosen AI service"),
+                    "feedback" => ("data", "Record your usefulness ratings for its own items"),
                     "tools" | "action-policy" => {
                         ("chat tools", "Offer tools under your approval rules")
                     }

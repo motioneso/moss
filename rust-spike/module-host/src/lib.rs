@@ -31,6 +31,7 @@ pub mod browser;
 pub mod public_web;
 pub mod route_image;
 pub mod robots;
+pub mod feedback_port;
 pub mod proactive_cards;
 pub mod usefulness_feedback;
 pub mod services;
