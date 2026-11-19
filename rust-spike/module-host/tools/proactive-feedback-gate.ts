@@ -115,6 +115,28 @@ try {
       }
     }
   );
+  const portRun = spawnSync(
+    "cargo",
+    [
+      "+1.95.0",
+      "test",
+      "--locked",
+      "--offline",
+      "--manifest-path",
+      "rust-spike/module-host/Cargo.toml",
+      "--test",
+      "feedback_port_database",
+      "--",
+      "--include-ignored",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    {
+      stdio: "inherit",
+      env: { ...process.env, JS43_APP_URL: urls.app, JS43_BOOTSTRAP_URL: urls.bootstrap }
+    }
+  );
+  check("the feedback port proof passes", portRun.status === 0);
   if (run.status !== 0) failed = true;
   else {
     const rust = JSON.parse(readFileSync(out, "utf8"));

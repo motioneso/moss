@@ -5,9 +5,12 @@
 //! is cleaned) live in the `usefulness-rules` crate.
 //!
 //! Not built here: saving a feedback signal as a memory (`remember_this`), removing calendar
-//! follow-through events, and verifying chat messages and briefing runs, which belong to modules
+//! follow-through events, and verifying chat messages, which belong to modules
 //! that are not ported yet. Those answer with the same refusals the old server gave when the
 //! owning module was absent.
+//!
+//! Briefing runs and items are verified against the target rows a module writes through the
+//! `feedback` port (`feedback_port.rs`); the route never creates those rows itself.
 
 use safety_core::db::DataContext;
 use safety_core::error::ApiError;
@@ -103,7 +106,7 @@ async fn find_target(
             }
         }));
     }
-    if input.target_kind == "chat_message" || input.target_kind == "briefing_run" {
+    if input.target_kind == "chat_message" {
         return Ok(None);
     }
     let row = cx

@@ -58,6 +58,12 @@ pub mod ports {
         "attachments",
         "moss:module/attachments@1.0.0"
     );
+    port!(
+        FEEDBACK,
+        feedback,
+        "feedback",
+        "moss:module/feedback@1.0.0"
+    );
     port!(TOOLS, tools, "tools", "moss:module/tools@1.0.0");
     port!(
         ACTION_POLICY,
