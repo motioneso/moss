@@ -48,6 +48,16 @@ fn the_package_builds_and_the_manifest_validates() {
     for needed in ["moss.module.json", "code/module.wasm", "LICENSE", "NOTICE", "CHANGELOG.md"] {
         assert!(files.contains_key(needed), "{needed} missing");
     }
+    for path in moss_goals_host::package::manifest()
+        .unwrap()
+        .screens
+        .values()
+    {
+        assert!(files.contains_key(path), "Screen {path} missing");
+    }
+    for name in ["today.css", "today.mjs", "view.mjs", "guest-bridge.mjs"] {
+        assert!(files.contains_key(&format!("ui/{name}")), "{name} missing");
+    }
     assert!(moss_goals_host::package::pack(&root(), &component()).is_ok());
 }
 
