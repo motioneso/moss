@@ -282,6 +282,36 @@ pub fn handle<H: Host + ?Sized>(host: &H, req: Request) -> Result<Value> {
     })
 }
 
+const DESTRUCTIVE: [&str; 4] = [
+    "meals.household.remove",
+    "meals.list.clear",
+    "meals.log.delete",
+    "meals.plan.delete",
+];
+
+/// Signed-in transport for the Meals screens. The person's own click is the consent, so this
+/// skips the chat approval step. A destructive tool still needs `confirmed: true` beside the
+/// parameters, which the screen sets only after its own confirm dialog. Reads and writes act
+/// on the signed-in person's rows only, the same as the chat tools.
+pub fn screen_run<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Response> {
+    let mut rest = body.clone();
+    let confirmed = rest
+        .as_object_mut()
+        .and_then(|fields| fields.remove("confirmed"))
+        == Some(json!(true));
+    let req: Request = match serde_json::from_value(rest) {
+        Ok(req) => req,
+        Err(_) => return Ok(util::bad_request("Invalid Meals tool request")),
+    };
+    if !TOOLS.contains(&req.tool.as_str()) || !req.parameters.is_object() {
+        return Ok(util::bad_request("Invalid Meals tool input"));
+    }
+    if DESTRUCTIVE.contains(&req.tool.as_str()) && !confirmed {
+        return Ok(util::error(409, "This change needs confirmation"));
+    }
+    Ok(Response::new(200, handle(host, req)?))
+}
+
 /// Signed-in transport for chat hosts. This crosses the host's one-use, exact-input approval
 /// boundary; it must never call `handle` directly or accept an approval flag from the caller.
 pub fn run<H: Host + ?Sized>(host: &H, body: &Value) -> Result<Response> {

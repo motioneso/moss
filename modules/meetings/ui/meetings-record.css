@@ -1,0 +1,86 @@
+.meetings-record-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+.meetings-record-heading > div:first-child {
+  flex: 1;
+  min-width: 12rem;
+}
+.meetings-record-tools {
+  align-items: flex-start;
+}
+.meetings-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: var(--space-7);
+  align-items: start;
+  min-width: 0;
+}
+.meetings-workspace > * {
+  min-width: 0;
+}
+.meetings-notes {
+  min-height: 24rem;
+  resize: vertical;
+}
+.meetings-dialog {
+  max-width: 36rem;
+}
+.meetings-transcript-timeline {
+  display: grid;
+  gap: var(--space-5);
+}
+.meetings-transcript-turn {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr);
+  gap: var(--space-3);
+  min-width: 0;
+  scroll-margin-block: var(--space-7);
+}
+.meetings-transcript-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 760px) {
+  .meetings-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .meetings-record-tools {
+    margin-left: auto;
+  }
+  .meetings-notes {
+    min-height: 20rem;
+  }
+}
+.meetings-capture {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: stretch;
+}
+.meetings-capture p {
+  margin: 0;
+}
+.meetings-capture-heading {
+  justify-content: flex-end;
+}
+.meetings-capture-title {
+  flex: 1;
+  min-width: 12rem;
+  margin-right: auto;
+}
+@media (max-width: 760px) {
+  .meetings-capture {
+    max-width: 100%;
+  }
+  .meetings-capture-heading > .jds-btn,
+  .meetings-capture-heading > .jds-control-pill {
+    position: fixed;
+    bottom: var(--space-4);
+    right: var(--space-4);
+    z-index: 10;
+  }
+}

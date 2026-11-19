@@ -1,5 +1,15 @@
 # Meals package
 
+## 0.2.0
+
+- Meals has a screen with three areas: the Plan, the Shopping list and the Pantry, plus a recipe page for each planned meal.
+- The Plan shows tonight's dinner and each day as Moss writes it. Lock a meal, swap it for a quick option, regenerate a meal or a day, stop and resume, re-plan the rest of the week, or delete the plan.
+- A recipe page shows ingredients and method, with servings, Mark cooked, ratings, favourites and Undo.
+- The Shopping list groups lines by store section. Tick lines, add or edit them, mark them Bought to move them to the Pantry, build the list from the plan, or clear it. Undo works after a removal or a Bought.
+- The Pantry lists what you have on hand with find, add, edit, remove and Staples.
+- Changes made on the screen need no chat approval because you click them. Removing data asks you to confirm first.
+- Household, Log and settings screens, and the swap, move, eaters and text helpers, are not on the screen yet.
+
 ## 0.1.0
 
 - Meals starts as a package that keeps the same 20 tables and saved data as before.

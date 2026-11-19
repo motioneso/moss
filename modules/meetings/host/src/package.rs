@@ -19,6 +19,30 @@ pub fn files(root: &Path, component: &[u8]) -> Result<BTreeMap<String, Vec<u8>>>
         ("NOTICE".into(), include_bytes!("../../NOTICE").to_vec()),
         ("CHANGELOG.md".into(), include_bytes!("../../CHANGELOG.md").to_vec()),
     ]);
+    for (name, bytes) in [
+        ("index.html", include_bytes!("../../ui/index.html").as_slice()),
+        ("app.mjs", include_bytes!("../../ui/app.mjs")),
+        ("api.mjs", include_bytes!("../../ui/api.mjs")),
+        ("format.mjs", include_bytes!("../../ui/format.mjs")),
+        ("kit.mjs", include_bytes!("../../ui/kit.mjs")),
+        ("home.mjs", include_bytes!("../../ui/home.mjs")),
+        ("manual.mjs", include_bytes!("../../ui/manual.mjs")),
+        ("record.mjs", include_bytes!("../../ui/record.mjs")),
+        ("transcript.mjs", include_bytes!("../../ui/transcript.mjs")),
+        ("summary.mjs", include_bytes!("../../ui/summary.mjs")),
+        ("summary-parts.mjs", include_bytes!("../../ui/summary-parts.mjs")),
+        ("guest-bridge.mjs", include_bytes!("../../ui/guest-bridge.mjs")),
+        ("meetings.css", include_bytes!("../../ui/meetings.css")),
+        ("meetings-record.css", include_bytes!("../../ui/meetings-record.css")),
+        ("settings.html", include_bytes!("../../ui/settings.html")),
+        ("settings.mjs", include_bytes!("../../ui/settings.mjs")),
+        ("settings-logic.mjs", include_bytes!("../../ui/settings-logic.mjs")),
+        ("settings.css", include_bytes!("../../ui/settings.css")),
+        ("capture.mjs", include_bytes!("../../ui/capture.mjs")),
+        ("capture-logic.mjs", include_bytes!("../../ui/capture-logic.mjs")),
+    ] {
+        files.insert(format!("ui/{name}"), bytes.to_vec());
+    }
     for path in &manifest.database.migrations {
         let frozen = moss_module_host::legacy::entry("meetings", path)
             .ok_or_else(|| anyhow::anyhow!("Meetings SQL is not in the legacy inventory"))?;

@@ -94,3 +94,7 @@ path = "../tests/capture_flow.rs"
 [[test]]
 name = "capture_audio"
 path = "../tests/capture_audio.rs"
+
+[[test]]
+name = "chat_read"
+path = "../tests/chat_read.rs"

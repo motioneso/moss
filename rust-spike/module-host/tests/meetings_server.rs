@@ -286,7 +286,7 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
 
     private(
         &root.join("modules.json"),
-        &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key}),
+        &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"ai_key":"cd".repeat(32)}),
     );
     let _server = start(true);
     // Setup allows one owner over HTTP, so the second person is made in the database with the
@@ -416,6 +416,15 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
         let (status, text) = call(m, &path, Some(&other), body);
         assert!(status == 404 && !text.contains(MARK), "another person gets 404: {path} {status} {text}");
     }
+    // MOSS_MEETINGS_HOLD names a folder. The test then keeps the server up for a browser check,
+    // writes the address to url.txt, and waits for a file named finished in that folder.
+    if let Ok(hold) = std::env::var("MOSS_MEETINGS_HOLD") {
+        fs::write(Path::new(&hold).join("url.txt"), &origin).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(3600);
+        while !Path::new(&hold).join("finished").exists() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(500));
+        }
+    }
     // Summaries through the real server. No model is configured here, so a request ends as a stored
     // failure and never as a server error.
     let (status, text) = call(Method::GET, &format!("/records/{pasted}/outputs"), Some(&cookie), None);
@@ -533,4 +542,56 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
     assert_eq!(call(Method::GET, &format!("/records/{id}"), Some(&cookie), None).0, 404);
     // Titles and notes stay out of the server log.
     assert!(!log().contains(MARK), "meeting text in the server log");
+    // A real summary. The router is pointed at the box's local model proxy on the cheapest model it
+    // lists. The key is read from its file and never printed. Without the file the proof is
+    // reported as not run, never as passed.
+    let key_file = std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".config/cliproxyapi/client-key");
+    let proxy_port = fs::read_to_string(key_file.with_file_name("port")).unwrap_or_default();
+    let model_key = fs::read_to_string(&key_file).map(|k| k.trim().to_owned()).ok().filter(|k| !k.is_empty());
+    let (Some(model_key), false) = (model_key, proxy_port.trim().is_empty()) else {
+        println!("NOT RUN live model: no local model proxy key on this box");
+        return;
+    };
+    let sealed = safety_core::secret::SecretCipher::ai(&[("JARVIS_AI_SECRET_KEY".into(), "cd".repeat(32))].into())
+        .unwrap()
+        .seal(&safety_core::secret::SecretFields::new().with("apiKey", safety_core::secret::Secret::new(&model_key)));
+    runtime.block_on(async {
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(async move { let _ = connection.await; });
+        let (provider, model) = (uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
+        db.execute(
+            "INSERT INTO app.ai_provider_configs(id,owner_user_id,provider_kind,display_name,base_url,encrypted_credential,is_instance_default) VALUES($1,$2,'openai-compatible','Local proxy',$3,$4,true)",
+            &[&provider, &owner, &format!("http://127.0.0.1:{}", proxy_port.trim()), &sealed],
+        ).await.unwrap();
+        db.execute(
+            "INSERT INTO app.ai_configured_models(id,provider_config_id,owner_user_id,provider_model_id,display_name,capabilities) VALUES($1,$2,$3,'gpt-5.6-luna','Small model',ARRAY['chat','json','summarization'])",
+            &[&model, &provider, &owner],
+        ).await.unwrap();
+    });
+    let (_, text) = call(Method::GET, &format!("/records/{pasted}/transcript?maxSegments=10&maxCharacters=1000"), Some(&cookie), None);
+    let revision = json_of(&text)["transcriptRevision"].as_i64().unwrap_or(1);
+    let request = json!({"requestKey":"44444444-4444-4444-8444-444444444444","expectedOutputVersion":0,"expectedTranscriptRevision":revision,
+        "expectedNotesRevision":0,"templateId":"general","templateVersion":1});
+    let (status, text) = call(Method::POST, &format!("/records/{pasted}/outputs"), Some(&cookie), Some(request));
+    assert!(status < 500, "a real generate request ends cleanly: {status} {text}\n{}", log());
+    let waited = Instant::now();
+    let artifact = loop {
+        let (_, text) = call(Method::GET, &format!("/records/{pasted}/outputs"), Some(&cookie), None);
+        let listing = json_of(&text);
+        if let Some(first) = listing["artifacts"].as_array().and_then(|a| a.first()) {
+            break first.clone();
+        }
+        assert!(waited.elapsed() < Duration::from_secs(180), "no summary arrived: {listing}\n{}", log());
+        std::thread::sleep(Duration::from_secs(2));
+    };
+    assert!(!log().contains(&model_key), "the model key never reaches the server log");
+    println!("PASS live model: gpt-5.6-luna wrote a real summary in {:?}: {}", waited.elapsed(), artifact.to_string().chars().take(300).collect::<String>());
+    // MOSS_MEETINGS_MODEL_HOLD names a folder, as MOSS_MEETINGS_HOLD does, for a browser look at it.
+    if let Ok(hold) = std::env::var("MOSS_MEETINGS_MODEL_HOLD") {
+        fs::write(Path::new(&hold).join("url.txt"), &origin).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(3600);
+        while !Path::new(&hold).join("finished").exists() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(500));
+        }
+    }
 }

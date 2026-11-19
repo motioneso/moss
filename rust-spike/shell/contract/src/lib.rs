@@ -11,6 +11,9 @@ use serde::{Deserialize, Serialize};
 pub struct Account {
     pub display_name: String,
     pub unread_notifications: u32,
+    /// True for an instance admin. Screens use it to word hints for admins and members.
+    #[serde(default)]
+    pub is_admin: bool,
 }
 
 /// One entry in the main navigation.

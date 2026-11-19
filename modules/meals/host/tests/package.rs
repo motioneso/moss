@@ -66,6 +66,27 @@ fn the_package_builds_and_the_manifest_validates() {
 }
 
 #[test]
+fn the_package_serves_the_meals_screen() {
+    let manifest = moss_meals_host::package::manifest().unwrap();
+    assert_eq!(manifest.screens["/meals"], "ui/index.html");
+    let files = moss_meals_host::package::files(&root(), &component()).unwrap();
+    for name in [
+        "index.html", "app.mjs", "api.mjs", "format.mjs", "kit.mjs", "plan.mjs", "plan-day.mjs",
+        "recipe.mjs", "list.mjs", "list-dialogs.mjs", "pantry.mjs", "pantry-dialogs.mjs",
+        "guest-bridge.mjs", "meals.css",
+    ] {
+        assert!(files.contains_key(&format!("ui/{name}")), "ui/{name} missing");
+    }
+    let nav = &manifest.navigation[0];
+    assert_eq!(nav["path"], "/meals");
+    assert!(manifest.screens.contains_key(nav["path"].as_str().unwrap()));
+    assert!(manifest
+        .routes
+        .iter()
+        .any(|r| r.path == "/meals/screen/tool" && r.sign_in));
+}
+
+#[test]
 fn the_package_asks_only_for_its_own_resources() {
     let manifest = moss_meals_host::package::manifest().unwrap();
     let ask = |port: &str, operation: &str, resource: &str| {
