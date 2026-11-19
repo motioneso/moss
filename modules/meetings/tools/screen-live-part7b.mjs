@@ -36,16 +36,36 @@ for (const [name, width] of [
   );
   const open = async (path, hash = "") => {
     await page.goto(`${url}/module-frame?module=meetings&path=${encodeURIComponent(path)}${hash}`);
-    await page.waitForTimeout(3500);
-    const frame = page.frames().find((f) => f !== page.mainFrame());
-    if (!frame) throw new Error(`${name}: the screen frame did not load for ${path}`);
-    return frame;
+    return settled();
+  };
+  // The screen frame draws a moment after it loads, and the server is slow when the machine is busy.
+  const settled = async () => {
+    for (let i = 0; i < 60; i += 1) {
+      await page.waitForTimeout(1000);
+      const frame = page.frames().find((f) => f !== page.mainFrame());
+      const body = frame
+        ? await frame
+            .locator("body")
+            .innerText()
+            .catch(() => "")
+        : "";
+      if (body.trim().length > 20 && !/Loading/.test(body)) return frame;
+    }
+    throw new Error(`${name}: the screen frame did not draw`);
   };
   const text = async (f) => (await f.locator("body").innerText()).replace(/\n+/g, " | ");
   const shot = (label) => page.screenshot({ path: `${out}/${name}-${label}.png`, fullPage: true });
 
   // The fake device runs in the page so it shares the real origin and the real server.
-  const ask = (platform) =>
+  const ask = async (platform) => {
+    for (let i = 0; i < 20; i += 1) {
+      const made = await askOnce(platform);
+      if (made.status !== 503) return made;
+      await page.waitForTimeout(3000);
+    }
+    return askOnce(platform);
+  };
+  const askOnce = (platform) =>
     page.evaluate(async (platformName) => {
       const verifier = `${platformName}-verifier-${Math.random()}`;
       const bytes = new TextEncoder().encode(verifier);
@@ -116,8 +136,7 @@ for (const [name, width] of [
   await shot("approval-ask");
   check(`${name} the code is gone from the address bar`, !page.url().includes("code="), page.url());
   await frame.getByRole("button", { name: "Link Mac" }).click();
-  await page.waitForTimeout(3500);
-  frame = page.frames().find((f) => f !== page.mainFrame());
+  frame = await settled();
   body = await text(frame);
   check(
     `${name} linking lands on the Devices list`,
@@ -220,8 +239,7 @@ for (const [name, width] of [
   const phone2 = await ask("android");
   frame = await open("/meetings", `#code=${codeOf(phone2)}`);
   await frame.getByRole("button", { name: "Link phone" }).click();
-  await page.waitForTimeout(3500);
-  frame = page.frames().find((f) => f !== page.mainFrame());
+  frame = await settled();
   body = await text(frame);
   check(
     `${name} a linked phone shows in the list`,
