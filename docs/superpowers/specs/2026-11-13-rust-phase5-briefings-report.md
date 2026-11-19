@@ -181,9 +181,12 @@ the person to sign in again). A source served from cache marks the run as using 
 
 ### Privacy
 
-- Gathering reads only the run owner's data. The Tasks call returns each caller only their own
-  tasks, shown by a test with a second person and an admin, which was seen failing with row
-  security removed and passing with it back.
+- The Tasks briefing call has an owner filter in addition to task row security. Removing row
+  security alone does not expose another owner's tasks through this API, so the original removal
+  control no longer tested the database boundary after the owner filter was added. The corrected
+  compiled tests check row security through the Tasks list route and check the briefing filter
+  with genuinely shared tasks that the list route can read. Both cover a second person and an
+  admin; their removal observations are recorded in the R1 fix PR (JS-358).
 - Only counts, gap reasons and source names are stored on the run. Briefing text is not in the
   stored metadata, job payloads or activity rows. The installed test scans 13 tables and 7 job
   payloads for a planted marker and finds nothing.

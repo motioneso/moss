@@ -2,9 +2,9 @@
   "schemaVersion": 2,
   "id": "goals",
   "name": "Goals",
-  "description": "Private long-running goals and evidence, with five chat tools under the host's approval rules and an active-goals data call for Today. No screen or memory sync jobs yet.",
+  "description": "Private long-running goals and evidence, with five chat tools under the host's approval rules and an active-goals data call for Today. The Today screen shows active goals. No memory sync jobs yet.",
   "publisher": "Moss",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
@@ -91,7 +91,9 @@
     "bundled": true,
     "removable": false
   },
-  "screens": {},
+  "screens": {
+    "/goals/today": "ui/today.html"
+  },
   "navigation": [],
   "settings": [
     {
@@ -137,8 +139,19 @@
     },
     {
       "id": "goals.today-data",
-      "description": "The Today data call returns only the signed-in person\u2019s active goals in priority order, newest first at equal priority. An empty list stays empty. The Today screen is not built yet.",
+      "description": "The Today data call returns only the signed-in person\u2019s active goals in priority order, newest first at equal priority. An empty list stays empty. The Today screen uses this call.",
       "errors": []
+    },
+    {
+      "id": "goals.today-screen",
+      "description": "Today shows the signed-in person\u2019s active goals under Focus and Long-term goals, with their target icon, priority and desired outcome, in the existing priority order. Completed and archived goals stay hidden. An empty list draws nothing. Loading is a quiet status line; a failed request offers Retry. This package screen has no editing or settings controls.",
+      "errors": [
+        {
+          "code": "goals-screen-request-failed",
+          "class": "transient",
+          "description": "Your goals could not be loaded. Retry the request, or reload Today if the screen itself could not open."
+        }
+      ]
     }
   ],
   "tools": {

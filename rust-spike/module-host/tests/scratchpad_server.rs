@@ -1,4 +1,4 @@
-//! Installed Scratchpad package served by the real HTTPS executable. Not a native UI proof.
+//! Installed Scratchpad served by the real HTTPS executable; optional held shell for live screen proof.
 mod common;
 #[path = "people_routes/installed.rs"]
 mod installed;
@@ -95,6 +95,14 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
         "<!doctype html><title>Scratchpad HTTP fixture</title>",
     )
     .unwrap();
+    if let Ok(web) = std::env::var("MOSS_SCRATCHPAD_SCREEN_WEB") {
+        assert!(Command::new("cp")
+            .args(["-r", &format!("{web}/.")])
+            .arg(root.join("web"))
+            .status()
+            .unwrap()
+            .success());
+    }
     let app_url = std::env::var("JS43_APP_URL").unwrap();
     let worker_url = std::env::var("JS43_WORKER_URL").unwrap();
     let bootstrap_url = std::env::var("JS43_BOOTSTRAP_URL").unwrap();
@@ -619,4 +627,27 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
     // Nothing the test sent reached the server log.
     assert!(!log().contains(MARK));
     println!("scratchpad live: read, save, conflict, append and settings worked over HTTPS for two people");
+    // Keep the real server and the gate's isolated database alive for browser proof.
+    if let Ok(hold) = std::env::var("MOSS_SCRATCHPAD_HOLD") {
+        let hold = Path::new(&hold);
+        fs::write(hold.join("url.txt"), remote.as_ref().unwrap_or(&origin)).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(3600);
+        while !hold.join("finished").exists() && Instant::now() < deadline {
+            // A browser proof can ask the trusted fixture to approve and execute a real append.
+            // It uses the same persisted one-use grant and HTTPS route already asserted above.
+            if let Ok(text) = fs::read_to_string(hold.join("append.txt")) {
+                let parameters = json!({"text":text});
+                services.approve_tool(&access, "scratchpad", "scratchpad.append", &parameters).unwrap();
+                let (status, _) = call(Method::POST, "/chat/append", Some(&cookie), Some(parameters));
+                fs::remove_file(hold.join("append.txt")).unwrap();
+                fs::write(hold.join("appended.txt"), status.to_string()).unwrap();
+                assert_eq!(status, 200);
+            }
+            std::thread::sleep(Duration::from_millis(500));
+        }
+        assert!(
+            hold.join("finished").exists(),
+            "screen proof did not finish before deadline"
+        );
+    }
 }

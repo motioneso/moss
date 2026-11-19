@@ -54,8 +54,8 @@ impl Database {
 
     /// A pool that has not connected and whose role is unchecked, for tests whose requests
     /// are answered before any query.
-    #[cfg(test)]
-    pub(crate) fn unconnected(url: &str, role: RuntimeRole) -> Self {
+    #[doc(hidden)]
+    pub fn unconnected(url: &str, role: RuntimeRole) -> Self {
         let mut config = Config::new();
         config.url = Some(url.to_owned());
         let pool = config.create_pool(Some(Runtime::Tokio1), NoTls).expect("test pool");
@@ -64,6 +64,14 @@ impl Database {
 
     pub fn role(&self) -> RuntimeRole {
         self.role
+    }
+
+    /// A raw connection on the auth role, for the pairing store. Refused on any other role.
+    pub async fn auth_client(&self) -> Result<Object, ApiError> {
+        if self.role != RuntimeRole::Auth {
+            return Err(ApiError::Internal("this store needs the auth role".into()));
+        }
+        self.client().await
     }
 
     /// A raw connection, for the narrow stores in this crate (sign-in, the job queue).

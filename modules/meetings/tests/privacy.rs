@@ -99,7 +99,7 @@ fn normal_use_makes_no_job_or_logging_call() {
     f.route("DELETE", "/records/:id", &[("id", &id)], Value::Null);
     for call in f.calls.borrow().iter() {
         assert!(
-            call.starts_with("db.query.app.meeting_") || call.starts_with("context."),
+            call.starts_with("db.query.app.meeting_") || call.starts_with("context.") || call == "api.call.chat",
             "unexpected host port use: {call}"
         );
         assert!(!call.contains(MARKER));

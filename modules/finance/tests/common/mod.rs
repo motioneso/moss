@@ -178,6 +178,7 @@ impl Host for Fake {
                 let tier = self.tiers.borrow().get(resource).cloned().unwrap_or_else(|| "ask_each_time".into());
                 return Ok(json!({"tier":tier}));
             }
+            ("credentials", "forget") => return Ok(json!({})),
             ("tools", "run") => {
                 if !self.approved.get() {
                     return Err(Error::new("This tool needs the account's approval"));

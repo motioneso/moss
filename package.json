@@ -30,6 +30,7 @@
     "test:rust-sports-live": "bash modules/sports/tools/live.sh",
     "test:rust-weather": "tsx modules/weather/tools/gate.ts",
     "test:rust-weather-live": "bash modules/weather/tools/live.sh",
+    "test:rust-suite-live": "bash rust-spike/module-host/tools/suite-live.sh",
     "test:rust-web-research": "tsx modules/web-research/tools/gate.ts",
     "test:rust-web-research-live": "bash modules/web-research/tools/live.sh",
     "test:rust-plaid-live": "bash rust-spike/module-host/probes/plaid/live.sh",
@@ -40,11 +41,14 @@
     "test:rust-meals": "tsx modules/meals/tools/gate.ts",
     "test:rust-meals-live": "bash modules/meals/tools/live.sh",
     "test:rust-commitments": "tsx modules/commitments/tools/gate.ts",
+    "test:rust-commitments-screen": "bash modules/commitments/tools/screen-live.sh",
     "test:rust-commitments-live": "bash modules/commitments/tools/live.sh",
     "test:rust-wellness": "tsx modules/wellness/tools/gate.ts",
     "test:rust-wellness-live": "bash modules/wellness/tools/live.sh",
     "test:rust-wellness-ui": "bash modules/wellness/tools/ui-gate.sh",
     "test:rust-finance": "tsx modules/finance/tools/gate.ts",
+    "test:rust-finance-ui-unit": "node --test modules/finance/ui/logic.test.mjs modules/finance/ui/view.test.mjs modules/finance/ui/screens.test.mjs",
+    "test:rust-finance-ui": "bash modules/finance/tools/ui-gate.sh",
     "test:rust-finance-live": "bash modules/finance/tools/live.sh",
     "test:rust-finance-plaid-live": "bash modules/finance/tools/plaid-live.sh",
     "test:rust-backtrack": "tsx modules/backtrack/tools/gate.ts",
@@ -340,7 +344,9 @@
     "test:integration:finance-bill-entry-negative": "pnpm build:app-map && MOSS_FINANCE_BILL_ENTRY_RLS_NEGATIVE=1 tsx scripts/test-integration.ts tests/integration/finance-bill-entry.test.ts",
     "test:integration:finance-bill-entry-live": "pnpm build:app-map && pnpm --filter @moss/web build && MOSS_FINANCE_LIVE=1 tsx scripts/test-integration.ts tests/integration/finance-page-live.test.ts --testNamePattern 'reviews and confirms the working currency|records a due bill expense'",
     "test:integration:finance-bill-entry-confirm-negative": "pnpm build:app-map && pnpm --filter @moss/web build && MOSS_FINANCE_LIVE=1 MOSS_FINANCE_BILL_ENTRY_CONFIRM_NEGATIVE=1 tsx scripts/test-integration.ts tests/integration/finance-page-live.test.ts --testNamePattern 'reviews and confirms the working currency|records a due bill expense'",
-    "test:recording-notices": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/recording-module-notices.test.ts tests/integration/chat-reminder-live-arrival.test.ts tests/integration/chat-origin-action-history.test.ts tests/integration/foundation-schema-catalog.test.ts tests/integration/module-data-lifecycle-cascade.test.ts tests/integration/data-export.test.ts && vitest run tests/unit/chat-stream-record-identity.test.tsx tests/unit/chat-reminder-live-arrival.test.ts tests/unit/chat-background-message-routing.test.ts tests/unit/chat-action-hydration.test.tsx tests/unit/chat-drawer-main-and-live-turn-recovery.test.tsx tests/unit/chat-drawer-activity.test.tsx tests/unit/meeting-manifest.test.ts tests/unit/module-registry-meeting-summary-worker.test.ts"
+    "test:recording-notices": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/recording-module-notices.test.ts tests/integration/chat-reminder-live-arrival.test.ts tests/integration/chat-origin-action-history.test.ts tests/integration/foundation-schema-catalog.test.ts tests/integration/module-data-lifecycle-cascade.test.ts tests/integration/data-export.test.ts && vitest run tests/unit/chat-stream-record-identity.test.tsx tests/unit/chat-reminder-live-arrival.test.ts tests/unit/chat-background-message-routing.test.ts tests/unit/chat-action-hydration.test.tsx tests/unit/chat-drawer-main-and-live-turn-recovery.test.tsx tests/unit/chat-drawer-activity.test.tsx tests/unit/meeting-manifest.test.ts tests/unit/module-registry-meeting-summary-worker.test.ts",
+    "test:rust-meetings-companion": "tsx modules/meetings/tools/companion-gate.ts",
+    "test:rust-meetings-companion-server": "MOSS_COMPANION_STARTUP_ONLY=1 bash modules/meetings/tools/live.sh"
   },
   "dependencies": {
     "@fastify/helmet": "^13",

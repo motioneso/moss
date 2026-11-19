@@ -114,6 +114,10 @@ fn installed_goals_package_serves_routes_from_the_real_server() {
         "<!doctype html><title>Goals HTTP fixture</title>",
     )
     .unwrap();
+    if let Ok(web) = std::env::var("GOALS_WEB_DIR") {
+        assert!(Command::new("cp").args(["-r", &format!("{web}/.")])
+            .arg(root.join("web")).status().unwrap().success());
+    }
     let app_url = std::env::var("JS43_APP_URL").unwrap();
     let worker_url = std::env::var("JS43_WORKER_URL").unwrap();
     let bootstrap_url = std::env::var("JS43_BOOTSTRAP_URL").unwrap();
@@ -526,4 +530,13 @@ fn installed_goals_package_serves_routes_from_the_real_server() {
     // Nothing the test sent reached the server log.
     assert!(!log().to_lowercase().contains(&MARK.to_lowercase()));
     println!("goals live: create, evidence, close and refusal for two people worked over HTTPS");
+    if let Ok(hold) = std::env::var("GOALS_HOLD_OPEN") {
+        // Browser proof signs in independently. This receipt contains no session credentials.
+        fs::write(&hold, json!({"origin":remote_origin}).to_string()).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(1800);
+        while !Path::new(&format!("{hold}.stop")).exists() {
+            assert!(Instant::now() < deadline, "browser proof hold deadline");
+            std::thread::sleep(Duration::from_millis(500));
+        }
+    }
 }

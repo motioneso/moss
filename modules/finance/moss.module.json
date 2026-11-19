@@ -2,9 +2,9 @@
   "schemaVersion": 2,
   "id": "finance",
   "name": "Finance",
-  "description": "Private money accounts and transactions. You can list your accounts, add manual accounts and transactions, connect a bank and pull its balances and transactions every six hours or on demand, sort and review transactions, set rules, split, add notes, import a CSV bank file, and plan a monthly budget with drafts. It also plans bills, sets targets, shares a flexible pool and reserves money for card payments. You can share a bank account with the household, read spending and net worth reports, export your history, review the activity list and undo a change, and archive an empty category. The screens are not built yet.",
+  "description": "Private money accounts and transactions. You can list your accounts, add manual accounts and transactions, connect a bank and pull its balances and transactions every six hours or on demand, sort and review transactions, set rules, split, add notes, import a CSV bank file, and plan a monthly budget with drafts. It also plans bills, sets targets, shares a flexible pool and reserves money for card payments. You can share a bank account with the household, read spending and net worth reports, export your history, review the activity list and undo a change, and archive an empty category. The Finance screen shows Start, the budget, transactions, accounts, reports and upcoming bills, and a settings page opens from the header cog.",
   "publisher": "Moss",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "callLimitMs": 30000,
@@ -543,6 +543,7 @@
     { "method": "GET", "path": "/finance/reports/spending", "signIn": true },
     { "method": "GET", "path": "/finance/reports/net-worth", "signIn": true },
     { "method": "GET", "path": "/finance/reports/transactions", "signIn": true },
+    { "method": "GET", "path": "/finance/setup/status", "signIn": true },
     { "method": "GET", "path": "/finance/activity", "signIn": true },
     { "method": "POST", "path": "/finance/activity/undo", "signIn": true },
     { "method": "POST", "path": "/finance/accounts/shared", "signIn": true },
@@ -947,7 +948,10 @@
     }
   },
   "requires": {},
-  "provides": {},
+  "provides": {
+    "collectFinanceExportSection": "1.0.0",
+    "deleteFinanceAccountData": "1.0.0"
+  },
   "icons": ["icons/finance.svg"],
   "accounts": {
     "supportsUserDisable": true,
@@ -958,13 +962,48 @@
     "bundled": false,
     "removable": true
   },
-  "screens": {},
-  "navigation": [],
-  "settings": [],
+  "screens": {
+    "/finance": "ui/index.html",
+    "/settings/finance": "ui/settings.html"
+  },
+  "navigation": [
+    {
+      "id": "finance",
+      "label": "Finance",
+      "description": "Your budget by month, a searchable list of transactions you can sort into categories, your accounts with balances, net worth and bank connection status, spending and cash flow reports, and upcoming bills. A Start page opens first when you have no accounts and needs no bank keys.",
+      "path": "/finance",
+      "icon": "Landmark",
+      "order": 38
+    }
+  ],
+  "settings": [
+    {
+      "id": "finance.settings",
+      "label": "Finance",
+      "path": "/settings/finance",
+      "scope": "user",
+      "description": "Shows how much Moss sorts on its own, whether bank keys are saved, your merchant rules and this week's activity with Undo."
+    }
+  ],
   "features": [
     {
+      "id": "finance.account-data",
+      "description": "The whole-account export collects a person's accounts, transactions, categories, rules, budget, bills, targets and undo records, and the whole-account delete removes all of them and drops any saved bank token. Bank links and link sessions are left out of the export because they name a stored credential. Each call touches only the signed-in person's rows.",
+      "errors": []
+    },
+    {
+      "id": "finance.start",
+      "description": "With no accounts, Finance opens on Start, which offers a manual account without any bank keys and shows whether a bank can be connected. A person with an account opens on Budget.",
+      "errors": []
+    },
+    {
+      "id": "finance.settings",
+      "description": "The settings page, opened from the cog in the Finance header, shows how much Moss sorts alone, whether bank keys are saved, the person's merchant rules and the last week of activity with an Undo button. Changing the sorting limits and the dollar limit is not available from this page yet.",
+      "errors": []
+    },
+    {
       "id": "finance.accounts",
-      "description": "A person can list their own accounts with current balances, currencies and, for manual accounts, the opening date and balance. With no accounts, the list suggests adding a manual account. Accounts shared by other people and bank links are not built yet. No screen is built yet.",
+      "description": "A person can list their own accounts with current balances, currencies and, for manual accounts, the opening date and balance. With no accounts, the list suggests adding a manual account. Accounts shared by other people and bank links are not built yet. The Finance screen shows it.",
       "errors": [
         {
           "code": "finance_accounts_unavailable",
@@ -1032,7 +1071,7 @@
     },
     {
       "id": "finance.transactions",
-      "description": "A person can list their own transactions for a month with filters, search, notes and splits. They can set or change a category, confirm what Moss sorted, save a note, split a transaction across categories, and sort many at once. Moss sorts by payee rule first, then the bank's own category, and only confirms on its own when the sorting tier allows it. No screen is built yet.",
+      "description": "A person can list their own transactions for a month with filters, search, notes and splits. They can set or change a category, confirm what Moss sorted, save a note, split a transaction across categories, and sort many at once. Moss sorts by payee rule first, then the bank's own category, and only confirms on its own when the sorting tier allows it. The Finance screen shows it.",
       "errors": [
         {
           "code": "stale_transaction",
@@ -1117,12 +1156,12 @@
     },
     {
       "id": "finance.bank-sync",
-      "description": "Balances and transactions for every connected bank are pulled every six hours and on request. Each bank is handled on its own, so one failing bank never stops the others. A bank that needs a new sign-in is marked as needing a reconnect and keeps its saved data. A person's own category and note on a bank transaction are kept, and manual entries are never overwritten. Categorizing new transactions is not built yet.",
+      "description": "Balances and transactions for every connected bank are pulled every six hours and on request. Each bank is handled on its own, so one failing bank never stops the others. If the bank changes its pages during a read, Moss retries from the start of that read, up to three times. A bank that needs a new sign-in is marked as needing a reconnect and keeps its saved data. A person's own category and note on a bank transaction are kept, and manual entries are never overwritten. Categorizing new transactions is not built yet.",
       "errors": []
     },
     {
       "id": "finance.budget",
-      "description": "A person can choose a budget currency once, see a month of the budget with each category's assigned, spent and available money and what is ready to assign, set the amount for one category or up to 20 at once, and move money between categories or from ready to assign. Every save needs the review numbers from the screen. If the budget or the ledger changed since, nothing is saved. Flexible pools, targets, card payments and bills are not built yet.",
+      "description": "A person can choose a budget currency once, see a month of the budget with each category's assigned, spent and available money and what is ready to assign, set the amount for one category or up to 20 at once, and move money between categories or from ready to assign. Every save needs the review numbers from the screen. If the budget or the ledger changed since, nothing is saved. The Finance screen shows the budget. Flexible pools, targets, card payments and bills are not built yet.",
       "errors": [
         {
           "code": "stale_budget",

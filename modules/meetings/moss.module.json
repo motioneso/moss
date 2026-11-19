@@ -2,9 +2,9 @@
   "schemaVersion": 2,
   "id": "meetings",
   "name": "Meetings",
-  "description": "Keeps each person's meeting records, personal notes and recording defaults private to their account. Create, rename, delete and take versioned notes on meetings, and set recording defaults. Transcripts, History search, recording types and pasted transcripts are included. Summaries written by the configured model, with edits, history and an automatic summary after a pasted transcript, are included. Each action a summary proposes can be accepted into Tasks or dismissed. A summary version can be saved as a private copy in your notes, once, and a copy you edited is never overwritten. Your account export holds every meeting collection, including the stored audio of finished recording imports. The Meetings screen lists meetings, shows each one with its transcript, notes and summary, and adds a pasted transcript. Recording and the Meetings settings are not part of this package yet.",
+  "description": "Keeps each person's meeting records, personal notes and recording defaults private to their account. Create, rename, delete and take versioned notes on meetings, and set recording defaults. Transcripts, History search, recording types and pasted transcripts are included. Summaries written by the configured model, with edits, history and an automatic summary after a pasted transcript, are included. Each action a summary proposes can be accepted into Tasks or dismissed. A summary version can be saved as a private copy in your notes, once, and a copy you edited is never overwritten. Your account export holds every meeting collection, including the stored audio of finished recording imports. The Meetings screen lists meetings, shows each one with its transcript, notes and summary, and adds a pasted transcript. Recording from a linked Mac, with its panel and status on each meeting, and the Meetings settings are included. The settings open from the Meetings cog and hold the audio source, transcript language and vocabulary, the automatic summary switch and your linked Macs.",
   "publisher": "Moss",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "callLimitMs": 30000,
@@ -13,7 +13,7 @@
     {
       "port": "api",
       "operations": ["call"],
-      "resources": ["calendar", "memory", "notes", "people", "tasks"]
+      "resources": ["calendar", "chat", "memory", "notes", "people", "tasks"]
     },
     {
       "port": "db",
@@ -426,7 +426,14 @@
   },
   "provides": {
     "prepareMeetingRoute": "1.0.0",
-    "collectMeetingsExportSection": "1.0.0"
+    "collectMeetingsExportSection": "1.0.0",
+    "meetingChatAvailable": "1.0.0",
+    "meetingChatSnapshot": "1.0.0",
+    "meetingChatEvidence": "1.0.0",
+    "checkDevice": "1.0.0"
+  },
+  "optionalRequires": {
+    "chat": ">=0.1.0, <1.0.0"
   },
   "icons": ["icons/meetings.svg"],
   "accounts": {
@@ -489,15 +496,15 @@
     {
       "id": "meetings.module-settings",
       "label": "Meetings",
-      "path": "/settings?section=modules&module=meetings",
+      "path": "/settings/meetings",
       "scope": "user",
-      "description": "Recording audio, transcript language, vocabulary and automatic summary defaults are saved with your account. Changing them from Settings is not available in this version yet; they can be read and saved through the Meetings routes."
+      "description": "Recording audio, transcript language, vocabulary and automatic summary defaults are saved with your account. Change them from the Meetings settings, which open from the cog in the Meetings header."
     }
   ],
   "features": [
     {
       "id": "meetings.records",
-      "description": "Each person keeps private meeting records with a title and personal notes. Titles are at most 240 bytes and notes at most 64,000 bytes. Notes save with a version check, so a stale edit is refused and returns the current notes. A repeated request key returns the original result. Deleting a meeting is permanent. Nobody else, including admins, can see them.",
+      "description": "Each person keeps private meeting records with a title and personal notes. Titles are at most 240 bytes and notes at most 64,000 bytes. Notes save with a version check, so a stale edit is refused and returns the current notes. A repeated request key returns the original result. Deleting a meeting is permanent. Nobody else, including admins, can see them. Chat can read a meeting you own, its transcript and notes, and asks Meetings to delete the meeting chat threads before a meeting is deleted. Deletion goes ahead even if Chat is missing or cannot answer.",
       "errors": [
         {
           "code": "meeting_invalid_input",
@@ -548,7 +555,7 @@
     },
     {
       "id": "meetings.preferences",
-      "description": "Saves the default recording audio, the remembered recording source, automatic summaries on Stop, the summary style, the transcript language and best-effort vocabulary for the account. Reading never creates a default. The Meetings screen and Settings controls are not part of this package yet.",
+      "description": "Saves the default recording audio, the remembered recording source, automatic summaries on Stop, the summary style, the transcript language and best-effort vocabulary for the account. Reading never creates a default. The Meetings settings screen, opened from the cog in the Meetings header, shows the linked Macs, the audio source, the transcript language, the vocabulary list and the automatic summary switch, and saves each change to your account. A failed save shows an error with Retry.",
       "errors": [
         {
           "code": "meeting_capture_invalid_input",
@@ -858,7 +865,7 @@
     },
     {
       "id": "meetings.mac-link",
-      "description": "The Mac recorder app links to your account and reports which Macs can record. From a meeting you start recording on a Mac, or cancel a start that has not begun. A start needs a live Mac, a speech-to-text route and room under the start limits. Starting only reserves the recording and never begins capture by itself. The link is private to your account, and no admin can read it. The old relink routes answer that relinking is required. Audio upload, pause, resume, stop and source changes are handled with a 60 second finish window, and status reads show gaps. Pairing a Mac and the real device credential check are not part of this package yet.",
+      "description": "The Mac recorder app links to your account and reports which Macs can record. From a meeting you start recording on a Mac, or cancel a start that has not begun. A start needs a live Mac, a speech-to-text route and room under the start limits. Starting only reserves the recording and never begins capture by itself. The link is private to your account, and no admin can read it. The old relink routes answer that relinking is required. Audio upload, pause, resume, stop and source changes are handled with a 60 second finish window, and status reads show gaps. Pairing a Mac and the real device credential check are not part of this package yet. On a meeting, the recording panel shows Ready, Connecting, Recording, Paused and Stopped, with Record, Pause, Resume and Stop, and lists gaps in the transcript. Meetings home offers New meeting when a Mac is linked and a Link your Mac prompt when none is. Rewrite summary and Delete are unavailable while recording.",
       "errors": [
         {
           "code": "meeting_capture_busy",
@@ -916,9 +923,40 @@
           "description": "The Mac connection is missing, expired or revoked"
         }
       ]
+    },
+    {
+      "id": "meetings.device-data-removal",
+      "description": "Removing Meetings while keeping its data keeps linked devices. Removing Meetings with its data forgets linked devices and pending link requests for every account. Reinstalling requires linking devices again. Linking waits for removal and is unavailable while Meetings is absent or device lookup preparation is unavailable. If device cleanup fails, removal stops so it can be retried. If a later data-removal step fails, devices have already been forgotten and must be linked again.",
+      "errors": [
+        {
+          "code": "module-removal-failed",
+          "class": "transient",
+          "description": "Device cleanup could not finish, so Meetings was not removed",
+          "remediationRef": "retry-device-removal"
+        },
+        {
+          "code": "companion-unavailable",
+          "class": "transient",
+          "description": "Linking returns unavailable while Meetings is absent, being removed, or its device lookup is not ready",
+          "remediationRef": "restore-device-linking"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "retry-device-removal",
+          "description": "Restore the database connection and retry removing Meetings with its data",
+          "path": "/settings/modules"
+        },
+        {
+          "id": "restore-device-linking",
+          "description": "Install Meetings if it was removed. If device lookup preparation failed, restore the database connection and elevated install access, then restart the server or install Meetings again",
+          "path": "/settings/modules"
+        }
+      ]
     }
   ],
   "screens": {
-    "/meetings": "ui/index.html"
+    "/meetings": "ui/index.html",
+    "/settings/meetings": "ui/settings.html"
   }
 }

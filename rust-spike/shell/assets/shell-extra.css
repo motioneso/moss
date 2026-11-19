@@ -1,8 +1,67 @@
 /* Installed module screens in the page area. */
+moss-goals-today {
+  display: block;
+}
+.goals-today-frame {
+  display: block;
+  width: 100%;
+  height: 0;
+  border: 0;
+}
+
 .module-screen {
   display: block;
   width: 100%;
   height: calc(100dvh - 9rem);
   min-height: 24rem;
   border: 0;
+}
+
+/* Persistent package slot, positioned to the approved Scratchpad frames. */
+.scratchpad-slot {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 90;
+  width: 340px;
+  height: 420px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-drawer);
+  background: var(--surface-raised);
+}
+.scratchpad-slot[hidden] {
+  display: none;
+}
+.scratchpad-slot--beside {
+  right: 434px;
+  width: min(340px, calc(100vw - 450px));
+  bottom: 18px;
+}
+.scratchpad-slot iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+@media (max-width: 720px) {
+  .scratchpad-slot {
+    inset: 0;
+    width: auto;
+    height: 100dvh;
+    border: 0;
+    border-radius: 0;
+  }
+}
+
+/* Package-owned sections participate in Today's flow, including a truly empty state. */
+.package-section-frame {
+  display: block;
+  width: 100%;
+  height: 0;
+  border: 0;
+}
+[data-module-section] {
+  min-width: 0;
 }

@@ -24,6 +24,16 @@ export function meetingsApi(client) {
     search: (body) => call("POST", "/history/search", body),
     devices: () => call("GET", "/capture/devices"),
     recordingTypes: () => call("GET", "/recording-types"),
+    preferences: () => call("GET", "/preferences"),
+    putPreferences: (body) => call("PUT", "/preferences", body),
+    createRecord: (body) => call("POST", "/records", body),
+    capture: (meetingId) => call("GET", `/records/${id(meetingId)}/capture`),
+    captureStart: (meetingId, body) =>
+      call("POST", `/records/${id(meetingId)}/capture/start`, body),
+    captureCancelStart: (meetingId, body) =>
+      call("POST", `/records/${id(meetingId)}/capture/cancel-start`, body),
+    captureControl: (meetingId, body) =>
+      call("POST", `/records/${id(meetingId)}/capture/control`, body),
     record: (meetingId) => call("GET", `/records/${id(meetingId)}`),
     putTitle: (meetingId, body) => call("PUT", `/records/${id(meetingId)}/title`, body),
     putNotes: (meetingId, body) => call("PUT", `/records/${id(meetingId)}/notes`, body),

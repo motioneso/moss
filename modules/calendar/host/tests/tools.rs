@@ -81,7 +81,7 @@ impl Installed {
         let registry = tempfile::tempdir().unwrap();
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
         let bytes = moss_calendar_host::package::pack(&root, &f.core()).unwrap();
-        let (key, publisher, artifact) = registry::publish(registry.path(), &bytes);
+        let (key, publisher, artifacts) = registry::publish_with_tasks(registry.path(), &bytes);
         let database = f.db.clone();
         let task = Uuid::new_v4();
         let refs = Arc::new(Tasks {
@@ -119,9 +119,11 @@ impl Installed {
                 "calendar-test-registry",
             )
             .unwrap();
-        app.installer
-            .install(&f.access(f.a), &source, &artifact, true)
-            .unwrap();
+        for artifact in artifacts {
+            app.installer
+                .install(&f.access(f.a), &source, &artifact, true)
+                .unwrap();
+        }
         Self {
             f,
             app,
