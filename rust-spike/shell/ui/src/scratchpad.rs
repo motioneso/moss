@@ -36,10 +36,10 @@ pub fn Scratchpad(
     });
     Effect::new(move |_| {
         let opened = open.get();
+        let is_phone = phone.get();
         if let Some(frame) = panel.get() {
             if let Some(window) = frame.content_window() {
-                let payload =
-                    serde_json::json!({"channel":"moss.scratchpad.visibility","open":opened});
+                let payload = serde_json::json!({"channel":"moss.scratchpad.visibility","open":opened,"phone":is_phone});
                 if let Ok(data) = js_sys::JSON::parse(&payload.to_string()) {
                     let _ = window.post_message(
                         &data,

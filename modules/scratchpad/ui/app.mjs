@@ -128,7 +128,7 @@ root
     () => void (model.state.loaded && model.dirty() ? model.save() : model.read())
   );
 async function close(path) {
-  await model.save();
+  void model.save();
   // Hiding the persistent frame keeps both failed drafts and conflict drafts in memory.
   await client.navigate(path);
 }
@@ -162,6 +162,7 @@ document.addEventListener("keydown", (event) => {
 window.addEventListener("message", (event) => {
   if (event.source !== window.parent || event.data?.channel !== "moss.scratchpad.visibility")
     return;
+  document.documentElement.dataset.phone = String(event.data.phone === true);
   if (event.data.open) {
     void model.read();
     text.focus();
@@ -181,6 +182,7 @@ await client
   .theme()
   .then((theme) => {
     document.documentElement.dataset.colorMode = theme.colorMode;
+    document.documentElement.dataset.phone = String(theme.phone === true);
   })
   .catch(() => {});
 await model.read();

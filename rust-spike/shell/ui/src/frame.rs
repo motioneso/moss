@@ -214,7 +214,7 @@ fn Frame(shell: ShellView, modules: Vec<api::ModuleNav>) -> impl IntoView {
     let chat_expanded_wish = RwSignal::new(false);
     let chat_unread = RwSignal::new(shell.chat_unread);
 
-    let dock_chat = Memo::new(move |_| wide.get());
+    let dock_chat = Memo::new(move |_| wide.get() && !scratchpad_open.get());
     let expanded = Memo::new(move |_| {
         chat_expanded_wish.get() && dock_chat.get() && chat_open.get() && !phone.get()
     });
@@ -354,6 +354,7 @@ fn Frame(shell: ShellView, modules: Vec<api::ModuleNav>) -> impl IntoView {
         >
             <aside
                 id="moss-main-navigation"
+                inert=move || phone.get() && scratchpad_open.get()
                 class=move || if mobile_nav_open.get() { "sidebar open" } else { "sidebar" }
                 role=move || mobile_nav_open.get().then_some("dialog")
                 aria-modal=move || mobile_nav_open.get().then_some("true")
@@ -539,7 +540,7 @@ fn Frame(shell: ShellView, modules: Vec<api::ModuleNav>) -> impl IntoView {
                     </div>
                 </header>
 
-                <div class=move || {
+                <div inert=move || phone.get() && scratchpad_open.get() class=move || {
                     let mut class = String::from("workspace-body");
                     if dock_chat.get() && chat_open.get() { class.push_str(" workspace-body--docked"); }
                     if expanded.get() { class.push_str(" workspace-body--expanded"); }

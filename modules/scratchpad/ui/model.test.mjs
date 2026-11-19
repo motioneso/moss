@@ -131,6 +131,25 @@ test("initial read failure keeps the editor unavailable, then retries", async ()
   assert.equal(model.state.loaded, true);
   model.dispose();
 });
+test("a successful unchanged refresh clears a transient read error", async () => {
+  let fail = false;
+  const model = padModel({
+    read: async () => {
+      if (fail) throw Error();
+      return note("saved", 1);
+    }
+  });
+  await model.read();
+  fail = true;
+  await model.read();
+  assert.match(model.state.error, /check for changes/);
+  fail = false;
+  await model.read();
+  assert.equal(model.state.error, "");
+  assert.equal(model.state.text, "saved");
+  assert.equal(model.state.status, "Saved");
+  model.dispose();
+});
 test("a changed draft during Reload is preserved", async () => {
   const pending = deferred();
   let calls = 0;

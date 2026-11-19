@@ -28,6 +28,7 @@ export function padModel(api, changed = () => {}) {
       if (saving || revision !== state.revision) return;
       state.shortcut = note.shortcut;
       if (reload && before !== generation) return;
+      if (state.error === "Couldn't check for changes. Your text is kept here.") state.error = "";
       if (!state.loaded || reload) {
         state.text = state.saved = note.body;
         state.revision = note.revision;

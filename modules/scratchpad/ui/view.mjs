@@ -25,7 +25,7 @@ export const padMarkup = `
         <circle cx="12" cy="10.4" r="3" />
       </svg></button
     ><button
-      class="jds-iconbtn jds-iconbtn--sm"
+      class="jds-iconbtn jds-iconbtn--sm sc-pad__close"
       aria-label="Close scratchpad"
       title="Close scratchpad"
     >
@@ -40,7 +40,8 @@ export const padMarkup = `
         stroke-width="1.6"
         viewBox="0 0 24 24"
       >
-        <path d="M18 6 6 18M6 6l12 12" />
+        <path class="sc-pad__close-desktop" d="M18 6 6 18M6 6l12 12" />
+        <path class="sc-pad__close-phone" d="m15 18-6-6 6-6" />
       </svg>
     </button>
   </header>

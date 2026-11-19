@@ -100,18 +100,20 @@ body {
 .sc-settings {
   padding: var(--space-6) var(--space-7);
 }
+.sc-pad__close-phone,
+[data-phone="true"] .sc-pad__close-desktop {
+  display: none;
+}
+[data-phone="true"] .sc-pad__close-phone {
+  display: initial;
+}
+[data-phone="true"] .sc-pad__close {
+  order: -1;
+}
+[data-phone="true"] .sc-pad {
+  padding: var(--space-4);
+}
 @media (max-width: 720px) {
-  .sc-pad {
-    padding: var(--space-4);
-  }
-  .sc-pad__tools .jds-iconbtn {
-    width: 44px;
-    height: 44px;
-  }
-  .sc-pad__tools {
-    column-gap: var(--space-2);
-    row-gap: var(--space-2);
-  }
   .sc-settings {
     padding: var(--space-5) var(--space-4);
   }

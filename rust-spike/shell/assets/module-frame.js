@@ -95,7 +95,12 @@ try {
   if (moduleId === "weather") frame.setAttribute("allow", "geolocation *");
   openModuleFrame(frame, moduleId, screenUrl.href, {
     request,
-    theme: () => ({ theme: "park-press", colorMode: dark ? "dark" : "light", isAdmin }),
+    theme: () => ({
+      theme: "park-press",
+      colorMode: dark ? "dark" : "light",
+      isAdmin,
+      phone: moduleId === "scratchpad" && window.parent.matchMedia("(max-width: 720px)").matches
+    }),
     navigate: async (path) => {
       if (
         moduleId === "scratchpad" &&
