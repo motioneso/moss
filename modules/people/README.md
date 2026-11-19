@@ -19,7 +19,7 @@ through verify-gate:
 scripts/run-gate.sh start --gate test:rust-people-large
 ```
 
-The large-account gate builds its component in `CARGO_TARGET_DIR` when
+The large-account gate builds its handwritten comparison component in `CARGO_TARGET_DIR` when
 `JS50_PEOPLE_COMPONENT` is unset. An explicit component path still selects an
 existing artifact for focused checks.
 
