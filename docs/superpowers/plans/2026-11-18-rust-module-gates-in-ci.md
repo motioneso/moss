@@ -136,18 +136,25 @@ Cold runs (fresh target folder, load about 9):
 Sweep runs (two lanes in parallel, each lane reusing one target folder, load 30 to 55 from other
 work on the box). Treat these as upper bounds.
 
-| Gate                      | Wall time                             | Gate                           | Wall time |
-| ------------------------- | ------------------------------------- | ------------------------------ | --------- |
-| `test:rust-memory`        | over 90 min (stopped, 42 tests green) | `test:rust-goals`              | 8 min     |
-| `test:rust-news`          | 44 min                                | `test:rust-wellness`           | 8 min     |
-| `test:rust-meals`         | 36 min                                | `test:rust-proactive-server`   | 8 min     |
-| `test:rust-meetings`      | 33 min                                | `test:rust-module-assembly`    | 5 min     |
-| `test:rust-sports`        | 30 min                                | `test:rust-tasks-server`       | 4 min     |
-| `test:rust-tasks` (rerun) | 16 min                                | `test:rust-module-ai`          | 4 min     |
-| `test:rust-briefings`     | 12 min                                | `test:rust-proactive-feedback` | 3 min     |
-| `test:rust-scratchpad`    | 2 min                                 | `test:rust-memory-index`       | 3 min     |
-| `test:rust-web-research`  | 2 min                                 | `test:rust-public-web`         | 2 min     |
-| `test:rust-commitments`   | 2 min                                 | `test:rust-weather`            | 1 min     |
+| Gate                      | Wall time                              | Gate                           | Wall time    |
+| ------------------------- | -------------------------------------- | ------------------------------ | ------------ |
+| `test:rust-memory`        | over 90 min (stopped, 42 tests green)  | `test:rust-goals`              | 8 min        |
+| `test:rust-news`          | 44 min                                 | `test:rust-wellness`           | 8 min        |
+| `test:rust-meals`         | 36 min                                 | `test:rust-proactive-server`   | 8 min        |
+| `test:rust-meetings`      | 33 min                                 | `test:rust-module-assembly`    | 5 min        |
+| `test:rust-sports`        | 30 min                                 | `test:rust-tasks-server`       | 4 min        |
+| `test:rust-tasks` (rerun) | 16 min                                 | `test:rust-module-ai`          | 4 min        |
+| `test:rust-briefings`     | 12 min                                 | `test:rust-proactive-feedback` | 3 min        |
+| `test:rust-scratchpad`    | 2 min                                  | `test:rust-memory-index`       | 3 min        |
+| `test:rust-web-research`  | 2 min                                  | `test:rust-public-web`         | 2 min        |
+| `test:rust-commitments`   | 2 min                                  | `test:rust-weather`            | 1 min        |
+| `test:rust-connectors`    | over 90 min (stopped, 192 tests green) | Calendar `gate.sh`             | 11 min (red) |
+| `test:rust-email`         | 9 min                                  | `test:rust-integrations`       | 4 min        |
+| `test:rust-standins`      | 2 min                                  |                                |              |
+
+Connectors' time is one test. `one_sync_step_fits_the_manifest_budget_at_every_mailbox_size`
+(`modules/connectors/host/tests/sync_speed.rs`) ran 55 minutes alone. It belongs in the nightly
+tier, not the per-PR tier.
 
 Two shared target folders reached 22 GB and 11 GB across the sweep. A hosted runner cannot hold
 one target folder shared across modules, so each module job keeps its own.
