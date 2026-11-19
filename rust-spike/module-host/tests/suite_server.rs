@@ -523,6 +523,12 @@ fn installed_news_sports_weather_and_briefings_work_together() {
         println!("briefing prompt mentions {name}: {}", lower.contains(word));
     }
     println!("briefing prompt length: {}", prompt.len());
+    // The briefing must carry each module's own block. Sports may read "none today" on a day with no game.
+    assert!(prompt.contains("<external_source type=\"news\">\n- "), "no news headlines reached the prompt");
+    assert!(prompt.contains("<external_source type=\"sports\">"), "no sports block reached the prompt");
+    if weather_ok {
+        assert!(prompt.contains("<external_source type=\"weather\">"), "no weather block reached the prompt");
+    }
     for line in prompt.lines().filter(|l| { let l = l.to_lowercase(); l.contains("sport") || l.contains("follow") || l.contains("nfl") || l.contains("gap") }).take(12) {
         println!("prompt sports line: {}", line.chars().take(240).collect::<String>());
     }
