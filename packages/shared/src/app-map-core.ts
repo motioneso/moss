@@ -77,7 +77,10 @@ export const RUST_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
   ...DESKTOP_APP_SCREENS
 ];
 
-export const CORE_APP_FEATURES: readonly AppMapItem[] = [
+export const CORE_APP_FEATURES: readonly (AppMapItem & {
+  readonly id: string;
+  readonly description: string;
+})[] = [
   {
     moduleId: "core",
     id: "rust-module-chat",
