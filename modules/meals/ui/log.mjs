@@ -174,6 +174,14 @@ export function logScreen(ctx) {
       ctx.draw();
     },
     "save-edit": async () => {
+      // A background estimate can move the revision while the dialog is open.
+      try {
+        const fresh = await ctx.api.read("meals.log.list", { localDate: s.date });
+        const now = fresh.entries.find((e) => e.entryId === s.form.entry.entryId);
+        if (now) s.form.entry = { ...s.form.entry, estimateRevision: now.estimateRevision };
+      } catch {
+        // The save below reports any real failure.
+      }
       const checked = readEdit(s.form);
       if (checked.problem) {
         s.form.problem = checked.problem;

@@ -258,8 +258,10 @@ export function textScreen(ctx) {
   );
   const base = screen.input;
   screen.input = (name, v) => {
-    if (name === "t-text") screen.state.pick.text = v;
-    else base(name, v);
+    if (name === "t-text") {
+      screen.state.pick.text = v;
+      ctx.draw();
+    } else base(name, v);
   };
   return screen;
 }
