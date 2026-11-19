@@ -19,7 +19,9 @@ use moss_network::{
     web::{self, Network},
 };
 use moss_shell_contract::stub::StubShellData;
-use moss_shell_contract::{ChatMessage, ChatThread, SendMessage, ShellData, ShellView, TodayView};
+use moss_shell_contract::{
+    ChatError, ChatThread, DecideApproval, SendMessage, ShellData, ShellView, TodayView,
+};
 use safety_core::access::AccessContext;
 use tower_http::services::ServeDir;
 
@@ -36,6 +38,7 @@ mod module_install;
 mod modules;
 mod proactive_feedback;
 mod runner_data;
+mod chat_approvals;
 mod chat_tools;
 
 type Data = Arc<dyn ShellData>;
@@ -133,11 +136,23 @@ fn router(data: Arc<Accounts>, web: PathBuf) -> Router {
             "/api/chat/messages",
             post(
                 |State(d): State<Arc<Accounts>>, Extension(access): Extension<AccessContext>, Json(body): Json<SendMessage>| async move {
-                    // A chat turn can take minutes, so it waits off the request threads.
+                    // The turn runs in the background. The drawer polls the thread for its progress.
                     let data = d.for_actor(&access);
-                    match tokio::task::spawn_blocking(move || data.send_message(&body)).await {
-                        Ok(m) => Json::<ChatMessage>(m).into_response(),
-                        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+                    match data.send_message(&body) {
+                        Ok(thread) => (StatusCode::ACCEPTED, Json::<ChatThread>(thread)).into_response(),
+                        Err(error) => chat_error(error),
+                    }
+                },
+            ),
+        )
+        .route(
+            "/api/chat/approvals/{id}",
+            post(
+                |State(d): State<Arc<Accounts>>, Extension(access): Extension<AccessContext>, axum::extract::Path(id): axum::extract::Path<String>, Json(body): Json<DecideApproval>| async move {
+                    let actor = access.actor_user_id().to_string();
+                    match d.for_actor(&access).decide_approval(&actor, &id, body.decision) {
+                        Ok(thread) => Json::<ChatThread>(thread).into_response(),
+                        Err(error) => chat_error(error),
                     }
                 },
             ),
@@ -149,6 +164,14 @@ fn router(data: Arc<Accounts>, web: PathBuf) -> Router {
                 .fallback((move |uri: Uri| app_page(uri, index.clone())).into_service()),
         )
         .with_state(data)
+}
+
+fn chat_error(error: ChatError) -> Response {
+    match error {
+        ChatError::Busy | ChatError::Closed => StatusCode::CONFLICT,
+        ChatError::NotFound => StatusCode::NOT_FOUND,
+    }
+    .into_response()
 }
 
 async fn app_page(uri: Uri, index: PathBuf) -> Response {

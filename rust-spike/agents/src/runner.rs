@@ -56,9 +56,19 @@ pub struct AccountFolders {
     pub run: PathBuf,
 }
 
+/// Who raised the ask. `moss` is a module tool through the gateway, `agent` is the agent's own
+/// permission request.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ApprovalSource {
+    Moss,
+    Agent,
+}
+
 /// An approval card: the runner asks, the app shows it, the person answers.
 #[derive(Debug, Clone, Serialize)]
 pub struct ApprovalCard {
+    pub source: ApprovalSource,
     pub tool: String,
     pub title: String,
     pub input: Value,
@@ -306,6 +316,7 @@ impl Runner {
                 match ask {
                     Some(ask) => {
                         ask(ApprovalCard {
+                            source: ApprovalSource::Moss,
                             title: tool.clone(),
                             tool,
                             input,
@@ -448,6 +459,7 @@ fn approver(cwd: PathBuf, home: PathBuf, slot: Slot) -> Approver {
                 policy::Decision::Ask => match person {
                     Some(person) => {
                         person(ApprovalCard {
+                            source: ApprovalSource::Agent,
                             tool: ask.tool_name.unwrap_or_else(|| "unknown".into()),
                             title: ask.title,
                             input: ask.raw_input,
