@@ -334,6 +334,43 @@ describe("Cloudflare decision-model discovery (#3057)", () => {
   });
 });
 
+describe("OpenAI-compatible discovery address (#3559)", () => {
+  function listingAt(baseUrl: string | null) {
+    const urls: string[] = [];
+    const fetch = (async (url: string | URL | Request) => {
+      urls.push(String(url));
+      return new Response(JSON.stringify({ data: [{ id: "test-chat-model" }] }), { status: 200 });
+    }) as typeof globalThis.fetch;
+    return { urls, fetch, baseUrl };
+  }
+
+  it("asks a custom API root exactly once, without adding a second version segment", async () => {
+    const { urls, fetch, baseUrl } = listingAt("https://example.invalid/v1beta/openai");
+    await new ModelDiscoveryService().discoverModels("u1:p7", {
+      providerKind: "openai-compatible",
+      authMethod: "api_key",
+      acpAgentId: null,
+      baseUrl,
+      credential: { apiKey: "test-key-listing" },
+      fetch
+    });
+    expect(urls).toEqual(["https://example.invalid/v1beta/openai/models"]);
+  });
+
+  it("keeps a bare host on the standard /v1 surface", async () => {
+    const { urls, fetch, baseUrl } = listingAt("http://proxy.test");
+    await new ModelDiscoveryService().discoverModels("u1:p8", {
+      providerKind: "openai-compatible",
+      authMethod: "api_key",
+      acpAgentId: null,
+      baseUrl,
+      credential: { apiKey: "test-key-listing" },
+      fetch
+    });
+    expect(urls).toEqual(["http://proxy.test/v1/models"]);
+  });
+});
+
 describe("Anthropic API-key discovery address", () => {
   it("lists models from the row's address", async () => {
     const urls: string[] = [];

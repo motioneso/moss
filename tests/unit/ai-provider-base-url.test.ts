@@ -4,6 +4,7 @@ import {
   ANTHROPIC_DEFAULT_BASE_URL,
   OPENAI_DEFAULT_BASE_URL,
   PROVIDER_MODEL_ID_PATTERN,
+  openAiCompatibleApiRoot,
   providerBaseUrl
 } from "../../packages/ai/src/provider-base-url.js";
 
@@ -39,4 +40,22 @@ describe("PROVIDER_MODEL_ID_PATTERN", () => {
       expect(PROVIDER_MODEL_ID_PATTERN.test(id)).toBe(false);
     }
   );
+});
+
+describe("openAiCompatibleApiRoot (#3559)", () => {
+  it.each([
+    [null, `${OPENAI_DEFAULT_BASE_URL}/v1`],
+    [undefined, `${OPENAI_DEFAULT_BASE_URL}/v1`],
+    ["   ", `${OPENAI_DEFAULT_BASE_URL}/v1`],
+    ["http://proxy.test", "http://proxy.test/v1"],
+    ["http://proxy.test/", "http://proxy.test/v1"],
+    ["http://proxy.test/v1", "http://proxy.test/v1"],
+    ["http://proxy.test/v1//", "http://proxy.test/v1"],
+    ["http://proxy.test/gateway/v1", "http://proxy.test/gateway/v1"],
+    // A custom root keeps its own path untouched: no second /v1 is added.
+    ["https://example.invalid/v1beta/openai", "https://example.invalid/v1beta/openai"],
+    ["https://openrouter.ai/api/v1/", "https://openrouter.ai/api/v1"]
+  ] as const)("%j gives %s", (stored, expected) => {
+    expect(openAiCompatibleApiRoot(stored)).toBe(expected);
+  });
 });

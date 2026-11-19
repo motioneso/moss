@@ -170,6 +170,25 @@ describe("HttpApiAdapter — openai-compatible", () => {
 
     expect(urls).toEqual(["http://proxy.test/v1/chat/completions"]);
   });
+
+  it("keeps a custom API root that already names its own version path (#3559)", async () => {
+    const urls: string[] = [];
+    const fakeFetch = async (url: string | URL | Request) => {
+      urls.push(typeof url === "string" ? url : url instanceof URL ? url.href : url.url);
+      return new Response(
+        JSON.stringify({ choices: [{ message: { role: "assistant", content: "ok" } }] }),
+        { status: 200 }
+      );
+    };
+    const adapter = new HttpApiAdapter("openai-compatible", "sk-test-openai", {
+      fetch: fakeFetch as typeof fetch,
+      baseUrl: "https://example.invalid/v1beta/openai"
+    });
+
+    await adapter.generateChat({ model: openaiModel, messages: [{ role: "user", content: "yo" }] });
+
+    expect(urls).toEqual(["https://example.invalid/v1beta/openai/chat/completions"]);
+  });
 });
 
 describe("HttpApiAdapter — google", () => {

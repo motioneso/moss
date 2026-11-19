@@ -32,3 +32,32 @@ export function providerBaseUrlHasUserInfo(value: string): boolean {
     return false;
   }
 }
+
+/**
+ * The OpenAI-compatible API root: the address endpoint paths hang off. A bare host means the
+ * standard `/v1` surface, so a stored value of either `https://host` or `https://host/v1`
+ * yields exactly `https://host/v1`. Any other stored path is the caller's own API root and is
+ * kept as written — `https://host/v1beta/openai` and `https://openrouter.ai/api/v1` must not
+ * receive a second version segment (#3559).
+ */
+export function openAiCompatibleApiRoot(stored: string | null | undefined): string {
+  const trimmed = (stored ?? "").trim().replace(/\/+$/, "");
+  if (trimmed.length === 0) return `${OPENAI_DEFAULT_BASE_URL}/v1`;
+  return addressHasPath(trimmed) ? trimmed : `${trimmed}/v1`;
+}
+
+/**
+ * Whether the address names anything after its host. Tolerant on purpose: a stored value that
+ * is not a parseable URL keeps whatever path text it has, so an odd inherited row behaves the
+ * same before and after this rule.
+ */
+function addressHasPath(value: string): boolean {
+  try {
+    const { pathname } = new URL(value);
+    return pathname !== "" && pathname !== "/";
+  } catch {
+    const withoutScheme = value.replace(/^[A-Za-z][A-Za-z0-9+.-]*:\/\//, "");
+    const slash = withoutScheme.indexOf("/");
+    return slash !== -1 && slash < withoutScheme.length - 1;
+  }
+}
