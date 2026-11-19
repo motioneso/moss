@@ -1,4 +1,4 @@
-/* global document, ResizeObserver, window, navigator, CSS */
+/* global document, ResizeObserver, window, CSS */
 import { moduleClient } from "./guest-bridge.mjs";
 import { briefingsApi } from "./api.mjs";
 import { sectionHtml } from "./today-view.mjs";
