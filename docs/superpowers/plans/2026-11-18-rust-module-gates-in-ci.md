@@ -118,7 +118,9 @@ Trigger paths: `rust-spike/module-host/**`, `module-sdk/**`, `access-context/**`
   - one shared Cargo home (`CARGO_HOME: ${{ github.workspace }}/.cargo-home`), keyed on
     `hashFiles('modules/**/Cargo.lock', 'rust-spike/**/Cargo.lock')`;
   - one shared host seed, built nightly from `rust-spike/module-host`. All hosts pin the same
-    wasmtime, so every module job restores it as its starting target folder;
+    wasmtime, so every module job restores it as its starting target folder. Key it on
+    `hashFiles('rust-spike/module-host/Cargo.lock')`. Each host has its own lockfile, so the reuse
+    is unproven; if step 2 shows the seed saves under a few minutes, drop it;
   - no per-module target cache. Step 2 measures the miss cost on Finance and Tasks before any
     module earns one.
 - **Shared Wasm build.** The nightly warm job also builds the shared screen assets
@@ -168,7 +170,8 @@ Connectors' time is one test. `one_sync_step_fits_the_manifest_budget_at_every_m
 tier, not the per-PR tier, so Connectors' gate needs a switch to skip it on PRs.
 
 Two shared target folders reached 22 GB and 11 GB across the sweep. A hosted runner cannot hold
-one target folder shared across modules, so each module job keeps its own.
+one target folder shared across modules, so each module job builds in its own fresh folder,
+seeded from the shared host seed.
 
 Most of each gate is test run time, not compiling. Finance's installed suite alone ran 494 s with
 `--test-threads=1`, and its guard-removal controls about 4 minutes. A cache cannot shrink that.
