@@ -1,0 +1,259 @@
+/* Reuse the merged review shell (fonts, sidebar, top bar, chat composer) and shipped primitives. */
+@import url("../meetings-any-recording/mockups.css");
+
+/* Artifact layout only. Colours, type and controls come from shipped Park Press CSS. */
+
+.sc-frame .mock-shell {
+  height: 100dvh;
+}
+.sc-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sc-title__name {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: var(--text-lg);
+}
+.sc-title__sub {
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+.sc-main {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-6) var(--space-7);
+  overflow: hidden;
+}
+.sc-section + .sc-section {
+  margin-top: var(--space-6);
+}
+.sc-time {
+  flex: 0 0 52px;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  color: var(--accent-fg);
+}
+
+/* Scratchpad panel: 340 x 420, bottom right, above the page and the chat drawer's lower corner. */
+.sc-pad {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 90;
+  width: 340px;
+  height: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4) var(--space-3);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-drawer);
+}
+.sc-pad__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.sc-pad__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: var(--text-md);
+}
+.sc-pad__status {
+  margin-right: auto;
+}
+.sc-pad__text {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  resize: none;
+  padding: var(--space-3);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+.sc-pad__text--lines {
+  display: flex;
+  flex-direction: column;
+  white-space: pre;
+  overflow: hidden;
+}
+.sc-pad__tools {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.sc-pad__conflict {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+/* With chat open the pad sits beside the drawer (18px inset + 404px drawer + 12px gap). */
+.sc-pad--beside {
+  right: 434px;
+  bottom: 18px;
+}
+
+/* Settings pane. */
+.sc-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 1120px;
+}
+.sc-back {
+  align-self: flex-start;
+}
+.sc-row-title {
+  font-weight: var(--weight-semibold);
+}
+.sc-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.sc-kbd {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Commitments section. */
+.sc-commit {
+  align-items: center;
+}
+.sc-commit .jds-task__main {
+  flex: 1;
+  min-width: 0;
+}
+.sc-commit .jds-task__meta {
+  margin-top: var(--space-1);
+  column-gap: var(--space-3);
+}
+.sc-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+.sc-commit--row {
+  cursor: pointer;
+}
+.sc-commit--selected {
+  background: var(--hover-tint);
+}
+.sc-chev {
+  display: inline-flex;
+  color: var(--text-muted);
+  transform: rotate(-90deg);
+}
+.sc-peek {
+  gap: var(--space-4);
+}
+.sc-peek__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sc-peek__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: var(--text-xl);
+}
+.sc-quote {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-2);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+.sc-actions--peek {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+/* Phone frame, 390 wide. Chat and the pad are full-screen sheets, one at a time. */
+.sc-phone .sc-phone-shell {
+  min-height: 100dvh;
+}
+.sc-phone .mock-topbar {
+  padding: var(--space-3) var(--space-4);
+}
+.sc-phone .sc-main {
+  padding: var(--space-5) var(--space-4);
+}
+.sc-phone .sc-commit {
+  flex-wrap: wrap;
+}
+.sc-phone .sc-commit .sc-actions {
+  flex-basis: 100%;
+  padding-left: calc(15px + var(--space-3));
+}
+.sc-phone .sc-pad--sheet,
+.sc-phone .chatd {
+  inset: 0;
+  width: auto;
+  height: auto;
+  max-width: none;
+  border: 0;
+  border-radius: 0;
+  right: 0;
+}
+.sc-phone .sc-pad--sheet {
+  padding: var(--space-4);
+}
+
+/* Review boards: frames side by side with a caption over each. */
+.sc-board {
+  padding: var(--space-6) var(--space-7) var(--space-7);
+  background: var(--surface);
+  color: var(--text);
+}
+.sc-board h1 {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+}
+.sc-board__lede {
+  margin: 0 0 var(--space-6);
+  color: var(--text-muted);
+  max-width: 90ch;
+}
+.sc-board__row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-6);
+  margin-bottom: var(--space-6);
+}
+.sc-board figure {
+  margin: 0;
+}
+.sc-board figcaption {
+  margin-bottom: var(--space-2);
+  font-weight: var(--weight-bold);
+}
+.sc-board figcaption span {
+  display: block;
+  font-weight: var(--weight-regular);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.sc-board iframe {
+  display: block;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+}

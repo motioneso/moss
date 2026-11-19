@@ -9,7 +9,8 @@ function setup({
   connect = true,
   theme = () => ({ theme: "sage" }),
   opened = [],
-  save
+  save,
+  minimumHeight = 160
 } = {}) {
   let listener;
   const replies = [];
@@ -31,6 +32,7 @@ function setup({
       return request(...args);
     },
     theme,
+    minimumHeight,
     ...(save ? { save } : {}),
     navigate: () => null,
     open: (url) => {
@@ -64,6 +66,16 @@ function setup({
     });
   return { send, replies, calls, frame, dispose, bootstrap };
 }
+test("embedded sections can collapse to zero height without changing page defaults", async () => {
+  const widget = setup({ minimumHeight: 0 });
+  await widget.send({ type: "resize", height: 0 });
+  assert.equal(widget.frame.style.height, "0px");
+  await widget.send({ type: "resize", height: 121.2 });
+  assert.equal(widget.frame.style.height, "122px");
+  const page = setup();
+  await page.send({ type: "resize", height: 0 });
+  assert.equal(page.frame.style.height, "160px");
+});
 test("an async theme callback replies with its value, not a promise", async () => {
   const s = setup({ theme: async () => ({ theme: "sage", displayName: "Ben" }) });
   s.send({ type: "theme" });
