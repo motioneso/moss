@@ -125,7 +125,7 @@ mod socket {
     }
 
     fn ask(id: u64) -> Value {
-        json!({"event":"approval","id":id,"source":"agent",
+        json!({"event":"approval","id":id,
                "card":{"source":"agent","tool":"Bash","title":"agent supplied title","input":{"command":"ls /tmp"}}})
     }
 
@@ -369,7 +369,7 @@ mod socket {
         let listener = rig.listener.try_clone().unwrap();
         let task = std::thread::spawn(move || {
             let mut runner = Runner::accept(&listener);
-            runner.send(json!({"event":"approval","id":4,"source":"moss","card":{"tool":"scratchpad_append","input":{}}}));
+            runner.send(json!({"event":"approval","id":4,"card":{"source":"moss","tool":"scratchpad_append","input":{}}}));
             assert_eq!(
                 runner.next().unwrap(),
                 json!({"op":"answer","id":4,"allow":false})
