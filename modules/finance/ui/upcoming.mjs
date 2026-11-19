@@ -1,5 +1,15 @@
 // The Upcoming screen: the month's bills, suggestions and saved bill plans.
-import { esc, button, badge, sectionHead, emptyState, loadingLine, errorState, stepper, note } from "./html.mjs";
+import {
+  esc,
+  button,
+  badge,
+  sectionHead,
+  emptyState,
+  loadingLine,
+  errorState,
+  stepper,
+  note
+} from "./html.mjs";
 import { formatCents, monthLabel, shortDayLabel } from "./format.mjs";
 import {
   accountName,
@@ -40,13 +50,24 @@ function row(o, view, busy) {
 }
 
 function planRow(p, view, busy) {
-  const ends = p.endDate ? (p.endDate < view.today ? `stopped after ${shortDayLabel(p.endDate)}` : `stops ${shortDayLabel(p.endDate)}`) : "";
-  const bits = [accountName(view, p.accountId), `${cadenceLabel(p.cadence)} from ${shortDayLabel(p.anchorDate)}`];
+  const ends = p.endDate
+    ? p.endDate < view.today
+      ? `stopped after ${shortDayLabel(p.endDate)}`
+      : `stops ${shortDayLabel(p.endDate)}`
+    : "";
+  const bits = [
+    accountName(view, p.accountId),
+    `${cadenceLabel(p.cadence)} from ${shortDayLabel(p.anchorDate)}`
+  ];
   if (ends) bits.push(ends);
   const live = !p.endDate || p.endDate >= view.today;
-  const stop = live && p.cadence !== "once"
-    ? button(p.endDate ? "Stop sooner" : "Stop future bills", { act: "bill-stop", extra: ` data-plan="${esc(p.id)}"${busy ? " disabled" : ""}` })
-    : "";
+  const stop =
+    live && p.cadence !== "once"
+      ? button(p.endDate ? "Stop sooner" : "Stop future bills", {
+          act: "bill-stop",
+          extra: ` data-plan="${esc(p.id)}"${busy ? " disabled" : ""}`
+        })
+      : "";
   return `<li class="fnm-row"><div class="fnm-txmain"><strong>${esc(p.name)}</strong><span class="jds-hint">${esc(bits.join(" · "))}</span></div><span class="fnm-money">${formatCents(p.amountCents, view.isoCurrency)}</span>${stop}</li>`;
 }
 
@@ -81,9 +102,10 @@ export function upcomingView(s) {
         )
         .join("")
     : `<p class="jds-hint">Nothing due in ${esc(monthLabel(s.month))}.</p>`;
-  const bills = v.plans.length === 0 && v.occurrences.length === 0
-    ? emptyState("No bills yet", "Add a bill and Moss shows when it is due.", addBtn)
-    : `${sectionHead("Bills due", `${money(totals.due)} due · ${money(totals.paid)} paid · ${money(totals.toGo)} to go`)}<div class="fnm-weeks">${list}</div>`;
+  const bills =
+    v.plans.length === 0 && v.occurrences.length === 0
+      ? emptyState("No bills yet", "Add a bill and Moss shows when it is due.", addBtn)
+      : `${sectionHead("Bills due", `${money(totals.due)} due · ${money(totals.paid)} paid · ${money(totals.toGo)} to go`)}<div class="fnm-weeks">${list}</div>`;
   const sug = s.suggestions?.length
     ? `${sectionHead("Suggested bills")}<ul class="fnm-feed">${s.suggestions.map((x) => suggestionRow(x, v, busy)).join("")}</ul>`
     : "";

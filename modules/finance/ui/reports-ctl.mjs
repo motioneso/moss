@@ -44,7 +44,13 @@ export function createReports({ api, render, goTab }) {
     d.data = null;
     d.error = false;
     render();
-    const q = new URLSearchParams({ month: d.month, currency: s.spend?.currency ?? s.currency, group: d.group, offset: String(d.offset), months: String(s.months) });
+    const q = new URLSearchParams({
+      month: d.month,
+      currency: s.spend?.currency ?? s.currency,
+      group: d.group,
+      offset: String(d.offset),
+      months: String(s.months)
+    });
     if (d.key) q.set("key", d.key);
     try {
       const data = await api.call("GET", `/finance/reports/transactions?${q}`);
@@ -57,24 +63,59 @@ export function createReports({ api, render, goTab }) {
 
   function click(act, el) {
     switch (act) {
-      case "rpt-reload": return void load(), true;
-      case "rpt-toggle": s.open[el.dataset.id] = !s.open[el.dataset.id]; render(); return true;
-      case "rpt-more": s.open[el.dataset.id] = !s.open[el.dataset.id]; render(); return true;
-      case "rpt-hist-newer": s.historyPage -= 1; render(); return true;
-      case "rpt-hist-older": s.historyPage += 1; render(); return true;
-      case "rpt-add-account": goTab("accounts", "add=account"); return true;
+      case "rpt-reload":
+        return (void load(), true);
+      case "rpt-toggle":
+        s.open[el.dataset.id] = !s.open[el.dataset.id];
+        render();
+        return true;
+      case "rpt-more":
+        s.open[el.dataset.id] = !s.open[el.dataset.id];
+        render();
+        return true;
+      case "rpt-hist-newer":
+        s.historyPage -= 1;
+        render();
+        return true;
+      case "rpt-hist-older":
+        s.historyPage += 1;
+        render();
+        return true;
+      case "rpt-add-account":
+        goTab("accounts", "add=account");
+        return true;
       case "rpt-detail": {
         const { group, key, month } = el.dataset;
         const title = group === "income" ? "Income" : group === "outflow" ? "Outflow" : key;
-        s.detail = { group, key, month, offset: 0, data: null, error: false, title: `Report transactions · ${title}` };
+        s.detail = {
+          group,
+          key,
+          month,
+          offset: 0,
+          data: null,
+          error: false,
+          title: `Report transactions · ${title}`
+        };
         void loadDetail();
         return true;
       }
-      case "rpt-detail-reload": void loadDetail(); return true;
-      case "rpt-page-next": s.detail.offset += 50; void loadDetail(); return true;
-      case "rpt-page-prev": s.detail.offset = Math.max(0, s.detail.offset - 50); void loadDetail(); return true;
-      case "dialog-close": s.detail = null; render(); return true;
-      default: return false;
+      case "rpt-detail-reload":
+        void loadDetail();
+        return true;
+      case "rpt-page-next":
+        s.detail.offset += 50;
+        void loadDetail();
+        return true;
+      case "rpt-page-prev":
+        s.detail.offset = Math.max(0, s.detail.offset - 50);
+        void loadDetail();
+        return true;
+      case "dialog-close":
+        s.detail = null;
+        render();
+        return true;
+      default:
+        return false;
     }
   }
 
@@ -93,5 +134,12 @@ export function createReports({ api, render, goTab }) {
     return true;
   }
 
-  return { state: s, load, click, change, hasDialog: () => Boolean(s.detail), closeDialog: () => ((s.detail = null), render()) };
+  return {
+    state: s,
+    load,
+    click,
+    change,
+    hasDialog: () => Boolean(s.detail),
+    closeDialog: () => ((s.detail = null), render())
+  };
 }

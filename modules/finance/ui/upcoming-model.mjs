@@ -40,8 +40,7 @@ export const weekdayDayLabel = (date) =>
 export function weeksOf(occurrences) {
   const groups = new Map();
   const sorted = [...occurrences].sort(
-    (a, b) =>
-      occurrenceDate(a).localeCompare(occurrenceDate(b)) || a.name.localeCompare(b.name)
+    (a, b) => occurrenceDate(a).localeCompare(occurrenceDate(b)) || a.name.localeCompare(b.name)
   );
   for (const o of sorted) {
     const d = day(occurrenceDate(o));

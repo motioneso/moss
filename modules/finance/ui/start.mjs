@@ -5,7 +5,8 @@ const rowHtml = (title, body, aside) =>
   `<li class="fnm-row"><div class="fnm-txmain"><strong>${esc(title)}</strong><span class="jds-hint">${esc(body)}</span></div>${aside}</li>`;
 
 export function startView(s) {
-  if (s.error) return errorState("Start didn't load.", button("Try again", { act: "start-reload" }));
+  if (s.error)
+    return errorState("Start didn't load.", button("Try again", { act: "start-reload" }));
   if (!s.data) return loadingLine("Loading");
   const d = s.data;
   const bank = d.hasBank

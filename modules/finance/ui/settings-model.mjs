@@ -4,7 +4,10 @@ const TIERS = {
   trusted_auto: "Does it alone",
   deny: "Never does it"
 };
-export const tierLabel = (tier) => (tier === null || tier === undefined ? "Unavailable" : (TIERS[tier] ?? String(tier).replace(/_/g, " ")));
+export const tierLabel = (tier) =>
+  tier === null || tier === undefined
+    ? "Unavailable"
+    : (TIERS[tier] ?? String(tier).replace(/_/g, " "));
 
 /** The activity window is the last seven days, as UTC timestamps. */
 export function weekWindow(now = new Date()) {

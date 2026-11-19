@@ -6,7 +6,12 @@ const add = (into, from) => {
 /** Sums the person's months with every shared owner's months, month by month. */
 export function mergeSpending(window, own, shared) {
   return window.map((month) => {
-    const out = { month, byCategory: {}, byPayee: {}, cashFlow: { incomeCents: 0, outflowCents: 0, netCents: 0 } };
+    const out = {
+      month,
+      byCategory: {},
+      byPayee: {},
+      cashFlow: { incomeCents: 0, outflowCents: 0, netCents: 0 }
+    };
     for (const list of [own, ...shared.map((s) => s.months)]) {
       const m = (list ?? []).find((x) => x.month === month);
       if (!m) continue;
@@ -40,7 +45,10 @@ export function trendPath(points, width, height, pad = 6) {
   const lo = Math.min(...values);
   const hi = Math.max(...values);
   const span = hi - lo || 1;
-  const x = (i) => (points.length === 1 ? width / 2 : pad + (i * (width - 2 * pad)) / (points.length - 1));
+  const x = (i) =>
+    points.length === 1 ? width / 2 : pad + (i * (width - 2 * pad)) / (points.length - 1);
   const y = (v) => height - pad - ((v - lo) * (height - 2 * pad)) / span;
-  return points.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.totalCents).toFixed(1)}`).join(" ");
+  return points
+    .map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.totalCents).toFixed(1)}`)
+    .join(" ");
 }
