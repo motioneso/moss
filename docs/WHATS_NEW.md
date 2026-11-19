@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-11-19
+
+#### Added
+
+- **A scratchpad beside chat.** Keep notes beside chat or in a full phone screen, with automatic saving, a personal shortcut, and a choice to reload when another tab changes your note. [PR #4379](https://github.com/motioneso/moss/pull/4379)
+
 ### 2026-11-18
 
 #### Added
