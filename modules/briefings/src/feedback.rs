@@ -134,8 +134,8 @@ pub fn verify<H: Host + ?Sized>(host: &H, request: &Verify) -> Value {
 }
 
 /// The refs the caller has an active rating of this kind on, for the briefing surface. The
-/// host fills in the caller. A refused or failed read hides nothing, so a rating that cannot
-/// be read never takes the reader down.
+/// host fills in the caller. A refused or failed read returns no refs, so the reader still
+/// loads but previously dismissed things show again until the read works.
 pub(crate) fn active_refs<H: Host + ?Sized>(host: &H, target_kind: &str, rating: &str) -> HashSet<String> {
     host.call("feedback", "active", target_kind, json!({"surface":"briefing","kind":rating}))
         .ok()
