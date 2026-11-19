@@ -39,11 +39,13 @@ function safety(meal) {
 }
 
 function mealTools(meal, busy) {
-  if (meal.cookedAt !== null || meal.kind !== "recipe") return "";
+  if (meal.cookedAt !== null) return "";
   const d = `data-meal="${esc(meal.mealId)}"`;
   const tool = (label, act) =>
     btn(label, act, { variant: "quiet", sm: true, disabled: busy, data: d });
-  return `<div class="mls-meal__tools">${tool(meal.locked ? "Unlock" : "Lock", meal.locked ? "unlock" : "lock")}${tool("Quick swap", "quick-swap")}${
+  if (meal.kind === "text") return `<div class="mls-meal__tools">${tool("Text", "text")}</div>`;
+  if (meal.kind !== "recipe") return "";
+  return `<div class="mls-meal__tools">${tool(meal.locked ? "Unlock" : "Lock", meal.locked ? "unlock" : "lock")}${tool("Swap", "swap")}${tool("Quick swap", "quick-swap")}${tool("Move", "move")}${tool("Eaters", "eaters")}${tool("Text", "text")}${
     isReplaceable(meal) ? tool("Regenerate", "regen-meal") : ""
   }</div>`;
 }

@@ -69,11 +69,14 @@ fn the_package_builds_and_the_manifest_validates() {
 fn the_package_serves_the_meals_screen() {
     let manifest = moss_meals_host::package::manifest().unwrap();
     assert_eq!(manifest.screens["/meals"], "ui/index.html");
+    assert_eq!(manifest.screens["/settings/meals"], "ui/settings.html");
     let files = moss_meals_host::package::files(&root(), &component()).unwrap();
     for name in [
         "index.html", "app.mjs", "api.mjs", "format.mjs", "kit.mjs", "plan.mjs", "plan-day.mjs",
         "recipe.mjs", "list.mjs", "list-dialogs.mjs", "pantry.mjs", "pantry-dialogs.mjs",
-        "guest-bridge.mjs", "meals.css",
+        "household.mjs", "log.mjs", "log-dialogs.mjs", "log-format.mjs", "plan-new.mjs",
+        "swap.mjs", "arrange.mjs", "settings.html", "settings.mjs", "guest-bridge.mjs",
+        "meals.css",
     ] {
         assert!(files.contains_key(&format!("ui/{name}")), "ui/{name} missing");
     }

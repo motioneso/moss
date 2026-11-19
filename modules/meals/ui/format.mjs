@@ -152,3 +152,44 @@ export const failureText = (reason) => (reason == null ? null : (FAILURE_TEXT[re
 
 export const plural = (count, one, many = `${one}s`) =>
   count === 1 ? `1 ${one}` : `${count} ${many}`;
+
+const SLOT_ORDER = ["breakfast", "lunch", "dinner"];
+const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+export const joinTitled = (words) => words.map(titleCase).join(", ");
+
+export function dailyTarget(member) {
+  const { calorieTarget, macroTargets } = member;
+  const parts = [
+    calorieTarget !== null ? `${calorieTarget.toLocaleString("en-US")} kcal` : null,
+    macroTargets.proteinG !== null ? `${macroTargets.proteinG} g protein` : null,
+    macroTargets.carbG !== null ? `${macroTargets.carbG} g carbs` : null,
+    macroTargets.fatG !== null ? `${macroTargets.fatG} g fat` : null
+  ].filter((part) => part !== null);
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+/** Every slot any member eats, breakfast, lunch and dinner first. */
+export function slotsEaten(members) {
+  const all = new Set(members.flatMap((member) => member.mealPattern));
+  const known = SLOT_ORDER.filter((slot) => all.has(slot));
+  const extra = [...all].filter((slot) => !SLOT_ORDER.includes(slot)).sort();
+  return [...known, ...extra];
+}
+
+export function sharingRule(rule) {
+  const days = rule?.soloWeekdays ?? [];
+  const key = days.join(",");
+  if (key === "") return "Shared every day";
+  if (key === "1,2,3,4,5,6,7") return "Solo every day";
+  if (key === "1,2,3,4,5") return "Solo on weekdays, shared at weekends";
+  if (key === "6,7") return "Solo at weekends, shared on weekdays";
+  return `Solo on ${days.map((day) => WEEKDAYS[day - 1]).join(", ")}`;
+}
+
+/** A comma-separated list typed into one box. */
+export const words = (text) =>
+  text
+    .split(",")
+    .map((word) => word.trim())
+    .filter((word) => word !== "");
