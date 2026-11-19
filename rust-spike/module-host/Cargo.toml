@@ -38,10 +38,13 @@ moss-platform-adapters = { path = "bridges/adapters" }
 async-trait = "0.1"
 
 [features]
+# Downstream package parity tests only; never enable in application dependencies.
+test-tool-dispatch = []
 # Proof only. Adds controls that weaken the browser's isolation so tests can see each guard fail.
 browser-proof = []
 
 [dev-dependencies]
+axum = "0.8"
 moss-email-host = { path = "../../modules/email/host" }
 tempfile = "3"
 moss-people = { path = "../../modules/people/src" }

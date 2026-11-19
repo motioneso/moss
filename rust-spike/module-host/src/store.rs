@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
-    sync::{Arc, RwLock},
+    sync::{Arc, RwLock, Weak},
 };
 
 #[derive(Clone, Default, Serialize, Deserialize)]
@@ -80,6 +80,7 @@ pub struct Installer {
     pub(crate) lifecycle: Arc<dyn Lifecycle>,
     pub(crate) host: Host,
     pub(crate) ports: Arc<dyn Ports>,
+    pub(crate) chat_services: RwLock<Weak<crate::services::ServicePorts>>,
     pub(crate) moss: Version,
     pub(crate) inventory: LegacyInventory,
     pub(crate) fence: RwLock<()>,
@@ -140,6 +141,7 @@ impl Installer {
             lifecycle,
             host,
             ports,
+            chat_services: RwLock::new(Weak::new()),
             moss,
             inventory,
             fence: RwLock::new(()),
@@ -604,70 +606,6 @@ impl Installer {
         ensure!(trust::valid_digest(digest), "Invalid installed digest");
         let bytes = self.root.subdir("blobs/sha256")?.read(digest)?;
         Package::read(&bytes, digest, &self.moss)
-    }
-    pub fn call(
-        &self,
-        id: &str,
-        access: AccessContext,
-        kind: &str,
-        payload: &str,
-    ) -> Result<String> {
-        let _fence = self
-            .fence
-            .read()
-            .map_err(|_| anyhow::anyhow!("Module changes are busy"))?;
-        let _disk_lock = self.disk_lock(false)?;
-        self.call_unfenced(id, access, kind, payload)
-    }
-    pub(crate) fn call_unfenced(
-        &self,
-        id: &str,
-        access: AccessContext,
-        kind: &str,
-        payload: &str,
-    ) -> Result<String> {
-        ensure!(
-            !self.root.path().join("operation.json").exists(),
-            "Module recovery must finish before calls resume"
-        );
-        let state = self.catalog.load()?;
-        let installed = state
-            .installed
-            .get(id)
-            .context("This module is not installed")?;
-        ensure!(installed.disabled.is_none(), "This module is disabled");
-        ensure!(
-            self.lifecycle.account_enabled(
-                id,
-                &access,
-                installed.manifest.accounts.default_enabled
-            )?,
-            "This module is switched off for this account"
-        );
-        let package = self.read_package(&installed.digest)?;
-        let dir = self
-            .root
-            .subdir("installed")?
-            .subdir(id)?
-            .subdir(&installed.manifest.version.to_string())?;
-        for (path, expected) in &package.files {
-            ensure!(
-                dir.read(path)? == *expected,
-                "The installed module changed on disk and is disabled"
-            );
-        }
-        let wasm = package
-            .files
-            .get("code/module.wasm")
-            .context("This module has no code handler")?;
-        self.host.call(
-            wasm,
-            Arc::new(installed.manifest.clone()),
-            access,
-            self.ports.clone(),
-            kind,
-            payload,
-        )
     }
     pub fn pin(&self, access: &AccessContext, id: &str, version: Option<Version>) -> Result<()> {
         self.admin(access)?;
