@@ -4,7 +4,7 @@
   "name": "Email",
   "description": "Keeps the cached mail messages that Connectors fills in, and the Email settings for briefings, task capture and drafted replies. It never contacts a mail service.",
   "publisher": "Moss",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -126,7 +126,9 @@
     "triageMessage": "1.0.0",
     "emailTriageContext": "1.0.0",
     "listSavedMessages": "1.0.0",
-    "replyContext": "1.0.0"
+    "replyContext": "1.0.0",
+    "getBriefingSource": "1.0.0",
+    "setBriefingSource": "1.0.0"
   },
   "icons": ["icons/email.svg"],
   "accounts": {
@@ -221,7 +223,7 @@
       "label": "Email",
       "path": "/settings/email",
       "scope": "user",
-      "description": "Briefings, task capture and drafted replies for your mail."
+      "description": "Briefings, task capture and drafted replies for your mail. The Include in briefings switch is also readable and changeable by Briefings through Email's own public calls, and always acts on your own account."
     }
   ]
 }

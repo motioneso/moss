@@ -421,6 +421,10 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
     assert_eq!((status, &sources), (200, &json!({"briefings":true,"planning":true})));
     let (status, bad) = call(Method::PATCH, "/source-behaviors", Some(&cookie), Some(json!({"writeback":true})));
     assert_eq!(status, 400, "{bad}");
+    let (status, saved) = call(Method::PATCH, "/source-behaviors", Some(&cookie), Some(json!({"briefings":false})));
+    assert_eq!((status, &saved), (200, &json!({"briefings":false,"planning":true})), "{saved}");
+    let (status, sources) = call(Method::GET, "/source-behaviors", Some(&cookie), None);
+    assert_eq!((status, &sources), (200, &json!({"briefings":false,"planning":true})));
     // Day plans check task references through the installed Tasks package, under the caller's account.
     let (own_task, other_task) = runtime.block_on(async {
         let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
@@ -445,8 +449,17 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
             db.execute("INSERT INTO app.tasks(id,owner_user_id,list_id,title,status) VALUES($1,$2,$3,'Gate task','todo')", &[&task, &user, &list]).await.unwrap();
             ids.push(task);
         }
+        // The owner's switch write above must not have reached the second account.
+        let other_switches = db
+            .query_opt("SELECT value_json FROM app.preferences WHERE owner_user_id=$1 AND key='sourceBehaviors'", &[&other])
+            .await
+            .unwrap();
+        assert!(other_switches.is_none(), "an owner switch write reached another account");
         (ids[0], ids[1])
     });
+    // Put the owner's switch back so the browser check starts from the defaults.
+    let (status, restored) = call(Method::PATCH, "/source-behaviors", Some(&cookie), Some(json!({"briefings":true})));
+    assert_eq!((status, &restored), (200, &json!({"briefings":true,"planning":true})), "{restored}");
     // The first call into Tasks compiles its package, which a debug build does slowly. Warm it
     // so the day plan checks below run inside the module time limit.
     let warm = client

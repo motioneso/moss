@@ -262,6 +262,7 @@ fn source_switch_keeps_other_entries_and_draft_policy_round_trips() {
     let stored: Value = f.rt.block_on(f.root.query_one(
         "SELECT value_json FROM app.preferences WHERE owner_user_id=$1 AND key='sourceBehaviors'", &[&f.a])).unwrap().get(0);
     assert_eq!(stored, json!({"calendar.briefings":false,"email.briefings":false}));
+    assert_eq!(f.call(f.b, "get", "email.source-behaviors", json!({})), json!({}), "a write changed another account");
     assert_eq!(f.call(f.a, "get", "email.draft-policy", json!({})), json!({}));
     f.call(f.a, "set", "email.draft-policy", json!({"tier":"trusted_auto"}));
     assert_eq!(f.call(f.a, "get", "email.draft-policy", json!({})), json!({"tier":"trusted_auto"}));

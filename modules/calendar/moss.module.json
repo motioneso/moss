@@ -4,7 +4,7 @@
   "name": "Calendar",
   "description": "Calendar cached-event screens and draft tools; signed-in HTTPS Calendar pages; provider execution and full shell composition remain incomplete.",
   "publisher": "Moss",
-  "version": "0.30.0",
+  "version": "0.31.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -194,6 +194,7 @@
     "reserveAutoPlan": "1.0.0",
     "findUnfinishedBatch": "1.0.0",
     "getSourceSwitches": "1.0.0",
+    "setSourceSwitches": "1.0.0",
     "upsertCachedEvent": "1.0.0",
     "pruneCachedEvents": "1.0.0",
     "evictCachedEvent": "1.0.0",
@@ -407,7 +408,7 @@
       "id": "calendar.automation",
       "label": "Calendar",
       "path": "/settings/calendar",
-      "description": "Saved account lookahead, prep-task and time-block choices. Time-block mode also saves the matching writeback permission. Auto grants standing permission also honored by the existing app; Rust action execution and source-behavior controls remain open.",
+      "description": "Saved account lookahead, prep-task and time-block choices. Time-block mode also saves the matching writeback permission. Auto grants standing permission also honored by the existing app; Rust action execution remains open. The Include in briefings and Use for planning switches can also be changed by Briefings through Calendar's own public call, and always act on your own account.",
       "scope": "user"
     }
   ],

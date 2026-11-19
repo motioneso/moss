@@ -1,5 +1,9 @@
 # Calendar package
 
+## 0.31.0
+
+- Add a public `setSourceSwitches` call so Briefings can change the Include in briefings and Use for planning switches. It shares its write with the settings screen, accepts only those two boolean switches, and touches only the caller's own preference.
+
 ## 0.29.0
 
 - Add a read-only `getSourceSwitches` call so Briefings can honor the Include in briefings and Use for planning switches. It returns both values, true unless turned off, and writes nothing.
