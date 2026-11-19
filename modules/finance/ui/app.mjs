@@ -8,6 +8,11 @@ import { saveFailure } from "./budget-model.mjs";
 import { accountsView } from "./accounts.mjs";
 import { transactionsView } from "./transactions.mjs";
 import { emptyFilters, requestParams } from "./transactions-model.mjs";
+import { startView } from "./start.mjs";
+import { reportsView } from "./reports.mjs";
+import { createReports } from "./reports-ctl.mjs";
+import { upcomingView } from "./upcoming.mjs";
+import { createUpcoming } from "./upcoming-ctl.mjs";
 import { accountDialog, entryDialog, accountRequest, entryRequest } from "./dialogs.mjs";
 
 const client = moduleClient();
@@ -18,12 +23,17 @@ const FLEX_POOL = "moss:flex-pool";
 const TABS = [
   ["budget", "Budget"],
   ["transactions", "Transactions"],
-  ["accounts", "Accounts"]
+  ["accounts", "Accounts"],
+  ["reports", "Reports"],
+  ["upcoming", "Upcoming"]
 ];
+// Start is not a tab. It opens for a person with no accounts and is reached by its own address.
+const PAGES = [...TABS.map(([id]) => id), "start"];
 const fromHash = () => {
   const [tab, query = ""] = window.location.hash.slice(1).split("?");
   return {
-    tab: TABS.some(([id]) => id === tab) ? tab : "budget",
+    tab: PAGES.includes(tab) ? tab : "budget",
+    explicit: PAGES.includes(tab),
     params: new URLSearchParams(query)
   };
 };
@@ -61,7 +71,11 @@ const state = {
   context: null,
   dialog: null
 };
-const seq = { budget: 0, tx: 0, acct: 0 };
+const seq = { budget: 0, tx: 0, acct: 0, start: 0 };
+state.start = { data: null, error: false };
+const reports = createReports({ api, render: () => render(), goTab: (t, p) => goTab(t, p) });
+const upcoming = createUpcoming({ api, root, render: () => render() });
+const screens = { reports, upcoming };
 
 function saveFocus() {
   const el = document.activeElement;
@@ -88,7 +102,13 @@ function render() {
       ? budgetView(state.budget)
       : state.tab === "transactions"
         ? transactionsView(state.tx)
-        : accountsView(state.acct);
+        : state.tab === "accounts"
+          ? accountsView(state.acct)
+          : state.tab === "reports"
+            ? reportsView(reports.state)
+            : state.tab === "upcoming"
+              ? upcomingView(upcoming.state)
+              : startView(state.start);
   const dialog = state.dialog
     ? state.dialog.kind === "account"
       ? accountDialog(state.dialog, state.context)
@@ -161,7 +181,27 @@ async function loadAccounts() {
   render();
 }
 
-const loaders = { budget: loadBudget, transactions: loadTransactions, accounts: loadAccounts };
+async function loadStart() {
+  const mine = ++seq.start;
+  state.start.error = false;
+  try {
+    const data = await api.call("GET", "/finance/setup/status");
+    if (mine !== seq.start) return;
+    state.start.data = data;
+  } catch {
+    if (mine === seq.start) state.start.error = true;
+  }
+  render();
+}
+
+const loaders = {
+  budget: loadBudget,
+  transactions: loadTransactions,
+  accounts: loadAccounts,
+  reports: () => reports.load(),
+  upcoming: () => upcoming.load(),
+  start: loadStart
+};
 const reload = () => loaders[state.tab]();
 
 function goTab(tab, params = "") {
@@ -324,6 +364,14 @@ async function saveDialog() {
   }
 }
 
+function openAddAccount() {
+  return void ensureContext().then((ok) => {
+    if (!ok) return goTab("accounts");
+    state.dialog = { kind: "account" };
+    render();
+  });
+}
+
 let searchTimer = 0;
 
 root.addEventListener("click", (event) => {
@@ -332,12 +380,21 @@ root.addEventListener("click", (event) => {
   if (!target) return;
   if (target.matches("[data-scrim]")) {
     if (event.target === target) {
+      if (screens[state.tab]?.hasDialog()) return screens[state.tab].closeDialog();
       state.dialog = null;
       render();
     }
     return;
   }
   const act = target.dataset.act;
+  if (state.tab === "start" && act === "start-reload") return void loadStart();
+  if (state.tab === "start" && act === "start-add") {
+    state.tab = "accounts";
+    window.history.replaceState(null, "", "#accounts");
+    void loadAccounts().then(openAddAccount);
+    return;
+  }
+  if (screens[state.tab]?.click(act, target)) return;
   const b = state.budget;
   const t = state.tx;
   switch (act) {
@@ -429,11 +486,7 @@ root.addEventListener("click", (event) => {
     case "reconnect":
       return void client.chat(`Reconnect my ${target.dataset.bank} account`).catch(() => {});
     case "add-account":
-      return void ensureContext().then((ok) => {
-        if (!ok) return goTab("accounts");
-        state.dialog = { kind: "account" };
-        render();
-      });
+      return openAddAccount();
     case "add-entry":
     case "go-add-entry": {
       const id = target.dataset.account;
@@ -480,6 +533,7 @@ root.addEventListener("input", (event) => {
 root.addEventListener("change", (event) => {
   const el = event.target;
   if (!(el instanceof HTMLSelectElement)) return;
+  if (state.tab === "reports" && reports.change(el)) return;
   if (el.matches("[data-currency]")) {
     state.budget.currency = el.value;
     return render();
@@ -520,11 +574,31 @@ root.addEventListener("keydown", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && state.dialog) {
+  if (event.key === "Escape" && screens[state.tab]?.hasDialog()) {
+    screens[state.tab].closeDialog();
+  } else if (event.key === "Escape" && state.dialog) {
     state.dialog = null;
     render();
   }
 });
 
+/** With no address given, a person with no accounts lands on Start. */
+async function boot() {
+  if (!start.explicit) {
+    try {
+      const d = await api.call("GET", "/finance/setup/status");
+      if (!d.hasBank && !d.hasManualAccount) {
+        state.tab = "start";
+        state.start.data = d;
+        window.history.replaceState(null, "", "#start");
+        return render();
+      }
+    } catch {
+      // The Budget screen reports its own load failure.
+    }
+  }
+  render();
+  void reload();
+}
 render();
-void reload();
+void boot();

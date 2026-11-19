@@ -113,6 +113,7 @@ fn changing_one_byte_of_the_legacy_sql_stops_the_build() {
 fn the_screen_ships_with_every_file_it_loads() {
     let manifest = moss_finance_host::package::manifest().unwrap();
     assert_eq!(manifest.screens["/finance"], "ui/index.html");
+    assert_eq!(manifest.screens["/settings/finance"], "ui/settings.html");
     let files = moss_finance_host::package::files(&root(), &component()).unwrap();
     for entry in manifest.screens.values() {
         assert!(files.contains_key(entry), "{entry} is not in the package");
