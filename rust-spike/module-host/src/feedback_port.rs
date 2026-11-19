@@ -17,7 +17,12 @@ use tokio::runtime::Runtime;
 use usefulness_rules::feedback as rules;
 
 /// Target kinds a module may declare. Cards and chat messages stay host-owned.
-pub const MODULE_TARGET_KINDS: &[&str] = &["briefing_run", "briefing_item", "news_story", "sports_story"];
+pub const MODULE_TARGET_KINDS: &[&str] = &[
+    "briefing_run",
+    "briefing_item",
+    "news_story",
+    "sports_story",
+];
 
 const RECORD_KEYS: &[&str] = &[
     "targetRef",

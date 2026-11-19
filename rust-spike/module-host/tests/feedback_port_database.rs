@@ -133,17 +133,37 @@ fn ratings_through_the_port_belong_to_the_caller_and_stay_private() {
             &[&a],
         ))
         .unwrap();
-    assert_eq!(targets.len(), 2, "one target row for the item, one for the run");
-    for stored in targets.iter().map(|t| t.get::<_, Value>(1)).chain([row.get::<_, Value>(3)]) {
-        assert!(!stored.to_string().contains("PLANTED"), "item text stored: {stored}");
+    assert_eq!(
+        targets.len(),
+        2,
+        "one target row for the item, one for the run"
+    );
+    for stored in targets
+        .iter()
+        .map(|t| t.get::<_, Value>(1))
+        .chain([row.get::<_, Value>(3)])
+    {
+        assert!(
+            !stored.to_string().contains("PLANTED"),
+            "item text stored: {stored}"
+        );
     }
 
     // The same rating again does not make a second row.
-    assert_eq!(call(a, "record", "briefing_item", dismiss("run-1:item-1")).unwrap()["id"], item["id"]);
+    assert_eq!(
+        call(a, "record", "briefing_item", dismiss("run-1:item-1")).unwrap()["id"],
+        item["id"]
+    );
 
     // A sees it; B sees nothing and cannot undo it.
     let active = |who| {
-        call(who, "active", "briefing_item", json!({"surface":"briefing","kind":"dismiss"})).unwrap()
+        call(
+            who,
+            "active",
+            "briefing_item",
+            json!({"surface":"briefing","kind":"dismiss"}),
+        )
+        .unwrap()
     };
     assert_eq!(active(a), json!({"refs":["run-1:item-1"]}));
     assert_eq!(active(b), json!({"refs":[]}));

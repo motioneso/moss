@@ -40,17 +40,21 @@ impl Feedback for Store {
         Ok("rating-1".into())
     }
     fn undo(&self, access: &AccessContext, kind: &str, _: &str) -> Result<()> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push((access.actor_user_id(), "undo".into(), kind.into(), json!({})));
+        self.calls.lock().unwrap().push((
+            access.actor_user_id(),
+            "undo".into(),
+            kind.into(),
+            json!({}),
+        ));
         Ok(())
     }
     fn active(&self, access: &AccessContext, kind: &str, _: &str, _: &str) -> Result<Vec<String>> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push((access.actor_user_id(), "active".into(), kind.into(), json!({})));
+        self.calls.lock().unwrap().push((
+            access.actor_user_id(),
+            "active".into(),
+            kind.into(),
+            json!({}),
+        ));
         Ok(vec!["ref-1".into()])
     }
 }
@@ -108,7 +112,15 @@ fn a_module_without_the_permission_is_refused() {
     let store = Arc::new(Store::default());
     let mut m = manifest(&["briefing_item"]);
     m.capabilities.clear();
-    assert!(run(&store, &m, uuid::Uuid::new_v4(), "record", "briefing_item", record("a")).is_err());
+    assert!(run(
+        &store,
+        &m,
+        uuid::Uuid::new_v4(),
+        "record",
+        "briefing_item",
+        record("a")
+    )
+    .is_err());
     assert!(store.calls.lock().unwrap().is_empty());
 }
 
@@ -120,7 +132,10 @@ fn a_target_kind_the_permission_does_not_list_is_refused() {
     // Listed kind works; every other kind never reaches the store.
     assert!(run(&store, &m, who, "record", "briefing_run", record("a")).is_ok());
     for kind in ["briefing_item", "proactive_card", "chat_message"] {
-        assert!(run(&store, &m, who, "record", kind, record("a")).is_err(), "{kind}");
+        assert!(
+            run(&store, &m, who, "record", kind, record("a")).is_err(),
+            "{kind}"
+        );
     }
     assert_eq!(store.calls.lock().unwrap().len(), 1);
 }
@@ -128,7 +143,12 @@ fn a_target_kind_the_permission_does_not_list_is_refused() {
 #[test]
 fn a_manifest_cannot_declare_a_host_owned_target_kind() {
     for kind in ["proactive_card", "chat_message", "anything_else"] {
-        assert!(manifest(&[kind]).validate(&"0.1.0".parse().unwrap()).is_err(), "{kind}");
+        assert!(
+            manifest(&[kind])
+                .validate(&"0.1.0".parse().unwrap())
+                .is_err(),
+            "{kind}"
+        );
     }
     assert!(manifest(&["briefing_run", "briefing_item"])
         .validate(&"0.1.0".parse().unwrap())
@@ -145,7 +165,10 @@ fn the_owner_is_the_caller_and_no_field_can_name_another_user() {
     for field in ["ownerUserId", "actorUserId", "owner_user_id", "userId"] {
         let mut body = record("a");
         body[field] = json!(other.to_string());
-        assert!(run(&store, &m, caller, "record", "briefing_item", body).is_err(), "{field}");
+        assert!(
+            run(&store, &m, caller, "record", "briefing_item", body).is_err(),
+            "{field}"
+        );
     }
     assert_eq!(store.calls.lock().unwrap().len(), 1);
 }
@@ -160,7 +183,15 @@ fn metadata_keeps_ids_and_labels_and_drops_item_text() {
         "title":"PLANTED item text","text":"PLANTED body","summary":"PLANTED",
         "nested":{"itemId":"x"},"longLabel":"x".repeat(200)
     });
-    run(&store, &m, uuid::Uuid::new_v4(), "record", "briefing_item", body).unwrap();
+    run(
+        &store,
+        &m,
+        uuid::Uuid::new_v4(),
+        "record",
+        "briefing_item",
+        body,
+    )
+    .unwrap();
     let stored = store.calls.lock().unwrap()[0].3.clone();
     assert_eq!(stored, json!({"runId":"run-1","itemLabel":"Tasks"}));
     assert!(!stored.to_string().contains("PLANTED"));
