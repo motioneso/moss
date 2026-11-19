@@ -137,7 +137,10 @@ async function loadTransactions() {
     if (mine !== seq.tx) return;
     t.data = data;
   } catch {
-    if (mine === seq.tx) t.error = true;
+    if (mine === seq.tx) {
+      t.error = true;
+      t.data = null;
+    }
   }
   render();
 }
@@ -150,7 +153,10 @@ async function loadAccounts() {
     if (mine !== seq.acct) return;
     state.acct.data = data;
   } catch {
-    if (mine === seq.acct) state.acct.error = true;
+    if (mine === seq.acct) {
+      state.acct.error = true;
+      state.acct.data = null;
+    }
   }
   render();
 }
@@ -274,17 +280,15 @@ async function setCategory(id, categoryId) {
 }
 
 async function ensureContext() {
-  if (state.context) return;
+  if (state.context) return true;
   try {
     const c = await client.request("GET", "/finance/manual/context");
     state.context = c?.body ?? c;
     state.context.defaultCurrency = state.context.currencies?.[0];
+    return true;
   } catch {
-    state.context = {
-      currencies: ["USD"],
-      categories: [],
-      today: new Date().toISOString().slice(0, 10)
-    };
+    state.context = null;
+    return false;
   }
 }
 
@@ -425,7 +429,8 @@ root.addEventListener("click", (event) => {
     case "reconnect":
       return void client.chat(`Reconnect my ${target.dataset.bank} account`).catch(() => {});
     case "add-account":
-      return void ensureContext().then(() => {
+      return void ensureContext().then((ok) => {
+        if (!ok) return goTab("accounts");
         state.dialog = { kind: "account" };
         render();
       });
@@ -434,7 +439,8 @@ root.addEventListener("click", (event) => {
       const id = target.dataset.account;
       const account = (state.acct.data?.accounts ?? []).find((a) => a.accountId === id);
       if (!account) return goTab("accounts");
-      return void ensureContext().then(() => {
+      return void ensureContext().then((ok) => {
+        if (!ok) return goTab("accounts");
         state.dialog = {
           kind: "entry",
           accountId: id,

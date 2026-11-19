@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "finance",
   "name": "Finance",
-  "description": "Private money accounts and transactions. You can list your accounts, add manual accounts and transactions, connect a bank and pull its balances and transactions every six hours or on demand, sort and review transactions, set rules, split, add notes, import a CSV bank file, and plan a monthly budget with drafts. It also plans bills, sets targets, shares a flexible pool and reserves money for card payments. You can share a bank account with the household, read spending and net worth reports, export your history, review the activity list and undo a change, and archive an empty category. The screens are not built yet.",
+  "description": "Private money accounts and transactions. You can list your accounts, add manual accounts and transactions, connect a bank and pull its balances and transactions every six hours or on demand, sort and review transactions, set rules, split, add notes, import a CSV bank file, and plan a monthly budget with drafts. It also plans bills, sets targets, shares a flexible pool and reserves money for card payments. You can share a bank account with the household, read spending and net worth reports, export your history, review the activity list and undo a change, and archive an empty category. The Finance screen shows the budget, transactions and accounts.",
   "publisher": "Moss",
   "version": "0.5.2",
   "requiresMoss": ">=0.1.0, <1.0.0",
@@ -1133,7 +1133,7 @@
     },
     {
       "id": "finance.budget",
-      "description": "A person can choose a budget currency once, see a month of the budget with each category's assigned, spent and available money and what is ready to assign, set the amount for one category or up to 20 at once, and move money between categories or from ready to assign. Every save needs the review numbers from the screen. If the budget or the ledger changed since, nothing is saved. Flexible pools, targets, card payments and bills are not built yet.",
+      "description": "A person can choose a budget currency once, see a month of the budget with each category's assigned, spent and available money and what is ready to assign, set the amount for one category or up to 20 at once, and move money between categories or from ready to assign. Every save needs the review numbers from the screen. If the budget or the ledger changed since, nothing is saved. The Finance screen shows the budget. Flexible pools, targets, card payments and bills are not built yet.",
       "errors": [
         {
           "code": "stale_budget",
