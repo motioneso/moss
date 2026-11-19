@@ -4,7 +4,7 @@
   "name": "Commitments",
   "description": "Moss reads your email and chats and suggests things you said you would do. You review each suggestion and mark it done or dismiss it.",
   "publisher": "Moss",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",

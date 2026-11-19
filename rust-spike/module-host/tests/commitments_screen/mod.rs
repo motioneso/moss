@@ -148,8 +148,7 @@ pub fn run(
     }
     println!("PASS live demo: four email threads inserted through Email's API, judged by the real Codex proxy model and saved as pending review by the worker");
     {
-        let hold =
-            std::env::var("COMMITMENTS_SCREEN_HOLD").unwrap_or_else(|_| "/tmp/js356-proof".into());
+        let Ok(hold) = std::env::var("COMMITMENTS_SCREEN_HOLD") else { return };
         fs::create_dir_all(&hold).unwrap();
         fs::write(Path::new(&hold).join("url.txt"), origin).unwrap();
         let deadline = Instant::now() + Duration::from_secs(2400);

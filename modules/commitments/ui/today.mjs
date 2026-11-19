@@ -18,7 +18,7 @@ function resize() {
         (menu) => menu.getBoundingClientRect().bottom
       )
     );
-    const height = Math.ceil(bottom);
+    const height = Math.ceil(bottom + window.scrollY);
     if (height !== lastHeight) {
       lastHeight = height;
       void client.resize(height).catch(() => {});
@@ -38,7 +38,10 @@ const controller = reviewController(commitmentsApi(client), (state) => {
     const row = [...root.querySelectorAll("[data-candidate]")].find(
       (r) => r.dataset.candidate === id
     );
-    (row?.querySelector(`[data-act="${action}"]`) ?? root.querySelector("[data-act]"))?.focus();
+    const selector = ["tomorrow", "week", "pick"].includes(action)
+      ? "[data-menu-trigger]"
+      : `[data-act="${action}"]`;
+    (row?.querySelector(selector) ?? root.querySelector("[data-act]"))?.focus();
   }
   resize();
 });

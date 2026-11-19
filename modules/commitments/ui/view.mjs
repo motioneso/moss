@@ -38,7 +38,7 @@ const sourceIcons = {
 };
 const names = { email: "Email", chat: "Chat", notes: "Notes" };
 
-function rowHtml(row, busy, picker) {
+function rowHtml(row, busy, picker, pickerDate, minimumDate) {
   const id = esc(row.id);
   const disabled = busy ? " disabled" : "";
   const sources = [...new Set((row.evidence ?? []).map((s) => s.sourceKind))].filter(
@@ -66,21 +66,30 @@ function rowHtml(row, busy, picker) {
     ${
       picker === row.id
         ? `<form class="commitments-date" data-date-form><label class="jds-label" for="snooze-date">Snooze until</label>
-      <input class="jds-input" id="snooze-date" type="date" required${disabled} />
+      <input class="jds-input" id="snooze-date" type="date" required value="${esc(pickerDate)}" min="${esc(minimumDate)}"${disabled} />
       <button class="jds-btn jds-btn--secondary jds-btn--sm"${disabled}>Snooze</button>
       <button type="button" class="jds-btn jds-btn--quiet jds-btn--sm" data-act="cancel"${disabled}>Cancel</button></form>`
         : ""
     }</div>`;
 }
 
-export function sectionHtml({ phase, rows = [], busy = "", error = "", notice = "", picker = "" }) {
+export function sectionHtml({
+  phase,
+  rows = [],
+  busy = "",
+  error = "",
+  notice = "",
+  picker = "",
+  pickerDate = "",
+  minimumDate = ""
+}) {
   if (phase === "ready" && rows.length === 0 && !error) return "";
   const head = `<div class="jds-brief__head"><span class="jds-brief__kicker">Commitments</span>${phase === "ready" ? `<span class="jds-brief__updated">${rows.length} to review</span>` : ""}</div>
     <h2 class="jds-brief__title" id="commitments-title">Things you said you would do</h2>`;
   const status =
     phase === "loading" ? '<p class="jds-caption" role="status">Loading commitments…</p>' : "";
   const failure = error
-    ? `<div class="commitments-feedback" role="alert"><p class="jds-hint jds-hint--error">${esc(error)}</p><button type="button" class="jds-btn jds-btn--quiet jds-btn--sm" data-act="retry">Try again</button></div>`
+    ? `<div class="commitments-feedback" role="alert" data-error-code="commitments_today_unavailable"><p class="jds-hint jds-hint--error">${esc(error)}</p><button type="button" class="jds-btn jds-btn--quiet jds-btn--sm" data-act="retry">${phase === "error" ? "Try again" : "Reload suggestions"}</button></div>`
     : "";
-  return `<section class="jds-brief commitments-section" aria-labelledby="commitments-title"${phase === "loading" ? ' aria-busy="true"' : ""}>${head}${status}${failure}${notice ? `<p class="jds-caption" role="status">${esc(notice)}</p>` : ""}<div class="loose">${rows.map((r) => rowHtml(r, busy, picker)).join("")}</div></section>`;
+  return `<section class="jds-brief commitments-section" aria-labelledby="commitments-title"${phase === "loading" ? ' aria-busy="true"' : ""}>${head}${status}${failure}${notice ? `<p class="jds-caption" role="status">${esc(notice)}</p>` : ""}<div class="commitments-list">${rows.map((r) => rowHtml(r, busy, picker, pickerDate, minimumDate)).join("")}</div></section>`;
 }

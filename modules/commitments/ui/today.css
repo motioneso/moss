@@ -2,6 +2,11 @@
   margin: 0;
   padding-bottom: var(--space-7);
 }
+.commitments-list {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--space-1);
+}
 .commitments-row {
   align-items: center;
   flex-wrap: wrap;
@@ -46,9 +51,6 @@
 }
 .commitments-section > .jds-caption {
   margin-block: var(--space-3);
-}
-.commitments-row .jds-menu__list {
-  z-index: var(--z-dropdown, 30);
 }
 [hidden] {
   display: none !important;

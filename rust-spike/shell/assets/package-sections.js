@@ -22,7 +22,7 @@ async function mount(slot) {
       const frame = document.createElement("iframe");
       frame.className = "package-section-frame";
       frame.title = screen.title;
-      frame.setAttribute("sandbox", "allow-scripts");
+      frame.setAttribute("sandbox", "allow-scripts allow-forms");
       slot.append(frame);
       dispose = openModuleFrame(frame, moduleId, screen.src, {
         minimumHeight: 0,
@@ -35,7 +35,7 @@ async function mount(slot) {
             headers: body == null ? {} : { "content-type": "application/json" },
             body: body == null ? undefined : JSON.stringify(body)
           });
-          if (!reply.ok) throw new Error();
+          if (!reply.ok) throw Object.assign(new Error(), { status: reply.status });
           return reply.status === 204 ? null : reply.json();
         },
         theme: () => ({
@@ -48,6 +48,7 @@ async function mount(slot) {
       const message = document.createElement("p");
       message.className = "cmd-empty";
       message.setAttribute("role", "status");
+      message.dataset.errorCode = "commitments_today_unavailable";
       message.textContent = "This section couldn't load.";
       const retry = document.createElement("button");
       retry.type = "button";

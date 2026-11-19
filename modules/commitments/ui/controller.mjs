@@ -1,7 +1,16 @@
 import { snoozeUntil } from "./view.mjs";
 
 export function reviewController(api, draw, now = () => new Date()) {
-  const state = { phase: "loading", rows: [], busy: "", error: "", notice: "", picker: "" };
+  const state = {
+    phase: "loading",
+    rows: [],
+    busy: "",
+    error: "",
+    notice: "",
+    picker: "",
+    pickerDate: "",
+    minimumDate: ""
+  };
   async function load() {
     if (state.busy) return;
     state.phase = "loading";
@@ -22,12 +31,21 @@ export function reviewController(api, draw, now = () => new Date()) {
     state.notice = "";
     if (action === "pick" || action === "cancel") {
       state.picker = action === "pick" ? id : "";
+      state.pickerDate = "";
+      const tomorrow = new Date(now());
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      state.minimumDate = [
+        tomorrow.getFullYear(),
+        String(tomorrow.getMonth() + 1).padStart(2, "0"),
+        String(tomorrow.getDate()).padStart(2, "0")
+      ].join("-");
       draw(state);
       return;
     }
     if (!state.rows.some((r) => r.id === id)) return;
     let until;
     try {
+      if (action === "date") state.pickerDate = date;
       if (!["accepted", "rejected"].includes(action)) until = snoozeUntil(action, now(), date);
     } catch (error) {
       state.error = error.message;
@@ -46,7 +64,8 @@ export function reviewController(api, draw, now = () => new Date()) {
           ? "Commitment accepted."
           : "Commitment rejected.";
     } catch {
-      state.error = "That change couldn't be saved. The suggestion is still here. Try again.";
+      state.error =
+        "That change couldn't be saved. The suggestion is still here. Try the action again.";
     }
     state.busy = "";
     draw(state);

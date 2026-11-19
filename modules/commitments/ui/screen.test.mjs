@@ -88,3 +88,37 @@ test("the review card escapes stored content and exposes only approval decisions
   assert.match(html, /2026-12-01/);
   assert.match(html, /data-decision="approve"/);
 });
+
+test("a suggestion removed during loading does not hide the remaining suggestions", async () => {
+  const api = commitmentsApi({
+    request: async (_, path) => {
+      if (path.includes("?")) return [{ id: "removed" }, { id: "reviewed" }, { id: "pending" }];
+      if (path.endsWith("removed")) throw Object.assign(new Error(), { status: 404 });
+      return {
+        id: path.split("/").at(-1),
+        status: path.endsWith("reviewed") ? "accepted" : "pending_review"
+      };
+    }
+  });
+  assert.deepEqual(await api.pending(), [{ id: "pending", status: "pending_review" }]);
+});
+
+test("a failed chosen-date save retains the date and future-date limit", async () => {
+  const controller = reviewController(
+    {
+      pending: async () => [candidate],
+      change: async () => {
+        throw new Error();
+      }
+    },
+    () => {},
+    () => new Date("2026-11-18T12:00:00")
+  );
+  await controller.load();
+  await controller.act(candidate.id, "pick");
+  await controller.act(candidate.id, "date", "2026-12-01");
+  assert.equal(controller.state.pickerDate, "2026-12-01");
+  assert.equal(controller.state.minimumDate, "2026-11-19");
+  assert.match(sectionHtml(controller.state), /value="2026-12-01" min="2026-11-19"/);
+  assert.match(sectionHtml(controller.state), /Reload suggestions/);
+});

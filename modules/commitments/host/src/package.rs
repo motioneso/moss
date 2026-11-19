@@ -4,9 +4,7 @@ use moss_module_host::{archive, manifest::Manifest};
 use std::{collections::BTreeMap, path::Path};
 
 pub fn manifest() -> Result<Manifest> {
-    Ok(serde_json::from_str(include_str!(
-        "../../moss.module.json"
-    ))?)
+    Ok(serde_json::from_str(include_str!("../../moss.module.json"))?)
 }
 pub fn files(root: &Path, component: &[u8]) -> Result<BTreeMap<String, Vec<u8>>> {
     let manifest = manifest()?;
@@ -14,16 +12,10 @@ pub fn files(root: &Path, component: &[u8]) -> Result<BTreeMap<String, Vec<u8>>>
     let mut files = BTreeMap::from([
         ("moss.module.json".into(), serde_json::to_vec(&manifest)?),
         ("code/module.wasm".into(), component.to_vec()),
-        (
-            "icons/commitments.svg".into(),
-            include_bytes!("../../icons/commitments.svg").to_vec(),
-        ),
+        ("icons/commitments.svg".into(), include_bytes!("../../icons/commitments.svg").to_vec()),
         ("LICENSE".into(), std::fs::read(root.join("LICENSE"))?),
         ("NOTICE".into(), include_bytes!("../../NOTICE").to_vec()),
-        (
-            "CHANGELOG.md".into(),
-            include_bytes!("../../CHANGELOG.md").to_vec(),
-        ),
+        ("CHANGELOG.md".into(), include_bytes!("../../CHANGELOG.md").to_vec()),
     ]);
     for (name, bytes) in [
         (

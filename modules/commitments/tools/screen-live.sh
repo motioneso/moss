@@ -4,7 +4,7 @@ cd "$(dirname "$0")/../../.."
 [[ "${JARVIS_GATE_RUN:-}" == 1 ]] || { echo 'Use scripts/run-gate.sh' >&2; exit 4; }
 : "${CARGO_HOME:?Set CARGO_HOME}"
 : "${RUSTUP_HOME:?Set RUSTUP_HOME}"
-: "${CARGO_TARGET_DIR:=/tmp/js356-target}"
+: "${CARGO_TARGET_DIR:=/tmp/moss-commitments-screen}"
 export CARGO_TARGET_DIR
 # Build the unchanged source packages that supply real cached demo email.
 export EMAIL_BINDGEN_TARGET="$CARGO_TARGET_DIR"
