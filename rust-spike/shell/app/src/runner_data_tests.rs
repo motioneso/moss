@@ -235,6 +235,36 @@ mod socket {
     }
 
     #[test]
+    fn answering_a_card_after_the_idle_limit_does_not_end_the_turn() {
+        let rig = Rig::new();
+        let listener = rig.listener.try_clone().unwrap();
+        let task = std::thread::spawn(move || {
+            let mut runner = Runner::accept(&listener);
+            runner.send(ask(5));
+            let answer = runner.next().expect("no answer");
+            assert_eq!(answer, json!({"op":"answer","id":5,"allow":true}));
+            std::thread::sleep(Duration::from_millis(100));
+            runner.send(json!({"event":"done","text":"finished"}));
+        });
+        let data = rig.data(Limits {
+            idle: Duration::from_millis(400),
+            ..Limits::default()
+        });
+        data.send_message(&SendMessage {
+            text: "go".into(),
+            ..Default::default()
+        })
+        .unwrap();
+        let t = wait_for(&data, "pending card", |t| !t.approvals.is_empty());
+        // The person takes longer than the idle limit to answer.
+        std::thread::sleep(Duration::from_millis(900));
+        data.decide_approval(ME, &t.approvals[0].id, Decision::Approve).unwrap();
+        let t = wait_for(&data, "turn end", |t| !t.running);
+        assert_eq!(t.messages[1].text, "finished", "{:?}", t.messages);
+        task.join().unwrap();
+    }
+
+    #[test]
     fn an_unanswered_card_times_out_and_the_runner_is_told_no() {
         let rig = Rig::new();
         let listener = rig.listener.try_clone().unwrap();

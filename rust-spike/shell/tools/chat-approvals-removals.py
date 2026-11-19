@@ -24,6 +24,7 @@ controls = [
     ("moss-card-refused", "rust-spike/shell/app/src/runner_data.rs", r'if m\["source"\]\.as_str\(\) != Some\("agent"\) \{', 'if false {', "rust-spike/shell/Cargo.toml", server("runner_data::tests::socket::a_module_tool_card_is_refused_until_part_3b")),
     ("fixed-card-title", "rust-spike/shell/app/src/runner_data.rs", r'title: chat_approvals::PERMISSION_TITLE\.into\(\),', 'title: m["card"]["title"].as_str().unwrap_or_default().to_string(),', "rust-spike/shell/Cargo.toml", server("runner_data::tests::socket::an_agent_permission_ask_is_answered_only_by_its_owner_through_the_record")),
     ("card-values-redacted", "rust-spike/shell/app/src/chat_approvals.rs", r'let value = moss_agents::redact::redact_line\(value\);', 'let value = value.to_string();', "rust-spike/shell/Cargo.toml", server("chat_approvals::tests::the_card_title_is_fixed_and_agent_text_is_a_capped_field_value")),
+    ("idle-clock-paused-while-waiting", "rust-spike/shell/app/src/runner_data.rs", r'            if waiting \{\n                last_heard = Instant::now\(\);\n            \}\n', '', "rust-spike/shell/Cargo.toml", server("runner_data::tests::socket::answering_a_card_after_the_idle_limit_does_not_end_the_turn")),
     ("runner-ask-timer", "rust-spike/agents/src/bin/moss-runner.rs", r'match tokio::time::timeout\(limit, rx\)\.await \{', 'match Ok::<_, ()>(rx.await) {', "rust-spike/agents/Cargo.toml", ["--bin", "moss-runner", "tests::an_unanswered_ask_is_refused_when_its_timer_runs_out"]),
 ]
 

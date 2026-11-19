@@ -199,6 +199,10 @@ impl Inner {
                 break Err("this turn ran longer than the 15 minute limit".to_string());
             }
             let waiting = self.state.lock().expect("chat lock").book.has_pending();
+            // Time spent waiting on the person is not the runner going quiet.
+            if waiting {
+                last_heard = Instant::now();
+            }
             if !waiting && last_heard.elapsed() >= self.limits.idle {
                 break Err("the runner stopped answering".to_string());
             }
