@@ -1,5 +1,9 @@
 # Finance package
 
+## 0.5.2
+
+- The Finance screen shows your budget by month, your transactions and your accounts from the package, on desktop and phone. A bank that cannot sync shows its status and a Reconnect button. Settings, Reports, Upcoming and the first-budget setup panels are not on the screen yet.
+
 ## 0.5.1
 
 - Connecting a bank and syncing now have 30 seconds instead of 5, because a real bank sync makes several slow calls in a row. A long history is read two pages at a time, and each sync carries on where the last stopped.

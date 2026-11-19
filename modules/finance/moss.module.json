@@ -2,9 +2,9 @@
   "schemaVersion": 2,
   "id": "finance",
   "name": "Finance",
-  "description": "Private money accounts and transactions. You can list your accounts, add manual accounts and transactions, connect a bank and pull its balances and transactions every six hours or on demand, sort and review transactions, set rules, split, add notes, import a CSV bank file, and plan a monthly budget with drafts. It also plans bills, sets targets, shares a flexible pool and reserves money for card payments. You can share a bank account with the household, read spending and net worth reports, export your history, review the activity list and undo a change, and archive an empty category. The screens are not built yet.",
+  "description": "Private money accounts and transactions. You can list your accounts, add manual accounts and transactions, connect a bank and pull its balances and transactions every six hours or on demand, sort and review transactions, set rules, split, add notes, import a CSV bank file, and plan a monthly budget with drafts. It also plans bills, sets targets, shares a flexible pool and reserves money for card payments. You can share a bank account with the household, read spending and net worth reports, export your history, review the activity list and undo a change, and archive an empty category. The Finance screen shows the budget, transactions and accounts.",
   "publisher": "Moss",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "callLimitMs": 30000,
@@ -958,13 +958,24 @@
     "bundled": false,
     "removable": true
   },
-  "screens": {},
-  "navigation": [],
+  "screens": {
+    "/finance": "ui/index.html"
+  },
+  "navigation": [
+    {
+      "id": "finance",
+      "label": "Finance",
+      "description": "Your budget by month, a searchable list of transactions you can sort into categories, and your accounts with balances, net worth and bank connection status.",
+      "path": "/finance",
+      "icon": "Landmark",
+      "order": 38
+    }
+  ],
   "settings": [],
   "features": [
     {
       "id": "finance.accounts",
-      "description": "A person can list their own accounts with current balances, currencies and, for manual accounts, the opening date and balance. With no accounts, the list suggests adding a manual account. Accounts shared by other people and bank links are not built yet. No screen is built yet.",
+      "description": "A person can list their own accounts with current balances, currencies and, for manual accounts, the opening date and balance. With no accounts, the list suggests adding a manual account. Accounts shared by other people and bank links are not built yet. The Finance screen shows it.",
       "errors": [
         {
           "code": "finance_accounts_unavailable",
@@ -1032,7 +1043,7 @@
     },
     {
       "id": "finance.transactions",
-      "description": "A person can list their own transactions for a month with filters, search, notes and splits. They can set or change a category, confirm what Moss sorted, save a note, split a transaction across categories, and sort many at once. Moss sorts by payee rule first, then the bank's own category, and only confirms on its own when the sorting tier allows it. No screen is built yet.",
+      "description": "A person can list their own transactions for a month with filters, search, notes and splits. They can set or change a category, confirm what Moss sorted, save a note, split a transaction across categories, and sort many at once. Moss sorts by payee rule first, then the bank's own category, and only confirms on its own when the sorting tier allows it. The Finance screen shows it.",
       "errors": [
         {
           "code": "stale_transaction",
@@ -1122,7 +1133,7 @@
     },
     {
       "id": "finance.budget",
-      "description": "A person can choose a budget currency once, see a month of the budget with each category's assigned, spent and available money and what is ready to assign, set the amount for one category or up to 20 at once, and move money between categories or from ready to assign. Every save needs the review numbers from the screen. If the budget or the ledger changed since, nothing is saved. Flexible pools, targets, card payments and bills are not built yet.",
+      "description": "A person can choose a budget currency once, see a month of the budget with each category's assigned, spent and available money and what is ready to assign, set the amount for one category or up to 20 at once, and move money between categories or from ready to assign. Every save needs the review numbers from the screen. If the budget or the ledger changed since, nothing is saved. The Finance screen shows the budget. Flexible pools, targets, card payments and bills are not built yet.",
       "errors": [
         {
           "code": "stale_budget",
