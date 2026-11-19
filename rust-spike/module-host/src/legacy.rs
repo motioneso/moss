@@ -42,6 +42,20 @@ pub fn owns(module: &str, table: &str) -> bool {
         .get(module)
         .is_some_and(|t| t.iter().any(|t| t == table))
 }
+
+/// A legacy trigger function survives table removal. Keep it available for snapshot
+/// recovery, then clear it only when its frozen migration is actually replayed.
+pub(crate) async fn prepare_replay(
+    tx: &tokio_postgres::Transaction<'_>,
+    module: &str,
+    path: &str,
+) -> Result<()> {
+    if module == "meetings" && path == "sql/0292_meeting_minimal.sql" {
+        tx.batch_execute("DROP FUNCTION IF EXISTS app.meeting_record_creation_title()")
+            .await?;
+    }
+    Ok(())
+}
 /// Reviewed pre-package sharing identity. It cannot be chosen by downloaded SQL.
 pub fn sharing(module: &str, table: &str, resource: &str, key: &str) -> bool {
     matches!(

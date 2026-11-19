@@ -3,6 +3,8 @@
 #[path = "support/registry.rs"]
 mod registry;
 mod support;
+#[path = "devices_lifecycle.rs"]
+mod lifecycle;
 use moss_meetings_host::{
     device_store::{Check, DeviceStore, Use},
     pairing::{credential_shape, digest, Decision, NewAttempt, PairingStore, Pending, Redeemed},

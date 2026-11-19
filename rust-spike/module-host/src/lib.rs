@@ -22,6 +22,7 @@ pub mod jobs;
 pub mod companion_devices {
     pub const MIGRATION: &str = include_str!("../sql/0004_companion_devices.sql");
 }
+pub mod purge_hooks;
 
 pub mod ai;
 pub mod credentials;
