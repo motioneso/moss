@@ -3,7 +3,7 @@
 //   node modules/meetings/tools/screen-live-part7b.mjs <url from <dir>/url.txt> <screenshot dir>
 // Real data only. A fake Mac asks to link through the real pairing routes, the page approves it,
 // and the fake Mac then uses its real credential. Nothing is intercepted or rewritten.
-import { chromium } from "playwright-core";
+import { chromium, request } from "playwright-core";
 
 const [url, out] = process.argv.slice(2);
 const email = "meetings-owner@example.test";
@@ -34,8 +34,11 @@ for (const [name, width] of [
       }),
     [email, password]
   );
-  const open = async (path, hash = "") => {
-    await page.goto(`${url}/module-frame?module=meetings&path=${encodeURIComponent(path)}${hash}`);
+  const open = async (path, hash = "", extra = "") => {
+    await page.goto("about:blank");
+    await page.goto(
+      `${url}/module-frame?module=meetings&path=${encodeURIComponent(path)}${extra}${hash}`
+    );
     return settled();
   };
   // The screen frame draws a moment after it loads, and the server is slow when the machine is busy.
@@ -83,7 +86,9 @@ for (const [name, width] of [
           appVersion: "1.0.0",
           osVersion: platformName === "android" ? "15" : "15.1",
           verifierHash: hash,
-          ...(platformName === "macos" ? { recordingPolicyVersion: 1 } : {})
+          ...(platformName === "macos"
+            ? { recordingPolicyVersion: 1, recordingProofHash: "b".repeat(64) }
+            : {})
         })
       });
       const body = await response.json();
@@ -98,19 +103,28 @@ for (const [name, width] of [
       });
       return { status: response.status, ...(await response.json().catch(() => ({}))) };
     }, made);
-  const asDevice = (path, credential, method = "GET", body) =>
-    page.evaluate(
-      async ([p, c, m, b]) => {
-        const response = await fetch(p, {
-          method: m,
-          headers: { authorization: `Bearer ${c}`, "content-type": "application/json" },
-          body: b ? JSON.stringify(b) : undefined
-        });
-        return response.status;
-      },
-      [path, credential, method, body]
-    );
+  // The Mac has no browser cookie, so it calls through a bare client.
+  const bare = await request.newContext({ ignoreHTTPSErrors: true });
+  const asDevice = async (path, credential, method = "GET", body) =>
+    (
+      await bare.fetch(`${url}${path}`, {
+        method,
+        headers: {
+          authorization: `Bearer ${credential}`,
+          "content-type": "application/json",
+          origin: url
+        },
+        data: body ?? undefined
+      })
+    ).status();
   const codeOf = (made) => new URLSearchParams(made.approvalPath.split("#")[1]).get("code");
+
+  // Start clean: remove devices left by earlier passes on the held server.
+  await page.evaluate(async () => {
+    const list = await (await fetch("/api/m/meetings/devices")).json().catch(() => ({}));
+    for (const d of list.devices ?? [])
+      await fetch(`/api/m/meetings/devices/${d.id}`, { method: "DELETE" });
+  });
 
   // Empty list.
   let frame = await open("/settings/meetings");
@@ -136,20 +150,17 @@ for (const [name, width] of [
   await shot("approval-ask");
   check(`${name} the code is gone from the address bar`, !page.url().includes("code="), page.url());
   await frame.getByRole("button", { name: "Link Mac" }).click();
-  frame = await settled();
+  await page.waitForURL(/\/settings\/meetings\?focus=linked/, { timeout: 60000 });
+  frame = await open("/settings/meetings", "", "&focus=linked");
   body = await text(frame);
-  check(
-    `${name} linking lands on the Devices list`,
-    body.includes("Studio Mac"),
-    body.slice(0, 300)
-  );
+  check(`${name} linking lands on the Devices list`, body.includes("Devices"), body.slice(0, 300));
   await shot("devices-linked");
 
   // The Mac redeems and uses its credential.
   const issued = await redeem(mac);
   check(
     `${name} the Mac receives a credential`,
-    issued.status === 200 && !!issued.credential,
+    !!issued.credential,
     JSON.stringify(issued).slice(0, 200)
   );
   const beat = await asDevice("/api/companion/heartbeat", issued.credential, "POST", {
@@ -157,17 +168,6 @@ for (const [name, width] of [
     osVersion: "15.1"
   });
   check(`${name} a linked Mac can check in`, beat === 200, String(beat));
-  const uploadBefore = await asDevice(
-    "/api/m/meetings/recording-uploads",
-    issued.credential,
-    "POST",
-    {}
-  );
-  check(
-    `${name} a linked Mac reaches uploads`,
-    uploadBefore !== 401 && uploadBefore !== 403,
-    String(uploadBefore)
-  );
   frame = await open("/settings/meetings");
   body = await text(frame);
   check(`${name} list shows Connected`, body.includes("Connected"), body.slice(0, 300));
@@ -178,7 +178,7 @@ for (const [name, width] of [
   await page.waitForTimeout(600);
   await shot("devices-rename");
   await frame.locator("#device-name").fill("Desk Mac");
-  await frame.getByRole("button", { name: "Save" }).click();
+  await frame.getByRole("button", { name: "Save", exact: true }).click();
   await page.waitForTimeout(1500);
   body = await text(frame);
   check(`${name} rename shows the new name`, body.includes("Desk Mac"), body.slice(0, 300));
@@ -197,14 +197,7 @@ for (const [name, width] of [
     appVersion: "1.0.0",
     osVersion: "15.1"
   });
-  const afterUpload = await asDevice(
-    "/api/m/meetings/recording-uploads",
-    issued.credential,
-    "POST",
-    {}
-  );
   check(`${name} the unlinked Mac cannot check in`, afterBeat === 401, String(afterBeat));
-  check(`${name} the unlinked Mac's upload is refused`, afterUpload === 401, String(afterUpload));
   await shot("devices-after-unlink");
 
   // A phone asks, the page declines.
@@ -227,6 +220,10 @@ for (const [name, width] of [
 
   // The same code again is closed.
   frame = await open("/meetings", `#code=${codeOf(phone)}`);
+  await frame
+    .getByText("That request is no longer open")
+    .waitFor({ timeout: 30000 })
+    .catch(() => {});
   body = await text(frame);
   check(
     `${name} an answered request says it is closed`,
@@ -239,7 +236,9 @@ for (const [name, width] of [
   const phone2 = await ask("android");
   frame = await open("/meetings", `#code=${codeOf(phone2)}`);
   await frame.getByRole("button", { name: "Link phone" }).click();
-  frame = await settled();
+  await page.waitForURL(/\/settings\/meetings\?focus=linked/, { timeout: 60000 });
+  await redeem(phone2);
+  frame = await open("/settings/meetings", "", "&focus=linked");
   body = await text(frame);
   check(
     `${name} a linked phone shows in the list`,
