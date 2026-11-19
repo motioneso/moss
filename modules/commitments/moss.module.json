@@ -122,7 +122,8 @@
   "requires": {},
   "provides": {
     "requestThreadJudgement": "1.0.0",
-    "prepareCommitmentAction": "1.0.0"
+    "prepareCommitmentAction": "1.0.0",
+    "prepareChatAction": "1.0.0"
   },
   "icons": ["icons/commitments.svg"],
   "accounts": {
@@ -194,7 +195,7 @@
     },
     {
       "id": "commitments.review-in-chat",
-      "description": "The package supplies review tools and a reusable approval card based on a saved suggestion. Live Rust chat review waits on the Rust chat tools and approval cards task."
+      "description": "Chat can list saved suggestions, show their evidence and ask for approval before accepting, rejecting or snoozing one. Each card shows the saved suggestion and the proposed action."
     },
     {
       "id": "commitments.heartbeat_source",
@@ -209,7 +210,7 @@
     },
     {
       "id": "commitments.chat_app_actions",
-      "description": "Package chat tools read suggestions and change their status after approval. The Rust chat host does not connect these tools yet. Resolving a suggestion is still unavailable."
+      "description": "Ask Moss in chat to list suggestions and their evidence, accept one, reject one or snooze it. Every change shows the saved suggestion in an approval card first. Resolving a suggestion is still unavailable."
     },
     {
       "id": "structured.commitments.email-judgement",
@@ -253,34 +254,154 @@
   "tools": {
     "commitments.heartbeatOpen": {
       "description": "Background read of accepted commitments that are due soon or recently overdue, with a change revision.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "horizonHours": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 48,
+            "description": "Hours ahead to check, default 24."
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "description": "Maximum suggestions, default 20."
+          }
+        },
+        "required": []
+      }
     },
     "commitments.list": {
       "description": "List the commitment suggestions that have been found so far.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Suggestion status to list; default pending_review.",
+            "enum": [
+              "pending_review",
+              "accepted",
+              "rejected",
+              "snoozed",
+              "expired",
+              "explicit_non_action"
+            ]
+          }
+        },
+        "required": []
+      }
     },
     "commitments.threadJudgements": {
       "description": "Say which email threads were already judged, when, and with what outcome. No message text.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "threadRefs": {
+            "type": "array",
+            "description": "Email thread references whose last judgement you want.",
+            "items": {
+              "type": "string",
+              "description": "An email thread reference.",
+              "maxLength": 4096
+            },
+            "maxItems": 50
+          }
+        },
+        "required": ["threadRefs"]
+      }
     },
     "commitments.get": {
       "description": "Show one commitment suggestion with its saved evidence.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "candidateId": {
+            "type": "string",
+            "description": "The saved suggestion id returned by commitments.list or commitments.get.",
+            "maxLength": 36
+          }
+        },
+        "required": ["candidateId"]
+      }
     },
     "commitments.accept": {
       "description": "Accept a commitment suggestion after the person approves.",
       "risk": "write",
-      "approvalVersion": true
+      "approvalVersion": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "candidateId": {
+            "type": "string",
+            "description": "The saved suggestion id returned by commitments.list or commitments.get.",
+            "maxLength": 36
+          }
+        },
+        "required": ["candidateId"],
+        "examples": [
+          {
+            "candidateId": "00000000-0000-4000-8000-000000000001"
+          }
+        ]
+      },
+      "card": "prepareChatAction"
     },
     "commitments.reject": {
       "description": "Reject a commitment suggestion after the person approves.",
       "risk": "write",
-      "approvalVersion": true
+      "approvalVersion": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "candidateId": {
+            "type": "string",
+            "description": "The saved suggestion id returned by commitments.list or commitments.get.",
+            "maxLength": 36
+          }
+        },
+        "required": ["candidateId"],
+        "examples": [
+          {
+            "candidateId": "00000000-0000-4000-8000-000000000001"
+          }
+        ]
+      },
+      "card": "prepareChatAction"
     },
     "commitments.snooze": {
       "description": "Snooze a commitment suggestion until a date after the person approves.",
       "risk": "write",
-      "approvalVersion": true
+      "approvalVersion": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "candidateId": {
+            "type": "string",
+            "description": "The saved suggestion id returned by commitments.list or commitments.get.",
+            "maxLength": 36
+          },
+          "snoozedUntil": {
+            "type": "string",
+            "description": "When the suggestion returns, as an RFC 3339 timestamp with timezone.",
+            "maxLength": 64
+          }
+        },
+        "required": ["candidateId", "snoozedUntil"],
+        "examples": [
+          {
+            "candidateId": "00000000-0000-4000-8000-000000000001",
+            "snoozedUntil": "2026-12-01T09:00:00.000Z"
+          }
+        ]
+      },
+      "card": "prepareChatAction"
     }
   }
 }

@@ -10,6 +10,10 @@ fn record(actor: &str, turn: &str, kind: ApprovalKind, runner_id: u64) -> Record
         runner_id,
         title: "t".into(),
         fields: vec![],
+        target: String::new(),
+        content: None,
+        danger: false,
+        action: None,
         expires: Instant::now() + Duration::from_secs(600),
         state: ApprovalState::Pending,
     }
@@ -60,7 +64,9 @@ fn approved_permission_is_used_up_and_approved_action_waits_for_its_call() {
 fn no_approval_outlives_its_turn() {
     let (mut book, id) = book_with(record("a", "t1", ApprovalKind::Permission, 1));
     let (mut approved, approved_id) = book_with(record("a", "t1", ApprovalKind::Action, 2));
-    approved.decide("a", &approved_id, Decision::Approve).unwrap();
+    approved
+        .decide("a", &approved_id, Decision::Approve)
+        .unwrap();
     let mut other = record("a", "t2", ApprovalKind::Permission, 3);
     other.expires = Instant::now() + Duration::from_secs(600);
     book.add(other);
@@ -114,4 +120,64 @@ fn views_never_carry_raw_parameters() {
     )
     .unwrap();
     assert!(!json.contains("runner_id") && !json.contains("input"));
+}
+
+fn action_book() -> (Book, String) {
+    let mut r = record("a", "t1", ApprovalKind::Action, 8);
+    r.action = Some(Action {
+        module: "commitments".into(),
+        tool: "commitments.accept".into(),
+        parameters: serde_json::json!({"candidateId":"one"}),
+        version: Some("shown-version".into()),
+    });
+    book_with(r)
+}
+#[test]
+fn approved_record_binds_actor_turn_tool_and_exact_parameters_once() {
+    let (mut book, id) = action_book();
+    let p = serde_json::json!({"candidateId":"one"});
+    assert!(
+        book.consume("a", "t1", "commitments", "commitments.accept", &p)
+            .is_none()
+    );
+    book.decide("a", &id, Decision::Approve).unwrap();
+    for (actor, turn, module, tool, params) in [
+        ("b", "t1", "commitments", "commitments.accept", p.clone()),
+        ("a", "t2", "commitments", "commitments.accept", p.clone()),
+        ("a", "t1", "other", "commitments.accept", p.clone()),
+        ("a", "t1", "commitments", "commitments.reject", p.clone()),
+        (
+            "a",
+            "t1",
+            "commitments",
+            "commitments.accept",
+            serde_json::json!({"candidateId":"two"}),
+        ),
+    ] {
+        assert!(book.consume(actor, turn, module, tool, &params).is_none());
+    }
+    let matched = book
+        .consume("a", "t1", "commitments", "commitments.accept", &p)
+        .unwrap();
+    assert_eq!(matched.version.as_deref(), Some("shown-version"));
+    assert!(
+        book.consume("a", "t1", "commitments", "commitments.accept", &p)
+            .is_none()
+    );
+}
+#[test]
+fn voided_action_cannot_be_used_in_a_later_turn() {
+    let (mut book, id) = action_book();
+    book.decide("a", &id, Decision::Approve).unwrap();
+    book.void_turn("t1");
+    assert!(
+        book.consume(
+            "a",
+            "t1",
+            "commitments",
+            "commitments.accept",
+            &serde_json::json!({"candidateId":"one"})
+        )
+        .is_none()
+    );
 }

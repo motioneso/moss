@@ -10,7 +10,7 @@ use moss_module_host::{
     trust::{self, Publisher, RegistryIdentity},
 };
 use safety_core::db::{Database, RuntimeRole};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 use std::{
     fs,
@@ -70,16 +70,18 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
         .ok()
         .map(|host| format!("https://{host}:{}", port.0));
     let cert = root.join("tls/certificate.pem");
-    assert!(Command::new(std::env::var("JS170_CERTIFICATE").unwrap())
-        .args(["local-certificate"])
-        .arg(root.join("tls"))
-        .arg(&origin)
-        .args(&remote)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .unwrap()
-        .success());
+    assert!(
+        Command::new(std::env::var("JS170_CERTIFICATE").unwrap())
+            .args(["local-certificate"])
+            .arg(root.join("tls"))
+            .arg(&origin)
+            .args(&remote)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .unwrap()
+            .success()
+    );
     fs::create_dir(root.join("web")).unwrap();
     if let Ok(shared) = std::env::var("MOSS_MODULE_SHARED_DIR") {
         // Generated shared styles and fonts, which the sandboxed screens load.
@@ -96,12 +98,14 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
     )
     .unwrap();
     if let Ok(web) = std::env::var("MOSS_SCRATCHPAD_SCREEN_WEB") {
-        assert!(Command::new("cp")
-            .args(["-r", &format!("{web}/.")])
-            .arg(root.join("web"))
-            .status()
-            .unwrap()
-            .success());
+        assert!(
+            Command::new("cp")
+                .args(["-r", &format!("{web}/.")])
+                .arg(root.join("web"))
+                .status()
+                .unwrap()
+                .success()
+        );
     }
     let app_url = std::env::var("JS43_APP_URL").unwrap();
     let worker_url = std::env::var("JS43_WORKER_URL").unwrap();
@@ -226,7 +230,11 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
     // canonical installer, as the server would find it.
     let keys = Keys::new();
     fs::create_dir_all(root.join("registry/packages")).unwrap();
-    let artifacts: Vec<Artifact> = [("JS286_SCRATCHPAD_PACKAGE", "scratchpad")]
+    let mut packages = vec![("JS286_SCRATCHPAD_PACKAGE", "scratchpad")];
+    if std::env::var_os("JS383_COMMITMENTS_PACKAGE").is_some() {
+        packages.push(("JS383_COMMITMENTS_PACKAGE", "commitments"));
+    }
+    let artifacts: Vec<Artifact> = packages
         .iter()
         .map(|(variable, id)| {
             let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
@@ -508,7 +516,9 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
         json_of(&text)["data"]["body"],
         format!("owner {MARK}\nsecond\nchat {MARK}")
     );
-    println!("scratchpad live: stored-record approval, denied unapproved/other-account/replay, approved chat append through HTTPS");
+    println!(
+        "scratchpad live: stored-record approval, denied unapproved/other-account/replay, approved chat append through HTTPS"
+    );
     // The other person sees none of it, and cannot save over it.
     let (_, text) = call(Method::GET, "/note", Some(&other), None);
     let seen = json_of(&text);
@@ -612,10 +622,12 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
         200
     );
     let (_, text) = call(Method::GET, "/account/export", Some(&cookie), None);
-    assert!(json_of(&text)["scratchpad"]["body"]
-        .as_str()
-        .unwrap()
-        .contains(MARK));
+    assert!(
+        json_of(&text)["scratchpad"]["body"]
+            .as_str()
+            .unwrap()
+            .contains(MARK)
+    );
     let (status, text) = call(Method::DELETE, "/account/data", Some(&cookie), None);
     assert_eq!(status, 200);
     assert_eq!(json_of(&text)["deleted"], 1);
@@ -626,21 +638,54 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
             .unwrap()
             .contains(MARK)
     );
-    println!("scratchpad live: account export and deletion run through HTTPS, activity and server log contain no planted text");
+    println!(
+        "scratchpad live: account export and deletion run through HTTPS, activity and server log contain no planted text"
+    );
     // Nothing the test sent reached the server log.
     assert!(!log().contains(MARK));
-    println!("scratchpad live: read, save, conflict, append and settings worked over HTTPS for two people");
+    println!(
+        "scratchpad live: read, save, conflict, append and settings worked over HTTPS for two people"
+    );
     // Keep the real server and the gate's isolated database alive for browser proof.
     if let Ok(hold) = std::env::var("MOSS_SCRATCHPAD_HOLD") {
         let hold = Path::new(&hold);
         fs::write(hold.join("url.txt"), remote.as_ref().unwrap_or(&origin)).unwrap();
         if std::env::var_os("MOSS_CHAT_BRIDGE_RUNNER").is_some() {
             let other_id: uuid::Uuid = runtime.block_on(async {
-                let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
-                tokio::spawn(async move { let _ = connection.await; });
-                db.query_one("SELECT id FROM app.users WHERE email='scratchpad-other@example.test'", &[]).await.unwrap().get(0)
+                let (db, connection) =
+                    tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
+                        .await
+                        .unwrap();
+                tokio::spawn(async move {
+                    let _ = connection.await;
+                });
+                db.query_one(
+                    "SELECT id FROM app.users WHERE email='scratchpad-other@example.test'",
+                    &[],
+                )
+                .await
+                .unwrap()
+                .get(0)
             });
-            private(&hold.join("bridge.json"), &json!({"root":root,"owner":owner,"other":other_id,"origin":origin,"remote":remote,"server_pid":_server.0.id()}));
+            let commitments = if std::env::var_os("JS383_COMMITMENTS_PACKAGE").is_some() {
+                runtime.block_on(async {
+                    let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+                    tokio::spawn(async move { let _ = connection.await; });
+                    let mut ids = Vec::new();
+                    for name in ["Desktop approve report", "Desktop decline report", "Phone approve report", "Phone decline report"] {
+                        let id = uuid::Uuid::new_v4();
+                        db.execute("INSERT INTO app.commitment_candidates(id,owner_user_id,candidate_signature,kind,title,confidence,status,source_count,last_seen_at) VALUES($1,$2,$3,'promise',$4,'high','pending_review',1,now())", &[&id,&owner,&format!("js383-{id}"),&name]).await.unwrap();
+                        ids.push(id);
+                    }
+                    ids
+                })
+            } else {
+                Vec::new()
+            };
+            private(
+                &hold.join("bridge.json"),
+                &json!({"root":root,"owner":owner,"other":other_id,"origin":origin,"remote":remote,"server_pid":_server.0.id(),"commitments":commitments}),
+            );
         }
         let deadline = Instant::now() + Duration::from_secs(3600);
         while !hold.join("finished").exists() && Instant::now() < deadline {
@@ -648,8 +693,15 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
             // It uses the same persisted one-use grant and HTTPS route already asserted above.
             if let Ok(text) = fs::read_to_string(hold.join("append.txt")) {
                 let parameters = json!({"text":text});
-                services.approve_tool(&access, "scratchpad", "scratchpad.append", &parameters).unwrap();
-                let (status, _) = call(Method::POST, "/chat/append", Some(&cookie), Some(parameters));
+                services
+                    .approve_tool(&access, "scratchpad", "scratchpad.append", &parameters)
+                    .unwrap();
+                let (status, _) = call(
+                    Method::POST,
+                    "/chat/append",
+                    Some(&cookie),
+                    Some(parameters),
+                );
                 fs::remove_file(hold.join("append.txt")).unwrap();
                 fs::write(hold.join("appended.txt"), status.to_string()).unwrap();
                 assert_eq!(status, 200);

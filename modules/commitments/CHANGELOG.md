@@ -1,3 +1,7 @@
+## 0.1.1
+
+- Offer the Commitments chat tools with checked inputs and saved-suggestion approval cards.
+
 # Commitments package
 
 ## 0.1.1
