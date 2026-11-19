@@ -1,5 +1,11 @@
 # Tasks package changes
 
+## 0.1.5
+
+- Add the public `setBriefingTaskStatus` call. It moves the caller's own suggested task to open or archived, and an open task to archived. Done tasks and other people's tasks are refused or reported as not found.
+- Add the public `createFollowUpTask` call, which makes one open task from a title and optional description.
+- `listBriefingTasks` also accepts a list of task ids and then returns those tasks in any status, archived included, with the action-row fields.
+
 ## 0.1.4
 
 - `listBriefingTasks` also accepts status `suggested`, which returns the caller's suggested tasks with description, source, source reference, update time and suggestion metadata, so Briefings can show action rows.
