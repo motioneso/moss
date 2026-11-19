@@ -48,7 +48,7 @@
     },
     {
       "port": "feedback",
-      "operations": ["active"],
+      "operations": ["active", "record", "undo"],
       "resources": ["briefing_run", "briefing_item"]
     },
     {
@@ -118,6 +118,21 @@
     {
       "method": "POST",
       "path": "/today/rows/:task_id",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/today/runs/:run_id/catch-up/:item_id/add",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/today/runs/:run_id/catch-up/:item_id/dismiss",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/today/runs/:run_id/catch-up/:item_id/undo",
       "signIn": true
     }
   ],

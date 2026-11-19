@@ -50,6 +50,14 @@ pub struct Fake {
     /// Active ratings as (person, target kind, rating kind, target ref). The feedback port
     /// answers from the caller's own rows only.
     pub ratings: RefCell<Vec<(String, String, String, String)>>,
+    /// Rating ids as (id, person, target kind, rating kind, target ref), kept beside `ratings`.
+    pub rating_ids: RefCell<Vec<(String, String, String, String, String)>>,
+    /// When true, recording a rating fails.
+    pub record_fails: Cell<bool>,
+    /// When true, archiving a task fails.
+    pub archive_fails: Cell<bool>,
+    /// Tasks as {id, owner, title, description, status}, for the follow-up and status calls.
+    pub tasks: RefCell<Vec<Value>>,
     ids: Cell<u32>,
 }
 
@@ -74,6 +82,10 @@ impl Fake {
             ai_reply: RefCell::new(None),
             ai_calls: RefCell::new(vec![]),
             ratings: RefCell::new(vec![]),
+            rating_ids: RefCell::new(vec![]),
+            record_fails: Cell::new(false),
+            archive_fails: Cell::new(false),
+            tasks: RefCell::new(vec![]),
             ids: Cell::new(0),
         }
     }
@@ -185,6 +197,50 @@ impl Fake {
             || self.shares.borrow().iter().any(|(d, p, l)| {
                 row["id"] == json!(d) && p == actor && (level == "view" || l == "manage")
             })
+    }
+    fn is_task_call(&self, parameters: &Value) -> bool {
+        match parameters["name"].as_str() {
+            Some("createFollowUpTask" | "setBriefingTaskStatus") => true,
+            Some("listBriefingTasks") => parameters["parameters"]["ids"].is_array(),
+            _ => false,
+        }
+    }
+    /// A small tasks owner. Reads and writes reach the caller's own tasks only.
+    fn task_call(&self, parameters: &Value) -> Result<Value> {
+        let actor = self.actor.get();
+        let args = &parameters["parameters"];
+        match parameters["name"].as_str().unwrap() {
+            "createFollowUpTask" => {
+                let id = self.next_id();
+                self.tasks.borrow_mut().push(json!({"id": id, "owner": actor, "title": args["title"], "description": args["description"], "status": "todo"}));
+                Ok(json!({"task": {"id": id, "status": "todo"}}))
+            }
+            "setBriefingTaskStatus" => {
+                if self.archive_fails.get() {
+                    return Err(moss_module_sdk::Error::new("Archive refused"));
+                }
+                let mut tasks = self.tasks.borrow_mut();
+                match tasks.iter_mut().find(|t| t["id"] == args["taskId"] && t["owner"] == actor) {
+                    Some(task) => {
+                        task["status"] = args["status"].clone();
+                        Ok(json!({"task": {"id": task["id"], "status": task["status"]}}))
+                    }
+                    None => Ok(json!({"task": null})),
+                }
+            }
+            _ => {
+                let ids = args["ids"].as_array().unwrap();
+                let items: Vec<Value> = self.tasks.borrow().iter()
+                    .filter(|t| t["owner"] == actor && t["status"] == args["status"] && ids.contains(&t["id"]))
+                    .map(|t| json!({"id": t["id"], "title": t["title"], "status": t["status"]}))
+                    .collect();
+                Ok(json!({"items": items}))
+            }
+        }
+    }
+    /// Open tasks of one person.
+    pub fn open_tasks(&self, person: &str) -> usize {
+        self.tasks.borrow().iter().filter(|t| t["owner"] == person && t["status"] == "todo").count()
     }
     fn next_id(&self) -> String {
         let n = self.ids.get();
@@ -351,6 +407,7 @@ impl Host for Fake {
                 let found = self.schedules.borrow().iter().find(|(k, _, _)| k == key).cloned();
                 Ok(json!({"schedule": found.map(|(_, zone, cron)| json!({"timezone": zone, "cron": cron}))}))
             }
+            ("api", "call") if resource == "tasks" && self.is_task_call(&parameters) => self.task_call(&parameters),
             ("api", "call") => {
                 let actor = self.actor.get();
                 let name = parameters["name"].as_str().unwrap_or("").to_owned();
@@ -375,6 +432,25 @@ impl Host for Fake {
                     .map(|(_, _, _, r)| r.clone())
                     .collect();
                 Ok(json!({"refs": refs}))
+            }
+            ("feedback", "record") => {
+                let actor = self.actor.get();
+                if self.record_fails.get() {
+                    return Err(moss_module_sdk::Error::new("Rating refused"));
+                }
+                let id = self.next_id();
+                let (kind, target) = (parameters["kind"].as_str().unwrap().to_owned(), parameters["targetRef"].as_str().unwrap().to_owned());
+                self.rate(actor, resource, &kind, &target);
+                self.rating_ids.borrow_mut().push((id.clone(), actor.into(), resource.into(), kind, target));
+                Ok(json!({"id": id}))
+            }
+            ("feedback", "undo") => {
+                let actor = self.actor.get();
+                let found = self.rating_ids.borrow().iter().find(|r| r.0 == parameters["id"].as_str().unwrap_or("") && r.1 == actor && r.2 == resource).cloned();
+                let Some((id, _, kind, rating, target)) = found else { return Err(moss_module_sdk::Error::new("Feedback not found")) };
+                self.rating_ids.borrow_mut().retain(|r| r.0 != id);
+                self.unrate(actor, &kind, &rating, &target);
+                Ok(json!({"undone": true}))
             }
             ("ai", "generate") => {
                 self.ai_calls.borrow_mut().push((resource.into(), parameters));
