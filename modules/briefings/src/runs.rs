@@ -113,7 +113,7 @@ fn feedback_items(metadata: &Value, hidden: &Hidden) -> Vec<Value> {
 }
 
 /// The stored payload, or the empty one for runs written before payloads existed.
-fn payload_of(metadata: &Value) -> Value {
+pub(crate) fn payload_of(metadata: &Value) -> Value {
     match metadata["structuredPayload"].as_object() {
         Some(stored) => Value::Object(stored.clone()),
         None => json!({"version":1,"actionRows":[],"catchUp":null}),
