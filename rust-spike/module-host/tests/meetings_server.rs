@@ -43,6 +43,35 @@ fn private(path: &Path, value: &Value) {
     file.write_all(value.to_string().as_bytes()).unwrap();
 }
 
+/// Link the ring through the same HTTPS approval flow as the Android app.
+fn pair_android_device(client: &reqwest::blocking::Client, origin: &str, cookie: &str) -> String {
+    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+    use sha2::{Digest, Sha256};
+    let verifier = uuid::Uuid::new_v4().to_string();
+    let response = client.post(format!("{origin}/api/companion/pair"))
+        .header("origin", origin)
+        .json(&json!({"deviceName":"Meetings live ring","platform":"android","appVersion":"1","osVersion":"14",
+            "verifierHash":URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()))}))
+        .send().unwrap();
+    assert_eq!(response.status(), 200, "create Android pairing attempt");
+    let attempt: Value = response.json().unwrap();
+    let code = attempt["approvalPath"].as_str().unwrap().strip_prefix("/link/trail-marker#code=").unwrap();
+    let response = client.post(format!("{origin}/api/companion/pair/decide"))
+        .header("origin", origin).header("cookie", cookie)
+        .json(&json!({"code":code,"decision":"approve"})).send().unwrap();
+    assert_eq!(response.status(), 200, "approve Android pairing as the owner");
+    let response = client.post(format!("{origin}/api/companion/pair/redeem"))
+        .header("origin", origin)
+        .json(&json!({"attemptId":attempt["attemptId"],"verifier":verifier})).send().unwrap();
+    assert_eq!(response.status(), 200, "redeem Android pairing");
+    let issued: Value = response.json().unwrap();
+    assert_eq!(issued["status"], "issued");
+    let device = issued["device"]["id"].as_str().unwrap();
+    uuid::Uuid::parse_str(device).expect("paired device UUID");
+    println!("Android paired through create/approve/redeem -> 200");
+    device.to_owned()
+}
+
 #[test]
 #[ignore = "Only through verify-gate and the Meetings live gate"]
 fn installed_meetings_package_serves_routes_from_the_real_server() {
@@ -520,10 +549,16 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
         let packets = vec![0u8, 3, 1, 2, 3, 1, 2, 4, 5];
         let sidecar = format!("{{\"record\":[\"1700000000\",\"start\"]}},{{\"btn\":[\"1700000001\",\"1\"]}},{{\"record\":[\"1700000040\",\"end\"]}},{{\"duration\":[\"1700000040\",\"{ms}\"]}}").into_bytes();
         let file = |b: &[u8]| json!({"byteLength": b.len(), "sha256": digest(b)});
-        let device = uuid::Uuid::new_v4().to_string();
+        let device = pair_android_device(&client, &origin, &cookie);
         let recording = format!("1700000000_ring-{}", &uuid::Uuid::new_v4().simple().to_string()[..8]);
         let manifest = json!({"version":3,"sourceDeviceId":device,"recordingId":recording,"destination":{"intent":"meeting"},
             "packets":file(&packets),"sidecar":file(&sidecar),"wav":file(&wav)});
+        let mut unpaired = manifest.clone();
+        unpaired["sourceDeviceId"] = json!(uuid::Uuid::new_v4().to_string());
+        let (status, text) = call(Method::POST, "/recording-uploads", Some(&cookie), Some(unpaired));
+        assert_eq!(status, 403, "an unpaired device may not upload: {text}");
+        assert_eq!(json_of(&text)["error"], "This device may not upload recordings");
+        println!("unpaired Android source device -> 403");
         let (status, text) = call(Method::POST, "/recording-uploads", Some(&cookie), Some(manifest.clone()));
         assert_eq!(status, 201, "{text}\n{}", log());
         let reserved = json_of(&text);
