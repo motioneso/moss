@@ -1,0 +1,122 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+[hidden] {
+  display: none !important;
+}
+.sc-pad {
+  width: 100%;
+  height: 100dvh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4) var(--space-3);
+  background: var(--surface-raised);
+}
+.sc-pad__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.sc-pad__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: var(--text-md);
+}
+.sc-pad__status {
+  margin-right: auto;
+}
+.sc-pad__text {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  resize: none;
+  padding: var(--space-3);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+.sc-pad__text--lines {
+  display: flex;
+  flex-direction: column;
+  white-space: pre;
+  overflow: hidden;
+}
+.sc-pad__tools {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.sc-pad__conflict {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+/* Settings pane. */
+.sc-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 1120px;
+}
+.sc-back {
+  align-self: flex-start;
+}
+.sc-row-title {
+  font-weight: var(--weight-semibold);
+}
+.sc-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.sc-kbd {
+  font-variant-numeric: tabular-nums;
+}
+
+.sc-pad__notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.sc-pad__count {
+  margin: 0;
+}
+.sc-pad__count--near {
+  color: var(--gold-ink);
+}
+.sc-settings {
+  padding: var(--space-6) var(--space-7);
+}
+@media (max-width: 720px) {
+  .sc-pad {
+    padding: var(--space-4);
+  }
+  .sc-pad__tools .jds-iconbtn {
+    width: 44px;
+    height: 44px;
+  }
+  .sc-pad__tools {
+    column-gap: var(--space-2);
+    row-gap: var(--space-2);
+  }
+  .sc-settings {
+    padding: var(--space-5) var(--space-4);
+  }
+  .sc-settings .set-row,
+  .sc-controls {
+    flex-wrap: wrap;
+  }
+}

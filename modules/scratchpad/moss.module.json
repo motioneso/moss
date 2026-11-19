@@ -4,7 +4,7 @@
   "name": "Scratchpad",
   "description": "One private note for each person, for quick jot-downs. Read it, save over it, add a line to the end, and change its shortcut and notes copying.",
   "publisher": "Moss",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
@@ -93,26 +93,29 @@
     "removable": false
   },
   "jobs": {},
-  "screens": {},
+  "screens": {
+    "/scratchpad": "ui/index.html",
+    "/scratchpad-settings": "ui/settings.html"
+  },
   "navigation": [],
   "settings": [
     {
       "id": "scratchpad.module-settings",
       "label": "Scratchpad",
-      "path": "/settings?section=modules&module=scratchpad",
+      "path": "/scratchpad-settings",
       "scope": "user",
-      "description": "The shortcut and notes copying can be changed through the Scratchpad settings route. The Settings page for them is not part of this package yet."
+      "description": "Open the cog in the Scratchpad header to change the keyboard shortcut or copy the pad to your connected notes folder."
     }
   ],
   "features": [
     {
       "id": "scratchpad.where-to-find",
-      "description": "The web app has no Scratchpad screen yet. The note can be read, saved over, added to and its settings changed through the Scratchpad routes. Each person sees only their own note.",
+      "description": "Open the private Scratchpad from the pencil beside Chat on any page, or use your saved shortcut (Ctrl/Cmd + Shift + S by default). It stays open across navigation. On desktop it sits beside chat; on phone each opens as a full-screen sheet, one at a time.",
       "errors": []
     },
     {
       "id": "scratchpad.save",
-      "description": "Saving keeps a version number with the text, so a save made against an out-of-date copy is refused instead of quietly overwriting the newer one.",
+      "description": "The plain Markdown editor saves after 800 ms, on blur and on close, with Saved, Saving and failure status. Changed elsewhere preserves local text and pauses saving until you choose Reload. Bullet, numbered and checkbox lists continue on Enter; Tab/Shift+Tab indent, and Ctrl/Cmd+B or I format the selection. The limit is 64,000 characters; a count appears above 50,000.",
       "errors": [
         {
           "code": "scratchpad_conflict",
@@ -128,7 +131,7 @@
     },
     {
       "id": "scratchpad.settings",
-      "description": "Scratchpad settings are the keyboard shortcut that opens the note and whether the note is copied into the notes folder. The web app has no settings page for these yet.",
+      "description": "The pad header cog opens Scratchpad settings. Record a modified keyboard shortcut or reset it. Copy to my notes folder is disabled until a notes folder is connected; Connect one opens Connections.",
       "remediations": [
         {
           "id": "scratchpad.settings.connect_notes_folder",
@@ -152,7 +155,7 @@
     },
     {
       "id": "scratchpad.chat",
-      "description": "Chat can read your private note and append up to 2000 characters. Reading returns outside content. Preparing approval details reads the stored revision and character count without changing the note. Append requires an account-bound one-use grant for the exact submitted text; no chat replace or delete tool is offered. The host chat interface must render these details and grant approval. No Scratchpad screen is included.",
+      "description": "Chat can read your private note and append up to 2000 characters. Reading returns outside content. Preparing approval details reads the stored revision and character count without changing the note. Append requires an account-bound one-use grant for the exact submitted text; no chat replace or delete tool is offered. The host chat interface must render these details and grant approval. The open pad refreshes when clean and shows Added to your scratchpad when appended text arrives; unsaved edits are kept with a conflict notice.",
       "errors": [
         {
           "code": "scratchpad_empty_text",
