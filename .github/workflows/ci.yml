@@ -434,7 +434,12 @@ jobs:
             scripts/run-gate.sh wait --follow --log "$log"
             rc=$?
             echo "GATE_RESULT gate=$gate exit=$rc seconds=$(( $(date +%s) - start ))"
-            if [ "$rc" -ne 0 ]; then failed=1; fi
+            if [ "$rc" -ne 0 ]; then
+              failed=1
+              echo "::group::Last lines of the $gate log"
+              tail -n 80 "$log"
+              echo "::endgroup::"
+            fi
           done
           exit $failed
 
