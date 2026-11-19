@@ -11,3 +11,7 @@
 - Listing, creating, changing, closing and adding evidence work through the same routes as before.
 - Evidence on a closed goal is refused.
 - Chat tools, memory sync, the Today section and the screen are not part of this package yet.
+
+## 0.1.2
+
+Today shows your active long-term goals, their priorities and desired outcomes, matching the existing screen.

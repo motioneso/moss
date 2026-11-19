@@ -14,7 +14,8 @@ export function connectModuleFrame(
     save,
     screenUrl,
     hostWindow = globalThis.window,
-    bootstrapToken = null
+    bootstrapToken = null,
+    minimumHeight = 160
   }
 ) {
   if (!/^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)*$/.test(moduleId)) throw new Error("Invalid module");
@@ -140,7 +141,7 @@ export function connectModuleFrame(
         }
         case "resize": {
           if (!Number.isFinite(message.height)) throw new Error();
-          frame.style.height = `${Math.min(10000, Math.max(160, Math.ceil(message.height)))}px`;
+          frame.style.height = `${Math.min(10000, Math.max(minimumHeight, Math.ceil(message.height)))}px`;
           result = null;
           break;
         }
