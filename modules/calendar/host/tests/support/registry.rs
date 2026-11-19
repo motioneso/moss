@@ -23,29 +23,46 @@ fn public(k: &Ed25519KeyPair) -> String {
 fn sign(k: &Ed25519KeyPair, b: &[u8]) -> String {
     STANDARD.encode(k.sign(b).as_ref())
 }
-pub fn publish(folder: &Path, bytes: &[u8]) -> (String, String, Artifact) {
+pub fn publish(folder: &Path, bytes: &[u8]) -> (String, String, Vec<Artifact>) {
+    // Keep the dependency first so callers install it before Calendar.
+    let tasks = std::fs::read(
+        std::env::var("CALENDAR_TASKS_PACKAGE").expect("Run modules/calendar/tools/gate.sh"),
+    )
+    .unwrap();
+    std::fs::create_dir(folder.join("packages")).unwrap();
     // Ephemeral keys generated for this disposable registry; no production credentials.
     let root = key();
     let index = key();
     let publisher = key();
-    let m = moss_calendar_host::package::manifest().unwrap();
-    let digest = trust::digest(bytes);
-    let artifact = Artifact {
-        id: m.id.clone(),
-        version: m.version.clone(),
-        digest: digest.clone(),
-        size: bytes.len() as u64,
-        publisher_key: "calendar-test".into(),
-        signature: sign(&publisher, digest.as_bytes()),
-        requires_moss: m.requires_moss,
-        abi: m.abi,
-        capabilities: m.capabilities,
-        migrations: m.database.migrations,
-        requires: m.requires,
-        changelog: "Calendar data slice".into(),
-        channel: Channel::Stable,
-        urgent: false,
-    };
+    let artifacts: Vec<Artifact> = [tasks.as_slice(), bytes]
+        .into_iter()
+        .zip(["tasks", "calendar"])
+        .map(|(bytes, id)| {
+            let digest = trust::digest(bytes);
+            let package =
+                moss_module_host::archive::Package::read(bytes, &digest, &"0.1.0".parse().unwrap())
+                    .unwrap();
+            let m = package.manifest;
+            assert_eq!(m.id, id);
+            std::fs::write(folder.join(format!("packages/{digest}.mosspkg")), bytes).unwrap();
+            Artifact {
+                id: m.id,
+                version: m.version,
+                digest: digest.clone(),
+                size: bytes.len() as u64,
+                publisher_key: "calendar-test".into(),
+                signature: sign(&publisher, digest.as_bytes()),
+                requires_moss: m.requires_moss,
+                abi: m.abi,
+                capabilities: m.capabilities,
+                migrations: m.database.migrations,
+                requires: m.requires,
+                changelog: "Calendar test packages".into(),
+                channel: Channel::Stable,
+                urgent: false,
+            }
+        })
+        .collect();
     let identity = RegistryIdentity {
         id: "calendar-test-registry".into(),
         name: "Calendar test registry".into(),
@@ -65,7 +82,7 @@ pub fn publish(folder: &Path, bytes: &[u8]) -> (String, String, Artifact) {
         serial: 1,
         expires: chrono::Utc::now() + chrono::Duration::days(1),
         signing_key: "online".into(),
-        modules: vec![artifact.clone()],
+        modules: artifacts.clone(),
         revoked: vec![],
     };
     for (name, data, k) in [
@@ -79,7 +96,5 @@ pub fn publish(folder: &Path, bytes: &[u8]) -> (String, String, Artifact) {
         std::fs::write(folder.join(name), &data).unwrap();
         std::fs::write(folder.join(format!("{name}.sig")), sign(k, &data)).unwrap();
     }
-    std::fs::create_dir(folder.join("packages")).unwrap();
-    std::fs::write(folder.join(format!("packages/{digest}.mosspkg")), bytes).unwrap();
-    (public(&root), public(&publisher), artifact)
+    (public(&root), public(&publisher), artifacts)
 }
