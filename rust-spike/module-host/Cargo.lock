@@ -1298,14 +1298,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "moss-email"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "moss-module-sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "moss-email-host"
+version = "0.1.0"
+dependencies = [
+ "access-context",
+ "anyhow",
+ "moss-email",
+ "moss-module-host",
+ "moss-module-sdk",
+ "safety-core",
+ "serde_json",
+ "tokio",
+ "tokio-postgres",
+ "uuid",
+ "wat",
+]
+
+[[package]]
 name = "moss-module-host"
 version = "0.1.0"
 dependencies = [
  "access-context",
  "anyhow",
  "async-trait",
+ "axum",
  "base64 0.22.1",
  "chrono",
+ "moss-email-host",
  "moss-module-sdk",
  "moss-people",
  "moss-platform-adapters",

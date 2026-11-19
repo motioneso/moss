@@ -127,11 +127,77 @@ pub struct ChatThread {
     pub status: String,
     pub model_label: String,
     pub messages: Vec<ChatMessage>,
+    /// True while a turn is running in the background. The drawer polls until it clears.
+    #[serde(default)]
+    pub running: bool,
+    #[serde(default)]
+    pub approvals: Vec<ApprovalView>,
+}
+
+/// `action` is a module tool card (part 3b). `permission` is the agent's own ask.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ApprovalKind {
+    Action,
+    Permission,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ApprovalState {
+    Pending,
+    Approved,
+    Used,
+    Declined,
+    TimedOut,
+    Voided,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct CardField {
+    pub label: String,
+    pub value: String,
+}
+
+/// What the browser may see of an approval. It never carries raw tool parameters.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct ApprovalView {
+    pub id: String,
+    pub kind: ApprovalKind,
+    pub state: ApprovalState,
+    pub title: String,
+    pub fields: Vec<CardField>,
+    pub danger: bool,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Decision {
+    Approve,
+    Reject,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct DecideApproval {
+    pub decision: Decision,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChatError {
+    /// A turn is already running for this account.
+    Busy,
+    /// The approval is not this account's, or is gone.
+    NotFound,
+    /// The approval was already answered, expired or voided.
+    Closed,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct SendMessage {
     pub text: String,
+    /// Explicitly ends the previous agent conversation before adopting the current tool list.
+    #[serde(default)]
+    pub fresh_conversation: bool,
 }
 
 /// The seam Phase 2/3 fill in. Each call is made on behalf of one signed-in account.
@@ -139,8 +205,15 @@ pub trait ShellData: Send + Sync + 'static {
     fn shell(&self) -> ShellView;
     fn today(&self) -> TodayView;
     fn chat_thread(&self) -> ChatThread;
-    /// Stores the person's message and returns the assistant's reply.
-    fn send_message(&self, text: &str) -> ChatMessage;
+    /// Stores the person's message and starts the turn. The reply arrives in the thread.
+    fn send_message(&self, message: &SendMessage) -> Result<ChatThread, ChatError>;
+    /// Answers one pending approval on behalf of `actor`. Any other account's id is unknown.
+    fn decide_approval(
+        &self,
+        actor: &str,
+        id: &str,
+        decision: Decision,
+    ) -> Result<ChatThread, ChatError>;
 }
 
 /// Fixed sample data, so the frame and the first two screens can be built and checked before

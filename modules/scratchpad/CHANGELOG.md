@@ -1,3 +1,12 @@
+# 0.1.3
+
+- Moss can read your Scratchpad through the Rust chat runner and signed-in server.
+
+# 0.1.2
+
+- Open your private pad beside chat, type Markdown with autosave, and recover from changes made elsewhere.
+- The header cog opens shortcut and notes-copy settings. Phone uses one full-screen sheet at a time.
+
 # Scratchpad package
 
 ## 0.1.1

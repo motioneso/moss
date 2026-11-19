@@ -24,9 +24,10 @@ struct ProbeTools {
 }
 
 impl ToolHost for ProbeTools {
-    fn tools(&self) -> Vec<ToolDef> {
+    fn tools(&self, _: &str) -> Vec<ToolDef> {
         vec![ToolDef {
             name: "secret_word".into(),
+            module: None,
             description: "Returns today's secret word from Moss.".into(),
             input_schema: json!({"type": "object", "properties": {}}),
             facts: ToolFacts {

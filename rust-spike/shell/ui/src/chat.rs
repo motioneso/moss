@@ -41,7 +41,12 @@ pub fn ChatDrawer(
                     Ok(t) => {
                         load_error.set(None);
                         messages.set(t.messages.clone());
+                        waiting.set(t.running);
+                        let running = t.running;
                         thread.set(Some(t));
+                        if running {
+                            poll_soon(thread, messages, waiting);
+                        }
                     }
                     Err(e) => load_error.set(Some(e)),
                 }
@@ -99,10 +104,24 @@ pub fn ChatDrawer(
         });
         spawn_local(async move {
             match api::send_message(text).await {
-                Ok(reply) => messages.update(|m| m.push(reply)),
-                Err(_) => send_error.set(Some("Your message didn't send. Try again.".into())),
+                Ok(t) => {
+                    messages.set(t.messages.clone());
+                    waiting.set(t.running);
+                    let running = t.running;
+                    thread.set(Some(t));
+                    if running {
+                        poll_soon(thread, messages, waiting);
+                    }
+                }
+                Err(e) => {
+                    send_error.set(Some(if e == "busy" {
+                        "Moss is still working on your last message.".into()
+                    } else {
+                        "Your message didn't send. Try again.".to_string()
+                    }));
+                    waiting.set(false);
+                }
             }
-            waiting.set(false);
         });
     };
 
@@ -238,6 +257,37 @@ pub fn ChatDrawer(
         </aside>
         </Show>
     }
+}
+
+/// How often the drawer asks for the thread while a turn runs.
+const POLL: std::time::Duration = std::time::Duration::from_millis(1500);
+
+/// Reloads the thread after a short wait, and again until the turn stops running.
+fn poll_soon(
+    thread: RwSignal<Option<ChatThread>>,
+    messages: RwSignal<Vec<ChatMessage>>,
+    waiting: RwSignal<bool>,
+) {
+    set_timeout(
+        move || {
+            spawn_local(async move {
+                match api::chat_thread().await {
+                    Ok(t) => {
+                        messages.set(t.messages.clone());
+                        waiting.set(t.running);
+                        let running = t.running;
+                        thread.set(Some(t));
+                        if running {
+                            poll_soon(thread, messages, waiting);
+                        }
+                    }
+                    // A failed poll is retried, so a dropped connection does not strand the drawer.
+                    Err(_) => poll_soon(thread, messages, waiting),
+                }
+            });
+        },
+        POLL,
+    );
 }
 
 const LOADING_BAR: &str = r##"<path opacity="0.8" d="M2 14 V18 H6 V14z"><animateTransform attributeName="transform" type="translate" values="0 0; 24 0; 0 0" dur="2s" begin="0" repeatCount="indefinite" keySplines="0.2 0.2 0.4 0.8;0.2 0.2 0.4 0.8" calcMode="spline"></animateTransform></path><path opacity="0.5" d="M0 14 V18 H8 V14z"><animateTransform attributeName="transform" type="translate" values="0 0; 24 0; 0 0" dur="2s" begin="0.1s" repeatCount="indefinite" keySplines="0.2 0.2 0.4 0.8;0.2 0.2 0.4 0.8" calcMode="spline"></animateTransform></path>"##;

@@ -94,7 +94,7 @@
     {
       "id": "people.settings",
       "label": "People",
-      "description": "Choose your People notes folder, refresh notes, review matches and manage people. Requires the installed host preference and note adapters.",
+      "description": "Choose your People notes folder, refresh notes, review matches and manage people. Your account notes folder is prepared when first selected; folder and suggestion choices are saved for your account.",
       "path": "/settings/memory/people",
       "scope": "user",
       "entry": "ui/index.html"

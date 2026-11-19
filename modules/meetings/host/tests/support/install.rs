@@ -27,6 +27,7 @@ pub fn stand_in(id: &str, wasm: &[u8]) -> (Vec<u8>, moss_module_host::manifest::
 /// The installed application plus the folders that must outlive it.
 pub struct Installed {
     pub app: Application,
+    pub meetings: (moss_module_host::registry::Catalog, moss_module_host::registry::Artifact),
     _folders: (tempfile::TempDir, tempfile::TempDir),
 }
 
@@ -112,6 +113,7 @@ pub fn install_all(
             version: "0.1.0".parse().unwrap(),
             compiled_cache: None,
             fuel_ceiling: Some(250_000_000),
+            browser_dir: None,
         },
         move |next| {
             let authority = Arc::new(moss_meetings_host::authority::MeetingsAuthority::new(database.clone()));
@@ -138,6 +140,7 @@ pub fn install_all(
             .refresh(&f.access(f.a), Source::Folder(reg.path().join(label)), &key, &publisher, &format!("{label}-test-registry"))
             .unwrap();
         app.installer.install(&f.access(f.a), &source, &artifact, true).unwrap();
+        (source, artifact)
     };
     // Meetings requires Calendar, People, Tasks, Notes and Memory. Calendar, People, Tasks and Notes are empty stand-ins
     // because the tests never reach them; Memory is the real package.
@@ -149,6 +152,6 @@ pub fn install_all(
         let core = std::fs::read(std::env::var("MEMORY_CORE_WASM").expect("Run modules/meetings/tools/check.sh")).unwrap();
         put(&moss_memory_host::package::pack(&root, &core).unwrap(), moss_memory_host::package::manifest().unwrap(), "memory");
     }
-    put(&moss_meetings_host::package::pack(&root, &wasm).unwrap(), moss_meetings_host::package::manifest().unwrap(), "meetings");
-    Installed { app, _folders: (dir, reg) }
+    let meetings = put(&moss_meetings_host::package::pack(&root, &wasm).unwrap(), moss_meetings_host::package::manifest().unwrap(), "meetings");
+    Installed { app, meetings, _folders: (dir, reg) }
 }

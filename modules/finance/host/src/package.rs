@@ -17,6 +17,38 @@ pub fn files(root: &Path, component: &[u8]) -> Result<BTreeMap<String, Vec<u8>>>
         ("NOTICE".into(), include_bytes!("../../NOTICE").to_vec()),
         ("CHANGELOG.md".into(), include_bytes!("../../CHANGELOG.md").to_vec()),
     ]);
+    let ui: [(&str, &[u8]); 27] = [
+        ("index.html", include_bytes!("../../ui/index.html")),
+        ("app.mjs", include_bytes!("../../ui/app.mjs")),
+        ("api.mjs", include_bytes!("../../ui/api.mjs")),
+        ("html.mjs", include_bytes!("../../ui/html.mjs")),
+        ("format.mjs", include_bytes!("../../ui/format.mjs")),
+        ("budget-model.mjs", include_bytes!("../../ui/budget-model.mjs")),
+        ("budget.mjs", include_bytes!("../../ui/budget.mjs")),
+        ("accounts-model.mjs", include_bytes!("../../ui/accounts-model.mjs")),
+        ("accounts.mjs", include_bytes!("../../ui/accounts.mjs")),
+        ("transactions-model.mjs", include_bytes!("../../ui/transactions-model.mjs")),
+        ("transactions.mjs", include_bytes!("../../ui/transactions.mjs")),
+        ("dialogs.mjs", include_bytes!("../../ui/dialogs.mjs")),
+        ("upcoming-model.mjs", include_bytes!("../../ui/upcoming-model.mjs")),
+        ("upcoming.mjs", include_bytes!("../../ui/upcoming.mjs")),
+        ("upcoming-ctl.mjs", include_bytes!("../../ui/upcoming-ctl.mjs")),
+        ("bill-dialogs.mjs", include_bytes!("../../ui/bill-dialogs.mjs")),
+        ("reports-model.mjs", include_bytes!("../../ui/reports-model.mjs")),
+        ("reports.mjs", include_bytes!("../../ui/reports.mjs")),
+        ("reports-ctl.mjs", include_bytes!("../../ui/reports-ctl.mjs")),
+        ("start.mjs", include_bytes!("../../ui/start.mjs")),
+        ("settings.html", include_bytes!("../../ui/settings.html")),
+        ("settings.mjs", include_bytes!("../../ui/settings.mjs")),
+        ("settings-model.mjs", include_bytes!("../../ui/settings-model.mjs")),
+        ("settings.css", include_bytes!("../../ui/settings.css")),
+        ("guest-bridge.mjs", include_bytes!("../../ui/guest-bridge.mjs")),
+        ("finance.css", include_bytes!("../../ui/finance.css")),
+        ("finance-ledger.css", include_bytes!("../../ui/finance-ledger.css")),
+    ];
+    for (name, bytes) in ui {
+        files.insert(format!("ui/{name}"), bytes.to_vec());
+    }
     for path in &manifest.database.migrations {
         let bytes = if let Some(frozen) = moss_module_host::legacy::entry("finance", path) {
             let bytes = std::fs::read(root.join("external-modules/finance").join(path))?;

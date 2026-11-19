@@ -28,7 +28,7 @@ def run(source, name, test="cleanup_privacy_detects_removed_rls_and_owner_predic
 
 with tempfile.TemporaryDirectory(prefix="notes-cleanup-source-") as folder:
     isolated = Path(folder)
-    for relative in ["rust-spike", "modules/notes", "modules/people", "packages/notes"]:
+    for relative in ["rust-spike", "modules/notes", "modules/people", "modules/memory", "packages/notes"]:
         shutil.copytree(root / relative, isolated / relative, ignore=shutil.ignore_patterns("target", "node_modules", ".git"))
     shutil.copyfile(root / "LICENSE", isolated / "LICENSE")
     path = isolated / "rust-spike/module-host/src/memory_cleanup.rs"

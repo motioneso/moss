@@ -3,6 +3,8 @@
 mod common;
 #[path = "people_routes/installed.rs"]
 mod installed;
+#[path = "people_routes/readiness.rs"]
+mod readiness;
 use serde_json::{json, Value};
 use std::{
     fs,
@@ -150,11 +152,7 @@ fn installer_alone_brings_a_fresh_instance_to_serving_people() {
         )
     };
     use reqwest::Method;
-    assert_eq!(
-        call(Method::GET, "/people", None).0,
-        503,
-        "nothing installed yet"
-    );
+    readiness::wait_for_people(&client, &origin, &cookie, 503, &root.join("server.log"));
     let registry = root.join("registry");
     let keys = installed::publish(&registry);
     let output = Command::new(std::env::var("JS170_SERVER").unwrap())
@@ -188,17 +186,7 @@ fn installer_alone_brings_a_fresh_instance_to_serving_people() {
             .join(stored["admin_user_id"].as_str().expect("owner recorded"))
     };
     // The running server picks the module up with no restart.
-    let deadline = Instant::now() + Duration::from_secs(30);
-    let (mut status, mut list) = call(Method::GET, "/people", None);
-    while status != 200 {
-        assert!(
-            Instant::now() < deadline,
-            "not served after install: {status} {list}\n{}",
-            log("server.log")
-        );
-        std::thread::sleep(Duration::from_millis(500));
-        (status, list) = call(Method::GET, "/people", None);
-    }
+    readiness::wait_for_people(&client, &origin, &cookie, 200, &root.join("server.log"));
     let saved = call(
         Method::PUT,
         "/people/notes-settings",

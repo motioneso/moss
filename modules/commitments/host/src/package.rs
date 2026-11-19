@@ -17,6 +17,34 @@ pub fn files(root: &Path, component: &[u8]) -> Result<BTreeMap<String, Vec<u8>>>
         ("NOTICE".into(), include_bytes!("../../NOTICE").to_vec()),
         ("CHANGELOG.md".into(), include_bytes!("../../CHANGELOG.md").to_vec()),
     ]);
+    for (name, bytes) in [
+        (
+            "index.html",
+            include_bytes!("../../ui/index.html").as_slice(),
+        ),
+        ("today.mjs", include_bytes!("../../ui/today.mjs").as_slice()),
+        (
+            "menu.mjs",
+            include_bytes!("../../../../rust-spike/module-ui/web/menu.mjs").as_slice(),
+        ),
+        ("today.css", include_bytes!("../../ui/today.css").as_slice()),
+        ("api.mjs", include_bytes!("../../ui/api.mjs").as_slice()),
+        ("view.mjs", include_bytes!("../../ui/view.mjs").as_slice()),
+        (
+            "controller.mjs",
+            include_bytes!("../../ui/controller.mjs").as_slice(),
+        ),
+        (
+            "guest-bridge.mjs",
+            include_bytes!("../../ui/guest-bridge.mjs").as_slice(),
+        ),
+        (
+            "review-card.mjs",
+            include_bytes!("../../ui/review-card.mjs").as_slice(),
+        ),
+    ] {
+        files.insert(format!("ui/{name}"), bytes.to_vec());
+    }
     for path in &manifest.database.migrations {
         let frozen = moss_module_host::legacy::entry("commitments", path)
             .ok_or_else(|| anyhow::anyhow!("Commitments SQL is not in the legacy inventory"))?;

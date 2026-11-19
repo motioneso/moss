@@ -35,6 +35,14 @@ impl Fixture {
                 root.batch_execute(moss_module_host::postgres::MIGRATION).await.unwrap();
                 root.batch_execute(moss_module_host::migrations::MIGRATION).await.unwrap();
             }
+            if !root
+                .query_one("SELECT to_regclass('app.companion_devices_owner') IS NOT NULL", &[])
+                .await
+                .unwrap()
+                .get::<_, bool>(0)
+            {
+                root.batch_execute(moss_module_host::companion_devices::MIGRATION).await.unwrap();
+            }
             root.execute(
                 "INSERT INTO app.users(id,email,name,is_instance_admin) VALUES($1,$4,'Meet A',true),($2,$5,'Meet B',false),($3,$6,'Meet Admin',true)",
                 &[&a, &b, &admin, &format!("{a}@example.test"), &format!("{b}@example.test"), &format!("{admin}@example.test")],

@@ -76,3 +76,6 @@ pub const CLOUD_RAIN: &str = r##"<path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4
 pub const CLOUD_SNOW: &str = r##"<path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path><path d="M8 15h.01"></path><path d="M8 19h.01"></path><path d="M12 17h.01"></path><path d="M12 21h.01"></path><path d="M16 15h.01"></path><path d="M16 19h.01"></path>"##;
 
 pub const WIND: &str = r##"<path d="M12.8 19.6A2 2 0 1 0 14 16H2"></path><path d="M17.5 8a2.5 2.5 0 1 1 2 4H2"></path><path d="M9.8 4.4A2 2 0 1 1 11 8H2"></path>"##;
+
+pub const PENCIL: &str =
+    r#"<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>"#;

@@ -149,7 +149,7 @@ pub fn post<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Respon
 }
 
 /// The ledger and bounds a read needs, or the answer to give instead.
-fn open<H: Host + ?Sized>(host: &H, id: &str) -> Result<std::result::Result<(Stored, Ledger), Response>> {
+pub(crate) fn open<H: Host + ?Sized>(host: &H, id: &str) -> Result<std::result::Result<(Stored, Ledger), Response>> {
     let id = id.to_lowercase();
     Ok(match store::load(host, &id, false)? {
         Ok(Some(state)) if state.ledger.is_some() => {

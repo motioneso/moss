@@ -212,10 +212,9 @@ fn installed_search_matches_legacy_and_privacy_controls_fail_first() {
         let payload = json!({"tool":"notes.search","parameters":case["parameters"]});
         serde_json::from_str(
             &installer
-                .call(
+                .call_tool_for_test(
                     "notes",
                     AccessContext::new(actor, "notes-search"),
-                    "tool",
                     &payload.to_string(),
                 )
                 .unwrap(),

@@ -50,6 +50,9 @@ pub struct Fake {
     /// Private note copies the Notes stand-in holds, keyed by `<meeting>/v<version>`, and its switches.
     pub copies: RefCell<BTreeMap<String, String>>,
     pub notes_down: Cell<bool>,
+    /// Meetings whose chat threads the Chat stand-in was asked to delete, and its refusal switch.
+    pub chat_deleted: RefCell<Vec<String>>,
+    pub chat_refuses: RefCell<Option<String>>,
     pub lose_write_answer: Cell<bool>,
     /// What the transcribe port answers to `create`, and every audio clip it was given.
     pub speech: RefCell<Value>,
@@ -78,6 +81,8 @@ impl Fake {
             history_fails: Cell::new(false),
             copies: RefCell::new(BTreeMap::new()),
             notes_down: Cell::new(false),
+            chat_deleted: RefCell::new(vec![]),
+            chat_refuses: RefCell::new(None),
             lose_write_answer: Cell::new(false),
             section: RefCell::new(BTreeMap::new()),
             clock: Cell::new(0),
@@ -282,6 +287,15 @@ impl Host for Fake {
                 Ok(json!({"id": format!("00000000-0000-4000-8000-{n:012x}")}))
             }
             ("api", "call") if resource == "notes" => self.notes(&parameters),
+            ("api", "call") if resource == "chat" => {
+                assert_eq!(parameters["name"], "deleteMeetingChatThreads");
+                if let Some(message) = self.chat_refuses.borrow().clone() {
+                    return Err(moss_module_sdk::Error::new(&message));
+                }
+                let id = parameters["parameters"]["meetingId"].as_str().unwrap().to_owned();
+                self.chat_deleted.borrow_mut().push(id);
+                Ok(json!({"deleted": 1}))
+            }
             ("kv", "section") if resource == "meetings.exports" => {
                 let mut all = Map::new();
                 for name in HOST_COLLECTIONS {

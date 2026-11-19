@@ -2,6 +2,13 @@
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
 [[ "${JARVIS_GATE_RUN:-}" == 1 ]] || { echo 'Use scripts/run-gate.sh' >&2; exit 4; }
+# PRs may opt out of the long mailbox-size benchmark; full/main runs keep it.
+speed_suite=(--test sync_speed)
+case "${CONNECTORS_SKIP_SYNC_SPEED:-0}" in
+  0) ;;
+  1) speed_suite=(); echo 'Skipping Connectors sync_speed (CONNECTORS_SKIP_SYNC_SPEED=1)' ;;
+  *) echo 'CONNECTORS_SKIP_SYNC_SPEED must be 0 or 1' >&2; exit 4 ;;
+esac
 : "${CARGO_TARGET_DIR:=/tmp/moss-connectors-host}"
 export CARGO_TARGET_DIR
 export CONNECTORS_UI_DIR="${CONNECTORS_UI_DIR:-$CARGO_TARGET_DIR/connectors-ui/web}"
@@ -19,4 +26,4 @@ pnpm exec tsx modules/connectors/tools/google-fixtures.ts --check
 CARGO_TARGET_DIR="$guest" RUSTFLAGS='-C link-arg=--import-memory -C link-arg=--initial-memory=2097152 -C link-arg=--max-memory=67108864' \
   cargo +1.95.0 build --locked --offline --release --lib --target wasm32-unknown-unknown --manifest-path modules/connectors/src/Cargo.toml
 export CONNECTORS_CORE_WASM="$guest/wasm32-unknown-unknown/release/moss_connectors.wasm"
-cargo +1.95.0 test --locked --offline --manifest-path modules/connectors/host/Cargo.toml --test package --test registry --test google --test google_sync --test imap --test refresh --test outlook --test mail_probe --test sync_speed --test writes -- --nocapture
+cargo +1.95.0 test --locked --offline --manifest-path modules/connectors/host/Cargo.toml --test package --test registry --test google --test google_sync --test imap --test refresh --test outlook --test mail_probe "${speed_suite[@]}" --test writes -- --nocapture

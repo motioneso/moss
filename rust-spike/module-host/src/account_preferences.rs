@@ -87,8 +87,8 @@ impl JsonShape {
         }
     }
 }
-/// Weather's two bindings, as the shell grants them. The `weather` module reads and writes
-/// the preference keys the old Settings routes used.
+/// Weather reads and writes the place and unit keys the old Settings routes used,
+/// and reads the saved locale time zone for its fallback city.
 pub fn weather_bindings() -> BTreeMap<(String, String), Binding> {
     BTreeMap::from([
         (
