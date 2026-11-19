@@ -11,7 +11,7 @@ pub fn DisclosureToggle(
     children: Children,
 ) -> impl IntoView {
     view! {<button type="button" class=format!("jds-disclosure {class}")
-    aria-expanded=move||expanded.get() aria-controls=controls
+    aria-expanded=move||expanded.get().to_string() aria-controls=controls
     on:click=move|event|on_click.run(event)>{children()}</button>}
 }
 

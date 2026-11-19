@@ -47,7 +47,7 @@ export async function checkToday(page: Page, context: BrowserContext, origin: st
       "review fits the viewport"
     );
     if (name === "phone") {
-      const toggle = dialog.getByRole("button", { name: "Today's schedule", exact: true });
+      const toggle = dialog.getByRole("button", { name: /Today's schedule$/ });
       await expect(toggle).toHaveAttribute("aria-expanded", "false");
       await toggle.click();
       await expect(toggle).toHaveAttribute("aria-expanded", "true");
