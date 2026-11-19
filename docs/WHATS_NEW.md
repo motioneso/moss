@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Finance screens in the new app.** You can now see your budget, transactions and accounts, assign money and sort transactions, and a bank that needs you to sign in again shows a Reconnect button. [PR #4362](https://github.com/motioneso/moss/pull/4362)
 - **Meals screen.** The Meals page now shows your meal plan, shopping list, pantry and staples, and works on your phone. [PR #4360](https://github.com/motioneso/moss/pull/4360)
 - **News settings in the new app.** The News settings page now opens in the new app, with your sources, topics, excluded publishers and story preferences. [PR #4355](https://github.com/motioneso/moss/pull/4355)
 - **Briefings screens in the new app.** You can read your morning and evening briefings and change when they are prepared from the new Moss app, including on your phone. [PR #4349](https://github.com/motioneso/moss/pull/4349)
