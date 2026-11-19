@@ -45,7 +45,7 @@ fn an_unsupported_invocation_leaks_no_request_text() {
 fn the_package_builds_and_the_manifest_validates() {
     let files = moss_commitments_host::package::files(&root(), &component()).unwrap();
     assert_eq!(files.keys().filter(|k| k.starts_with("sql/")).count(), 2);
-    for needed in ["moss.module.json", "code/module.wasm", "LICENSE", "NOTICE", "CHANGELOG.md"] {
+    for needed in ["moss.module.json", "code/module.wasm", "LICENSE", "NOTICE", "CHANGELOG.md", "ui/index.html", "ui/today.mjs", "ui/menu.mjs"] {
         assert!(files.contains_key(needed), "{needed} missing");
     }
     assert!(moss_commitments_host::package::pack(&root(), &component()).is_ok());

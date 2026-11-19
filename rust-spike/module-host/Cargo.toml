@@ -42,6 +42,7 @@ async-trait = "0.1"
 browser-proof = []
 
 [dev-dependencies]
+moss-email-host = { path = "../../modules/email/host" }
 tempfile = "3"
 moss-people = { path = "../../modules/people/src" }
 

@@ -1,5 +1,7 @@
-//! Installed Commitments package served by the real HTTPS executable. Not a native UI proof.
+//! Installed Commitments package over real HTTPS, optionally with the full Today screen proof.
 mod common;
+#[path = "commitments_screen/mod.rs"]
+mod screen_proof;
 #[path = "people_routes/installed.rs"]
 mod installed;
 use common::Keys;
@@ -92,6 +94,9 @@ fn installed_commitments_package_serves_routes_from_the_real_server() {
         "<!doctype html><title>Commitments HTTP fixture</title>",
     )
     .unwrap();
+    if let Ok(web) = std::env::var("MOSS_SHELL_WEB_DIR") {
+        assert!(Command::new("cp").arg("-r").arg(format!("{web}/.")).arg(root.join("web")).status().unwrap().success());
+    }
     let app_url = std::env::var("JS43_APP_URL").unwrap();
     let worker_url = std::env::var("JS43_WORKER_URL").unwrap();
     let bootstrap_url = std::env::var("JS43_BOOTSTRAP_URL").unwrap();
@@ -206,7 +211,16 @@ fn installed_commitments_package_serves_routes_from_the_real_server() {
     // canonical installer, as the server would find it.
     let keys = Keys::new();
     fs::create_dir_all(root.join("registry/packages")).unwrap();
-    let artifacts: Vec<Artifact> = [("JS293_COMMITMENTS_PACKAGE", "commitments")]
+    let mut packages = vec![("JS293_COMMITMENTS_PACKAGE", "commitments")];
+    if std::env::var("COMMITMENTS_SCREEN_LIVE").is_ok() {
+        packages.extend([
+            ("JS220_TASKS_PACKAGE", "tasks"),
+            ("JS181_CALENDAR_PACKAGE", "calendar"),
+            ("JS225_EMAIL_PACKAGE", "email"),
+            ("JS224_CONNECTORS_PACKAGE", "connectors"),
+        ]);
+    }
+    let artifacts: Vec<Artifact> = packages
     .iter()
     .map(|(variable, id)| {
         let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
@@ -423,5 +437,8 @@ fn installed_commitments_package_serves_routes_from_the_real_server() {
     println!("PASS live extract: queued over HTTPS on a non-loopback address, job carries no text, untrusted origin refused");
     // Nothing the test sent reached the server log.
     assert!(!log().to_lowercase().contains(&MARK.to_lowercase()));
+    if std::env::var("COMMITMENTS_SCREEN_LIVE").is_ok() {
+        screen_proof::run(root, &runtime, &bootstrap_url, &app_url, &owner, &ai_key, &client, &remote_origin, &cookie);
+    }
     println!("commitments live: list, read, status, suppress, refused resolve and two-person privacy worked over HTTPS");
 }

@@ -10,7 +10,8 @@ function setup({
   theme = () => ({ theme: "sage" }),
   opened = [],
   save,
-  minimumHeight = 160
+  minimumHeight,
+  resized
 } = {}) {
   let listener;
   const replies = [];
@@ -33,6 +34,7 @@ function setup({
     },
     theme,
     minimumHeight,
+    resized,
     ...(save ? { save } : {}),
     navigate: () => null,
     open: (url) => {
@@ -460,5 +462,18 @@ test("save fails when the host provides no save callback", async () => {
     text: "x"
   });
   assert.equal(s.replies.at(-1).ok, false);
+  s.dispose();
+});
+
+test("embedded sections opt into zero height while keeping the upper bound", async () => {
+  const heights = [];
+  const s = setup({ minimumHeight: 0, resized: (height) => heights.push(height) });
+  await s.send({ type: "resize", height: 0 });
+  assert.equal(s.frame.style.height, "0px");
+  await s.send({ type: "resize", height: 20000 });
+  assert.equal(s.frame.style.height, "10000px");
+  await s.send({ type: "resize", height: Number.NaN });
+  assert.equal(s.replies.at(-1).ok, false);
+  assert.deepEqual(heights, [0, 10000]);
   s.dispose();
 });

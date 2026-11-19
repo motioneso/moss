@@ -4,9 +4,10 @@
   "name": "Commitments",
   "description": "Moss reads your email and chats and suggests things you said you would do. You review each suggestion and mark it done or dismiss it.",
   "publisher": "Moss",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
+  "callLimitMs": 30000,
   "abi": "moss:module@1",
   "capabilities": [
     {
@@ -133,7 +134,9 @@
     "bundled": true,
     "removable": false
   },
-  "screens": {},
+  "screens": {
+    "/today": "ui/index.html"
+  },
   "navigation": [],
   "settings": [
     {
@@ -141,7 +144,7 @@
       "label": "Commitments",
       "path": "/settings?section=modules&module=commitments",
       "scope": "user",
-      "description": "Commitments has no settings page. Review suggestions by asking Moss in chat."
+      "description": "Commitments has no settings page. Review pending suggestions in the Commitments section on Today."
     }
   ],
   "features": [
@@ -180,11 +183,18 @@
     },
     {
       "id": "commitments.where-to-find",
-      "description": "Commitments has no screen, navigation entry or settings pane. Commitment suggestions are found when an extraction is started, and an email thread is judged when another module asks for it. Moss does not yet start either one on its own."
+      "description": "Today shows Things you said you would do below the day plan. Accept, reject or snooze a saved suggestion until tomorrow, next week or a chosen date. The section is hidden when there is nothing to review. There is no separate navigation entry or settings pane. Extraction still runs only when requested.",
+      "errors": [
+        {
+          "code": "commitments_today_unavailable",
+          "class": "transient",
+          "description": "Suggestions could not load or a change could not be saved. Use Try again; a failed change leaves the suggestion in place."
+        }
+      ]
     },
     {
       "id": "commitments.review-in-chat",
-      "description": "You review commitments by asking Moss in chat: list suggestions, show the evidence for one, then accept it, reject it or snooze it. Each change asks for your approval first. A suggestion reaches no task list until you accept it."
+      "description": "The package supplies review tools and a reusable approval card based on a saved suggestion. Live Rust chat review waits on the Rust chat tools and approval cards task."
     },
     {
       "id": "commitments.heartbeat_source",
@@ -199,7 +209,7 @@
     },
     {
       "id": "commitments.chat_app_actions",
-      "description": "Chat tools read suggestions, change their status after approval, and report which email threads were already judged. Resolving a suggestion is still unavailable."
+      "description": "Package chat tools read suggestions and change their status after approval. The Rust chat host does not connect these tools yet. Resolving a suggestion is still unavailable."
     },
     {
       "id": "structured.commitments.email-judgement",

@@ -54,3 +54,14 @@ moss-goals-today {
     border-radius: 0;
   }
 }
+
+/* Package-owned sections participate in Today's flow, including a truly empty state. */
+.package-section-frame {
+  display: block;
+  width: 100%;
+  height: 0;
+  border: 0;
+}
+[data-module-section] {
+  min-width: 0;
+}
