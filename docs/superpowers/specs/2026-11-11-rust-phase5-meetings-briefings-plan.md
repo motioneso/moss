@@ -624,8 +624,15 @@ install, and device rows not deleted with Meetings.
 - B1 adds no migration, so an existing install has nothing new to apply. Its ledger keeps 238,
   239, 287 and 330 as applied, and `moss-db up` skips them by checksum.
 - The device lookup SQL is `CREATE OR REPLACE` and guarded by "tables present, view absent"
-  (`module_install.rs:132-141`). 7c moves that guard into server start-up so it runs on every
-  path, not only the install command. Running it twice is a no-op.
+  (`module_install.rs:132-141`), and today it runs only at the end of the install command
+  (`module_install.rs:282`). 7c also runs it at server start-up in `rust-spike/shell/app/src/main.rs`,
+  next to `register_revoker` (line 284), over the elevated migration URL the install command
+  already uses (`INSTALL_URL_VARIABLE`, `module_install.rs:15`). **Open**, owner the 7c builder: if
+  the server has no migration URL at start-up, apply the step when the server installs a module
+  instead, and say which in the report. Running it twice is a no-op.
+- 7c fixes the header of `0004_companion_devices.sql` (line 2), which still says the tables are
+  owned by the Meetings ledger. Under B1 they are core tables. A comment is not a migration, and
+  0004 is host SQL outside every ledger, so the edit is safe.
 - Proof: a copy of the dev data upgrades with exit 0, and `pg_class` shows one row per table name.
 
 ### 4b.4 Account delete and Meetings removal
@@ -634,7 +641,7 @@ install, and device rows not deleted with Meetings.
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | Account delete                     | that person's devices, pair attempts, recording capabilities and recording attempts                  | `ON DELETE CASCADE` on `app.users` (`0238:23,38`, `0287:16,27`); no new code                                              |
 | Meetings removed, data kept        | none; devices reach nothing while Meetings is off (section 4a.3)                                     | as 7a                                                                                                                     |
-| Meetings removed with its data     | every device row and every pair attempt on the instance; capabilities and attempts follow by cascade | a host purge step calls the pairing store before the owned tables drop; if it fails, removal fails and nothing is dropped |
+| Meetings removed with its data     | every device row and every pair attempt on the instance; capabilities and attempts follow by cascade | a host purge step calls the pairing store before the purge transaction; if it fails, removal fails and nothing is dropped |
 | Meetings reinstalled after a purge | none; the tables are still there and empty                                                           | the tables are never dropped, so the core ledger and the tables agree                                                     |
 
 - The manifest does not list the four tables in `ownedTables`. Listing them would make purge drop
@@ -642,6 +649,13 @@ install, and device rows not deleted with Meetings.
   forced it leaves the core ledger saying 238 is applied with no table, so a reinstall breaks.
 - Rust has no account-delete route yet (only tests delete `app.users`). The cascade covers it when
   that route lands. **Open**, owner the account-delete port: confirm it deletes the `app.users` row.
+- The device delete commits on its own, before the purge transaction (`migrations.rs:251-267`),
+  because the pairing store has its own connection. If the later drop fails, the devices are
+  already gone and removal reports failure. That is the safe side, since no credential outlives
+  the removal, and a retry finishes the drop.
+- The call site is `Installer::remove` (`rust-spike/module-host/src/store.rs:750`), just before
+  `lifecycle.purge(id)`. The shell registers the hook at start-up next to `register_revoker`
+  (`rust-spike/shell/app/src/main.rs:284`).
 - New signatures, decisions only:
 
 ```rust
@@ -649,8 +663,8 @@ install, and device rows not deleted with Meetings.
 // Deletes every companion device and pair attempt on the instance. Returns rows deleted.
 fn revoke_all_devices<'a>(&'a self) -> Pin<Box<dyn Future<Output = Result<u64, ApiError>> + Send + 'a>>;
 
-// rust-spike/module-host/src/lifecycle.rs. The shell registers one hook per module id;
-// purge runs it first and stops on error.
+// rust-spike/module-host/src/store.rs. The shell registers one hook per module id.
+// remove() runs it before lifecycle.purge(id) and stops on error.
 pub fn set_purge_hook(module_id: &'static str, hook: Arc<dyn PurgeHook>);
 ```
 
@@ -676,11 +690,13 @@ pub fn set_purge_hook(module_id: &'static str, hook: Arc<dyn PurgeHook>);
    the tables were dropped.
 
 ```bash
-cargo test --manifest-path rust-spike/Cargo.toml -p moss-module-host companion > /tmp/7c-host.log 2>&1; echo "EXIT=$?"   # expect EXIT=0
-cargo test --manifest-path modules/meetings/host/Cargo.toml --test devices > /tmp/7c-meet.log 2>&1; echo "EXIT=$?"     # expect EXIT=0
+cargo test --manifest-path rust-spike/module-host/Cargo.toml --test companion_tables > /tmp/7c-host.log 2>&1; echo "EXIT=$?"   # expect EXIT=0
+cargo test --manifest-path modules/meetings/host/Cargo.toml --test devices > /tmp/7c-meet.log 2>&1; echo "EXIT=$?"            # expect EXIT=0
 ```
 
-The builder confirms the exact crate and test names against the tree before running.
+- `companion_tables` is a new test file in `rust-spike/module-host/tests/` holding tests 1 to 3.
+  Test 4 goes in the existing `modules/meetings/host/tests/devices.rs`.
+- Each log must show a nonzero count of tests run. A name filter that matches nothing also exits 0.
 
 ### 4b.7 Live proof and kill gate
 
