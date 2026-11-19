@@ -445,12 +445,6 @@ pub async fn rename(
 struct Revoker(PairingStore);
 
 impl safety_core::admin::DeviceRevoker for Revoker {
-    fn revoke_all_devices<'a>(
-        &'a self,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<u64, ApiError>> + Send + 'a>> {
-        Box::pin(async move { self.0.revoke_all_devices().await.map_err(internal) })
-    }
-
     fn revoke_all_for<'a>(
         &'a self,
         user: Uuid,
