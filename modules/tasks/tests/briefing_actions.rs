@@ -59,6 +59,10 @@ impl Host for Store {
         if port == "context" {
             return Ok(json!({"actorUserId":self.me,"now":STAMP}));
         }
+        if table == "app.task_activity" {
+            return Ok(json!([{"id":"a","task_id":"t","actor_user_id":self.me,
+                "activity_type":"status_changed","body":null,"created_at":STAMP}]));
+        }
         if table == "app.task_lists" {
             return Ok(
                 json!([{"id":"l","owner_user_id":self.me,"name":"Personal","position":0,
@@ -245,4 +249,47 @@ fn ids_cannot_be_mixed_with_a_status_filter() {
     )
     .is_err());
     assert!(api(&host, "listBriefingTasks", json!({})).is_err());
+}
+
+#[test]
+fn archiving_a_parent_archives_its_open_subtasks_only() {
+    const CHILD_OPEN: &str = "55555555-5555-4555-8555-555555555551";
+    const CHILD_SUGGESTED: &str = "55555555-5555-4555-8555-555555555552";
+    const CHILD_DONE: &str = "55555555-5555-4555-8555-555555555553";
+    let mut rows = vec![task(MINE, "alice", "todo")];
+    for (id, status) in [
+        (CHILD_OPEN, "todo"),
+        (CHILD_SUGGESTED, "suggested"),
+        (CHILD_DONE, "done"),
+    ] {
+        let mut child = task(id, "alice", status);
+        child["parent_task_id"] = json!(MINE);
+        rows.push(child);
+    }
+    let host = Store::new(rows);
+    set(&host, MINE, "archived").unwrap();
+    assert_eq!(host.status_of(CHILD_OPEN), "archived");
+    assert_eq!(host.status_of(CHILD_SUGGESTED), "suggested");
+    assert_eq!(host.status_of(CHILD_DONE), "archived");
+}
+
+#[test]
+fn a_task_finished_after_the_check_is_not_archived() {
+    // The store reports "todo" on the read but the row is already done when the write lands.
+    struct Racy(Store);
+    impl Host for Racy {
+        fn call(&self, port: &str, op: &str, table: &str, query: Value) -> Result<Value> {
+            let kind = query["kind"].clone();
+            let out = self.0.call(port, op, table, query)?;
+            if table == "app.tasks" && kind == "select" {
+                self.0.rows.lock().unwrap()[0]["status"] = json!("done");
+            }
+            Ok(out)
+        }
+    }
+    let host = Racy(Store::new(vec![task(MINE, "alice", "todo")]));
+    let request =
+        json!({"name":"setBriefingTaskStatus","parameters":{"taskId":MINE,"status":"archived"}});
+    assert!(moss_tasks_module::handle(&host, "api", &request.to_string()).is_err());
+    assert_eq!(host.0.status_of(MINE), "done");
 }

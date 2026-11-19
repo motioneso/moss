@@ -14,6 +14,17 @@ use serde_json::{json, Value};
 
 const MAX_IDS: usize = 200;
 const MAX_TITLE: usize = 500;
+const MAX_DESCRIPTION: usize = 10_000;
+
+/// A task id is a UUID. Anything else cannot name a task, so it is treated as absent
+/// instead of reaching the database, where the cast would fail the whole call.
+fn is_task_id(id: &str) -> bool {
+    id.len() == 36
+        && id.char_indices().all(|(i, c)| match i {
+            8 | 13 | 18 | 23 => c == '-',
+            _ => c.is_ascii_hexdigit(),
+        })
+}
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -93,6 +104,7 @@ pub fn list_tasks<H: Host + ?Sized>(host: &H, b: BriefingTasks) -> Result<Value>
         if b.status.is_some() || b.completed_after.is_some() || ids.len() > MAX_IDS {
             return Err(fail("Briefing tasks unavailable"));
         }
+        let ids: Vec<String> = ids.into_iter().filter(|i| is_task_id(i)).collect();
         let tasks: Vec<Task> = if ids.is_empty() {
             Vec::new()
         } else {
@@ -149,6 +161,9 @@ fn allowed(from: &str, to: TargetStatus) -> bool {
 }
 
 pub fn set_status<H: Host + ?Sized>(host: &H, r: SetStatus) -> Result<Value> {
+    if !is_task_id(&r.task_id) {
+        return Ok(json!({"task":null}));
+    }
     let repo = Repository::new(host);
     let failed = |_| fail("Briefing task status unavailable");
     let mine = and(vec![Filter::Owned, Filter::eq("id", r.task_id.as_str())]);
@@ -162,25 +177,64 @@ pub fn set_status<H: Host + ?Sized>(host: &H, r: SetStatus) -> Result<Value> {
         return Ok(json!({"task":{"id":task.id,"status":task.status}}));
     }
     let now = repo.now().map_err(failed)?;
+    // The write names the status it checked, so a task finished in between is not archived.
+    let unchanged = and(vec![mine, Filter::eq("status", task.status.as_str())]);
     let updated: Vec<Task> = repo
         .query(
             TASKS,
             &Query::update(
-                mine,
+                unchanged,
                 values(json!({"status":r.status.as_str(),"completed_at":null,"updated_at":now})),
             ),
         )
         .map_err(failed)?;
     let Some(task) = updated.into_iter().next() else {
-        return Ok(json!({"task":null}));
+        return Err(fail("Task status change not allowed"));
     };
+    if r.status == TargetStatus::Archived && task.parent_task_id.is_none() {
+        archive_open_subtasks(&repo, &task.id, &now).map_err(failed)?;
+    }
     Ok(json!({"task":{"id":task.id,"status":task.status}}))
+}
+
+/// Archiving a parent archives its open subtasks, as closing a task does everywhere else.
+fn archive_open_subtasks<H: Host + ?Sized>(
+    repo: &Repository<'_, H>,
+    parent: &str,
+    now: &str,
+) -> crate::repository::Result<()> {
+    for child in repo.subtasks(parent)? {
+        if child.status == "archived" || child.status == "suggested" {
+            continue;
+        }
+        let _: Vec<Value> = repo.query(
+            TASKS,
+            &Query::update(
+                Filter::eq("id", child.id.as_str()),
+                values(json!({"status":"archived","completed_at":null,"updated_at":now})),
+            ),
+        )?;
+        repo.add_activity(
+            &child.id,
+            "status_changed",
+            Some("Cascaded to archived when parent was closed"),
+        )?;
+    }
+    Ok(())
 }
 
 pub fn follow_up<H: Host + ?Sized>(host: &H, r: FollowUp) -> Result<Value> {
     let title = r.title.trim();
     if title.is_empty() || title.chars().count() > MAX_TITLE {
         return Err(fail("Follow-up title is invalid"));
+    }
+    let description = r
+        .description
+        .as_deref()
+        .map(str::trim)
+        .filter(|d| !d.is_empty());
+    if description.is_some_and(|d| d.chars().count() > MAX_DESCRIPTION) {
+        return Err(fail("Follow-up description is too long"));
     }
     let failed = |_| fail("Follow-up task unavailable");
     let repo = Repository::new(host);
@@ -190,7 +244,7 @@ pub fn follow_up<H: Host + ?Sized>(host: &H, r: FollowUp) -> Result<Value> {
         .one(
             TASKS,
             Query::insert(values(json!({
-                "title":title,"description":r.description,"list_id":list,"status":"todo",
+                "title":title,"description":description,"list_id":list,"status":"todo",
                 "source":"manual","position":0,"created_at":now,"updated_at":now,
             }))),
         )
