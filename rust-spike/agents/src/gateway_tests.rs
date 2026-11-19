@@ -21,8 +21,17 @@ async fn an_unoffered_tool_is_refused_before_execution() {
     )
     .await;
     assert_eq!(reply["isError"], true);
+    struct ExecutorProbe;
+    impl ToolHost for ExecutorProbe {
+        fn tools(&self, _: &str) -> Vec<ToolDef> {
+            vec![current_time()]
+        }
+        fn call(&self, _: &str, _: &str, _: Value) -> ToolFuture {
+            Box::pin(async { Ok("Executor was reached".into()) })
+        }
+    }
     let reply = call_tool(
-        &host,
+        &ExecutorProbe,
         &deny(),
         &plain_facts(),
         "alice",
@@ -31,6 +40,7 @@ async fn an_unoffered_tool_is_refused_before_execution() {
     )
     .await;
     assert_eq!(reply["isError"], true);
+    assert_eq!(reply["text"], "Moss has no tool called unoffered.");
 }
 
 #[tokio::test]

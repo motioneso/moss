@@ -13,6 +13,7 @@ for key in ["CARGO_HOME", "CARGO_TARGET_DIR"]:
         raise SystemExit(f"Set {key}")
 cargo = ["cargo", "+1.95.0", "test", "--offline", "--locked", "--manifest-path", str(root / "Cargo.toml")]
 controls = [
+    ("gateway-offered-list", "src/gateway.rs", r'let Some\(def\) = host.tools\(account\).into_iter\(\).find\(\|t\| t.name == name\) else \{.*?\n    \};', 'let def = host.tools(account).into_iter().find(|t| t.name == name).unwrap_or_else(crate::builtins::current_time);', ["--lib", "gateway::tests::an_unoffered_tool_is_refused_before_execution"]),
     ("account-list", "src/turn_tools.rs", r'if account != self.account \{\s*return vec!\[\];\s*\}', '', ["--lib", "turn_tools::tests::a_turn_list_and_execution_do_not_cross_accounts"]),
     ("account-execution", "src/turn_tools.rs", r'if account != self.account \{\s*return Box::pin\(async \{ Err\("Wrong tool account".into\(\)\) \}\);\s*\}', '', ["--lib", "turn_tools::tests::a_turn_list_and_execution_do_not_cross_accounts"]),
     ("gateway-hello", "src/gateway.rs", r'if crate::hello::same_secret\(&lease, expected\)', 'if true', ["--lib", "gateway::tests::wrong_gateway_lease_cannot_list_tools"]),
