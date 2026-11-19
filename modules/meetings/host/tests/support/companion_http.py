@@ -34,7 +34,8 @@ try:
 
         private("credentials.json", {"app_url": os.environ["JS48_APP_URL"], "auth_url": os.environ["JS48_AUTH_URL"], "auth_secret": secret, "connector_key": "ab" * 32})
         private("network.json", {"listen": f"127.0.0.1:{port}", "origins": [origin], "certificate": str(root / "tls/certificate.pem"), "private_key": str(root / "tls/key.pem"), "credentials": str(root / "credentials.json")})
-        private("modules.json", {"data": data["modules"], "admin_user_id": data["owner"], "migrations_url": os.environ["JS48_BOOTSTRAP_URL"], "producer_url": os.environ["JS48_APP_URL"], "worker_url": os.environ["JS48_WORKER_URL"], "connector_key": "ab" * 32})
+        # Installer.data_path() is <data>/modules; server settings take <data>.
+        private("modules.json", {"data": str(Path(data["modules"]).parent), "admin_user_id": data["owner"], "migrations_url": os.environ["JS48_BOOTSTRAP_URL"], "producer_url": os.environ["JS48_APP_URL"], "worker_url": os.environ["JS48_WORKER_URL"], "connector_key": "ab" * 32})
         context = ssl.create_default_context(cafile=str(root / "tls/certificate.pem"))
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPSHandler(context=context))
         with open(root / "server.log", "w") as log:
@@ -71,7 +72,7 @@ try:
                 except urllib.error.HTTPError as error:
                     if error.code != 503 or time.monotonic() >= deadline:
                         raise
-                    time.sleep(0.2)
+                    time.sleep(3.1)  # Stay below the production pairing rate limit.
             code = urllib.parse.parse_qs(urllib.parse.urlparse(created["approvalPath"]).fragment)["code"][0]
             assert post("/api/companion/pair/decide", {"code": code, "decision": "approve"}, cookie)["status"] == "approved"
             issued = post("/api/companion/pair/redeem", {"attemptId": created["attemptId"], "verifier": verifier})
