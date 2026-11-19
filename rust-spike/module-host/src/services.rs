@@ -100,7 +100,7 @@ impl ServicePorts {
         self.network = transport;
         self
     }
-    fn serial_lock(&self) -> Result<(std::sync::MutexGuard<'_, ()>, std::fs::File)> {
+    pub(crate) fn serial_lock(&self) -> Result<(std::sync::MutexGuard<'_, ()>, std::fs::File)> {
         let guard = self
             .serial
             .lock()
@@ -375,21 +375,14 @@ impl ServicePorts {
                         let mut payload = json!({"tool":r.resource,"parameters":params});
                         if required {
                             let _guard = self.serial_lock()?;
-                            let key = tool_key(&r.resource, &params)?;
-                            let grant = self.read(id, access, &key)?;
-                            ensure!(
-                                grant["expires"]
-                                    .as_i64()
-                                    .is_some_and(|t| t > chrono::Utc::now().timestamp()),
-                                "This tool needs the account's approval"
-                            );
-                            if tool.approval_version {
-                                let version = grant["version"].as_str()
-                                    .filter(|v| !v.is_empty() && v.len() <= 256)
-                                    .context("This tool needs the account's approval at its displayed version")?;
-                                payload["approvalVersion"] = json!(version);
-                            }
-                            self.write(id, access, &key, &Value::Null)?;
+                            self.consume_tool_approval(
+                                id,
+                                access,
+                                &r.resource,
+                                &params,
+                                tool.approval_version,
+                                &mut payload,
+                            )?;
                         }
                         self.host()?
                             .invoke_public(id, access.clone(), "tool", &payload.to_string())
@@ -513,6 +506,9 @@ impl ServicePorts {
     }
 }
 impl Ports for ServicePorts {
+    fn chat_services(&self) -> Result<&ServicePorts> {
+        Ok(self)
+    }
     fn invoke(&self, scope: &CallScope, port: &str, r: &Request) -> Result<Value> {
         crate::runtime::authorize(scope.module(), port, r)?;
         let result = self.invoke_service(scope, port, r);
@@ -540,7 +536,7 @@ impl Ports for ServicePorts {
         self.next.finish_call(scope, success)
     }
 }
-fn tool_key(tool: &str, parameters: &Value) -> Result<String> {
+pub(crate) fn tool_key(tool: &str, parameters: &Value) -> Result<String> {
     Ok(format!(
         "approval-{}",
         crate::trust::digest(&serde_json::to_vec(&(tool, parameters))?)

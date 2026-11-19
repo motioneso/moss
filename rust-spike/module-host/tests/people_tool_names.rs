@@ -17,6 +17,8 @@ fn manifest_retains_exact_people_names_without_relaxing_module_ids() {
             name.into(),
             Tool {
                 approval_version: false,
+                input_schema: None,
+                card: None,
                 description: "Existing People tool".into(),
                 risk: "read".into(),
             },
@@ -31,6 +33,8 @@ fn manifest_retains_exact_people_names_without_relaxing_module_ids() {
         "people/merge".into(),
         Tool {
             approval_version: false,
+            input_schema: None,
+            card: None,
             description: "Unsafe name".into(),
             risk: "write".into(),
         },

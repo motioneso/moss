@@ -200,6 +200,10 @@ pub struct Tool {
     /// Require a trusted approval target version in addition to exact inputs.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub approval_version: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_schema: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub card: Option<String>,
 }
 impl Tool {
     fn permission_label(&self, name: &str) -> String {
@@ -503,6 +507,21 @@ impl Manifest {
                     )
                     && !tool.description.is_empty(),
                 "Invalid tool declaration"
+            );
+            if let Some(schema) = &tool.input_schema {
+                crate::chat_schema::check(schema)?;
+                if tool.risk != "read" {
+                    ensure!(
+                        schema["examples"].as_array().is_some_and(|v| !v.is_empty()),
+                        "Write tool needs a worked example"
+                    );
+                }
+            }
+            ensure!(
+                tool.card
+                    .as_ref()
+                    .is_none_or(|api| self.provides.contains_key(api)),
+                "Tool card API is not provided"
             );
         }
         for (name, cred) in &self.credentials {

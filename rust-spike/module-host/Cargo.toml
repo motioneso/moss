@@ -42,6 +42,7 @@ async-trait = "0.1"
 browser-proof = []
 
 [dev-dependencies]
+axum = "0.8"
 tempfile = "3"
 moss-people = { path = "../../modules/people/src" }
 
