@@ -93,7 +93,7 @@ fn parse(raw: Vec<String>) -> Result<Args> {
 }
 
 /// The module tables each have one table that proves they exist, so a second run is a no-op.
-fn bootstrap_steps() -> [(&'static str, &'static str); 5] {
+fn bootstrap_steps() -> [(&'static str, &'static str); 4] {
     [
         (
             "moss_modules.catalog",
@@ -108,10 +108,6 @@ fn bootstrap_steps() -> [(&'static str, &'static str); 5] {
             "moss_modules.paused_modules",
             moss_module_host::jobs::MIGRATION,
         ),
-        (
-            "app.companion_devices_owner",
-            moss_module_host::companion_devices::MIGRATION,
-        ),
     ]
 }
 
@@ -123,6 +119,29 @@ FOR r IN SELECT schemaname AS s, tablename AS n FROM pg_tables WHERE schemaname 
 EXECUTE format('ALTER TABLE %I.%I OWNER TO jarvis_migration_owner', r.s, r.n); END LOOP; \
 FOR r IN SELECT sequence_schema AS s, sequence_name AS n FROM information_schema.sequences WHERE sequence_schema IN ('moss_modules','moss_queue') LOOP \
 EXECUTE format('ALTER SEQUENCE %I.%I OWNER TO jarvis_migration_owner', r.s, r.n); END LOOP; END $$";
+
+/// The device lookup functions need the tables Meetings creates, so they go in after the
+/// installs and only when those tables exist. Safe to repeat.
+async fn ensure_device_sql(migrations_url: &str) -> Result<()> {
+    let (db, connection) = tokio_postgres::connect(migrations_url, tokio_postgres::NoTls)
+        .await
+        .map_err(|_| anyhow::anyhow!("Cannot reach the instance database"))?;
+    tokio::spawn(async move {
+        let _ = connection.await;
+    });
+    let ready = db
+        .query_one(
+            "SELECT to_regclass('app.companion_recording_attempts') IS NOT NULL \
+             AND to_regclass('app.companion_devices_owner') IS NULL",
+            &[],
+        )
+        .await?
+        .get::<_, bool>(0);
+    if ready {
+        db.batch_execute(moss_module_host::companion_devices::MIGRATION).await?;
+    }
+    Ok(())
+}
 
 /// Creates the module tables that are missing and returns the instance owner's id.
 async fn prepare_database(migrations_url: &str) -> Result<uuid::Uuid> {
@@ -180,6 +199,7 @@ pub fn run(raw: Vec<String>) -> Result<()> {
             RuntimeRole::App,
         ))
         .map_err(|_| anyhow::anyhow!("Cannot reach the instance database"))?;
+    let migrations_url = settings.migrations_url.clone();
     let application = modules::application(settings, database)?;
     let access = AccessContext::new(owner, "module-install");
     let catalog = application.installer.refresh(
@@ -259,6 +279,7 @@ pub fn run(raw: Vec<String>) -> Result<()> {
         println!("installed {name} {}", artifact.version);
     }
     drop(application);
+    runtime.block_on(ensure_device_sql(&migrations_url))?;
     Ok(())
 }
 

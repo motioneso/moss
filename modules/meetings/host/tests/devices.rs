@@ -277,3 +277,15 @@ fn heartbeat_and_rename_change_only_the_owners_device() {
         assert!(d.last_contact_at.is_some());
     });
 }
+
+#[test]
+#[ignore]
+fn a_deactivated_account_gets_no_ring_session() {
+    let w = world();
+    w.fx.rt.block_on(async {
+        let (_, credential) = pair(&w, w.fx.b, "android").await;
+        assert!(w.pairing.ring_session(&credential).await.unwrap().is_some());
+        w.fx.root.execute("UPDATE app.users SET status = 'deactivated' WHERE id = $1", &[&w.fx.b]).await.unwrap();
+        assert!(w.pairing.ring_session(&credential).await.unwrap().is_none());
+    });
+}

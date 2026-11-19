@@ -22,10 +22,13 @@ Card JS-346. Plan: `2026-11-11-rust-phase5-meetings-briefings-plan.md`, section 
 | One person cannot see or change another's devices            | `tests/devices.rs`             | yes                                     |
 | Ring credential gets 403 off its list, act-as header refused | `companion_gate.rs` unit tests | yes (list opened, header check removed) |
 | Backtrack refuses a request with no resolved device          | `companion_links.rs` unit test | yes                                     |
+| A deactivated account gets no ring session                   | `tests/devices.rs`             | yes                                     |
 | Device store names the refusal reason                        | `tests/devices.rs`             | yes                                     |
 
 ## Not proven
 
+- Review findings left open, to fix later: the pre-sign-in rate limiter keys on the connection address and never drops old entries, so many people behind one proxy share a limit. Resolving a credential extends its expiry before the account-status check. Admin revoke deletes devices and sessions in two steps, not one transaction. The device store opens a thread and runtime per lookup. Heartbeat uses three transactions. The credential shape and hash are defined twice. The four device tables are listed as module database resources although only the auth role can read them.
+- Meetings installed through any path other than the install command does not get the device lookup SQL until the next install run.
 - No paused-account state exists in the data, so the paused path is untested.
 - Routes are mounted by the shell, not by the Meetings guest module.
 - The focus feature has no owner yet.

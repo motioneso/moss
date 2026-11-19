@@ -246,7 +246,7 @@ mod tests {
     }
 
     fn ring_token() -> String {
-        format!("tm2_{}", "a".repeat(43))
+        format!("vr1_{}", "a".repeat(43))
     }
 
     /// Paths outside the allow-list are refused with 403 before any database lookup. An

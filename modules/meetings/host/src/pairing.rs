@@ -358,7 +358,17 @@ impl PairingStore {
                 &[&digest(credential)],
             )
             .await?;
-        Ok(row.map(|r| RingSession { owner: r.get(0), device_id: r.get(1) }))
+        let Some(r) = row else { return Ok(None) };
+        let owner: Uuid = r.get(0);
+        // A pending or deactivated account gets no ring session.
+        let status: Option<String> = c
+            .query_opt("SELECT status FROM app.get_user_by_id($1::uuid)", &[&owner])
+            .await?
+            .map(|u| u.get(0));
+        if matches!(status.as_deref(), None | Some("pending") | Some("deactivated")) {
+            return Ok(None);
+        }
+        Ok(Some(RingSession { owner, device_id: r.get(1) }))
     }
 
     /// Admin revoke. Removes every device of one account and fails whole on any error.
