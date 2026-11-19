@@ -501,7 +501,8 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
             (response.status().as_u16(), response.json::<Value>().unwrap_or(Value::Null))
         };
         let switches = |who: &str| {
-            let (_, signals) = call(Method::GET, "/source-signals", Some(who), None);
+            let (signal_status, signals) = call(Method::GET, "/source-signals", Some(who), None);
+            assert_eq!(signal_status, 200, "source-signals answered {signals}");
             let (_, email) = owner_call("email", Method::GET, "/briefing-source", who, None);
             let (_, calendar) = owner_call("calendar", Method::GET, "/source-behaviors", who, None);
             (json_of(&signals), email, calendar)
