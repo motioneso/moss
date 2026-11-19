@@ -4,7 +4,6 @@ Card JS-346. Plan: `2026-11-11-rust-phase5-meetings-briefings-plan.md`, section 
 
 ## Built
 
-- The four companion tables moved into the Meetings ledger. Deletion tables added to the manifest.
 - Resolver, owner view and definer functions in `rust-spike/module-host/sql/0004_companion_devices.sql`.
 - `PairingStore` (create, decide, redeem, cancel, revoke) and `DeviceStore` plus `NativeAuthority` in `modules/meetings/host`.
 - Sign-in gate in `rust-spike/safety-core/src/companion_gate.rs`, wired into `rust-spike/network/src/web.rs`. A device credential opens only its own path list. Ring credentials reach recording and voice paths and one voice-request read. Mac credentials reach six paths.
@@ -26,16 +25,17 @@ Card JS-346. Plan: `2026-11-11-rust-phase5-meetings-briefings-plan.md`, section 
 | Device store names the refusal reason                        | `tests/devices.rs`             | yes                                     |
 | Admin revoke removes devices and sessions in one transaction | `tests/devices.rs`             | yes (devices committed before sessions) |
 | A deactivated account's credential is never extended         | `tests/devices.rs`             | yes (status check removed)              |
-| Moved migrations are skipped on an existing install          | `tests/devices.rs` (database)  | yes (one moved file's bytes altered)    |
 | Pre-sign-in rate limiter drops old entries                   | `companion.rs` unit test       | yes (sweep disabled)                    |
 
 ## Migration move decision
 
-Kept the move of migrations 0238, 0239, 0287 and 0330 into `packages/meetings/sql`; did not revert. The Rust installer applies only module folders, so a Rust install with the files left in the shared folder would have no device tables. The move follows the precedent of other modules (AI, Tasks) and the plan's section 4a. The bytes are unchanged and the ledger stays `core-legacy`, so an existing install's applied rows still match. The test `moved_companion_migrations_are_not_rerun_on_an_existing_install` runs the real package against a database whose core ledger already holds all of its migrations, and shows nothing re-runs, checksums and tables are untouched, and changed bytes are refused. The collision checker change only allows a same-name, same-bytes move. Other open branches that still carry the files in the shared folder will see a path difference on those four numbers until they rebase.
+Reverted. Migrations 0238, 0239, 0287 and 0330 stay in the shared migrations folder, byte for byte as on main, and the collision checker is unchanged. The move made the cross-PR collision check fail every other open PR. The four companion tables are no longer listed as Meetings-owned or in its deletion tables. The first move-proof test was removed with it.
 
 ## Not proven
 
-- Review findings left open, to fix later: the pre-sign-in rate limiter keys on the connection address, so many people behind one proxy share a limit. The device store opens a thread and runtime per lookup. Heartbeat uses three transactions. The credential shape and hash are defined twice. The four device tables are listed as module database resources although only the auth role can read them.
+- Review findings left open, to fix later: the pre-sign-in rate limiter keys on the connection address, so many people behind one proxy share a limit. The device store opens a thread and runtime per lookup. Heartbeat uses three transactions. The credential shape and hash are defined twice.
+- A Rust-only install that never ran the core migrations has no device tables, so Meetings pairing does not work there until the tables move into the Meetings package. Moving them needs a plan that does not trip the cross-PR collision check.
+- The four device tables are not in Meetings' deletion tables, so uninstalling Meetings does not delete device rows.
 - Meetings installed through any path other than the install command does not get the device lookup SQL until the next install run.
 - No paused-account state exists in the data, so the paused path is untested.
 - Routes are mounted by the shell, not by the Meetings guest module.

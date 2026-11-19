@@ -120,7 +120,7 @@ EXECUTE format('ALTER TABLE %I.%I OWNER TO jarvis_migration_owner', r.s, r.n); E
 FOR r IN SELECT sequence_schema AS s, sequence_name AS n FROM information_schema.sequences WHERE sequence_schema IN ('moss_modules','moss_queue') LOOP \
 EXECUTE format('ALTER SEQUENCE %I.%I OWNER TO jarvis_migration_owner', r.s, r.n); END LOOP; END $$";
 
-/// The device lookup functions need the tables Meetings creates, so they go in after the
+/// The device lookup functions need the companion tables from the core migrations, so they go in after the
 /// installs and only when those tables exist. Safe to repeat.
 async fn ensure_device_sql(migrations_url: &str) -> Result<()> {
     let (db, connection) = tokio_postgres::connect(migrations_url, tokio_postgres::NoTls)

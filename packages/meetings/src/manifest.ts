@@ -75,11 +75,7 @@ export const meetingsModuleManifest = {
       "app.meeting_capture_connections",
       "app.meeting_capture_start_cancellations",
       "app.meeting_stop_summaries",
-      "app.meeting_capture_start_limits",
-      "app.companion_pair_attempts",
-      "app.companion_devices",
-      "app.companion_recording_capabilities",
-      "app.companion_recording_attempts"
+      "app.meeting_capture_start_limits"
     ]
   },
   permissions: [
@@ -395,14 +391,7 @@ export const meetingsModuleManifest = {
           countPredicate: "owner_user_id = $1::uuid"
         },
         { table: "app.meeting_stop_summaries", countPredicate: "owner_user_id = $1::uuid" },
-        { table: "app.meeting_capture_start_limits", countPredicate: "owner_user_id = $1::uuid" },
-        { table: "app.companion_pair_attempts", countPredicate: "user_id = $1::uuid" },
-        { table: "app.companion_devices", countPredicate: "user_id = $1::uuid" },
-        {
-          table: "app.companion_recording_capabilities",
-          countPredicate: "owner_user_id = $1::uuid"
-        },
-        { table: "app.companion_recording_attempts", countPredicate: "owner_user_id = $1::uuid" }
+        { table: "app.meeting_capture_start_limits", countPredicate: "owner_user_id = $1::uuid" }
       ]
     }
   }
