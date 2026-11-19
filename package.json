@@ -30,6 +30,7 @@
     "test:rust-sports-live": "bash modules/sports/tools/live.sh",
     "test:rust-weather": "tsx modules/weather/tools/gate.ts",
     "test:rust-weather-live": "bash modules/weather/tools/live.sh",
+    "test:rust-suite-live": "bash rust-spike/module-host/tools/suite-live.sh",
     "test:rust-web-research": "tsx modules/web-research/tools/gate.ts",
     "test:rust-web-research-live": "bash modules/web-research/tools/live.sh",
     "test:rust-plaid-live": "bash rust-spike/module-host/probes/plaid/live.sh",

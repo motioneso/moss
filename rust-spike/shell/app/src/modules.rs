@@ -505,13 +505,24 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
             ) as Arc<dyn Ports>;
             // Meetings answers only its own capture-preference calls, as the signed-in person.
             let authority_database = meetings_database.clone();
+            let device_store = moss_meetings_host::device_store::DeviceStore::new(meetings_database.clone());
+            let device_requests = safety_core::device_requests::DeviceRequests::shared();
             let services = Arc::new(
                 MeetingsPorts::new(meetings_database, services)?
-                    .with_recordings(&settings.data.join("modules/files"))?,
+                    .with_recordings(&settings.data.join("modules/files"))?
+                    .with_devices(Arc::new(device_store.clone()))
+                    .with_capture_authority(Arc::new(moss_meetings_host::device_store::NativeAuthority::new(
+                        device_store.clone(),
+                        device_requests.clone(),
+                    ))),
             ) as Arc<dyn Ports>;
             // Backtrack answers only its own screen-text calls, as the signed-in person. Mac uploads
             // are refused until the device link check is supplied.
-            let services = Arc::new(BacktrackPorts::new(backtrack_database, services)?) as Arc<dyn Ports>;
+            let services = Arc::new(
+                BacktrackPorts::new(backtrack_database, services)?.with_links(Arc::new(
+                    crate::companion_links::StoreLinks { devices: device_store, requests: device_requests },
+                )),
+            ) as Arc<dyn Ports>;
             // Scratchpad answers only its own note calls, as the signed-in person.
             let services = Arc::new(ScratchpadPorts::new(scratchpad_database, services)?) as Arc<dyn Ports>;
             // Calendar keeps its settings in the account's real preferences and reads the
@@ -563,6 +574,7 @@ pub type Slot = Arc<std::sync::Mutex<Option<ServerModules>>>;
 pub fn routes(slot: Slot, web: PathBuf) -> Router {
     Router::new()
         .route("/api/m/{module}/{*path}", any(dispatch))
+        .route("/api/companion/backtrack", any(dispatch))
         .route("/api/me/weather-location", any(dispatch))
         .route("/api/me/weather-location/{leaf}", any(dispatch))
         .route("/api/me/weather-unit", any(dispatch))
@@ -830,6 +842,7 @@ async fn dispatch(
 /// served by the packages for the support window. Every other path passes through unchanged.
 fn alias(target: &str) -> String {
     for (old, new) in [
+        ("/api/companion/backtrack", "/api/m/backtrack/ingest"),
         ("/api/me/weather-location", "/api/m/weather/location"),
         ("/api/me/weather-unit", "/api/m/weather/unit"),
         ("/api/news/images/", "/api/m/news/images/"),

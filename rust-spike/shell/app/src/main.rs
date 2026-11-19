@@ -23,6 +23,8 @@ use moss_shell_contract::{ChatMessage, ChatThread, SendMessage, ShellData, Shell
 use safety_core::access::AccessContext;
 use tower_http::services::ServeDir;
 
+mod companion;
+mod companion_links;
 mod desktop_notices;
 mod integrations;
 mod module_admin;
@@ -92,6 +94,17 @@ fn router(data: Arc<Accounts>, web: PathBuf) -> Router {
             "/api/today",
             get(|State(d): State<Arc<Accounts>>, Extension(access): Extension<AccessContext>| async move { Json::<TodayView>(d.for_actor(&access).today()) }),
         )
+        .route("/api/companion/protocol", post(companion::protocol))
+        .route("/api/companion/pair", post(companion::pair))
+        .route("/api/companion/pair/attempt", post(companion::attempt))
+        .route("/api/companion/pair/decide", post(companion::decide))
+        .route("/api/companion/pair/redeem", post(companion::redeem))
+        .route("/api/companion/pair/cancel", post(companion::cancel))
+        .route("/api/companion/heartbeat", post(companion::heartbeat))
+        .route("/api/companion/device", axum::routing::patch(companion::rename))
+        .route("/api/companion/logout", post(companion::logout))
+        .route("/api/companion/ring-session", get(companion::ring_session))
+        .route("/api/companion/ring-logout", post(companion::ring_logout))
         .route("/api/desktop/notices", get(desktop_notices::list).post(desktop_notices::accept))
         // The notifier program signs in with a device token instead of a session.
         .route("/api/notifier/notices", get(desktop_notices::list).post(desktop_notices::accept))
@@ -268,6 +281,7 @@ fn main() {
             runner: args.runner,
             data: Mutex::new(HashMap::new()),
         });
+        companion::register_revoker(&data);
         let private = router(data, args.web.clone());
         let private = match &loader {
             Some(_) => private.merge(modules::routes(modules.clone(), args.web.clone())),
