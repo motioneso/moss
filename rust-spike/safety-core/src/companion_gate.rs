@@ -226,4 +226,68 @@ mod tests {
         assert!(!shaped(&format!("tm1_{}", "a".repeat(42)), MAC_PREFIX));
         assert!(!shaped(&format!("tm1_{}!", "a".repeat(42)), MAC_PREFIX));
     }
+
+    fn platform() -> Platform {
+        use crate::auth::SessionCookies;
+        use crate::db::{Database, RuntimeRole};
+        use crate::origin::TrustedOrigins;
+        use crate::secret::SecretCipher;
+        use portability::secrets::Env;
+        let pool = |role| Database::unconnected("postgres://nobody@127.0.0.1:1/none", role);
+        let mut env = Env::new();
+        env.insert("NODE_ENV".into(), "test".into());
+        Platform {
+            app: pool(RuntimeRole::App),
+            auth: pool(RuntimeRole::Auth),
+            sessions: SessionCookies::from_env(&env).unwrap(),
+            connectors: SecretCipher::connectors(&Env::new()).unwrap(),
+            origins: TrustedOrigins::from_env(&Env::new(), 3000).unwrap(),
+        }
+    }
+
+    fn ring_token() -> String {
+        format!("tm2_{}", "a".repeat(43))
+    }
+
+    /// Paths outside the allow-list are refused with 403 before any database lookup. An
+    /// allowed path gets past that check and only then fails on the unreachable database, so
+    /// the two outcomes differ and a removed allow-list shows up as a different status.
+    #[tokio::test]
+    async fn the_real_gate_answers_403_off_the_list_and_goes_on_to_the_lookup_on_it() {
+        let platform = platform();
+        let headers = HeaderMap::new();
+        let token = ring_token();
+        let off = admit(&platform, &headers, &Method::GET, "/api/me", Kind::Ring, &token).await;
+        assert!(matches!(off, Err(ApiError::Http { status: 403, .. })));
+        let wrong_kind = admit(
+            &platform,
+            &headers,
+            &Method::POST,
+            "/api/meetings/recording-uploads",
+            Kind::Mac,
+            &format!("tm1_{}", "a".repeat(43)),
+        )
+        .await;
+        assert!(matches!(wrong_kind, Err(ApiError::Http { status: 403, .. })));
+        let on =
+            admit(&platform, &headers, &Method::POST, "/api/meetings/recording-uploads", Kind::Ring, &token)
+                .await;
+        assert!(!matches!(on, Err(ApiError::Http { status: 403, .. })));
+    }
+
+    #[tokio::test]
+    async fn an_act_as_header_is_refused_even_on_an_allowed_path() {
+        let mut headers = HeaderMap::new();
+        headers.insert(ACT_AS_HEADER, "someone".parse().unwrap());
+        let out = admit(
+            &platform(),
+            &headers,
+            &Method::POST,
+            "/api/meetings/recording-uploads",
+            Kind::Ring,
+            &ring_token(),
+        )
+        .await;
+        assert!(matches!(out, Err(ApiError::Http { status: 403, .. })));
+    }
 }

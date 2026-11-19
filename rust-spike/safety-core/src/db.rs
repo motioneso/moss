@@ -54,8 +54,8 @@ impl Database {
 
     /// A pool that has not connected and whose role is unchecked, for tests whose requests
     /// are answered before any query.
-    #[cfg(test)]
-    pub(crate) fn unconnected(url: &str, role: RuntimeRole) -> Self {
+    #[doc(hidden)]
+    pub fn unconnected(url: &str, role: RuntimeRole) -> Self {
         let mut config = Config::new();
         config.url = Some(url.to_owned());
         let pool = config.create_pool(Some(Runtime::Tokio1), NoTls).expect("test pool");

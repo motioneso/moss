@@ -22,3 +22,17 @@ impl MacLinks for StoreLinks {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use safety_core::db::{Database, RuntimeRole};
+
+    /// A request the gate did not tie to a device gets no link, and the store is never asked.
+    #[test]
+    fn a_request_without_a_resolved_device_is_not_linked() {
+        let db = Database::unconnected("postgres://nobody@127.0.0.1:1/none", RuntimeRole::App);
+        let links = StoreLinks { devices: DeviceStore::new(db), requests: DeviceRequests::shared() };
+        assert!(matches!(links.resolve(Uuid::new_v4(), "no-such-request").unwrap(), Link::None));
+    }
+}
