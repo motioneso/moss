@@ -14,8 +14,9 @@ export function connectModuleFrame(
     save,
     screenUrl,
     hostWindow = globalThis.window,
-    bootstrapToken = null,
-    minimumHeight = 160
+    minimumHeight = 160,
+    resized,
+    bootstrapToken = null
   }
 ) {
   if (!/^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)*$/.test(moduleId)) throw new Error("Invalid module");
@@ -37,6 +38,7 @@ export function connectModuleFrame(
       : Array.from(globalThis.crypto.getRandomValues(new Uint8Array(32)), (byte) =>
           byte.toString(16).padStart(2, "0")
         ).join("");
+  if (![0, 160].includes(minimumHeight)) throw new Error("Invalid frame minimum");
   let live = true;
   let commandPort;
   let loaded = false;
@@ -141,7 +143,9 @@ export function connectModuleFrame(
         }
         case "resize": {
           if (!Number.isFinite(message.height)) throw new Error();
-          frame.style.height = `${Math.min(10000, Math.max(minimumHeight, Math.ceil(message.height)))}px`;
+          const height = Math.min(10000, Math.max(minimumHeight, Math.ceil(message.height)));
+          frame.style.height = `${height}px`;
+          if (resized) resized(height);
           result = null;
           break;
         }
