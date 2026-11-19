@@ -41,9 +41,12 @@ const names = { email: "Email", chat: "Chat", notes: "Notes" };
 function rowHtml(row, busy, picker, pickerDate, minimumDate) {
   const id = esc(row.id);
   const disabled = busy ? " disabled" : "";
-  const sources = [...new Set((row.evidence ?? []).map((s) => s.sourceKind))].filter(
-    (s) => names[s]
-  );
+  const sources = [
+    ...new Set([
+      ...(row.evidence ?? []).map((s) => s.sourceKind),
+      ...(row.threadRef ? ["email"] : [])
+    ])
+  ].filter((s) => names[s]);
   const meta = [
     row.counterpartyLabel ? `To ${row.counterpartyLabel}` : "",
     dueLabel(row.dueLocalDate)

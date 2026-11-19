@@ -1,4 +1,4 @@
-export function commitmentsApi(client) {
+export function commitmentsApi(client, now = () => new Date()) {
   async function call(method, path, body) {
     const result = await client.request(method, path, body);
     if (result && Number.isInteger(result.status) && "body" in result) {
@@ -19,7 +19,15 @@ export function commitmentsApi(client) {
             rows.slice(start, start + 8).map(async (row) => {
               try {
                 const detail = await call("GET", `/candidates/${encodeURIComponent(row.id)}`);
-                return detail.status && detail.status !== "pending_review" ? null : detail;
+                // List normalizes expired snoozes to pending; detail keeps saved status.
+                // A new future snooze between these reads must still be skipped.
+                const dueSnooze =
+                  detail.status === "snoozed" &&
+                  detail.snoozedUntil &&
+                  new Date(detail.snoozedUntil).getTime() <= now().getTime();
+                return detail.status && detail.status !== "pending_review" && !dueSnooze
+                  ? null
+                  : detail;
               } catch (error) {
                 if (error.status === 404) return null;
                 throw error;

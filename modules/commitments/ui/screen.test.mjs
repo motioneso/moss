@@ -122,3 +122,33 @@ test("a failed chosen-date save retains the date and future-date limit", async (
   assert.match(sectionHtml(controller.state), /value="2026-12-01" min="2026-11-19"/);
   assert.match(sectionHtml(controller.state), /Reload suggestions/);
 });
+
+test("expired snoozes return while a newly changed snooze is skipped", async () => {
+  const due = { id: "due", status: "snoozed", snoozedUntil: "2026-01-01T00:00:00.000Z" };
+  const moved = { ...due, id: "moved" };
+  const api = commitmentsApi({
+    request: async (_, path) => {
+      if (path.includes("?"))
+        return [due, moved].map((row) => ({
+          ...row,
+          status: "pending_review",
+          snoozedUntil: null
+        }));
+      return path.endsWith("due") ? due : { ...moved, snoozedUntil: "2099-01-01T00:00:00.000Z" };
+    }
+  });
+  assert.deepEqual(await api.pending(), [due]);
+});
+
+test("stored email threads show their source without a separate evidence row", () => {
+  const html = sectionHtml({
+    phase: "ready",
+    rows: [{ ...candidate, evidence: [], threadRef: "saved-email-thread" }]
+  });
+  assert.match(html, /Email/);
+  const withEvidence = sectionHtml({
+    phase: "ready",
+    rows: [{ ...candidate, threadRef: "saved-email-thread" }]
+  });
+  assert.equal(withEvidence.split("Email").length - 1, 1);
+});
