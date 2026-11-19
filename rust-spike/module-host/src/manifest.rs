@@ -355,7 +355,7 @@ impl Manifest {
                             .resources
                             .iter()
                             .all(|r| crate::feedback_port::MODULE_TARGET_KINDS.contains(&r.as_str())),
-                    "A module may rate only its own kinds of target"
+                    "A module may declare only briefing, news and sports target kinds"
                 );
             }
             if matches!(cap.port.as_str(), "fetch" | "credentials" | "browser") {
@@ -679,7 +679,7 @@ impl Manifest {
                     "vault" | "attachments" => ("files", "Read the files you give this module"),
                     "fetch" | "credentials" => ("network", "Contact approved services"),
                     "ai" | "embed" | "transcribe" => ("AI", "Use your chosen AI service"),
-                    "feedback" => ("data", "Record your usefulness ratings for its own items"),
+                    "feedback" => ("data", "Record and take back your usefulness ratings for the kinds of item it lists"),
                     "tools" | "action-policy" => {
                         ("chat tools", "Offer tools under your approval rules")
                     }

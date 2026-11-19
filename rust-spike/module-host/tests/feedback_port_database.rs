@@ -170,6 +170,18 @@ fn ratings_through_the_port_belong_to_the_caller_and_stay_private() {
     assert!(call(b, "undo", "briefing_item", json!({"id":item_id})).is_err());
     assert_eq!(active(a), json!({"refs":["run-1:item-1"]}));
 
+    // The run list does not include the item rating.
+    assert_eq!(
+        call(
+            a,
+            "active",
+            "briefing_run",
+            json!({"surface":"briefing","kind":"dismiss"})
+        )
+        .unwrap(),
+        json!({"refs":[]})
+    );
+
     // A rating cannot be undone through a different target kind.
     assert!(call(a, "undo", "briefing_run", json!({"id":item_id})).is_err());
 
@@ -177,7 +189,7 @@ fn ratings_through_the_port_belong_to_the_caller_and_stay_private() {
     call(a, "undo", "briefing_item", json!({"id":item_id})).unwrap();
     assert_eq!(active(a), json!({"refs":[]}));
 
-    // A kind the pair rules reject is refused with nothing written.
+    // A kind the pair rules reject is refused.
     assert!(call(
         a,
         "record",
@@ -190,5 +202,5 @@ fn ratings_through_the_port_belong_to_the_caller_and_stay_private() {
         rt.block_on(bootstrap.execute("DELETE FROM app.users WHERE id=$1", &[&who]))
             .unwrap();
     }
-    println!("feedback port: owner pinned, other account blind, text never stored");
+    println!("feedback port: owner pinned, other account blind, item text dropped");
 }

@@ -1,6 +1,8 @@
-//! The `feedback` port. A module records, undoes and lists usefulness ratings for its own
-//! target kinds. The host decides who the rating belongs to and which target kinds a module may
-//! touch, so a module can neither rate as another person nor rate another module's targets.
+//! The `feedback` port. A module records, undoes and lists usefulness ratings for the target
+//! kinds its manifest declares. The host decides who the rating belongs to and which kinds a
+//! module may touch, so a module cannot rate as another person or reach a kind it did not
+//! declare. Ratings are per kind, not per module, so two modules that declare the same kind
+//! see the same ratings.
 //!
 //! The owner always comes from the call's access context. No request field can name a user,
 //! and the database applies the same owner through row-level security.
