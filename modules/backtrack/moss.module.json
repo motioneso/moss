@@ -89,6 +89,9 @@
   "requires": {
     "memory": ">=0.1.0, <1.0.0"
   },
+  "optionalRequires": {
+    "meetings": ">=0.1.0, <1.0.0"
+  },
   "provides": {
     "prepareBacktrackRoute": "1.0.0",
     "collectBacktrackSegmentsExportSection": "1.0.0"

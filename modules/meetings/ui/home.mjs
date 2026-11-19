@@ -1,5 +1,6 @@
 import { esc, meetingDate, meetingLength } from "./format.mjs";
-import { btn, field, hint, input, select, status } from "./kit.mjs";
+import { alertHint, btn, empty, field, hint, input, select, status } from "./kit.mjs";
+import { randomKey } from "./format.mjs";
 
 const PAGE_SIZE = 30;
 
@@ -10,7 +11,10 @@ export function homeScreen({ api, draw, go }) {
     typeId: "",
     types: { state: "loading", list: [] },
     list: { phase: "loading", items: [], next: null, moreBusy: false },
-    searching: false
+    searching: false,
+    mac: "loading",
+    creating: "idle",
+    createKey: null
   };
   let timer = null;
   let seq = 0;
@@ -72,15 +76,62 @@ export function homeScreen({ api, draw, go }) {
     try {
       const reply = await api.devices();
       s.macLinked = Array.isArray(reply?.devices) && reply.devices.length > 0;
+      s.mac = "ready";
     } catch (error) {
+      s.mac = error?.status === 401 || error?.status === 403 ? "denied" : "unavailable";
       // Only a refusal means no Mac. Any other failure leaves History visible.
       s.macLinked = error?.status === 401 || error?.status === 403 ? false : undefined;
     }
     draw();
   }
 
+  async function create() {
+    if (s.creating === "creating") return;
+    s.createKey ??= randomKey();
+    s.creating = "creating";
+    draw();
+    try {
+      const reply = await api.createRecord({ requestKey: s.createKey, title: "Untitled meeting" });
+      s.creating = "idle";
+      s.createKey = null;
+      go({ view: "record", id: reply.meeting.id });
+    } catch {
+      s.creating = "failed";
+      draw();
+    }
+  }
+
+  // The Mac status and New meeting button that sit above the history.
+  function macBlock() {
+    const button = s.macLinked
+      ? btn(s.creating === "creating" ? "Opening meeting…" : "New meeting", "new", {
+          disabled: s.creating === "creating"
+        })
+      : "";
+    const note =
+      s.mac === "denied"
+        ? alertHint("Mac access could not be verified. Sign in again.")
+        : s.mac === "loading"
+          ? status("Checking your linked Mac…")
+          : s.mac === "unavailable"
+            ? `<p role="status" class="jds-hint">Couldn’t confirm your Mac connection. ${btn("Check again", "mac-retry", { variant: "link" })}</p>`
+            : s.macLinked === false
+              ? empty(
+                  "Link your Mac",
+                  "Open Trail Marker and follow its linking instructions.",
+                  btn("Download app", "download-app")
+                )
+              : "";
+    const failed =
+      s.creating === "failed"
+        ? `<p role="alert" class="jds-hint jds-hint--error">Couldn’t confirm the new meeting. ${btn("Retry opening meeting", "new", { variant: "link" })}</p>`
+        : "";
+    return { button, rest: `${note}${failed}` };
+  }
+
   function render() {
     const { list, types } = s;
+    const mac = macBlock();
     const q = s.query.trim();
     const rows = list.items
       .map((m) => {
@@ -115,10 +166,10 @@ export function homeScreen({ api, draw, go }) {
       !s.typeId &&
       s.macLinked === false
     ) {
-      return `<div class="meetings-list-heading">${btn("Add recording", "add")}</div>`;
+      return `<div class="meetings-list-heading">${btn("Add recording", "add")}${mac.button}</div>${mac.rest}`;
     }
     const showTable = list.phase === "ready" && !s.searching && list.items.length;
-    return `<div class="meetings-list-heading">${btn("Add recording", "add")}</div>
+    return `<div class="meetings-list-heading">${btn("Add recording", "add")}${mac.button}</div>${mac.rest}
 <section class="meetings-section" aria-label="Your meetings">
 <div class="meetings-history-filters">
 ${field("meeting-history-search", "Search meetings", input("meeting-history-search", s.query, { type: "search", max: 256, placeholder: "Search titles, notes and transcripts", model: "query" }))}
@@ -153,6 +204,9 @@ ${list.next && !s.searching && list.phase === "ready" ? btn(list.moreBusy ? "Loa
     },
     acts: {
       add: () => go({ view: "manual" }),
+      new: () => void create(),
+      "mac-retry": () => void loadLink(),
+      "download-app": () => {},
       open: (el) => go({ view: "record", id: el.dataset.id }),
       more: () => void search(true),
       "history-retry": () => void search(),

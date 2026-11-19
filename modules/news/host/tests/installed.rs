@@ -4,6 +4,8 @@ mod registry;
 #[path = "support/replay.rs"]
 mod replay;
 mod support;
+#[path = "support/fixed_clock.rs"]
+mod fixed_clock;
 use access_context::AccessContext;
 use moss_module_host::{
     application::{Application, Configuration},
@@ -559,7 +561,11 @@ fn compare(steps: &[Value], old: &[Value], new: &[Value]) {
 #[test]
 #[ignore = "Only through verify-gate"]
 fn overview_serves_the_stored_page_like_the_old_route_and_only_to_its_owner() {
-    let w = World::new();
+    // Both implementations must read these fixed story dates at the same fixed instant.
+    // A live clock ages them out after seven days even while the snapshot is unexpired.
+    const NOW: &str = "2026-11-11T10:00:00.000Z";
+    let mut w = World::new();
+    fixed_clock::reopen(&mut w.app, &w.f, w._dirs.0.path(), NOW);
     let (a, b) = (w.f.a, w.f.b);
     // A valid stored page, fresh for a week, with two stories from one added source.
     let payload = json!({"articles":[
@@ -568,13 +574,13 @@ fn overview_serves_the_stored_page_like_the_old_route_and_only_to_its_owner() {
     ]});
     for who in [a, b] {
         w.f.rt.block_on(w.f.root.execute(
-            "INSERT INTO app.news_compilation_snapshots(owner_user_id,compiled_at,expires_at,payload) VALUES($1,now(),now()+interval '7 days',$2)",
+            "INSERT INTO app.news_compilation_snapshots(owner_user_id,compiled_at,expires_at,payload) VALUES($1,'2026-11-11T10:00:00Z','2026-11-18T10:00:00Z',$2)",
             &[&who, &payload],
         )).unwrap();
     }
     // The old route answers for b (its own rows), the package for a. The stored pages are equal.
     let steps = vec![json!({"method":"GET","url":"/api/news/overview"})];
-    let old = replay::old_routes(b, &steps, json!({}));
+    let old = replay::old_routes_at(b, &steps, json!({}), Some(NOW));
     let new = vec![w.call(a, "GET", "/overview", Value::Null)];
     compare(&steps, &old, &new);
     assert_eq!(new[0]["body"]["topStories"][0]["title"], json!("First stored story"), "{new:?}");

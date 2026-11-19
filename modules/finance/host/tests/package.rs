@@ -108,3 +108,27 @@ fn changing_one_byte_of_the_legacy_sql_stops_the_build() {
     }
     assert!(moss_finance_host::package::files(copy, &component()).is_err());
 }
+
+#[test]
+fn the_screen_ships_with_every_file_it_loads() {
+    let manifest = moss_finance_host::package::manifest().unwrap();
+    assert_eq!(manifest.screens["/finance"], "ui/index.html");
+    assert_eq!(manifest.screens["/settings/finance"], "ui/settings.html");
+    let files = moss_finance_host::package::files(&root(), &component()).unwrap();
+    for entry in manifest.screens.values() {
+        assert!(files.contains_key(entry), "{entry} is not in the package");
+    }
+    let page = String::from_utf8(files["ui/index.html"].clone()).unwrap();
+    for linked in ["./finance.css", "./finance-ledger.css", "./app.mjs"] {
+        assert!(page.contains(linked), "the page does not link {linked}");
+        assert!(files.contains_key(&format!("ui/{}", linked.trim_start_matches("./"))));
+    }
+    // Every local module any screen file imports is in the package.
+    for (path, bytes) in files.iter().filter(|(p, _)| p.starts_with("ui/") && p.ends_with(".mjs")) {
+        let text = String::from_utf8(bytes.clone()).unwrap();
+        for line in text.lines().filter(|l| l.contains("from \"./")) {
+            let name = line.split("\"./").nth(1).unwrap().split('"').next().unwrap();
+            assert!(files.contains_key(&format!("ui/{name}")), "{path} imports ui/{name}, which is not in the package");
+        }
+    }
+}

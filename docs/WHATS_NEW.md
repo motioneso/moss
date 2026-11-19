@@ -29,14 +29,32 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-11-19
+
+#### Added
+
+- **Manage linked devices in Meetings.** You can now see, rename and unlink the Macs and phones linked to Meetings, and approve a new device from a simple question on screen. [PR #4387](https://github.com/motioneso/moss/pull/4387)
+- **Review commitments on Today.** Review things you said you would do on Today, then accept, reject or snooze each suggestion. [PR #4378](https://github.com/motioneso/moss/pull/4378)
+- **A scratchpad beside chat.** Keep notes beside chat or in a full phone screen, with automatic saving, a personal shortcut, and a choice to reload when another tab changes your note. [PR #4379](https://github.com/motioneso/moss/pull/4379)
+
 ### 2026-11-18
 
 #### Added
 
+- **Long-term goals on Today.** Today shows your active long-term goals, priorities and desired outcomes. [PR #4376](https://github.com/motioneso/moss/pull/4376)
+- **Household, Log and settings in Meals.** Meals now has a Household list, a daily Log, a settings page, and tools to swap, move or rewrite a planned meal. [PR #4368](https://github.com/motioneso/moss/pull/4368)
+- **Finance start, reports, upcoming bills and settings.** Finance now has a start page that works without a bank connection, a reports page for net worth and spending, an upcoming bills page, and a settings page. [PR #4369](https://github.com/motioneso/moss/pull/4369)
+- **Finance screens in the new app.** You can now see your budget, transactions and accounts, assign money and sort transactions, and a bank that needs you to sign in again shows a Reconnect button. [PR #4362](https://github.com/motioneso/moss/pull/4362)
+- **Meals screen.** The Meals page now shows your meal plan, shopping list, pantry and staples, and works on your phone. [PR #4360](https://github.com/motioneso/moss/pull/4360)
 - **News settings in the new app.** The News settings page now opens in the new app, with your sources, topics, excluded publishers and story preferences. [PR #4355](https://github.com/motioneso/moss/pull/4355)
 - **Briefings screens in the new app.** You can read your morning and evening briefings and change when they are prepared from the new Moss app, including on your phone. [PR #4349](https://github.com/motioneso/moss/pull/4349)
 - **Sports settings.** You can now choose the teams and leagues you follow, your news sources, and your standings leagues from the Sports settings page. [PR #4348](https://github.com/motioneso/moss/pull/4348)
 - **Sports screen.** The Sports page now shows live scores, your followed teams, standings and team news. [PR #4345](https://github.com/motioneso/moss/pull/4345)
+
+#### Fixed
+
+- **Forget removed device links.** Removing Meetings with its data forgets linked devices so they must be linked again after reinstalling. [PR #4375](https://github.com/motioneso/moss/pull/4375)
+- **Keep bank transactions when a sync restarts.** Bank sync now finishes reading the next page after the bank changes data during a read, so transactions are not left out of the completed sync. [PR #4364](https://github.com/motioneso/moss/pull/4364)
 
 ### 2026-11-17
 

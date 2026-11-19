@@ -454,6 +454,24 @@ async fn create_session(
 
 /// The user behind a session token. Expired sessions are deleted; sessions older than a day
 /// get a fresh week, as `getSession` does.
+/// The live browser session behind the cookie, when it belongs to `actor`. Device approval
+/// binds to this id; a bearer never supplies one.
+pub async fn browser_session_id(
+    platform: &Platform,
+    headers: &HeaderMap,
+    actor: Uuid,
+) -> Result<Option<Uuid>, ApiError> {
+    let Some(token) = platform.sessions.read_token(headers) else { return Ok(None) };
+    let client = auth_client(&platform.auth).await?;
+    Ok(client
+        .query_opt(
+            "SELECT id FROM app.better_auth_sessions WHERE token = $1 AND user_id = $2 AND expires_at > now()",
+            &[&token, &actor],
+        )
+        .await?
+        .map(|row| row.get(0)))
+}
+
 async fn session_user(auth: &Database, token: &str) -> Result<Option<Uuid>, ApiError> {
     let client = auth_client(auth).await?;
     let Some(row) = client

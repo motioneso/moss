@@ -371,6 +371,14 @@ const normal = (text: string, names: Record<string, string>) => {
   for (const [name, id] of Object.entries(names)) out = out.split(id).join(`{${name}}`);
   return out;
 };
+// Unlabelled successful pastes have generated reply ids too. Apply after named ids were
+// replaced, and to stored cases as well; leave request keys, input dates and rows untouched.
+const normalReplyIds = (text: string) =>
+  text.replace(/"meetingId":"([0-9a-f-]{36})"/g, (field, id: string) =>
+    id.startsWith("00000000-0000-4000") || id.startsWith("99999999-9999")
+      ? field
+      : '"meetingId":"<id>"'
+  );
 const fill = (value: string, names: Record<string, string>) => {
   let out = value;
   for (const [name, id] of Object.entries(names)) out = out.split(`{${name}}`).join(id);
@@ -467,15 +475,20 @@ try {
   // Long runs of one character are stored as ~~REP(char,count)~~ to keep the file small.
   const pack = (t: string) =>
     t.replace(/(.)\1{199,}/gu, (run, ch: string) => `~~REP(${ch},${[...run].length})~~`);
-  const text = pack(`[\n${results.map((r) => `  ${JSON.stringify(r)}`).join(",\n")}\n]\n`);
+  const text = normalReplyIds(
+    pack(`[\n${results.map((r) => `  ${JSON.stringify(r)}`).join(",\n")}\n]\n`)
+  );
   if (process.argv[2] === "write") {
     writeFileSync(file, text);
     console.log(
       `wrote ${results.length} scenarios, ${results.reduce((n, r) => n + r.steps.length, 0)} steps`
     );
   } else {
-    assert.equal(text, readFileSync(file, "utf8"));
-    console.log("recording-cases.json matches the old code");
+    const expected = normalReplyIds(readFileSync(file, "utf8"));
+    assert.deepEqual(JSON.parse(text), JSON.parse(expected));
+    console.log(
+      `recording-cases.json matches the old code: ${results.length} scenarios, ${results.reduce((n, r) => n + r.steps.length, 0)} steps`
+    );
   }
 } finally {
   await server.close();

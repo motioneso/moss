@@ -43,6 +43,35 @@ fn private(path: &Path, value: &Value) {
     file.write_all(value.to_string().as_bytes()).unwrap();
 }
 
+/// Link the ring through the same HTTPS approval flow as the Android app.
+fn pair_android_device(client: &reqwest::blocking::Client, origin: &str, cookie: &str) -> String {
+    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+    use sha2::{Digest, Sha256};
+    let verifier = uuid::Uuid::new_v4().to_string();
+    let response = client.post(format!("{origin}/api/companion/pair"))
+        .header("origin", origin)
+        .json(&json!({"deviceName":"Meetings live ring","platform":"android","appVersion":"1","osVersion":"14",
+            "verifierHash":URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()))}))
+        .send().unwrap();
+    assert_eq!(response.status(), 200, "create Android pairing attempt");
+    let attempt: Value = response.json().unwrap();
+    let code = attempt["approvalPath"].as_str().unwrap().strip_prefix("/link/trail-marker#code=").unwrap();
+    let response = client.post(format!("{origin}/api/companion/pair/decide"))
+        .header("origin", origin).header("cookie", cookie)
+        .json(&json!({"code":code,"decision":"approve"})).send().unwrap();
+    assert_eq!(response.status(), 200, "approve Android pairing as the owner");
+    let response = client.post(format!("{origin}/api/companion/pair/redeem"))
+        .header("origin", origin)
+        .json(&json!({"attemptId":attempt["attemptId"],"verifier":verifier})).send().unwrap();
+    assert_eq!(response.status(), 200, "redeem Android pairing");
+    let issued: Value = response.json().unwrap();
+    assert_eq!(issued["status"], "issued");
+    let device = issued["device"]["id"].as_str().unwrap();
+    uuid::Uuid::parse_str(device).expect("paired device UUID");
+    println!("Android paired through create/approve/redeem -> 200");
+    device.to_owned()
+}
+
 #[test]
 #[ignore = "Only through verify-gate and the Meetings live gate"]
 fn installed_meetings_package_serves_routes_from_the_real_server() {
@@ -288,7 +317,40 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
         &root.join("modules.json"),
         &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"ai_key":"cd".repeat(32)}),
     );
+    runtime.block_on(async {
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(async move { let _ = connection.await; });
+        assert!(!db.query_one("SELECT to_regclass('app.companion_devices_owner') IS NOT NULL", &[]).await.unwrap().get::<_,bool>(0), "registry installation must not accidentally supply the lookup");
+    });
     let _server = start(true);
+    runtime.block_on(async {
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(async move { let _ = connection.await; });
+        assert!(db.query_one("SELECT to_regclass('app.companion_devices_owner') IS NOT NULL", &[]).await.unwrap().get::<_,bool>(0), "server startup supplies the lookup after a registry install");
+    });
+    if std::env::var_os("MOSS_COMPANION_STARTUP_ONLY").is_some() {
+        println!("registry install: startup supplies companion lookup without install-module");
+        drop(_server);
+        runtime.block_on(async {
+            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+            tokio::spawn(async move { let _ = connection.await; });
+            db.batch_execute("DROP VIEW app.companion_devices_owner").await.unwrap();
+        });
+        // A valid runtime login cannot apply DDL. Failure must leave the server usable,
+        // with linking closed until an elevated install or restart can prepare the lookup.
+        let mut settings: Value = serde_json::from_slice(&fs::read(root.join("modules.json")).unwrap()).unwrap();
+        settings["migrations_url"] = json!(app_url);
+        fs::write(root.join("modules.json"), settings.to_string()).unwrap();
+        let _denied = start(true);
+        assert_eq!(client.get(format!("{origin}/api/hello")).send().unwrap().status(), 200);
+        let response = client.post(format!("{origin}/api/companion/pair"))
+            .header("origin", &origin)
+            .json(&json!({"deviceName":"Unprepared Mac","platform":"macos","appVersion":"1","osVersion":"14","verifierHash":"a".repeat(43)}))
+            .send().unwrap();
+        assert_eq!(response.status(), 503, "linking must fail closed without lookup preparation");
+        println!("unavailable startup DDL: HTTPS stays healthy and linking returns 503");
+        return;
+    }
     // Setup allows one owner over HTTP, so the second person is made in the database with the
     // owner's password hash and then signs in through the real route.
     let other = {
@@ -487,10 +549,16 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
         let packets = vec![0u8, 3, 1, 2, 3, 1, 2, 4, 5];
         let sidecar = format!("{{\"record\":[\"1700000000\",\"start\"]}},{{\"btn\":[\"1700000001\",\"1\"]}},{{\"record\":[\"1700000040\",\"end\"]}},{{\"duration\":[\"1700000040\",\"{ms}\"]}}").into_bytes();
         let file = |b: &[u8]| json!({"byteLength": b.len(), "sha256": digest(b)});
-        let device = uuid::Uuid::new_v4().to_string();
+        let device = pair_android_device(&client, &origin, &cookie);
         let recording = format!("1700000000_ring-{}", &uuid::Uuid::new_v4().simple().to_string()[..8]);
         let manifest = json!({"version":3,"sourceDeviceId":device,"recordingId":recording,"destination":{"intent":"meeting"},
             "packets":file(&packets),"sidecar":file(&sidecar),"wav":file(&wav)});
+        let mut unpaired = manifest.clone();
+        unpaired["sourceDeviceId"] = json!(uuid::Uuid::new_v4().to_string());
+        let (status, text) = call(Method::POST, "/recording-uploads", Some(&cookie), Some(unpaired));
+        assert_eq!(status, 403, "an unpaired device may not upload: {text}");
+        assert_eq!(json_of(&text)["error"], "This device may not upload recordings");
+        println!("unpaired Android source device -> 403");
         let (status, text) = call(Method::POST, "/recording-uploads", Some(&cookie), Some(manifest.clone()));
         assert_eq!(status, 201, "{text}\n{}", log());
         let reserved = json_of(&text);

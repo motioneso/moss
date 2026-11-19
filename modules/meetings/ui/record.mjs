@@ -9,7 +9,18 @@ import {
 import { alertHint, btn, empty, hint, menu, sectionHead, status, textarea, field } from "./kit.mjs";
 import { transcriptPane } from "./transcript.mjs";
 import { summaryPane } from "./summary.mjs";
+import { capturePanel } from "./capture.mjs";
 
+const CAPTURE_ACTS = [
+  "capture-start",
+  "capture-pause",
+  "capture-resume",
+  "capture-stop",
+  "capture-retry",
+  "capture-check",
+  "capture-gaps",
+  "capture-new"
+];
 const NARROW = "(max-width: 760px)";
 
 /** One meeting page: header, title, type, notes, and the transcript and summary panes. */
@@ -18,6 +29,8 @@ export function recordScreen(ctx) {
   const ws = newWorkspace();
   const transcript = transcriptPane(ctx, ws);
   const summary = summaryPane(ctx, ws);
+  let panel = null;
+  let captureLive = false;
   ctx.refreshRecord = () => void loadRecord(true);
   ctx.notesDirty = () => dirty();
 
@@ -120,6 +133,24 @@ export function recordScreen(ctx) {
     void loadType();
     transcript.start();
     summary.start();
+    panel?.stop();
+    captureLive = false;
+    panel = capturePanel({
+      api,
+      draw,
+      meeting: { id },
+      navigate: ctx.navigate,
+      onLive: (value) => {
+        captureLive = value;
+      }
+    });
+    panel.start();
+  }
+
+  function leave() {
+    panel?.stop();
+    panel = null;
+    captureLive = false;
   }
 
   /* ---------- title ---------- */
@@ -418,7 +449,12 @@ ${
       '<span aria-hidden="true">•••</span>',
       [
         { act: "tool", data: 'data-tool="search"', label: "Search transcript" },
-        { act: "tool", data: 'data-tool="rewrite"', label: "Rewrite summary" },
+        {
+          act: "tool",
+          data: 'data-tool="rewrite"',
+          label: "Rewrite summary",
+          disabled: captureLive
+        },
         { act: "tool", data: 'data-tool="versions"', label: "Earlier versions" },
         { act: "tool", data: 'data-tool="vault"', label: "Save to vault" },
         { act: "tool", data: 'data-tool="copy"', label: "Copy as Markdown" },
@@ -426,7 +462,7 @@ ${
           act: "tool",
           data: 'data-tool="delete"',
           label: "Delete meeting",
-          disabled: ws.notes.phase === "saving"
+          disabled: ws.notes.phase === "saving" || captureLive
         }
       ],
       ws.menuOpen === "meeting-actions"
@@ -436,6 +472,7 @@ ${
 <header class="meetings-record-heading"><div>${btn("Meetings", "back", { variant: "link" })}</div><div class="meetings-actions meetings-record-tools">${menuNode}</div></header>
 ${titleBlock()}
 ${typeChip()}
+${panel ? panel.render() : ""}
 ${m.title !== "Untitled meeting" ? hint(esc(meetingDate(m.createdAt))) : ""}
 <div class="meetings-workspace">${ws.narrow ? "" : tPane}${tabs(items)}</div>
 ${showTab ? "" : `<div hidden>${summary.render()}</div>`}
@@ -525,11 +562,15 @@ ${ws.showDelete ? dialog() : ""}
     },
     "delete-confirm": () => void removeMeeting(),
     ...transcript.acts,
+    ...Object.fromEntries(
+      CAPTURE_ACTS.map((name) => [name, (target) => panel?.acts[name](target)])
+    ),
     ...summary.acts
   };
 
   return {
     start,
+    leave,
     render,
     acts,
     narrow(value) {

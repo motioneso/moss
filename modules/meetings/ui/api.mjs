@@ -23,7 +23,23 @@ export function meetingsApi(client) {
   return {
     search: (body) => call("POST", "/history/search", body),
     devices: () => call("GET", "/capture/devices"),
+    deviceList: () => call("GET", "/devices"),
+    renameDevice: (deviceId, displayName) =>
+      call("PATCH", `/devices/${id(deviceId)}`, { displayName }),
+    unlinkDevice: (deviceId) => call("DELETE", `/devices/${id(deviceId)}`),
+    linkAttempt: (code) => call("POST", "/link/attempt", { code }),
+    linkDecide: (body) => call("POST", "/link/decide", body),
     recordingTypes: () => call("GET", "/recording-types"),
+    preferences: () => call("GET", "/preferences"),
+    putPreferences: (body) => call("PUT", "/preferences", body),
+    createRecord: (body) => call("POST", "/records", body),
+    capture: (meetingId) => call("GET", `/records/${id(meetingId)}/capture`),
+    captureStart: (meetingId, body) =>
+      call("POST", `/records/${id(meetingId)}/capture/start`, body),
+    captureCancelStart: (meetingId, body) =>
+      call("POST", `/records/${id(meetingId)}/capture/cancel-start`, body),
+    captureControl: (meetingId, body) =>
+      call("POST", `/records/${id(meetingId)}/capture/control`, body),
     record: (meetingId) => call("GET", `/records/${id(meetingId)}`),
     putTitle: (meetingId, body) => call("PUT", `/records/${id(meetingId)}/title`, body),
     putNotes: (meetingId, body) => call("PUT", `/records/${id(meetingId)}/notes`, body),

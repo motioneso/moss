@@ -357,3 +357,33 @@ fn the_route_hands_every_tool_to_the_host_for_approval() {
     );
     assert_eq!(f.route("GET", "/meals", json!(null)).0, 404);
 }
+
+#[test]
+fn the_screen_route_runs_tools_without_chat_approval_and_gates_destructive_ones() {
+    let f = Fake::new();
+    f.tools_refuse.set(true);
+    let (status, body) = f.route(
+        "POST",
+        "/meals/screen/tool",
+        json!({"tool":"meals.kitchen.get","parameters":{}}),
+    );
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["data"]["unitsSystem"], "us");
+    let (status, _) = f.route(
+        "POST",
+        "/meals/screen/tool",
+        json!({"tool":"meals.kitchen.save","parameters":{"unitsSystem":"metric"}}),
+    );
+    assert_eq!(status, 200);
+    assert_eq!(f.rows(KITCHENS).len(), 1, "a screen write lands without chat approval");
+    let remove = json!({"tool":"meals.household.remove","parameters":{"memberId":B}});
+    assert_eq!(f.route("POST", "/meals/screen/tool", remove).0, 409);
+    let confirmed = json!({"tool":"meals.household.remove","parameters":{"memberId":B},"confirmed":true});
+    assert_eq!(f.route("POST", "/meals/screen/tool", confirmed).0, 200);
+    for bad in [
+        json!({"tool":"meals.not.a.tool","parameters":{}}),
+        json!({"tool":"meals.kitchen.get","parameters":[]}),
+    ] {
+        assert_eq!(f.route("POST", "/meals/screen/tool", bad).0, 400);
+    }
+}

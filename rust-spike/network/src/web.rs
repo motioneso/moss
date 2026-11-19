@@ -14,7 +14,8 @@ use axum::{
 };
 use safety_core::{
     access::AccessContext,
-    auth,
+    auth, companion_gate,
+    device_requests::DeviceRequests,
     db::DataContext,
     error::ApiError,
     http::{log, Platform},
@@ -126,6 +127,7 @@ fn public(path: &str) -> bool {
                 | "/icon.svg"
         )
         || path.starts_with("/fonts/")
+        || companion_gate::before_sign_in(path)
 }
 
 /// The only route a notifier device token opens. The token and `?client=<uuid>` identify the
@@ -264,12 +266,30 @@ async fn guarded(n: &Arc<Network>, request: &mut Request, next: Next) -> Respons
     } else {
         None
     };
+    let mut scoped = None;
     if path == NOTIFIER_PATH {
         // The notifier program holds a device token, not a session. The token opens only
         // this path.
         match notifier_access(&n.platform, request.headers(), request.uri().query()).await {
             Ok(access) => {
                 request.extensions_mut().insert(access);
+            }
+            Err(error) => return error.into_response(),
+        }
+    } else if let (false, Some((kind, token))) =
+        (public(&path), companion_gate::companion_bearer(request.headers()))
+    {
+        // A device credential opens only its own short list of paths.
+        match companion_gate::admit(&n.platform, request.headers(), request.method(), &path, kind, &token)
+            .await
+        {
+            Ok(admitted) => {
+                scoped = Some(companion_gate::Scoped::new(
+                    DeviceRequests::shared(),
+                    admitted.access.request_id(),
+                    admitted.device,
+                ));
+                request.extensions_mut().insert(admitted.access);
             }
             Err(error) => return error.into_response(),
         }
@@ -288,6 +308,7 @@ async fn guarded(n: &Arc<Network>, request: &mut Request, next: Next) -> Respons
     }
     let request = std::mem::replace(request, Request::new(Body::empty()));
     let response = next.run(request).await;
+    drop(scoped);
     if signing_in && response.status().is_success() {
         browser_auth_response(response).await
     } else {

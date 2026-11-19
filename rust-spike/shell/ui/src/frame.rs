@@ -97,6 +97,15 @@ fn current_path() -> String {
         .location()
         .pathname()
         .unwrap_or_else(|_| "/".into());
+    // Mac and Android apps already in the field open the old approval address. It now lands on
+    // Meetings, which keeps the one-time code after the "#" and asks for the approval.
+    if path == "/link/trail-marker" {
+        let to = format!("/meetings{}", window().location().hash().unwrap_or_default());
+        let _ = window().history().and_then(|h| {
+            h.replace_state_with_url(&wasm_bindgen::JsValue::NULL, "", Some(&to))
+        });
+        return "/meetings".into();
+    }
     if path == "/" || path.is_empty() {
         let _ = window().history().and_then(|h| {
             h.replace_state_with_url(&wasm_bindgen::JsValue::NULL, "", Some("/today"))
@@ -210,10 +219,11 @@ fn Frame(shell: ShellView, modules: Vec<api::ModuleNav>) -> impl IntoView {
     let rail = RwSignal::new(load_nav_rail());
     let mobile_nav_open = RwSignal::new(false);
     let chat_open = RwSignal::new(false);
+    let scratchpad_open = RwSignal::new(false);
     let chat_expanded_wish = RwSignal::new(false);
     let chat_unread = RwSignal::new(shell.chat_unread);
 
-    let dock_chat = Memo::new(move |_| wide.get());
+    let dock_chat = Memo::new(move |_| wide.get() && !scratchpad_open.get());
     let expanded = Memo::new(move |_| {
         chat_expanded_wish.get() && dock_chat.get() && chat_open.get() && !phone.get()
     });
@@ -337,6 +347,9 @@ fn Frame(shell: ShellView, modules: Vec<api::ModuleNav>) -> impl IntoView {
             chat_open.set(false);
             chat_expanded_wish.set(false);
         } else {
+            if phone.get_untracked() {
+                scratchpad_open.set(false);
+            }
             chat_open.set(true);
             chat_unread.set(0);
         }
@@ -350,6 +363,7 @@ fn Frame(shell: ShellView, modules: Vec<api::ModuleNav>) -> impl IntoView {
         >
             <aside
                 id="moss-main-navigation"
+                inert=move || phone.get() && scratchpad_open.get()
                 class=move || if mobile_nav_open.get() { "sidebar open" } else { "sidebar" }
                 role=move || mobile_nav_open.get().then_some("dialog")
                 aria-modal=move || mobile_nav_open.get().then_some("true")
@@ -505,6 +519,7 @@ fn Frame(shell: ShellView, modules: Vec<api::ModuleNav>) -> impl IntoView {
                         <span class="topbar-subtitle">{subtitle}</span>
                     </div>
                     <div class="topbar-actions">
+                        <crate::scratchpad::Scratchpad open=scratchpad_open chat_open=chat_open phone=phone />
                         <button
                             aria-label=chat_label
                             aria-pressed=move || if chat_open.get() { "true" } else { "false" }
@@ -534,7 +549,7 @@ fn Frame(shell: ShellView, modules: Vec<api::ModuleNav>) -> impl IntoView {
                     </div>
                 </header>
 
-                <div class=move || {
+                <div inert=move || phone.get() && scratchpad_open.get() class=move || {
                     let mut class = String::from("workspace-body");
                     if dock_chat.get() && chat_open.get() { class.push_str(" workspace-body--docked"); }
                     if expanded.get() { class.push_str(" workspace-body--expanded"); }
@@ -543,6 +558,8 @@ fn Frame(shell: ShellView, modules: Vec<api::ModuleNav>) -> impl IntoView {
                     <main class="content-surface" hidden=move || expanded.get()>
                         {move || if path.get() == "/today" {
                             view! { <TodayPage /> }.into_any()
+                        } else if path.get() == "/scratchpad-settings" {
+                            view! { <iframe id="scratchpad-settings-frame" class="module-screen" title="Scratchpad settings" src="/module-frame?module=scratchpad&path=%2Fscratchpad-settings"></iframe> }.into_any()
                         } else if path.get() == "/modules" {
                             view! { <crate::modules_page::ModulesPage /> }.into_any()
                         } else if let Some(m) = modules.iter().find(|m| m.path == path.get()) {

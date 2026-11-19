@@ -18,6 +18,11 @@ pub mod postgres;
 pub mod recovery;
 
 pub mod jobs;
+/// The companion device lookup, view and narrow write functions. Needs the Meetings tables.
+pub mod companion_devices {
+    pub const MIGRATION: &str = include_str!("../sql/0004_companion_devices.sql");
+}
+pub mod purge_hooks;
 
 pub mod ai;
 pub mod credentials;
@@ -78,3 +83,8 @@ mod notifications;
 mod producer_queue;
 pub mod quiet_hours;
 pub mod worker;
+
+pub mod chat_tools;
+mod chat_schema;
+mod chat_services;
+mod invocation;

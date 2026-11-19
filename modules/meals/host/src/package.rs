@@ -25,6 +25,33 @@ pub fn files(root: &Path, component: &[u8]) -> Result<BTreeMap<String, Vec<u8>>>
             include_bytes!("../../CHANGELOG.md").to_vec(),
         ),
     ]);
+    for (name, bytes) in [
+        ("index.html", include_bytes!("../../ui/index.html").as_slice()),
+        ("app.mjs", include_bytes!("../../ui/app.mjs")),
+        ("api.mjs", include_bytes!("../../ui/api.mjs")),
+        ("format.mjs", include_bytes!("../../ui/format.mjs")),
+        ("kit.mjs", include_bytes!("../../ui/kit.mjs")),
+        ("plan.mjs", include_bytes!("../../ui/plan.mjs")),
+        ("plan-day.mjs", include_bytes!("../../ui/plan-day.mjs")),
+        ("recipe.mjs", include_bytes!("../../ui/recipe.mjs")),
+        ("list.mjs", include_bytes!("../../ui/list.mjs")),
+        ("list-dialogs.mjs", include_bytes!("../../ui/list-dialogs.mjs")),
+        ("pantry.mjs", include_bytes!("../../ui/pantry.mjs")),
+        ("pantry-dialogs.mjs", include_bytes!("../../ui/pantry-dialogs.mjs")),
+        ("household.mjs", include_bytes!("../../ui/household.mjs")),
+        ("log.mjs", include_bytes!("../../ui/log.mjs")),
+        ("log-dialogs.mjs", include_bytes!("../../ui/log-dialogs.mjs")),
+        ("log-format.mjs", include_bytes!("../../ui/log-format.mjs")),
+        ("plan-new.mjs", include_bytes!("../../ui/plan-new.mjs")),
+        ("swap.mjs", include_bytes!("../../ui/swap.mjs")),
+        ("arrange.mjs", include_bytes!("../../ui/arrange.mjs")),
+        ("settings.html", include_bytes!("../../ui/settings.html")),
+        ("settings.mjs", include_bytes!("../../ui/settings.mjs")),
+        ("guest-bridge.mjs", include_bytes!("../../ui/guest-bridge.mjs")),
+        ("meals.css", include_bytes!("../../ui/meals.css")),
+    ] {
+        files.insert(format!("ui/{name}"), bytes.to_vec());
+    }
     for path in &manifest.database.migrations {
         let frozen = moss_module_host::legacy::entry("meals", path)
             .ok_or_else(|| anyhow::anyhow!("Meals SQL is not in the legacy inventory"))?;

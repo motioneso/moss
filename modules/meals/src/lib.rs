@@ -43,6 +43,7 @@ pub const KITCHENS: &str = "app.meals_kitchens";
 pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
     let result = match (request.method.as_str(), request.path.as_str()) {
         ("POST", "/meals/tools/run") => tools::run(host, &request.body),
+        ("POST", "/meals/screen/tool") => tools::screen_run(host, &request.body),
         _ => return Response::new(404, json!({"message":"Route not found"})),
     };
     // A host failure leaves as a fixed message, because host errors can carry request text.

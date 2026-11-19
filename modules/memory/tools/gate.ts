@@ -1,6 +1,13 @@
 import { spawnSync } from "node:child_process";
 import { getMossDatabaseUrls } from "@moss/db";
 if (process.env.JARVIS_GATE_RUN !== "1") throw new Error("Use verify-gate");
+const suites = ["db", "dashboard", "recording", "reembed", "account"];
+const selected = process.env.MEMORY_SUITE;
+if (selected && !suites.includes(selected)) throw new Error("Unknown Memory test suite");
+// Preserve the existing multi-suite entry point, including test:rust-memory-recording.
+const requested = selected
+  ? [selected]
+  : (process.env.MEMORY_SUITES ?? suites.join(",")).split(",");
 const urls = getMossDatabaseUrls();
 const checks = spawnSync("modules/memory/tools/check.sh", {
   stdio: "inherit",
@@ -14,9 +21,7 @@ const env = {
   MEMORY_CORE_WASM: `${process.env.CARGO_TARGET_DIR ?? "/tmp/moss-memory-host"}/memory-guest/wasm32-unknown-unknown/release/moss_memory.wasm`
 };
 let status = 0;
-for (const suite of (process.env.MEMORY_SUITES ?? "db,dashboard,recording,reembed,account").split(
-  ","
-)) {
+for (const suite of requested) {
   const run = spawnSync(
     "cargo",
     [

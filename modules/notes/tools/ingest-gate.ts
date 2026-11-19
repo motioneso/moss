@@ -1,8 +1,10 @@
 import { spawnSync } from "node:child_process";
 import { getMossDatabaseUrls } from "@moss/db";
 import { ingestOracle } from "./ingest-oracle.js";
+import { prepareNotesToolComponent } from "./tool-component.js";
 
 if (process.env.JARVIS_GATE_RUN !== "1") throw new Error("Use verify-gate");
+prepareNotesToolComponent();
 const oracle = await ingestOracle();
 try {
   const urls = getMossDatabaseUrls();

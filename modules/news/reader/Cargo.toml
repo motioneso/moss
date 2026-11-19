@@ -26,6 +26,10 @@ name = "live_read"
 path = "tools/live_read.rs"
 
 [[test]]
+name = "html"
+path = "tests/html.rs"
+
+[[test]]
 name = "privacy"
 path = "tests/privacy.rs"
 

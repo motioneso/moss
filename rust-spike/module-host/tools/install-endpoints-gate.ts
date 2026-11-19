@@ -1,15 +1,14 @@
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { getMossDatabaseUrls } from "@moss/db";
+import { buildPeopleServerPackage } from "./people-server-package.js";
 
 if (process.env.JARVIS_GATE_RUN !== "1") throw new Error("Use verify-gate");
-for (const name of ["JS50_PEOPLE_COMPONENT", "JS73_PEOPLE_PACKAGE"]) {
-  if (!process.env[name]) throw new Error(`Set ${name}`);
-}
 for (const name of ["CARGO_HOME", "RUSTUP_HOME", "CARGO_TARGET_DIR"]) {
   if (!process.env[name]) throw new Error(`Use task-owned ${name}`);
 }
 const urls = getMossDatabaseUrls();
+const peoplePackage = buildPeopleServerPackage(process.env.CARGO_TARGET_DIR!);
 function cargo(args: string[], extra: Record<string, string> = {}) {
   const result = spawnSync("cargo", ["+1.95.0", ...args], {
     stdio: "inherit",
@@ -49,6 +48,7 @@ cargo(
     "--nocapture"
   ],
   {
+    ...peoplePackage,
     JS43_APP_URL: urls.app,
     JS43_WORKER_URL: urls.worker,
     JS43_BOOTSTRAP_URL: urls.bootstrap,

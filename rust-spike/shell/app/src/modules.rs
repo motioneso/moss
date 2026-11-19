@@ -1,5 +1,5 @@
 //! Explicit assembly for an existing approved module catalog. Installation/bootstrap
-//! still owns schema creation; the serving process never runs bootstrap SQL.
+//! still owns module schema creation; this opens the installed catalog.
 use crate::module_embedding::{ActivityRows, EmbeddingConfig, SettingsEmbeddings};
 use anyhow::Result;
 use moss_calendar_host::CalendarPorts;
@@ -225,9 +225,13 @@ impl Intelligence for SplitIntelligence {
     }
 }
 
-/// Sports keeps its standings choices, and Weather its place and unit, in fixed account
-/// preference keys. Weather's keys are the ones the old Settings routes wrote.
-fn module_preferences(database: Database, next: Arc<dyn Ports>) -> Result<Arc<dyn Ports>> {
+/// One preference adapter owns all fixed module bindings; stacking adapters would hide
+/// inner bindings because each adapter handles every preference operation.
+fn module_preferences(
+    database: Database,
+    notes_base: Option<PathBuf>,
+    next: Arc<dyn Ports>,
+) -> Result<Arc<dyn Ports>> {
     let mut bindings = weather_bindings();
     bindings.extend(wellness_bindings());
     bindings.extend([
@@ -246,20 +250,8 @@ fn module_preferences(database: Database, next: Arc<dyn Ports>) -> Result<Arc<dy
                 },
             ),
         ]);
-    Ok(Arc::new(AccountPreferencesPorts::new(database, bindings, next)?))
-}
-
-/// Account preference and linked-notes ports for People. Keys, resources and roots are
-/// fixed here, never chosen by the guest.
-fn linked_notes(
-    database: Database,
-    base: PathBuf,
-    private_base: PathBuf,
-    next: Arc<dyn Ports>,
-) -> Result<Arc<dyn Ports>> {
-    let preferences = AccountPreferencesPorts::new(
-        database.clone(),
-        BTreeMap::from([
+    if notes_base.is_some() {
+        bindings.extend([
             (
                 ("people".into(), "people-folder".into()),
                 Binding::Folder {
@@ -275,10 +267,23 @@ fn linked_notes(
                     default: true,
                 },
             ),
-        ]),
-        next,
-    )?
-    .with_account_base(base.clone());
+        ]);
+    }
+    let preferences = AccountPreferencesPorts::new(database, bindings, next)?;
+    Ok(Arc::new(match notes_base {
+        Some(base) => preferences.with_account_base(base),
+        None => preferences,
+    }))
+}
+
+/// Linked-notes ports for People. Keys, resources and roots are fixed here,
+/// never chosen by the guest.
+fn linked_notes(
+    database: Database,
+    base: PathBuf,
+    private_base: PathBuf,
+    next: Arc<dyn Ports>,
+) -> Result<Arc<dyn Ports>> {
     let folders = PreferenceFolders::new(
         database.clone(),
         BTreeMap::from([
@@ -303,7 +308,7 @@ fn linked_notes(
     .with_private_export("notes", "private-export", private_base);
     let linked: Arc<dyn Ports> = Arc::new(LinkedNotesPorts::new(
         Arc::new(folders),
-        Arc::new(preferences),
+        next,
     ));
     // Notes folder browse, link and status. The setting keys are fixed here.
     Ok(Arc::new(
@@ -472,7 +477,7 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
             browser_dir: settings.browser_dir.clone(),
         },
         |services| {
-            let services = match notes_base {
+            let services = match notes_base.clone() {
             Some(base) => {
                 let services = memory(
                     preferences_database.clone(),
@@ -497,7 +502,7 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
                 Ok(Arc::new(LinkedNotesPorts::new(Arc::new(folders), services)) as Arc<dyn Ports>)
             }
             }?;
-            let services = module_preferences(preferences_database_sports, services)?;
+            let services = module_preferences(preferences_database_sports, notes_base, services)?;
             // Sports source photos: the host re-encodes pictures and keeps the private copies.
             let services = Arc::new(
                 moss_sports_host::SportsPorts::new(services)
@@ -505,13 +510,24 @@ pub fn application(settings: Settings, database: Database) -> Result<Application
             ) as Arc<dyn Ports>;
             // Meetings answers only its own capture-preference calls, as the signed-in person.
             let authority_database = meetings_database.clone();
+            let device_store = moss_meetings_host::device_store::DeviceStore::new(meetings_database.clone());
+            let device_requests = safety_core::device_requests::DeviceRequests::shared();
             let services = Arc::new(
                 MeetingsPorts::new(meetings_database, services)?
-                    .with_recordings(&settings.data.join("modules/files"))?,
+                    .with_recordings(&settings.data.join("modules/files"))?
+                    .with_devices(Arc::new(device_store.clone()))
+                    .with_capture_authority(Arc::new(moss_meetings_host::device_store::NativeAuthority::new(
+                        device_store.clone(),
+                        device_requests.clone(),
+                    ))),
             ) as Arc<dyn Ports>;
             // Backtrack answers only its own screen-text calls, as the signed-in person. Mac uploads
             // are refused until the device link check is supplied.
-            let services = Arc::new(BacktrackPorts::new(backtrack_database, services)?) as Arc<dyn Ports>;
+            let services = Arc::new(
+                BacktrackPorts::new(backtrack_database, services)?.with_links(Arc::new(
+                    crate::companion_links::StoreLinks { devices: device_store, requests: device_requests },
+                )),
+            ) as Arc<dyn Ports>;
             // Scratchpad answers only its own note calls, as the signed-in person.
             let services = Arc::new(ScratchpadPorts::new(scratchpad_database, services)?) as Arc<dyn Ports>;
             // Calendar keeps its settings in the account's real preferences and reads the
@@ -563,6 +579,7 @@ pub type Slot = Arc<std::sync::Mutex<Option<ServerModules>>>;
 pub fn routes(slot: Slot, web: PathBuf) -> Router {
     Router::new()
         .route("/api/m/{module}/{*path}", any(dispatch))
+        .route("/api/companion/backtrack", any(dispatch))
         .route("/api/me/weather-location", any(dispatch))
         .route("/api/me/weather-location/{leaf}", any(dispatch))
         .route("/api/me/weather-unit", any(dispatch))
@@ -635,7 +652,7 @@ pub fn routes(slot: Slot, web: PathBuf) -> Router {
         )
 }
 
-fn host(slot: &Slot) -> Option<Arc<Application>> {
+pub(crate) fn host(slot: &Slot) -> Option<Arc<Application>> {
     slot.lock()
         .unwrap_or_else(|e| e.into_inner())
         .as_ref()
@@ -830,6 +847,7 @@ async fn dispatch(
 /// served by the packages for the support window. Every other path passes through unchanged.
 fn alias(target: &str) -> String {
     for (old, new) in [
+        ("/api/companion/backtrack", "/api/m/backtrack/ingest"),
         ("/api/me/weather-location", "/api/m/weather/location"),
         ("/api/me/weather-unit", "/api/m/weather/unit"),
         ("/api/news/images/", "/api/m/news/images/"),

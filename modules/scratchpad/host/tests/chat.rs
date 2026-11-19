@@ -260,7 +260,7 @@ fn tool_replies_match_the_real_legacy_handlers() {
             &w.app
                 .app
                 .installer
-                .call("scratchpad", w.f.access(w.f.b), "tool", &step.to_string())
+                .call_tool_for_test("scratchpad", w.f.access(w.f.b), &step.to_string())
                 .unwrap(),
         )
         .unwrap();

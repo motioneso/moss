@@ -1,5 +1,5 @@
 //! Goals package: long-running goals and their evidence, private to each owner. All effects
-//! cross the guest-safe SDK Host interface. Chat tools share the route mutations; Today reads active goals without a screen.
+//! cross the guest-safe SDK Host interface. Chat tools share the route mutations; the Today package screen reads active goals.
 pub mod goals;
 pub mod input;
 pub mod tools;

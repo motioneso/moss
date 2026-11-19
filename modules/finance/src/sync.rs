@@ -10,8 +10,8 @@ use moss_module_sdk::{
 };
 use serde_json::{json, Value};
 
-/// Pages read per run. A real bank holds hundreds of transactions and one call has 30 seconds, so a
-/// run stops early and the saved cursor lets the next run continue.
+/// Pages read per attempt. A real bank holds hundreds of transactions and one call has 30 seconds,
+/// so a run stops early and the saved cursor lets the next run continue. Restarts are capped below.
 const PAGES_PER_RUN: u32 = 2;
 const MAX_RESTARTS: u32 = 3;
 const MUTATION: &str = "TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION";
@@ -86,7 +86,7 @@ fn sync_item<H: Host + ?Sized>(host: &H, item: &Value, id: &str, day: &str, at: 
                     return refuse(host, item, id, &bad, &counts);
                 }
                 pages += 1;
-                counts.pages = pages;
+                counts.pages += 1;
                 Client(host).query(
                     LINKS,
                     &Query::update(
@@ -102,6 +102,8 @@ fn sync_item<H: Host + ?Sized>(host: &H, item: &Value, id: &str, day: &str, at: 
             Err(e) if e.code == MUTATION && restarts < MAX_RESTARTS => {
                 restarts += 1;
                 cursor = begin.clone();
+                // Replayed pages must not use up the restarted read's page budget.
+                pages = 0;
             }
             Err(e) => return refuse(host, item, id, &e, &counts),
         }

@@ -61,6 +61,9 @@ databases in a scratch folder and never touches the dev or prod database.
 
 ## Running
 
+For the chat runner's per-account configuration and live-list proof build, see
+[`agents/README.md`](agents/README.md).
+
 Needs the Rust toolchain in `~/.cargo/bin`, `dbus-daemon` for the key store tests, and the
 repo's own `pnpm install`. Run the TypeScript scripts from the repo root and cargo from this
 folder. The cargo target folder below is `rust-spike/target` unless `CARGO_TARGET_DIR` says

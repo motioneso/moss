@@ -2,7 +2,7 @@
 //! Module IDs and archive/file paths continue to use their separate, stricter validators.
 pub(crate) fn valid(name: &str) -> bool {
     !name.is_empty()
-        && name.len() <= 100
+        && "mcp__moss__".len() + name.len() <= 110
         && name.split('.').all(|part| {
             !part.is_empty()
                 && part.as_bytes()[0].is_ascii_lowercase()

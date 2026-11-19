@@ -104,7 +104,7 @@ fn program(name: &str) -> Command {
 }
 
 /// The elevated database address, read fresh for one run.
-fn elevated_url(instance: &Path) -> Result<String, &'static str> {
+pub(crate) fn elevated_url(instance: &Path) -> Result<String, &'static str> {
     // A gate points this at a stand-in; a real install always uses the bundled program.
     let mut supervisor = match std::env::var_os("MOSS_DB_PROGRAM") {
         Some(path) => Command::new(path),

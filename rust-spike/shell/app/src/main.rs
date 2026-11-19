@@ -19,10 +19,16 @@ use moss_network::{
     web::{self, Network},
 };
 use moss_shell_contract::stub::StubShellData;
-use moss_shell_contract::{ChatMessage, ChatThread, SendMessage, ShellData, ShellView, TodayView};
+use moss_shell_contract::{
+    ChatError, ChatThread, DecideApproval, SendMessage, ShellData, ShellView, TodayView,
+};
 use safety_core::access::AccessContext;
 use tower_http::services::ServeDir;
 
+mod companion;
+mod companion_owner;
+mod companion_startup;
+mod companion_links;
 mod desktop_notices;
 mod integrations;
 mod module_admin;
@@ -32,12 +38,15 @@ mod module_install;
 mod modules;
 mod proactive_feedback;
 mod runner_data;
+mod chat_approvals;
+mod chat_tools;
 
 type Data = Arc<dyn ShellData>;
 
 struct Accounts {
     platform: Arc<safety_core::http::Platform>,
     runner: Option<PathBuf>,
+    modules: modules::Slot,
     /// True when the server has an instance folder the module installer can work in.
     can_install_modules: bool,
     data: Mutex<HashMap<uuid::Uuid, Data>>,
@@ -53,6 +62,7 @@ impl Accounts {
                 Some(root) => Arc::new(runner_data::RunnerShellData::new(
                     root.clone(),
                     access.actor_user_id().to_string(),
+                    chat_tools::source(self.modules.clone(), access.clone()),
                 )) as Data,
                 None => Arc::new(StubShellData::default()) as Data,
             })
@@ -92,6 +102,25 @@ fn router(data: Arc<Accounts>, web: PathBuf) -> Router {
             "/api/today",
             get(|State(d): State<Arc<Accounts>>, Extension(access): Extension<AccessContext>| async move { Json::<TodayView>(d.for_actor(&access).today()) }),
         )
+        .route("/api/companion/protocol", post(companion::protocol))
+        .route("/api/companion/pair", post(companion::pair))
+        .route("/api/companion/pair/attempt", post(companion::attempt))
+        .route("/api/companion/pair/decide", post(companion::decide))
+        .route("/api/companion/pair/redeem", post(companion::redeem))
+        .route("/api/companion/pair/cancel", post(companion::cancel))
+        // The Meetings Devices screen reaches these through its own module path.
+        .route("/api/m/meetings/devices", get(companion_owner::list))
+        .route(
+            "/api/m/meetings/devices/{id}",
+            axum::routing::patch(companion_owner::rename).delete(companion_owner::unlink),
+        )
+        .route("/api/m/meetings/link/attempt", post(companion::attempt))
+        .route("/api/m/meetings/link/decide", post(companion::decide))
+        .route("/api/companion/heartbeat", post(companion::heartbeat))
+        .route("/api/companion/device", axum::routing::patch(companion::rename))
+        .route("/api/companion/logout", post(companion::logout))
+        .route("/api/companion/ring-session", get(companion::ring_session))
+        .route("/api/companion/ring-logout", post(companion::ring_logout))
         .route("/api/desktop/notices", get(desktop_notices::list).post(desktop_notices::accept))
         // The notifier program signs in with a device token instead of a session.
         .route("/api/notifier/notices", get(desktop_notices::list).post(desktop_notices::accept))
@@ -107,11 +136,23 @@ fn router(data: Arc<Accounts>, web: PathBuf) -> Router {
             "/api/chat/messages",
             post(
                 |State(d): State<Arc<Accounts>>, Extension(access): Extension<AccessContext>, Json(body): Json<SendMessage>| async move {
-                    // A chat turn can take minutes, so it waits off the request threads.
+                    // The turn runs in the background. The drawer polls the thread for its progress.
                     let data = d.for_actor(&access);
-                    match tokio::task::spawn_blocking(move || data.send_message(&body.text)).await {
-                        Ok(m) => Json::<ChatMessage>(m).into_response(),
-                        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+                    match data.send_message(&body) {
+                        Ok(thread) => (StatusCode::ACCEPTED, Json::<ChatThread>(thread)).into_response(),
+                        Err(error) => chat_error(error),
+                    }
+                },
+            ),
+        )
+        .route(
+            "/api/chat/approvals/{id}",
+            post(
+                |State(d): State<Arc<Accounts>>, Extension(access): Extension<AccessContext>, axum::extract::Path(id): axum::extract::Path<String>, Json(body): Json<DecideApproval>| async move {
+                    let actor = access.actor_user_id().to_string();
+                    match d.for_actor(&access).decide_approval(&actor, &id, body.decision) {
+                        Ok(thread) => Json::<ChatThread>(thread).into_response(),
+                        Err(error) => chat_error(error),
                     }
                 },
             ),
@@ -123,6 +164,14 @@ fn router(data: Arc<Accounts>, web: PathBuf) -> Router {
                 .fallback((move |uri: Uri| app_page(uri, index.clone())).into_service()),
         )
         .with_state(data)
+}
+
+fn chat_error(error: ChatError) -> Response {
+    match error {
+        ChatError::Busy | ChatError::Closed => StatusCode::CONFLICT,
+        ChatError::NotFound => StatusCode::NOT_FOUND,
+    }
+    .into_response()
 }
 
 async fn app_page(uri: Uri, index: PathBuf) -> Response {
@@ -249,6 +298,12 @@ fn main() {
             None => None,
         };
         let network = Network::new(platform.clone(), config, args.network)?;
+        // The registry and file-import paths do not run install-module. Prepare the core
+        // device lookup before loading modules or accepting a pairing request.
+        if companion_startup::prepare(&platform.auth, modules_path.as_deref(), args.instance.as_deref())
+            .await.is_err() {
+            eprintln!("moss-shell: device lookup is unavailable; linking stays disabled until module installation or a successful restart");
+        }
         // The host opens in the background, last: errors above must not drop its runtimes on
         // this executor, and a module installed later is picked up without a restart.
         let modules: modules::Slot = Arc::new(Mutex::new(None));
@@ -266,8 +321,10 @@ fn main() {
             platform: platform.clone(),
             can_install_modules: args.instance.is_some(),
             runner: args.runner,
+            modules: modules.clone(),
             data: Mutex::new(HashMap::new()),
         });
+        companion::register_revoker(&data);
         let private = router(data, args.web.clone());
         let private = match &loader {
             Some(_) => private.merge(modules::routes(modules.clone(), args.web.clone())),
@@ -314,6 +371,7 @@ fn main() {
             Some(admin) => private.merge(module_admin::routes(admin)),
             None => private,
         };
+        let private = private.layer(Extension(modules.clone()));
         let app = web::router(network, private, args.web);
         Ok::<_, String>((listener, acceptor, app, running, modules, loader))
     });

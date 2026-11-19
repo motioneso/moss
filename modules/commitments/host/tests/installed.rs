@@ -351,3 +351,23 @@ fn extraction_state_and_judgements_stay_private_and_jobs_carry_ids_only() {
     println!("PASS jobs: the extract job carries the source kind only, and asking twice queues one job");
     let _ = AccessContext::new(a, "commitments-proof");
 }
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn saved_commitment_renders_the_reusable_review_card() {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+    let w = World::new();
+    let id = w.seed(w.f.a, "stored-card", "Stored review <budget> & draft", "pending_review", None, 1);
+    for action in ["accept", "reject", "snooze"] {
+        let prepared = w.app.installer.call("commitments", w.f.access(w.f.a), "api", &json!({
+            "name":"prepareCommitmentAction", "parameters":{"candidateId":id,"action":action,"snoozedUntil":"2026-12-01T00:00:00Z"}
+        }).to_string()).unwrap();
+        let mut render = Command::new("node")
+            .arg(root().join("modules/commitments/tools/render-stored-card.mjs"))
+            .args([id.to_string(), action.to_owned()]).stdin(Stdio::piped()).spawn().unwrap();
+        render.stdin.take().unwrap().write_all(prepared.as_bytes()).unwrap();
+        assert!(render.wait().unwrap().success(), "stored record must render through the packaged card");
+    }
+    assert_eq!(w.call(w.f.a, "GET", &format!("/candidates/{id}"), json!(null))["body"]["status"], "pending_review");
+}

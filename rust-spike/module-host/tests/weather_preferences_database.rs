@@ -47,8 +47,8 @@ fn weather_place_and_unit_are_validated_private_and_shared_with_typescript() {
         )
         .unwrap(),
     );
-    // The checked-in declaration the Weather manifest will carry: the two resources and
-    // the two operations. Every declared resource must have a binding in the shell's map.
+    // The checked-in account-preferences declaration includes place, unit and the read-only
+    // saved time zone. Every declared resource must have a binding in the shell's map.
     let declared: Capability = serde_json::from_str(include_str!("data/weather-preferences-capability.json")).unwrap();
     for resource in &declared.resources {
         assert!(weather_bindings().contains_key(&("weather".to_string(), resource.clone())), "{resource}");
@@ -107,7 +107,7 @@ fn weather_place_and_unit_are_validated_private_and_shared_with_typescript() {
     }
     assert_eq!(stored(owner, LOCATION), Some(place.clone()));
     assert_eq!(stored(owner, UNIT), Some(json!("metric")));
-    // Only the two declared resources exist, and the host picks the keys.
+    // Undeclared resources are refused, and the host picks the keys.
     assert!(call(owner, "preference.read", "other", json!({})).is_err());
     assert!(call(owner, "preference.write", "location", json!({"value":place,"key":"weather-unit"})).is_err());
     assert!(call(owner, "preference.write", "location", json!({"owner":other.to_string(),"value":place})).is_err());
