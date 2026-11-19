@@ -1,5 +1,9 @@
 # Finance package
 
+## 0.6.0
+
+- Finance now has Start, Reports and Upcoming screens and a settings page that opens from the header cog. Start works with no bank keys. Reports show net worth, spending by category and payee, and cash flow. Upcoming lists the month's bills and lets you add, skip, match, change and stop them. Whole-account export and delete now include Finance data. The settings page cannot change the sorting limits or the dollar limit yet.
+
 ## 0.5.2
 
 - The Finance screen shows your budget by month, your transactions and your accounts from the package, on desktop and phone. A bank that cannot sync shows its status and a Reconnect button. Settings, Reports, Upcoming and the first-budget setup panels are not on the screen yet.
