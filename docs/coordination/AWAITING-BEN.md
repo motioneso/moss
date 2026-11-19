@@ -75,6 +75,20 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
+### JS-356: scope of missing Rust chat support (Card 611) — 2026-11-18
+
+Commitments part 9 is a screen-only task with approved Today option A and chat approval-card
+mockups. Its required live proof includes reviewing commitments in the real Rust chat drawer.
+At origin/main `62311fb5e`, `rust-spike/agents/src/bin/moss-runner.rs` offers only the
+`current_time` tool, and `rust-spike/shell/app/src/runner_data.rs` declines every approval.
+The Commitments package already implements review tools and `prepareCommitmentAction`, but
+the shell does not connect them. The plan excludes the general Chat host from this part.
+
+Decision needed: include the minimum installed-tool and approval-card host wiring in JS-356,
+or build that prerequisite separately before finishing the chat screen and proof. Recommendation:
+include only the minimum wiring needed by the approved Commitments review, with independent
+review of that boundary. No product files have been changed while this scope decision is pending.
+
 No open Outlook calendar decision. Ben approved the
 [calendar-first design](../superpowers/specs/2026-10-21-outlook-browser-calendar-sync.md)
 on 2026-10-21. Implementation and isolated-dev verification are authorized;
