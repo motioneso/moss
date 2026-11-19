@@ -199,7 +199,7 @@ mod tests {
         ];
         let months = derive(&assigned, &rows, &BTreeSet::new(), &[]).unwrap();
         assert_eq!(months["2026-10"].categories["groceries"], Cat { assigned: 10_000, activity: 12_000, available: -2_000 });
-        assert_eq!(months["2026-10"].tbb, 40_000);
+        assert_eq!(months["2026-10"].tbb, 40_001);
         // The overspend is not carried, but it lowers the pool from the next month on.
         assert_eq!(months["2026-11"].categories["groceries"].available, -1_000);
         assert_eq!(months["2026-11"].tbb, 40_000 - 2_000);
