@@ -1,5 +1,5 @@
-//! The public Briefings calls read and change only the caller's own tasks. The read gives each caller only their own tasks, and the proof fails when
-//! row security is removed.
+//! The public Briefings calls read and change only the caller's own tasks. Both the call's own-rows
+//! filter and row security keep another person out, so each control turns one layer off at a time.
 use super::*;
 
 impl Fixture {
