@@ -16,12 +16,14 @@ With the task-owned build environment prepared as below, reproduce
 through verify-gate:
 
 ```sh
-scripts/run-gate.sh start --gate test:rust-people-large
+JS177_PEOPLE_FUEL=200000000 scripts/run-gate.sh start --gate test:rust-people-large
 ```
 
-The large-account gate builds its handwritten comparison component in `CARGO_TARGET_DIR` when
+The large-account gate builds its generated component in `CARGO_TARGET_DIR` when
 `JS50_PEOPLE_COMPONENT` is unset. An explicit component path still selects an
-existing artifact for focused checks.
+existing artifact for focused checks. The diagnostic's fuel override above matches
+the manifest's existing 200M request; without it, the test uses the smaller default
+host budget.
 
 The [delivery report](../../docs/superpowers/specs/2026-11-08-rust-phase5-people-report.md)
 records each delivered slice and the exact remaining continuation work.
