@@ -68,3 +68,21 @@ fn export_returns_every_row_of_a_large_table() {
     f.as_actor(A);
     assert_eq!(call(&f, "collectFinanceExportSection")["activity"].as_array().unwrap().len(), 1200);
 }
+
+#[test]
+fn setup_status_reports_accounts_without_bank_keys() {
+    let f = Fake::new();
+    let (status, empty) = f.route("GET", "/finance/setup/status", json!({}));
+    assert_eq!(status, 200);
+    assert_eq!(empty["hasBank"], false);
+    assert_eq!(empty["hasManualAccount"], false);
+    assert_eq!(empty["keysConfigured"], false);
+    f.seed(
+        "app.finance_accounts",
+        A,
+        json!({"account_id":"m1","name":"Cash","source":"manual","type":"depository","iso_currency":"USD"}),
+    );
+    let (_, after) = f.route("GET", "/finance/setup/status", json!({}));
+    assert_eq!(after["hasManualAccount"], true);
+    assert_eq!(after["hasBank"], false);
+}

@@ -543,6 +543,7 @@
     { "method": "GET", "path": "/finance/reports/spending", "signIn": true },
     { "method": "GET", "path": "/finance/reports/net-worth", "signIn": true },
     { "method": "GET", "path": "/finance/reports/transactions", "signIn": true },
+    { "method": "GET", "path": "/finance/setup/status", "signIn": true },
     { "method": "GET", "path": "/finance/activity", "signIn": true },
     { "method": "POST", "path": "/finance/activity/undo", "signIn": true },
     { "method": "POST", "path": "/finance/accounts/shared", "signIn": true },
