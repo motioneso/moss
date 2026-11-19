@@ -29,7 +29,7 @@ use crate::Accounts;
 
 const POLL_SECONDS: u64 = 3;
 
-type Reply = Result<Response, ApiError>;
+pub(crate) type Reply = Result<Response, ApiError>;
 
 const WINDOW: Duration = Duration::from_secs(60);
 const SWEEP_ABOVE: usize = 1024;
@@ -91,7 +91,7 @@ fn limited() -> ApiError {
     ApiError::http(429, "Rate limit exceeded")
 }
 
-fn json_body<T>(body: Result<Json<T>, JsonRejection>) -> Result<T, ApiError> {
+pub(crate) fn json_body<T>(body: Result<Json<T>, JsonRejection>) -> Result<T, ApiError> {
     body.map(|Json(v)| v).map_err(|_| ApiError::framework(400, "Request body is invalid"))
 }
 
@@ -100,15 +100,15 @@ fn no_store(mut response: Response) -> Response {
     response
 }
 
-fn pairing(data: &Accounts) -> PairingStore {
+pub(crate) fn pairing(data: &Accounts) -> PairingStore {
     PairingStore::new(data.platform.auth.clone())
 }
 
-fn devices(data: &Accounts) -> DeviceStore {
+pub(crate) fn devices(data: &Accounts) -> DeviceStore {
     DeviceStore::new(data.platform.app.clone())
 }
 
-fn internal(e: anyhow::Error) -> ApiError {
+pub(crate) fn internal(e: anyhow::Error) -> ApiError {
     ApiError::Internal(format!("companion: {e}"))
 }
 
@@ -189,7 +189,7 @@ pub struct CodeBody {
 }
 
 /// Approving a device with a cookie is a state change, so a trusted Origin is required.
-fn trusted_origin(data: &Accounts, headers: &HeaderMap) -> Result<(), ApiError> {
+pub(crate) fn trusted_origin(data: &Accounts, headers: &HeaderMap) -> Result<(), ApiError> {
     data.platform
         .origins
         .check_auth_post(headers)
@@ -197,7 +197,7 @@ fn trusted_origin(data: &Accounts, headers: &HeaderMap) -> Result<(), ApiError> 
 }
 
 /// A signed-in browser, never a bearer: the cookie is the only way in here.
-async fn browser_actor(data: &Accounts, headers: &HeaderMap) -> Result<AccessContext, ApiError> {
+pub(crate) async fn browser_actor(data: &Accounts, headers: &HeaderMap) -> Result<AccessContext, ApiError> {
     if auth::read_bearer_token(headers).is_some() {
         return Err(ApiError::Unauthorized);
     }

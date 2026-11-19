@@ -346,6 +346,16 @@ impl PairingStore {
         Ok(())
     }
 
+    /// The owner removes one of their own devices. `false` when the device is not theirs, so a
+    /// guessed id learns nothing. The device's credential stops working at once.
+    pub async fn unlink(&self, owner: Uuid, device: Uuid) -> Result<bool> {
+        let c = self.client().await?;
+        let removed = c
+            .execute("DELETE FROM app.companion_devices WHERE id = $1 AND user_id = $2", &[&device, &owner])
+            .await?;
+        Ok(removed > 0)
+    }
+
     /// The ring (Android) credential's owner and device, refreshing its expiry like any call.
     pub async fn ring_session(&self, credential: &str) -> Result<Option<RingSession>> {
         if !credential_shape(credential, RING_PREFIX) {
