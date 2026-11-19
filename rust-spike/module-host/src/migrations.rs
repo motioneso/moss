@@ -171,6 +171,7 @@ impl Lifecycle for PostgresLifecycle {
                 let legacy=crate::legacy::entry(id,path).is_some_and(|f| f.raw==crate::trust::digest(&new.files[path]));
                 let role=if legacy {"jarvis_migration_owner"}else{&owner};
                 tx.batch_execute(&format!("SET LOCAL ROLE {role}")).await?;
+                if legacy {crate::legacy::prepare_replay(&tx,id,path).await?;}
                 tx.batch_execute(std::str::from_utf8(&new.files[path])?).await?;
                 crate::legacy::backfill(&tx,new,path).await?;
                 tx.batch_execute("RESET ROLE").await?;

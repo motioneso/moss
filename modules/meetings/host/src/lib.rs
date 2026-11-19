@@ -16,6 +16,7 @@ pub mod exports;
 pub mod files;
 pub mod outputs;
 pub mod pairing;
+mod device_purge;
 pub mod package;
 pub mod recordings;
 pub mod section;

@@ -1,5 +1,5 @@
 -- Companion device lookup for the sign-in gate and the Meetings stores.
--- The four tables are owned by the Meetings ledger and readable only by jarvis_auth_runtime.
+-- The four tables come from the core ledger and are readable only by jarvis_auth_runtime.
 -- Everything here is owned by that role, so FORCE RLS admits it, and the app role reaches
 -- devices only through the owner-only view and the narrow functions below.
 -- No object here returns credential_hash, pair_attempt_id or any proof hash.

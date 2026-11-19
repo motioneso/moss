@@ -1,5 +1,5 @@
 //! Explicit assembly for an existing approved module catalog. Installation/bootstrap
-//! still owns schema creation; the serving process never runs bootstrap SQL.
+//! still owns module schema creation; this opens the installed catalog.
 use crate::module_embedding::{ActivityRows, EmbeddingConfig, SettingsEmbeddings};
 use anyhow::Result;
 use moss_calendar_host::CalendarPorts;
@@ -647,7 +647,7 @@ pub fn routes(slot: Slot, web: PathBuf) -> Router {
         )
 }
 
-fn host(slot: &Slot) -> Option<Arc<Application>> {
+pub(crate) fn host(slot: &Slot) -> Option<Arc<Application>> {
     slot.lock()
         .unwrap_or_else(|e| e.into_inner())
         .as_ref()
