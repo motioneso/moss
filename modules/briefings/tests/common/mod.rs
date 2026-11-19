@@ -40,6 +40,9 @@ pub struct Fake {
     pub answers: RefCell<Vec<(String, String, String, Option<Value>)>>,
     /// Every public-API call as (person, module, name, parameters).
     pub api_calls: RefCell<Vec<(String, String, String, Value)>>,
+    /// A stand-in for Tasks. When `Some`, its own-account rules answer the task calls: a person
+    /// reads and changes only tasks they own. Entries carry `ownerUserId` and the task fields.
+    pub tasks: RefCell<Option<Vec<Value>>>,
     /// The router's answer: `Ok(text)` or `Err(message)`. Unset fails like a server with no model.
     pub ai_reply: RefCell<Option<std::result::Result<String, String>>>,
     /// Every router call as (resource, parameters).
@@ -67,6 +70,7 @@ impl Fake {
             schedules: RefCell::new(vec![]),
             answers: RefCell::new(vec![]),
             api_calls: RefCell::new(vec![]),
+            tasks: RefCell::new(None),
             ai_reply: RefCell::new(None),
             ai_calls: RefCell::new(vec![]),
             ratings: RefCell::new(vec![]),
@@ -90,6 +94,28 @@ impl Fake {
     /// Teaches a person's public-API answer. `None` makes that call fail.
     pub fn answer(&self, person: &str, module: &str, name: &str, answer: Option<Value>) {
         self.answers.borrow_mut().push((person.into(), module.into(), name.into(), answer));
+    }
+    /// The Tasks rules the real module applies to these two calls.
+    fn tasks_answer(&self, actor: &str, name: &str, p: &Value) -> Result<Value> {
+        let mut guard = self.tasks.borrow_mut();
+        let tasks = guard.as_mut().unwrap();
+        let mine = |t: &Value| t["ownerUserId"] == actor;
+        match name {
+            "listBriefingTasks" if p["ids"].is_array() => {
+                let wanted: Vec<&Value> = p["ids"].as_array().unwrap().iter().collect();
+                Ok(json!({"items": tasks.iter().filter(|t| mine(t) && wanted.contains(&&t["id"])).cloned().collect::<Vec<_>>()}))
+            }
+            "listBriefingTasks" => Ok(json!({"items": tasks.iter().filter(|t| mine(t) && t["status"] == p["status"]).cloned().collect::<Vec<_>>()})),
+            "setBriefingTaskStatus" => {
+                let Some(task) = tasks.iter_mut().find(|t| mine(t) && t["id"] == p["taskId"]) else { return Ok(json!({"task": null})) };
+                if task["status"] == "done" {
+                    return Err(moss_module_sdk::Error::new("Task status change not allowed"));
+                }
+                task["status"] = p["status"].clone();
+                Ok(json!({"task": {"id": task["id"], "status": task["status"]}}))
+            }
+            _ => Err(moss_module_sdk::Error::new("Public call unavailable")),
+        }
     }
     pub fn share(&self, definition: &str, person: &str, level: &str) {
         self.shares.borrow_mut().push((definition.into(), person.into(), level.into()));
@@ -329,6 +355,9 @@ impl Host for Fake {
                 let actor = self.actor.get();
                 let name = parameters["name"].as_str().unwrap_or("").to_owned();
                 self.api_calls.borrow_mut().push((actor.into(), resource.into(), name.clone(), parameters["parameters"].clone()));
+                if resource == "tasks" && self.tasks.borrow().is_some() {
+                    return self.tasks_answer(actor, &name, &parameters["parameters"]);
+                }
                 let found = self.answers.borrow().iter().rev().find(|(p, m, n, _)| p == actor && m == resource && *n == name).cloned();
                 match found {
                     Some((_, _, _, Some(answer))) => Ok(answer),

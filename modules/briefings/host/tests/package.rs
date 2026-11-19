@@ -55,6 +55,8 @@ fn the_package_builds_and_the_manifest_validates() {
         "ui/briefing.mjs",
         "ui/briefings.css",
         "ui/reader.css",
+        "ui/today.html",
+        "ui/today.mjs",
     ] {
         assert!(files.contains_key(screen), "{screen} missing");
     }

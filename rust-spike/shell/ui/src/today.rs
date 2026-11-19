@@ -46,7 +46,7 @@ fn Today(view: TodayView) -> impl IntoView {
                         </section>
                     })}
                     <div data-module-section="commitments" data-screen-path="/today"></div>
-                    <div id="needs-you"></div>
+                    <div id="needs-you"><div data-module-section="briefings" data-screen-path="/today"></div></div>
                     <div id="goals"><moss-goals-today></moss-goals-today></div>
                 </div>
                 <aside class="cmd-aside" aria-label="Today widgets">
