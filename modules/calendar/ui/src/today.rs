@@ -316,7 +316,11 @@ fn ReviewRow(item: Item, zone: chrono_tz::Tz, twelve: bool) -> impl IntoView {
         item.label
     };
     let meta = if item.minutes.is_some() && !item.unavailable {
-        format!("{} minutes · {label}", item.minutes.unwrap())
+        format!(
+            "{} minutes · {}",
+            item.minutes.unwrap(),
+            item.review_reason.as_deref().unwrap_or(label)
+        )
     } else {
         label.to_owned()
     };
@@ -324,7 +328,7 @@ fn ReviewRow(item: Item, zone: chrono_tz::Tz, twelve: bool) -> impl IntoView {
     view! {<li class="plan-review__row"><div><div class="plan-review__title">{item.title.clone()}</div><div class="plan-review__meta">{meta}</div></div>
         {(!item.unavailable).then(||view! {<div class="plan-review__fields">
             {item.minutes.is_some().then(||view! {<div class="plan-review__field"><label class="plan-review__label plan-review__label--time" for=format!("{id}-time")>"Time"</label><input class="plan-review__time plan-review__field--time" type="time" id=format!("{id}-time") aria-label=format!("{}: start time",item.title) value=time disabled /></div>})}
-            <div class="plan-review__field"><label class="plan-review__label" for=format!("{id}-placement")>"Placement"</label><select class="jds-select" id=format!("{id}-placement") aria-label=format!("{}: placement",item.title) disabled><option>{if item.flexible {"Keep as is"} else if item.first_proposal {"Keep proposed"} else {"Leave unscheduled"}}</option></select></div>
+            <div class="plan-review__field plan-review__field--placement"><label class="plan-review__label plan-review__label--placement" for=format!("{id}-placement")>"Placement"</label><select class="jds-select" id=format!("{id}-placement") aria-label=format!("{}: placement",item.title) disabled><option>{item.placement_label}</option></select></div>
         </div>})}
     </li>}
 }

@@ -31,6 +31,15 @@ function run(command: string, args: string[], extra: Record<string, string> = {}
 function cargo(args: string[], extra: Record<string, string> = {}) {
   run("cargo", ["+1.95.0", ...args], extra);
 }
+cargo([
+  "test",
+  "--offline",
+  "--locked",
+  "--manifest-path",
+  "modules/tasks/src/Cargo.toml",
+  "--test",
+  "reference"
+]);
 run("bash", ["modules/calendar/tools/build-ui.sh"], {
   CALENDAR_UI_DIR: calendarUi,
   CALENDAR_UI_TARGET: join(target, "calendar-ui"),
@@ -102,7 +111,7 @@ cargo(
   { CARGO_TARGET_DIR: join(target, "calendar-ui") }
 );
 run(join(target, "release/ui-bindgen"), [
-  join(target, "calendar-ui/wasm32-unknown-unknown/release/moss_shell_ui.wasm"),
+  join(target, "calendar-ui/wasm32-unknown-unknown/release/moss-shell-ui.wasm"),
   shellWeb,
   "app"
 ]);

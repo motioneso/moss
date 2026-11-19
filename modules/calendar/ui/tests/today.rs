@@ -33,8 +33,10 @@ fn saved_proposals_and_actual_blocks_keep_the_typescript_labels_and_order() {
     assert_eq!(result[1].title, "Current task title");
     assert_eq!(result[1].label, "On the calendar");
     assert_eq!(result[2].label, "Change pending");
+    assert_eq!(result[2].placement_label, "Keep on calendar");
     assert!(result[2].start.is_some());
     assert_eq!(result[3].label, "Proposed, not on the calendar yet");
+    assert_eq!(result[3].placement_label, "Keep proposed");
 }
 
 #[test]

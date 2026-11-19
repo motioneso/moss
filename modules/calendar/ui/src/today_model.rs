@@ -19,6 +19,8 @@ pub struct Item {
     pub kind_label: &'static str,
     pub reason: Option<String>,
     pub location: Option<String>,
+    pub placement_label: &'static str,
+    pub review_reason: Option<String>,
 }
 fn text(value: &Value) -> Option<String> {
     value.as_str().map(str::to_owned)
@@ -78,6 +80,8 @@ pub fn items(saved: &Value, events: &Value, day: NaiveDate, zone: Tz, twelve: bo
             kind_label: "",
             reason: None,
             location: text(&event["location"]),
+            placement_label: "",
+            review_reason: None,
         });
     }
     let blocks = array(&saved["plan"]["blocks"]);
@@ -164,6 +168,24 @@ pub fn items(saved: &Value, events: &Value, day: NaiveDate, zone: Tz, twelve: bo
             },
             reason,
             location: None,
+            placement_label: if actual.is_some() {
+                "Keep on calendar"
+            } else if !block["taskId"].is_null() {
+                "Keep proposed"
+            } else {
+                "Leave unscheduled"
+            },
+            review_reason: summary
+                .and_then(|t| instant(&t["dueAt"]))
+                .and_then(DateTime::<Utc>::from_timestamp_millis)
+                .map(|at| {
+                    let due = at.with_timezone(&zone);
+                    if due.date_naive() == day {
+                        "Due today".into()
+                    } else {
+                        format!("Due {}", due.format("%b %-d"))
+                    }
+                }),
         });
     }
     out.extend(calendar);
