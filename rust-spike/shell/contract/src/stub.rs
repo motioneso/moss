@@ -94,8 +94,6 @@ impl ShellData for StubShellData {
                 headline_accent: "DAY".into(),
                 summary: "Two things on the plan and 1 event on the calendar.".into(),
                 weather_note: Some("Weather isn't set up yet.".into()),
-                briefing_note: "Briefing not ready yet. Your morning briefing is switched off."
-                    .into(),
             },
             timeline: vec![
                 TimelineSlot {
@@ -155,26 +153,34 @@ impl ShellData for StubShellData {
             status: "Sample replies only".into(),
             model_label: "Sample model".into(),
             messages: self.messages.lock().expect("stub lock").clone(),
+            running: false,
+            approvals: Vec::new(),
         }
     }
 
-    fn send_message(&self, text: &str) -> ChatMessage {
+    fn decide_approval(&self, _: &str, _: &str, _: Decision) -> Result<ChatThread, ChatError> {
+        Err(ChatError::NotFound)
+    }
+
+    fn send_message(&self, message: &SendMessage) -> Result<ChatThread, ChatError> {
         let mut messages = self.messages.lock().expect("stub lock");
+        if message.fresh_conversation {
+            messages.clear();
+        }
         let mut next_id = self.next_id.lock().expect("stub lock");
         let n = *next_id;
         *next_id += 2;
         messages.push(ChatMessage {
             id: format!("m{}", n + 1),
             role: ChatRole::User,
-            text: text.to_string(),
+            text: message.text.clone(),
         });
-        let reply = ChatMessage {
+        messages.push(ChatMessage {
             id: format!("m{}", n + 2),
             role: ChatRole::Assistant,
             text: "This is a sample reply. Real answers arrive when the chat runner is ported."
                 .into(),
-        };
-        messages.push(reply.clone());
+        });
         if messages.len() > STUB_HISTORY_LIMIT {
             let excess = messages.len() - STUB_HISTORY_LIMIT;
             messages.drain(..excess);
@@ -184,7 +190,9 @@ impl ShellData for StubShellData {
                 );
             }
         }
-        reply
+        drop(next_id);
+        drop(messages);
+        Ok(self.chat_thread())
     }
 }
 
@@ -196,8 +204,13 @@ mod tests {
     fn send_appends_both_turns() {
         let data = StubShellData::default();
         let before = data.chat_thread().messages.len();
-        let reply = data.send_message("hello");
-        let thread = data.chat_thread();
+        let thread = data
+            .send_message(&SendMessage {
+                text: "hello".into(),
+                ..Default::default()
+            })
+            .unwrap();
+        let reply = thread.messages.last().unwrap().clone();
         assert_eq!(thread.messages.len(), before + 2);
         assert_eq!(thread.messages[before].text, "hello");
         assert_eq!(thread.messages[before + 1], reply);
@@ -208,7 +221,11 @@ mod tests {
     fn history_keeps_the_newest_messages() {
         let data = StubShellData::default();
         for i in 0..STUB_HISTORY_LIMIT {
-            data.send_message(&format!("note {i}"));
+            data.send_message(&SendMessage {
+                text: format!("note {i}"),
+                ..Default::default()
+            })
+            .unwrap();
         }
         let messages = data.chat_thread().messages;
         assert_eq!(messages.len(), STUB_HISTORY_LIMIT);

@@ -15,10 +15,12 @@
 //! Every connection opens with `{"op":"hello","secret":...}`; a wrong secret closes it.
 //! Then, one line of JSON each way:
 //!
-//!   -> {"op":"chat","account":"<signed-in-user-id>","text":"...","tools":[...]}
+//!   -> {"op":"chat","account":"<signed-in-user-id>","text":"...","tools":[...],"turn_id":"<uuid>"}
 //!   <- {"event":"text","delta":"..."} | {"event":"tool_started",...} | {"event":"tool_finished",...}
-//!   <- {"event":"approval","id":1,"card":{"tool":...,"title":...,"input":...}}
+//!   <- {"event":"approval","id":1,"card":{"source":"agent"|"moss","tool":...,"title":...,"input":...}}
 //!   -> {"op":"answer","id":1,"allow":true}
+//!   <- {"event":"tool_call","call_id":"<turn>:1","name":"scratchpad_read","arguments":{}}
+//!   -> {"op":"tool_result","call_id":"<turn>:1","ok":true,"text":"..."}
 //!   <- {"event":"done","text":"...","tools_used":[...]} | {"event":"error","message":"..."}
 
 use std::collections::HashMap;
@@ -30,6 +32,7 @@ use moss_agents::builtins::BuiltinTools;
 use moss_agents::driver::*;
 use moss_agents::gateway::ToolDef;
 use moss_agents::runner::*;
+use moss_agents::tool_bridge::ToolBridge;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -65,6 +68,15 @@ enum Op {
         account: String,
         text: String,
         tools: Vec<ToolDef>,
+        turn_id: String,
+        #[serde(default)]
+        fresh_conversation: bool,
+    },
+    #[serde(rename = "tool_result")]
+    ToolResult {
+        call_id: String,
+        ok: bool,
+        text: String,
     },
     Answer {
         id: u64,
@@ -176,7 +188,9 @@ async fn serve(
 
     let pending: Arc<Mutex<HashMap<u64, oneshot::Sender<Answer>>>> = Arc::default();
     let next_id = Arc::new(AtomicU64::new(1));
-    while let Some(line) = lines.next_line().await? {
+    let active: Arc<Mutex<Option<Arc<ToolBridge>>>> = Arc::default();
+    let mut chat_task: Option<(String, tokio::task::JoinHandle<()>)> = None;
+    while let Ok(Some(line)) = lines.next_line().await {
         match serde_json::from_str::<Op>(&line) {
             Ok(Op::Chat { ref account, .. }) if !accounts.contains_key(account) => {
                 let _ = out_tx.send(json!({"event": "error", "message": "This runner has no agent for that account."}));
@@ -185,7 +199,23 @@ async fn serve(
                 account,
                 text,
                 tools,
+                turn_id,
+                fresh_conversation,
             }) => {
+                if active.lock().unwrap().is_some() {
+                    let _ = out_tx.send(
+                        json!({"event":"error", "message":"A turn is already open on this socket"}),
+                    );
+                    continue;
+                }
+                let sender = out_tx.clone();
+                let bridge = Arc::new(ToolBridge::new(
+                    account.clone(),
+                    turn_id,
+                    Arc::new(move |event| sender.send(event).is_ok()),
+                ));
+                *active.lock().unwrap() = Some(bridge.clone());
+                let active_turn = active.clone();
                 let setup = Arc::new(accounts[&account].clone());
                 let (runner, setup, out, pending, next_id) = (
                     runner.clone(),
@@ -194,22 +224,40 @@ async fn serve(
                     pending.clone(),
                     next_id.clone(),
                 );
-                tokio::spawn(async move {
+                let account_name = account.clone();
+                let task = tokio::spawn(async move {
                     let sink_out = out.clone();
                     let events: EventSink = Arc::new(move |e| {
                         let _ = sink_out.send(event_json(&e));
                     });
                     let ask_out = out.clone();
+                    let ask_pending = pending.clone();
                     let ask: AskPerson = Arc::new(move |card| {
+                        let pending = ask_pending.clone();
                         let id = next_id.fetch_add(1, Ordering::Relaxed);
                         let (tx, rx) = oneshot::channel();
                         pending.lock().unwrap().insert(id, tx);
                         let _ = ask_out.send(json!({"event": "approval", "id": id, "card": card}));
-                        // No answer (the app went away) counts as no.
-                        Box::pin(async move { rx.await.unwrap_or(Answer::Deny) })
+                        // No answer (the app went away or never replied) counts as no. The
+                        // server expires an ask first, at 10 minutes; this is the backstop.
+                        let pending = pending.clone();
+                        Box::pin(async move {
+                            let answer = await_answer(rx, ASK_LIMIT).await;
+                            pending.lock().unwrap().remove(&id);
+                            answer
+                        })
                     });
                     let reply = match runner
-                        .chat(&account, &setup, &text, &events, ask, tools)
+                        .chat_with_bridge(
+                            &account,
+                            &setup,
+                            &text,
+                            &events,
+                            ask,
+                            tools,
+                            Some(bridge.clone()),
+                            fresh_conversation,
+                        )
                         .await
                     {
                         Ok(t) => {
@@ -224,8 +272,21 @@ async fn serve(
                             json!({"event": "error", "message": "The agent stopped with an error. Details are in the Moss log."})
                         }
                     };
+                    bridge.close();
+                    *active_turn.lock().unwrap() = None;
                     let _ = out.send(reply);
                 });
+                chat_task = Some((account_name, task));
+            }
+            Ok(Op::ToolResult { call_id, ok, text }) => {
+                let accepted = active
+                    .lock()
+                    .unwrap()
+                    .as_ref()
+                    .is_some_and(|b| b.result(&call_id, ok, text));
+                if !accepted {
+                    eprintln!("moss-runner: refused unmatched tool result");
+                }
             }
             Ok(Op::Answer { id, allow }) => {
                 if let Some(tx) = pending.lock().unwrap().remove(&id) {
@@ -237,9 +298,33 @@ async fn serve(
             }
         }
     }
+    if let Some(bridge) = active.lock().unwrap().take() {
+        bridge.close();
+    }
+    pending.lock().unwrap().clear();
+    // The server closed the socket mid-turn (its hard turn limit, or it went away). The turn
+    // ends here too, and the agent restarts fresh next time.
+    if let Some((account, task)) = chat_task.take() {
+        if !task.is_finished() {
+            task.abort();
+            let _ = task.await;
+            runner.stop(&account).await;
+        }
+    }
     drop(out_tx);
-    let _ = writer.await;
+    writer.abort();
     Ok(())
+}
+
+/// The server expires an ask at 10 minutes. The runner waits one minute longer.
+const ASK_LIMIT: std::time::Duration = std::time::Duration::from_secs(11 * 60);
+
+/// An ask with no answer inside `limit`, or whose sender is dropped, is a refusal.
+async fn await_answer(rx: oneshot::Receiver<Answer>, limit: std::time::Duration) -> Answer {
+    match tokio::time::timeout(limit, rx).await {
+        Ok(Ok(answer)) => answer,
+        _ => Answer::Deny,
+    }
 }
 
 fn event_json(e: &AgentEvent) -> Value {
@@ -320,19 +405,43 @@ mod tests {
             .write_all(b"{\"op\":\"hello\",\"secret\":\"wrong\"}\n")
             .await
             .unwrap();
-        write.shutdown().await.unwrap();
         let mut lines = BufReader::new(read).lines();
+        // Keep the write half open: an EOF would abort the server writer before a weakened
+        // hello check can flush its ready event, making this assertion pass either way.
+        let first = tokio::time::timeout(std::time::Duration::from_secs(2), lines.next_line())
+            .await
+            .expect("hello check did not close or answer")
+            .unwrap();
         assert!(
-            lines.next_line().await.unwrap().is_none(),
+            first.is_none(),
             "wrong hello secret opened a turn socket"
         );
         task.await.unwrap().unwrap();
     }
 
+    #[tokio::test]
+    async fn an_unanswered_ask_is_refused_when_its_timer_runs_out() {
+        let (tx, rx) = oneshot::channel::<Answer>();
+        let answer = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            await_answer(rx, std::time::Duration::from_millis(20)),
+        )
+        .await
+        .expect("the ask waited past its own timer");
+        assert_eq!(answer, Answer::Deny);
+        drop(tx);
+        let (tx, rx) = oneshot::channel();
+        tx.send(Answer::Allow).unwrap();
+        assert_eq!(
+            await_answer(rx, std::time::Duration::from_secs(5)).await,
+            Answer::Allow
+        );
+    }
+
     #[test]
     fn chat_op_carries_tools_and_config_has_distinct_account_setups() {
         let tools = vec![moss_agents::builtins::current_time()];
-        let op = json!({"op":"chat", "account":"alice", "text":"hello", "tools":tools});
+        let op = json!({"op":"chat", "account":"alice", "text":"hello", "tools":tools, "turn_id":"turn-a"});
         let Op::Chat { account, tools, .. } = serde_json::from_value(op).unwrap() else {
             panic!("chat")
         };

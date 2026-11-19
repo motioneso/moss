@@ -1,7 +1,7 @@
 //! Calls to the Moss server. Same origin in the browser and in the desktop window.
 
 use gloo_net::http::Request;
-use moss_shell_contract::{ChatMessage, ChatThread, SendMessage, ShellView, TodayView};
+use moss_shell_contract::{ChatThread, SendMessage, ShellView, TodayView};
 use serde::de::DeserializeOwned;
 
 async fn get<T: DeserializeOwned>(path: &str) -> Result<T, String> {
@@ -15,6 +15,11 @@ async fn get<T: DeserializeOwned>(path: &str) -> Result<T, String> {
         return Err(format!("{path} answered {}", response.status()));
     }
     response.json().await.map_err(|e| e.to_string())
+}
+
+/// GET a JSON route on the Moss server.
+pub async fn get_json<T: DeserializeOwned>(path: &str) -> Result<T, String> {
+    get(path).await
 }
 
 pub async fn shell() -> Result<ShellView, String> {
@@ -91,13 +96,20 @@ pub async fn chat_thread() -> Result<ChatThread, String> {
     get("/api/chat/thread").await
 }
 
-pub async fn send_message(text: String) -> Result<ChatMessage, String> {
+/// Starts a turn. The reply arrives in the thread, which the drawer polls.
+pub async fn send_message(text: String) -> Result<ChatThread, String> {
     let response = Request::post("/api/chat/messages")
-        .json(&SendMessage { text })
+        .json(&SendMessage {
+            text,
+            ..Default::default()
+        })
         .map_err(|e| e.to_string())?
         .send()
         .await
         .map_err(|e| e.to_string())?;
+    if response.status() == 409 {
+        return Err("busy".into());
+    }
     if !response.ok() {
         return Err(format!("send answered {}", response.status()));
     }

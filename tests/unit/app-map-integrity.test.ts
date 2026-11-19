@@ -21,6 +21,8 @@ describe("app-map integrity and truthfulness", () => {
       ).matchAll(/\.route\(\s*"([^" ]+)"/g)
     ]
       .map((match) => match[1])
+      // The shell serves Today at "/" through its fallback, not a declared route.
+      .concat(["/"])
       .concat(
         // The desktop app serves its own screens from moss-app:// links declared in its source.
         [
@@ -65,6 +67,7 @@ describe("app-map integrity and truthfulness", () => {
     });
     expect(rustMap.screens.map((entry) => entry.id)).toEqual([
       "rust-sign-in",
+      "rust-today",
       "rust-desktop-connect"
     ]);
     expect(rustMap.settings.map((entry) => entry.id)).toEqual([

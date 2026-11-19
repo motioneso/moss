@@ -8,6 +8,7 @@ pub(crate) struct TurnTools {
     account: String,
     definitions: Mutex<Vec<ToolDef>>,
     executor: Arc<dyn ToolHost>,
+    bridge: Mutex<Option<Arc<dyn ToolHost>>>,
 }
 
 impl TurnTools {
@@ -16,7 +17,16 @@ impl TurnTools {
             account: account.into(),
             definitions: Mutex::new(definitions),
             executor,
+            bridge: Mutex::new(None),
         }
+    }
+
+    pub fn set_bridge(&self, bridge: Option<Arc<dyn ToolHost>>) {
+        *self.bridge.lock().unwrap() = bridge;
+    }
+
+    pub fn refresh(&self, kind: crate::driver::AgentKind, definitions: Vec<ToolDef>) -> bool {
+        kind != crate::driver::AgentKind::Codex && self.replace(definitions)
     }
 
     /// Compare canonical JSON, including schemas and routing facts, independent of list order.
@@ -53,9 +63,10 @@ impl ToolHost for TurnTools {
             .iter()
             .any(|d| d.name == name && d.module.is_some())
         {
-            return Box::pin(async {
-                Err("Module tool execution arrives with the server bridge.".into())
-            });
+            return match self.bridge.lock().unwrap().clone() {
+                Some(bridge) => bridge.call(account, name, args),
+                None => Box::pin(async { Err("No open server tool turn".into()) }),
+            };
         }
         self.executor.call(account, name, args)
     }
@@ -85,6 +96,21 @@ mod tests {
         second.facts.execution_auto = false;
         assert!(tools.replace(vec![first, second]));
         assert!(tools.replace(vec![]));
+    }
+
+    #[test]
+    fn codex_keeps_the_starting_list_until_a_fresh_account_session() {
+        use crate::driver::AgentKind;
+        let original = current_time();
+        let mut added = original.clone();
+        added.name = "new".into();
+        let tools = TurnTools::new("a", vec![original.clone()], Arc::new(BuiltinTools));
+        assert!(!tools.refresh(AgentKind::Codex, vec![original.clone(), added.clone()]));
+        assert_eq!(tools.tools("a").len(), 1);
+        assert!(tools.refresh(AgentKind::Claude, vec![original.clone(), added.clone()]));
+        assert_eq!(tools.tools("a").len(), 2);
+        let fresh = TurnTools::new("a", vec![original, added], Arc::new(BuiltinTools));
+        assert_eq!(fresh.tools("a").len(), 2);
     }
 
     #[tokio::test]

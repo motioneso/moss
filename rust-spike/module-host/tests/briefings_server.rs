@@ -114,7 +114,7 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
             .arg("--network")
             .arg(root.join("network.json"))
             .arg("--web")
-            .arg(root.join("web"));
+            .arg(std::env::var_os("BRIEFINGS_WEB").map(std::path::PathBuf::from).unwrap_or_else(|| root.join("web")));
         if modules {
             command.arg("--modules").arg(root.join("modules.json"));
         }
@@ -484,7 +484,7 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
     if let Ok(hold) = std::env::var("BRIEFINGS_HOLD_OPEN") {
         // Held-open mode for browser proof. Writes the origin and owner cookie to the hold file,
         // then keeps the real server and its stand-in model up until the stop file appears.
-        fs::write(&hold, json!({"origin":origin,"cookie":cookie,"certificate":cert}).to_string()).unwrap();
+        fs::write(&hold, json!({"origin":origin,"cookie":cookie,"otherCookie":other,"certificate":cert}).to_string()).unwrap();
         let mut extras = json!({});
         // Real-model pass. Points the router at a real OpenAI-compatible endpoint and runs one
         // morning briefing end to end. The key comes from a file and is never written out.

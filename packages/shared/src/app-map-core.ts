@@ -74,7 +74,29 @@ export const RUST_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
     path: "/sign-in",
     scope: "user"
   },
+  {
+    id: "rust-today",
+    runtime: "rust",
+    label: "Rust Moss - Today",
+    description:
+      "Under the greeting, Today says where your morning briefing stands, taken from your saved Briefings records. It says the briefing is switched off, failed to run, was blocked, or when it runs (for example It runs at 7:00 AM, or It should have run at 7:00 AM once that time has passed). It shows nothing when you have no morning briefing, when Briefings is not installed, or when today's briefing is ready to read. Read your briefing opens the reader.",
+    path: "/",
+    scope: "user"
+  },
   ...DESKTOP_APP_SCREENS
+];
+
+export const CORE_APP_FEATURES: readonly (AppMapItem & {
+  readonly id: string;
+  readonly description: string;
+})[] = [
+  {
+    moduleId: "core",
+    id: "rust-module-chat",
+    runtime: "rust",
+    description:
+      "Moss can use the chat tools of modules you have installed and switched on for your account. Only tools with a declared input schema that need no approval appear until chat approval cards are available. Scratchpad can read your private note through chat. Codex keeps its starting tool list until a fresh conversation."
+  }
 ];
 
 export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [

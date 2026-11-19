@@ -12,6 +12,8 @@
     "test:rust-linux-desktop": "python3 rust-spike/shell/tools/proof_linux_desktop.py",
     "test:rust-click-live": "bash rust-spike/shell/tools/click-gate.sh",
     "test:rust-tasks": "bash modules/tasks/tools/gate.sh",
+    "test:rust-notes": "bash modules/notes/tools/gate.sh",
+    "test:rust-calendar": "bash modules/calendar/tools/gate.sh",
     "test:rust-tasks-privacy": "tsx modules/tasks/tools/gate.ts",
     "test:rust-tasks-ui": "bash modules/tasks/tools/ui-gate.sh",
     "test:rust-tasks-jobs": "bash modules/tasks/tools/job-gate.sh",
@@ -26,6 +28,7 @@
     "test:rust-briefings": "tsx modules/briefings/tools/gate.ts",
     "test:rust-news-reader": "bash modules/news/reader/tools/check.sh",
     "test:rust-briefings-live": "bash modules/briefings/tools/live.sh",
+    "test:rust-today-hero-live": "bash rust-spike/shell/tools/hero-live.sh",
     "test:rust-sports": "tsx modules/sports/tools/gate.ts",
     "test:rust-sports-live": "bash modules/sports/tools/live.sh",
     "test:rust-weather": "tsx modules/weather/tools/gate.ts",
@@ -346,7 +349,9 @@
     "test:integration:finance-bill-entry-confirm-negative": "pnpm build:app-map && pnpm --filter @moss/web build && MOSS_FINANCE_LIVE=1 MOSS_FINANCE_BILL_ENTRY_CONFIRM_NEGATIVE=1 tsx scripts/test-integration.ts tests/integration/finance-page-live.test.ts --testNamePattern 'reviews and confirms the working currency|records a due bill expense'",
     "test:recording-notices": "pnpm build:app-map && tsx scripts/test-integration.ts tests/integration/recording-module-notices.test.ts tests/integration/chat-reminder-live-arrival.test.ts tests/integration/chat-origin-action-history.test.ts tests/integration/foundation-schema-catalog.test.ts tests/integration/module-data-lifecycle-cascade.test.ts tests/integration/data-export.test.ts && vitest run tests/unit/chat-stream-record-identity.test.tsx tests/unit/chat-reminder-live-arrival.test.ts tests/unit/chat-background-message-routing.test.ts tests/unit/chat-action-hydration.test.tsx tests/unit/chat-drawer-main-and-live-turn-recovery.test.tsx tests/unit/chat-drawer-activity.test.tsx tests/unit/meeting-manifest.test.ts tests/unit/module-registry-meeting-summary-worker.test.ts",
     "test:rust-meetings-companion": "tsx modules/meetings/tools/companion-gate.ts",
-    "test:rust-meetings-companion-server": "MOSS_COMPANION_STARTUP_ONLY=1 bash modules/meetings/tools/live.sh"
+    "test:rust-meetings-companion-server": "MOSS_COMPANION_STARTUP_ONLY=1 bash modules/meetings/tools/live.sh",
+    "test:rust-chat-bridge": "tsx rust-spike/shell/tools/chat-bridge-gate.ts",
+    "test:rust-chat-bridge-live": "tsx rust-spike/shell/tools/chat-bridge-live.ts"
   },
   "dependencies": {
     "@fastify/helmet": "^13",
