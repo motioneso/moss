@@ -93,9 +93,10 @@ jobs:
             echo "No changed files listed — running the full gate."
             exit 0
           fi
-          # Touched modules: a path under the module or its SQL, or a change to the shared
-          # host crates or this workflow (which runs every covered module).
-          host_re='^(rust-spike/(module-host|module-sdk|access-context|safety-core|module-ui|network|standins|vault|parity|ui/bindgen)/|infra/postgres/migrations/|scripts/run-gate\.sh$|\.github/workflows/ci\.yml$)'
+          # Touched modules: a path under the module or its SQL, or a change to anything the
+          # gates build against (all of rust-spike, crates the host pulls in from modules, the
+          # test harness packages) or this workflow. Those run every covered module.
+          host_re='^(rust-spike/|modules/email/host/|modules/people/src/|packages/db/|package\.json$|pnpm-lock\.yaml$|infra/postgres/migrations/|scripts/run-gate\.sh$|\.github/workflows/ci\.yml$)'
           host_changed=false
           if grep -qE "$host_re" files.txt; then host_changed=true; fi
           touched=""
