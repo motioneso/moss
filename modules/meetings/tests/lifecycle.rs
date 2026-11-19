@@ -11,13 +11,13 @@ fn manifest() -> Value {
 }
 
 #[test]
-fn deletion_covers_the_same_twenty_two_tables_the_manifest_owns() {
+fn deletion_covers_the_same_twenty_six_tables_the_manifest_owns() {
     let m = manifest();
     let owned: Vec<&str> = m["database"]["ownedTables"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
-    assert_eq!(owned.len(), 22);
+    assert_eq!(owned.len(), 26);
     assert_eq!(owned, OWNED_TABLES.to_vec());
     let db = m["capabilities"].as_array().unwrap().iter().find(|c| c["port"] == "db").unwrap();
-    assert_eq!(db["resources"].as_array().unwrap().len(), 22);
+    assert_eq!(db["resources"].as_array().unwrap().len(), 26);
     assert_eq!(COUNT_PREDICATE, "owner_user_id = $1::uuid");
 }
 
@@ -25,7 +25,7 @@ fn deletion_covers_the_same_twenty_two_tables_the_manifest_owns() {
 fn the_manifest_declares_the_same_routes_jobs_and_ledger() {
     let m = manifest();
     assert_eq!(m["database"]["ledger"], "core-legacy");
-    assert_eq!(m["database"]["migrations"].as_array().unwrap().len(), 17);
+    assert_eq!(m["database"]["migrations"].as_array().unwrap().len(), 21);
     assert_eq!(m["navigation"][0]["path"], "/meetings");
     assert_eq!(m["screens"], json!({"/meetings": "ui/index.html", "/settings/meetings": "ui/settings.html"}));
     let routes: BTreeSet<(String, String)> = m["routes"]

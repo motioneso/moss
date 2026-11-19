@@ -7,7 +7,7 @@ use serde_json::{Map, Value};
 pub const COUNT_PREDICATE: &str = "owner_user_id = $1::uuid";
 const PAGE: u32 = 100;
 
-pub const OWNED_TABLES: [&str; 22] = [
+pub const OWNED_TABLES: [&str; 26] = [
     "app.meeting_recording_metadata",
     "app.meeting_recording_types",
     "app.meeting_manual_entries",
@@ -30,6 +30,10 @@ pub const OWNED_TABLES: [&str; 22] = [
     "app.meeting_capture_start_cancellations",
     "app.meeting_stop_summaries",
     "app.meeting_capture_start_limits",
+    "app.companion_pair_attempts",
+    "app.companion_devices",
+    "app.companion_recording_capabilities",
+    "app.companion_recording_attempts",
 ];
 
 const RECORD_FIELDS: [(&str, &str); 9] = [
