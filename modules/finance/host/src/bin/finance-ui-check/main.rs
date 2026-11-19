@@ -228,8 +228,15 @@ async fn private(
             }
             let app = server.installed(access.clone())?;
             let app = app.as_ref().unwrap();
-            if method == Method::GET && matches!(uri.path(), "/" | "/finance") {
-                let screen = app.installer.screen(&access, "finance", "/finance")?;
+            if method == Method::GET
+                && matches!(uri.path(), "/" | "/finance" | "/settings/finance")
+            {
+                let route = if uri.path() == "/settings/finance" {
+                    "/settings/finance"
+                } else {
+                    "/finance"
+                };
+                let screen = app.installer.screen(&access, "finance", route)?;
                 let html = include_str!("../../../fixture/host.html").replace("__SCREEN__", &screen.src);
                 return Ok(Html(html).into_response());
             }

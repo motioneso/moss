@@ -60,6 +60,12 @@
   margin: 0;
   padding: 0;
 }
+.fnm-feed > .fnm-row {
+  padding-block: var(--space-2);
+}
+.fnm-row > .fnm-money {
+  margin-inline-start: auto;
+}
 .fnm-txrow {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -202,7 +208,15 @@
   overflow-wrap: anywhere;
   text-align: left;
 }
-.fnm-report-bar-row > span:last-child {
+.fnm-report-bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.fnm-report-bar-row > button {
+  justify-self: start;
+}
+.fnm-report-bar-row > .fnm-money {
   grid-column: 2;
   grid-row: 1;
 }

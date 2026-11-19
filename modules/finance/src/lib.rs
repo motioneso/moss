@@ -12,6 +12,8 @@ macro_rules! ask {
     };
 }
 
+pub mod account;
+pub mod setup;
 pub mod accounts;
 pub mod activity;
 pub mod archive;
@@ -57,6 +59,7 @@ use serde_json::json;
 pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
     let result = match (request.method.as_str(), request.path.as_str()) {
         ("GET", "/finance/accounts") => accounts::list(host).map(|v| Response::new(200, v)),
+        ("GET", "/finance/setup/status") => setup::status(host).map(|v| Response::new(200, v)),
         ("GET", "/finance/manual/context") => accounts::context(host).map(|v| Response::new(200, v)),
         ("POST", "/finance/manual/accounts") => {
             tools::route_write(ledger::create_account(host, &request.body))
@@ -222,6 +225,11 @@ pub fn handle<H: Host + ?Sized>(
             };
             sync_household(host);
             Ok(done.to_string())
+        }
+        "api" => {
+            let call = account::execute(host, serde_json::from_str(payload)?)
+                .map_err(|_| moss_module_sdk::Error::new("Finance account operation failed"))?;
+            Ok(serde_json::to_string(&call)?)
         }
         "tool" => {
             let request: tools::Request = serde_json::from_str(payload)?;

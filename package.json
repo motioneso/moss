@@ -45,7 +45,7 @@
     "test:rust-wellness-live": "bash modules/wellness/tools/live.sh",
     "test:rust-wellness-ui": "bash modules/wellness/tools/ui-gate.sh",
     "test:rust-finance": "tsx modules/finance/tools/gate.ts",
-    "test:rust-finance-ui-unit": "node --test modules/finance/ui/logic.test.mjs modules/finance/ui/view.test.mjs",
+    "test:rust-finance-ui-unit": "node --test modules/finance/ui/logic.test.mjs modules/finance/ui/view.test.mjs modules/finance/ui/screens.test.mjs",
     "test:rust-finance-ui": "bash modules/finance/tools/ui-gate.sh",
     "test:rust-finance-live": "bash modules/finance/tools/live.sh",
     "test:rust-finance-plaid-live": "bash modules/finance/tools/plaid-live.sh",
