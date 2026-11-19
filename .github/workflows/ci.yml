@@ -379,7 +379,7 @@ jobs:
         run: df -h / /tmp
 
       - name: Provision the declared Rust toolchain and target
-        run: rustup toolchain install 1.95.0 --profile minimal --target wasm32-unknown-unknown
+        run: rustup toolchain install 1.95.0 --profile minimal --target wasm32-unknown-unknown --target wasm32-wasip2
 
       - name: Restore the shared Cargo home
         id: cargo-home
@@ -431,8 +431,8 @@ jobs:
             scripts/run-gate.sh start --gate "$gate" | tee "$RUNNER_TEMP/start.out"
             log=$(sed -n 's/^LOG=//p' "$RUNNER_TEMP/start.out" | head -1)
             if [ -z "$log" ]; then echo "run-gate start gave no log path for $gate"; failed=1; continue; fi
-            scripts/run-gate.sh wait --follow --log "$log"
-            rc=$?
+            rc=0
+            scripts/run-gate.sh wait --follow --log "$log" || rc=$?
             echo "GATE_RESULT gate=$gate exit=$rc seconds=$(( $(date +%s) - start ))"
             if [ "$rc" -ne 0 ]; then
               failed=1
