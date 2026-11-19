@@ -17,13 +17,14 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use crate::approvals::{route, CallFacts, Route, ToolFacts};
 use crate::driver::Answer;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolDef {
     /// Bare name. Agents see it as `mcp__moss__<name>` (Claude, Codex) or `moss_<name>` (OpenCode).
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub module: Option<String>,
     pub description: String,
     pub input_schema: Value,
-    #[serde(skip)]
     pub facts: ToolFacts,
 }
 
@@ -31,7 +32,7 @@ pub type ToolFuture = Pin<Box<dyn Future<Output = Result<String, String>> + Send
 
 /// Where tools come from. The app supplies these; the gateway only routes.
 pub trait ToolHost: Send + Sync + 'static {
-    fn tools(&self) -> Vec<ToolDef>;
+    fn tools(&self, account: &str) -> Vec<ToolDef>;
     /// `account` is the account whose gateway accepted the call, so the host can scope it.
     fn call(&self, account: &str, name: &str, args: Value) -> ToolFuture;
 }
@@ -57,6 +58,7 @@ pub struct GatewayHost {
     /// any process of the same OS user can read another's command line.
     pub lease_file: PathBuf,
     task: tokio::task::JoinHandle<()>,
+    changed: tokio::sync::watch::Sender<u64>,
 }
 
 impl Drop for GatewayHost {
@@ -68,6 +70,11 @@ impl Drop for GatewayHost {
 }
 
 impl GatewayHost {
+    pub fn tools_changed(&self) {
+        self.changed
+            .send_modify(|generation| *generation = generation.wrapping_add(1));
+    }
+
     /// Listens on a new owner-only socket in `dir` and writes the lease beside it. `dir` must be
     /// the account's own folder, which confinement keeps other accounts out of.
     #[cfg(unix)]
@@ -96,16 +103,30 @@ impl GatewayHost {
         std::fs::set_permissions(&socket, std::fs::Permissions::from_mode(0o600))?;
         let expected = lease.clone();
         let account = account.to_string();
+        let (changed, _) = tokio::sync::watch::channel(0);
+        let notifications = changed.clone();
         let task = tokio::spawn(async move {
             while let Ok((stream, _)) = listener.accept().await {
-                let (host, confirm, facts, expected, account) =
-                    (host.clone(), confirm.clone(), facts.clone(), expected.clone(), account.clone());
+                let (host, confirm, facts, expected, account) = (
+                    host.clone(),
+                    confirm.clone(),
+                    facts.clone(),
+                    expected.clone(),
+                    account.clone(),
+                );
+                let changes = notifications.subscribe();
                 tokio::spawn(async move {
-                    let _ = serve_one(stream, &expected, &account, host, confirm, facts).await;
+                    let _ =
+                        serve_one(stream, &expected, &account, host, confirm, facts, changes).await;
                 });
             }
         });
-        Ok(Self { socket, lease_file, task })
+        Ok(Self {
+            socket,
+            lease_file,
+            task,
+            changed,
+        })
     }
 }
 
@@ -117,26 +138,51 @@ async fn serve_one(
     host: Arc<dyn ToolHost>,
     confirm: Confirm,
     facts: CallFactsFn,
+    mut changes: tokio::sync::watch::Receiver<u64>,
 ) -> std::io::Result<()> {
     let (read, mut write) = stream.into_split();
     let mut lines = BufReader::new(read).lines();
 
     // The first line must be the right lease, or the connection closes with nothing said.
-    let Some(first) = lines.next_line().await? else { return Ok(()) };
+    let Some(first) = lines.next_line().await? else {
+        return Ok(());
+    };
     match serde_json::from_str::<GatewayOp>(&first) {
         Ok(GatewayOp::Hello { lease }) if crate::hello::same_secret(&lease, expected) => {}
         _ => return Ok(()),
     }
     write.write_all(b"{\"ok\":true}\n").await?;
 
-    while let Some(line) = lines.next_line().await? {
-        let reply = match serde_json::from_str::<GatewayOp>(&line) {
-            Ok(GatewayOp::List) => json!({"tools": host.tools()}),
-            Ok(GatewayOp::Call { name, arguments }) => {
-                call_tool(&*host, &confirm, &facts, account, &name, arguments).await
+    loop {
+        let line = tokio::select! {
+            line = lines.next_line() => match line? { Some(line) => line, None => break },
+            changed = changes.changed() => {
+                if changed.is_err() { break; }
+                write.write_all(b"{\"event\":\"list_changed\"}\n").await?;
+                continue;
             }
-            _ => json!({"error": "bad request"}),
         };
+        let request: Value = serde_json::from_str(&line).unwrap_or(Value::Null);
+        let reply = async {
+            match serde_json::from_value::<GatewayOp>(request.clone()) {
+                Ok(GatewayOp::List) => json!({"tools": host.tools(account)}),
+                Ok(GatewayOp::Call { name, arguments }) => {
+                    call_tool(&*host, &confirm, &facts, account, &name, arguments).await
+                }
+                _ => json!({"error": "bad request"}),
+            }
+        };
+        tokio::pin!(reply);
+        let mut reply = loop {
+            tokio::select! {
+                reply = &mut reply => break reply,
+                changed = changes.changed() => {
+                    if changed.is_err() { return Ok(()); }
+                    write.write_all(b"{\"event\":\"list_changed\"}\n").await?;
+                }
+            }
+        };
+        reply["id"] = request["id"].clone();
         let mut out = serde_json::to_vec(&reply).expect("json");
         out.push(b'\n');
         write.write_all(&out).await?;
@@ -153,13 +199,15 @@ pub async fn call_tool(
     name: &str,
     arguments: Value,
 ) -> Value {
-    let Some(def) = host.tools().into_iter().find(|t| t.name == name) else {
+    let Some(def) = host.tools(account).into_iter().find(|t| t.name == name) else {
         return json!({"isError": true, "text": format!("Moss has no tool called {name}.")});
     };
     let decision = route(&def.facts, &facts());
     let allowed = match decision {
         Route::AutoRun | Route::YoloRun => true,
-        Route::Confirm | Route::YoloConfirm => confirm(name.to_string(), arguments.clone()).await == Answer::Allow,
+        Route::Confirm | Route::YoloConfirm => {
+            confirm(name.to_string(), arguments.clone()).await == Answer::Allow
+        }
     };
     if !allowed {
         return json!({"isError": true, "route": decision, "text": "The person did not approve this action."});
@@ -169,3 +217,7 @@ pub async fn call_tool(
         Err(text) => json!({"isError": true, "route": decision, "text": text}),
     }
 }
+
+#[cfg(all(test, unix))]
+#[path = "gateway_tests.rs"]
+mod tests;

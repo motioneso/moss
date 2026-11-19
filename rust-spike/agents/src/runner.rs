@@ -15,7 +15,8 @@ use serde_json::Value;
 use crate::approvals::CallFacts;
 use crate::confine::{Confinement, SYSTEM_READ, SYSTEM_WRITE};
 use crate::driver::*;
-use crate::gateway::{CallFactsFn, Confirm, GatewayHost, ToolHost};
+use crate::gateway::{CallFactsFn, Confirm, GatewayHost, ToolDef, ToolHost};
+use crate::turn_tools::TurnTools;
 use crate::policy;
 use crate::session::AgentSession;
 
@@ -77,6 +78,7 @@ struct Account {
     session: AgentSession,
     _gateway: GatewayHost,
     slot: Slot,
+    tools: Arc<TurnTools>,
 }
 
 pub struct Runner {
@@ -237,13 +239,13 @@ impl Runner {
     }
 
     /// Starts the account's agent if it is not running. One agent per account, ever.
-    async fn account(&self, account: &str, setup: &AccountSetup) -> Result<Arc<tokio::sync::Mutex<Account>>, RunnerError> {
+    async fn account(&self, account: &str, setup: &AccountSetup, tools: Vec<ToolDef>) -> Result<Arc<tokio::sync::Mutex<Account>>, RunnerError> {
         let cell = self.accounts.lock().unwrap().entry(account.to_string()).or_default().clone();
-        let acct = cell.get_or_try_init(|| self.start(account, setup)).await?;
+        let acct = cell.get_or_try_init(|| self.start(account, setup, tools)).await?;
         Ok(acct.clone())
     }
 
-    async fn start(&self, account: &str, setup: &AccountSetup) -> Result<Arc<tokio::sync::Mutex<Account>>, RunnerError> {
+    async fn start(&self, account: &str, setup: &AccountSetup, definitions: Vec<ToolDef>) -> Result<Arc<tokio::sync::Mutex<Account>>, RunnerError> {
         let f = self.prepare(account, setup)?;
         let slot: Slot = Arc::default();
 
@@ -264,7 +266,8 @@ impl Runner {
                 }
             })
         });
-        let gateway = GatewayHost::start(account, &f.run, self.tools.clone(), confirm, self.facts.clone())
+        let account_tools = Arc::new(TurnTools::new(account, definitions, self.tools.clone()));
+        let gateway = GatewayHost::start(account, &f.run, account_tools.clone(), confirm, self.facts.clone())
             .map_err(RunnerError::Folders)?;
         let tools = ToolServer {
             command: self.cfg.gateway_bin.clone(),
@@ -281,6 +284,7 @@ impl Runner {
             session,
             _gateway: gateway,
             slot,
+            tools: account_tools,
         })))
     }
 
@@ -292,9 +296,13 @@ impl Runner {
         text: &str,
         events: &EventSink,
         ask: AskPerson,
+        tools: Vec<ToolDef>,
     ) -> Result<TurnOutcome, RunnerError> {
-        let acct = self.account(account, setup).await?;
+        let acct = self.account(account, setup, tools.clone()).await?;
         let mut a = acct.lock().await;
+        if a.tools.replace(tools) {
+            a._gateway.tools_changed();
+        }
         *a.slot.lock().unwrap() = Some(ask);
         let out = a.session.prompt(text, events).await;
         *a.slot.lock().unwrap() = None;
@@ -369,7 +377,7 @@ mod tests {
 
     struct NoTools;
     impl ToolHost for NoTools {
-        fn tools(&self) -> Vec<crate::gateway::ToolDef> {
+        fn tools(&self, _: &str) -> Vec<crate::gateway::ToolDef> {
             vec![]
         }
         fn call(&self, _: &str, _: &str, _: Value) -> crate::gateway::ToolFuture {

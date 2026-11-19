@@ -12,7 +12,7 @@ use serde_json::Value;
 
 struct NoTools;
 impl ToolHost for NoTools {
-    fn tools(&self) -> Vec<ToolDef> {
+    fn tools(&self, _: &str) -> Vec<ToolDef> {
         vec![]
     }
     fn call(&self, _: &str, _: &str, _: Value) -> ToolFuture {

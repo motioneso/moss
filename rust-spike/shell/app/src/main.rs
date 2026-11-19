@@ -35,12 +35,14 @@ mod module_install;
 mod modules;
 mod proactive_feedback;
 mod runner_data;
+mod chat_tools;
 
 type Data = Arc<dyn ShellData>;
 
 struct Accounts {
     platform: Arc<safety_core::http::Platform>,
     runner: Option<PathBuf>,
+    modules: modules::Slot,
     /// True when the server has an instance folder the module installer can work in.
     can_install_modules: bool,
     data: Mutex<HashMap<uuid::Uuid, Data>>,
@@ -56,6 +58,7 @@ impl Accounts {
                 Some(root) => Arc::new(runner_data::RunnerShellData::new(
                     root.clone(),
                     access.actor_user_id().to_string(),
+                    chat_tools::source(self.modules.clone(), access.clone()),
                 )) as Data,
                 None => Arc::new(StubShellData::default()) as Data,
             })
@@ -286,6 +289,7 @@ fn main() {
             platform: platform.clone(),
             can_install_modules: args.instance.is_some(),
             runner: args.runner,
+            modules: modules.clone(),
             data: Mutex::new(HashMap::new()),
         });
         companion::register_revoker(&data);

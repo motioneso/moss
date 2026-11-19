@@ -17,15 +17,17 @@ pub struct RunnerShellData {
     account: String,
     sample: StubShellData,
     messages: Mutex<Vec<ChatMessage>>,
+    tools: crate::chat_tools::Source,
 }
 
 impl RunnerShellData {
-    pub fn new(root: PathBuf, account: String) -> Self {
+    pub fn new(root: PathBuf, account: String, tools: crate::chat_tools::Source) -> Self {
         Self {
             root,
             account,
             sample: StubShellData::default(),
             messages: Mutex::new(Vec::new()),
+            tools,
         }
     }
 
@@ -45,7 +47,8 @@ impl RunnerShellData {
             writer.write_all(&line).map_err(|e| e.to_string())
         };
         send(json!({"op": "hello", "secret": secret.trim()}))?;
-        send(json!({"op": "chat", "account": self.account, "text": text}))?;
+        let tools = (self.tools)()?;
+        send(json!({"op": "chat", "account": self.account, "text": text, "tools": tools}))?;
 
         let mut refused = 0;
         for line in BufReader::new(stream).lines() {
