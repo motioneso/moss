@@ -1,19 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { getMossDatabaseUrls } from "@moss/db";
 if (process.env.JARVIS_GATE_RUN !== "1") throw new Error("Use verify-gate");
-const urls = getMossDatabaseUrls();
-// MEETINGS_ONLY=<test file> runs one host test file without the component build.
-const only = process.env.MEETINGS_ONLY;
-if (!only) {
-  const checks = spawnSync("modules/meetings/tools/check.sh", {
-    stdio: "inherit",
-    env: process.env
-  });
-  if (checks.status !== 0) process.exit(checks.status ?? 1);
-}
-// One cargo run per test file, in this order. The files share one database and
-// the installed test expects it untouched, so it runs first.
-for (const name of [
+const suites = [
   "installed",
   "outputs",
   "recording",
@@ -23,7 +11,21 @@ for (const name of [
   "ring",
   "capture",
   "devices"
-].filter((name) => !only || name === only)) {
+];
+const selected = process.env.MEETINGS_SUITE || process.env.MEETINGS_ONLY;
+if (selected && !suites.includes(selected)) throw new Error("Unknown Meetings test suite");
+const urls = getMossDatabaseUrls();
+// Keep the legacy prebuilt-component entry point; the new selector builds prerequisites.
+if (!process.env.MEETINGS_ONLY || process.env.MEETINGS_SUITE) {
+  const checks = spawnSync("modules/meetings/tools/check.sh", {
+    stdio: "inherit",
+    env: process.env
+  });
+  if (checks.status !== 0) process.exit(checks.status ?? 1);
+}
+// One cargo run per test file, in this order. The files share one database and
+// the installed test expects it untouched, so it runs first.
+for (const name of selected ? [selected] : suites) {
   const run = spawnSync(
     "cargo",
     [
