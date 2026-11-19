@@ -113,7 +113,10 @@ export function checkBaseBranchCollisions(
     const base = baseByVersion.get(local.version);
     if (!base) continue;
 
-    if (base.path !== local.path) {
+    // A file moved to its owning module with identical bytes keeps its applied identity.
+    const moved =
+      base.filename === local.filename && !!base.checksum && base.checksum === local.checksum;
+    if (base.path !== local.path && !moved) {
       violations.push({
         kind: "main_collision",
         version: local.version,
