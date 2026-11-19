@@ -494,3 +494,38 @@ test("a module can enter and leave the host's modal presentation", async () => {
   assert.equal(s.replies.at(-1).ok, true);
   assert.deepEqual(modes, [true, false]);
 });
+
+test("leaving host modal presentation restores its original guest control after the host reply", async () => {
+  let transport;
+  let focused = false;
+  const frames = [];
+  const opener = { isConnected: true, focus: () => (focused = true) };
+  const guestWindow = {
+    document: { activeElement: opener },
+    requestAnimationFrame: (callback) => frames.push(callback),
+    parent: {
+      postMessage(_message, _target, ports) {
+        transport = ports[0];
+        transport.onmessage = ({ data, ports: replies }) => {
+          assert.equal(data.type, "present");
+          assert.equal(focused, false, "focus must wait for host presentation to close");
+          replies[0].postMessage({ channel: "moss.module.v1", id: data.id, ok: true });
+          replies[0].close();
+        };
+      }
+    }
+  };
+  const client = moduleClient({ guestWindow });
+  try {
+    await client.present(true);
+    guestWindow.document.activeElement = {};
+    await client.present(false);
+    assert.equal(frames.length, 1);
+    assert.equal(focused, false);
+    frames[0]();
+    assert.equal(focused, true);
+  } finally {
+    client.dispose();
+    transport.close();
+  }
+});

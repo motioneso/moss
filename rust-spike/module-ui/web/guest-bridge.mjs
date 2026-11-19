@@ -19,6 +19,7 @@ export function moduleClient({ guestWindow = globalThis.window, timeoutMs = 3000
   const pending = new Map();
   let nextId = 0;
   let live = true;
+  let modalOpener;
   const call = (type, data = {}) =>
     new Promise((resolve, reject) => {
       if (!live || pending.size >= 32) {
@@ -63,7 +64,18 @@ export function moduleClient({ guestWindow = globalThis.window, timeoutMs = 3000
     theme: () => call("theme"),
     navigate: (path) => call("navigate", { path }),
     chat: (text = "") => call("chat", { text }),
-    present: (modal) => call("present", { modal }),
+    async present(modal) {
+      if (modal && !modalOpener) modalOpener = guestWindow.document?.activeElement;
+      const result = await call("present", { modal });
+      if (!modal) {
+        const opener = modalOpener;
+        modalOpener = undefined;
+        guestWindow.requestAnimationFrame?.(() => {
+          if (live && opener?.isConnected) opener.focus({ preventScroll: true });
+        });
+      }
+      return result;
+    },
     resize: (height) => call("resize", { height }),
     save: (file) => call("save", file),
     dispose() {
