@@ -27,18 +27,27 @@ function mealScreen(ctx, { title, extra, body, reset }) {
     pick: {}
   };
 
+  let gen = 0;
+
   async function load() {
+    const mine = gen;
     try {
-      s.recipe = await ctx.api.read("meals.meal.get", { mealId: s.id });
+      const recipe = await ctx.api.read("meals.meal.get", { mealId: s.id });
+      if (mine !== gen) return;
+      s.recipe = recipe;
       s.kind = "ready";
     } catch {
+      if (mine !== gen) return;
       s.kind = "error";
     }
     ctx.draw();
     if (s.kind === "ready" && extra) {
       try {
-        s.extra = await extra(ctx.api);
+        const more = await extra(ctx.api);
+        if (mine !== gen) return;
+        s.extra = more;
       } catch {
+        if (mine !== gen) return;
         s.kind = "error";
       }
       ctx.draw();
@@ -74,12 +83,16 @@ function mealScreen(ctx, { title, extra, body, reset }) {
 
   return {
     start: (id) => {
+      gen += 1;
       s.id = id;
       s.kind = "loading";
       s.extra = null;
       s.failed = null;
       s.pick = reset ? reset() : {};
       void load();
+    },
+    stop: () => {
+      gen += 1;
     },
     render,
     acts: {

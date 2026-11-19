@@ -82,9 +82,11 @@ export function logScreen(ctx) {
     open: new Set()
   };
   let timer = null;
+  let gen = 0;
 
   async function load() {
     const asked = s.date;
+    const mine = gen;
     try {
       const day = await ctx.api.read("meals.log.list", { localDate: asked });
       if (asked === s.date) {
@@ -95,6 +97,7 @@ export function logScreen(ctx) {
     } catch {
       if (!(s.kind === "ready" && s.forDate === asked)) s.kind = "error";
     }
+    if (mine !== gen) return;
     if (s.dialog === null || s.busy) ctx.draw();
     schedule();
   }
@@ -147,6 +150,7 @@ export function logScreen(ctx) {
     "open-add": () => {
       s.dialog = "add";
       s.form = newAddForm(s.date === todayIso() ? nowTime() : "12:00");
+      s.form.key = newKey();
       ctx.draw();
     },
     "save-add": async () => {
@@ -164,7 +168,7 @@ export function logScreen(ctx) {
         consumedAt: consumedAt(time),
         ...(tz !== null ? { timeZone: tz } : {}),
         captureKind: "text",
-        idempotencyKey: newKey()
+        idempotencyKey: s.form.key
       });
       if (done) closeDialog();
     },
@@ -348,13 +352,18 @@ export function logScreen(ctx) {
 
   return {
     start: () => {
+      gen += 1;
+      clearTimeout(timer);
       s.failed = null;
       s.dialog = null;
       s.form = null;
       s.kind = s.forDate === s.date ? "ready" : "loading";
       void load();
     },
-    stop: () => clearTimeout(timer),
+    stop: () => {
+      gen += 1;
+      clearTimeout(timer);
+    },
     render,
     acts,
     input: input_

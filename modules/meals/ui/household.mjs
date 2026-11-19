@@ -48,13 +48,21 @@ export function householdScreen(ctx) {
     problem: null
   };
 
+  let gen = 0;
+
   async function load() {
+    const mine = gen;
+    let kitchen = null;
     try {
-      s.kitchen = await ctx.api.read("meals.kitchen.get", {});
-      s.kind = "ready";
+      kitchen = await ctx.api.read("meals.kitchen.get", {});
     } catch {
-      if (s.kind !== "ready") s.kind = "error";
+      // Keep what is on screen unless nothing has loaded yet.
     }
+    if (mine !== gen) return;
+    if (kitchen) {
+      s.kitchen = kitchen;
+      s.kind = "ready";
+    } else if (s.kind !== "ready") s.kind = "error";
     ctx.draw();
   }
 
@@ -268,10 +276,14 @@ export function householdScreen(ctx) {
 
   return {
     start: () => {
+      gen += 1;
       s.editing = null;
       s.removing = null;
       s.failed = null;
       void load();
+    },
+    stop: () => {
+      gen += 1;
     },
     render,
     acts,

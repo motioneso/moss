@@ -10,14 +10,21 @@ const waiting = (choice) => choice.status === "pending" || choice.status === "wr
 export function swapScreen(ctx) {
   const s = { kind: "loading", id: null, recipe: null, busy: false, failed: null };
   let timer = null;
+  let gen = 0;
 
   async function load() {
+    const mine = gen;
+    let recipe = null;
     try {
-      s.recipe = await ctx.api.read("meals.meal.get", { mealId: s.id });
-      s.kind = "ready";
+      recipe = await ctx.api.read("meals.meal.get", { mealId: s.id });
     } catch {
-      if (s.kind !== "ready") s.kind = "error";
+      // Keep what is on screen unless nothing has loaded yet.
     }
+    if (mine !== gen) return;
+    if (recipe) {
+      s.recipe = recipe;
+      s.kind = "ready";
+    } else if (s.kind !== "ready") s.kind = "error";
     ctx.draw();
     schedule();
   }
@@ -113,12 +120,17 @@ export function swapScreen(ctx) {
 
   return {
     start: (id) => {
+      gen += 1;
+      clearTimeout(timer);
       s.id = id;
       s.kind = "loading";
       s.failed = null;
       void load();
     },
-    stop: () => clearTimeout(timer),
+    stop: () => {
+      gen += 1;
+      clearTimeout(timer);
+    },
     render,
     acts,
     input: () => {}
