@@ -1,6 +1,7 @@
 //! Briefing runs. A run holds the person's own briefing text, so the table is owner-only. A
 //! share viewer can open a definition and sees no runs.
 use crate::definitions;
+use crate::feedback;
 use crate::queue::{self, Started};
 use crate::status::{self, Facts, Resolved};
 use crate::util::{bad_request, call, iso};
@@ -10,6 +11,7 @@ use moss_module_sdk::{
 };
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
+use std::collections::HashSet;
 
 pub const TABLE: &str = "app.briefing_runs";
 pub const NOT_AVAILABLE: &str = "Briefing run is missing or owned by someone else";
@@ -59,8 +61,28 @@ pub(crate) fn signal_item_id(kind: &str, signal_type: &str, summary: &str) -> St
     format!("{kind}:{signal_type}:{}", short_hash(&[kind, signal_type, summary]))
 }
 
+/// What the caller's own ratings hide from the reader. Every set comes from the feedback port,
+/// which answers only for the caller, so another account's dismissals never appear here.
+#[derive(Default)]
+pub(crate) struct Hidden {
+    runs: HashSet<String>,
+    items: HashSet<String>,
+    handled: HashSet<String>,
+}
+
+impl Hidden {
+    /// Runs are read only for the list, because a single run opened by id stays readable.
+    pub(crate) fn load<H: Host + ?Sized>(host: &H, with_runs: bool) -> Self {
+        let runs = if with_runs { feedback::active_refs(host, "briefing_run", "dismiss") } else { HashSet::new() };
+        let items = feedback::active_refs(host, "briefing_item", "dismiss");
+        let mut handled = feedback::active_refs(host, "briefing_item", "more_like_this");
+        handled.extend(items.iter().cloned());
+        Self { runs, items, handled }
+    }
+}
+
 /// Feedback targets the stored calendar and email signals give rise to.
-fn feedback_items(metadata: &Value) -> Vec<Value> {
+fn feedback_items(metadata: &Value, hidden: &Hidden) -> Vec<Value> {
     let mut items = Vec::new();
     for (field, kind, label) in [("calendarSignals", "calendar", "Calendar"), ("emailSignals", "email", "Email")] {
         let Some(signals) = metadata[field].as_array() else { continue };
@@ -72,8 +94,12 @@ fn feedback_items(metadata: &Value) -> Vec<Value> {
             if !signal["followThrough"].is_null() && signal["followThrough"] != json!(false) {
                 meta.insert("calendarFollowThrough".into(), signal["followThrough"].clone());
             }
+            let id = signal_item_id(kind, kind_of, summary);
+            if hidden.items.contains(&id) {
+                continue;
+            }
             items.push(json!({
-                "feedbackItemId": signal_item_id(kind, kind_of, summary),
+                "feedbackItemId": id,
                 "targetKind": "briefing_item",
                 "surface": "briefing",
                 "sourceKind": kind,
@@ -94,9 +120,15 @@ fn payload_of(metadata: &Value) -> Value {
     }
 }
 
-/// Catch-up entries survive only while at least one remains.
-fn visible_catch_up(catch_up: &Value) -> Value {
-    let entries = catch_up["entries"].as_array().cloned().unwrap_or_default();
+/// Dismissed or added entries drop out, and the block goes once none remain.
+fn visible_catch_up(catch_up: &Value, handled: &HashSet<String>) -> Value {
+    let entries: Vec<Value> = catch_up["entries"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|entry| !entry["id"].as_str().is_some_and(|id| handled.contains(id)))
+        .cloned()
+        .collect();
     if !catch_up.is_object() || entries.is_empty() {
         return Value::Null;
     }
@@ -106,14 +138,14 @@ fn visible_catch_up(catch_up: &Value) -> Value {
     Value::Object(kept)
 }
 
-pub fn dto(row: &Value) -> Result<(Value, Value)> {
+pub(crate) fn dto(row: &Value, hidden: &Hidden) -> Result<(Value, Value)> {
     let bad = || Error::new("Invalid briefing run row");
     let text = |key: &str| row[key].as_str().map(str::to_owned).ok_or_else(bad);
     let metadata = &row["source_metadata"];
     let mut source = metadata.as_object().cloned().ok_or_else(bad)?;
     source.remove("structuredPayload");
     let mut payload = payload_of(metadata);
-    payload["catchUp"] = visible_catch_up(&payload["catchUp"]);
+    payload["catchUp"] = visible_catch_up(&payload["catchUp"], &hidden.handled);
     let summary = if is_fallback(metadata) { String::new() } else { text("summary_text")? };
     let shaped = json!({
         "id": text("id")?,
@@ -124,7 +156,7 @@ pub fn dto(row: &Value) -> Result<(Value, Value)> {
         "briefingType": text("briefing_type")?,
         "summaryText": summary,
         "sourceMetadata": source,
-        "feedbackItems": feedback_items(metadata),
+        "feedbackItems": feedback_items(metadata, hidden),
         "structuredPayload": payload,
         "createdAt": iso(&row["created_at"])?,
     });
@@ -150,9 +182,11 @@ pub fn list<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Respon
     let Some(definition) = definitions::find(host, &id)? else {
         return Ok(not_found("Briefing definition not found"));
     };
+    let hidden = Hidden::load(host, true);
     let runs = run_rows(host, definition["id"].as_str().unwrap_or_default())?
         .iter()
-        .map(|row| dto(row).map(|(shaped, _)| shaped))
+        .filter(|row| !row["id"].as_str().is_some_and(|id| hidden.runs.contains(id)))
+        .map(|row| dto(row, &hidden).map(|(shaped, _)| shaped))
         .collect::<Result<Vec<_>>>()?;
     Ok(Response::new(200, json!({"runs":runs})))
 }
@@ -227,7 +261,7 @@ pub fn get<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Respons
     });
     match (resolved, row) {
         (Resolved::Ready { latest }, Some(row)) => {
-            let (shaped, stored) = dto(row)?;
+            let (shaped, stored) = dto(row, &Hidden::load(host, false))?;
             Ok(Response::new(
                 200,
                 json!({"state":"ready","run":shaped,"latest":latest,"plan":plan_state(&stored)}),

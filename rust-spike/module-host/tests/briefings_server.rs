@@ -260,7 +260,7 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
     }
     let installer = installed::reopen(
         &root.join("data"),
-        app,
+        app.clone(),
         &access,
         std::sync::Arc::new(moss_module_host::runtime::DenyPorts),
     );
@@ -552,9 +552,46 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
             extras["upgrade"] = json!({"signIn": sign_status, "listStatus": list_status, "definitions": defs.len(), "perDefinition": runs});
             extras["devCookie"] = json!(dev_cookie);
         }
+        // Browser proof of hidden items. Seeds a newest morning run with three catch-up entries,
+        // then applies each command the proof script writes to `{hold}.cmd` through the host's
+        // own feedback store: {"op":"rate"|"undo","kind":"dismiss","ref":"catch-1"}.
+        let seeded = uuid::Uuid::new_v4();
+        runtime.block_on(async {
+            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+            tokio::spawn(async move { let _ = connection.await; });
+            let entries: Vec<Value> = (1..=3).map(|n| json!({"id": format!("catch-{n}"), "senderName": format!("Sender {n}"), "summary": format!("Catch-up email number {n}"), "reason": "important"})).collect();
+            let metadata = json!({"aiModel": {"provider": "p", "model": "m"}, "structuredPayload": {"version": 1, "actionRows": [], "catchUp": {"itemCount": 3, "since": "2026-11-18T07:00:00.000Z", "leftOutCount": 0, "entries": entries}}});
+            let def: uuid::Uuid = id.parse().unwrap();
+            db.execute(
+                "INSERT INTO app.briefing_runs(id,definition_id,owner_user_id,status,run_kind,briefing_type,summary_text,source_metadata,created_at) \
+                 VALUES($1,$2,$3,'succeeded','manual','morning','Seeded morning briefing',$4, now() + interval '1 minute')",
+                &[&seeded, &def, &owner, &metadata],
+            ).await.unwrap();
+        });
+        fs::write(format!("{hold}.seed.json"), json!({"runId": seeded, "definitionId": id}).to_string()).unwrap();
+        let feedback = moss_module_host::feedback_port::PostgresFeedback::new(app.clone()).unwrap();
+        let mut ratings: std::collections::HashMap<String, String> = Default::default();
         fs::write(format!("{hold}.extras.json"), extras.to_string()).unwrap();
         while !Path::new(&format!("{hold}.stop")).exists() {
-            std::thread::sleep(std::time::Duration::from_millis(500));
+            if let Ok(text) = fs::read_to_string(format!("{hold}.cmd")) {
+                use moss_module_host::feedback_port::{Feedback, Record};
+                let cmd = json_of(&text);
+                let (kind, target) = (cmd["kind"].as_str().unwrap().to_owned(), cmd["ref"].as_str().unwrap().to_owned());
+                let key = format!("{kind}:{target}");
+                let access = AccessContext::new(owner, "briefings-hold");
+                if cmd["op"] == "rate" {
+                    let rating = feedback.record(&access, "briefing_item", &Record {
+                        target_ref: target, surface: "briefing".into(), kind: cmd["rating"].as_str().unwrap().into(),
+                        source_kind: Some("briefing".into()), source_label: Some("Briefing".into()), metadata: json!({}),
+                    }).unwrap();
+                    ratings.insert(key, rating);
+                } else if let Some(rating) = ratings.remove(&key) {
+                    feedback.undo(&access, "briefing_item", &rating).unwrap();
+                }
+                fs::remove_file(format!("{hold}.cmd")).unwrap();
+                fs::write(format!("{hold}.cmd.done"), "done").unwrap();
+            }
+            std::thread::sleep(std::time::Duration::from_millis(300));
         }
     }
 }

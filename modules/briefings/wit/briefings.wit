@@ -6,6 +6,7 @@ interface jobs { call: func(request: string) -> result<string, string>; }
 interface notify { call: func(request: string) -> result<string, string>; }
 interface api { call: func(request: string) -> result<string, string>; }
 interface ai { call: func(request: string) -> result<string, string>; }
+interface feedback { call: func(request: string) -> result<string, string>; }
 
 world briefings {
   import db;
@@ -14,5 +15,6 @@ world briefings {
   import notify;
   import api;
   import ai;
+  import feedback;
   export handle: func(kind: string, payload: string) -> result<string, string>;
 }
