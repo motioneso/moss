@@ -120,6 +120,29 @@ EXECUTE format('ALTER TABLE %I.%I OWNER TO jarvis_migration_owner', r.s, r.n); E
 FOR r IN SELECT sequence_schema AS s, sequence_name AS n FROM information_schema.sequences WHERE sequence_schema IN ('moss_modules','moss_queue') LOOP \
 EXECUTE format('ALTER SEQUENCE %I.%I OWNER TO jarvis_migration_owner', r.s, r.n); END LOOP; END $$";
 
+/// The device lookup functions need the companion tables from the core migrations, so they go in after the
+/// installs and only when those tables exist. Safe to repeat.
+async fn ensure_device_sql(migrations_url: &str) -> Result<()> {
+    let (db, connection) = tokio_postgres::connect(migrations_url, tokio_postgres::NoTls)
+        .await
+        .map_err(|_| anyhow::anyhow!("Cannot reach the instance database"))?;
+    tokio::spawn(async move {
+        let _ = connection.await;
+    });
+    let ready = db
+        .query_one(
+            "SELECT to_regclass('app.companion_recording_attempts') IS NOT NULL \
+             AND to_regclass('app.companion_devices_owner') IS NULL",
+            &[],
+        )
+        .await?
+        .get::<_, bool>(0);
+    if ready {
+        db.batch_execute(moss_module_host::companion_devices::MIGRATION).await?;
+    }
+    Ok(())
+}
+
 /// Creates the module tables that are missing and returns the instance owner's id.
 async fn prepare_database(migrations_url: &str) -> Result<uuid::Uuid> {
     let (db, connection) = tokio_postgres::connect(migrations_url, tokio_postgres::NoTls)
@@ -176,6 +199,7 @@ pub fn run(raw: Vec<String>) -> Result<()> {
             RuntimeRole::App,
         ))
         .map_err(|_| anyhow::anyhow!("Cannot reach the instance database"))?;
+    let migrations_url = settings.migrations_url.clone();
     let application = modules::application(settings, database)?;
     let access = AccessContext::new(owner, "module-install");
     let catalog = application.installer.refresh(
@@ -255,6 +279,7 @@ pub fn run(raw: Vec<String>) -> Result<()> {
         println!("installed {name} {}", artifact.version);
     }
     drop(application);
+    runtime.block_on(ensure_device_sql(&migrations_url))?;
     Ok(())
 }
 

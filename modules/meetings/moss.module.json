@@ -429,7 +429,8 @@
     "collectMeetingsExportSection": "1.0.0",
     "meetingChatAvailable": "1.0.0",
     "meetingChatSnapshot": "1.0.0",
-    "meetingChatEvidence": "1.0.0"
+    "meetingChatEvidence": "1.0.0",
+    "checkDevice": "1.0.0"
   },
   "optionalRequires": {
     "chat": ">=0.1.0, <1.0.0"
