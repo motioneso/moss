@@ -4,6 +4,8 @@
 mod common;
 #[path = "people_routes/installed.rs"]
 mod installed;
+#[path = "people_routes/readiness.rs"]
+mod readiness;
 use serde_json::{json, Value};
 use std::{
     fs,
@@ -169,11 +171,7 @@ fn owner_installs_a_module_from_the_app_endpoints() {
         )
     };
     use reqwest::Method;
-    assert_eq!(
-        call(Method::GET, "/people", None).0,
-        503,
-        "nothing installed yet"
-    );
+    readiness::wait_for_people(&client, &origin, &cookie, 503, &root.join("server.log"));
     let api = |method: reqwest::Method, path: &str, body: Option<Value>, cookie: Option<&str>| {
         let mut request = client.request(method, format!("{origin}{path}")).header("origin", &origin);
         if let Some(cookie) = cookie {
@@ -227,13 +225,7 @@ fn owner_installs_a_module_from_the_app_endpoints() {
         let stored: Value = serde_json::from_slice(&fs::read(root.join("modules.json")).unwrap()).unwrap();
         root.join("notes").join(stored["admin_user_id"].as_str().expect("owner recorded"))
     };
-    let deadline = Instant::now() + Duration::from_secs(30);
-    let (mut status, mut list) = call(Method::GET, "/people", None);
-    while status != 200 {
-        assert!(Instant::now() < deadline, "not served after install: {status} {list}\n{}", log("server.log"));
-        std::thread::sleep(Duration::from_millis(500));
-        (status, list) = call(Method::GET, "/people", None);
-    }
+    readiness::wait_for_people(&client, &origin, &cookie, 200, &root.join("server.log"));
     let saved = call(Method::PUT, "/people/notes-settings", Some(json!({"folder": owner_folder})));
     assert_eq!(saved.0, 200, "{}\n{}", saved.1, log("server.log"));
     let created = call(Method::POST, "/people", Some(json!({"displayName":"Ada Lovelace"})));
