@@ -45,6 +45,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Forget removed device links.** Removing Meetings with its data forgets linked devices so they must be linked again after reinstalling. [PR #4375](https://github.com/motioneso/moss/pull/4375)
 - **Keep bank transactions when a sync restarts.** Bank sync now finishes reading the next page after the bank changes data during a read, so transactions are not left out of the completed sync. [PR #4364](https://github.com/motioneso/moss/pull/4364)
 
 ### 2026-11-17
