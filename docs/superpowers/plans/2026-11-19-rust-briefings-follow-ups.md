@@ -12,13 +12,13 @@ Tree checked at `434e67967` (origin/main, 2026-11-19).
 
 ## 1. Pieces in scope
 
-| Piece                                    | TypeScript behaviour today                                                                                                                                                                                                     | Owner of the data it changes                                                                |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| Accept and Dismiss on action rows        | `apps/web/src/today/briefing-action-rows.tsx:50,76-89,312`. Live status joined from the task; with no run, rows come from suggested tasks. Accept sets the task to todo, Dismiss archives it.                                  | Tasks                                                                                       |
-| Catch-up Add task and Dismiss, with Undo | `apps/web/src/today/catch-up-digest.tsx:205-315`. Add task creates "Follow up with ..." and records a "more like this" rating. Dismiss records a "dismiss" rating. A failed rating keeps the stray task and a retry reuses it. | Tasks, plus usefulness feedback (host)                                                      |
-| Plan review and day-plan accept          | `day-plan-review.tsx`, `day-plan-review-controller.ts` (save, accept all additions, confirm, retry); shown at `today-page.tsx:776`                                                                                             | Calendar (it already reads tasks through Tasks, `modules/calendar/src/saved_read.rs:52-75`) |
-| Email and Calendar signal switches       | `apps/web/src/settings/settings-source-behaviors.ts:12-22`, shown on Briefings settings (`settings-module-subviews.tsx:290-300`)                                                                                               | Email, Calendar                                                                             |
-| Today hero note                          | `apps/web/src/today/today-hero.tsx:125-136` (`morningNotReadyReason`)                                                                                                                                                          | Today shell (core), reading Briefings                                                       |
+| Piece                                    | TypeScript behaviour today                                                                                                                                                                                                                            | Owner of the data it changes                                                                             |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Accept and Dismiss on action rows        | `apps/web/src/today/briefing-action-rows.tsx:50,76-89,312`. Live status joined from the task; with no run, rows come from suggested tasks. Accept sets the task to todo, Dismiss archives it.                                                         | Tasks                                                                                                    |
+| Catch-up Add task and Dismiss, with Undo | `apps/web/src/today/catch-up-digest.tsx:205-315`. Add task creates "Follow up with ..." and records a "more like this" rating. Dismiss records a "dismiss" rating. A failed rating archives the new task; it is kept only if that archive also fails. | Tasks, plus usefulness feedback (host)                                                                   |
+| Plan review and day-plan accept          | `day-plan-review.tsx`, `day-plan-review-controller.ts` (save, accept all additions, confirm, retry); shown at `today-page.tsx:776`                                                                                                                    | Calendar (it reads tasks through a host-held task reference, `modules/calendar/src/saved_read.rs:52-75`) |
+| Email and Calendar signal switches       | `apps/web/src/settings/settings-source-behaviors.ts:12-22`, shown on Briefings settings (`settings-module-subviews.tsx:290-300`)                                                                                                                      | Email, Calendar                                                                                          |
+| Today hero note                          | `apps/web/src/today/today-hero.tsx:125-136` (`morningNotReadyReason`)                                                                                                                                                                                 | Today shell (core), reading Briefings                                                                    |
 
 Out of scope:
 
@@ -129,8 +129,7 @@ Each security test must be observed failing with the check removed.
 - Tests:
   - Unit, one case per rule. A note stuck on "switched off" fails the "scheduled" and "readable run" cases.
   - Live: a morning briefing switched on with a finished run hides the note; switched off shows the off line.
-- Security: the routes the shell reads are the Briefings module routes, which run under the
-  caller's session like every `/api/m/` route. Test with a second account holding a run: the first
+- Security: the shell reads `/api/m/briefings/definitions` and the runs route through the module host (`rust-spike/shell/ui/src/api.rs:85`), not the sample data. The builder confirms those requests carry the session before stating it. Test with a second account holding a run: the first
   account's hero never reflects it.
 - App map: the Rust core "today" entry says the hero note gives the briefing state. No new entry.
 - Mockup: none.
@@ -198,11 +197,18 @@ Each security test must be observed failing with the check removed.
   is async, so the builder must bridge the two; check how the shell app wires its existing handles
   before choosing.
 - Ownership of a ref is the module's job before it calls `record`; Briefings uses `owned_run`
-  (Part 6). The host guarantees only that a module rates as the caller and only for its own kinds.
+  (Part 6). The host's own guarantee is narrower: a module rates as the caller and only for the
+  target kinds it declared. This is a design goal, not yet a fact. The builder traces the owner
+  from the access context to the stored row (`proactive_feedback.rs`,
+  `usefulness_feedback.rs:110-120`) and the test below must be seen failing with the pin removed
+  before any comment or PR states it.
+- The existing `verifyBriefingFeedbackTarget` call stays. It is the check for ratings that arrive
+  through `/api/me/usefulness-feedback`, which is out of scope here (section 1).
 - Files: `rust-spike/module-host/src/services.rs`, `rust-spike/module-host/src/feedback_port.rs`,
   `rust-spike/shell/app/src/proactive_feedback.rs`, module SDK client.
 - Tests:
-  - A module without the permission, or naming a kind it did not declare, is refused.
+  - A module without the permission, or naming a target kind (such as `proactive_card`) that its
+    permission resources do not list, is refused. Rating kinds are checked by the existing rules.
   - Ratings written through the port carry the caller as owner; a second account's `active` read
     never returns them. Fails if the port takes the owner from the parameters.
   - Stored metadata holds ids and labels only, no item text.
@@ -228,21 +234,26 @@ Each security test must be observed failing with the check removed.
 
 - Owner: Briefings. Waits on Parts 2, 4 and 5.
 - Adds the catch-up block to the Part 3 section.
-- Each route first checks the item with `owned_run` and the run's own catch-up ids. An unknown or
-  foreign item returns 404 before anything is written.
+- Every route names the run. Each first loads the raw stored run with `owned_run` (the caller's
+  own rows, `modules/briefings/src/feedback.rs:40`) and checks the item id against that run's
+  stored catch-up ids, not against the Part 5 view that hides handled entries. An unknown or
+  foreign run or item returns 404 before anything is written.
 - New routes:
-  - `POST /today/catch-up/:item_id/add { strayTaskId? }` reuses the stray task if given and still
-    the caller's, else calls `createFollowUpTask` ("Follow up with {sender}", summary). Then
-    `feedback.record more_like_this`. A failed rating returns the task id so a retry reuses it, as
-    TypeScript does.
-  - `POST /today/catch-up/:item_id/dismiss { strayTaskId? }` archives the stray task, then records "dismiss".
-  - `POST /today/catch-up/:item_id/undo { feedbackId, taskId? }` undoes the rating and archives the
-    task. Both ids are re-checked against the caller through the port and Tasks.
+  - `POST /today/runs/:run_id/catch-up/:item_id/add` calls `createFollowUpTask` ("Follow up with
+    {sender}", summary), then `feedback.record more_like_this` with `metadata.briefingRunId` set to
+    the run id. If the rating fails, it archives the new task and answers the failure, as
+    TypeScript does (`catch-up-digest.tsx:280-284`). The task id is returned only when that
+    archive also fails, so a retry can archive it.
+  - `POST /today/runs/:run_id/catch-up/:item_id/dismiss { strayTaskId? }` archives the stray task,
+    then records "dismiss" with the same metadata.
+  - `POST /today/runs/:run_id/catch-up/:item_id/undo { feedbackId, taskId? }` undoes the rating and
+    archives the task. The feedback id is re-checked through the port as the caller. Like
+    TypeScript, the task id can be any of the caller's own tasks; another account's is not found.
 - The frame keeps the returned feedback and task ids in memory, as the TypeScript component does.
   After a reload, handled state comes from Part 5.
 - Statuses open, added and dismissed; the failure text matches TypeScript's ACTION_FAILED copy.
 - Tests:
-  - A failed rating followed by a retry creates exactly one task.
+  - A failed rating then a retry leaves exactly one open task.
   - Another account's item id returns 404 and creates no task. Fails if the route creates the task
     before the ownership check.
   - Undo with another account's feedback id or task id changes nothing.
@@ -293,8 +304,7 @@ Each security test must be observed failing with the check removed.
 
 ### Part 10: review writes
 
-- Owner: Calendar. Waits on Part 9. Needs no new Tasks call, because Calendar already reads tasks
-  through Tasks.
+- Owner: Calendar. Waits on Part 9. Needs no new Tasks call: Calendar reads tasks through a host-held task reference (`saved_read.rs:52-75`). The builder confirms what Accept all additions writes; if it creates tasks, that goes through a declared Tasks call and the part waits on it.
 - Save changes, Accept all additions, Confirm and Retry, calling the existing day-plan routes.
 - Tests: confirm or retry with another account's plan or operation id returns 404 and writes nothing.
 - Live: change one block, accept all, confirm; the calendar shows the events, both widths.
