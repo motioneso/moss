@@ -400,34 +400,6 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
             (json!(0), json!(""), json!(64000))
         );
     }
-    // Notes setup uses the same loaded module host as the checked Scratchpad routes above.
-    if std::env::var_os("JS388_NOTES_PACKAGE").is_some() {
-        let folder = root.join("notes").join(owner.to_string()).join("Journal");
-        fs::create_dir_all(&folder).unwrap();
-        for name in [
-            "desktop-delete.md",
-            "phone-delete.md",
-            "desktop-reject.md",
-            "phone-reject.md",
-        ] {
-            fs::write(
-                folder.join(name),
-                format!("# Approval proof\nSaved {name} before deletion.\n"),
-            )
-            .unwrap();
-        }
-        let linked = client
-            .put(format!("{origin}/api/m/notes/notes-source"))
-            .header("origin", &origin)
-            .header("cookie", &cookie)
-            .json(&json!({"path":folder}))
-            .send()
-            .unwrap();
-        let status = linked.status();
-        let body = linked.text().unwrap();
-        assert_eq!(status, 200, "Link the real Notes folder: {body}");
-        println!("notes live: linked the real folder after module readiness");
-    }
     // Save, conflict and append work for the owner.
     let (status, text) = call(
         Method::PUT,
@@ -595,6 +567,34 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
         (409, json!("scratchpad_notes_folder_missing")),
         "{text}"
     );
+    // Link Notes after readiness and the unlinked-folder assertion, before browser proof.
+    if std::env::var_os("JS388_NOTES_PACKAGE").is_some() {
+        let folder = root.join("notes").join(owner.to_string()).join("Journal");
+        fs::create_dir_all(&folder).unwrap();
+        for name in [
+            "desktop-delete.md",
+            "phone-delete.md",
+            "desktop-reject.md",
+            "phone-reject.md",
+        ] {
+            fs::write(
+                folder.join(name),
+                format!("# Approval proof\nSaved {name} before deletion.\n"),
+            )
+            .unwrap();
+        }
+        let linked = client
+            .put(format!("{origin}/api/m/notes/notes-source"))
+            .header("origin", &origin)
+            .header("cookie", &cookie)
+            .json(&json!({"path":folder}))
+            .send()
+            .unwrap();
+        let status = linked.status();
+        let body = linked.text().unwrap();
+        assert_eq!(status, 200, "Link the real Notes folder: {body}");
+        println!("notes live: linked the real folder after module readiness");
+    }
     assert_eq!(
         call(
             Method::PATCH,
