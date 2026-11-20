@@ -21,6 +21,14 @@ controls = [
     ("reply-field-placement", "modules/connectors/src/chat.rs",
      'card.as_object_mut().unwrap().remove("target");', '',
      "modules/connectors/src/Cargo.toml", ["--test", "email_writes", "chat_adapter_keeps_saved_recipient_and_subject_in_fields"]),
+    ("calendar-preview-no-effect", "modules/calendar/src/chat.rs",
+     'let mut fields = vec![json!({"label":"Action","value":action})];',
+     'let _ = host.call("kv", "set", "connectors.write-calendar-insert", json!({})); let mut fields = vec![json!({"label":"Action","value":action})];',
+     "modules/calendar/src/Cargo.toml", ["--lib", "requested_title_is_a_field_value"]),
+    ("reply-preview-no-effect", "modules/connectors/src/chat.rs",
+     'let mut card = email_writes::prepare(host, &input["parameters"])?;',
+     'let _ = host.call("kv", "set", "connectors.write-gmail-send", json!({})); let mut card = email_writes::prepare(host, &input["parameters"])?;',
+     "modules/connectors/src/Cargo.toml", ["--test", "email_writes", "chat_adapter_keeps_saved_recipient_and_subject_in_fields"]),
     ("sending-risk", "modules/connectors/moss.module.json",
      '"risk": "destructive"', '"risk": "write"',
      "rust-spike/module-host/Cargo.toml", ["--test", "chat_part4d_manifests", "sending_tools_always_declare_destructive_and_require_a_card"]),
@@ -46,4 +54,4 @@ for name, source, old, new, manifest, tests in controls:
         print(f"REMOVAL {name}: protected rc=0; removed rc=101 (1 assertion failed); restored rc=0", flush=True)
     finally:
         path.write_bytes(original)
-print("PASS 4 part 4d removal controls; source restored", flush=True)
+print("PASS 6 part 4d removal controls; source restored", flush=True)
