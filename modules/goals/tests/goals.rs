@@ -170,9 +170,18 @@ fn tools_share_route_writes_and_get_only_ten_newest_evidence_summaries() {
         json!({"title":"Ship","desiredOutcome":"Done"}),
     );
     let id = created["data"]["id"].as_str().unwrap();
+    let mut saved = created["data"].clone();
+    let receipt = saved.as_object_mut().unwrap().remove("changed").unwrap();
+    assert_eq!(
+        receipt,
+        json!([
+            {"label":"Title","before":"None","after":"Ship"},
+            {"label":"Desired outcome","before":"None","after":"Done"}
+        ])
+    );
     assert_eq!(
         f.route("GET", "/goals/:id", &[("id", id)], Value::Null).1,
-        created["data"]
+        saved
     );
     for n in 0..12 {
         let evidence = tool(
