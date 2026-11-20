@@ -12,9 +12,7 @@
   "capabilities": [
     {
       "port": "db",
-      "operations": [
-        "query"
-      ],
+      "operations": ["query"],
       "resources": [
         "app.sports_custom_sources",
         "app.sports_espn_source_assignments",
@@ -26,14 +24,8 @@
     },
     {
       "port": "context",
-      "operations": [
-        "read",
-        "uuid"
-      ],
-      "resources": [
-        "call",
-        "new"
-      ]
+      "operations": ["read", "uuid"],
+      "resources": ["call", "new"]
     },
     {
       "port": "kv",
@@ -65,19 +57,12 @@
     },
     {
       "port": "ai",
-      "operations": [
-        "generate"
-      ],
-      "resources": [
-        "structured"
-      ]
+      "operations": ["generate"],
+      "resources": ["structured"]
     },
     {
       "port": "tools",
-      "operations": [
-        "offer",
-        "run"
-      ],
+      "operations": ["offer", "run"],
       "resources": [
         "sports.listSources",
         "sports.previewSource",
@@ -97,23 +82,13 @@
     },
     {
       "port": "fetch",
-      "operations": [
-        "get"
-      ],
-      "resources": [
-        "content.core.api.espn.com",
-        "site.api.espn.com",
-        "public-web"
-      ]
+      "operations": ["get"],
+      "resources": ["content.core.api.espn.com", "site.api.espn.com", "public-web"]
     },
     {
       "port": "browser",
-      "operations": [
-        "render"
-      ],
-      "resources": [
-        "public-web"
-      ]
+      "operations": ["render"],
+      "resources": ["public-web"]
     }
   ],
   "installWideKv": [
@@ -309,9 +284,7 @@
     "sportsFollowedFactsToday": "1.0.0",
     "prepareSportsChatAction": "1.0.0"
   },
-  "icons": [
-    "icons/sports.svg"
-  ],
+  "icons": ["icons/sports.svg"],
   "accounts": {
     "supportsUserDisable": true,
     "defaultEnabled": true
@@ -525,7 +498,7 @@
     "sports.listSources": {
       "description": "List the active actor\u2019s bounded public sports sources, assignments, health, timestamps, and safe recovery status. Never returns recipes or opaque parameters.",
       "risk": "read",
-      "inputSchema": {"type":"object","required":["competitionKey"],"properties":{"competitionKey":{"type":"string","maxLength":100,"description":"Catalog competition key, e.g. \"nfl\" or \"eng.1\""},"teamKey":{"type":"string","maxLength":100,"description":"Catalog team key within the competition; omit to unfollow the whole competition"}},"examples":[{"competitionKey":"nfl"}]}
+      "inputSchema": {"type":"object","properties":{}}
     },
     "sports.previewSource": {
       "description": "Preview and safely verify one public unauthenticated sports publisher and optional followed targets before confirmation. Returned headline samples are external publisher content.",

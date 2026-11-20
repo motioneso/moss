@@ -8,6 +8,9 @@ fn chat_follows_show_done_and_the_optional_policy_has_a_card() {
     let access = w.f.access(w.f.a);
     let installer = &w.app.installer;
     assert_eq!(installer.chat_tools(&access).unwrap().len(), 14);
+    let source = w.plant_source(w.f.a, "read.example.com", "Chat source read");
+    let listed = installer.run_chat_tool(&access, "sports", "sports.listSources", json!({})).unwrap();
+    assert!(listed["data"]["sources"].as_array().unwrap().iter().any(|row| row["id"] == source.to_string()), "{listed}");
     let parameters = json!({"competitionKey":"nfl"});
     let done = installer.run_chat_tool(&access, "sports", "sports.followTeam", parameters.clone()).unwrap();
     assert_eq!(done["data"]["changed"][2], json!({"label":"Following","before":"Not followed","after":"Following"}));
@@ -33,7 +36,7 @@ fn chat_source_card_passes_the_shown_compact_version_to_the_installed_tool() {
     assert_eq!(card.version.as_ref().unwrap().len(), 64);
     assert!(card.danger);
     w.f.rt.block_on(w.f.root.execute(
-        "UPDATE app.sports_sources SET label='Updated source', updated_at=updated_at+interval '1 second' WHERE id=$1", &[&id],
+        "UPDATE app.sports_custom_sources SET label='Updated source', updated_at=updated_at+interval '1 second' WHERE id=$1", &[&id],
     )).unwrap();
     let stale = installer.run_approved_chat_tool(&access, "sports", "sports.removeSource", parameters.clone(), card.version.as_deref()).unwrap();
     assert!(stale["data"]["error"].as_str().unwrap().contains("approval no longer matches"));

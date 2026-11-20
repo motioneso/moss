@@ -1,5 +1,5 @@
 //! The follow and unfollow chat tools. Following saves exactly what the follow route saves, and
-//! both tools touch only the signed-in person's own follows, so neither needs an approval card.
+//! both tools touch only the signed-in person's own follows. The explicit ask-first policy adds a card.
 use crate::teams::TeamList;
 use crate::{catalog, follows};
 use moss_module_sdk::{
