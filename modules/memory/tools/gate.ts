@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { getMossDatabaseUrls } from "@moss/db";
+import { memoryControlArgs } from "./control-selection.js";
 if (process.env.JARVIS_GATE_RUN !== "1") throw new Error("Use verify-gate");
 const suites = ["db", "dashboard", "recording", "reembed", "account"];
 const selected = process.env.MEMORY_SUITE;
@@ -8,6 +9,10 @@ if (selected && !suites.includes(selected)) throw new Error("Unknown Memory test
 const requested = selected
   ? [selected]
   : (process.env.MEMORY_SUITES ?? suites.join(",")).split(",");
+const selectedSuites = requested.map((suite) => ({
+  suite,
+  controlArgs: memoryControlArgs(suite, process.env.MEMORY_CONTROLS ?? "all")
+}));
 const urls = getMossDatabaseUrls();
 const checks = spawnSync("modules/memory/tools/check.sh", {
   stdio: "inherit",
@@ -21,7 +26,7 @@ const env = {
   MEMORY_CORE_WASM: `${process.env.CARGO_TARGET_DIR ?? "/tmp/moss-memory-host"}/memory-guest/wasm32-unknown-unknown/release/moss_memory.wasm`
 };
 let status = 0;
-for (const suite of requested) {
+for (const { suite, controlArgs } of selectedSuites) {
   const run = spawnSync(
     "cargo",
     [
@@ -36,7 +41,8 @@ for (const suite of requested) {
       "--",
       "--ignored",
       "--nocapture",
-      "--test-threads=1"
+      "--test-threads=1",
+      ...controlArgs
     ],
     { stdio: "inherit", env }
   );
