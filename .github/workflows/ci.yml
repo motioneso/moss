@@ -67,6 +67,8 @@ jobs:
           LIVE_CANDIDATE: ${{ inputs.live_candidate || false }}
           PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
           REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
         run: |
           set -euo pipefail
           # Both outputs default to the full gate; any early exit below keeps them false.
@@ -84,9 +86,26 @@ jobs:
           # Unknown PR scope conservatively runs all modules and host gates.
           # Main and nightly always run all modules; nightly also runs every host gate.
           emit_modules "$ALL_MODULES"
-          if [ "$RUST_TIER" != "pull_request" ]; then exit 0; fi
-          if [ "$EVENT_NAME" != "pull_request" ] && [ -z "${PR_NUMBER:-}" ]; then
-            echo "No PR number provided — running the full Rust PR tier."
+          # Keep main's existing legacy-JS classification below; Rust still runs its
+          # full matrix regardless of the paths. Manual main/nightly proof needs no file list.
+          if [ "$RUST_TIER" != "pull_request" ] && [ "$EVENT_NAME" != "push" ]; then exit 0; fi
+          # Push events have no pull request file list, so look up the PR that produced the
+          # commit. That PR only covers the whole push when the push is exactly one commit
+          # (squash merges), so a longer range, a failed compare or an empty lookup runs the
+          # full gate.
+          if [ "$EVENT_NAME" = "push" ]; then
+            count=$(gh api "repos/$REPO/compare/$BEFORE_SHA...$SHA" --jq '.total_commits' || true)
+            if [ "${count:-0}" != "1" ]; then
+              echo "Push is not exactly one commit (${count:-unknown}) — running the full gate."
+              exit 0
+            fi
+            PR_NUMBER=$(gh api "repos/$REPO/commits/$SHA/pulls" --jq '.[0].number // empty' || true)
+            if [ -z "${PR_NUMBER:-}" ]; then
+              echo "No merged PR found for $SHA — running the full gate."
+              exit 0
+            fi
+          elif [ "$EVENT_NAME" != "pull_request" ] && [ -z "${PR_NUMBER:-}" ]; then
+            echo "Not a pull request and no PR number provided — running the full gate."
             exit 0
           fi
           # Renames list both the new and the old path, so moving a file into a Rust tree
@@ -114,6 +133,7 @@ jobs:
             fi
           done
           rust_modules=$(printf '%s\n' $touched | jq -R . | jq -sc 'map(select(length>0))')
+          if [ "$RUST_TIER" = "push" ]; then rust_modules="$ALL_MODULES"; fi
           echo "host_changed=$host_changed" >> "$GITHUB_OUTPUT"
           emit_modules "$rust_modules"
           echo "Rust module gates: $rust_modules (host changed: $host_changed)"
@@ -128,6 +148,8 @@ jobs:
             echo "rust_only=true" >> "$GITHUB_OUTPUT"
             echo "Rust-only change — the old browser and unit tests are skipped."
           fi
+          # Main keeps the full legacy gate except its existing Rust-only JS skips.
+          if [ "$EVENT_NAME" = "push" ]; then exit 0; fi
           # docs-only == every changed path is under docs/ or is a markdown file.
           non_docs=$(grep -vcE '(^docs/|\.md$)' files.txt || true)
           if [ "${non_docs:-1}" -gt 0 ]; then
