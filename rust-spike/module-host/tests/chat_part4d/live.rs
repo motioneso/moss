@@ -8,5 +8,7 @@ pub async fn seed(db: &Client, owner: Uuid) -> Value {
     let message = Uuid::new_v4();
     db.execute("INSERT INTO app.connector_accounts(id,provider_id,owner_user_id,scopes,status,encrypted_secret) VALUES($1,'google',$2,ARRAY['https://www.googleapis.com/auth/gmail.modify'],'active','{}')", &[&account,&owner]).await.unwrap();
     db.execute("INSERT INTO app.email_messages(id,connector_account_id,owner_user_id,sender,subject,received_at,external_id,external_metadata) VALUES($1,$2,$3,'Alex Example <alex@example.test>','Part 4d planning check',now(),'js389-proof','{\"threadId\":\"js389-thread\",\"messageId\":\"js389@example.test\"}')", &[&message,&account,&owner]).await.unwrap();
-    json!({"cacheMessageId":message,"recipient":"Alex Example <alex@example.test>","subject":"Re: Part 4d planning check"})
+    let calendar_title = format!("Part 4d cache check {}", Uuid::new_v4().simple());
+    db.execute("INSERT INTO app.calendar_events(id,connector_account_id,owner_user_id,title,starts_at,ends_at,external_id,external_metadata) VALUES(gen_random_uuid(),$1,$2,$3,now()+interval '1 hour',now()+interval '2 hours','js389-calendar','{}')", &[&account,&owner,&calendar_title]).await.unwrap();
+    json!({"calendarTitle":calendar_title,"cacheMessageId":message,"recipient":"Alex Example <alex@example.test>","subject":"Re: Part 4d planning check"})
 }
