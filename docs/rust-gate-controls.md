@@ -93,6 +93,7 @@ runs the plan's thirteen host entries (including Calendar's `check.sh`) instead 
 to all modules; mixed PRs also run directly touched modules. All Rust entries now block
 `ci-gate`, which still accepts a skipped matrix when no Rust paths changed.
 Notes includes its server and ingest companions; Calendar includes its server companion.
+Companions run in separate jobs to preserve the measured package-job time budget.
 The standalone Calendar workflow is replaced by the host tier.
 
 The nightly schedule runs at 08:23 UTC on main. Workflow dispatch accepts a `rust_tier`

@@ -44,9 +44,16 @@ export function rustGateEntries(modules, event = "pull_request") {
           controls: event === "pull_request" ? "skip" : "all"
         }));
       case "notes":
-        return [entry("full", "test:rust-notes test:rust-notes-server test:rust-notes-ingest")];
+        return [
+          entry("package", "test:rust-notes"),
+          entry("server", "test:rust-notes-server"),
+          entry("ingest", "test:rust-notes-ingest")
+        ];
       case "calendar":
-        return [entry("full", "test:rust-calendar test:rust-calendar-server")];
+        return [
+          entry("package", "test:rust-calendar"),
+          entry("server", "test:rust-calendar-server")
+        ];
       case "finance":
         return [entry("full", "test:rust-finance test:rust-finance-ui-unit")];
       case "meetings":
