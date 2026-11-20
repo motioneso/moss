@@ -217,7 +217,7 @@
     },
     {
       "id": "notes.semantic-search",
-      "description": "The read-only notes.search tool returns your existing indexed Notes chunks in semantic order, with source paths and line ranges. The host must connect core memory and your configured query embedding service. Automatic chat recall is not implemented yet. File changes are indexed by sync. Chat integration must first preserve the legacy schemas and outside-content classification; note text is untrusted data.",
+      "description": "The read-only notes.search tool returns your existing indexed Notes chunks in semantic order, with source paths and line ranges. The host must connect core memory and your configured query embedding service. Automatic chat recall is not implemented yet. File changes are indexed by sync. Chat uses the declared search inputs; note text remains untrusted outside content.",
       "errors": [
         {
           "code": "notes-search-unavailable",

@@ -145,7 +145,9 @@ fn a_failed_embedding_keeps_the_fact_and_flags_it() {
     assert_eq!(host.count("memory.index"), 2);
     let said = tool(&host, "memory.remember",
         json!({"predicate": "prefers", "objectText": "tea", "source": source()})).unwrap();
-    assert_eq!(said, json!({"data": {"factId": "f1", "searchPending": true}}));
+    assert_eq!(said["data"]["factId"], "f1");
+    assert_eq!(said["data"]["searchPending"], true);
+    assert!(said["data"]["changed"].as_array().is_some_and(|v| !v.is_empty()));
 }
 
 #[test]
@@ -153,7 +155,14 @@ fn remember_tool_answers_with_the_fact_id_and_trims() {
     let host = Fake::new();
     let params = json!({"predicate": "prefers", "objectText": " tea ",
         "source": {"sourceKind": "chat", "sourceRef": "t1", "excerpt": " said so "}});
-    assert_eq!(tool(&host, "memory.remember", params).unwrap(), json!({"data": {"factId": "f1"}}));
+    let result = tool(&host, "memory.remember", params).unwrap();
+    assert_eq!(result, json!({"data": {"factId": "f1", "changed": [
+        {"label":"Relationship","before":"None","after":"prefers"},
+        {"label":"Fact","before":"None","after":"tea"},
+        {"label":"Source type","before":"None","after":"chat"},
+        {"label":"Source reference","before":"None","after":"t1"},
+        {"label":"Source excerpt","before":"None","after":"said so"}
+    ]}}));
     let sent = host.sent("memory.fact");
     assert_eq!((sent["predicate"].as_str(), sent["objectText"].as_str()), (Some("prefers"), Some("tea")));
     assert_eq!(sent["source"]["excerpt"], "said so");

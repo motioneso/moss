@@ -309,7 +309,7 @@ pub fn remember_tool(host: &impl Host, parameters: &Value) -> Result<Value> {
     if pending {
         data["searchPending"] = json!(true);
     }
-    let mut saved = input.clone();
+    let mut saved = tidy.clone();
     for (key, value) in fact.as_object().into_iter().flatten() {
         if saved.get(key).is_some() { saved[key] = value.clone(); }
     }
