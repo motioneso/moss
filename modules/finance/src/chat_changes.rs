@@ -126,12 +126,7 @@ fn table(resource: &str) -> Option<Table> {
         "app.finance_flex_policies" => (
             "Flexible pool",
             &["month"],
-            &[
-                "month",
-                "active",
-                "flex_ids",
-                "non_monthly_ids",
-            ],
+            &["month", "active", "flex_ids", "non_monthly_ids"],
         ),
         "app.finance_card_policies" => (
             "Card reserve policy",
@@ -172,7 +167,10 @@ fn project(rows: &[Value], columns: &[&str]) -> Value {
 }
 
 fn shown(value: &Value) -> String {
-    let text = value.as_str().map(str::to_owned).unwrap_or_else(|| value.to_string());
+    let text = value
+        .as_str()
+        .map(str::to_owned)
+        .unwrap_or_else(|| value.to_string());
     if text.len() <= 7800 {
         return text;
     }

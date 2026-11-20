@@ -143,7 +143,12 @@ fn chat_schemas_are_installable_and_match_the_declared_tools() {
         assert!(tool.description.split_whitespace().count() < 60, "{name}");
         if tool.risk != "read" {
             assert_eq!(tool.card.as_deref(), Some("prepareChatAction"), "{name}");
-            assert!(tool.input_schema.as_ref().unwrap()["examples"].as_array().is_some_and(|v| !v.is_empty()), "{name}");
+            assert!(
+                tool.input_schema.as_ref().unwrap()["examples"]
+                    .as_array()
+                    .is_some_and(|v| !v.is_empty()),
+                "{name}"
+            );
         }
     }
 }

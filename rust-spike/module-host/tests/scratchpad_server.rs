@@ -236,6 +236,9 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
     if std::env::var_os("JS386_NEWS_PACKAGE").is_some() {
         packages.push(("JS386_NEWS_PACKAGE", "news"));
     }
+    if std::env::var_os("JS390_FINANCE_PACKAGE").is_some() {
+        packages.push(("JS390_FINANCE_PACKAGE", "finance"));
+    }
     let artifacts: Vec<Artifact> = packages
         .iter()
         .map(|(variable, id)| {
@@ -324,6 +327,8 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
         )
         .unwrap();
     for artifact in &artifacts {
+        // Finance joins only after Scratchpad's exact export/delete checks below.
+        if artifact.id == "finance" { continue; }
         installer.install(&access, &source, artifact, true).unwrap();
     }
     drop(installer);
@@ -669,6 +674,17 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
     // Nothing the test sent reached the server log.
     assert!(!log().contains(MARK));
     println!("scratchpad live: read, save, conflict, append and settings worked over HTTPS for two people");
+    let _server = if let Some(finance) = artifacts.iter().find(|a| a.id == "finance") {
+        drop(_server);
+        let app = runtime.block_on(Database::connect(&app_url, 4, RuntimeRole::App)).unwrap();
+        let installer = installed::reopen(
+            &root.join("data"), app, &access,
+            std::sync::Arc::new(moss_module_host::runtime::DenyPorts),
+        );
+        installer.install(&access, &source, finance, true).unwrap();
+        drop(installer);
+        start(true)
+    } else { _server };
     // Keep the real server and the gate's isolated database alive for browser proof.
     if let Ok(hold) = std::env::var("MOSS_SCRATCHPAD_HOLD") {
         let hold = Path::new(&hold);

@@ -231,7 +231,7 @@ pub fn handle<H: Host + ?Sized>(
         "api" => {
             let input: serde_json::Value = serde_json::from_str(payload)?;
             if input["name"] == "prepareChatAction" {
-                return Ok(chat::prepare(host, &input["parameters"])? .to_string());
+                return Ok(chat::prepare(host, &input["parameters"])?.to_string());
             }
             let call = account::execute(host, serde_json::from_value(input)?)
                 .map_err(|_| moss_module_sdk::Error::new("Finance account operation failed"))?;
