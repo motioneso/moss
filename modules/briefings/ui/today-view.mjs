@@ -58,6 +58,9 @@ function entryHtml(entry, mark, pending, now, locale) {
     typeof entry.cacheMessageId === "string"
       ? `<button type="button" class="${BUTTON} jds-btn--quiet" data-reply="${esc(entry.cacheMessageId)}"${busy}>Reply</button>`
       : "";
+  const received = Number.isNaN(Date.parse(entry.receivedAt))
+    ? ""
+    : `<span class="jds-caption">${esc(receivedLabel(entry.receivedAt, now, locale))}</span>`;
   const handled = mark?.status === "added" || mark?.status === "dismissed";
   const controls = handled
     ? `<span class="jds-caption">${mark.status === "added" ? "Added to your tasks" : "Dismissed"}</span>
@@ -68,7 +71,7 @@ function entryHtml(entry, mark, pending, now, locale) {
   return `<div class="briefing-catchup__item" data-entry="${esc(entry.id)}">
     <div class="briefing-catchup__sender"><span>${esc(sender)}</span>${badge}</div>
     <p class="briefing-catchup__excerpt">${esc(entry.summary ?? "")}</p>
-    <div class="briefing-catchup__meta"><span class="jds-caption">${esc(receivedLabel(entry.receivedAt, now, locale))}</span>${controls}</div></div>`;
+    <div class="briefing-catchup__meta">${received}${controls}</div></div>`;
 }
 
 /** The catch-up block. Empty text when no entries remain. */

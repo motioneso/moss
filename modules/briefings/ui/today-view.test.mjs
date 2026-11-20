@@ -104,3 +104,12 @@ test("an email's text is escaped", () => {
   );
   assert.doesNotMatch(html, /<img onerror|<b>hi/);
 });
+
+test("an email with no usable received time shows no time text", () => {
+  const bare = { ...catchUp, entries: [{ id: "x", senderName: "Sam", summary: "Hi" }] };
+  const html = sectionHtml(
+    { phase: "ready", data: { state: "none", rows: [], catchUp: bare } },
+    "en"
+  );
+  assert.doesNotMatch(html, /Invalid Date/);
+});
