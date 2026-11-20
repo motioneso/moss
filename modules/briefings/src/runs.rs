@@ -67,7 +67,7 @@ pub(crate) fn signal_item_id(kind: &str, signal_type: &str, summary: &str) -> St
 pub(crate) struct Hidden {
     runs: HashSet<String>,
     items: HashSet<String>,
-    handled: HashSet<String>,
+    pub(crate) handled: HashSet<String>,
 }
 
 impl Hidden {
@@ -121,7 +121,7 @@ pub(crate) fn payload_of(metadata: &Value) -> Value {
 }
 
 /// Dismissed or added entries drop out, and the block goes once none remain.
-fn visible_catch_up(catch_up: &Value, handled: &HashSet<String>) -> Value {
+pub(crate) fn visible_catch_up(catch_up: &Value, handled: &HashSet<String>) -> Value {
     let entries: Vec<Value> = catch_up["entries"]
         .as_array()
         .into_iter()

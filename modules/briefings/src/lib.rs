@@ -8,6 +8,7 @@ pub mod sports;
 pub mod weather;
 pub mod evening_prompt;
 pub mod body;
+pub mod catch_up;
 pub mod chat_card;
 pub mod compose;
 pub mod definitions;
@@ -58,6 +59,9 @@ pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
         ("GET", "/definitions/:id/runs/:run_id") => runs::get(host, &request),
         ("GET", "/today") => today::get(host),
         ("POST", "/today/rows/:task_id") => today::act(host, &request),
+        ("POST", "/today/runs/:run_id/catch-up/:item_id/add") => catch_up::add(host, &request),
+        ("POST", "/today/runs/:run_id/catch-up/:item_id/dismiss") => catch_up::dismiss(host, &request),
+        ("POST", "/today/runs/:run_id/catch-up/:item_id/undo") => catch_up::undo(host, &request),
         _ => return Response::new(404, json!({"message":"Route not found"})),
     };
     result.unwrap_or_else(|_| Response::new(500, json!({"message":"Internal server error"})))

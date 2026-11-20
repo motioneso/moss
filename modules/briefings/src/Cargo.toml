@@ -84,3 +84,7 @@ path = "../tests/hidden.rs"
 [[test]]
 name = "today"
 path = "../tests/today.rs"
+
+[[test]]
+name = "catch_up"
+path = "../tests/catch_up.rs"
