@@ -75,23 +75,6 @@ environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
 ## Open
 
-### JS-385: Calendar write prerequisite missing — 2026-11-19
-
-Part 10 of the Rust Briefings follow-ups plan (Card 630) expects the existing Calendar
-day-plan routes to execute Save changes, Accept all additions, Confirm and Retry. Checked at
-`origin/main` `4f3ff1d59` after Part 9 merged (#4425), with no commits behind main:
-`modules/calendar/src/apply.rs` validates apply, retry and confirm requests, then always returns
-503, "day plan apply is unavailable". Confirm and retry do not receive a host, so they cannot
-read the caller's plan or operation. The existing guest test
-`retry_recover_and_confirm_validate_then_fail_closed` explicitly expects 503 and no inserts;
-this is source inspection, not a new gate run. The Calendar phase report's JS-191 section
-records execution and stored approvals as unfinished.
-
-This prevents Part 10's required live event writes and foreign-plan/operation 404 proof.
-Recommendation: add a Calendar execution/approval prerequisite, then resume Part 10 against
-working routes. Alternative: explicitly expand this task and split the backend work into
-approved parts before building the review controls. Which scope should JS-385 follow?
-
 No open Outlook calendar decision. Ben approved the
 [calendar-first design](../superpowers/specs/2026-10-21-outlook-browser-calendar-sync.md)
 on 2026-10-21. Implementation and isolated-dev verification are authorized;
