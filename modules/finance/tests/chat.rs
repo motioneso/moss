@@ -33,14 +33,36 @@ fn every_declared_write_has_a_read_only_card_using_its_worked_example() {
                 .as_str()
                 .map(str::to_owned)
                 .unwrap_or_else(|| value.to_string());
-            assert!(
-                prepared["fields"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .any(|field| field["value"] == shown),
-                "{name}: omitted {key}"
-            );
+            if let Some(rows) = value
+                .as_array()
+                .filter(|rows| rows.first().is_some_and(Value::is_object))
+            {
+                for row in rows {
+                    for child in row.as_object().unwrap().values() {
+                        let shown = child
+                            .as_str()
+                            .map(str::to_owned)
+                            .unwrap_or_else(|| child.to_string());
+                        assert!(
+                            prepared["fields"]
+                                .as_array()
+                                .unwrap()
+                                .iter()
+                                .any(|field| field["value"] == shown),
+                            "{name}: omitted row value"
+                        );
+                    }
+                }
+            } else {
+                assert!(
+                    prepared["fields"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|field| field["value"] == shown),
+                    "{name}: omitted {key}"
+                );
+            }
         }
     }
     for (port, op, _, p) in f.calls.borrow().iter() {
@@ -222,33 +244,7 @@ fn chat_distribution_can_leave_the_pool_and_refuses_duplicate_categories() {
 #[test]
 fn large_batches_and_unicode_notes_keep_every_value_within_host_card_limits() {
     let f = Fake::new();
-    let transactions: Vec<_> = (0..200)
-        .map(|n| {
-            json!({
-                "id":format!("transaction-{n:04}"), "writeRevision":"a".repeat(32)
-            })
-        })
-        .collect();
     let m = manifest();
-    let mut p =
-        m["tools"]["finance.transactions.bulk-confirm"]["inputSchema"]["examples"][0].clone();
-    p["transactions"] = json!(transactions);
-    let prepared = card(&f, "finance.transactions.bulk-confirm", p.clone()).unwrap();
-    let label = m["tools"]["finance.transactions.bulk-confirm"]["inputSchema"]["properties"]
-        ["transactions"]["description"]
-        .as_str()
-        .unwrap();
-    let fields = prepared["fields"].as_array().unwrap();
-    let shown: String = fields
-        .iter()
-        .filter(|field| field["label"] == label)
-        .map(|field| field["value"].as_str().unwrap())
-        .collect();
-    assert_eq!(shown, p["transactions"].to_string());
-    assert!(fields.len() <= 32 && prepared.to_string().len() <= 32768);
-    assert!(fields
-        .iter()
-        .all(|field| field["value"].as_str().unwrap().len() <= 4096));
     let mut p = m["tools"]["finance.transactions.notes.save"]["inputSchema"]["examples"][0].clone();
     let notes = "🍵".repeat(4000);
     p["notes"] = json!(notes);
@@ -266,4 +262,71 @@ fn large_batches_and_unicode_notes_keep_every_value_within_host_card_limits() {
         .collect();
     assert_eq!(shown, notes);
     assert!(prepared.to_string().len() <= 32768);
+}
+
+fn maximum(schema: &Value) -> Value {
+    if let Some(values) = schema["enum"].as_array() {
+        return values
+            .iter()
+            .max_by_key(|v| v.to_string().len())
+            .unwrap()
+            .clone();
+    }
+    match schema["type"].as_str().unwrap() {
+        "string" => json!("\u{0001}".repeat(
+            schema["maxLength"]
+                .as_u64()
+                .expect("Batch string must be bounded") as usize
+        )),
+        "array" => json!(vec![
+            maximum(&schema["items"]);
+            schema["maxItems"].as_u64().unwrap() as usize
+        ]),
+        "object" => Value::Object(
+            schema["properties"]
+                .as_object()
+                .unwrap()
+                .iter()
+                .map(|(k, v)| (k.clone(), maximum(v)))
+                .collect(),
+        ),
+        "boolean" => json!(false),
+        _ => schema
+            .get("minimum")
+            .or_else(|| schema.get("maximum"))
+            .cloned()
+            .unwrap_or(json!(-9007199254740991_i64)),
+    }
+}
+
+#[test]
+fn every_batch_at_its_schema_limit_fits_a_complete_card() {
+    let f = Fake::new();
+    let m = manifest();
+    for name in [
+        "finance.transactions.bulk-categorize",
+        "finance.transactions.bulk-confirm",
+        "finance.transactions.review-apply",
+        "finance.import.apply",
+    ] {
+        let p = maximum(&m["tools"][name]["inputSchema"]);
+        let prepared = card(&f, name, p).unwrap_or_else(|e| panic!("{name}: {e}"));
+        let fields = prepared["fields"].as_array().unwrap();
+        assert!(fields.len() <= 32, "{name}");
+        assert!(
+            prepared.to_string().len() <= 32768,
+            "{name}: {} bytes",
+            prepared.to_string().len()
+        );
+        assert!(fields
+            .iter()
+            .all(|field| field["value"].as_str().unwrap().len() <= 4096));
+        if name.contains("bulk-") {
+            let mut oversized = maximum(&m["tools"][name]["inputSchema"]);
+            let row = oversized["transactions"][0].clone();
+            oversized["transactions"] = json!(vec![row; 200]);
+            let error = card(&f, name, oversized).unwrap_err().to_string();
+            assert!(error.contains("smaller batch"));
+        }
+    }
 }

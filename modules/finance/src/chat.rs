@@ -35,6 +35,38 @@ pub fn adapt_parameters(tool: &str, mut parameters: Value) -> Result<Value> {
     Ok(parameters)
 }
 
+fn shown(value: &Value) -> String {
+    value
+        .as_str()
+        .map(str::to_owned)
+        .unwrap_or_else(|| value.to_string())
+}
+fn value_as_rows<'a>(value: &'a Value, schema: &Value) -> Option<&'a Vec<Value>> {
+    (schema["items"]["type"] == "object")
+        .then(|| value.as_array())
+        .flatten()
+        .filter(|rows| !rows.is_empty())
+}
+fn add_field(fields: &mut Vec<Value>, label: &str, value: String) -> Result<()> {
+    if label.len() > 120 {
+        return Err(bad());
+    }
+    // Continue whole values at UTF-8 boundaries, always under code-owned labels.
+    let mut rest = value.as_str();
+    loop {
+        let mut end = rest.len().min(4096);
+        while !rest.is_char_boundary(end) {
+            end -= 1;
+        }
+        fields.push(json!({"label":label,"value":&rest[..end]}));
+        rest = &rest[end..];
+        if rest.is_empty() {
+            break;
+        }
+    }
+    Ok(())
+}
+
 pub fn prepare<H: Host + ?Sized>(host: &H, input: &Value) -> Result<Value> {
     let manifest: Value = serde_json::from_str(include_str!("../moss.module.json"))?;
     let name = input["tool"].as_str().ok_or_else(bad)?;
@@ -63,22 +95,33 @@ pub fn prepare<H: Host + ?Sized>(host: &H, input: &Value) -> Result<Value> {
                 .as_str()
                 .map(str::to_owned)
                 .unwrap_or_else(|| value.to_string());
-            if label.len() > 120 {
-                return Err(bad());
-            }
-            // Keep every byte, including long batches and multi-byte note text. Continuations
-            // retain the fixed schema label; no model text becomes a label.
-            let mut rest = value.as_str();
-            loop {
-                let mut end = rest.len().min(4096);
-                while !rest.is_char_boundary(end) {
-                    end -= 1;
+            let rows = matches!(
+                name,
+                "finance.transactions.bulk-categorize"
+                    | "finance.transactions.bulk-confirm"
+                    | "finance.import.apply"
+            )
+            .then(|| value_as_rows(parameters.get(key).unwrap(), property))
+            .flatten();
+            if let Some(rows) = rows {
+                for (index, row) in rows.iter().enumerate() {
+                    for (child, child_schema) in property["items"]["properties"]
+                        .as_object()
+                        .ok_or_else(bad)?
+                    {
+                        if let Some(child_value) = row.get(child) {
+                            let child_label =
+                                child_schema["description"].as_str().ok_or_else(bad)?;
+                            add_field(
+                                &mut fields,
+                                &format!("Row {}: {}", index + 1, child_label),
+                                shown(child_value),
+                            )?;
+                        }
+                    }
                 }
-                fields.push(json!({"label":label,"value":&rest[..end]}));
-                rest = &rest[end..];
-                if rest.is_empty() {
-                    break;
-                }
+            } else {
+                add_field(&mut fields, label, value)?;
             }
         }
     }
