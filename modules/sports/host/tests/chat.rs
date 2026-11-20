@@ -39,7 +39,7 @@ fn chat_source_card_passes_the_shown_compact_version_to_the_installed_tool() {
         "UPDATE app.sports_custom_sources SET label='Updated source', updated_at=updated_at+interval '1 second' WHERE id=$1", &[&id],
     )).unwrap();
     let stale = installer.run_approved_chat_tool(&access, "sports", "sports.removeSource", parameters.clone(), card.version.as_deref()).unwrap();
-    assert!(stale["data"]["error"].as_str().unwrap().contains("approval no longer matches"));
+    assert!(stale["data"]["error"].as_str().is_some_and(|e| e.contains("approval no longer matches")), "{stale}");
     assert_eq!(w.source_rows(&id.to_string()), 1);
     let fresh = installer.chat_tool_card(&access, "sports", "sports.removeSource", &parameters).unwrap().unwrap();
     assert_ne!(fresh.version, card.version);
