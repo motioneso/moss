@@ -605,7 +605,7 @@
     },
     {
       "id": "memory.chat-tools",
-      "description": "Moss can recall saved facts and remember a source-backed fact. Remembering runs without a card unless you have chosen to approve it; completed changes show the saved fact. Forgetting always asks with a danger card showing the saved memory and refuses if it changed."
+      "description": "Moss can recall saved facts and remember a source-backed fact. Remembering runs without a card unless you have chosen to approve it; completed changes show the saved fact. Forgetting always asks with a danger card showing the saved memory and refuses if it changed. Oversized approval cards are refused; long completed values are marked as truncated."
     }
   ],
   "tools": {

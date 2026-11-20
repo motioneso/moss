@@ -126,6 +126,11 @@ async function compare(
         { label: "Description", before: "  Body  ", after: "" }
       ]);
     }
+    if (name === "list rename") {
+      assert.deepEqual(reply.data.changed, [
+        { label: "Name", before: "  Work  ", after: "Renamed" }
+      ]);
+    }
     delete reply.data.changed;
   }
   assert.deepEqual(canonical(actual.ok, "rs"), canonical(expected, "ts"), name);

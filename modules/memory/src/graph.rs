@@ -314,8 +314,7 @@ pub fn remember_tool(host: &impl Host, parameters: &Value) -> Result<Value> {
         if saved.get(key).is_some() { saved[key] = value.clone(); }
     }
     saved["source"] = tidy["source"].clone();
-    data["changed"] = json!(crate::chat::fields(&saved).into_iter()
-        .map(|f| json!({"label":f["label"],"before":"None","after":f["value"]})).collect::<Vec<_>>());
+    data["changed"] = json!(crate::chat::completed(&saved));
     Ok(json!({"data": data}))
 }
 

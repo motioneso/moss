@@ -51,6 +51,27 @@ fn shown(value: &Value) -> String {
         .unwrap_or_else(|| value.to_string())
 }
 
+pub fn completed(p: &Value) -> Vec<Value> {
+    fields(p)
+        .into_iter()
+        .map(|f| {
+            let text = f["value"].as_str().unwrap();
+            let after = if text.len() <= 8192 {
+                text.to_owned()
+            } else {
+                let end = text
+                    .char_indices()
+                    .map(|(i, _)| i)
+                    .take_while(|i| *i <= 8100)
+                    .last()
+                    .unwrap_or(0);
+                format!("{}… [truncated]", &text[..end])
+            };
+            json!({"label":f["label"],"before":"None","after":after})
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

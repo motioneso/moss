@@ -22,8 +22,14 @@ pub fn prepare<H: Host + ?Sized>(host: &H, input: &Value) -> Value {
 
 pub fn before<H: Host + ?Sized>(repo: &Repository<'_, H>, tool: &str, p: &Value) -> Result<Value> {
     if let Some(id) = p["taskId"].as_str() {
-        let Some(task) = repo.task(id)? else { return Ok(Value::Null) };
-        let tags = if tool.ends_with("assignTag") { repo.task_tags(id)? } else { vec![] };
+        let Some(task) = repo.task(id)? else {
+            return Ok(Value::Null);
+        };
+        let tags = if tool.ends_with("assignTag") {
+            repo.task_tags(id)?
+        } else {
+            vec![]
+        };
         return Ok(task.dto(&tags));
     }
     let table = if tool.ends_with("Tag") { TAGS } else { LISTS };
@@ -43,11 +49,21 @@ pub fn before<H: Host + ?Sized>(repo: &Repository<'_, H>, tool: &str, p: &Value)
 }
 
 fn shown(value: &Value) -> String {
-    match value {
+    let text = match value {
         Value::Null => "None".into(),
         Value::String(s) => s.clone(),
         _ => value.to_string(),
+    };
+    if text.len() <= 8192 {
+        return text;
     }
+    let end = text
+        .char_indices()
+        .map(|(i, _)| i)
+        .take_while(|i| *i <= 8100)
+        .last()
+        .unwrap_or(0);
+    format!("{}… [truncated]", &text[..end])
 }
 
 pub fn completed(tool: &str, p: &Value, before: &Value, result: &mut Value) {
@@ -75,6 +91,10 @@ pub fn completed(tool: &str, p: &Value, before: &Value, result: &mut Value) {
         ("parentTaskId", "Parent task"),
     ] {
         if let Some(value) = p.get(key) {
+            // These identify the existing collection; they are not changed assignments.
+            if key == "listId" && !matches!(tool, "tasks.create" | "tasks.update") {
+                continue;
+            }
             fields.push(json!({"label":label,"before":shown(&before[key]),"after":shown(after.get(key).unwrap_or(value))}));
         }
     }
@@ -88,10 +108,19 @@ pub fn completed(tool: &str, p: &Value, before: &Value, result: &mut Value) {
         }
     }
     if tool.ends_with("assignTag") {
-        let names = |task: &Value| task["tags"].as_array().map(|tags| tags.iter()
-            .filter_map(|tag| tag["name"].as_str()).collect::<Vec<_>>().join(", "))
-            .filter(|s| !s.is_empty()).unwrap_or_else(|| "None".into());
-        fields.push(json!({"label":"Tags","before":names(before),"after":names(&after)}));
+        let names = |task: &Value| {
+            task["tags"]
+                .as_array()
+                .map(|tags| {
+                    tags.iter()
+                        .filter_map(|tag| tag["name"].as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| "None".into())
+        };
+        fields.push(json!({"label":"Tags","before":shown(&json!(names(before))),"after":shown(&json!(names(&after)))}));
     }
     if tool == "tasks.deleteTag" || tool == "tasks.deleteList" {
         fields.push(json!({"label":"Name","before":shown(&before["name"]),"after":"Deleted"}));

@@ -4,7 +4,7 @@
   "name": "Tasks",
   "description": "Tasks component with package screens for lists, priority views, task editing, subtasks, tags, activity, focus, at-risk, overdue and summary reads. Full legacy parity remains unfinished.",
   "publisher": "Moss",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -124,7 +124,7 @@
   "features": [
     {
       "id": "tasks.package-data",
-      "description": "Tasks component with validated task, list, tag, activity, view preference and ordered breakdown routes. Other modules can change a suggested task's status (to open or archived) and add a follow-up task through two public calls, both limited to the caller's own tasks. Twenty-three tool handlers cover ten reads and thirteen task, list, tag, activity and breakdown actions. Full parity, automatic assistant actions and full background-job parity remain unfinished.",
+      "description": "Tasks component with validated task, list, tag, activity, view preference and ordered breakdown routes. Other modules can change a suggested task's status (to open or archived) and add a follow-up task through two public calls, both limited to the caller's own tasks. Twenty-three tool handlers cover ten reads and thirteen task, list, tag, activity and breakdown actions. Full parity and full background-job parity remain unfinished.",
       "errors": [
         {
           "code": "tasks-invalid-input",
@@ -168,7 +168,7 @@
     },
     {
       "id": "tasks.package-actions",
-      "description": "Moss can read tasks, lists, tags, activity and summaries, and create or change tasks, lists, tags and subtasks. Ordinary changes run without a card unless you have chosen to approve them. Deleting lists or tags asks first. Cards show the proposed values; completed changes show before and after values. Chat cannot clear nullable task fields yet."
+      "description": "Moss can read tasks, lists, tags, activity and summaries, and create or change tasks, lists, tags and subtasks. Ordinary changes run without a card unless you have chosen to approve them. Deleting lists or tags asks first. Cards show the proposed values; completed changes show before and after values. Chat cannot clear nullable task fields yet. Oversized approval cards are refused; completed text that exceeds the display limit is marked as truncated."
     },
     {
       "id": "tasks.package-queue",
@@ -601,7 +601,7 @@
           },
           "status": {
             "type": "string",
-            "enum": ["todo", "suggested", "done", "archived"],
+            "enum": ["todo", "done", "archived"],
             "description": "New status."
           }
         },
@@ -821,7 +821,7 @@
     },
     "tasks.deleteTag": {
       "description": "Delete an owned task tag.",
-      "risk": "write",
+      "risk": "destructive",
       "card": "prepareChatAction",
       "inputSchema": {
         "type": "object",
@@ -912,7 +912,7 @@
     },
     "tasks.deleteList": {
       "description": "Delete an owned task list, optionally moving its tasks to another owned list. The last list is kept; a nonempty list requires a destination.",
-      "risk": "write",
+      "risk": "destructive",
       "card": "prepareChatAction",
       "inputSchema": {
         "type": "object",

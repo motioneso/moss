@@ -183,3 +183,15 @@ fn explicit_nulls_stay_null() {
     assert!(sent["source"]["occurredAt"].is_null());
     assert_eq!(sent["objectText"], "tea");
 }
+
+#[test]
+fn long_unicode_remember_receipt_fits_the_drawer_without_losing_the_write() {
+    let host = Fake::new();
+    let text = "🌱".repeat(2500);
+    let result = tool(&host, "memory.remember", json!({"predicate":"prefers", "objectText":text,"source":source()})).unwrap();
+    assert_eq!(host.sent("memory.fact")["objectText"], text);
+    let field = result["data"]["changed"].as_array().unwrap().iter().find(|f| f["label"] == "Fact").unwrap();
+    let shown = field["after"].as_str().unwrap();
+    assert!(shown.len() <= 8192);
+    assert!(shown.ends_with("[truncated]"));
+}

@@ -10,7 +10,7 @@ use moss_module_host::{
     trust::{self, Publisher, RegistryIdentity},
 };
 use safety_core::db::{Database, RuntimeRole};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 use std::{
     fs,
@@ -325,10 +325,11 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
     }
     drop(installer);
 
-    private(
-        &root.join("modules.json"),
-        &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"notes_base":root.join("notes")}),
-    );
+    let mut modules = json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key});
+    if std::env::var_os("JS388_NOTES_PACKAGE").is_some() {
+        modules["notes_base"] = json!(root.join("notes"));
+    }
+    private(&root.join("modules.json"), &modules);
     let _server = start(true);
     if std::env::var_os("JS388_NOTES_PACKAGE").is_some() {
         let folder = root.join("notes").join(owner.to_string()).join("Journal");

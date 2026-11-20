@@ -60,8 +60,21 @@ fn shown(value: &Value) -> String {
     }
 }
 pub fn completed(p: &Value, before: &Value, after: &Value) -> Vec<Value> {
+    let receipt = |value: &Value| {
+        let text = shown(value);
+        if text.len() <= 8192 {
+            return text;
+        }
+        let end = text
+            .char_indices()
+            .map(|(i, _)| i)
+            .take_while(|i| *i <= 8100)
+            .last()
+            .unwrap_or(0);
+        format!("{}… [truncated]", &text[..end])
+    };
     let mut fields: Vec<Value> = FIELDS.iter().filter_map(|(key, label)| p.get(*key).map(|value| {
-        json!({"label":label,"before":shown(&before[*key]),"after":shown(after.get(*key).unwrap_or(value))})
+        json!({"label":label,"before":receipt(&before[*key]),"after":receipt(after.get(*key).unwrap_or(value))})
     })).collect();
     if fields.is_empty() {
         fields.push(json!({"label":"Updated at","before":shown(&before["updatedAt"]),"after":shown(&after["updatedAt"])}));

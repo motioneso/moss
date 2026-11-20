@@ -248,7 +248,7 @@
     },
     {
       "id": "notes.chat-tools",
-      "description": "Moss can search indexed notes and create, edit or permanently delete linked Markdown notes. Every change asks first with a card for the shown note version. Deletion shows a danger button and has no trash or undo. A changed note needs a new request."
+      "description": "Moss can search indexed notes and create, edit or permanently delete linked Markdown notes. Every change asks first with a card for the shown note version. Deletion shows a danger button and has no trash or undo. A changed note needs a new request. Oversized approval cards are refused; use your note editor for longer changes."
     }
   ],
   "screens": {

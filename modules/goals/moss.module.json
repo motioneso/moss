@@ -130,7 +130,7 @@
     },
     {
       "id": "goals.chat-tools",
-      "description": "Moss can read, create and change goals and add evidence. Ordinary changes run without a card unless you have chosen to approve them. Cards show the proposed values and completed changes show before and after values. Source labels and references are shown as proposed evidence values."
+      "description": "Moss can read, create and change goals and add evidence. Ordinary changes run without a card unless you have chosen to approve them. Cards show the proposed values and completed changes show before and after values. Source labels and references are shown as proposed evidence values. Oversized approval cards are refused; long completed values are marked as truncated."
     },
     {
       "id": "goals.today-data",
