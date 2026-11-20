@@ -330,3 +330,57 @@ fn every_batch_at_its_schema_limit_fits_a_complete_card() {
         }
     }
 }
+
+struct Strict<'a>(&'a Fake);
+impl moss_module_sdk::Host for Strict<'_> {
+    fn call(
+        &self,
+        port: &str,
+        operation: &str,
+        resource: &str,
+        parameters: Value,
+    ) -> moss_module_sdk::Result<Value> {
+        fn check(filter: &moss_module_sdk::query::Filter) -> moss_module_sdk::Result<()> {
+            use moss_module_sdk::{query::Filter, Error};
+            match filter {
+                Filter::And { filters } | Filter::Or { filters } => {
+                    if filters.is_empty() {
+                        return Err(Error::new("Empty filter group"));
+                    }
+                    for f in filters {
+                        check(f)?;
+                    }
+                }
+                Filter::Compare { value, .. } if value.is_null() => {
+                    return Err(Error::new("Use the typed null filter"))
+                }
+                _ => {}
+            }
+            Ok(())
+        }
+        if port == "db" && operation == "query" {
+            let query: Query = serde_json::from_value(parameters.clone())?;
+            check(&query.filter)?;
+        }
+        moss_module_sdk::Host::call(self.0, port, operation, resource, parameters)
+    }
+}
+
+#[test]
+fn budget_configure_tool_uses_host_valid_receipt_filters() {
+    let f = Fake::new();
+    let strict = Strict(&f);
+    let payload = json!({"tool":"finance.budget.configure", "parameters":{"isoCurrency":"USD", "acknowledgeLegacy":false}});
+    let result = moss_finance_module::handle(&strict, "tool", &payload.to_string()).unwrap();
+    let result: Value = serde_json::from_str(&result).unwrap();
+    assert_eq!(result["status"], "ok");
+    let receipt = result["changed"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["label"] == "Budget setup")
+        .unwrap();
+    assert_eq!(receipt["before"], "[]");
+    assert!(receipt["after"].as_str().unwrap().contains("USD"));
+    assert_eq!(f.rows("app.finance_budget_policy").len(), 1);
+}

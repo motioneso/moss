@@ -253,12 +253,26 @@ impl<H: Host + ?Sized> Host for Changes<'_, H> {
         }
         let filter = if matches!(query.kind, Kind::Insert) {
             // Owner is supplied by the host; the remaining primary key identifies the prior row.
-            let filters = table
-                .keys
-                .iter()
-                .map(|key| Filter::eq(key, query.values.get(*key).cloned().unwrap_or(Value::Null)))
-                .collect();
-            Filter::And { filters }
+            if table.keys.is_empty() {
+                // The owner's singleton has no guest-supplied key columns.
+                Filter::Owned
+            } else {
+                let filters = table
+                    .keys
+                    .iter()
+                    .map(|key| {
+                        let value = query
+                            .values
+                            .get(*key)
+                            .filter(|value| !value.is_null())
+                            .ok_or_else(|| {
+                                moss_module_sdk::Error::new("Finance receipt key unavailable")
+                            })?;
+                        Ok(Filter::eq(key, value.clone()))
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                Filter::And { filters }
+            }
         } else {
             query.filter.clone()
         };
