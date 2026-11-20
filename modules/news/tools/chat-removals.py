@@ -15,7 +15,7 @@ controls = [
      "modules/scratchpad/src/Cargo.toml", "tools", "chat_append_reports_the_actual_change_and_adapts_the_card"),
     ("news-pinned-manifest", "modules/news/moss.module.json",
      '"approvalVersion": true', '"approvalVersion": false',
-     "modules/news/src/Cargo.toml", "part7", "chat_card_adapter_uses_the_refresh_card_and_empty_input"),
+     "modules/news/host/Cargo.toml", "installed", "chat_refresh_uses_empty_schema_and_the_pinned_card_adapter"),
     ("scratchpad-card-tool", "modules/scratchpad/src/tools.rs",
      'if input["tool"] != "scratchpad.append" {', 'if false {',
      "modules/scratchpad/src/Cargo.toml", "tools", "chat_append_reports_the_actual_change_and_adapts_the_card"),
@@ -36,6 +36,8 @@ for name, source, before, after, manifest, suite, test in controls:
         raise SystemExit(f"Expected one protection: {name}")
     command = ["cargo", "+1.95.0", "test", "--offline", "--locked", "--manifest-path", manifest,
                "--test", suite, test, "--", "--exact"]
+    if "/host/" in manifest:
+        command += ["--ignored", "--nocapture", "--test-threads=1"]
     for state in ["protected", "removed", "restored"]:
         try:
             path.write_bytes(original.replace(before.encode(), after.encode()) if state == "removed" else original)

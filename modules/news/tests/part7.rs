@@ -274,10 +274,6 @@ fn story_feedback_reason_stays_out_of_jobs_and_notices() {
 
 #[test]
 fn chat_card_adapter_uses_the_refresh_card_and_empty_input() {
-    let manifest: Value = serde_json::from_str(include_str!("../moss.module.json")).unwrap();
-    let refresh = &manifest["tools"]["news.refreshNews"];
-    assert_eq!(refresh["approvalVersion"], true);
-    assert_eq!(refresh["inputSchema"]["properties"], json!({}));
     let f = Fake::new();
     let card = call_api(&f, "prepareChatAction", json!({"tool":"news.refreshNews","parameters":{}}));
     assert_eq!(card, json!({"title":"Refresh news","content":"user_authored","target":"Your news feed","fields":[],"version":"[]"}));
