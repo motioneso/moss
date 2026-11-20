@@ -32,6 +32,7 @@ pub mod run_job;
 pub mod runs;
 pub mod schedule;
 pub mod signals;
+pub mod source_signals;
 pub mod sources;
 pub mod status;
 pub mod text;
@@ -57,6 +58,8 @@ pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
         ("POST", "/definitions/:id/run") => runs::start(host, &request),
         ("GET", "/definitions/:id/runs") => runs::list(host, &request),
         ("GET", "/definitions/:id/runs/:run_id") => runs::get(host, &request),
+        ("GET", "/source-signals") => source_signals::get(host),
+        ("PATCH", "/source-signals") => source_signals::patch(host, &request),
         ("GET", "/today") => today::get(host),
         ("POST", "/today/rows/:task_id") => today::act(host, &request),
         ("POST", "/today/runs/:run_id/catch-up/:item_id/add") => catch_up::add(host, &request),

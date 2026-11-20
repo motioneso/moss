@@ -33,6 +33,8 @@ export function briefingsApi(client) {
         "GET",
         `/definitions/${id(definitionId)}/runs/${id(runId)}${jobId ? `?jobId=${id(jobId)}` : ""}`
       ),
+    sourceSignals: () => call("GET", "/source-signals"),
+    setSourceSignals: (body) => call("PATCH", "/source-signals", body),
     today: () => call("GET", "/today"),
     triage: (taskId, action) => call("POST", `/today/rows/${id(taskId)}`, { action }),
     catchUp: (runId, itemId, action, body = {}) =>
