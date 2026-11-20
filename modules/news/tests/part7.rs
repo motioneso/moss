@@ -271,3 +271,18 @@ fn story_feedback_reason_stays_out_of_jobs_and_notices() {
     assert!(f.jobs.borrow().iter().all(|(_, _, _, p)| !p.to_string().contains(MARK)));
     assert!(f.notices.borrow().iter().all(|(_, p)| !p.to_string().contains(MARK)));
 }
+
+#[test]
+fn chat_card_adapter_uses_the_refresh_card_and_empty_input() {
+    let f = Fake::new();
+    let card = call_api(&f, "prepareChatAction", json!({"tool":"news.refreshNews","parameters":{}}));
+    assert_eq!(card, json!({"title":"Refresh news","content":"user_authored","target":"Your news feed","fields":[],"version":"[]"}));
+    for input in [
+        json!({"tool":"news.refreshNews","parameters":{"source":"PLANTED"}}),
+        json!({"tool":"news.topHeadlinesToday","parameters":{}}),
+        json!({"tool":"news.refreshNews","parameters":null}),
+    ] {
+        assert!(call_api(&f, "prepareChatAction", input).is_null());
+    }
+    assert!(f.fetched().is_empty());
+}

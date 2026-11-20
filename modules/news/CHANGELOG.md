@@ -1,5 +1,9 @@
 # News package
 
+## 0.1.3
+
+- Five News tools are available in chat. Refresh asks with a pinned card before queuing the work.
+
 ## 0.1.2
 
 - The News screen and the Today News widget now ship in the package. The screen has the front-page carousel, the mosaic, the source rail, the in-brief list, topic filters when topics exist, and the story menu with a reason form. Pictures and site icons load through the signed-in shell. Links open in a new tab.

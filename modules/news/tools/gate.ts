@@ -37,4 +37,11 @@ const run = spawnSync(
     }
   }
 );
-process.exit(run.status ?? 1);
+if (run.status !== 0) process.exit(run.status ?? 1);
+if (process.env.JS386_CHAT_REMOVALS === "1") {
+  const controls = spawnSync("python3", ["modules/news/tools/chat-removals.py"], {
+    stdio: "inherit",
+    env: process.env
+  });
+  process.exit(controls.status ?? 1);
+}
