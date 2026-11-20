@@ -89,7 +89,10 @@ fn sending_tools_always_declare_destructive_and_require_a_card() {
         let value: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
         let module = value["id"].as_str().unwrap();
-        for (name, declaration) in value["tools"].as_object().unwrap().iter() {
+        let Some(tools) = value["tools"].as_object() else {
+            continue;
+        };
+        for (name, declaration) in tools {
             let verb = name.rsplit('.').next().unwrap().to_ascii_lowercase();
             let sends = ["send", "publish", "invite", "forward"]
                 .iter()
