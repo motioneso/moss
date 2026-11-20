@@ -45,6 +45,15 @@ if (process.env.MOSS_CHAT_NOTES_PROOF === "1") {
   ]);
   process.env.JS388_NOTES_PACKAGE = join(target, "notes.mosspkg");
 }
+if (process.env.MOSS_CHAT_NEWS_PROOF === "1") {
+  run("bash", ["modules/news/tools/build-component.sh", join(target, "news.wasm")]);
+  cargo("modules/news/host/Cargo.toml", ["build", "--bin", "news-package"]);
+  run(join(target, "debug/news-package"), [
+    join(target, "news.wasm"),
+    join(target, "news.mosspkg")
+  ]);
+  process.env.JS386_NEWS_PACKAGE = join(target, "news.mosspkg");
+}
 cargo("rust-spike/shell/Cargo.toml", ["build", "-p", "moss-shell", "--features", "live-proof"]);
 cargo("rust-spike/agents/Cargo.toml", ["build", "--bins"]);
 cargo("rust-spike/network/Cargo.toml", ["build", "--bin", "moss-network"]);

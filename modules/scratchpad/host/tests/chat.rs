@@ -269,10 +269,40 @@ fn tool_replies_match_the_real_legacy_handlers() {
             .unwrap()
             .remove("updatedAt");
         actual["data"].as_object_mut().unwrap().remove("updatedAt");
+        // The Rust chat drawer additionally consumes this after-the-fact acceptance row.
+        // Its exact content is asserted by the installed chat append test below.
+        actual["data"].as_object_mut().unwrap().remove("changed");
         assert_eq!(actual, expected, "tool parity mismatch");
     }
     println!(
         "PASS replay: {} actual legacy tool steps match the installed Wasm guest",
         steps.len()
     );
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn chat_append_uses_the_installed_schema_adapter_and_done_result() {
+    let w = World::new();
+    let access = w.f.access(w.f.a);
+    let tools = w.app.app.installer.chat_tools(&access).unwrap();
+    let append = tools.iter().find(|t| t.tool == "scratchpad.append").unwrap();
+    assert_eq!(append.rule, moss_module_host::chat_tools::ChatToolRule::RunUnlessPolicy);
+    let parameters = json!({"text":"Chat line"});
+    let card = w.app.app.installer.chat_tool_card(&access, "scratchpad", "scratchpad.append", &parameters).unwrap().unwrap();
+    assert_eq!(card.title, "Action request");
+    assert_eq!(card.fields[0].value, "Your scratchpad");
+    assert_eq!(card.fields[1].value, "Chat line");
+    let output = w.app.app.installer.run_chat_tool(&access, "scratchpad", "scratchpad.append", parameters).unwrap();
+    assert_eq!(output["data"]["changed"], json!([{"label":"Text appended","before":"","after":"Chat line"}]));
+    assert_eq!(w.route(w.f.a, "GET", "/note", Value::Null)["body"]["body"], "Chat line");
+    w.app.app.services.set_action_policy(&access, "scratchpad", &std::collections::BTreeMap::from([("scratchpad.append".into(), true)])).unwrap();
+    let tools = w.app.app.installer.chat_tools(&access).unwrap();
+    assert_eq!(tools.iter().find(|t| t.tool == "scratchpad.append").unwrap().rule, moss_module_host::chat_tools::ChatToolRule::Card { pinned: false });
+    let parameters = json!({"text":"記".repeat(2000)});
+    assert!(w.app.app.installer.run_chat_tool(&access, "scratchpad", "scratchpad.append", parameters.clone()).is_err());
+    let card = w.app.app.installer.chat_tool_card(&access, "scratchpad", "scratchpad.append", &parameters).unwrap().unwrap();
+    assert_eq!(card.fields[1..].iter().map(|f| f.value.as_str()).collect::<String>(), parameters["text"].as_str().unwrap());
+    w.app.app.installer.run_approved_chat_tool(&access, "scratchpad", "scratchpad.append", parameters, card.version.as_deref()).unwrap();
+    assert_eq!(w.route(w.f.a, "GET", "/note", Value::Null)["body"]["body"], format!("Chat line\n{}", "記".repeat(2000)));
 }
