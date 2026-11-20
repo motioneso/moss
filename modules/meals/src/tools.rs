@@ -1,7 +1,7 @@
 //! The four kitchen and household tools. The trusted host runs `handle` only after applying the
 //! person's approval policy; `run` is the signed-in transport that asks the host to do so.
 use crate::input::{self, coded, invalid, Checked, Fields, InputError};
-use crate::{arrange, cooking, favourites, swap, kitchen, log, plans, shopping, stock, undo, util};
+use crate::{arrange, cooking, favourites, kitchen, log, plans, shopping, stock, swap, undo, util};
 use moss_module_sdk::{Host, Response, Result};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -276,8 +276,12 @@ fn remove_member<H: Host + ?Sized>(host: &H, input: &Fields) -> Result<Checked<V
 }
 
 pub fn handle<H: Host + ?Sized>(host: &H, req: Request) -> Result<Value> {
-    Ok(match call(host, &req.tool, &req.parameters)? {
-        Ok(data) => json!({"data":data}),
+    let recorded = crate::chat_changes::Recorded::new(host);
+    Ok(match call(&recorded, &req.tool, &req.parameters)? {
+        Ok(mut data) => {
+            recorded.append(&mut data);
+            json!({"data":data})
+        }
         Err(error) => failure(error),
     })
 }

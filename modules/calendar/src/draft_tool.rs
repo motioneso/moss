@@ -162,6 +162,10 @@ pub fn save(host: &impl Host, input: &Value) -> Result<Value> {
     let saved = &saved["plan"];
     Ok(json!({"data":{
         "planId":saved["id"],"revision":saved["revision"],"addedCount":additions.len(),
+        "changed":[
+            {"label":"Day-plan blocks","before":plan["blocks"].to_string(),"after":saved["blocks"].to_string()},
+            {"label":"Evening intent","before":plan["eveningIntent"].to_string(),"after":saved["eveningIntent"].to_string()}
+        ],
         "message":format!("Draft saved for review as revision {}. New tasks are untimed proposals; accept them in the Plan tomorrow dialog and its review to schedule anything.",saved["revision"])
     }}))
 }

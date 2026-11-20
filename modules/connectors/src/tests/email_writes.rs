@@ -17,7 +17,9 @@ impl Host for Script {
         self.calls.borrow_mut().push((resource.to_string(), p));
         Ok(match (port, resource) {
             ("api", "email") => self.original.clone(),
-            ("kv", "connectors.context-setup") => json!({"accounts":self.accounts,"grants":self.grants}),
+            ("kv", "connectors.context-setup") => {
+                json!({"accounts":self.accounts,"grants":self.grants})
+            }
             ("kv", _) => self.wrote.clone(),
             _ => return Err(Error::new("unexpected call")),
         })
@@ -56,11 +58,20 @@ fn version(h: &Script) -> String {
 }
 
 fn written(h: &Script) -> (String, Value) {
-    h.calls.borrow().iter().rev().find(|c| c.0.starts_with("connectors.write-")).cloned().expect("a write")
+    h.calls
+        .borrow()
+        .iter()
+        .rev()
+        .find(|c| c.0.starts_with("connectors.write-"))
+        .cloned()
+        .expect("a write")
 }
 
 fn version_of(h: &Script, body: &str) -> String {
-    prepare(h, &input(body)).unwrap()["version"].as_str().unwrap().to_string()
+    prepare(h, &input(body)).unwrap()["version"]
+        .as_str()
+        .unwrap()
+        .to_string()
 }
 
 #[test]
@@ -108,7 +119,10 @@ fn a_subject_already_starting_with_re_is_kept() {
     m["subject"] = json!("RE: Lunch?");
     let h = google(m);
     run(&h, false, &input("Ok"), None).unwrap();
-    assert!(written(&h).1["mime"].as_str().unwrap().contains("Subject: RE: Lunch?\r\n"));
+    assert!(written(&h).1["mime"]
+        .as_str()
+        .unwrap()
+        .contains("Subject: RE: Lunch?\r\n"));
 }
 
 #[test]
@@ -140,7 +154,11 @@ fn a_send_without_the_approved_version_writes_nothing() {
         let out = run(&h, true, &input("Yes"), approved).unwrap();
         assert_eq!(out["data"]["ok"], false);
     }
-    assert!(h.calls.borrow().iter().all(|c| !c.0.starts_with("connectors.write-")));
+    assert!(h
+        .calls
+        .borrow()
+        .iter()
+        .all(|c| !c.0.starts_with("connectors.write-")));
 }
 
 #[test]
@@ -149,7 +167,11 @@ fn editing_the_body_after_approval_changes_the_version() {
     let v = version(&h);
     let out = run(&h, true, &input("Yes please, and bring snacks"), Some(&v)).unwrap();
     assert_eq!(out["data"]["ok"], false);
-    assert!(h.calls.borrow().iter().all(|c| !c.0.starts_with("connectors.write-")));
+    assert!(h
+        .calls
+        .borrow()
+        .iter()
+        .all(|c| !c.0.starts_with("connectors.write-")));
 }
 
 #[test]
@@ -168,17 +190,36 @@ fn the_model_cannot_choose_the_recipient() {
 #[test]
 fn failures_are_plain_and_never_retried() {
     let cases = [
-        (json!({"result":"auth_failed"}), "Couldn't refresh your Google access — reconnect in Settings."),
-        (json!({"result":"inactive"}), "Connect Google in Settings first."),
-        (json!({"result":"failed","error":{"status":500}}), "Couldn't send your reply right now — try again."),
+        (
+            json!({"result":"auth_failed"}),
+            "Couldn't refresh your Google access — reconnect in Settings.",
+        ),
+        (
+            json!({"result":"inactive"}),
+            "Connect Google in Settings first.",
+        ),
+        (
+            json!({"result":"failed","error":{"status":500}}),
+            "Couldn't send your reply right now — try again.",
+        ),
     ];
     for (wrote, message) in cases {
         let mut h = google(message_value());
         h.wrote = wrote;
         let v = version(&h);
         let out = run(&h, true, &input("Yes please"), Some(&v)).unwrap();
-        assert_eq!(out["data"], json!({"ok":false,"mode":"sent","message":message}));
-        assert_eq!(h.calls.borrow().iter().filter(|c| c.0.starts_with("connectors.write-")).count(), 1);
+        assert_eq!(
+            out["data"],
+            json!({"ok":false,"mode":"sent","message":message})
+        );
+        assert_eq!(
+            h.calls
+                .borrow()
+                .iter()
+                .filter(|c| c.0.starts_with("connectors.write-"))
+                .count(),
+            1
+        );
     }
 }
 
@@ -191,10 +232,14 @@ fn refusals_say_why() {
     let mut gone = google(Value::Null);
     gone.original = Value::Null;
     let out = run(&gone, false, &input("x"), None).unwrap();
-    assert_eq!(out["data"]["message"], "That message isn't in your inbox anymore — it may have been removed.");
+    assert_eq!(
+        out["data"]["message"],
+        "That message isn't in your inbox anymore — it may have been removed."
+    );
 
     let mut h = google(message());
-    h.accounts = json!([{"id":"g1","providerType":"google","status":"active","scopes":["email.read"]}]);
+    h.accounts =
+        json!([{"id":"g1","providerType":"google","status":"active","scopes":["email.read"]}]);
     assert_eq!(
         run(&h, false, &input("x"), None).unwrap()["data"]["message"],
         "Your Google connection doesn't have send permission yet — reconnect in Settings to grant it."
@@ -235,8 +280,15 @@ fn the_card_shows_what_will_be_sent_and_grants_nothing() {
     let card = prepare(&h, &input("Yes please")).unwrap();
     assert_eq!(card["content"], "user_authored");
     assert_eq!(card["target"], "ann@example.com");
-    assert_eq!(card["fields"][1], json!({"label":"Subject","value":"Re: Lunch?"}));
-    assert!(h.calls.borrow().iter().all(|c| !c.0.starts_with("connectors.write-")));
+    assert_eq!(
+        card["fields"][1],
+        json!({"label":"Subject","value":"Re: Lunch?"})
+    );
+    assert!(h
+        .calls
+        .borrow()
+        .iter()
+        .all(|c| !c.0.starts_with("connectors.write-")));
 }
 
 #[test]
@@ -246,5 +298,43 @@ fn non_ascii_subjects_are_encoded() {
     let h = google(m);
     run(&h, false, &input("Ok"), None).unwrap();
     let mime = written(&h).1["mime"].as_str().unwrap().to_string();
-    assert!(mime.contains("Subject: =?UTF-8?B?UmU6IENhZsOp?=\r\n"), "{mime}");
+    assert!(
+        mime.contains("Subject: =?UTF-8?B?UmU6IENhZsOp?=\r\n"),
+        "{mime}"
+    );
+}
+
+#[test]
+fn chat_adapter_keeps_saved_recipient_and_subject_in_fields() {
+    let h = google(message());
+    let body = "MODEL-VALUE-DO-NOT-LABEL";
+    let card = moss_connectors::chat::prepare(
+        &h,
+        &json!({"tool":"email.sendReply","parameters":input(body)}),
+    )
+    .unwrap();
+    assert!(card.get("title").is_none());
+    assert!(card.get("target").is_none());
+    assert_eq!(
+        card["fields"][0],
+        json!({"label":"Action","value":"Send reply"})
+    );
+    assert_eq!(
+        card["fields"][1],
+        json!({"label":"To","value":"Ann Lee <ann@example.com>"})
+    );
+    assert_eq!(
+        card["fields"][2],
+        json!({"label":"Subject","value":"Re: Lunch?"})
+    );
+    assert_eq!(card["fields"][3], json!({"label":"Reply","value":body}));
+    assert_eq!(
+        card["version"],
+        prepare(&h, &input(body)).unwrap()["version"]
+    );
+    assert!(h
+        .calls
+        .borrow()
+        .iter()
+        .all(|(name, _)| !name.starts_with("connectors.write-")));
 }

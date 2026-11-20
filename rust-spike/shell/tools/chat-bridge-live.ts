@@ -32,6 +32,15 @@ if (process.env.MOSS_CHAT_COMMITMENTS_PROOF === "1") {
   ]);
   process.env.JS383_COMMITMENTS_PACKAGE = join(target, "commitments.mosspkg");
 }
+if (process.env.MOSS_CHAT_PART4D_PROOF === "1") {
+  run("bash", ["rust-spike/shell/tools/chat-part4d-live.sh"]);
+  for (const module of ["tasks", "calendar", "email", "connectors", "meals", "web-research"]) {
+    process.env[`JS389_${module.replaceAll("-", "_").toUpperCase()}_PACKAGE`] = join(
+      target,
+      `${module}.mosspkg`
+    );
+  }
+}
 cargo("rust-spike/shell/Cargo.toml", ["build", "-p", "moss-shell", "--features", "live-proof"]);
 cargo("rust-spike/agents/Cargo.toml", ["build", "--bins"]);
 cargo("rust-spike/network/Cargo.toml", ["build", "--bin", "moss-network"]);

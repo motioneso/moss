@@ -1,5 +1,9 @@
 # Web Research package
 
+## 0.1.1
+
+- Offer validated chat tools and code-built approval fields. Normal writes show their returned result; deleting and sending ask first.
+
 ## 0.1.0
 
 - Web Research starts as a built-in package. Chat and other modules can search the web, and it says whether search is on and why not.

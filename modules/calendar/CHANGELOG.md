@@ -1,5 +1,9 @@
 # Calendar package
 
+## 0.31.1
+
+- Offer validated chat tools and code-built approval fields. Normal writes show their returned result; deleting and sending ask first.
+
 ## 0.31.0
 
 - Add a public `setSourceSwitches` call so Briefings can change the Include in briefings and Use for planning switches. It shares its write with the settings screen, accepts only those two boolean switches, and touches only the caller's own preference.

@@ -1,5 +1,9 @@
 # Meals package
 
+## 0.3.1
+
+- Offer validated chat tools and code-built approval fields. Normal writes show their returned result; deleting and sending ask first.
+
 ## 0.3.0
 
 - The Meals screen gains Household and Log areas, and a settings page opened from the Meals cog.
