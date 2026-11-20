@@ -65,3 +65,28 @@ moss-goals-today {
 [data-module-section] {
   min-width: 0;
 }
+
+.package-section-host {
+  position: static;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  overflow: visible;
+}
+.package-section-host.is-modal {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  max-height: none;
+}
+.package-section-host.is-modal .package-section-frame {
+  height: 100dvh !important;
+}
+.package-section-host::backdrop {
+  background: var(--scrim);
+}

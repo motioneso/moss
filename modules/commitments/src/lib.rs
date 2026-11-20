@@ -35,7 +35,10 @@ pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
 }
 
 /// `POST /extract` queues one extraction run. The body names the source and nothing else.
-fn extract_route<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> moss_module_sdk::Result<Response> {
+fn extract_route<H: Host + ?Sized>(
+    host: &H,
+    request: &RouteRequest,
+) -> moss_module_sdk::Result<Response> {
     match input::extract_source(&request.body) {
         Ok(kind) => {
             jobs::enqueue_extraction(host, &kind)?;
@@ -61,7 +64,11 @@ fn state_route<H: Host + ?Sized>(host: &H) -> moss_module_sdk::Result<Response> 
 }
 
 /// The same entry point runs natively in tests and inside the packaged component.
-pub fn handle<H: Host + ?Sized>(host: &H, kind: &str, payload: &str) -> moss_module_sdk::Result<String> {
+pub fn handle<H: Host + ?Sized>(
+    host: &H,
+    kind: &str,
+    payload: &str,
+) -> moss_module_sdk::Result<String> {
     match kind {
         "health" | "install" => Ok("{}".into()),
         "route" => {
@@ -76,10 +83,17 @@ pub fn handle<H: Host + ?Sized>(host: &H, kind: &str, payload: &str) -> moss_mod
             let data = match call["name"].as_str() {
                 Some("requestThreadJudgement") => jobs::request_thread_judgement(host, input)?,
                 Some("prepareCommitmentAction") => tools::prepare(host, input)?,
-                _ => return Err(moss_module_sdk::Error::new("Commitments operation not found")),
+                Some("prepareChatAction") => tools::prepare_chat(host, input)?,
+                _ => {
+                    return Err(moss_module_sdk::Error::new(
+                        "Commitments operation not found",
+                    ));
+                }
             };
             Ok(serde_json::to_string(&data)?)
         }
-        _ => Err(moss_module_sdk::Error::new("Unsupported Commitments invocation")),
+        _ => Err(moss_module_sdk::Error::new(
+            "Unsupported Commitments invocation",
+        )),
     }
 }

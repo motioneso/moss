@@ -288,3 +288,26 @@ pub async fn scratchpad_shortcut() -> Option<String> {
         .as_str()
         .map(str::to_owned)
 }
+
+/// Answer the stored card; the server returns the authoritative thread state.
+pub async fn decide_approval(
+    id: &str,
+    decision: moss_shell_contract::Decision,
+) -> Result<ChatThread, String> {
+    let response = Request::post(&format!("/api/chat/approvals/{id}"))
+        .json(&moss_shell_contract::DecideApproval { decision })
+        .map_err(|e| e.to_string())?
+        .send()
+        .await
+        .map_err(|_| "Could not resolve. Try again.".to_string())?;
+    if matches!(response.status(), 404 | 409) {
+        return Err("Approval no longer available. Ask Moss again.".into());
+    }
+    if !response.ok() {
+        return Err("Could not resolve. Try again.".into());
+    }
+    response
+        .json()
+        .await
+        .map_err(|_| "Could not read the approval result. Try again.".into())
+}

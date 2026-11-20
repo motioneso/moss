@@ -25,10 +25,13 @@ use moss_shell_contract::{
 use safety_core::access::AccessContext;
 use tower_http::services::ServeDir;
 
+mod chat_approvals;
+mod chat_completed;
+mod chat_tools;
 mod companion;
+mod companion_links;
 mod companion_owner;
 mod companion_startup;
-mod companion_links;
 mod desktop_notices;
 mod integrations;
 mod module_admin;
@@ -38,8 +41,6 @@ mod module_install;
 mod modules;
 mod proactive_feedback;
 mod runner_data;
-mod chat_approvals;
-mod chat_tools;
 
 type Data = Arc<dyn ShellData>;
 
@@ -389,7 +390,12 @@ fn main() {
             std::process::exit(1);
         }
     }
-    let served = runtime.block_on(tls::serve_in(listener, acceptor, app, args.instance.as_deref()));
+    let served = runtime.block_on(tls::serve_in(
+        listener,
+        acceptor,
+        app,
+        args.instance.as_deref(),
+    ));
     // The host owns blocking runtimes. Drop it outside the asynchronous executor.
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
     // The loader can sit in a database wait or a lock held by another installer. Give it a few

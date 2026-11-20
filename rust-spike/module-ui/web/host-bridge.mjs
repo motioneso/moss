@@ -9,6 +9,7 @@ export function connectModuleFrame(
     request,
     theme,
     navigate,
+    present,
     chat,
     open,
     save,
@@ -139,6 +140,12 @@ export function connectModuleFrame(
           )
             throw new Error();
           result = await save({ filename, contentType, text });
+          break;
+        }
+        case "present": {
+          if (typeof message.modal !== "boolean" || typeof present !== "function")
+            throw new Error();
+          result = await present(message.modal);
           break;
         }
         case "resize": {

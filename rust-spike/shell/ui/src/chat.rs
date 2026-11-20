@@ -63,6 +63,7 @@ pub fn ChatDrawer(
     Effect::new(move |_| {
         messages.track();
         waiting.track();
+        thread.track();
         request_animation_frame(move || {
             if let Some(body) = body_ref.get_untracked() {
                 body.set_scroll_top(body.scroll_height());
@@ -199,6 +200,15 @@ pub fn ChatDrawer(
                     <div class="chatd-thread">
                         <For each=move || messages.get() key=|m| m.id.clone() let:message>
                             <MessageRow message=message />
+                        </For>
+                        <For each=move || thread.get().map(|t| t.approvals).unwrap_or_default()
+                            key=|a| format!("{}:{:?}", a.id, a.state) let:card>
+                            <crate::chat_cards::ApprovalCard card=card on_thread=Callback::new(move |t: ChatThread| {
+                                messages.set(t.messages.clone()); waiting.set(t.running); thread.set(Some(t));
+                            }) />
+                        </For>
+                        <For each=move || thread.get().map(|t| t.completed).unwrap_or_default() key=|d| d.id.clone() let:done>
+                            <crate::chat_cards::DoneRow done=done />
                         </For>
                         <Show when=move || waiting.get()>
                             <div class="chatd-loading" aria-live="polite" aria-label=thinking_label.get_value()>

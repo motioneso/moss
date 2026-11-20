@@ -1,8 +1,8 @@
 use super::*;
 use crate::chat_tools::ChatTools;
 use moss_agents::gateway::ToolDef;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 struct Tools(AtomicUsize);
 fn read() -> ToolDef {
     let mut def = moss_agents::builtins::current_time();
@@ -100,7 +100,11 @@ mod socket {
             let mut lines = BufReader::new(socket.try_clone().unwrap()).lines();
             let _hello = lines.next().unwrap().unwrap();
             let chat = serde_json::from_str(&lines.next().unwrap().unwrap()).unwrap();
-            Self { lines, socket, chat }
+            Self {
+                lines,
+                socket,
+                chat,
+            }
         }
         fn send(&mut self, v: Value) {
             writeln!(self.socket, "{v}").unwrap();
@@ -113,7 +117,11 @@ mod socket {
         }
     }
 
-    fn wait_for(data: &RunnerShellData, what: &str, ok: impl Fn(&ChatThread) -> bool) -> ChatThread {
+    fn wait_for(
+        data: &RunnerShellData,
+        what: &str,
+        ok: impl Fn(&ChatThread) -> bool,
+    ) -> ChatThread {
         for _ in 0..200 {
             let t = data.chat_thread();
             if ok(&t) {
@@ -170,6 +178,173 @@ mod socket {
         assert_eq!(t.messages.len(), 2);
         assert_eq!(t.messages[0].text, "read it again");
         assert_eq!(t.messages[1].text, "read complete");
+        task.join().unwrap();
+    }
+
+    struct ActionTools(Arc<AtomicUsize>);
+    impl ChatTools for ActionTools {
+        fn list(&self) -> Result<Vec<ToolDef>, String> {
+            let mut def = read();
+            def.name = "commitments_accept".into();
+            def.module = Some("commitments".into());
+            def.facts.risk = moss_agents::approvals::Risk::Write;
+            def.facts.execution_auto = false;
+            Ok(vec![def])
+        }
+        fn run(&self, _: &str, _: &str, _: Value) -> Result<String, String> {
+            Err("Needs a new approval card".into())
+        }
+        fn card(
+            &self,
+            module: &str,
+            tool: &str,
+            _: &Value,
+        ) -> Result<moss_module_host::chat_tools::ApprovalCardRecord, String> {
+            assert_eq!((module, tool), ("commitments", "commitments.accept"));
+            Ok(moss_module_host::chat_tools::ApprovalCardRecord {
+                title: "Action request".into(),
+                target: "Commitments: Accept a suggestion".into(),
+                fields: vec![moss_module_host::chat_tools::CardField {
+                    label: "Item".into(),
+                    value: "Stored suggestion".into(),
+                }],
+                version: Some("displayed-v1".into()),
+                content: None,
+                danger: false,
+            })
+        }
+        fn run_approved(
+            &self,
+            module: &str,
+            tool: &str,
+            args: Value,
+            version: Option<&str>,
+        ) -> Result<String, String> {
+            assert_eq!((module, tool), ("commitments", "commitments.accept"));
+            assert_eq!(args, json!({"candidateId":"one"}));
+            assert_eq!(version, Some("displayed-v1"));
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Ok("accepted".into())
+        }
+    }
+
+    #[test]
+    fn module_card_approve_reject_and_exact_record_gate_round_trip() {
+        let rig = Rig::new();
+        let listener = rig.listener.try_clone().unwrap();
+        let task = std::thread::spawn(move || {
+            let mut runner = Runner::accept(&listener);
+            for (ask_id, allow) in [(11, true), (12, false)] {
+                runner.send(json!({"event":"approval","id":ask_id,"card":{"source":"moss","tool":"commitments_accept","title":"PLANTED MODEL TITLE","input":{"candidateId":"one"}}}));
+                assert_eq!(
+                    runner.next().unwrap(),
+                    json!({"op":"answer","id":ask_id,"allow":allow})
+                );
+                if allow {
+                    // A changed parameter and a forged tool cannot consume the approval.
+                    for (n, name, id, ok) in [
+                        (1, "commitments_accept", "two", false),
+                        (2, "other_accept", "one", false),
+                        (3, "commitments_accept", "one", true),
+                        (4, "commitments_accept", "one", false),
+                    ] {
+                        runner.send(json!({"event":"tool_call","call_id":format!("{}:{n}", runner.chat["turn_id"].as_str().unwrap()),"name":name,"arguments":{"candidateId":id}}));
+                        assert_eq!(runner.next().unwrap()["ok"], ok);
+                    }
+                }
+            }
+            runner.send(json!({"event":"done","text":"finished"}));
+        });
+        let calls = Arc::new(AtomicUsize::new(0));
+        let data = RunnerShellData::with_limits(
+            rig.root.clone(),
+            ME.into(),
+            Arc::new(ActionTools(calls.clone())),
+            Limits::default(),
+        );
+        data.send_message(&SendMessage {
+            text: "go".into(),
+            ..Default::default()
+        })
+        .unwrap();
+        for (n, decision) in [(1, Decision::Approve), (2, Decision::Reject)] {
+            let t = wait_for(&data, "module card", |t| t.approvals.len() == n);
+            let card = &t.approvals[n - 1];
+            assert_eq!(card.title, "Action request");
+            assert_eq!(card.fields[0].value, "Stored suggestion");
+            assert!(!serde_json::to_string(&t).unwrap().contains("candidateId"));
+            data.decide_approval(ME, &card.id, decision).unwrap();
+        }
+        let t = wait_for(&data, "turn end", |t| !t.running);
+        assert_eq!(t.approvals[0].state, ApprovalState::Used);
+        assert_eq!(t.approvals[1].state, ApprovalState::Declined);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        task.join().unwrap();
+    }
+
+    #[test]
+    fn an_unoffered_action_is_refused_even_when_its_card_builder_would_succeed() {
+        let rig = Rig::new();
+        let tools = Arc::new(ActionTools(Arc::new(AtomicUsize::new(0))));
+        let mut offered = tools.list().unwrap();
+        offered[0].name = "commitments_reject".into();
+        let turn = ToolTurn::new(offered, "turn".into()).unwrap();
+        let data = RunnerShellData::with_limits(rig.root.clone(), ME.into(), tools, Limits::default());
+        assert!(!data.inner.raise_approval(&json!({"id":4,"card":{"source":"moss","tool":"commitments_accept","input":{"candidateId":"one"}}}), &turn));
+        assert!(data.chat_thread().approvals.is_empty());
+    }
+
+    struct FailedCardTools;
+    impl ChatTools for FailedCardTools {
+        fn list(&self) -> Result<Vec<ToolDef>, String> {
+            ActionTools(Arc::new(AtomicUsize::new(0))).list()
+        }
+        fn run(&self, _: &str, _: &str, _: Value) -> Result<String, String> {
+            panic!("A failed card must never dispatch")
+        }
+    }
+    #[test]
+    fn an_offered_action_with_a_failed_card_builder_is_refused() {
+        let rig = Rig::new();
+        let tools = Arc::new(FailedCardTools);
+        let turn = ToolTurn::new(tools.list().unwrap(), "turn".into()).unwrap();
+        let data = RunnerShellData::with_limits(rig.root.clone(), ME.into(), tools, Limits::default());
+        assert!(!data.inner.raise_approval(&json!({"id":4,"card":{"source":"moss","tool":"commitments_accept","input":{"candidateId":"one"}}}), &turn));
+        assert!(data.chat_thread().approvals.is_empty());
+    }
+
+    struct ChangedTools;
+    impl ChatTools for ChangedTools {
+        fn list(&self) -> Result<Vec<ToolDef>, String> {
+            let mut write = read();
+            write.name = "scratchpad_append".into();
+            write.facts.risk = moss_agents::approvals::Risk::Write;
+            write.facts.execution_auto = true;
+            Ok(vec![read(), write])
+        }
+        fn run(&self, _: &str, _: &str, args: Value) -> Result<String, String> {
+            if args["fail"] == true { return Err("Write failed".into()); }
+            Ok(json!({"data":{"changed":[{"label":"Note","before":"Old","after":"New"}]}}).to_string())
+        }
+    }
+    #[test]
+    fn only_a_successful_plain_write_adds_a_done_row_from_the_wrapped_reply() {
+        let rig = Rig::new();
+        let listener = rig.listener.try_clone().unwrap();
+        let task = std::thread::spawn(move || {
+            let mut runner = Runner::accept(&listener);
+            for (n, name, fail) in [(1, "scratchpad_read", false), (2, "scratchpad_append", true), (3, "scratchpad_append", false)] {
+                runner.send(json!({"event":"tool_call","call_id":format!("{}:{n}",runner.chat["turn_id"].as_str().unwrap()),"name":name,"arguments":{"fail":fail}}));
+                assert_eq!(runner.next().unwrap()["ok"], !fail);
+            }
+            runner.send(json!({"event":"done","text":"finished"}));
+        });
+        let data = RunnerShellData::with_limits(rig.root.clone(), ME.into(), Arc::new(ChangedTools), Limits::default());
+        data.send_message(&SendMessage{text:"go".into(),..Default::default()}).unwrap();
+        let t = wait_for(&data, "write finished", |t| !t.running);
+        assert_eq!(t.completed.len(), 1);
+        assert_eq!(t.completed[0].changed, vec![moss_shell_contract::ChangedField{label:"Note".into(),before:"Old".into(),after:"New".into()}]);
+        assert!(t.approvals.is_empty());
         task.join().unwrap();
     }
 
@@ -316,6 +491,10 @@ mod socket {
                 runner_id: 5,
                 title: "t".into(),
                 fields: vec![],
+                target: String::new(),
+                content: None,
+                danger: false,
+                action: None,
                 expires: Instant::now() - Duration::from_secs(1),
                 state: moss_shell_contract::ApprovalState::Pending,
             });
@@ -364,7 +543,7 @@ mod socket {
     }
 
     #[test]
-    fn a_module_tool_card_is_refused_until_part_3b() {
+    fn a_module_tool_card_with_no_offered_tool_is_refused() {
         let rig = Rig::new();
         let listener = rig.listener.try_clone().unwrap();
         let task = std::thread::spawn(move || {

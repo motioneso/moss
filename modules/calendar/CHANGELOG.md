@@ -1,5 +1,11 @@
 # Calendar package
 
+## 0.32.0
+
+- Replace Today's sample timeline with Calendar's saved plan and visible calendar events, including Proposed, Flexible and unavailable task labels.
+- Open the existing day-plan review layout with a phone schedule disclosure. Time, placement and save controls remain disabled until review writes are implemented.
+- Require Tasks 0.1.6 so the existing task-reference API supplies the title and summary fields the saved-plan reader expects.
+
 ## 0.31.0
 
 - Add a public `setSourceSwitches` call so Briefings can change the Include in briefings and Use for planning switches. It shares its write with the settings screen, accepts only those two boolean switches, and touches only the caller's own preference.

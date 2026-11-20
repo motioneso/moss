@@ -28,6 +28,7 @@ struct Fixture {
     db: Database,
     fake: GoogleStandIn,
     ports: Arc<ConnectorsPorts>,
+    host: Host,
     a: Uuid,
     b: Uuid,
 }
@@ -66,7 +67,10 @@ impl Fixture {
                 .unwrap()
                 .with_google(config(&fake.token_url())),
         );
-        Self { rt, root, db, fake, ports, a, b }
+        // Reuse compiled Wasm instead of compiling each request inside the limiter's minute.
+        // Host::call still creates a fresh guest instance and request scope each time.
+        let host = Host::new(Limits::default()).unwrap();
+        Self { rt, root, db, fake, ports, host, a, b }
     }
 
     /// One request to the real package as `actor`.
@@ -77,8 +81,7 @@ impl Fixture {
             &std::fs::read(std::env::var("CONNECTORS_CORE_WASM").expect("CONNECTORS_CORE_WASM")).unwrap(),
         )
         .unwrap();
-        let out = Host::new(Limits::default())
-            .unwrap()
+        let out = self.host
             .call(
                 &wasm,
                 Arc::new(package::manifest().unwrap()),

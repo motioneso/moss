@@ -33,9 +33,16 @@ jobs:
       docs_only: ${{ steps.scope.outputs.docs_only }}
       rust_only: ${{ steps.scope.outputs.rust_only }}
       rust_modules: ${{ steps.scope.outputs.rust_modules }}
+      rust_entries: ${{ steps.scope.outputs.rust_entries }}
       host_changed: ${{ steps.scope.outputs.host_changed }}
 
     steps:
+      - name: Check out gate matrix definition
+        uses: actions/checkout@v5
+
+      - name: Validate gate matrix
+        run: node --test tests/scripts/rust-gate-matrix.test.mjs
+
       - name: Classify changed paths
         id: scope
         env:
@@ -55,13 +62,13 @@ jobs:
           echo "host_changed=false" >> "$GITHUB_OUTPUT"
           # Modules the shadow rust-modules job gates: every module with a package gate.
           ALL_MODULES='["backtrack","briefings","calendar","commitments","connectors","email","finance","goals","meals","meetings","memory","news","notes","people","scratchpad","sports","tasks","weather","web-research","wellness"]'
+          emit_modules() {
+            echo "rust_modules=$1" >> "$GITHUB_OUTPUT"
+            echo "rust_entries=$(node scripts/rust-gate-matrix.mjs "$1" "$EVENT_NAME")" >> "$GITHUB_OUTPUT"
+          }
           # Unknown file list on a pull request or manual run gates every covered module.
-          # A push gates none, so the shadow job never spends minutes on main.
-          if [ "$EVENT_NAME" = "push" ]; then
-            echo "rust_modules=[]" >> "$GITHUB_OUTPUT"
-          else
-            echo "rust_modules=$ALL_MODULES" >> "$GITHUB_OUTPUT"
-          fi
+          # Pushes retain only the measured Memory/News/Connectors kill tier in the helper.
+          emit_modules "$ALL_MODULES"
           # Push events have no pull request file list, so look up the PR that produced the
           # commit. That PR only covers the whole push when the push is exactly one commit
           # (squash merges), so a longer range, a failed compare or an empty lookup runs the
@@ -96,7 +103,7 @@ jobs:
           # Touched modules: a path under the module or its SQL, or a change to anything the
           # gates build against (all of rust-spike, crates the host pulls in from modules, the
           # test harness packages) or this workflow. Those run every covered module.
-          host_re='^(rust-spike/|modules/email/host/|modules/people/src/|packages/db/|package\.json$|pnpm-lock\.yaml$|infra/postgres/migrations/|scripts/run-gate\.sh$|\.github/workflows/ci\.yml$)'
+          host_re='^(rust-spike/|modules/email/host/|modules/people/src/|packages/db/|package\.json$|pnpm-lock\.yaml$|infra/postgres/migrations/|scripts/(run-gate\.sh|rust-gate-matrix\.mjs)$|\.github/workflows/ci\.yml$)'
           host_changed=false
           if grep -qE "$host_re" files.txt; then host_changed=true; fi
           touched=""
@@ -106,9 +113,8 @@ jobs:
             fi
           done
           rust_modules=$(printf '%s\n' $touched | jq -R . | jq -sc 'map(select(length>0))')
-          if [ "$EVENT_NAME" = "push" ]; then rust_modules='[]'; fi
           echo "host_changed=$host_changed" >> "$GITHUB_OUTPUT"
-          echo "rust_modules=$rust_modules" >> "$GITHUB_OUTPUT"
+          emit_modules "$rust_modules"
           echo "Rust module gates: $rust_modules (host changed: $host_changed)"
           # rust_only == every changed path is docs or Rust. Rust means everything under
           # rust-spike/, every path inside a module package under modules/ (each one there is
@@ -335,18 +341,19 @@ jobs:
 
   # Shadow job (rollout step 3 of docs/superpowers/plans/2026-11-18-rust-module-gates-in-ci.md).
   # Runs every module's package gates through scripts/run-gate.sh, one matrix job per touched
-  # module (all of them on a shared-host change). Not listed in ci-gate's needs, so a red run
+  # module (per test file for Memory, News and Connectors). All run on a shared-host change.
+  # Not listed in ci-gate's needs, so a red run
   # here never blocks a merge.
   rust-modules:
-    name: Rust gate (${{ matrix.module }})
+    name: Rust gate (${{ matrix.module }} / ${{ matrix.suite }})
     runs-on: ubuntu-latest
     timeout-minutes: 60
     needs: changes
-    if: needs.changes.outputs.rust_modules != '[]'
+    if: needs.changes.outputs.rust_entries != '[]'
     strategy:
       fail-fast: false
       matrix:
-        module: ${{ fromJSON(needs.changes.outputs.rust_modules) }}
+        include: ${{ fromJSON(needs.changes.outputs.rust_entries) }}
     env:
       CARGO_HOME: ${{ github.workspace }}/.rust-gate/cargo
       RUSTUP_HOME: ${{ github.workspace }}/.rust-gate/rustup
@@ -409,31 +416,34 @@ jobs:
       - name: Run the module gates
         env:
           MODULE: ${{ matrix.module }}
+          SUITE: ${{ matrix.suite }}
+          GATES: ${{ matrix.gates }}
+          MEMORY_CONTROLS: ${{ matrix.controls || 'all' }}
+          CONNECTORS_CONTROLS: ${{ matrix.controls || 'all' }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
           set -uo pipefail
           # Per-PR tier (docs/rust-gate-controls.md): skip Connectors' long speed test on PRs.
-          # Suite filters stay unset, so each gate keeps its full database suites.
           if [ "$EVENT_NAME" = "pull_request" ]; then export CONNECTORS_SKIP_SYNC_SPEED=1; fi
           case "$MODULE" in
-            backtrack|briefings|commitments|connectors|email|goals|meals|scratchpad|sports|tasks|weather|web-research|wellness|calendar|notes)
-              gates="test:rust-$MODULE" ;;
-            finance) gates="test:rust-finance test:rust-finance-ui-unit" ;;
-            memory) gates="test:rust-memory test:rust-memory-index test:rust-memory-oracle" ;;
-            meetings) gates="test:rust-meetings test:rust-meetings-oracle test:rust-recording-oracle" ;;
-            news) gates="test:rust-news test:rust-news-reader" ;;
-            people) gates="test:rust-people-large"; export JS177_PEOPLE_FUEL=200000000 ;;
-            *) echo "Unknown module $MODULE"; exit 1 ;;
+            memory) if [ "$GATES" = test:rust-memory ]; then export MEMORY_SUITE="$SUITE"; fi ;;
+            news) if [ "$GATES" = test:rust-news ]; then export NEWS_SUITE="$SUITE"; fi ;;
+            connectors) export CONNECTORS_SUITE="$SUITE" ;;
+            people) export JS177_PEOPLE_FUEL=200000000 ;;
           esac
           failed=0
-          for gate in $gates; do
+          for gate in $GATES; do
             start=$(date +%s)
-            scripts/run-gate.sh start --gate "$gate" | tee "$RUNNER_TEMP/start.out"
+            start_rc=0
+            scripts/run-gate.sh start --gate "$gate" > "$RUNNER_TEMP/start.out" || start_rc=$?
+            cat "$RUNNER_TEMP/start.out"
             log=$(sed -n 's/^LOG=//p' "$RUNNER_TEMP/start.out" | head -1)
+            if [ -n "$log" ]; then echo "$log" >> "$RUNNER_TEMP/rust-gate-logs"; fi
+            if [ "$start_rc" -ne 0 ]; then echo "Gate launch failed: $gate ($start_rc)"; failed=1; continue; fi
             if [ -z "$log" ]; then echo "run-gate start gave no log path for $gate"; failed=1; continue; fi
             rc=0
             scripts/run-gate.sh wait --follow --log "$log" || rc=$?
-            echo "GATE_RESULT gate=$gate exit=$rc seconds=$(( $(date +%s) - start ))"
+            echo "GATE_RESULT gate=$gate module=$MODULE entry=$SUITE exit=$rc seconds=$(( $(date +%s) - start ))"
             if [ "$rc" -ne 0 ]; then
               failed=1
               echo "::group::Last lines of the $gate log"
@@ -442,6 +452,19 @@ jobs:
             fi
           done
           exit $failed
+
+      # wait --follow only prints the final verdict. Retain bounded compile/test timings even
+      # for green gates and cancellations, so the next split is based on measured test files.
+      - name: Compile and test file timings
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/rust-gate-logs" ]; then
+            while IFS= read -r log; do
+              echo "::group::Compile and test timings: $(basename "$log")"
+              grep -E '^ *Finished |^ *Running .*tests/|^test result:' "$log" | tail -n 180 || true
+              echo "::endgroup::"
+            done < "$RUNNER_TEMP/rust-gate-logs"
+          fi
 
       - name: Disk after
         if: always()
