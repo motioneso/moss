@@ -132,3 +132,18 @@ fn the_screen_ships_with_every_file_it_loads() {
         }
     }
 }
+
+#[test]
+fn chat_schemas_are_installable_and_match_the_declared_tools() {
+    let manifest = moss_finance_host::package::manifest().unwrap();
+    manifest.validate(&"0.1.0".parse().unwrap()).unwrap();
+    assert_eq!(manifest.tools.len(), 57);
+    for (name, tool) in &manifest.tools {
+        assert!(tool.input_schema.is_some(), "{name}");
+        assert!(tool.description.split_whitespace().count() < 60, "{name}");
+        if tool.risk != "read" {
+            assert_eq!(tool.card.as_deref(), Some("prepareChatAction"), "{name}");
+            assert!(tool.input_schema.as_ref().unwrap()["examples"].as_array().is_some_and(|v| !v.is_empty()), "{name}");
+        }
+    }
+}
