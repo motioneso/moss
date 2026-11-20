@@ -236,6 +236,16 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
     if std::env::var_os("JS386_NEWS_PACKAGE").is_some() {
         packages.push(("JS386_NEWS_PACKAGE", "news"));
     }
+    for (variable, id) in [
+        ("JS387_SPORTS_PACKAGE", "sports"),
+        ("JS387_WELLNESS_PACKAGE", "wellness"),
+        ("JS387_WEATHER_PACKAGE", "weather"),
+        ("JS387_BRIEFINGS_PACKAGE", "briefings"),
+    ] {
+        if std::env::var_os(variable).is_some() {
+            packages.push((variable, id));
+        }
+    }
     let artifacts: Vec<Artifact> = packages
         .iter()
         .map(|(variable, id)| {

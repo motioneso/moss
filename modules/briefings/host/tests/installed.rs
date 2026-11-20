@@ -797,3 +797,6 @@ fn dismissed_items_stay_hidden_for_their_owner_only_and_undo_brings_them_back() 
     assert_eq!(read(a).as_array().unwrap().len(), 1);
     println!("GREEN: Undo brings the item, the entry and the run back");
 }
+
+#[path = "chat.rs"]
+mod chat;

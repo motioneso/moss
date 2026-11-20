@@ -3,7 +3,7 @@
   "id": "sports",
   "name": "Sports",
   "publisher": "Moss",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Keeps each person's followed leagues and teams, private to the owner. A whole league can be followed once, and following it again returns the saved follow. A followed team is tied to the provider's permanent team number. The standings picker remembers the leagues a person chose and the standings view they last opened, under the same saved settings as before. Account export and deletion cover all six Sports tables. The package reads ESPN's public data for the league catalog, each league's team list and club search, and keeps a shared copy so one person's lookup serves everyone. The copy holds only public sports data, never a person's follows or searches. Following a team checks the live team list and is refused, with the same fail-closed messages the old app gave, when ESPN is down. Scoreboard, standings and news reading are built but not yet offered as routes. A person can add news sources of their own, up to ten, each a website with a news feed or a subreddit, and choose which sports and followed teams each one covers, up to twenty choices in all. Adding a source shows a preview first, which names the reason when a site cannot be used, and a source saves only after the person confirms it. Two subreddits that differ only by letter case are one source. The package reads those public sites itself, and keeps unconfirmed previews for ten minutes under the person's own saved settings. A site with no feed can get a recipe that the person's chosen AI model proposes. The recipe is a strict description of one public address and where the headlines sit in it, it may only name sites the person already confirmed, and it is saved only after a real replay finds headlines. Sources are read again on a schedule without a browser or article text, each source shows whether it is healthy, drifted or missing its recipe, and a person can retry a source or rebuild its recipe after confirming a preview. Nine chat tools list, preview, confirm, retry, rebuild and remove sources. Every change asks the person first, showing a card built from the saved source and the stored preview, and removing a source asks before it deletes. When a site shows no headlines until its scripts run, adding or rebuilding a source from the screen can open the page in a sandboxed browser, and the AI model proposes the recipe from what the browser saw. A machine that cannot run the browser safely, or a chat tool, keeps the plain reading. Each refresh also looks for a photo for the newest stories of every source, from the feed, then from a saved page rule, then from the page's share picture. Pictures are re-encoded as plain JPEG with no hidden camera or location data and kept in the person's own private folder for fourteen days after they were last shown. A person can stop photos for a source, which forgets its page rule and clears its saved pictures (feed and share pictures come back at the next refresh), and deleting the source deletes them for good. The followed-team chat tools and the story preferences list are not part of this package yet. The Sports screen, the Sports desk page and the Sports settings page are.",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 250000000,
@@ -12,7 +12,9 @@
   "capabilities": [
     {
       "port": "db",
-      "operations": ["query"],
+      "operations": [
+        "query"
+      ],
       "resources": [
         "app.sports_custom_sources",
         "app.sports_espn_source_assignments",
@@ -24,8 +26,14 @@
     },
     {
       "port": "context",
-      "operations": ["read", "uuid"],
-      "resources": ["call", "new"]
+      "operations": [
+        "read",
+        "uuid"
+      ],
+      "resources": [
+        "call",
+        "new"
+      ]
     },
     {
       "port": "kv",
@@ -57,12 +65,19 @@
     },
     {
       "port": "ai",
-      "operations": ["generate"],
-      "resources": ["structured"]
+      "operations": [
+        "generate"
+      ],
+      "resources": [
+        "structured"
+      ]
     },
     {
       "port": "tools",
-      "operations": ["offer", "run"],
+      "operations": [
+        "offer",
+        "run"
+      ],
       "resources": [
         "sports.listSources",
         "sports.previewSource",
@@ -82,13 +97,23 @@
     },
     {
       "port": "fetch",
-      "operations": ["get"],
-      "resources": ["content.core.api.espn.com", "site.api.espn.com", "public-web"]
+      "operations": [
+        "get"
+      ],
+      "resources": [
+        "content.core.api.espn.com",
+        "site.api.espn.com",
+        "public-web"
+      ]
     },
     {
       "port": "browser",
-      "operations": ["render"],
-      "resources": ["public-web"]
+      "operations": [
+        "render"
+      ],
+      "resources": [
+        "public-web"
+      ]
     }
   ],
   "installWideKv": [
@@ -281,9 +306,12 @@
   "provides": {
     "collectSportsSourcesExportSection": "1.0.0",
     "prepareSportsSourceAction": "1.0.0",
-    "sportsFollowedFactsToday": "1.0.0"
+    "sportsFollowedFactsToday": "1.0.0",
+    "prepareSportsChatAction": "1.0.0"
   },
-  "icons": ["icons/sports.svg"],
+  "icons": [
+    "icons/sports.svg"
+  ],
   "accounts": {
     "supportsUserDisable": true,
     "defaultEnabled": true
@@ -486,70 +514,95 @@
     {
       "id": "sports.briefing_facts",
       "description": "Sports gives the daily briefing a short list of facts for the person's followed teams and leagues in their own time zone, covering games live now, still to play today and finished. A person who follows nothing sees the default leagues. When the scoreboards cannot be read, the briefing says so and shows no facts. A heartbeat tool lists the next followed fixtures from stored scoreboards only and reports whether they are fresh, stale or unknown."
+    },
+    {
+      "id": "sports.chat-tools",
+      "description": "Moss can read sports facts and sources, follow teams and preview source changes. Adding, changing, retrying or removing a source asks against the saved card version. Follow changes show Done; they ask first when the person enables asking."
     }
   ],
   "optionalRequires": {},
   "tools": {
     "sports.listSources": {
       "description": "List the active actor\u2019s bounded public sports sources, assignments, health, timestamps, and safe recovery status. Never returns recipes or opaque parameters.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {"type":"object","required":["competitionKey"],"properties":{"competitionKey":{"type":"string","maxLength":100,"description":"Catalog competition key, e.g. \"nfl\" or \"eng.1\""},"teamKey":{"type":"string","maxLength":100,"description":"Catalog team key within the competition; omit to unfollow the whole competition"}},"examples":[{"competitionKey":"nfl"}]}
     },
     "sports.previewSource": {
       "description": "Preview and safely verify one public unauthenticated sports publisher and optional followed targets before confirmation. Returned headline samples are external publisher content.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {"type":"object","required":["url"],"properties":{"url":{"type":"string","maxLength":2048,"description":"Public publisher URL to preview."},"assignments":{"type":"array","maxItems":20,"description":"Complete coverage choices; omitted when previewing publisher discovery only.","items":{"type":"object","required":["target"],"properties":{"target":{"type":"object","description":"One sport or followed team; use sportKey for kind sport, or followId for kind follow.","properties":{"kind":{"type":"string","enum":["sport","follow"],"description":"Coverage kind: sport or follow."},"sportKey":{"type":"string","enum":["football","hockey","soccer","baseball","basketball"],"description":"Sport key from the Sports catalog."},"followId":{"type":"string","maxLength":36,"description":"Saved follow id."}},"required":["kind"]},"exactTargetUrl":{"type":"string","maxLength":2048,"description":"Optional exact public HTTPS URL for this coverage target."}}}}}}
     },
     "sports.previewSourceAssignments": {
       "description": "Preview an exact replacement assignment set for one sports source. Added target samples are external publisher content.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {"type":"object","required":["sourceId","assignments"],"properties":{"sourceId":{"type":"string","description":"Saved source id."},"assignments":{"type":"array","maxItems":20,"description":"Complete coverage choices; omitted when previewing publisher discovery only.","items":{"type":"object","required":["target"],"properties":{"target":{"type":"object","description":"One sport or followed team; use sportKey for kind sport, or followId for kind follow.","properties":{"kind":{"type":"string","enum":["sport","follow"],"description":"Coverage kind: sport or follow."},"sportKey":{"type":"string","enum":["football","hockey","soccer","baseball","basketball"],"description":"Sport key from the Sports catalog."},"followId":{"type":"string","maxLength":36,"description":"Saved follow id."}},"required":["kind"]},"exactTargetUrl":{"type":"string","maxLength":2048,"description":"Optional exact public HTTPS URL for this coverage target."}}}}}}
     },
     "sports.rebuildSourceRecipe": {
       "description": "Preview a bounded safe rebuild of one saved sports source recipe without changing it. Samples are external publisher content.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {"type":"object","required":["sourceId"],"properties":{"sourceId":{"type":"string","description":"Saved source id."}}}
     },
     "sports.confirmSource": {
       "description": "Confirm a sports source from its actor-bound preview using the exact displayed publisher, hosts, targets, and authorization acknowledgement.",
       "risk": "write",
-      "approvalVersion": true
+      "approvalVersion": true,
+      "inputSchema": {"type":"object","required":["confirmationId","authorizationAcknowledgement","canonicalDomain","confirmedFetchHosts","targets"],"properties":{"confirmationId":{"type":"string","maxLength":256,"description":"Confirmation id returned by the preview."},"authorizationAcknowledgement":{"type":"string","maxLength":300,"description":"Copy the authorization acknowledgement returned by the preview."},"canonicalDomain":{"type":"string","maxLength":253,"description":"Copy the verified publisher domain from the preview."},"confirmedFetchHosts":{"type":"array","maxItems":6,"description":"Copy the complete allowed host list from the preview.","items":{"type":"string","maxLength":253}},"targets":{"type":"array","maxItems":20,"description":"Copy every preview target and target URL in the same order.","items":{"type":"object","required":["target","targetUrl"],"properties":{"target":{"type":"object","description":"One sport or followed team; use sportKey for kind sport, or followId for kind follow.","properties":{"kind":{"type":"string","enum":["sport","follow"],"description":"Coverage kind: sport or follow."},"sportKey":{"type":"string","enum":["football","hockey","soccer","baseball","basketball"],"description":"Sport key from the Sports catalog."},"followId":{"type":"string","maxLength":36,"description":"Saved follow id."}},"required":["kind"]},"targetUrl":{"type":"string","maxLength":2048,"description":"Exact HTTPS URL shown for this target."}}}}},"examples":[{"confirmationId":"preview-id","authorizationAcknowledgement":"I confirm I am authorized to fetch this publisher's public, unauthenticated sports news.","canonicalDomain":"news.example.com","confirmedFetchHosts":["news.example.com"],"targets":[]}]},
+      "card": "prepareSportsChatAction"
     },
     "sports.confirmSourceAssignments": {
       "description": "Confirm the exact actor-bound sports source assignment replacement shown by the preview.",
       "risk": "write",
-      "approvalVersion": true
+      "approvalVersion": true,
+      "inputSchema": {"type":"object","required":["sourceId","confirmationId","authorizationAcknowledgement","canonicalDomain","confirmedFetchHosts","targets"],"properties":{"sourceId":{"type":"string","description":"Saved source id."},"confirmationId":{"type":"string","maxLength":256,"description":"Confirmation id returned by the preview."},"authorizationAcknowledgement":{"type":"string","maxLength":300,"description":"Copy the authorization acknowledgement returned by the preview."},"canonicalDomain":{"type":"string","maxLength":253,"description":"Copy the verified publisher domain from the preview."},"confirmedFetchHosts":{"type":"array","maxItems":6,"description":"Copy the complete allowed host list from the preview.","items":{"type":"string","maxLength":253}},"targets":{"type":"array","maxItems":20,"description":"Copy every preview target and target URL in the same order.","items":{"type":"object","required":["target","targetUrl"],"properties":{"target":{"type":"object","description":"One sport or followed team; use sportKey for kind sport, or followId for kind follow.","properties":{"kind":{"type":"string","enum":["sport","follow"],"description":"Coverage kind: sport or follow."},"sportKey":{"type":"string","enum":["football","hockey","soccer","baseball","basketball"],"description":"Sport key from the Sports catalog."},"followId":{"type":"string","maxLength":36,"description":"Saved follow id."}},"required":["kind"]},"targetUrl":{"type":"string","maxLength":2048,"description":"Exact HTTPS URL shown for this target."}}}}},"examples":[{"sourceId":"11111111-1111-4111-8111-111111111111","confirmationId":"preview-id","authorizationAcknowledgement":"I confirm I am authorized to fetch this publisher's public, unauthenticated sports news.","canonicalDomain":"news.example.com","confirmedFetchHosts":["news.example.com"],"targets":[]}]},
+      "card": "prepareSportsChatAction"
     },
     "sports.confirmSourceRecipe": {
       "description": "Confirm the exact actor-bound sports source recipe rebuild shown by the preview.",
       "risk": "write",
-      "approvalVersion": true
+      "approvalVersion": true,
+      "inputSchema": {"type":"object","required":["sourceId","confirmationId","authorizationAcknowledgement","canonicalDomain","confirmedFetchHosts","targets"],"properties":{"sourceId":{"type":"string","description":"Saved source id."},"confirmationId":{"type":"string","maxLength":256,"description":"Confirmation id returned by the preview."},"authorizationAcknowledgement":{"type":"string","maxLength":300,"description":"Copy the authorization acknowledgement returned by the preview."},"canonicalDomain":{"type":"string","maxLength":253,"description":"Copy the verified publisher domain from the preview."},"confirmedFetchHosts":{"type":"array","maxItems":6,"description":"Copy the complete allowed host list from the preview.","items":{"type":"string","maxLength":253}},"targets":{"type":"array","maxItems":20,"description":"Copy every preview target and target URL in the same order.","items":{"type":"object","required":["target","targetUrl"],"properties":{"target":{"type":"object","description":"One sport or followed team; use sportKey for kind sport, or followId for kind follow.","properties":{"kind":{"type":"string","enum":["sport","follow"],"description":"Coverage kind: sport or follow."},"sportKey":{"type":"string","enum":["football","hockey","soccer","baseball","basketball"],"description":"Sport key from the Sports catalog."},"followId":{"type":"string","maxLength":36,"description":"Saved follow id."}},"required":["kind"]},"targetUrl":{"type":"string","maxLength":2048,"description":"Exact HTTPS URL shown for this target."}}}}},"examples":[{"sourceId":"11111111-1111-4111-8111-111111111111","confirmationId":"preview-id","authorizationAcknowledgement":"I confirm I am authorized to fetch this publisher's public, unauthenticated sports news.","canonicalDomain":"news.example.com","confirmedFetchHosts":["news.example.com"],"targets":[]}]},
+      "card": "prepareSportsChatAction"
     },
     "sports.retrySource": {
       "description": "Retry every verified target for one actor-owned sports source through pinned safe fetch with no browser.",
       "risk": "write",
-      "approvalVersion": true
+      "approvalVersion": true,
+      "inputSchema": {"type":"object","required":["sourceId"],"properties":{"sourceId":{"type":"string","description":"Saved source id."}},"examples":[{"sourceId":"11111111-1111-4111-8111-111111111111"}]},
+      "card": "prepareSportsChatAction"
     },
     "sports.removeSource": {
       "description": "Remove one actor-owned sports source and its assignments.",
       "risk": "destructive",
-      "approvalVersion": true
+      "approvalVersion": true,
+      "inputSchema": {"type":"object","required":["sourceId"],"properties":{"sourceId":{"type":"string","description":"Saved source id."}},"examples":[{"sourceId":"11111111-1111-4111-8111-111111111111"}]},
+      "card": "prepareSportsChatAction"
     },
     "sports.followedFactsToday": {
       "description": "Today's facts for the actor's followed teams and leagues, in the actor's time zone, with a bounded evidence block. Reads only the actor's own follows and public scoreboards. Never fails; a source that cannot be read gives a degraded, empty answer.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {"type":"object","properties":{"timeZone":{"type":"string","maxLength":100,"description":"The briefing definition's IANA time zone, for local-day game phases."}}}
     },
     "sports.heartbeatNextFixtures": {
       "description": "The actor's next followed fixtures from the cached scoreboards only, with a revision, the next boundary and a freshness label. Never calls the sports provider.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {"type":"object","properties":{"horizonHours":{"type":"integer","minimum":1,"maximum":48,"description":"Upcoming hours to inspect in the cache (1 to 48)."},"limit":{"type":"integer","minimum":1,"maximum":20,"description":"Maximum fixture count (1 to 20)."}}}
     },
     "sports.latestResult": {
       "description": "The most recent result for a named team or a followed team, using the same rules as the Sports latest-result route.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {"type":"object","properties":{"teamName":{"type":"string","maxLength":200,"description":"Exact team name from the conversation or Sports roster. Do not guess men's or women's."},"competitionKey":{"type":"string","description":"Explicit competition context from the person or Sports catalog. Omit to use follows."},"sourceTeamId":{"type":"string","description":"Permanent provider team ID from a Sports roster or follow, never an abbreviation or invented ID."}}}
     },
     "sports.followTeam": {
       "description": "Follow a league, or one team in a league, for the active actor. Checked against the provider's team list.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type":"object","required":["competitionKey"],"properties":{"competitionKey":{"type":"string","maxLength":100,"description":"Catalog competition key, e.g. \"nfl\" or \"eng.1\""},"teamKey":{"type":"string","maxLength":100,"description":"Catalog team key within the competition; omit to follow the whole competition"}},"examples":[{"competitionKey":"nfl"}]},
+      "card": "prepareSportsChatAction"
     },
     "sports.unfollowTeam": {
       "description": "Stop following a league or team for the active actor. Does nothing if it is not followed.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type":"object","required":["competitionKey"],"properties":{"competitionKey":{"type":"string","maxLength":100,"description":"Catalog competition key, e.g. \"nfl\" or \"eng.1\""},"teamKey":{"type":"string","maxLength":100,"description":"Catalog team key within the competition; omit to unfollow the whole competition"}},"examples":[{"competitionKey":"nfl"}]},
+      "card": "prepareSportsChatAction"
     }
   }
 }

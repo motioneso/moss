@@ -54,6 +54,17 @@ if (process.env.MOSS_CHAT_NEWS_PROOF === "1") {
   ]);
   process.env.JS386_NEWS_PACKAGE = join(target, "news.mosspkg");
 }
+if (process.env.MOSS_CHAT_PART4B_PROOF === "1") {
+  for (const module of ["sports", "wellness", "weather", "briefings"]) {
+    run("bash", [`modules/${module}/tools/build-component.sh`, join(target, `${module}.wasm`)]);
+    cargo(`modules/${module}/host/Cargo.toml`, ["build", "--bin", `${module}-package`]);
+    run(join(target, `debug/${module}-package`), [
+      join(target, `${module}.wasm`),
+      join(target, `${module}.mosspkg`)
+    ]);
+    process.env[`JS387_${module.toUpperCase()}_PACKAGE`] = join(target, `${module}.mosspkg`);
+  }
+}
 cargo("rust-spike/shell/Cargo.toml", ["build", "-p", "moss-shell", "--features", "live-proof"]);
 cargo("rust-spike/agents/Cargo.toml", ["build", "--bins"]);
 cargo("rust-spike/network/Cargo.toml", ["build", "--bin", "moss-network"]);

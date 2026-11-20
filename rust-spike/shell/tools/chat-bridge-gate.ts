@@ -8,6 +8,16 @@ function run(command: string, args: string[]) {
   const result = spawnSync(command, args, { stdio: "inherit", env: process.env });
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
+if (process.env.JS387_REMOVALS === "1") {
+  const urls = getMossDatabaseUrls();
+  Object.assign(process.env, {
+    JS48_APP_URL: urls.app,
+    JS48_WORKER_URL: urls.worker,
+    JS48_BOOTSTRAP_URL: urls.bootstrap
+  });
+  run("python3", ["rust-spike/shell/tools/chat-module-removals.py"]);
+  process.exit(0);
+}
 if (process.env.JS368_REMOVALS === "1") {
   const urls = getMossDatabaseUrls();
   Object.assign(process.env, {

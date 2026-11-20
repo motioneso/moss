@@ -869,3 +869,6 @@ fn stopping_photos_clears_the_rule_and_the_installed_routes_match_the_old_routes
     assert_eq!(photo_state(&w, id), ("none".into(), 0i16));
     println!("PASS parity: {} photo steps matched the old routes", steps.len());
 }
+
+#[path = "chat.rs"]
+mod chat;

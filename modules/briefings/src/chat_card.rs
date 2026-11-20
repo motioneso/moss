@@ -44,3 +44,9 @@ pub fn prepare<H: Host + ?Sized>(host: &H, tool: &str, input_json: &str) -> Valu
         Err(_) => json!({"error":{"statusCode":503,"error":"Briefings service is unavailable"}}),
     }
 }
+
+/// The chat host supplies validated parameters in the common card envelope.
+pub fn prepare_chat<H: Host + ?Sized>(host: &H, input: &Value) -> Result<Value> {
+    let Some(tool) = input["tool"].as_str() else { return Ok(Value::Null) };
+    card(host, tool, &input["parameters"])
+}
