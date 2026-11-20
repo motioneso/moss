@@ -3,7 +3,9 @@
 use leptos::prelude::*;
 pub mod calendar;
 mod controls;
-pub use controls::{IconButton, Segmented};
+mod report;
+pub use controls::{DisclosureToggle, IconButton, Segmented};
+pub use report::{PlanNote, ReportDialog, SectionHead};
 #[derive(Clone, Copy, Default)]
 pub enum ButtonVariant {
     #[default]
@@ -50,6 +52,7 @@ pub fn Button(
     #[prop(optional)] kind: ButtonType,
     #[prop(optional)] block: bool,
     #[prop(optional)] active: bool,
+    #[prop(optional, into)] aria_label: Option<String>,
     #[prop(into,default=false.into())] disabled: Signal<bool>,
     #[prop(optional)] on_click: Option<Callback<leptos::ev::MouseEvent>>,
     children: Children,
@@ -66,7 +69,7 @@ pub fn Button(
     if active {
         class.push_str(" jds-btn--active");
     }
-    view! {<button type=match kind {ButtonType::Button=>"button",ButtonType::Submit=>"submit"} class=class disabled=move||disabled.get() on:click=move|event|{if let Some(callback)=on_click {callback.run(event);}}>{children()}</button>}
+    view! {<button type=match kind {ButtonType::Button=>"button",ButtonType::Submit=>"submit"} class=class aria-label=aria_label disabled=move||disabled.get() on:click=move|event|{if let Some(callback)=on_click {callback.run(event);}}>{children()}</button>}
 }
 #[component]
 pub fn Field(children: Children) -> impl IntoView {

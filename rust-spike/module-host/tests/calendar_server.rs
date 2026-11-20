@@ -1,17 +1,19 @@
 //! Installed Calendar package served by the real HTTPS executable. Not a native UI proof.
+#[path = "calendar_today/mod.rs"]
+mod calendar_today;
 mod common;
 #[path = "people_routes/installed.rs"]
 mod installed;
+use access_context::AccessContext;
 use common::Keys;
 use moss_module_host::{
     archive::Package,
     registry::{Artifact, Channel, Index, Source},
     trust::{self, Publisher, RegistryIdentity},
 };
-use std::collections::{BTreeMap, BTreeSet};
-use access_context::AccessContext;
 use safety_core::db::{Database, RuntimeRole};
 use serde_json::{json, Value};
+use std::collections::{BTreeMap, BTreeSet};
 use std::{
     fs,
     path::Path,
@@ -62,17 +64,31 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
     );
     assert!(!port.0.is_empty());
     let origin = format!("https://localhost:{}", port.0);
+    let public = format!(
+        "https://{}:{}",
+        std::env::var("MOSS_CALENDAR_PUBLIC_HOST").unwrap(),
+        port.0
+    );
+    let origins = vec![origin.clone(), public.clone()];
     let cert = root.join("tls/certificate.pem");
     assert!(Command::new(std::env::var("JS170_CERTIFICATE").unwrap())
         .args(["local-certificate"])
         .arg(root.join("tls"))
-        .arg(&origin)
+        .args(&origins)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
         .unwrap()
         .success());
     fs::create_dir(root.join("web")).unwrap();
+    if let Ok(web) = std::env::var("MOSS_CALENDAR_SHELL_WEB") {
+        assert!(Command::new("cp")
+            .args(["-r", &format!("{web}/.")])
+            .arg(root.join("web"))
+            .status()
+            .unwrap()
+            .success());
+    }
     if let Ok(shared) = std::env::var("MOSS_MODULE_SHARED_DIR") {
         // Generated shared styles and fonts, which the sandboxed screens load.
         let status = Command::new("cp")
@@ -82,11 +98,6 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
             .unwrap();
         assert!(status.success());
     }
-    fs::write(
-        root.join("web/index.html"),
-        "<!doctype html><title>Calendar HTTP fixture</title>",
-    )
-    .unwrap();
     let app_url = std::env::var("JS43_APP_URL").unwrap();
     let worker_url = std::env::var("JS43_WORKER_URL").unwrap();
     let bootstrap_url = std::env::var("JS43_BOOTSTRAP_URL").unwrap();
@@ -98,7 +109,7 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
     );
     private(
         &root.join("network.json"),
-        &json!({"listen":format!("127.0.0.1:{}",port.0),"origins":[origin],"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
+        &json!({"listen":format!("0.0.0.0:{}",port.0),"origins":origins,"sharing":true,"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
     );
     let client = reqwest::blocking::Client::builder()
         .add_root_certificate(reqwest::Certificate::from_pem(&fs::read(&cert).unwrap()).unwrap())
@@ -212,7 +223,8 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
         let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
         let manifest = &package.manifest;
         assert_eq!(manifest.id, *id);
-        fs::write(root.join(format!("registry/packages/{digest}.mosspkg")), &bytes).unwrap();
+        fs::write(root.join(format!("registry/packages/{digest}.mosspkg")), &bytes,
+        ).unwrap();
         Artifact {
             id: manifest.id.clone(),
             version: manifest.version.clone(),
@@ -254,11 +266,14 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
         revoked: vec![],
     };
     for (name, data, key) in [
-        ("registry.json", serde_json::to_vec(&identity).unwrap(), &keys.root),
-        ("index.json", serde_json::to_vec(&index).unwrap(), &keys.index),
+        ("registry.json", serde_json::to_vec(&identity).unwrap(), &keys.root,
+        ),
+        ("index.json", serde_json::to_vec(&index).unwrap(), &keys.index,
+        ),
     ] {
         fs::write(root.join("registry").join(name), &data).unwrap();
-        fs::write(root.join("registry").join(format!("{name}.sig")), Keys::sign(key, &data)).unwrap();
+        fs::write(root.join("registry").join(format!("{name}.sig")), Keys::sign(key, &data),
+        ).unwrap();
     }
     let installer = installed::reopen(
         &root.join("data"),
@@ -412,14 +427,16 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
         let (status, refused) = call(Method::POST, &path, Some(&cookie), Some(body));
         assert_eq!((status, refused["error"].as_str()), (503, Some("day plan apply is unavailable")), "{action}: {refused}");
     }
-    let (status, bad) = call(Method::POST, &operation_path("retry"), Some(&cookie), Some(json!({"itemIds":[]})));
+    let (status, bad) = call(Method::POST, &operation_path("retry"), Some(&cookie), Some(json!({"itemIds":[]})),
+    );
     assert_eq!((status, bad["code"].as_str()), (400, Some("day_plan_invalid")), "{bad}");
     let (status, settings) = call(Method::GET, "/briefing-settings", Some(&cookie), None);
     println!("briefing settings read -> {status}: {settings}");
     assert_eq!(call(Method::GET, "/source-behaviors", None, None).0, 401);
     let (status, sources) = call(Method::GET, "/source-behaviors", Some(&cookie), None);
     assert_eq!((status, &sources), (200, &json!({"briefings":true,"planning":true})));
-    let (status, bad) = call(Method::PATCH, "/source-behaviors", Some(&cookie), Some(json!({"writeback":true})));
+    let (status, bad) = call(Method::PATCH, "/source-behaviors", Some(&cookie), Some(json!({"writeback":true})),
+    );
     assert_eq!(status, 400, "{bad}");
     // Day plans check task references through the installed Tasks package, under the caller's account.
     let (own_task, other_task) = runtime.block_on(async {
@@ -450,7 +467,8 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
         (ids[0], ids[1])
     });
     // The owner turns one switch off and must not reach the second account's saved switches.
-    let (status, saved) = call(Method::PATCH, "/source-behaviors", Some(&cookie), Some(json!({"briefings":false})));
+    let (status, saved) = call(Method::PATCH, "/source-behaviors", Some(&cookie), Some(json!({"briefings":false})),
+    );
     assert_eq!((status, &saved), (200, &json!({"briefings":false,"planning":true})), "{saved}");
     let (status, sources) = call(Method::GET, "/source-behaviors", Some(&cookie), None);
     assert_eq!((status, &sources), (200, &json!({"briefings":false,"planning":true})));
@@ -466,7 +484,8 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
     });
     assert_eq!(other_switches, json!({"calendar.briefings":true,"calendar.planning":false}), "an owner switch write reached another account");
     // Put the owner's switch back so the browser check starts from the defaults.
-    let (status, restored) = call(Method::PATCH, "/source-behaviors", Some(&cookie), Some(json!({"briefings":true})));
+    let (status, restored) = call(Method::PATCH, "/source-behaviors", Some(&cookie), Some(json!({"briefings":true})),
+    );
     assert_eq!((status, &restored), (200, &json!({"briefings":true,"planning":true})), "{restored}");
     // The first call into Tasks compiles its package, which a debug build does slowly. Warm it
     // so the day plan checks below run inside the module time limit.
@@ -486,10 +505,31 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
             Method::POST,
             "/day-plans",
             Some(who),
-            Some(json!({"localDay":day,"timeZone":"UTC","eveningIntent":{"priorityTaskIds":[task]}})),
+            Some(json!({"localDay":day,"timeZone":"UTC","eveningIntent":{"priorityTaskIds":[task]}}),
+            ),
         );
         assert_eq!(status, expected, "{day}: {reply}\n{}", fs::read_to_string(root.join("server.log")).unwrap_or_default());
     }
+    calendar_today::check(
+        &client,
+        &origin,
+        &cookie,
+        &runtime,
+        &bootstrap_url,
+        owner,
+        own_task,
+        other_task,
+    );
+    calendar_today::seed(
+        &client,
+        &origin,
+        &cookie,
+        &runtime,
+        &bootstrap_url,
+        owner,
+        own_task,
+        other_task,
+    );
     println!("PASS installed Calendar package served over HTTPS by the real server: sign-in required, owner event list and detail, unknown event 404, day plan create and read, apply route validates and fails closed");
     // The signed-in owner gets the verified screen address; the files need no session.
     let screen_url = format!("{origin}/api/modules/calendar/screen?path=/calendar");
@@ -506,8 +546,10 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
         let status = Command::new("pnpm")
             .args(["exec", "tsx", &script])
             .env("ORIGIN", &origin)
+            .env("PUBLIC_ORIGIN", &public)
             .env("EMAIL", "calendar-owner@example.test")
-            .env("PASSWORD", "temporary-calendar-password-181-not-a-real-secret")
+            .env("PASSWORD", "temporary-calendar-password-181-not-a-real-secret",
+            )
             .env("EVENT_TITLE", event_title)
             .env("OUT", out)
             .status()
@@ -519,5 +561,5 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
         println!("HOLD {origin} for {seconds}s");
         std::thread::sleep(std::time::Duration::from_secs(seconds.parse().unwrap_or(0)));
     }
-    println!("NOT PROVEN: Calendar screens on the real server (it serves module routes only), provider tools, second account over HTTP, second physical device");
+    println!("NOT PROVEN: provider writes, physical second-device use, review writes (Part 10)");
 }
