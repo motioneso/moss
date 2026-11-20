@@ -115,3 +115,16 @@ fn prerequisite_errors_are_typed_and_backend_messages_are_not_returned() {
         );
     }
 }
+
+#[test]
+fn chat_envelope_keeps_the_note_target_version_and_deletion_warning() {
+    let host = ReadOnly {
+        files: BTreeMap::from([("Journal/test.md".into(), "Saved note".into())]),
+    };
+    let parameters = json!({"path":"Journal/test.md"});
+    let legacy: Value = serde_json::from_str(&handle(&host,"api", &json!({"name":"prepareNoteAction","parameters":{"tool":"notes.delete","inputJson":parameters.to_string()}}).to_string()).unwrap()).unwrap();
+    let chat: Value = serde_json::from_str(&handle(&host,"api", &json!({"name":"prepareChatAction","parameters":{"tool":"notes.delete","parameters":parameters}}).to_string()).unwrap()).unwrap();
+    assert_eq!(chat, legacy["ok"]);
+    assert_eq!(chat["approvalKind"], "note_delete");
+    assert_eq!(chat["fields"][1]["label"], "Deletion");
+}

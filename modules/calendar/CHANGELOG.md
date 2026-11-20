@@ -1,8 +1,14 @@
 # Calendar package
 
-## 0.31.1
+## 0.32.1
 
 - Offer validated chat tools and code-built approval fields. Normal writes show their returned result; deleting and sending ask first.
+
+## 0.32.0
+
+- Replace Today's sample timeline with Calendar's saved plan and visible calendar events, including Proposed, Flexible and unavailable task labels.
+- Open the existing day-plan review layout with a phone schedule disclosure. Time, placement and save controls remain disabled until review writes are implemented.
+- Require Tasks 0.1.6 so the existing task-reference API supplies the title and summary fields the saved-plan reader expects.
 
 ## 0.31.0
 

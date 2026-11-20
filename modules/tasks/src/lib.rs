@@ -1,6 +1,7 @@
 //! Tasks package data core. All effects cross the guest-safe SDK Host interface.
 pub mod account;
 mod approval;
+mod chat;
 mod briefing_api;
 mod breakdown;
 pub mod dates;
@@ -51,6 +52,10 @@ pub fn handle<H: moss_module_sdk::Host + ?Sized>(
         }
         "job" => jobs::handle(host, payload),
         "api" => {
+            let call: serde_json::Value = serde_json::from_str(payload)?;
+            if call["name"] == "prepareChatAction" {
+                return Ok(chat::prepare(host, &call["parameters"]).to_string());
+            }
             #[derive(serde::Deserialize)]
             #[serde(deny_unknown_fields)]
             #[serde(tag = "name", content = "parameters")]
@@ -110,7 +115,8 @@ pub fn handle<H: moss_module_sdk::Host + ?Sized>(
                 let dto = task.dto(&[]);
                 return Ok(serde_json::json!({"task":{
                     "id":dto["id"],"ownerUserId":dto["ownerUserId"],
-                    "status":dto["status"],"dueAt":dto["dueAt"]}})
+                    "status":dto["status"],"dueAt":dto["dueAt"],
+                    "title":dto["title"],"doAt":dto["doAt"],"effort":dto["effort"]}})
                 .to_string());
             }
             if let Api::Briefing(b) = api {

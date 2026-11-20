@@ -59,6 +59,19 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> Result<String> {
             Err(Error::new("Notes tool is not available"))
         }
         "api" => {
+            let call: Value = serde_json::from_str(payload)?;
+            if call["name"] == "prepareChatAction" {
+                let input = &call["parameters"];
+                let tool = input["tool"]
+                    .as_str()
+                    .ok_or_else(|| Error::new("Invalid Notes action"))?;
+                return Ok(crate::write_tools::prepare_json(
+                    host,
+                    tool,
+                    &input["parameters"].to_string(),
+                )?
+                .to_string());
+            }
             let request: ApiRequest = serde_json::from_str(payload)?;
             let result: Value = match request {
                 ApiRequest::Export(_) => crate::export::collect(host)?,

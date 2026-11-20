@@ -8,6 +8,7 @@ use serde_json::{json, Value};
 #[cfg(target_arch = "wasm32")]
 mod abi;
 pub mod account;
+mod chat;
 pub mod dashboard;
 pub mod graph;
 pub mod lifecycle;
@@ -91,6 +92,10 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
             }
         }
         "api" => {
+            let call: Value = serde_json::from_str(payload).map_err(|_| "Invalid Memory action")?;
+            if call["name"] == "prepareChatAction" {
+                return chat::prepare(host, &call["parameters"]).map(|v| v.to_string());
+            }
             if let Ok(call) = serde_json::from_str::<Value>(payload) {
                 if let Some(name) = call["name"].as_str().filter(|n| !matches!(*n, "requestVaultIndex" | "prepareMemoryAction" | "recordingMemory" | "collectMemoryExportSection" | "deleteMemoryData")) {
                     return serde_json::to_string(&public::call(host, name, &call["parameters"]))

@@ -24,3 +24,26 @@ h3 {
 input {
   font: inherit;
 }
+
+/* Native modal reset; the report's typography and layout use the authored reader sheets. */
+.module-report-dialog {
+  margin: 0;
+  border: 0;
+  width: 100%;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  box-sizing: border-box;
+  color: var(--text);
+}
+.module-report-dialog::backdrop {
+  background: var(--scrim);
+}
+body:has(.module-report-dialog[open]) {
+  overflow: hidden;
+}
+@media (max-width: 1080px) {
+  .module-report-dialog {
+    padding: 0;
+  }
+}

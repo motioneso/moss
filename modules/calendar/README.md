@@ -19,7 +19,7 @@ horizontal position. Day, Week and Month screens, saved views and editable brief
 Full shell composition, the source-behavior switch, the remaining four chat tools, jobs,
 provider execution and the assembled HTTP/UI parity gate remain open.
 
-Version 0.26.0 requires the Tasks package and reads task facts (id, owner, status, due time) through its public `getTaskReference` call under the signed-in account, so day plans accept real tasks and refuse another account's. Version 0.25.0 adds the Briefings and Planning source switches on the settings screen. Version 0.2.0 adds `calendar.heartbeatWindow` (owned cache reads) and
+Version 0.32.0 owns the read-only Today schedule and task-block review. It requires Tasks 0.1.6: the existing public `getTaskReference` now includes title, do time and effort alongside id, owner, status and due time, matching the saved-plan reader's summary. Calendar still reads these facts through the public call under the signed-in account; unavailable task references remain marked unavailable. No new Tasks call is added. Version 0.26.0 introduced that required Tasks dependency. Version 0.25.0 adds the Briefings and Planning source switches on the settings screen. Version 0.2.0 adds `calendar.heartbeatWindow` (owned cache reads) and
 `calendar.dayPlanDraft` (typed evening intent and untimed task proposals). The latter
 retains recorded placement and requires an actor-scoped public Tasks projection for
 new task references. Neither tool calls a provider. The package advertises only these

@@ -111,6 +111,28 @@ async function compare(
   }
   assert(expected);
   assert(!actual.error, `${name}: component failed`);
+  // Rust adds the chat drawer's completed-write receipt; compare legacy data independently.
+  const reply = actual.ok as { data: Record<string, unknown> };
+  if (reply.data.error === undefined) {
+    assert(Array.isArray(reply.data.changed) && reply.data.changed.length > 0);
+    for (const field of reply.data.changed as Record<string, unknown>[]) {
+      assert.equal(typeof field.label, "string");
+      assert.equal(typeof field.before, "string");
+      assert.equal(typeof field.after, "string");
+    }
+    if (name === "update") {
+      assert.deepEqual(reply.data.changed, [
+        { label: "Title", before: "  Task  ", after: "  Updated  " },
+        { label: "Description", before: "  Body  ", after: "" }
+      ]);
+    }
+    if (name === "list rename") {
+      assert.deepEqual(reply.data.changed, [
+        { label: "Name", before: "  Work  ", after: "Renamed" }
+      ]);
+    }
+    delete reply.data.changed;
+  }
   assert.deepEqual(canonical(actual.ok, "rs"), canonical(expected, "ts"), name);
   results["ts"]![name] = expected.data as Record<string, unknown>;
   results["rs"]![name] = (actual.ok as { data: Record<string, unknown> }).data;

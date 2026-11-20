@@ -15,7 +15,7 @@ pub struct Request {
     pub parameters: Value,
 }
 
-fn request(method: &str, path: &str, input: &Value) -> RouteRequest {
+pub(crate) fn request(method: &str, path: &str, input: &Value) -> RouteRequest {
     RouteRequest {
         method: method.into(),
         path: path.into(),
@@ -29,7 +29,7 @@ fn request(method: &str, path: &str, input: &Value) -> RouteRequest {
     }
 }
 
-fn valid(tool: &str, input: &Value) -> bool {
+pub(crate) fn valid(tool: &str, input: &Value) -> bool {
     let Some(map) = input.as_object() else {
         return false;
     };
@@ -94,6 +94,11 @@ pub fn handle<H: Host + ?Sized>(host: &H, req: Request) -> Result<Value> {
         return Ok(json!({"data":{"error":"Invalid Goals tool input"}}));
     }
     let input = &req.parameters;
+    let before = if req.tool == "goals.update" {
+        crate::chat::before(host, input)?
+    } else {
+        Value::Null
+    };
     let response = match req.tool.as_str() {
         "goals.list" => return Ok(json!({"data":{"items":goals::list(host)?.body}})),
         "goals.get" => {
@@ -119,7 +124,12 @@ pub fn handle<H: Host + ?Sized>(host: &H, req: Request) -> Result<Value> {
         }
         _ => return Err(Error::new("Unknown Goals tool")),
     };
-    Ok(json!({"data":response.body}))
+    let mut data = response.body;
+    if response.status < 400 {
+        let changed = crate::chat::completed(input, &before, &data);
+        data["changed"] = json!(changed);
+    }
+    Ok(json!({"data":data}))
 }
 
 /// Signed-in transport for chat hosts. This crosses the host's one-use, exact-input approval
