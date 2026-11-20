@@ -124,10 +124,15 @@ pub fn dismiss<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Res
         Ok(target) => target,
         Err(response) => return Ok(response),
     };
+    // A leftover task is archived only while it is still the caller's open task; a task that was
+    // already closed or removed elsewhere is ignored so the dismissal still goes through.
     if let Some(stray) = body_text(request, "strayTaskId") {
-        match archive(host, &stray) {
-            Ok(Some(())) => {}
-            Ok(None) => return Ok(not_found()),
+        match own_open_task(host, &stray) {
+            Ok(true) => match archive(host, &stray) {
+                Ok(_) => {}
+                Err(_) => return Ok(failed(json!(stray))),
+            },
+            Ok(false) => {}
             Err(_) => return Ok(failed(json!(stray))),
         }
     }
@@ -145,8 +150,8 @@ pub fn undo<H: Host + ?Sized>(host: &H, request: &RouteRequest) -> Result<Respon
     if feedback_id.is_none() && task_id.is_none() {
         return Ok(Response::new(400, json!({"error": "Nothing to undo"})));
     }
-    // When both steps run, the task is checked first so a foreign task id changes nothing.
-    if let (Some(_), Some(task)) = (&feedback_id, &task_id) {
+    // The task is checked first so a foreign or closed task id changes nothing.
+    if let Some(task) = &task_id {
         match own_open_task(host, task) {
             Ok(true) => {}
             Ok(false) => return Ok(not_found()),

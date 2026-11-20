@@ -87,6 +87,14 @@ fn dismiss_archives_the_stray_task_then_records_dismiss() {
 }
 
 #[test]
+fn dismiss_ignores_a_stray_task_that_is_no_longer_open() {
+    let fake = setup();
+    let (status, out) = post(&fake, RUN, "catch-1", "dismiss", json!({"strayTaskId": "gone-task"}));
+    assert_eq!((status, out["status"].as_str()), (200, Some("dismissed")));
+    assert_eq!(fake.ratings.borrow()[0].2, "dismiss");
+}
+
+#[test]
 fn undo_takes_back_the_rating_and_archives_the_task() {
     let fake = setup();
     let added = post(&fake, RUN, "catch-1", "add", json!({})).1;
