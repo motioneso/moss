@@ -1,4 +1,4 @@
-/* global document, location, requestAnimationFrame, cancelAnimationFrame, addEventListener, removeEventListener */
+/* global document, location, requestAnimationFrame, cancelAnimationFrame, addEventListener, removeEventListener, ResizeObserver */
 import { moduleClient } from "./guest-bridge.mjs";
 
 // Establish the document port before the first iframe load, including slow Wasm startup.
@@ -6,6 +6,12 @@ const client = moduleClient();
 const presentation = client.theme();
 let interval;
 let revealFrame;
+const sizeObserver = new ResizeObserver(() => {
+  if (new URL(location.href).pathname.endsWith("/today.html")) {
+    void client.resize(Math.ceil(document.body.getBoundingClientRect().height)).catch(() => {});
+  }
+});
+sizeObserver.observe(document.body);
 function revealToday() {
   cancelAnimationFrame(revealFrame);
   revealFrame = requestAnimationFrame(() => {
@@ -27,6 +33,12 @@ globalThis.calendarBridge = {
     return presentation.then((value) =>
       typeof value?.calendarEvent === "string" ? value.calendarEvent : null
     );
+  },
+  today() {
+    return new URL(location.href).pathname.endsWith("/today.html");
+  },
+  present(modal) {
+    return client.present(modal);
   },
   settings() {
     return new URL(location.href).pathname.endsWith("/settings.html");
@@ -87,6 +99,7 @@ addEventListener(
   "pagehide",
   () => {
     clearInterval(interval);
+    sizeObserver.disconnect();
     cancelAnimationFrame(revealFrame);
     removeEventListener("resize", revealToday);
     client.dispose();

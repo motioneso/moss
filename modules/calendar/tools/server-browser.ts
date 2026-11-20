@@ -3,6 +3,7 @@
  * Started by the server gate with ORIGIN, EMAIL, PASSWORD, EVENT_TITLE and OUT set.
  * Nothing is intercepted or rewritten; every request reaches the server.
  */
+import { checkToday } from "./today-browser.js";
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import { chromium, expect } from "@playwright/test";
@@ -129,5 +130,6 @@ console.log(
   "PASS settings changed in the real control are saved by the server and survive a reload"
 );
 
+await checkToday(page, context, origin, OUT!);
 assert.deepEqual(failed, [], "server errors during the run");
 await browser.close();
