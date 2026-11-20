@@ -1,0 +1,135 @@
+{
+  "issue": 46,
+  "slug": "2026-11-20",
+  "weekOf": "November 16, 2026",
+  "summary": "Moss's new app gains Finance, Meals, Sports, News, Wellness and Meetings screens, and Today learns to show your briefing, goals and follow-ups.",
+  "intro": "This was a big week for the new Moss app. Most of the pages you already know arrived there, and Today got a lot more useful. Two small fixes are at the bottom.",
+  "headline": {
+    "title": "Today now works through your morning briefing with you",
+    "body": [
+      "Today now lists the things your morning briefing flagged for you, so you can accept or dismiss each suggested task right there. Emails that still need a look get their own catch-up list, where you can add a follow-up task or dismiss each one, and undo either.",
+      "Today also tells you plainly whether your morning briefing is switched off, running, failed or still due, instead of showing placeholder text."
+    ],
+    "prs": [
+      4421,
+      4426,
+      4410
+    ]
+  },
+  "sections": [
+    {
+      "title": "New",
+      "items": [
+        {
+          "title": "Finance screens in the new app",
+          "body": "See your budget, transactions and accounts, assign money and sort transactions. A bank that needs you to sign in again shows a Reconnect button. Finance also has a start page that works without a bank connection, plus reports, upcoming bills and settings.",
+          "prs": [
+            4362,
+            4369
+          ]
+        },
+        {
+          "title": "Meals screen and household pages",
+          "body": "The Meals page shows your meal plan, shopping list, pantry and staples, and works on your phone. There is also a household list, a daily log and a settings page.",
+          "prs": [
+            4360,
+            4368
+          ]
+        },
+        {
+          "title": "Sports screen and settings",
+          "body": "The Sports page shows live scores, your followed teams, standings and team news. In Sports settings you choose the teams and leagues you follow, your news sources and your standings leagues.",
+          "prs": [
+            4345,
+            4348
+          ]
+        },
+        {
+          "title": "News screen and settings",
+          "body": "News has a screen and a Today widget in the new app. News settings cover your sources, topics, excluded publishers and story preferences.",
+          "prs": [
+            4343,
+            4355
+          ]
+        },
+        {
+          "title": "Wellness screens",
+          "body": "Wellness shows your medicines, mood check-ins and trends on desktop and phone. Wellness settings let you choose whether your assistant may read your wellness data.",
+          "prs": [
+            4339,
+            4340
+          ]
+        },
+        {
+          "title": "Weather settings and forecast",
+          "body": "Choose Fahrenheit or Celsius, set your place by location or search, see the hourly forecast, and see the current weather at the top of Today.",
+          "prs": [
+            4341
+          ]
+        },
+        {
+          "title": "Briefings screens",
+          "body": "Read your morning and evening briefings and change when they are prepared, including on your phone.",
+          "prs": [
+            4349
+          ]
+        },
+        {
+          "title": "Manage linked devices in Meetings",
+          "body": "See, rename and unlink the Macs and phones linked to Meetings, and approve a new device from a simple question on screen.",
+          "prs": [
+            4387
+          ]
+        },
+        {
+          "title": "A scratchpad beside chat",
+          "body": "Keep notes beside chat or in a full phone screen, with automatic saving, a personal shortcut, and a choice to reload when another tab changes your note.",
+          "prs": [
+            4379
+          ]
+        },
+        {
+          "title": "Goals and commitments on Today",
+          "body": "Today shows your active long-term goals. You can also review things you said you would do, then accept, reject or snooze each suggestion.",
+          "prs": [
+            4376,
+            4378
+          ]
+        },
+        {
+          "title": "Email and calendar switches for Briefings",
+          "body": "Briefings settings let you turn the email and calendar signals on or off, and the change shows on the Email and Calendar settings too.",
+          "prs": [
+            4428
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Improved",
+      "items": [
+        {
+          "title": "Your saved plan on Today",
+          "body": "Today shows your saved schedule and lets you read the task-block review on a computer or phone.",
+          "prs": [
+            4425
+          ]
+        }
+      ]
+    }
+  ],
+  "fixes": [
+    {
+      "text": "Bank sync now finishes reading the next page after the bank changes data mid-read, so transactions are no longer left out.",
+      "prs": [
+        4364
+      ]
+    },
+    {
+      "text": "Removing Meetings with its data now forgets linked devices, so they must be linked again after reinstalling.",
+      "prs": [
+        4375
+      ]
+    }
+  ]
+}

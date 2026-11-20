@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Moss weekly — Week of November 9, 2026</title>
-<meta name="description" content="A quiet week on the surface: meeting summaries learn who was in the room, and explain themselves when they can't be written.">
+<title>Moss weekly — Week of November 16, 2026</title>
+<meta name="description" content="Moss's new app gains Finance, Meals, Sports, News, Wellness and Meetings screens, and Today learns to show your briefing, goals and follow-ups.">
 <link rel="stylesheet" href="weekly.css">
 </head>
 <body>
@@ -12,26 +12,88 @@
 <header class="masthead">
   <div class="shell">
     <span class="wordmark">Moss weekly</span>
-    <span class="issue">Issue #45</span>
+    <span class="issue">Issue #46</span>
   </div>
 </header>
 
 <main class="shell">
 
   <div class="lede">
-    <h1>Week of November 9, 2026</h1>
-    <p>This was a quiet week for things you can see. Most of the work went into foundations that aren't ready to show yet, so the visible changes all landed in one place: meeting summaries. They know more about your meetings now, and they're more honest when something goes wrong.</p>
+    <h1>Week of November 16, 2026</h1>
+    <p>This was a big week for the new Moss app. Most of the pages you already know arrived there, and Today got a lot more useful. Two small fixes are at the bottom.</p>
   </div>
 
   <section class="hero">
     <div>
       <p class="eyebrow">This week's headline</p>
-      <h2>Meeting summaries that know who was in the room</h2>
+      <h2>Today now works through your morning briefing with you</h2>
     </div>
     <div class="hero-body">
-      <p>Meeting summaries now draw on your own background: your name, the matching calendar event, and the notes you keep about the people involved. Names get spelled the way you spell them, and the summary reads like it was written by someone who knew what the meeting was for.</p>
-      <p>Summaries can also guess who is speaking. A guessed name is marked as a guess, and when I'm not sure I say &quot;Speaker 2&quot; rather than bluff. The names carry through wherever the summary goes, including copies, exports, and suggested tasks. Older summaries are left as they were.</p>
-      <p class="refs"><a href="https://github.com/motioneso/moss/pull/4026">PR&nbsp;#4026</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/4029">PR&nbsp;#4029</a></p>
+      <p>Today now lists the things your morning briefing flagged for you, so you can accept or dismiss each suggested task right there. Emails that still need a look get their own catch-up list, where you can add a follow-up task or dismiss each one, and undo either.</p>
+      <p>Today also tells you plainly whether your morning briefing is switched off, running, failed or still due, instead of showing placeholder text.</p>
+      <p class="refs"><a href="https://github.com/motioneso/moss/pull/4421">PR&nbsp;#4421</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/4426">PR&nbsp;#4426</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/4410">PR&nbsp;#4410</a></p>
+    </div>
+  </section>
+
+  <section class="band">
+    <h3>New</h3>
+    <hr class="hr">
+    <div class="items">
+      <article class="item">
+        <h4>Finance screens in the new app</h4>
+        <p>See your budget, transactions and accounts, assign money and sort transactions. A bank that needs you to sign in again shows a Reconnect button. Finance also has a start page that works without a bank connection, plus reports, upcoming bills and settings.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/4362">PR&nbsp;#4362</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/4369">PR&nbsp;#4369</a></p>
+      </article>
+      <article class="item">
+        <h4>Meals screen and household pages</h4>
+        <p>The Meals page shows your meal plan, shopping list, pantry and staples, and works on your phone. There is also a household list, a daily log and a settings page.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/4360">PR&nbsp;#4360</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/4368">PR&nbsp;#4368</a></p>
+      </article>
+      <article class="item">
+        <h4>Sports screen and settings</h4>
+        <p>The Sports page shows live scores, your followed teams, standings and team news. In Sports settings you choose the teams and leagues you follow, your news sources and your standings leagues.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/4345">PR&nbsp;#4345</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/4348">PR&nbsp;#4348</a></p>
+      </article>
+      <article class="item">
+        <h4>News screen and settings</h4>
+        <p>News has a screen and a Today widget in the new app. News settings cover your sources, topics, excluded publishers and story preferences.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/4343">PR&nbsp;#4343</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/4355">PR&nbsp;#4355</a></p>
+      </article>
+      <article class="item">
+        <h4>Wellness screens</h4>
+        <p>Wellness shows your medicines, mood check-ins and trends on desktop and phone. Wellness settings let you choose whether your assistant may read your wellness data.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/4339">PR&nbsp;#4339</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/4340">PR&nbsp;#4340</a></p>
+      </article>
+      <article class="item">
+        <h4>Weather settings and forecast</h4>
+        <p>Choose Fahrenheit or Celsius, set your place by location or search, see the hourly forecast, and see the current weather at the top of Today.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/4341">PR&nbsp;#4341</a></p>
+      </article>
+      <article class="item">
+        <h4>Briefings screens</h4>
+        <p>Read your morning and evening briefings and change when they are prepared, including on your phone.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/4349">PR&nbsp;#4349</a></p>
+      </article>
+      <article class="item">
+        <h4>Manage linked devices in Meetings</h4>
+        <p>See, rename and unlink the Macs and phones linked to Meetings, and approve a new device from a simple question on screen.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/4387">PR&nbsp;#4387</a></p>
+      </article>
+      <article class="item">
+        <h4>A scratchpad beside chat</h4>
+        <p>Keep notes beside chat or in a full phone screen, with automatic saving, a personal shortcut, and a choice to reload when another tab changes your note.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/4379">PR&nbsp;#4379</a></p>
+      </article>
+      <article class="item">
+        <h4>Goals and commitments on Today</h4>
+        <p>Today shows your active long-term goals. You can also review things you said you would do, then accept, reject or snooze each suggestion.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/4376">PR&nbsp;#4376</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/4378">PR&nbsp;#4378</a></p>
+      </article>
+      <article class="item">
+        <h4>Email and calendar switches for Briefings</h4>
+        <p>Briefings settings let you turn the email and calendar signals on or off, and the change shows on the Email and Calendar settings too.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/4428">PR&nbsp;#4428</a></p>
+      </article>
     </div>
   </section>
 
@@ -40,14 +102,9 @@
     <hr class="hr">
     <div class="items">
       <article class="item">
-        <h4>Clearer reasons when a summary can't be written</h4>
-        <p>Instead of one catch-all error, Moss now says what happened: the AI helper couldn't be reached, it isn't available, or it was stopped to keep your meeting private.</p>
-        <p class="refs"><a href="https://github.com/motioneso/moss/pull/4011">PR&nbsp;#4011</a></p>
-      </article>
-      <article class="item">
-        <h4>A heads-up about suspicious lines in a recording</h4>
-        <p>If something said in a meeting looks like an order aimed at the AI rather than ordinary conversation, the summary now flags it so you can read that part with a raised eyebrow.</p>
-        <p class="refs"><a href="https://github.com/motioneso/moss/pull/4011">PR&nbsp;#4011</a></p>
+        <h4>Your saved plan on Today</h4>
+        <p>Today shows your saved schedule and lets you read the task-block review on a computer or phone.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/4425">PR&nbsp;#4425</a></p>
       </article>
     </div>
   </section>
@@ -56,8 +113,8 @@
     <h3>Fixed</h3>
     <hr class="hr">
     <ul class="fixes">
-      <li>When a summary is stopped to keep your meeting private, the owner gets a notification even if the summary was started automatically. <a href="https://github.com/motioneso/moss/pull/4015">#4015</a></li>
-      <li>Automatic summaries no longer report the AI helper as unreachable while chat is working fine. <a href="https://github.com/motioneso/moss/pull/4011">#4011</a></li>
+      <li>Bank sync now finishes reading the next page after the bank changes data mid-read, so transactions are no longer left out. <a href="https://github.com/motioneso/moss/pull/4364">#4364</a></li>
+      <li>Removing Meetings with its data now forgets linked devices, so they must be linked again after reinstalling. <a href="https://github.com/motioneso/moss/pull/4375">#4375</a></li>
     </ul>
   </section>
 
