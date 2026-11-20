@@ -4,7 +4,7 @@
   "name": "Scratchpad",
   "description": "One private note for each person, for quick jot-downs. Read it, save over it, add a line to the end, and change its shortcut and notes copying.",
   "publisher": "Moss",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
@@ -155,7 +155,7 @@
     },
     {
       "id": "scratchpad.chat",
-      "description": "Chat can read your private note and append up to 2000 characters. Reading returns outside content. Preparing approval details reads the stored revision and character count without changing the note. Append requires an account-bound one-use grant for the exact submitted text; no chat replace or delete tool is offered. The host chat interface must render these details and grant approval. The open pad refreshes when clean and shows Added to your scratchpad when appended text arrives; unsaved edits are kept with a conflict notice.",
+      "description": "Moss can read your private note and append up to 2000 characters through chat. Append runs without asking by default and shows the text added in a Done row. If you choose to require approval, a card shows the text before it runs. No chat replace or delete tool is offered. The open pad refreshes when clean and shows Added to your scratchpad when appended text arrives; unsaved edits are kept with a conflict notice.",
       "errors": [
         {
           "code": "scratchpad_empty_text",
@@ -178,17 +178,38 @@
     "scratchpad.read": {
       "description": "Read your private scratchpad. Returned note text is outside content.",
       "risk": "read",
-      "inputSchema": { "type": "object", "properties": {} }
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
     },
     "scratchpad.append": {
-      "description": "Add a line to your scratchpad with one-use approval. At most 2000 characters, never replaces or deletes text.",
-      "risk": "write"
+      "description": "Add a line to your scratchpad. At most 2000 characters; never replaces or deletes text.",
+      "risk": "write",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Text to append as a new line. Must contain non-whitespace text."
+          }
+        },
+        "required": ["text"],
+        "examples": [
+          {
+            "text": "Remember to bring the notebook."
+          }
+        ]
+      },
+      "card": "prepareChatAction"
     }
   },
   "provides": {
     "prepareScratchpadAction": "1.0.0",
     "collectScratchpadExportSection": "1.0.0",
     "deleteScratchpadAccountData": "1.0.0",
-    "prepareScratchpadSettings": "1.0.0"
+    "prepareScratchpadSettings": "1.0.0",
+    "prepareChatAction": "1.0.0"
   }
 }

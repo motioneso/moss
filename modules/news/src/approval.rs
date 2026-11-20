@@ -79,3 +79,9 @@ pub fn prepare_route<H: Host + ?Sized>(host: &H, route: &str, params: Option<&st
         Err(_) => json!({"error": {"statusCode": 503, "error": "News service is unavailable"}}),
     }
 }
+
+/// Adapt the common chat envelope; keep the legacy API response intact.
+pub fn prepare_chat<H: Host + ?Sized>(host: &H, input: &Value) -> Value {
+    let Some(tool) = input["tool"].as_str() else { return Value::Null };
+    prepare(host, tool, &input["parameters"].to_string())["ok"].clone()
+}

@@ -230,6 +230,9 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
     if std::env::var_os("JS383_COMMITMENTS_PACKAGE").is_some() {
         packages.push(("JS383_COMMITMENTS_PACKAGE", "commitments"));
     }
+    if std::env::var_os("JS386_NEWS_PACKAGE").is_some() {
+        packages.push(("JS386_NEWS_PACKAGE", "news"));
+    }
     let artifacts: Vec<Artifact> = packages
         .iter()
         .map(|(variable, id)| {

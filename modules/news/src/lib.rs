@@ -103,12 +103,15 @@ fn api<H: Host + ?Sized>(host: &H, payload: &str) -> moss_module_sdk::Result<Str
         TopHeadlines(#[allow(dead_code)] Value),
         #[serde(rename = "prepareNewsAction")]
         PrepareAction(PrepareAction),
+        #[serde(rename = "prepareChatAction")]
+        PrepareChatAction(Value),
         #[serde(rename = "prepareNewsRoute")]
         PrepareRoute(PrepareRoute),
     }
     Ok(match serde_json::from_str(payload)? {
         Api::Export(_) => json!({"ok":lifecycle::collect(host)?}),
         Api::TopHeadlines(_) => evidence::top_headlines(host)?,
+        Api::PrepareChatAction(input) => approval::prepare_chat(host, &input),
         Api::PrepareAction(r) => approval::prepare(host, &r.tool, &r.input_json),
         Api::PrepareRoute(r) => approval::prepare_route(host, &r.route, r.params_json.as_deref(), r.query_json.as_deref(), r.body_json.as_deref()),
     }
