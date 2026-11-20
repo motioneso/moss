@@ -12,6 +12,7 @@ mkdir -p "$calendar_ui_out"
 "$calendar_bindgen_target/release/ui-bindgen" "$calendar_ui_target/wasm32-unknown-unknown/release/moss_calendar_ui.wasm" "$calendar_ui_out" calendar
 cp modules/calendar/ui/web/{index.html,boot.mjs,bridge.mjs} "$calendar_ui_out/"
 cp modules/calendar/ui/web/index.html "$calendar_ui_out/settings.html"
+cp modules/calendar/ui/web/index.html "$calendar_ui_out/today.html"
 cp rust-spike/module-ui/web/guest-bridge.mjs "$calendar_ui_out/"
-cat apps/web/src/styles/kit-calendar.css modules/calendar/ui/web/layout.css > "$calendar_ui_out/calendar.css"
+cat apps/web/src/styles/kit-calendar.css modules/calendar/ui/web/layout.css apps/web/src/styles/kit-today.css apps/web/src/styles/kit-today-misc.css apps/web/src/styles/kit-today-timeline.css apps/web/src/styles/kit-briefing-reader.css apps/web/src/styles/kit-day-plan-review.css > "$calendar_ui_out/calendar.css"
 echo "Calendar UI built at $calendar_ui_out"

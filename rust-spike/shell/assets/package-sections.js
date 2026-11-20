@@ -1,4 +1,4 @@
-/* global document, MutationObserver */
+/* global document, location, MutationObserver */
 // The shell embeds verified package screens; the package owns its section's content and actions.
 import { openModuleFrame } from "/module-shared/host-bridge.mjs";
 
@@ -23,9 +23,38 @@ async function mount(slot) {
       frame.className = "package-section-frame";
       frame.title = screen.title;
       frame.setAttribute("sandbox", "allow-scripts allow-forms");
-      slot.append(frame);
-      dispose = openModuleFrame(frame, moduleId, screen.src, {
+      const surface = document.createElement("dialog");
+      surface.className = "package-section-host";
+      surface.setAttribute("role", "presentation");
+      surface.setAttribute("open", "");
+      surface.append(frame);
+      slot.append(surface);
+      let overflow;
+      const present = (modal) => {
+        if (modal === surface.classList.contains("is-modal")) return;
+        surface.close();
+        surface.classList.toggle("is-modal", modal);
+        if (modal) {
+          overflow = document.body.style.overflow;
+          document.body.style.overflow = "hidden";
+          surface.showModal();
+        } else {
+          document.body.style.overflow = overflow;
+          surface.setAttribute("open", "");
+          frame.contentWindow.focus();
+        }
+      };
+      // Escape must also release the host if a package fails to close its own modal.
+      surface.addEventListener("cancel", (event) => {
+        event.preventDefault();
+        present(false);
+      });
+      const disconnect = openModuleFrame(frame, moduleId, screen.src, {
         minimumHeight: 0,
+        present,
+        navigate: (path) => {
+          location.href = path;
+        },
         resized: (height) => {
           slot.hidden = height === 0;
         },
@@ -43,12 +72,17 @@ async function mount(slot) {
           colorMode: document.documentElement.dataset.colorMode ?? "light"
         })
       });
+      dispose = () => {
+        if (surface.classList.contains("is-modal")) document.body.style.overflow = overflow;
+        disconnect();
+        surface.remove();
+      };
     } catch {
       if (!slot.isConnected) return;
       const message = document.createElement("p");
       message.className = "cmd-empty";
       message.setAttribute("role", "status");
-      message.dataset.errorCode = "commitments_today_unavailable";
+      message.dataset.errorCode = `${moduleId}_today_unavailable`;
       message.textContent = "This section couldn't load.";
       const retry = document.createElement("button");
       retry.type = "button";

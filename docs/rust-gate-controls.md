@@ -48,3 +48,47 @@ scripts/run-gate.sh wait --follow
 
 `CONNECTORS_TESTS` continues to select the database suites independently. These controls do
 not add CI jobs or change which gates are required.
+
+## Per-file shadow CI entries
+
+Memory splits its five database files, with `index` and `oracle` in their own jobs.
+News separates `installed` from `reader`.
+
+The first real per-file PR run (#4420, run 44601271371) still exceeded 30 minutes in
+Memory's `db` and News's `installed`. Under the plan's kill rule, those whole files now run
+on main pushes. News's guard-removal controls are in `installed`. Memory also moves the
+existing guard-removal test in each of `account`, `recording`, and `reembed` to its own
+main-push entry. PRs keep all other tests in those files, plus `dashboard`, `index`, `oracle`,
+and News's `reader`. Main pushes respect the same touched-module/shared-host path filter;
+unknown push scope conservatively runs all promoted modules. Other modules gain no push jobs.
+
+`MEMORY_CONTROLS=skip` excludes exactly those three named tests; `only` selects the control
+in the chosen file with an exact test-name filter. The names live in
+`modules/memory/tools/control-selection.ts`. Unset or `all` retains the full local gate;
+manual workflow runs also retain all files and controls. Unknown control modes fail before
+building. No test assertions or fixture behavior change.
+Each database entry still builds and checks its own module prerequisites.
+
+Connectors uses `CONNECTORS_SUITE` to select one host test file in **both** the prerequisite
+check and the ignored database phase. Its entries are `package`, `registry`, `mail_probe`,
+`db`, `google_sync`, `google`, `imap`, `refresh`, `outlook`, and `writes`. This prevents each
+entry from repeating every other file's non-ignored tests. Native/UI tests, parity oracles,
+fixture checks, and the guest build remain prerequisites of every entry. The full local gate
+is unchanged; `CONNECTORS_TESTS` still works when `CONNECTORS_SUITE` is unset or empty.
+Unknown non-empty `CONNECTORS_SUITE` values fail before building. Selecting `sync_speed`
+explicitly while also skipping it fails rather than silently testing nothing.
+Manual workflow runs retain `sync_speed` as an additional entry; pull requests omit it.
+
+The next real PR run (44615887769) measured Connectors `refresh` at 31.07 minutes, so its
+whole file now runs on main pushes. Its guard-removal control moves with it. The eight
+existing guard-removal tests in `db`, `google_sync`, `google`, `imap`, and `writes` also
+move to main-only entries. This includes the whole upgrade test, which contains a removal
+control; its assertions are unchanged. PRs keep the other nine entries with
+`CONNECTORS_CONTROLS=skip`. Main-only control entries use `only`; unset or `all` retains
+full local/manual coverage. Exact test names live in
+`modules/connectors/tools/control-selection.ts`. Unknown control modes fail before building.
+
+`scripts/rust-gate-matrix.mjs` expands the existing touched-module list. Unrelated modules keep
+their existing commands. The jobs remain optional shadow jobs outside `ci-gate`'s `needs`.
+Each job prints `GATE_RESULT` with its module and entry, then bounded Cargo compile and test
+file timing summaries, including on cancellation. Setup time is included in the job wall time.

@@ -4,7 +4,7 @@
   "name": "Calendar",
   "description": "Calendar cached-event screens and draft tools; signed-in HTTPS Calendar pages; provider execution and full shell composition remain incomplete.",
   "publisher": "Moss",
-  "version": "0.31.0",
+  "version": "0.32.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -183,7 +183,7 @@
     }
   ],
   "requires": {
-    "tasks": ">=0.1.1, <1.0.0"
+    "tasks": ">=0.1.6, <1.0.0"
   },
   "provides": {
     "listEvents": "1.0.0",
@@ -206,6 +206,25 @@
     "defaultEnabled": true
   },
   "features": [
+    {
+      "id": "calendar.today-plan",
+      "description": "Today shows the saved day plan together with visible calendar events, in the account timezone. Proposed task blocks carry Proposed; saved placements carry Flexible. Review task blocks opens the authored day-plan review and schedule at desktop and phone widths. This part is read only: time, placement, Accept all time blocks and Save changes are disabled. Another account’s plan is absent; task references that are no longer visible are marked unavailable. Calendar owns this Today section, replacing the sample schedule. Gaps between stored times show a break or open time, followed by a closing line after the last commitment. A preparation block ending within five minutes before a real calendar event names that event and its time. Automatic planning labels the review button Adjust task blocks. Partial failures name the unavailable saved plan or calendar while retaining the readable source, with Try again to reload.",
+      "errors": [
+        {
+          "code": "calendar_today_unavailable",
+          "class": "transient",
+          "description": "The Today plan, calendar events or installed screen could not load.",
+          "remediationRef": "retry-today-plan"
+        }
+      ],
+      "remediations": [
+        {
+          "id": "retry-today-plan",
+          "description": "Use Try again to reload the saved day plan and calendar. If the package screen cannot start, reload Today.",
+          "path": "/"
+        }
+      ]
+    },
     {
       "id": "calendar.source-switches",
       "description": "The Calendar settings screen has two switches, Include in briefings and Use for planning, both on by default. They save to the account's source-behavior preferences and change nothing for other modules. The Briefings module reads them: it leaves tomorrow's calendar out of the evening briefing when the first is off, and plans no day blocks when the second is off."
@@ -393,7 +412,8 @@
   },
   "screens": {
     "/calendar": "ui/index.html",
-    "/settings/calendar": "ui/settings.html"
+    "/settings/calendar": "ui/settings.html",
+    "/today": "ui/today.html"
   },
   "navigation": [
     {

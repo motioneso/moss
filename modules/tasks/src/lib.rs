@@ -115,7 +115,8 @@ pub fn handle<H: moss_module_sdk::Host + ?Sized>(
                 let dto = task.dto(&[]);
                 return Ok(serde_json::json!({"task":{
                     "id":dto["id"],"ownerUserId":dto["ownerUserId"],
-                    "status":dto["status"],"dueAt":dto["dueAt"]}})
+                    "status":dto["status"],"dueAt":dto["dueAt"],
+                    "title":dto["title"],"doAt":dto["doAt"],"effort":dto["effort"]}})
                 .to_string());
             }
             if let Api::Briefing(b) = api {
