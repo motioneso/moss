@@ -19,8 +19,12 @@ case "${1:-}" in
     ;;
   release)
     port="${2:?port required}"
-    [[ "$port" =~ ^[0-9]+$ ]] && ((port>=5180 && port<=5299))
-    rm -rf "$claims/$port"
+    if [[ "$port" =~ ^[0-9]+$ ]] && ((port>=5180 && port<=5299)); then
+      rm -rf "$claims/$port"
+    else
+      echo 'Invalid CI port' >&2
+      exit 1
+    fi
     ;;
   *) echo 'Use claim <name> or release <port>' >&2; exit 1 ;;
 esac

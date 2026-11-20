@@ -67,8 +67,6 @@ jobs:
           LIVE_CANDIDATE: ${{ inputs.live_candidate || false }}
           PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
           REPO: ${{ github.repository }}
-          SHA: ${{ github.sha }}
-          BEFORE_SHA: ${{ github.event.before }}
         run: |
           set -euo pipefail
           # Both outputs default to the full gate; any early exit below keeps them false.
@@ -105,7 +103,7 @@ jobs:
           fi
           # Touched modules: a path under the module or its SQL, or a change to anything the
           # gates build against (all of rust-spike, crates the host pulls in from modules, the
-          # test harness packages) or this workflow. Those run every covered module.
+          # test harness packages) or this workflow. Shared changes run the host tier.
           host_re='^(rust-spike/|modules/email/host/|modules/people/src/|packages/db/|package\.json$|pnpm-lock\.yaml$|infra/postgres/migrations/|scripts/(run-gate\.sh|rust-gate-matrix\.mjs)$|\.github/ci-bin/|\.github/workflows/ci\.yml$)'
           host_changed=false
           if grep -qE "$host_re" files.txt; then host_changed=true; fi
@@ -358,7 +356,7 @@ jobs:
       CARGO_TARGET_DIR: ${{ github.workspace }}/.rust-gate/target
       # Keep target folders small enough for a hosted runner disk.
       RUST_TEST_THREADS: "1"
-      JARVIS_GATE_DIR: ${{ runner.temp }}/rust-gate-logs
+      JARVIS_GATE_DIR: ${{ github.workspace }}/.rust-gate/logs
       CARGO_INCREMENTAL: "0"
       CARGO_PROFILE_DEV_DEBUG: "0"
       CARGO_PROFILE_TEST_DEBUG: "0"
