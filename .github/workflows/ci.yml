@@ -364,7 +364,8 @@ jobs:
   # Main runs all module files and controls; nightly adds all host gates.
   rust-modules:
     name: Rust gate (${{ matrix.module }} / ${{ matrix.suite }})
-    runs-on: ubuntu-latest
+    # Playwright currently supports Ubuntu 24.04, not the newer ubuntu-latest image.
+    runs-on: ${{ matrix.module == 'calendar' && matrix.suite == 'server' && 'ubuntu-24.04' || 'ubuntu-latest' }}
     timeout-minutes: ${{ needs.changes.outputs.rust_tier == 'pull_request' && 60 || 120 }}
     needs: changes
     if: needs.changes.outputs.rust_entries != '[]'
@@ -404,6 +405,13 @@ jobs:
 
       - name: Make runner port claims available to the host and live suites
         run: echo "$GITHUB_WORKSPACE/.github/ci-bin" >> "$GITHUB_PATH"
+
+      - name: Install Calendar gate Chromium
+        if: matrix.module == 'calendar' && matrix.suite == 'server'
+        run: |
+          sudo python3 scripts/prepare-browser-apt-mirror.py
+          sudo env "PATH=$PATH" timeout --verbose --signal=TERM --kill-after=15s 5m pnpm exec playwright install-deps chromium
+          timeout --verbose --signal=TERM --kill-after=15s 5m pnpm exec playwright install chromium
 
       - name: Provision the assembly gate's declared Linux dependencies
         if: matrix.module == 'host' && matrix.suite == 'module-assembly'
