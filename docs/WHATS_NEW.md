@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Email and calendar switches in Briefings settings.** Briefings settings now let you turn the email and calendar signals on or off, and the change shows on the Email and Calendar settings too. [PR #4428](https://github.com/motioneso/moss/pull/4428)
 - **Catch-up on Today.** Today now lists emails from your morning briefing that still need a look, so you can add a follow-up task or dismiss each one, and undo either. [PR #4426](https://github.com/motioneso/moss/pull/4426)
 - **Needs you on Today.** Today now lists the things your morning briefing flagged for you, so you can accept or dismiss each suggested task right there. [PR #4421](https://github.com/motioneso/moss/pull/4421)
 - **Manage linked devices in Meetings.** You can now see, rename and unlink the Macs and phones linked to Meetings, and approve a new device from a simple question on screen. [PR #4387](https://github.com/motioneso/moss/pull/4387)
