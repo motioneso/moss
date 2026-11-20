@@ -89,7 +89,7 @@ fn reads_unknown_tools_missing_and_oversize_inputs_do_not_make_cards() {
         ),
         (
             "finance.activity.undo",
-            json!({"activityId":"x".repeat(4097)}),
+            json!({"activityId":"x".repeat(32769)}),
         ),
     ] {
         assert!(card(&f, tool, p).is_err(), "{tool}");
@@ -217,4 +217,53 @@ fn chat_distribution_can_leave_the_pool_and_refuses_duplicate_categories() {
         .rows("app.finance_flex_policies")
         .iter()
         .any(|r| r["active"] == false));
+}
+
+#[test]
+fn large_batches_and_unicode_notes_keep_every_value_within_host_card_limits() {
+    let f = Fake::new();
+    let transactions: Vec<_> = (0..200)
+        .map(|n| {
+            json!({
+                "id":format!("transaction-{n:04}"), "writeRevision":"a".repeat(32)
+            })
+        })
+        .collect();
+    let m = manifest();
+    let mut p =
+        m["tools"]["finance.transactions.bulk-confirm"]["inputSchema"]["examples"][0].clone();
+    p["transactions"] = json!(transactions);
+    let prepared = card(&f, "finance.transactions.bulk-confirm", p.clone()).unwrap();
+    let label = m["tools"]["finance.transactions.bulk-confirm"]["inputSchema"]["properties"]
+        ["transactions"]["description"]
+        .as_str()
+        .unwrap();
+    let fields = prepared["fields"].as_array().unwrap();
+    let shown: String = fields
+        .iter()
+        .filter(|field| field["label"] == label)
+        .map(|field| field["value"].as_str().unwrap())
+        .collect();
+    assert_eq!(shown, p["transactions"].to_string());
+    assert!(fields.len() <= 32 && prepared.to_string().len() <= 32768);
+    assert!(fields
+        .iter()
+        .all(|field| field["value"].as_str().unwrap().len() <= 4096));
+    let mut p = m["tools"]["finance.transactions.notes.save"]["inputSchema"]["examples"][0].clone();
+    let notes = "🍵".repeat(4000);
+    p["notes"] = json!(notes);
+    let prepared = card(&f, "finance.transactions.notes.save", p).unwrap();
+    let label = m["tools"]["finance.transactions.notes.save"]["inputSchema"]["properties"]["notes"]
+        ["description"]
+        .as_str()
+        .unwrap();
+    let shown: String = prepared["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|field| field["label"] == label)
+        .map(|field| field["value"].as_str().unwrap())
+        .collect();
+    assert_eq!(shown, notes);
+    assert!(prepared.to_string().len() <= 32768);
 }

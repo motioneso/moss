@@ -63,10 +63,23 @@ pub fn prepare<H: Host + ?Sized>(host: &H, input: &Value) -> Result<Value> {
                 .as_str()
                 .map(str::to_owned)
                 .unwrap_or_else(|| value.to_string());
-            if label.len() > 120 || value.len() > 4096 {
+            if label.len() > 120 {
                 return Err(bad());
             }
-            fields.push(json!({"label":label,"value":value}));
+            // Keep every byte, including long batches and multi-byte note text. Continuations
+            // retain the fixed schema label; no model text becomes a label.
+            let mut rest = value.as_str();
+            loop {
+                let mut end = rest.len().min(4096);
+                while !rest.is_char_boundary(end) {
+                    end -= 1;
+                }
+                fields.push(json!({"label":label,"value":&rest[..end]}));
+                rest = &rest[end..];
+                if rest.is_empty() {
+                    break;
+                }
+            }
         }
     }
     if name == "finance.target.remove" {
@@ -83,5 +96,11 @@ pub fn prepare<H: Host + ?Sized>(host: &H, input: &Value) -> Result<Value> {
         fields.insert(0, json!({"label":"Current target","value":current.map_or("None".into(), |v| v.to_string())}));
         fields.push(json!({"label":"Effect","value":"Remove this target from the selected month onward. Earlier history and assigned money remain."}));
     }
-    Ok(json!({"fields":fields}))
+    let card = json!({"fields":fields});
+    if fields.len() > 32 || card.to_string().len() > 32 * 1024 {
+        return Err(Error::new(
+            "Finance approval is too large; use a smaller batch",
+        ));
+    }
+    Ok(card)
 }

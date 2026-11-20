@@ -14,6 +14,9 @@ controls = [
      'let label = property["description"].as_str().ok_or_else(bad)?;',
      'let label = parameters.get("name").and_then(Value::as_str).unwrap_or("Fallback");',
      "model_values_only_appear_in_labelled_fields"),
+    ("batch-card-continuations", "modules/finance/src/chat.rs",
+     "if label.len() > 120 {", "if label.len() > 120 || value.len() > 4096 {",
+     "large_batches_and_unicode_notes_keep_every_value_within_host_card_limits"),
     ("receipt-projection", "modules/finance/src/chat_changes.rs",
      "project(&before, table.columns)", "json!(before)",
      "receipts_do_not_include_internal_row_columns"),
@@ -38,4 +41,4 @@ for name, source, protection, removed, test in controls:
             print(f"Finance chat {name}: {'removed' if removal else 'protected'} exit {run.returncode}; one assertion", flush=True)
         finally:
             path.write_bytes(original)
-print("PASS 2 Finance chat removal controls; source restored", flush=True)
+print(f"PASS {len(controls)} Finance chat removal controls; source restored", flush=True)
