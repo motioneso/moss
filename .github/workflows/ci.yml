@@ -405,6 +405,17 @@ jobs:
       - name: Make runner port claims available to the host and live suites
         run: echo "$GITHUB_WORKSPACE/.github/ci-bin" >> "$GITHUB_PATH"
 
+      - name: Provision the assembly gate's declared Linux dependencies
+        if: matrix.module == 'host' && matrix.suite == 'module-assembly'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev python3-gi dbus-daemon
+          # The notification fixture imports system GIO bindings. Use the matching
+          # distro Python rather than a runner tool-cache Python with a different ABI.
+          mkdir -p "$RUNNER_TEMP/assembly-bin"
+          ln -s /usr/bin/python3 "$RUNNER_TEMP/assembly-bin/python3"
+          echo "$RUNNER_TEMP/assembly-bin" >> "$GITHUB_PATH"
+
       - name: Disk before
         run: df -h / /tmp
 

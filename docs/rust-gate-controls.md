@@ -57,8 +57,8 @@ News separates `installed` from `reader`.
 The first real per-file PR run (#4420, run 44601271371) still exceeded 30 minutes in
 Memory's `db` and News's `installed`. Under the plan's kill rule, those whole files now run
 on main pushes. News's guard-removal controls are in `installed`. Memory also moves the
-existing guard-removal test in each of `account`, `recording`, and `reembed` to its own
-main-push entry. PRs keep all other tests in those files, plus `dashboard`, `index`, `oracle`,
+existing guard-removal test in each of `account`, `recording`, and `reembed` to the
+main-push tier. PRs keep all other tests in those files, plus `dashboard`, `index`, `oracle`,
 and News's `reader`. Every main push now runs the full module matrix, including those deferred files and all
 guard-removal controls. Nightly runs the same full matrix plus all host gates.
 
@@ -82,10 +82,10 @@ Manual workflow runs retain `sync_speed` as an additional entry; pull requests o
 The next real PR run (44615887769) measured Connectors `refresh` at 31.07 minutes, so its
 whole file now runs on main pushes. Its guard-removal control moves with it. The eight
 existing guard-removal tests in `db`, `google_sync`, `google`, `imap`, and `writes` also
-move to main-only entries. This includes the whole upgrade test, which contains a removal
+move to the main tier. This includes the whole upgrade test, which contains a removal
 control; its assertions are unchanged. PRs keep the other nine entries with
-`CONNECTORS_CONTROLS=skip`. Main-only control entries use `only`; unset or `all` retains
-full local/manual coverage. Exact test names live in
+`CONNECTORS_CONTROLS=skip`. Main and nightly run the full files with `all`; `only` remains
+available for local control checks. Unset or `all` retains full local/manual coverage. Exact test names live in
 `modules/connectors/tools/control-selection.ts`. Unknown control modes fail before building.
 
 `scripts/rust-gate-matrix.mjs` expands the touched-module list on PRs. A shared host change
