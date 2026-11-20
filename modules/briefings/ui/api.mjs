@@ -34,6 +34,8 @@ export function briefingsApi(client) {
       ),
     sourceSignals: () => call("GET", "/source-signals"),
     setSourceSignals: (body) => call("PATCH", "/source-signals", body),
+    today: () => call("GET", "/today"),
+    triage: (taskId, action) => call("POST", `/today/rows/${id(taskId)}`, { action }),
     start: (definitionId, idempotencyKey) =>
       call("POST", `/definitions/${id(definitionId)}/run`, { idempotencyKey })
   };

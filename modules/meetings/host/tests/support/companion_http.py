@@ -5,6 +5,8 @@ import hmac
 import json
 import os
 from pathlib import Path
+import shutil
+import socket
 import ssl
 import subprocess
 import sys
@@ -16,7 +18,13 @@ import urllib.error
 
 data = json.load(sys.stdin)
 target = Path(os.environ.get("CARGO_TARGET_DIR", "/tmp/moss-meetings-host")) / "debug"
-port = subprocess.check_output(["devports", "claim", "js353-device-reinstall"], text=True).strip()
+devports = shutil.which("devports")
+if devports:
+    port = subprocess.check_output([devports, "claim", "js353-device-reinstall"], text=True).strip()
+else:
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        port = str(listener.getsockname()[1])
 server = None
 try:
     assert port.isdigit(), "claimed a development port"
@@ -89,4 +97,5 @@ finally:
     if server is not None:
         server.kill()
         server.wait()
-    subprocess.run(["devports", "release", port], stdout=subprocess.DEVNULL, check=False)
+    if devports:
+        subprocess.run([devports, "release", port], stdout=subprocess.DEVNULL, check=False)

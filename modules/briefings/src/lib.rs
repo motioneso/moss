@@ -35,6 +35,7 @@ pub mod source_signals;
 pub mod sources;
 pub mod status;
 pub mod text;
+pub mod today;
 pub mod tools;
 pub mod trust;
 pub mod util;
@@ -58,6 +59,8 @@ pub fn route<H: Host + ?Sized>(host: &H, request: RouteRequest) -> Response {
         ("GET", "/definitions/:id/runs/:run_id") => runs::get(host, &request),
         ("GET", "/source-signals") => source_signals::get(host),
         ("PATCH", "/source-signals") => source_signals::patch(host, &request),
+        ("GET", "/today") => today::get(host),
+        ("POST", "/today/rows/:task_id") => today::act(host, &request),
         _ => return Response::new(404, json!({"message":"Route not found"})),
     };
     result.unwrap_or_else(|_| Response::new(500, json!({"message":"Internal server error"})))

@@ -1,4 +1,5 @@
 import type { AiModelCapability, AiModelTier } from "./ai-types.js";
+import { RUST_CHAT_REMEDIATIONS } from "./app-map-rust-chat.js";
 import {
   DESKTOP_APP_ERRORS,
   DESKTOP_APP_REMEDIATIONS,
@@ -79,7 +80,7 @@ export const RUST_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
     runtime: "rust",
     label: "Rust Moss - Today",
     description:
-      "Under the greeting, Today says where your morning briefing stands, taken from your saved Briefings records. It says the briefing is switched off, failed to run, was blocked, or when it runs (for example It runs at 7:00 AM, or It should have run at 7:00 AM once that time has passed). It shows nothing when you have no morning briefing, when Briefings is not installed, or when today's briefing is ready to read. Read your briefing opens the reader.",
+      "Under the greeting, Today says where your morning briefing stands, taken from your saved Briefings records. It says the briefing is switched off, failed to run, was blocked, or when it runs (for example It runs at 7:00 AM, or It should have run at 7:00 AM once that time has passed). It shows nothing when you have no morning briefing, when Briefings is not installed, or when today's briefing is ready to read. Read your briefing opens the reader. A Needs you section lists the follow-ups from your latest morning briefing; each shows Accept and Dismiss while its task is still suggested, then Accepted or Dismissed once you choose, taken from the task itself, with Reply to ask Moss about it. It hides when Briefings is not installed or has nothing to show, and rows show without buttons when Tasks is not installed. Calendar owns the saved schedule and read-only task-block review through its calendar.today-plan feature, including the Proposed and Flexible labels, unavailable tasks, schedule gaps and phone disclosure. Those details belong to Calendar rather than core.",
     path: "/",
     scope: "user"
   },
@@ -95,7 +96,7 @@ export const CORE_APP_FEATURES: readonly (AppMapItem & {
     id: "rust-module-chat",
     runtime: "rust",
     description:
-      "Moss can use the chat tools of modules you have installed and switched on for your account. Only tools with a declared input schema that need no approval appear until chat approval cards are available. Scratchpad can read your private note through chat. Codex keeps its starting tool list until a fresh conversation."
+      "Moss can use the chat tools of modules you have installed and switched on for your account. Tools with a declared input schema are available. Scratchpad can read your private note through chat. Commitments can list suggestions and show their evidence. Chat asks before deleting, sending outside your account, or pinned actions; approve or reject the card in the chat drawer. Agent tool permissions also show a card. Outcomes say Approved, You declined or Timed out. If approval timed out or is no longer available, ask Moss again. Plain writes run unless you chose to ask first, and show Done with the labelled before and after values from the tool. Codex keeps its starting tool list until a fresh conversation."
   }
 ];
 
@@ -850,6 +851,7 @@ export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
     scope: "user"
   },
   ...DESKTOP_APP_REMEDIATIONS,
+  ...RUST_CHAT_REMEDIATIONS,
   {
     id: "core.page.reload_page",
     description:

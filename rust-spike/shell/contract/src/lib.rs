@@ -131,6 +131,8 @@ pub struct ChatThread {
     pub running: bool,
     #[serde(default)]
     pub approvals: Vec<ApprovalView>,
+    #[serde(default)]
+    pub completed: Vec<CompletedWrite>,
 }
 
 /// `action` is a module tool card (part 3b). `permission` is the agent's own ask.
@@ -167,6 +169,23 @@ pub struct ApprovalView {
     pub title: String,
     pub fields: Vec<CardField>,
     pub danger: bool,
+    #[serde(default)]
+    pub target: String,
+    #[serde(default)]
+    pub content: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct ChangedField {
+    pub label: String,
+    pub before: String,
+    pub after: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct CompletedWrite {
+    pub id: String,
+    pub changed: Vec<ChangedField>,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]

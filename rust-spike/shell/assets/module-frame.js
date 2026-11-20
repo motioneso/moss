@@ -108,6 +108,7 @@ try {
   // Weather's "Use my location" reads the browser position from inside the sandboxed frame.
   if (moduleId === "weather") frame.setAttribute("allow", "geolocation *");
   openModuleFrame(frame, moduleId, screenUrl.href, {
+    present: () => null,
     request,
     theme: () => ({
       theme: "park-press",

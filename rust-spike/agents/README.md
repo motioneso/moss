@@ -46,13 +46,13 @@ Module tools now execute through the server: the chat op includes a fresh server
 `text`. The runner waits up to 300 seconds, and a closed socket fails pending calls. Built-ins
 still run in the runner. The server selects the module from its offered snapshot, reverses the
 wire name (`_` back to `.`), and calls the validated host API with the signed-in account context.
-Approval-required tools remain unavailable until the later approval-card parts.
+Approval-required tools use stored cards in the chat drawer.
 
 Agent permission asks become approval records (pending, approved, used, declined, timed out,
 voided). `POST /api/chat/approvals/{id}` with `{"decision":"approve"|"reject"}` answers one as
 its owner (404 for another account or an unknown id, 409 once closed, expired or voided). Records
 expire after 10 minutes, the runner refuses an unanswered ask after 11, and every open record is
-voided when its turn ends. Module-tool approvals are refused until part 3b adds cards.
+voided when its turn ends. Module-tool approvals are built by the installed module host. The server matches the approved record to the actor, open turn, module, tool and exact parameters before passing the displayed version to the host. Missing or malformed cards are refused.
 
 Claude adopts changed lists in the retained session. Codex retains its starting list: send
 `fresh_conversation: true` in a chat op to explicitly end the previous conversation and start a
@@ -70,6 +70,6 @@ Run `test:rust-chat-bridge` through `scripts/run-gate.sh` for host, agent, shell
 checks. The `test:rust-chat-bridge-live` gate additionally builds the real UI/server/package and
 holds a disposable installed server for the task browser. Supply `MOSS_CHAT_BRIDGE_PROOF`,
 `MOSS_CHAT_BRIDGE_RUNNER` (an isolated runner root outside `/tmp`), and `MOSS_SCRATCHPAD_HOST`
-(the LAN or tailnet host). The fixture's `bridge.json` identifies its server and test accounts;
-write `finished` in the proof folder after exercising the real drawer. Proof files and disposable
+(the LAN or tailnet host). The fixture's `bridge.json` identifies its server and test accounts.
+Set `MOSS_CHAT_COMMITMENTS_PROOF=1` to also build and install Commitments and create four disposable pending suggestions (ids in `bridge.json`) for desktop/phone approve/reject proof. These rows are fixtures, not model extraction. Write `finished` in the proof folder after exercising the real drawer. Proof files and disposable
 account data belong outside the repository.

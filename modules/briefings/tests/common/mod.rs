@@ -40,10 +40,16 @@ pub struct Fake {
     pub answers: RefCell<Vec<(String, String, String, Option<Value>)>>,
     /// Every public-API call as (person, module, name, parameters).
     pub api_calls: RefCell<Vec<(String, String, String, Value)>>,
+    /// A stand-in for Tasks. When `Some`, its own-account rules answer the task calls: a person
+    /// reads and changes only tasks they own. Entries carry `ownerUserId` and the task fields.
+    pub tasks: RefCell<Option<Vec<Value>>>,
     /// The router's answer: `Ok(text)` or `Err(message)`. Unset fails like a server with no model.
     pub ai_reply: RefCell<Option<std::result::Result<String, String>>>,
     /// Every router call as (resource, parameters).
     pub ai_calls: RefCell<Vec<(String, Value)>>,
+    /// Active ratings as (person, target kind, rating kind, target ref). The feedback port
+    /// answers from the caller's own rows only.
+    pub ratings: RefCell<Vec<(String, String, String, String)>>,
     ids: Cell<u32>,
 }
 
@@ -64,10 +70,20 @@ impl Fake {
             schedules: RefCell::new(vec![]),
             answers: RefCell::new(vec![]),
             api_calls: RefCell::new(vec![]),
+            tasks: RefCell::new(None),
             ai_reply: RefCell::new(None),
             ai_calls: RefCell::new(vec![]),
+            ratings: RefCell::new(vec![]),
             ids: Cell::new(0),
         }
+    }
+    /// Records an active rating for a person, as the feedback owner would store it.
+    pub fn rate(&self, person: &str, target_kind: &str, kind: &str, target_ref: &str) {
+        self.ratings.borrow_mut().push((person.into(), target_kind.into(), kind.into(), target_ref.into()));
+    }
+    /// Takes the rating back, as Undo does.
+    pub fn unrate(&self, person: &str, target_kind: &str, kind: &str, target_ref: &str) {
+        self.ratings.borrow_mut().retain(|r| r != &(person.into(), target_kind.into(), kind.into(), target_ref.into()));
     }
     pub fn as_actor(&self, actor: &'static str) {
         self.actor.set(actor);
@@ -78,6 +94,28 @@ impl Fake {
     /// Teaches a person's public-API answer. `None` makes that call fail.
     pub fn answer(&self, person: &str, module: &str, name: &str, answer: Option<Value>) {
         self.answers.borrow_mut().push((person.into(), module.into(), name.into(), answer));
+    }
+    /// The Tasks rules the real module applies to these two calls.
+    fn tasks_answer(&self, actor: &str, name: &str, p: &Value) -> Result<Value> {
+        let mut guard = self.tasks.borrow_mut();
+        let tasks = guard.as_mut().unwrap();
+        let mine = |t: &Value| t["ownerUserId"] == actor;
+        match name {
+            "listBriefingTasks" if p["ids"].is_array() => {
+                let wanted: Vec<&Value> = p["ids"].as_array().unwrap().iter().collect();
+                Ok(json!({"items": tasks.iter().filter(|t| mine(t) && wanted.contains(&&t["id"])).cloned().collect::<Vec<_>>()}))
+            }
+            "listBriefingTasks" => Ok(json!({"items": tasks.iter().filter(|t| mine(t) && t["status"] == p["status"]).cloned().collect::<Vec<_>>()})),
+            "setBriefingTaskStatus" => {
+                let Some(task) = tasks.iter_mut().find(|t| mine(t) && t["id"] == p["taskId"]) else { return Ok(json!({"task": null})) };
+                if task["status"] == "done" {
+                    return Err(moss_module_sdk::Error::new("Task status change not allowed"));
+                }
+                task["status"] = p["status"].clone();
+                Ok(json!({"task": {"id": task["id"], "status": task["status"]}}))
+            }
+            _ => Err(moss_module_sdk::Error::new("Public call unavailable")),
+        }
     }
     pub fn share(&self, definition: &str, person: &str, level: &str) {
         self.shares.borrow_mut().push((definition.into(), person.into(), level.into()));
@@ -317,6 +355,9 @@ impl Host for Fake {
                 let actor = self.actor.get();
                 let name = parameters["name"].as_str().unwrap_or("").to_owned();
                 self.api_calls.borrow_mut().push((actor.into(), resource.into(), name.clone(), parameters["parameters"].clone()));
+                if resource == "tasks" && self.tasks.borrow().is_some() {
+                    return self.tasks_answer(actor, &name, &parameters["parameters"]);
+                }
                 let found = self.answers.borrow().iter().rev().find(|(p, m, n, _)| p == actor && m == resource && *n == name).cloned();
                 match found {
                     Some((_, _, _, Some(answer))) => Ok(answer),
@@ -324,6 +365,16 @@ impl Host for Fake {
                     None if resource == "calendar" && name == "getSourceSwitches" => Ok(json!({"briefings": true, "planning": true})),
                     _ => Err(moss_module_sdk::Error::new("Public call unavailable")),
                 }
+            }
+            ("feedback", "active") => {
+                let actor = self.actor.get();
+                let (surface, kind) = (parameters["surface"].as_str().unwrap_or(""), parameters["kind"].as_str().unwrap_or(""));
+                assert_eq!(surface, "briefing");
+                let refs: Vec<String> = self.ratings.borrow().iter()
+                    .filter(|(p, t, k, _)| p == actor && t == resource && k == kind)
+                    .map(|(_, _, _, r)| r.clone())
+                    .collect();
+                Ok(json!({"refs": refs}))
             }
             ("ai", "generate") => {
                 self.ai_calls.borrow_mut().push((resource.into(), parameters));

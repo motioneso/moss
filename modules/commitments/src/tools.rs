@@ -1,15 +1,21 @@
 //! Chat review tools and the approval card for them. Reads return trimmed shapes. A change needs
 //! the host's stored approval, and its version must still match the candidate's current row.
-use crate::candidates::{candidate_dto, compare, find, now, CANDIDATES, SOURCES};
-use crate::util::{iso, iso_or_null, is_uuid, values};
+use crate::candidates::{CANDIDATES, SOURCES, candidate_dto, compare, find, now};
+use crate::util::{is_uuid, iso, iso_or_null, values};
 use moss_module_sdk::{
-    query::{Compare, Filter, Order, Query},
     Client, Error, Host, Result,
+    query::{Compare, Filter, Order, Query},
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
-pub const LIST_STATUSES: [&str; 6] =
-    ["pending_review", "accepted", "rejected", "snoozed", "expired", "explicit_non_action"];
+pub const LIST_STATUSES: [&str; 6] = [
+    "pending_review",
+    "accepted",
+    "rejected",
+    "snoozed",
+    "expired",
+    "explicit_non_action",
+];
 pub const THREAD_LOOKUP_CAP: usize = 50;
 
 fn bad() -> Error {
@@ -32,7 +38,10 @@ fn list<H: Host + ?Sized>(host: &H, input: &Value) -> Result<Value> {
     };
     let clock = now(host)?;
     let mut query = Query::select(crate::candidates::status_filter(Some(status), &clock));
-    query.order = vec![Order { column: "last_seen_at".into(), descending: true }];
+    query.order = vec![Order {
+        column: "last_seen_at".into(),
+        descending: true,
+    }];
     let items = Client(host)
         .query(CANDIDATES, &query)?
         .iter()
@@ -65,15 +74,22 @@ fn thread_judgements<H: Host + ?Sized>(host: &H, input: &Value) -> Result<Value>
 
 fn get<H: Host + ?Sized>(host: &H, input: &Value) -> Result<Value> {
     let id = candidate_id(input)?;
-    let Some(c) = find(host, id)? else { return Ok(json!({"data":{"error":"Not found"}})) };
+    let Some(c) = find(host, id)? else {
+        return Ok(json!({"data":{"error":"Not found"}}));
+    };
     let mut query = Query::select(Filter::eq("candidate_id", id));
-    query.order = vec![Order { column: "created_at".into(), descending: false }];
+    query.order = vec![Order {
+        column: "created_at".into(),
+        descending: false,
+    }];
     let evidence = Client(host)
         .query(SOURCES, &query)?
         .iter()
         .map(|e| {
-            Ok(json!({"sourceKind": e["source_kind"], "evidenceExcerpt": e["evidence_excerpt"],
-                      "occurredAt": iso_or_null(&e["occurred_at"])?}))
+            Ok(
+                json!({"sourceKind": e["source_kind"], "evidenceExcerpt": e["evidence_excerpt"],
+                      "occurredAt": iso_or_null(&e["occurred_at"])?}),
+            )
         })
         .collect::<Result<Vec<_>>>()?;
     let dto = candidate_dto(&c)?;
@@ -86,7 +102,12 @@ fn get<H: Host + ?Sized>(host: &H, input: &Value) -> Result<Value> {
 }
 
 /// Moves one candidate to a new status once the approval version still matches the row.
-fn change<H: Host + ?Sized>(host: &H, input: &Value, status: &str, approval: Option<&str>) -> Result<Value> {
+fn change<H: Host + ?Sized>(
+    host: &H,
+    input: &Value,
+    status: &str,
+    approval: Option<&str>,
+) -> Result<Value> {
     let id = candidate_id(input)?;
     let until = if status == "snoozed" {
         let text = input["snoozedUntil"].as_str().ok_or_else(bad)?;
@@ -103,11 +124,17 @@ fn change<H: Host + ?Sized>(host: &H, input: &Value, status: &str, approval: Opt
         CANDIDATES,
         &Query::update(
             Filter::And {
-                filters: vec![Filter::eq("id", id), compare("updated_at", Compare::Eq, current["updated_at"].clone())],
+                filters: vec![
+                    Filter::eq("id", id),
+                    compare("updated_at", Compare::Eq, current["updated_at"].clone()),
+                ],
             },
             values(vec![
                 ("status", json!(status)),
-                ("snoozed_until", until.clone().map_or(Value::Null, Value::String)),
+                (
+                    "snoozed_until",
+                    until.clone().map_or(Value::Null, Value::String),
+                ),
                 ("updated_at", json!(now(host)?)),
             ]),
         ),
@@ -159,4 +186,31 @@ pub fn prepare<H: Host + ?Sized>(host: &H, input: &Value) -> Result<Value> {
         _ => return Err(bad()),
     }
     Ok(json!({"target": current["title"], "fields": fields, "version": version_of(&current)?}))
+}
+
+/// Adapt the chat host's common envelope to the saved-record card builder.
+pub fn prepare_chat<H: Host + ?Sized>(host: &H, input: &Value) -> Result<Value> {
+    let action = match input["tool"].as_str() {
+        Some("commitments.accept") => "accept",
+        Some("commitments.reject") => "reject",
+        Some("commitments.snooze") => "snooze",
+        _ => return Err(bad()),
+    };
+    let mut parameters = input["parameters"].as_object().ok_or_else(bad)?.clone();
+    parameters.insert("action".into(), json!(action));
+    if action == "snooze" {
+        chrono::DateTime::parse_from_rfc3339(parameters.get("snoozedUntil").and_then(Value::as_str).ok_or_else(bad)?)
+            .map_err(|_| bad())?;
+    }
+    let mut card = prepare(host, &Value::Object(parameters))?;
+    let label = match action {
+        "accept" => "Accept suggestion",
+        "reject" => "Reject suggestion",
+        _ => "Snooze suggestion",
+    };
+    card["fields"]
+        .as_array_mut()
+        .ok_or_else(bad)?
+        .insert(0, json!({"label":"Action","value":label}));
+    Ok(card)
 }

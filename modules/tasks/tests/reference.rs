@@ -27,11 +27,11 @@ fn call(id: &str) -> moss_module_sdk::Result<String> {
 }
 
 #[test]
-fn reference_carries_only_id_owner_status_and_due() {
+fn reference_carries_only_calendar_summary_fields() {
     let out: Value = serde_json::from_str(&call(TASK).unwrap()).unwrap();
     assert_eq!(
         out,
-        json!({"task":{"id":TASK,"ownerUserId":"o","status":"todo","dueAt":"2026-11-09T10:00:00.000Z"}})
+        json!({"task":{"id":TASK,"ownerUserId":"o","status":"todo","dueAt":"2026-11-09T10:00:00.000Z","title":"Secret title","doAt":null,"effort":null}})
     );
 }
 

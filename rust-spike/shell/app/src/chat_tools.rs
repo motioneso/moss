@@ -9,8 +9,25 @@ use std::sync::Arc;
 
 pub trait ChatTools: Send + Sync {
     fn list(&self) -> Result<Vec<ToolDef>, String>;
+    fn card(
+        &self,
+        _: &str,
+        _: &str,
+        _: &serde_json::Value,
+    ) -> Result<moss_module_host::chat_tools::ApprovalCardRecord, String> {
+        Err("Approval details are unavailable".into())
+    }
+    fn run_approved(
+        &self,
+        _: &str,
+        _: &str,
+        _: serde_json::Value,
+        _: Option<&str>,
+    ) -> Result<String, String> {
+        Err("Approved tools are unavailable".into())
+    }
     fn run(&self, module: &str, tool: &str, arguments: serde_json::Value)
-        -> Result<String, String>;
+    -> Result<String, String>;
 }
 pub type Source = Arc<dyn ChatTools>;
 struct InstalledTools {
@@ -42,13 +59,11 @@ impl ChatTools for InstalledTools {
                 .chat_tools(&self.access)
                 .map_err(|_| "Cannot list chat tools")?
             {
-                // Cards do not have a browser surface until part 3b.
-                if matches!(def.rule, ChatToolRule::Card { .. }) {
-                    continue;
-                }
                 let risk = match def.risk.as_str() {
                     "read" => Risk::Read,
                     "write" => Risk::Write,
+                    "destructive" => Risk::Destructive,
+                    "outbound" => Risk::Outbound,
                     _ => return Err("Unexpected chat tool risk".into()),
                 };
                 tools.push(ToolDef {
@@ -59,18 +74,56 @@ impl ChatTools for InstalledTools {
                     facts: ToolFacts {
                         risk,
                         is_external: false,
-                        execution_auto: true,
+                        execution_auto: !matches!(def.rule, ChatToolRule::Card { .. }),
                         confirm_under_yolo: false,
                         family: Some(Some(FamilyFacts {
                             default_tier: Tier::TrustedAuto,
                             allowed_tiers: vec![Tier::TrustedAuto, Tier::AlwaysConfirm],
-                            stored_tier: None,
+                            stored_tier: matches!(def.rule, ChatToolRule::Card { pinned: false })
+                                .then_some(Tier::AlwaysConfirm),
                         })),
                     },
                 });
             }
         }
         Ok(tools)
+    }
+    fn card(
+        &self,
+        module: &str,
+        tool: &str,
+        arguments: &serde_json::Value,
+    ) -> Result<moss_module_host::chat_tools::ApprovalCardRecord, String> {
+        let app = self
+            .modules
+            .lock()
+            .map_err(|_| "Module host is busy")?
+            .as_ref()
+            .map(|m| m.application.clone())
+            .ok_or("Module host unavailable")?;
+        app.installer
+            .chat_tool_card(&self.access, module, tool, arguments)
+            .map_err(|_| "Approval details are unavailable")?
+            .ok_or("Approval details are unavailable".into())
+    }
+    fn run_approved(
+        &self,
+        module: &str,
+        tool: &str,
+        arguments: serde_json::Value,
+        version: Option<&str>,
+    ) -> Result<String, String> {
+        let app = self
+            .modules
+            .lock()
+            .map_err(|_| "Module host is busy")?
+            .as_ref()
+            .map(|m| m.application.clone())
+            .ok_or("Module host unavailable")?;
+        app.installer
+            .run_approved_chat_tool(&self.access, module, tool, arguments, version)
+            .map(|v| v.to_string())
+            .map_err(|_| "The approved action could not run. Ask Moss again.".into())
     }
     fn run(
         &self,
