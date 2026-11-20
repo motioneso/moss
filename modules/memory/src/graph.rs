@@ -278,8 +278,12 @@ pub fn recall_tool(host: &impl Host, parameters: &Value) -> Result<Value> {
     Ok(json!({"data": {"query": query, "items": items}}))
 }
 
+pub(crate) fn validate_remember(parameters: &Value) -> Result<Value> {
+    checked(&fact_schema(false), parameters, "body")
+}
+
 pub fn remember_tool(host: &impl Host, parameters: &Value) -> Result<Value> {
-    let input = checked(&fact_schema(false), parameters, "body")?;
+    let input = validate_remember(parameters)?;
     let source = &input["source"];
     let tidy = json!({
         "subjectEntityId": optional(&input["subjectEntityId"]),
@@ -305,6 +309,8 @@ pub fn remember_tool(host: &impl Host, parameters: &Value) -> Result<Value> {
     if pending {
         data["searchPending"] = json!(true);
     }
+    data["changed"] = json!(crate::chat::fields(&input).into_iter()
+        .map(|f| json!({"label":f["label"],"before":"None","after":f["value"]})).collect::<Vec<_>>());
     Ok(json!({"data": data}))
 }
 

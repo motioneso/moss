@@ -296,3 +296,25 @@ fn tool_validation_and_errors_do_not_echo_private_input_or_host_failures() {
     );
     assert_eq!(f.calls.borrow().last().unwrap().0, "tools");
 }
+
+#[test]
+fn chat_cards_and_done_fields_use_the_saved_goal_and_proposed_values() {
+    let f = Fake::new();
+    let (_, goal) = create(&f, "Saved goal");
+    let p = json!({"goalId":goal["id"],"title":"Changed title","priority":5});
+    let card: Value = serde_json::from_str(&moss_goals_module::handle(&f,"api",&json!({"name":"prepareChatAction","parameters":{"tool":"goals.update","parameters":p}}).to_string()).unwrap()).unwrap();
+    assert_eq!(card["target"], "Saved goal");
+    assert_eq!(
+        card["fields"],
+        json!([{"label":"Title","value":"Changed title"},{"label":"Priority","value":"5"}])
+    );
+    let result = moss_goals_module::tools::handle(
+        &f,
+        serde_json::from_value(json!({"tool":"goals.update","parameters":p})).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        result["data"]["changed"],
+        json!([{"label":"Title","before":"Saved goal","after":"Changed title"},{"label":"Priority","before":"3","after":"5"}])
+    );
+}

@@ -10,7 +10,7 @@ use moss_module_host::{
     trust::{self, Publisher, RegistryIdentity},
 };
 use safety_core::db::{Database, RuntimeRole};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::{
     fs,
@@ -230,6 +230,9 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
     if std::env::var_os("JS383_COMMITMENTS_PACKAGE").is_some() {
         packages.push(("JS383_COMMITMENTS_PACKAGE", "commitments"));
     }
+    if std::env::var_os("JS388_NOTES_PACKAGE").is_some() {
+        packages.push(("JS388_NOTES_PACKAGE", "notes"));
+    }
     let artifacts: Vec<Artifact> = packages
         .iter()
         .map(|(variable, id)| {
@@ -324,9 +327,33 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
 
     private(
         &root.join("modules.json"),
-        &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key}),
+        &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"notes_base":root.join("notes")}),
     );
     let _server = start(true);
+    if std::env::var_os("JS388_NOTES_PACKAGE").is_some() {
+        let folder = root.join("notes").join(owner.to_string()).join("Journal");
+        fs::create_dir_all(&folder).unwrap();
+        for name in [
+            "desktop-delete.md",
+            "phone-delete.md",
+            "desktop-reject.md",
+            "phone-reject.md",
+        ] {
+            fs::write(
+                folder.join(name),
+                format!("# Approval proof\nSaved {name} before deletion.\n"),
+            )
+            .unwrap();
+        }
+        let linked = client
+            .put(format!("{origin}/api/m/notes/notes-source"))
+            .header("origin", &origin)
+            .header("cookie", &cookie)
+            .json(&json!({"path":folder}))
+            .send()
+            .unwrap();
+        assert_eq!(linked.status(), 200, "Link the real Notes folder");
+    }
     // Setup allows one owner over HTTP, so the second person is made in the database with the
     // owner's password hash and then signs in through the real route.
     let other = {
