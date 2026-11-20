@@ -22,7 +22,9 @@ pub fn prepare<H: Host + ?Sized>(host: &H, input: &Value) -> Value {
 
 pub fn before<H: Host + ?Sized>(repo: &Repository<'_, H>, tool: &str, p: &Value) -> Result<Value> {
     if let Some(id) = p["taskId"].as_str() {
-        return Ok(repo.task(id)?.map(|t| t.dto(&[])).unwrap_or(Value::Null));
+        let Some(task) = repo.task(id)? else { return Ok(Value::Null) };
+        let tags = if tool.ends_with("assignTag") { repo.task_tags(id)? } else { vec![] };
+        return Ok(task.dto(&tags));
     }
     let table = if tool.ends_with("Tag") { TAGS } else { LISTS };
     let id = if table == TAGS {
@@ -86,7 +88,10 @@ pub fn completed(tool: &str, p: &Value, before: &Value, result: &mut Value) {
         }
     }
     if tool.ends_with("assignTag") {
-        fields.push(json!({"label":"Tag","before":if tool=="tasks.assignTag" {"Unassigned"} else {"Assigned"},"after":if tool=="tasks.assignTag" {"Assigned"} else {"Unassigned"}}));
+        let names = |task: &Value| task["tags"].as_array().map(|tags| tags.iter()
+            .filter_map(|tag| tag["name"].as_str()).collect::<Vec<_>>().join(", "))
+            .filter(|s| !s.is_empty()).unwrap_or_else(|| "None".into());
+        fields.push(json!({"label":"Tags","before":names(before),"after":names(&after)}));
     }
     if tool == "tasks.deleteTag" || tool == "tasks.deleteList" {
         fields.push(json!({"label":"Name","before":shown(&before["name"]),"after":"Deleted"}));

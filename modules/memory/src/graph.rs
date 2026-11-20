@@ -309,7 +309,12 @@ pub fn remember_tool(host: &impl Host, parameters: &Value) -> Result<Value> {
     if pending {
         data["searchPending"] = json!(true);
     }
-    data["changed"] = json!(crate::chat::fields(&input).into_iter()
+    let mut saved = input.clone();
+    for (key, value) in fact.as_object().into_iter().flatten() {
+        if saved.get(key).is_some() { saved[key] = value.clone(); }
+    }
+    saved["source"] = tidy["source"].clone();
+    data["changed"] = json!(crate::chat::fields(&saved).into_iter()
         .map(|f| json!({"label":f["label"],"before":"None","after":f["value"]})).collect::<Vec<_>>());
     Ok(json!({"data": data}))
 }
