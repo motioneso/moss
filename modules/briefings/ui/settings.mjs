@@ -16,7 +16,14 @@ import {
 const api = briefingsApi(moduleClient());
 const root = document.getElementById("root");
 
-const state = { phase: "loading", definitions: [], externalSources: [], busy: false, error: "" };
+const state = {
+  phase: "loading",
+  definitions: [],
+  externalSources: [],
+  signals: {},
+  busy: false,
+  error: ""
+};
 
 const esc = (s) =>
   String(s).replace(
@@ -31,6 +38,19 @@ const localZone = () => {
     return undefined;
   }
 };
+
+const SIGNALS = [
+  {
+    key: "email",
+    label: "Include email signal",
+    desc: "Surface important threads in scheduled briefings."
+  },
+  {
+    key: "calendar",
+    label: "Include calendar signal",
+    desc: "Use calendar-derived readiness signals in scheduled briefings."
+  }
+];
 
 const toggle = (name, label, desc, checked, disabled) => `
   <div class="set-row">
@@ -73,6 +93,9 @@ function render() {
       )
     )
     .join("");
+  const signalRows = SIGNALS.filter((x) => x.key in state.signals)
+    .map((x) => toggle(`sig:${x.key}`, x.label, x.desc, state.signals[x.key], d))
+    .join("");
   root.innerHTML = `
   ${state.error ? `<p class="briefings-note briefings-note--drift" role="status">${esc(state.error)}</p>` : ""}
   <section class="pane__card">
@@ -93,6 +116,7 @@ function render() {
       ${toggle("news", "Morning news", "Include today's top headlines in the morning briefing.", morningTools.includes(MORNING_NEWS_TOOL), d || !morning)}
       ${toggle("sports", "Morning sports", "Include today's followed-team facts in the morning briefing.", morningTools.includes(MORNING_SPORTS_TOOL), d || !morning)}
       ${external}
+      ${signalRows}
     </div>
   </section>`;
   for (const input of root.querySelectorAll("[data-switch]")) {
@@ -106,6 +130,7 @@ function render() {
 
 function onSwitch(name, checked) {
   if (name === "evening") return save("evening", { enabled: checked });
+  if (name.startsWith("sig:")) return saveSignal(name.slice(4), checked);
   const tool =
     name === "news" ? MORNING_NEWS_TOOL : name === "sports" ? MORNING_SPORTS_TOOL : name.slice(4);
   const morning = findDefinition(state.definitions, "morning");
@@ -140,10 +165,25 @@ async function save(type, patch) {
   render();
 }
 
+async function saveSignal(key, enabled) {
+  if (state.busy) return;
+  state.busy = true;
+  state.error = "";
+  render();
+  try {
+    state.signals = await api.setSourceSignals({ [key]: enabled });
+  } catch (error) {
+    state.error = error instanceof Error && error.message ? error.message : "Save failed";
+  }
+  state.busy = false;
+  render();
+}
+
 async function refresh() {
   const data = await api.definitions();
   state.definitions = data.definitions ?? [];
   state.externalSources = data.externalSources ?? [];
+  state.signals = await api.sourceSignals().catch(() => ({}));
 }
 
 async function load() {

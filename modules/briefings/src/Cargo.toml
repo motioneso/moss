@@ -78,6 +78,10 @@ name = "tools"
 path = "../tests/tools.rs"
 
 [[test]]
+name = "source_signals"
+path = "../tests/source_signals.rs"
+
+[[test]]
 name = "hidden"
 path = "../tests/hidden.rs"
 

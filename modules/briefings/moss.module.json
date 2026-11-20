@@ -17,7 +17,7 @@
     {
       "port": "api",
       "operations": ["call"],
-      "resources": ["calendar", "connectors", "news", "sports", "tasks", "weather"]
+      "resources": ["calendar", "connectors", "email", "news", "sports", "tasks", "weather"]
     },
     {
       "port": "context",
@@ -93,6 +93,16 @@
     {
       "method": "PATCH",
       "path": "/definitions/:id",
+      "signIn": true
+    },
+    {
+      "method": "GET",
+      "path": "/source-signals",
+      "signIn": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/source-signals",
       "signIn": true
     },
     {
@@ -207,7 +217,7 @@
       "label": "Briefings",
       "path": "/settings/briefings",
       "scope": "user",
-      "description": "Choose when the morning briefing and the evening wind-down are prepared, and which sources the morning briefing reads."
+      "description": "Choose when the morning briefing and the evening wind-down are prepared, which sources the morning briefing reads, and whether the email and calendar signals are included (Include email signal, Include calendar signal)."
     }
   ],
   "features": [
@@ -333,11 +343,30 @@
     {
       "id": "briefings.day-plan",
       "description": "A succeeded run that found calendar signals asks Calendar to reserve blocks on the person's own day plan, only when the person's Use for planning switch on Calendar is on. A calendar the person left out of briefings with the Include in briefings switch is not read at all. Briefings reads the saved day plan for context and shows overnight changes for review. Calendar owns the plan, the blocks and the revision check. The run keeps only ids and a batch key. Applying the blocks to the connected calendar is not part of this package yet."
+    },
+    {
+      "id": "briefings.source-signals",
+      "description": "Briefings settings show two switches, Include email signal and Include calendar signal. Each one reads and writes the same switch the owner shows on its own settings screen, only for the signed-in person, through Email's and Calendar's public calls. A switch is hidden when its module is not installed, and flipping one leaves other people's switches alone.",
+      "errors": [
+        {
+          "code": "briefing_source_unavailable",
+          "class": "validation",
+          "description": "Email or Calendar could not be asked, so its switch was not changed."
+        }
+      ],
+      "remediations": [
+        {
+          "id": "briefings.source-signals.owner-settings",
+          "description": "Open the Email or Calendar settings and change the switch there.",
+          "path": "/settings"
+        }
+      ]
     }
   ],
   "optionalRequires": {
     "calendar": ">=0.29.0, <1.0.0",
     "connectors": ">=0.5.0, <1.0.0",
+    "email": ">=0.5.0, <1.0.0",
     "tasks": ">=0.1.5, <1.0.0",
     "news": ">=0.1.0, <1.0.0",
     "sports": ">=0.1.0, <1.0.0",
