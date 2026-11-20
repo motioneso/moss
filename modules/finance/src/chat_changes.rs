@@ -25,6 +25,8 @@ fn table(resource: &str) -> Option<Table> {
                 "subtype",
                 "balance_cents",
                 "iso_currency",
+                "opening_date",
+                "opening_balance_cents",
                 "shared_to_household",
             ],
         ),
@@ -37,6 +39,7 @@ fn table(resource: &str) -> Option<Table> {
                 "name",
                 "date",
                 "amount_cents",
+                "iso_currency",
                 "category_id",
                 "notes",
                 "splits",
@@ -47,7 +50,7 @@ fn table(resource: &str) -> Option<Table> {
         "app.finance_categories" => (
             "Categories",
             &["id"],
-            &["id", "name", "group_name", "archived_at"],
+            &["id", "name", "group_name", "is_income", "archived_at"],
         ),
         "app.finance_merchant_rules" => (
             "Payee rules",
@@ -90,6 +93,7 @@ fn table(resource: &str) -> Option<Table> {
                 "effective_month",
                 "kind",
                 "amount_cents",
+                "iso_currency",
                 "due_date",
                 "weekday",
             ],
