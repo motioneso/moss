@@ -2,7 +2,7 @@
 
 ## 0.1.1
 
-- Offer validated chat tools and code-built approval fields. Normal writes show their returned result; deleting and sending ask first.
+- Offer validated search and public-page reading tools to chat. These read-only tools run without an approval card.
 
 ## 0.1.0
 

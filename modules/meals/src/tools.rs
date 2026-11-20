@@ -1,7 +1,7 @@
 //! The four kitchen and household tools. The trusted host runs `handle` only after applying the
 //! person's approval policy; `run` is the signed-in transport that asks the host to do so.
 use crate::input::{self, coded, invalid, Checked, Fields, InputError};
-use crate::{arrange, cooking, favourites, kitchen, log, plans, shopping, stock, swap, undo, util};
+use crate::{arrange, cooking, favourites, swap, kitchen, log, plans, shopping, stock, undo, util};
 use moss_module_sdk::{Host, Response, Result};
 use serde::Deserialize;
 use serde_json::{json, Value};

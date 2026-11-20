@@ -163,8 +163,8 @@ pub fn save(host: &impl Host, input: &Value) -> Result<Value> {
     Ok(json!({"data":{
         "planId":saved["id"],"revision":saved["revision"],"addedCount":additions.len(),
         "changed":[
-            {"label":"Day-plan blocks","before":plan["blocks"].to_string(),"after":saved["blocks"].to_string()},
-            {"label":"Evening intent","before":plan["eveningIntent"].to_string(),"after":saved["eveningIntent"].to_string()}
+            {"label":"Day-plan blocks","before":crate::chat::shown(&plan["blocks"]),"after":crate::chat::shown(&saved["blocks"])},
+            {"label":"Evening intent","before":crate::chat::shown(&plan["eveningIntent"]),"after":crate::chat::shown(&saved["eveningIntent"])}
         ],
         "message":format!("Draft saved for review as revision {}. New tasks are untimed proposals; accept them in the Plan tomorrow dialog and its review to schedule anything.",saved["revision"])
     }}))

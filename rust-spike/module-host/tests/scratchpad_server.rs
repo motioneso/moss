@@ -243,7 +243,7 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
         if std::env::var_os(variable).is_some() {
             packages.push((variable, id));
         }
-}
+    }
     if std::env::var_os("JS388_NOTES_PACKAGE").is_some() {
         packages.push(("JS388_NOTES_PACKAGE", "notes"));
     }

@@ -29,6 +29,9 @@ controls = [
      'let mut card = email_writes::prepare(host, &input["parameters"])?;',
      'let _ = host.call("kv", "set", "connectors.write-gmail-send", json!({})); let mut card = email_writes::prepare(host, &input["parameters"])?;',
      "modules/connectors/src/Cargo.toml", ["--test", "email_writes", "chat_adapter_keeps_saved_recipient_and_subject_in_fields"]),
+    ("upsert-receipt", "modules/meals/src/chat_changes.rs",
+     'if k == \"owner_user_id\" {\n                                    Filter::Owned', 'if k == \"owner_user_id\" {\n                                    Filter::eq(k, Value::Null)',
+     "modules/meals/src/Cargo.toml", ["--lib", "upsert_receipt_handles_host_injected_ownership"]),
     ("sending-risk", "modules/connectors/moss.module.json",
      '"risk": "destructive"', '"risk": "write"',
      "rust-spike/module-host/Cargo.toml", ["--test", "chat_part4d_manifests", "sending_tools_always_declare_destructive_and_require_a_card"]),
@@ -54,4 +57,4 @@ for name, source, old, new, manifest, tests in controls:
         print(f"REMOVAL {name}: protected rc=0; removed rc=101 (1 assertion failed); restored rc=0", flush=True)
     finally:
         path.write_bytes(original)
-print("PASS 6 part 4d removal controls; source restored", flush=True)
+print("PASS 7 part 4d removal controls; source restored", flush=True)

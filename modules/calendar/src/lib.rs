@@ -135,9 +135,7 @@ fn api(host: &impl Host, name: &str, input: Value) -> Result<Value> {
         "getPlan" => plans::get_for_day(host, serde_json::from_value(input)?),
         "createPlan" => plans::create(host, serde_json::from_value(input)?),
         "saveDraft" => plans::save(host, serde_json::from_value(input)?),
-        "reserveAutoPlan" => {
-            Ok(json!({"reservation":auto_plan::reserve(host, serde_json::from_value(input)?)?}))
-        }
+        "reserveAutoPlan" => Ok(json!({"reservation":auto_plan::reserve(host, serde_json::from_value(input)?)?})),
         "findUnfinishedBatch" => auto_plan::find_unfinished(host, serde_json::from_value(input)?),
         "getSourceSwitches" => source_switches(host, &input),
         "setSourceSwitches" => set_source_switches(host, input),
@@ -228,11 +226,7 @@ fn original_day(host: &impl Host, mut value: Value, timezone_required: bool) -> 
 }
 
 fn operation_param(request: &RouteRequest) -> String {
-    request
-        .params
-        .get("operation_id")
-        .cloned()
-        .unwrap_or_default()
+    request.params.get("operation_id").cloned().unwrap_or_default()
 }
 
 fn route(host: &impl Host, request: RouteRequest) -> Result<Value> {
@@ -278,10 +272,15 @@ fn route(host: &impl Host, request: RouteRequest) -> Result<Value> {
         ("PATCH", "/briefing-settings") => {
             settings::save(host, settings_http::normalize(request.body)?)
         }
-        ("GET", "/source-behaviors") => {
-            Ok(host.call("kv", "get", "calendar.source-behaviors", json!({}))?)
+        ("GET", "/source-behaviors") => Ok(host.call(
+            "kv",
+            "get",
+            "calendar.source-behaviors",
+            json!({}),
+        )?),
+        ("PATCH", "/source-behaviors") => {
+            set_source_switches(host, request.body)
         }
-        ("PATCH", "/source-behaviors") => set_source_switches(host, request.body),
         ("GET", "/display-settings") => display::read(host),
         ("PATCH", "/display-settings") => display::save(host, request.body),
         _ => Err(Error::new(404, "Calendar data operation not found")),

@@ -22,7 +22,33 @@ pub fn prepare(host: &impl Host, input: &Value) -> Result<Value> {
 
 pub fn completed_draft(parameters: &Value, mut result: Value) -> Value {
     if result["data"]["ok"] == true {
-        result["data"]["changed"] = json!([{"label":"Reply draft","before":"No new draft","after":parameters["body"].as_str().unwrap_or("")}]);
+        let body = parameters["body"].as_str().unwrap_or("");
+        let after = if body.len() <= 8192 {
+            body.to_string()
+        } else {
+            let mut end = 8100;
+            while !body.is_char_boundary(end) {
+                end -= 1;
+            }
+            format!("{} … (open your mailbox for the full draft)", &body[..end])
+        };
+        result["data"]["changed"] =
+            json!([{"label":"Reply draft","before":"No new draft","after":after}]);
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn long_unicode_drafts_keep_their_done_receipt() {
+        let data = completed_draft(
+            &json!({"body":"🥦".repeat(4000)}),
+            json!({"data":{"ok":true}}),
+        );
+        let after = data["data"]["changed"][0]["after"].as_str().unwrap();
+        assert!(after.len() <= 8192);
+        assert!(after.ends_with("(open your mailbox for the full draft)"));
+    }
 }

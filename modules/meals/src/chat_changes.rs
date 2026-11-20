@@ -81,7 +81,18 @@ impl<H: Host + ?Sized> Host for Recorded<'_, H> {
                     let filter = Filter::And {
                         filters: columns
                             .iter()
-                            .map(|k| Filter::eq(k, q.values.get(k).cloned().unwrap_or(Value::Null)))
+                            .map(|k| {
+                                if k == "owner_user_id" {
+                                    Filter::Owned
+                                } else if q.values.get(k).is_none_or(Value::is_null) {
+                                    Filter::Null {
+                                        column: k.clone(),
+                                        not: false,
+                                    }
+                                } else {
+                                    Filter::eq(k, q.values[k].clone())
+                                }
+                            })
                             .collect(),
                     };
                     self.host.call(
@@ -130,6 +141,55 @@ mod tests {
                 json!([{"item_id":"a","quantity":3}])
             })
         }
+    }
+    #[test]
+    fn upsert_receipt_handles_host_injected_ownership() {
+        struct OwnedStore;
+        impl Host for OwnedStore {
+            fn call(&self, _: &str, _: &str, _: &str, params: Value) -> Result<Value> {
+                let q: Query = serde_json::from_value(params)?;
+                if q.kind == Kind::Select {
+                    assert_eq!(
+                        q.filter,
+                        Filter::And {
+                            filters: vec![Filter::Owned, Filter::eq("item_id", "a")]
+                        }
+                    );
+                    Ok(json!([{"item_id":"a","quantity":2}]))
+                } else {
+                    Ok(json!([{"item_id":"a","quantity":3}]))
+                }
+            }
+        }
+        let h = Recorded::new(&OwnedStore);
+        let mut q = Query::insert(
+            [
+                ("item_id".into(), json!("a")),
+                ("quantity".into(), json!(3)),
+            ]
+            .into(),
+        );
+        q.conflict = Conflict::Update {
+            columns: vec!["owner_user_id".into(), "item_id".into()],
+            values: [("quantity".into(), json!(3))].into(),
+        };
+        h.call(
+            "db",
+            "query",
+            "app.meals_pantry_items",
+            serde_json::to_value(q).unwrap(),
+        )
+        .unwrap();
+        let mut data = json!({});
+        h.append(&mut data);
+        assert_eq!(
+            data["changed"][0]["before"],
+            r#"[{"item_id":"a","quantity":2}]"#
+        );
+        assert_eq!(
+            data["changed"][0]["after"],
+            r#"[{"item_id":"a","quantity":3}]"#
+        );
     }
     #[test]
     fn receipt_has_the_actual_old_and_saved_rows_and_reads_have_no_receipt() {

@@ -51,6 +51,19 @@ pub fn prepare(host: &impl Host, input: &Value) -> Result<Value> {
     Ok(json!({"fields":fields}))
 }
 
+/// Keep a Done field inside the shell's byte limit, including with multibyte text.
+pub fn shown(value: &Value) -> String {
+    let text = value.to_string();
+    if text.len() <= 8192 {
+        return text;
+    }
+    let mut end = 8100;
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{} … (open Calendar for the full record)", &text[..end])
+}
+
 pub fn completed(tool: &str, mut result: Value) -> Value {
     let label = match tool {
         "calendar.createEvent" => "Created calendar event",
@@ -86,6 +99,14 @@ mod tests {
             .as_array()
             .unwrap()
             .contains(&json!({"label":"Title","value":"MODEL-MARKER"})));
+    }
+    #[test]
+    fn large_day_plan_fields_fit_done_rows() {
+        let blocks = json!([{"title":"🥦".repeat(3000)}]);
+        let text = shown(&blocks);
+        assert!(text.len() <= 8192);
+        assert!(text.ends_with("(open Calendar for the full record)"));
+        assert_eq!(shown(&json!("small")), "\"small\"");
     }
     #[test]
     fn only_confirmed_creates_get_a_done_receipt() {
