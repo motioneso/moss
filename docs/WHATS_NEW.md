@@ -40,6 +40,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Your saved plan on Today.** Today shows your saved schedule and lets you read the task-block review on a computer or phone. [PR #4425](https://github.com/motioneso/moss/pull/4425)
 - **Today shows your morning briefing status.** The Today screen now tells you whether your morning briefing is switched off, running, failed, or still due, instead of showing placeholder text. [PR #4410](https://github.com/motioneso/moss/pull/4410)
 
 ### 2026-11-18
