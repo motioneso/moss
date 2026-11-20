@@ -28,6 +28,24 @@ fn chat_append_reports_the_actual_change_and_adapts_the_card() {
         card["fields"],
         json!([{"label":"Text to append","value":"first"}])
     );
+    let long = "記".repeat(2000);
+    let long_card = call(
+        "api",
+        json!({"name":"prepareChatAction","parameters":{"tool":"scratchpad.append","parameters":{"text":long}}}),
+    );
+    let fields = long_card["fields"].as_array().unwrap();
+    assert!(fields.len() > 1);
+    assert!(fields
+        .iter()
+        .all(|f| f["value"].as_str().unwrap().len() <= 4096));
+    assert_eq!(
+        fields
+            .iter()
+            .map(|f| f["value"].as_str().unwrap())
+            .collect::<String>(),
+        long
+    );
+    assert_eq!(fields[1]["label"], "Text to append (continued)");
     assert!(host.body.borrow().is_empty());
     let first = call("tool", input);
     assert_eq!(

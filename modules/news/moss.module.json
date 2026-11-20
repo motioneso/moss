@@ -241,7 +241,7 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 48,
-            "description": "Lookback in hours, from 1 to 48; defaults to 24."
+            "description": "Accepted compatibility value from 1 to 48; defaults to 24. Reads the stored page without additional time filtering."
           },
           "limit": {
             "type": "integer",

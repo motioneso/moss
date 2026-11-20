@@ -104,5 +104,28 @@ pub fn prepare_chat<H: Host + ?Sized>(host: &H, input: &Value) -> Result<Value> 
     if input["tool"] != "scratchpad.append" {
         return Err(Error::new("Unknown Scratchpad card tool"));
     }
-    prepare(host, &input["parameters"])
+    let mut card = prepare(host, &input["parameters"])?;
+    // Preserve every character while fitting the host's per-field byte limit.
+    if let Some(value) = card["fields"][0]["value"]
+        .as_str()
+        .filter(|s| s.len() > 4096)
+    {
+        let mut remaining = value;
+        let mut fields = Vec::new();
+        while !remaining.is_empty() {
+            let mut end = remaining.len().min(4096);
+            while !remaining.is_char_boundary(end) {
+                end -= 1;
+            }
+            let label = if fields.is_empty() {
+                "Text to append"
+            } else {
+                "Text to append (continued)"
+            };
+            fields.push(json!({"label":label,"value":&remaining[..end]}));
+            remaining = &remaining[end..];
+        }
+        card["fields"] = json!(fields);
+    }
+    Ok(card)
 }

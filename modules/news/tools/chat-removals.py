@@ -10,6 +10,12 @@ root = Path(__file__).resolve().parents[3]
 logs = Path(os.environ["JS386_PROOF_DIR"]) / "module-removals"
 logs.mkdir(parents=True, exist_ok=True)
 controls = [
+    ("scratchpad-long-card", "modules/scratchpad/src/tools.rs",
+     'filter(|s| s.len() > 4096)', 'filter(|_| false)',
+     "modules/scratchpad/src/Cargo.toml", "tools", "chat_append_reports_the_actual_change_and_adapts_the_card"),
+    ("news-pinned-manifest", "modules/news/moss.module.json",
+     '"approvalVersion": true', '"approvalVersion": false',
+     "modules/news/src/Cargo.toml", "part7", "chat_card_adapter_uses_the_refresh_card_and_empty_input"),
     ("scratchpad-card-tool", "modules/scratchpad/src/tools.rs",
      'if input["tool"] != "scratchpad.append" {', 'if false {',
      "modules/scratchpad/src/Cargo.toml", "tools", "chat_append_reports_the_actual_change_and_adapts_the_card"),
@@ -45,4 +51,4 @@ for name, source, before, after, manifest, suite, test in controls:
             print(f"CONTROL {name}: {state} rc={result.returncode}; " + ("assertion failed" if removed else "1 passed"), flush=True)
         finally:
             path.write_bytes(original)
-print("PASS 4 module removal controls; original source restored", flush=True)
+print("PASS 6 module removal controls; original source restored", flush=True)

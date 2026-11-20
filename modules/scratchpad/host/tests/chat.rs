@@ -296,4 +296,13 @@ fn chat_append_uses_the_installed_schema_adapter_and_done_result() {
     let output = w.app.app.installer.run_chat_tool(&access, "scratchpad", "scratchpad.append", parameters).unwrap();
     assert_eq!(output["data"]["changed"], json!([{"label":"Text appended","before":"","after":"Chat line"}]));
     assert_eq!(w.route(w.f.a, "GET", "/note", Value::Null)["body"]["body"], "Chat line");
+    w.app.app.services.set_action_policy(&access, "scratchpad", &std::collections::BTreeMap::from([("scratchpad.append".into(), true)])).unwrap();
+    let tools = w.app.app.installer.chat_tools(&access).unwrap();
+    assert_eq!(tools.iter().find(|t| t.tool == "scratchpad.append").unwrap().rule, moss_module_host::chat_tools::ChatToolRule::Card { pinned: false });
+    let parameters = json!({"text":"記".repeat(2000)});
+    assert!(w.app.app.installer.run_chat_tool(&access, "scratchpad", "scratchpad.append", parameters.clone()).is_err());
+    let card = w.app.app.installer.chat_tool_card(&access, "scratchpad", "scratchpad.append", &parameters).unwrap().unwrap();
+    assert_eq!(card.fields[1..].iter().map(|f| f.value.as_str()).collect::<String>(), parameters["text"].as_str().unwrap());
+    w.app.app.installer.run_approved_chat_tool(&access, "scratchpad", "scratchpad.append", parameters, card.version.as_deref()).unwrap();
+    assert_eq!(w.route(w.f.a, "GET", "/note", Value::Null)["body"]["body"], format!("Chat line\n{}", "記".repeat(2000)));
 }
