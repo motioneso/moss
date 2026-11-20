@@ -6,6 +6,35 @@ fn bad() -> Error {
     Error::new("Invalid Finance chat action")
 }
 
+/// Chat schemas use a bounded list where the original Finance UI accepts category-keyed maps.
+pub fn adapt_parameters(tool: &str, mut parameters: Value) -> Result<Value> {
+    if !matches!(tool, "finance.flex.preview" | "finance.flex.configure") {
+        return Ok(parameters);
+    }
+    if let Some(rows) = parameters["distribution"].as_array() {
+        let mut amounts = serde_json::Map::new();
+        if rows.len() > 100 {
+            return Err(bad());
+        }
+        for row in rows {
+            let object = row.as_object().ok_or_else(bad)?;
+            let category = row["categoryId"]
+                .as_str()
+                .filter(|s| !s.is_empty())
+                .ok_or_else(bad)?;
+            let amount = row["amountCents"]
+                .as_i64()
+                .filter(|n| (0..=crate::input::MAX_SAFE).contains(n))
+                .ok_or_else(bad)?;
+            if object.len() != 2 || amounts.insert(category.into(), json!(amount)).is_some() {
+                return Err(bad());
+            }
+        }
+        parameters["distribution"] = Value::Object(amounts);
+    }
+    Ok(parameters)
+}
+
 pub fn prepare<H: Host + ?Sized>(host: &H, input: &Value) -> Result<Value> {
     let manifest: Value = serde_json::from_str(include_str!("../moss.module.json"))?;
     let name = input["tool"].as_str().ok_or_else(bad)?;

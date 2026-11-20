@@ -175,3 +175,46 @@ fn receipts_include_real_note_changes_and_never_send_notes_to_activity() {
         .to_string()
         .contains("New note"));
 }
+
+#[test]
+fn chat_distribution_can_leave_the_pool_and_refuses_duplicate_categories() {
+    let f = Fake::new();
+    f.account("checking", OP1, "2026-01-01", 100000);
+    assert_eq!(
+        f.route(
+            "POST",
+            "/finance/budget/configure",
+            json!({"isoCurrency":"USD","acknowledgeLegacy":false})
+        )
+        .0,
+        200
+    );
+    let review = || {
+        let (_, b) = f.get("/finance/budget/status", json!({"month":"2026-11"}));
+        json!({"month":"2026-11","expectedRevision":b["revision"],"expectedFingerprint":b["fingerprint"]})
+    };
+    let mut enter = review();
+    enter["mode"] = json!("flex");
+    enter["flexIds"] = json!(["groceries", "dining"]);
+    enter["nonMonthlyIds"] = json!([]);
+    assert_eq!(f.tool("finance.flex.configure", enter)["status"], "ok");
+    let mut leave = review();
+    leave["mode"] = json!("envelopes");
+    leave["distribution"] =
+        json!([{"categoryId":"groceries","amountCents":0},{"categoryId":"dining","amountCents":0}]);
+    let mut duplicate = leave.clone();
+    duplicate["distribution"][1]["categoryId"] = json!("groceries");
+    let before = json!(*f.tables.borrow());
+    let payload = json!({"tool":"finance.flex.configure","parameters":duplicate});
+    assert!(moss_finance_module::handle(&f, "tool", &payload.to_string()).is_err());
+    assert_eq!(before, json!(*f.tables.borrow()));
+    let preview = f.tool("finance.flex.preview", leave.clone());
+    assert_eq!(preview["status"], "ok", "{preview}");
+    assert_eq!(preview["requiresDistribution"], false);
+    let out = f.tool("finance.flex.configure", leave);
+    assert_eq!(out["status"], "ok", "{out}");
+    assert!(f
+        .rows("app.finance_flex_policies")
+        .iter()
+        .any(|r| r["active"] == false));
+}

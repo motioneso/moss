@@ -238,7 +238,8 @@ pub fn handle<H: Host + ?Sized>(
             Ok(serde_json::to_string(&call)?)
         }
         "tool" => {
-            let request: tools::Request = serde_json::from_str(payload)?;
+            let mut request: tools::Request = serde_json::from_str(payload)?;
+            request.parameters = chat::adapt_parameters(&request.tool, request.parameters)?;
             let writes = tools::changes_data(&request.tool);
             let changes = chat_changes::Changes::new(host);
             let mut result = if writes { tools::execute(&changes, request) } else { tools::execute(host, request) }
