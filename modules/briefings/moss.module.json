@@ -48,7 +48,7 @@
     },
     {
       "port": "feedback",
-      "operations": ["active"],
+      "operations": ["active", "record", "undo"],
       "resources": ["briefing_run", "briefing_item"]
     },
     {
@@ -118,6 +118,21 @@
     {
       "method": "POST",
       "path": "/today/rows/:task_id",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/today/runs/:run_id/catch-up/:item_id/add",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/today/runs/:run_id/catch-up/:item_id/dismiss",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/today/runs/:run_id/catch-up/:item_id/undo",
       "signIn": true
     }
   ],
@@ -293,6 +308,24 @@
         {
           "id": "briefings.today-actions.reload",
           "description": "Reload Today to read the current state of the rows.",
+          "path": "/today"
+        }
+      ]
+    },
+    {
+      "id": "briefings.today-catch-up",
+      "description": "Under Needs you, Today shows a Catch-up list of emails from the latest morning briefing that have not been handled, with Open, Reply, Add task and Dismiss on each. Add task creates a task named Follow up with the sender and marks the email as useful; Dismiss hides the email. Either one reads Added to your tasks or Dismissed with an Undo, which takes the rating back and archives the new task. After a reload, handled emails stay hidden. If a change does not save, the list says so and Add task can be tried again without creating a second task. Another person's briefing or email is not found and changes nothing.",
+      "errors": [
+        {
+          "code": "catch_up_entry_not_found",
+          "class": "validation",
+          "description": "The email is missing from the briefing, or belongs to someone else."
+        }
+      ],
+      "remediations": [
+        {
+          "id": "briefings.today-catch-up.reload",
+          "description": "Reload Today to read which emails are still waiting.",
           "path": "/today"
         }
       ]
