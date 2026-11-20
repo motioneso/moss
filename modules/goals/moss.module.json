@@ -4,7 +4,7 @@
   "name": "Goals",
   "description": "Private long-running goals and evidence, with five chat tools under the host's approval rules and an active-goals data call for Today. The Today screen shows active goals. No memory sync jobs yet.",
   "publisher": "Moss",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
@@ -80,7 +80,9 @@
     }
   ],
   "requires": {},
-  "provides": {},
+  "provides": {
+    "prepareChatAction": "1.0.0"
+  },
   "icons": ["icons/goals.svg"],
   "accounts": {
     "supportsUserDisable": false,
@@ -128,23 +130,16 @@
     },
     {
       "id": "goals.chat-tools",
-      "description": "Chat can list goals, read one with its ten newest evidence summaries, create, change and add evidence. Writes need the host\u2019s one-use approval for the same person and exact inputs. A missing or another person\u2019s goal is absent. No memory sync or approval screen is included yet.",
-      "errors": [
-        {
-          "code": "approval_required",
-          "class": "validation",
-          "description": "The tool cannot run without approval. Ask for approval for these exact inputs and try again."
-        }
-      ]
+      "description": "Moss can read, create and change goals and add evidence. Ordinary changes run without a card unless you have chosen to approve them. Cards show the proposed values and completed changes show before and after values. Source labels and references are shown as proposed evidence values. Oversized approval cards are refused; long completed values are marked as truncated."
     },
     {
       "id": "goals.today-data",
-      "description": "The Today data call returns only the signed-in person\u2019s active goals in priority order, newest first at equal priority. An empty list stays empty. The Today screen uses this call.",
+      "description": "The Today data call returns only the signed-in person’s active goals in priority order, newest first at equal priority. An empty list stays empty. The Today screen uses this call.",
       "errors": []
     },
     {
       "id": "goals.today-screen",
-      "description": "Today shows the signed-in person\u2019s active goals under Focus and Long-term goals, with their target icon, priority and desired outcome, in the existing priority order. Completed and archived goals stay hidden. An empty list draws nothing. Loading is a quiet status line; a failed request offers Retry. This package screen has no editing or settings controls.",
+      "description": "Today shows the signed-in person’s active goals under Focus and Long-term goals, with their target icon, priority and desired outcome, in the existing priority order. Completed and archived goals stay hidden. An empty list draws nothing. Loading is a quiet status line; a failed request offers Retry. This package screen has no editing or settings controls.",
       "errors": [
         {
           "code": "goals-screen-request-failed",
@@ -157,23 +152,172 @@
   "tools": {
     "goals.list": {
       "description": "List all goals in priority order.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
     },
     "goals.get": {
       "description": "Read a goal and its ten newest evidence summaries.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "required": ["goalId"],
+        "properties": {
+          "goalId": {
+            "type": "string",
+            "description": "Goal identifier from Goals."
+          }
+        }
+      }
     },
     "goals.create": {
       "description": "Create a long-running goal.",
-      "risk": "write"
+      "risk": "write",
+      "card": "prepareChatAction",
+      "inputSchema": {
+        "type": "object",
+        "required": ["title", "desiredOutcome"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Title to save."
+          },
+          "desiredOutcome": {
+            "type": "string",
+            "description": "What success looks like."
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "Priority from one (lowest) to five (highest)."
+          },
+          "reviewCadence": {
+            "type": "string",
+            "enum": ["none", "daily", "weekly", "biweekly", "monthly", "custom"],
+            "description": "How often to review this goal."
+          },
+          "targetAt": {
+            "type": "string",
+            "description": "Target date and time in ISO 8601."
+          }
+        },
+        "examples": [
+          {
+            "title": "Buy milk",
+            "desiredOutcome": "Walk every weekday"
+          }
+        ]
+      }
     },
     "goals.update": {
       "description": "Change or close a goal.",
-      "risk": "write"
+      "risk": "write",
+      "card": "prepareChatAction",
+      "inputSchema": {
+        "type": "object",
+        "required": ["goalId"],
+        "properties": {
+          "goalId": {
+            "type": "string",
+            "description": "Goal identifier from Goals."
+          },
+          "title": {
+            "type": "string",
+            "description": "Title to save."
+          },
+          "desiredOutcome": {
+            "type": "string",
+            "description": "What success looks like."
+          },
+          "status": {
+            "type": "string",
+            "enum": ["active", "paused", "blocked", "completed", "archived"],
+            "description": "New status."
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "Priority from one (lowest) to five (highest)."
+          },
+          "reviewCadence": {
+            "type": "string",
+            "enum": ["none", "daily", "weekly", "biweekly", "monthly", "custom"],
+            "description": "How often to review this goal."
+          },
+          "targetAt": {
+            "type": "string",
+            "description": "Target date and time in ISO 8601."
+          }
+        },
+        "examples": [
+          {
+            "goalId": "22222222-2222-4222-8222-222222222222"
+          }
+        ]
+      }
     },
     "goals.addEvidence": {
       "description": "Add evidence to an open goal.",
-      "risk": "write"
+      "risk": "write",
+      "card": "prepareChatAction",
+      "inputSchema": {
+        "type": "object",
+        "required": ["goalId", "evidenceKind", "sourceKind", "sourceLabel", "summary"],
+        "properties": {
+          "goalId": {
+            "type": "string",
+            "description": "Goal identifier from Goals."
+          },
+          "evidenceKind": {
+            "type": "string",
+            "enum": [
+              "context",
+              "task",
+              "status",
+              "progress",
+              "blocker",
+              "decision",
+              "checkpoint",
+              "suggested_action"
+            ],
+            "description": "Kind of evidence."
+          },
+          "sourceKind": {
+            "type": "string",
+            "enum": ["goal", "task", "note", "email", "calendar", "chat", "memory", "manual"],
+            "description": "Kind of source."
+          },
+          "sourceRef": {
+            "type": "string",
+            "description": "Reference to the source."
+          },
+          "sourceLabel": {
+            "type": "string",
+            "description": "Human-readable source name."
+          },
+          "summary": {
+            "type": "string",
+            "description": "Evidence summary."
+          },
+          "occurredAt": {
+            "type": "string",
+            "description": "When the evidence occurred, in ISO 8601."
+          }
+        },
+        "examples": [
+          {
+            "goalId": "22222222-2222-4222-8222-222222222222",
+            "evidenceKind": "context",
+            "sourceKind": "goal",
+            "sourceLabel": "Chat",
+            "summary": "Walked today"
+          }
+        ]
+      }
     }
   }
 }

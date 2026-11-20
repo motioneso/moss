@@ -306,3 +306,18 @@ fn preferences_card_shows_the_view_in_words() {
     }
     assert_eq!(route("setPreferences", "{}", None, None)["ok"], Value::Null);
 }
+
+#[test]
+fn chat_envelope_reuses_the_task_card() {
+    let input = json!({"taskId":TASK,"title":"New task title"});
+    let legacy = card("tasks.update", &input.to_string());
+    let request =
+        json!({"name":"prepareChatAction","parameters":{"tool":"tasks.update","parameters":input}});
+    let out: Value = serde_json::from_str(
+        &moss_tasks_module::handle(&Rows, "api", &request.to_string()).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(out["target"], legacy["ok"]["target"]);
+    assert_eq!(out["fields"], legacy["ok"]["fields"]);
+    assert!(out.get("version").is_none());
+}

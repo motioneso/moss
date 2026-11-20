@@ -124,7 +124,7 @@ fn compiled_actions_match_legacy_shapes_and_preserve_text() {
             json!({"listId":list,"tagId":tag})
         )
         .unwrap(),
-        json!({"data":{"summary":"Deleted task tag.","deleted":true}})
+        json!({"data":{"summary":"Deleted task tag.","deleted":true,"changed":[{"label":"Name","before":"New tag","after":"Deleted"}]}})
     );
 }
 

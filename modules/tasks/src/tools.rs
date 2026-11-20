@@ -76,7 +76,12 @@ pub fn handle<H: Host + ?Sized>(host: &H, request: ToolRequest) -> Result<Value>
                 .collect::<Vec<_>>();
             json!({"data":{"task":task_json(&repo,task)?,"subtasks":subtasks,"activity":activity}})
         }
-        _ => return crate::mutations::execute(&repo, &request.tool, &input),
+        _ => {
+            let before = crate::chat::before(&repo, &request.tool, &input)?;
+            let mut result = crate::mutations::execute(&repo, &request.tool, &input)?;
+            crate::chat::completed(&request.tool, &input, &before, &mut result);
+            return Ok(result);
+        }
     })
 }
 
