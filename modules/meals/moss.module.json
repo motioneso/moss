@@ -440,7 +440,7 @@
     "meals.kitchen.save": {
       "description": "Change kitchen settings: units, the default pantry mode and shared or solo rules per meal.",
       "risk": "write",
-      "inputSchema": {"type":"object","properties":{"unitsSystem":{"type":"string","enum":["us","metric"],"description":"Units system.","maxLength":4096},"defaultPantryMode":{"type":"string","enum":["ignore","prefer","only"],"description":"ignore: plan without the Pantry. prefer: use what is on hand where it fits. only: plan only from what is on hand.","maxLength":4096},"slotRules":{"type":"array","maxItems":6,"items":{"type":"object","required":["slotName","soloWeekdays"],"properties":{"slotName":{"type":"string","maxLength":40,"description":"Meal of the day, for example dinner."},"soloWeekdays":{"type":"array","maxItems":7,"items":{"type":"integer","minimum":1,"maximum":7,"description":"Solo weekdays item."},"description":"ISO weekdays (1 = Monday, 7 = Sunday) when each person eats this meal on their own. Empty means shared every day."},"usualTime":{"type":"string","description":"Usual time as HH:MM, or null.","maxLength":4096}},"description":"Slot rules item."},"description":"Slot rules."}},"description":"Input.","examples":[{"unitsSystem":"metric"}]},
+      "inputSchema": {"type":"object","properties":{"unitsSystem":{"type":"string","enum":["us","metric"],"description":"Units system.","maxLength":4096},"defaultPantryMode":{"type":"string","enum":["ignore","prefer","only"],"description":"ignore: plan without the Pantry. prefer: use what is on hand where it fits. only: plan only from what is on hand.","maxLength":4096},"slotRules":{"type":"array","maxItems":6,"items":{"type":"object","required":["slotName","soloWeekdays"],"properties":{"slotName":{"type":"string","maxLength":40,"description":"Meal of the day, for example dinner."},"soloWeekdays":{"type":"array","maxItems":7,"items":{"type":"integer","minimum":1,"maximum":7,"description":"Solo weekdays item."},"description":"ISO weekdays (1 = Monday, 7 = Sunday) when each person eats this meal on their own. Empty means shared every day."},"usualTime":{"type":"string","description":"Usual time as HH:MM.","maxLength":4096}},"description":"Slot rules item."},"description":"Slot rules."}},"description":"Input.","examples":[{"unitsSystem":"metric"}]},
       "card": "prepareChatAction"
     },
     "meals.household.save": {
@@ -552,13 +552,13 @@
       "card": "prepareChatAction"
     },
     "meals.meal.cooked": {
-      "description": "Mark a planned meal cooked, record an undo action and deduct its ingredients from the Pantry. Optionally name the local date and servings. The result may offer to log the meal; adding a food-log entry requires a separate meals.log.add call.",
+      "description": "Mark a planned meal cooked, record an undo action and deduct its ingredients from the Pantry. The result may offer to log the meal; adding a food-log entry requires a separate meals.log.add call.",
       "risk": "write",
       "inputSchema": {"type":"object","required":["mealId"],"properties":{"mealId":{"type":"string","maxLength":36,"description":"Meal id."}},"description":"Input.","examples":[{"mealId":"00000000-0000-4000-8000-000000000003"}]},
       "card": "prepareChatAction"
     },
     "meals.meal.rate": {
-      "description": "Rate a meal's recipe from 1 to 5 stars for one or more household members, or pass null stars to clear a rating. One star keeps that recipe out of future plans that include that person, unless a request names the recipe.",
+      "description": "Rate a meal's recipe from 1 to 5 stars for one or more household members. One star keeps that recipe out of future plans that include that person, unless a request names the recipe.",
       "risk": "write",
       "inputSchema": {"type":"object","required":["mealId","ratings"],"properties":{"mealId":{"type":"string","maxLength":36,"description":"Meal id."},"ratings":{"type":"array","maxItems":20,"items":{"type":"object","required":["memberId","stars"],"properties":{"memberId":{"type":"string","maxLength":36,"description":"Member id."},"stars":{"type":"integer","minimum":1,"maximum":5,"description":"Stars."}},"description":"Ratings item."},"description":"Ratings."}},"description":"Input.","examples":[{"mealId":"00000000-0000-4000-8000-000000000003","ratings":[{"memberId":"00000000-0000-4000-8000-000000000001","stars":4}]}]},
       "card": "prepareChatAction"
@@ -581,31 +581,31 @@
       "inputSchema": {"type":"object","required":["mealId"],"properties":{"mealId":{"type":"string","maxLength":36,"description":"Meal id."}},"description":"Input."}
     },
     "meals.meal.servings": {
-      "description": "Change how many servings a planned meal cooks, in steps of half a serving from 0.5 to 24, or pass null to go back to the eaters' portions. The recipe amounts and the shopping list follow the new servings.",
+      "description": "Change how many servings a planned meal cooks, in steps of half a serving from 0.5 to 24. The recipe amounts and the shopping list follow the new servings.",
       "risk": "write",
       "inputSchema": {"type":"object","required":["mealId","servings"],"properties":{"mealId":{"type":"string","maxLength":36,"description":"Meal id."},"servings":{"type":"number","minimum":0.5,"maximum":24,"description":"Servings."}},"description":"Input.","examples":[{"mealId":"00000000-0000-4000-8000-000000000003","servings":2}]},
       "card": "prepareChatAction"
     },
     "meals.meal.edit": {
-      "description": "Lock or unlock a planned meal, change its eaters, or move it. Locked meals cannot move. Moving needs targetDayId and targetSlotName. Read the meal and plan first to choose valid destinations and member IDs.",
+      "description": "Lock or unlock a planned recipe meal, change its eaters, or move it. Moving needs targetDayId or targetDate within the same plan; targetSlotName is optional and defaults to the current slot. Cooked meals and meals still being written cannot move. Read the meal and plan first.",
       "risk": "write",
       "inputSchema": {"type":"object","required":["mealId","action"],"properties":{"mealId":{"type":"string","maxLength":36,"description":"Meal id."},"action":{"type":"string","enum":["lock","unlock","move","set_eaters"],"description":"Action.","maxLength":4096},"targetDayId":{"type":"string","maxLength":36,"description":"Target day id."},"targetDate":{"type":"string","description":"Target date.","maxLength":4096},"targetSlotName":{"type":"string","maxLength":40,"description":"Target slot name."},"eaterIds":{"type":"array","maxItems":40,"items":{"type":"string","maxLength":36,"description":"Eater ids item."},"description":"Eater ids."}},"description":"Input.","examples":[{"mealId":"00000000-0000-4000-8000-000000000003","action":"lock"}]},
       "card": "prepareChatAction"
     },
     "meals.meal.swap": {
-      "description": "Swap a planned meal. quick requests a replacement within maxMinutes; choose applies a saved choiceId. Read the meal first. Safety checks and the existing swap workflow still apply.",
+      "description": "Request recipe alternatives with request_choices, apply a saved choiceId with choose, or request a replacement within maxMinutes with quick. Read the meal first.",
       "risk": "write",
       "inputSchema": {"type":"object","required":["mealId","action"],"properties":{"mealId":{"type":"string","maxLength":36,"description":"Meal id."},"action":{"type":"string","enum":["request_choices","choose","quick"],"description":"Action.","maxLength":4096},"choiceId":{"type":"string","maxLength":36,"description":"Choice id."},"maxMinutes":{"type":"integer","minimum":5,"maximum":240,"description":"Max minutes."}},"description":"Input.","examples":[{"mealId":"00000000-0000-4000-8000-000000000003","action":"quick","maxMinutes":30}]},
       "card": "prepareChatAction"
     },
     "meals.day.edit": {
-      "description": "Change a plan day: set text for a meal, skip or restore a slot, or move a meal. Supply the action and the relevant meal, day or slot identifiers from the current plan. Read the plan first.",
+      "description": "Edit a plan day: set_text (mealId, text), clear_text (mealId), add_one_off (slotName, memberId), set_cook_limit (minutes), or set_sharing (slotName, sharing). For the last three actions, name dayId or planId and date. Read the plan first.",
       "risk": "write",
       "inputSchema": {"type":"object","required":["action"],"properties":{"action":{"type":"string","enum":["set_text","clear_text","add_one_off","set_cook_limit","set_sharing"],"description":"Action.","maxLength":4096},"planId":{"type":"string","maxLength":36,"description":"Plan id."},"dayId":{"type":"string","maxLength":36,"description":"Day id."},"date":{"type":"string","description":"Date.","maxLength":4096},"mealId":{"type":"string","maxLength":36,"description":"Meal id."},"text":{"type":"string","maxLength":200,"description":"Text."},"slotName":{"type":"string","maxLength":40,"description":"Slot name."},"memberId":{"type":"string","maxLength":36,"description":"Member id."},"minutes":{"type":"integer","minimum":5,"maximum":240,"description":"Minutes."},"sharing":{"type":"string","enum":["shared","solo"],"description":"Sharing.","maxLength":4096}},"description":"Input.","examples":[{"action":"set_text","mealId":"00000000-0000-4000-8000-000000000003","text":"Eating out"}]},
       "card": "prepareChatAction"
     },
     "meals.favourites.edit": {
-      "description": "Add or remove a recipe from a household member’s favourites. Supply action, memberId and recipeId. Adding runs the existing recipe safety checks for that member and refuses unsafe recipes.",
+      "description": "Add or remove a member's favourite recipe using action, memberId and recipeId. place also requires mealId and puts an existing favourite into an unlocked, uncooked meal. Only placement runs the existing safety checks for everyone eating that meal.",
       "risk": "write",
       "inputSchema": {"type":"object","required":["action","memberId","recipeId"],"properties":{"action":{"type":"string","enum":["add","remove","place"],"description":"Action.","maxLength":4096},"memberId":{"type":"string","maxLength":36,"description":"Member id."},"recipeId":{"type":"string","maxLength":36,"description":"Recipe id."},"mealId":{"type":"string","maxLength":36,"description":"Meal id."}},"description":"Input.","examples":[{"action":"add","memberId":"00000000-0000-4000-8000-000000000001","recipeId":"00000000-0000-4000-8000-000000000006"}]},
       "card": "prepareChatAction"
