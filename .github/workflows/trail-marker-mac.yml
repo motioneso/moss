@@ -12,6 +12,12 @@ on:
       - "apps/trail-marker/**"
       - ".github/workflows/trail-marker-mac.yml"
 
+# Superseded PR commits yield runners; other events get independent groups so
+# even pending main, nightly and manual runs cannot replace one another.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
