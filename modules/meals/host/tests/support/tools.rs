@@ -8,14 +8,18 @@ pub(crate) fn run(w: &World, actor: uuid::Uuid, tool: &str, parameters: Value, a
             .approve_tool(&w.f.access(actor), "meals", tool, &parameters)
             .unwrap();
     }
-    w.call(
+    let before = receipts::snapshot(w, actor);
+    let reply = w.call(
         actor,
         "POST",
         "/meals/tools/run",
         json!({"tool":tool,"parameters":parameters}),
-    )
+    );
+    receipts::verify(before, receipts::snapshot(w, actor), &reply);
+    reply
 }
 pub(crate) fn compare(mut a: Value, mut b: Value) {
+    a = receipts::legacy_reply(a);
     replay::mask(&mut a);
     replay::mask(&mut b);
     assert_eq!(a, b);

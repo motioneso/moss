@@ -135,7 +135,7 @@ fn installed_list_and_pantry_tools_match_the_old_handlers_step_for_step() {
         let old = replay::old_tool(old_actor, &role(), tool, fill_all(params, &old_state));
         learn(&mut new_state, &new["body"]);
         learn(&mut old_state, &old);
-        let (mut a, mut b) = (new["body"].clone(), old.clone());
+        let (mut a, mut b) = (receipts::legacy_reply(new["body"].clone()), old.clone());
         replay::mask(&mut a);
         replay::mask(&mut b);
         assert_eq!(a, b, "step {n} {tool} {params}");
@@ -224,7 +224,7 @@ fn lists_and_pantry_are_private_and_clearing_a_list_touches_nothing_else() {
     let before = snapshot(&w);
     let lines_before = digest(&w, "app.meals_shopping_list_items", a);
     let cleared = run(&w, a, "meals.list.clear", json!({"listId":list_id}), true);
-    assert_eq!(cleared["body"]["data"], json!({"cleared":true}), "{cleared}");
+    assert_eq!(receipts::legacy_reply(cleared["body"].clone())["data"], json!({"cleared":true}), "{cleared}");
     assert_ne!(lines_before, digest(&w, "app.meals_shopping_list_items", a));
     let left: i64 = w.f.rt.block_on(w.f.root.query_one(&format!("SELECT count(*) FROM app.meals_shopping_list_items WHERE owner_user_id = '{a}'"), &[])).unwrap().get(0);
     assert_eq!(left, 0);
