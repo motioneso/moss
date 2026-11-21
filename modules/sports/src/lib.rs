@@ -50,6 +50,7 @@ pub mod story;
 pub mod standings_views;
 pub mod teams;
 pub mod tools;
+pub mod chat;
 pub mod util;
 
 #[cfg(target_arch = "wasm32")]
@@ -125,6 +126,8 @@ fn api<H: Host + ?Sized>(host: &H, payload: &str) -> moss_module_sdk::Result<Str
         Export(#[allow(dead_code)] Value),
         #[serde(rename = "prepareSportsSourceAction")]
         Prepare(Prepare),
+        #[serde(rename = "prepareSportsChatAction")]
+        Chat(Value),
         #[serde(rename = "sportsFollowedFactsToday")]
         Facts(Facts),
     }
@@ -141,6 +144,7 @@ fn api<H: Host + ?Sized>(host: &H, payload: &str) -> moss_module_sdk::Result<Str
         input_json: String,
     }
     Ok(match serde_json::from_str(payload)? {
+        Api::Chat(p) => chat::prepare(host, &roster::EspnTeams(host), &p)?,
         Api::Export(_) => json!({"ok":lifecycle::collect(host)?}),
         Api::Prepare(p) => source_approval::prepare(host, &roster::EspnTeams(host), &p.tool, &p.input_json),
         Api::Facts(f) => briefing::today(host, f.time_zone.as_deref().unwrap_or("UTC")),

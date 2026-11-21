@@ -196,3 +196,17 @@ fn text_a_person_types_into_a_tool_stays_out_of_logs_and_jobs() {
         assert!(!(sink && parameters.to_string().to_lowercase().contains(&MARK.to_lowercase())), "{port}.{operation}.{resource}");
     }
 }
+
+#[test]
+fn chat_confirm_card_adapts_the_common_envelope_and_fits_the_host_version_limit() {
+    let f = Src::new();
+    site(&f);
+    let shown = call(&f, "sports.previewSource", json!({"url":"news.example.com"}), None)["data"].clone();
+    let parameters = confirm_input(&shown);
+    let payload = json!({"name":"prepareSportsChatAction","parameters":{"tool":"sports.confirmSource","parameters":parameters}});
+    let made: Value = serde_json::from_str(&moss_sports_module::handle(&f, "api", &payload.to_string()).unwrap()).unwrap();
+    let version = made["version"].as_str().unwrap();
+    assert_eq!(version.len(), 64);
+    let done = call(&f, "sports.confirmSource", parameters, Some(version));
+    assert_eq!(done["data"]["source"]["canonicalDomain"], "news.example.com");
+}

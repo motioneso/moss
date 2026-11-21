@@ -1,5 +1,9 @@
 # Wellness package
 
+## 0.1.1
+
+- Offer validated Rust chat tools and approval cards where actions ask first.
+
 ## 0.1.0
 
 - The Wellness screen shows Today, History and Trends from the package, on desktop and phone: today's medicines and doses, the mood check-in, past check-ins and the mood and medicine trend chart. Managing medicines (add, change, remove) works in the same screen.

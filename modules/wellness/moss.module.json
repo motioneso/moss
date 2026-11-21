@@ -4,7 +4,7 @@
   "name": "Wellness",
   "description": "Private mood check-ins, medications with their schedules and dose records, therapy notes, a selective export of check-ins and therapy notes, and the choice of whether the assistant may use them. Insights worked out in code, two assistant tools that answer only while assistant access is on, and the choice of whether the assistant may use them.",
   "publisher": "Moss",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
@@ -294,7 +294,7 @@
     },
     {
       "id": "wellness.chat-tools",
-      "description": "Chat can list the person's 20 most recent check-ins (feeling, intensity, mood index and note) and read seven-day medication counts (scheduled, taken, skipped, as-needed, rate). The counts never name a medicine. Both tools return nothing private and answer WELLNESS_CONSENT_REQUIRED while the person has assistant access switched off, and both follow the host's approval rules. The old energy-trend note in chat memory is not written, and therapy notes and medicine names are never offered.",
+      "description": "Moss can read recent check-ins and medication adherence counts when assistant access is allowed. These reads do not ask for an action card.",
       "errors": [
         {
           "code": "WELLNESS_CONSENT_REQUIRED",
@@ -369,11 +369,19 @@
   "tools": {
     "wellness.recentCheckIns": {
       "description": "List the actor's 20 most recent check-ins, newest first: time, core feeling, secondary feeling, intensity, mood index and note.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
     },
     "wellness.medicationAdherence": {
       "description": "Summarize the last seven days of medication as counts and an adherence rate. Never a medicine list.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
     }
   },
   "jobs": {
