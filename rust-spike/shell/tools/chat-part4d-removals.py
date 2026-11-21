@@ -34,7 +34,7 @@ controls = [
      "modules/meals/src/Cargo.toml", ["--lib", "upsert_receipt_handles_host_injected_ownership"]),
     ("reschedule-unknown-guests", "modules/connectors/src/calendar_writes.rs",
      'let Some(attendee_count) = event["attendeeCount"].as_u64() else {\n        return Ok(fail("provider_error", "Couldn\'t verify this event\'s guest count. Change it in Google Calendar."));\n    };\n    if attendee_count > 0 {',
-     'if event["attendeeCount"].as_u64().unwrap_or(0) > 0 {',
+     'let attendee_count = event["attendeeCount"].as_u64().unwrap_or(0);\n    if attendee_count > 0 {',
      "modules/connectors/src/Cargo.toml", ["--lib", "reschedule_refuses_unverified_attendee_counts"]),
     ("calendar-whole-guest-count", "modules/calendar/src/events.rs",
      '\"attendeeCount\":md[\"attendeeCount\"].as_u64()',
