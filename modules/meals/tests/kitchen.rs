@@ -131,10 +131,14 @@ fn household_members_can_be_added_changed_cleared_and_removed() {
         .collect();
     assert_eq!(names, ["You", "Ana B"], "self first, then by order added");
 
-    assert_eq!(
-        f.ok("meals.household.remove", json!({"memberId":id})),
-        json!({"removed":true})
-    );
+    let before: Vec<_> = f.rows(MEMBERS).into_iter().filter(|row| row["member_id"] == id).collect();
+    let mut removed = f.ok("meals.household.remove", json!({"memberId":id}));
+    assert_eq!(before.len(), 1);
+    assert_eq!(removed.as_object_mut().unwrap().remove("changed").unwrap(), json!([
+        {"label":"Household member","before":json!(before).to_string(),"after":"[]"}
+    ]));
+    assert!(!f.rows(MEMBERS).iter().any(|row| row["member_id"] == id));
+    assert_eq!(removed, json!({"removed":true}));
     assert_eq!(
         f.ok("meals.household.remove", json!({"memberId":id})),
         json!({"removed":false})
