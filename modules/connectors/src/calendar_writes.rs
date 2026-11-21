@@ -188,7 +188,9 @@ pub fn create(host: &impl Host, input: &Value) -> Result<Value> {
         out["calendarMirror"] = json!("skipped-error");
         return Ok(refusal(google_failed(&write, "Couldn't create the calendar event — try again.").0, out));
     }
-    let (mirror, row) = mirror(host, &account.id, &event_id, title, from, to, json!({}));
+    // Only a newly created attendee-free request establishes zero; an existing event stays unknown.
+    let metadata = if write["created"] == true { json!({"attendeeCount":0}) } else { json!({}) };
+    let (mirror, row) = mirror(host, &account.id, &event_id, title, from, to, metadata);
     out["googleEventId"] = json!(event_id);
     out["calendarEventId"] = row;
     out["calendarMirror"] = json!(mirror);
@@ -336,7 +338,7 @@ pub fn reschedule(host: &impl Host, input: &Value) -> Result<Value> {
         }
     }
     let title = event["title"].as_str().unwrap_or("");
-    let (_, row) = mirror(host, &account.id, event["externalId"].as_str().unwrap_or(""), title, start, end, json!({}));
+    let (_, row) = mirror(host, &account.id, event["externalId"].as_str().unwrap_or(""), title, start, end, json!({"attendeeCount":attendee_count}));
     Ok(json!({"ok":true,"calendarEventId":if row.is_null() { event["id"].clone() } else { row },
         "changed":[
             {"label":"Event start","before":event["startsAt"].as_str().unwrap_or(""),"after":iso(start)},
@@ -422,5 +424,6 @@ mod tests {
             "end":{"dateTime":"2026-11-21T11:00:00.000Z","timeZone":"UTC"}
         })));
         assert_eq!(effects[1].0, "mirror");
+        assert_eq!(effects[1].1["parameters"]["externalMetadata"]["attendeeCount"].as_u64(), Some(0));
     }
 }
