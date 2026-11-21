@@ -18,9 +18,9 @@ on:
         description: "Rust tier to verify on this ref (same routing as PR, main, nightly)"
         type: choice
         options: [pull_request, push, schedule]
-        default: pull_request
+        default: push
       live_candidate:
-        description: "Prove Scratchpad live gate without accounts before nightly promotion"
+        description: "Include the nightly Scratchpad live gate in another tier"
         type: boolean
         default: false
 

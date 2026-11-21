@@ -96,10 +96,11 @@ Notes includes its server and ingest companions; Calendar includes its server co
 Companions run in separate jobs to preserve the measured package-job time budget.
 The standalone Calendar workflow is replaced by the host tier.
 
-The nightly schedule runs at 08:23 UTC on main. Workflow dispatch accepts a `rust_tier`
-(`pull_request`, `push`, `schedule`) so the same routing can be verified on a PR ref.
-`live_candidate` runs Scratchpad's live gate for account-free hosted verification; no live
-gate joins the schedule until that proof passes. Other live gates remain unpromoted.
+The nightly schedule runs at 08:23 UTC on main, including Scratchpad's account-free live
+gate as the first promoted live suite. Other live gates remain unpromoted.
+Workflow dispatch accepts a `rust_tier` (`pull_request`, `push`, `schedule`) so the same
+routing can be verified on a PR ref; its default is `push` to retain full manual coverage.
+`live_candidate` also includes the Scratchpad live gate when verifying another tier.
 The runner-only `.github/ci-bin/devports` supplies isolated port claims to existing host tests;
 local runs continue to use the machine's allocator.
 Each job prints `GATE_RESULT` with its module and entry, then bounded Cargo compile and test

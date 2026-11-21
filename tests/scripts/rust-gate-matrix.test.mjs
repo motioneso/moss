@@ -253,7 +253,7 @@ test("every main push restores all modules and controls; nightly adds all host c
   assert.deepEqual(main, rustGateEntries(rustModules, "push"));
   const nightly = rustCiEntries([], "schedule");
   assert.deepEqual(
-    nightly.filter(({ module }) => module !== "host"),
+    nightly.filter(({ module }) => module !== "host" && module !== "live"),
     main
   );
   assert.deepEqual(
@@ -261,12 +261,19 @@ test("every main push restores all modules and controls; nightly adds all host c
     hostGates
   );
   assert.throws(() => rustCiEntries([], "unknown"));
-  assert.ok(!nightly.some(({ module }) => module === "live"));
-  assert.deepEqual(rustCiEntries([], "schedule", false, true).at(-1), {
-    module: "live",
-    suite: "scratchpad",
-    gates: "test:rust-scratchpad-live"
-  });
+  assert.deepEqual(
+    nightly.filter(({ module }) => module === "live"),
+    [
+      {
+        module: "live",
+        suite: "scratchpad",
+        gates: "test:rust-scratchpad-live"
+      }
+    ]
+  );
+  assert.deepEqual(rustCiEntries([], "schedule", false, true), nightly);
+  assert.ok(!main.some(({ module }) => module === "live"));
+  assert.deepEqual(rustCiEntries([], "pull_request", false, true).at(-1), nightly.at(-1));
 });
 
 test("all CI entries reference declared scripts, including Notes and Calendar companions", () => {

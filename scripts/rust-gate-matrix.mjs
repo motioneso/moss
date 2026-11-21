@@ -123,8 +123,8 @@ export function rustCiEntries(modules, event, hostChanged = false, liveCandidate
       }))
     );
   }
-  // Candidate runs prove account-free operation before a live gate joins the schedule.
-  if (liveCandidate) {
+  // Promote one account-free live gate; other live suites remain outside the schedule.
+  if (event === "schedule" || liveCandidate) {
     entries.push({ module: "live", suite: "scratchpad", gates: "test:rust-scratchpad-live" });
   }
   return entries;
