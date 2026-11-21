@@ -120,3 +120,67 @@ async fn wrong_gateway_lease_cannot_list_tools() {
     );
     task.await.unwrap();
 }
+
+fn probe_tool(risk: crate::approvals::Risk) -> ToolDef {
+    let mut def = current_time();
+    def.name = "probe".into();
+    def.facts.risk = risk;
+    def.facts.family = None;
+    def
+}
+
+struct ProbeHost(ToolDef);
+impl ToolHost for ProbeHost {
+    fn tools(&self, _: &str) -> Vec<ToolDef> {
+        vec![self.0.clone()]
+    }
+    fn call(&self, _: &str, _: &str, _: Value) -> ToolFuture {
+        Box::pin(async { Ok("Saved.".into()) })
+    }
+}
+
+fn allow() -> Confirm {
+    Arc::new(|_, _| Box::pin(async { Answer::Allow }))
+}
+
+#[tokio::test]
+async fn an_approved_card_is_named_in_the_text_the_model_reads() {
+    let host = ProbeHost(probe_tool(crate::approvals::Risk::Write));
+    let reply = call_tool(&host, &allow(), &plain_facts(), "alice", "probe", json!({})).await;
+    assert_eq!(reply["route"], "confirm");
+    let text = model_text(&reply);
+    assert!(text.contains("the person approved this action"), "{text}");
+    assert!(text.ends_with("Saved."), "{text}");
+}
+
+#[tokio::test]
+async fn a_denied_card_claims_no_approval() {
+    let host = ProbeHost(probe_tool(crate::approvals::Risk::Write));
+    let reply = call_tool(&host, &deny(), &plain_facts(), "alice", "probe", json!({})).await;
+    assert!(!model_text(&reply).contains("approved"));
+}
+
+#[tokio::test]
+async fn a_plain_read_claims_no_approval() {
+    let host = ProbeHost(probe_tool(crate::approvals::Risk::Read));
+    let reply = call_tool(&host, &deny(), &plain_facts(), "alice", "probe", json!({})).await;
+    assert_eq!(reply["route"], "auto-run");
+    assert_eq!(model_text(&reply), "Saved.");
+}
+
+#[tokio::test]
+async fn a_yolo_run_says_no_card_was_shown() {
+    let mut tool = probe_tool(crate::approvals::Risk::Write);
+    tool.facts.execution_auto = true;
+    tool.facts.family = Some(Some(crate::approvals::FamilyFacts {
+        default_tier: crate::approvals::Tier::AlwaysConfirm,
+        allowed_tiers: vec![crate::approvals::Tier::TrustedAuto],
+        stored_tier: None,
+    }));
+    let host = ProbeHost(tool);
+    let facts: CallFactsFn = Arc::new(|| crate::approvals::CallFacts { yolo: true, ..Default::default() });
+    let reply = call_tool(&host, &deny(), &facts, "alice", "probe", json!({})).await;
+    let text = model_text(&reply);
+    assert!(text.contains("no card was shown"), "{text}");
+    assert!(!text.contains("the person approved"), "{text}");
+}
