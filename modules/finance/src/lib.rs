@@ -13,6 +13,8 @@ macro_rules! ask {
 }
 
 pub mod account;
+pub mod chat;
+mod chat_changes;
 pub mod setup;
 pub mod accounts;
 pub mod activity;
@@ -227,14 +229,22 @@ pub fn handle<H: Host + ?Sized>(
             Ok(done.to_string())
         }
         "api" => {
-            let call = account::execute(host, serde_json::from_str(payload)?)
+            let input: serde_json::Value = serde_json::from_str(payload)?;
+            if input["name"] == "prepareChatAction" {
+                return Ok(chat::prepare(host, &input["parameters"])?.to_string());
+            }
+            let call = account::execute(host, serde_json::from_value(input)?)
                 .map_err(|_| moss_module_sdk::Error::new("Finance account operation failed"))?;
             Ok(serde_json::to_string(&call)?)
         }
         "tool" => {
-            let request: tools::Request = serde_json::from_str(payload)?;
+            let mut request: tools::Request = serde_json::from_str(payload)?;
+            request.parameters = chat::adapt_parameters(&request.tool, request.parameters)?;
             let writes = tools::changes_data(&request.tool);
-            let result = tools::execute(host, request).map_err(|_| moss_module_sdk::Error::new("Finance tool failed"))?;
+            let changes = chat_changes::Changes::new(host);
+            let mut result = if writes { tools::execute(&changes, request) } else { tools::execute(host, request) }
+                .map_err(|_| moss_module_sdk::Error::new("Finance tool failed"))?;
+            if writes { changes.finish(&mut result); }
             if writes && result["status"] != "error" {
                 sync_household(host);
             }

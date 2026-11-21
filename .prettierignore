@@ -130,3 +130,5 @@ docs/superpowers/specs/mockups/scratchpad-commitments/
 
 # Repeated restricted chat schemas stay on one line per tool to keep the manifest below 1000 lines.
 modules/sports/moss.module.json
+# Finance's single wire manifest keeps each declaration compact to stay under 1000 lines.
+modules/finance/moss.module.json
