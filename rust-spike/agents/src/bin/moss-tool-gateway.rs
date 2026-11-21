@@ -65,7 +65,7 @@ fn main() {
                     "arguments": msg["params"].get("arguments").cloned().unwrap_or(json!({})),
                 }));
                 json!({
-                    "content": [{"type": "text", "text": reply["text"].as_str().unwrap_or("No answer from Moss.")}],
+                    "content": [{"type": "text", "text": moss_agents::gateway::model_text(&reply)}],
                     "isError": reply["isError"] != false,
                 })
             }
