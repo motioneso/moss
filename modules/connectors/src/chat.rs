@@ -13,6 +13,8 @@ pub fn prepare(host: &impl Host, input: &Value) -> Result<Value> {
     // The common host sets the target from module metadata. Keep the recipient under To only.
     card.as_object_mut().unwrap().remove("target");
     card.as_object_mut().unwrap().remove("title");
+    // The legacy preview classifies content; chat renders this field as visible text.
+    card.as_object_mut().unwrap().remove("content");
     card["fields"]
         .as_array_mut()
         .unwrap()

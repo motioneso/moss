@@ -260,6 +260,10 @@ fn chat_adapter_keeps_saved_recipient_and_subject_in_fields() {
     .unwrap();
     assert!(card.get("title").is_none());
     assert!(card.get("target").is_none());
+    assert!(
+        card.get("content").is_none(),
+        "Internal content classification is not preview text"
+    );
     assert_eq!(
         card["fields"][0],
         json!({"label":"Action","value":"Send reply"})
