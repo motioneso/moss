@@ -101,3 +101,19 @@ fn tools_and_insights_keep_private_text_in_the_owner_and_out_of_logs() {
     }
     println!("PASS part16 privacy: other people read nothing, the policy removal leaks, consent off returns nothing, and note text is in no job, activity row or log");
 }
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn chat_reads_use_the_installed_tools_and_respect_consent() {
+    let w = World::new();
+    let access = w.f.access(w.f.a);
+    fill(&w, w.f.a, "A saved check-in");
+    assert_eq!(w.app.installer.chat_tools(&access).unwrap().len(), 2);
+    let recent = w.app.installer.run_chat_tool(&access, "wellness", RECENT, json!({})).unwrap();
+    assert_eq!(recent["data"]["items"].as_array().unwrap().len(), 11);
+    assert_eq!(w.call(w.f.a, "PUT", "/wellness/ai-consent", json!({"granted":false}))["status"], 200);
+    for name in [RECENT, ADHERENCE] {
+        let answer = w.app.installer.run_chat_tool(&access, "wellness", name, json!({})).unwrap();
+        assert_eq!(answer["data"]["code"], "WELLNESS_CONSENT_REQUIRED");
+    }
+}

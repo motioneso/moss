@@ -10,6 +10,11 @@ const checks = spawnSync("modules/finance/tools/check.sh", {
   env: process.env
 });
 if (checks.status !== 0) process.exit(checks.status ?? 1);
+const chatControls = spawnSync("python3", ["modules/finance/tools/chat-controls.py"], {
+  stdio: "inherit",
+  env: process.env
+});
+if (chatControls.status !== 0) process.exit(chatControls.status ?? 1);
 for (const suite of selected ? [selected] : suites) {
   const run = spawnSync(
     "cargo",

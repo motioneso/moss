@@ -37,4 +37,17 @@ const run = spawnSync(
     }
   }
 );
-process.exit(run.status ?? 1);
+if (run.status !== 0) process.exit(run.status ?? 1);
+if (process.env.JS386_CHAT_REMOVALS === "1") {
+  const controls = spawnSync("python3", ["modules/news/tools/chat-removals.py"], {
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      JS48_APP_URL: urls.app,
+      JS48_BOOTSTRAP_URL: urls.bootstrap,
+      JS48_WORKER_URL: urls.worker,
+      NEWS_COMPONENT_WASM: `${process.env.CARGO_TARGET_DIR ?? "/tmp/moss-news-host"}/module.wasm`
+    }
+  });
+  process.exit(controls.status ?? 1);
+}

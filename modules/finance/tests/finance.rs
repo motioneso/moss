@@ -286,7 +286,9 @@ fn two_people_never_see_or_touch_each_others_accounts() {
 #[test]
 fn tools_return_the_same_shapes_as_routes() {
     let f = Fake::new();
-    assert_eq!(f.tool("finance.manual.account-create", account_body("checking")), json!({"status":"ok","id":ACCT,"unchanged":false}));
+    let mut created = f.tool("finance.manual.account-create", account_body("checking"));
+    assert!(created.as_object_mut().unwrap().remove("changed").is_some());
+    assert_eq!(created, json!({"status":"ok","id":ACCT,"unchanged":false}));
     assert_eq!(f.tool("finance.manual.entry-create", entry_body(450, Value::Null))["status"], "ok");
     assert_eq!(f.tool("finance.accounts.list", json!({}))["accounts"].as_array().unwrap().len(), 1);
     assert_eq!(f.tool("finance.manual.context", json!({}))["today"], "2026-11-11");

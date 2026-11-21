@@ -20,6 +20,11 @@ fn compare(mut a: Value, mut b: Value) {
     replay::mask(&mut b);
     assert_eq!(a, b);
 }
+fn without_receipt(mut reply: Value, expected: Value) -> Value {
+    let receipt = reply["data"].as_object_mut().unwrap().remove("changed").unwrap();
+    assert_eq!(receipt, expected);
+    reply
+}
 
 #[test]
 #[ignore = "Only through verify-gate"]
@@ -34,12 +39,19 @@ fn installed_tools_match_legacy_tools_and_routes_and_today_filters_states() {
     let created = run(&w, actor, "goals.create", input.clone(), true);
     assert_eq!(created["status"], 200, "{created}");
     let legacy = replay::old_tool(old, "goals.create", input.clone());
-    compare(created["body"].clone(), legacy.clone());
+    let created_reply = without_receipt(created["body"].clone(), json!([
+        {"label":"Title","before":"None","after":"Fixture goal"},
+        {"label":"Desired outcome","before":"None","after":"Ship"},
+        {"label":"Priority","before":"None","after":"5"},
+        {"label":"Review frequency","before":"None","after":"daily"},
+        {"label":"Target date","before":"None","after":"2030-01-01T00:00:00.000Z"}
+    ]));
+    compare(created_reply.clone(), legacy.clone());
     let id = created["body"]["data"]["id"].as_str().unwrap();
     let old_id = legacy["data"]["id"].as_str().unwrap();
     assert_eq!(
         w.call(actor, "GET", &format!("/goals/{id}"), Value::Null)["body"],
-        created["body"]["data"]
+        created_reply["data"]
     );
     // Replaying an approval cannot create a second goal.
     assert_eq!(run(&w, actor, "goals.create", input, false)["status"], 403);
@@ -49,7 +61,13 @@ fn installed_tools_match_legacy_tools_and_routes_and_today_filters_states() {
         old_params["goalId"] = json!(old_id);
         let saved = run(&w, actor, "goals.addEvidence", params, true);
         compare(
-            saved["body"].clone(),
+            without_receipt(saved["body"].clone(), json!([
+                {"label":"Evidence type","before":"None","after":"progress"},
+                {"label":"Source type","before":"None","after":"manual"},
+                {"label":"Source label","before":"None","after":"Note"},
+                {"label":"Summary","before":"None","after":format!("Step {n}")},
+                {"label":"Occurred at","before":"None","after":"2026-11-13T12:00:00.000Z"}
+            ])),
             replay::old_tool(old, "goals.addEvidence", old_params),
         );
     }
@@ -63,8 +81,19 @@ fn installed_tools_match_legacy_tools_and_routes_and_today_filters_states() {
         ),
     ] {
         let result = run(&w, actor, name, params, true);
+        let reply = if name == "goals.update" {
+            without_receipt(result["body"].clone(), json!([
+                {"label":"Title","before":"Fixture goal","after":"Changed"},
+                {"label":"Status","before":"active","after":"paused"},
+                {"label":"Priority","before":"5","after":"4"},
+                {"label":"Review frequency","before":"daily","after":"monthly"}
+            ]))
+        } else {
+            assert!(result["body"]["data"].get("changed").is_none());
+            result["body"].clone()
+        };
         compare(
-            result["body"].clone(),
+            reply,
             replay::old_tool(old, name, old_params),
         );
         if name == "goals.get" {
@@ -96,7 +125,7 @@ fn installed_tools_match_legacy_tools_and_routes_and_today_filters_states() {
             json!(expected)
         );
     }
-    println!("PASS part5: all five installed Wasm tools match legacy execute replies and share route writes; newest ten summaries; Today matches the legacy active filter; approval is one-use");
+    println!("PASS all five installed Wasm tools match legacy data and share route writes; create, update and evidence receipts match exact saved values; newest ten summaries; Today matches the legacy active filter; approval is one-use");
 }
 
 #[test]

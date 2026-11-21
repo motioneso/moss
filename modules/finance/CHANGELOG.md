@@ -1,5 +1,9 @@
 # Finance package
 
+## 0.6.1
+
+- Finance chat tools declare their inputs and examples. Writes return saved-change receipts; target removal and writes set to ask use labelled approval cards.
+
 ## 0.6.0
 
 - Finance now has Start, Reports and Upcoming screens and a settings page that opens from the header cog. Start works with no bank keys. Reports show net worth, spending by category and payee, and cash flow. Upcoming lists the month's bills and lets you add, skip, match, change and stop them. Whole-account export and delete now include Finance data. The settings page cannot change the sorting limits or the dollar limit yet.

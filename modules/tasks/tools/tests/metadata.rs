@@ -24,8 +24,11 @@ fn package_owns_every_existing_tasks_table() {
     );
     assert_eq!(
         m.tools.values().filter(|tool| tool.risk == "write").count(),
-        13
+        11
     );
+    for name in ["tasks.deleteList", "tasks.deleteTag"] {
+        assert_eq!(m.tools[name].risk, "destructive");
+    }
     assert!(
         m.navigation.len() == 1
             && m.settings.len() == 1

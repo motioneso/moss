@@ -4,7 +4,7 @@
   "name": "Memory",
   "description": "Keeps what Moss remembers for each account, recalls it for a question, remembers new facts, and sets up the model that turns text into searchable vectors. Facts Moss derives from meeting recordings are kept with receipts, proposals and removal. Suggestions and the Memory screen are not part of this package yet.",
   "publisher": "Moss",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -329,7 +329,8 @@
     "supersedeFact": "1.0.0",
     "updateEntity": "1.0.0",
     "updateFactImportance": "1.0.0",
-    "upsertChunks": "1.0.0"
+    "upsertChunks": "1.0.0",
+    "prepareChatAction": "1.0.0"
   },
   "icons": ["icons/memory.svg"],
   "accounts": {
@@ -601,21 +602,142 @@
         }
       ],
       "remediations": []
+    },
+    {
+      "id": "memory.chat-tools",
+      "description": "Moss can recall saved facts and remember a source-backed fact. Remembering runs without a card unless you have chosen to approve it; completed changes show the saved fact. Forgetting always asks with a danger card showing the saved memory and refuses if it changed. Oversized approval cards are refused; long completed values are marked as truncated."
     }
   ],
   "tools": {
     "memory.recall": {
       "description": "Recall source-backed graph memory owned by the active actor.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "required": ["query"],
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Words to search for."
+          },
+          "limit": {
+            "type": "number",
+            "description": "Maximum number of results."
+          }
+        }
+      }
     },
     "memory.remember": {
       "description": "Create a source-backed graph memory fact for the active actor.",
-      "risk": "write"
+      "risk": "write",
+      "card": "prepareChatAction",
+      "inputSchema": {
+        "type": "object",
+        "required": ["predicate", "source"],
+        "properties": {
+          "subjectEntityId": {
+            "type": "string",
+            "description": "Subject entity identifier; omit for yourself."
+          },
+          "predicate": {
+            "type": "string",
+            "enum": [
+              "prefers",
+              "works_on",
+              "has_goal",
+              "has_constraint",
+              "decided",
+              "related_to",
+              "owes",
+              "waiting_on",
+              "mentioned_in",
+              "alias_of"
+            ],
+            "description": "Relationship described by this fact."
+          },
+          "objectEntityId": {
+            "type": "string",
+            "description": "Fact object entity; provide this or objectText."
+          },
+          "objectText": {
+            "type": "string",
+            "description": "Fact value in words; provide this or objectEntityId."
+          },
+          "confidence": {
+            "type": "number",
+            "description": "Confidence in the fact."
+          },
+          "provenance": {
+            "type": "string",
+            "enum": ["volunteered", "inferred", "confirmed", "imported"],
+            "description": "How this fact was learned."
+          },
+          "importance": {
+            "type": "number",
+            "description": "Importance of the fact."
+          },
+          "pinned": {
+            "type": "boolean",
+            "description": "Whether to keep this fact always relevant."
+          },
+          "source": {
+            "type": "object",
+            "required": ["sourceKind", "sourceRef", "excerpt"],
+            "description": "Source backing this fact.",
+            "properties": {
+              "sourceKind": {
+                "type": "string",
+                "enum": ["chat", "note", "task", "email", "calendar", "manual"],
+                "description": "Kind of source."
+              },
+              "sourceRef": {
+                "type": "string",
+                "description": "Reference to the source."
+              },
+              "sourceLabel": {
+                "type": "string",
+                "description": "Human-readable source name."
+              },
+              "excerpt": {
+                "type": "string",
+                "description": "Exact supporting source text."
+              }
+            }
+          }
+        },
+        "examples": [
+          {
+            "predicate": "prefers",
+            "objectText": "tea",
+            "source": {
+              "sourceKind": "chat",
+              "sourceRef": "conversation-example",
+              "excerpt": "I prefer tea"
+            }
+          }
+        ]
+      }
     },
     "memory.forget": {
       "description": "Delete one saved memory fact for the active actor. Always asks first, showing the memory in words.",
       "risk": "destructive",
-      "approvalVersion": true
+      "approvalVersion": true,
+      "card": "prepareChatAction",
+      "inputSchema": {
+        "type": "object",
+        "required": ["factId"],
+        "properties": {
+          "factId": {
+            "type": "string",
+            "description": "Saved memory identifier returned by recall."
+          }
+        },
+        "examples": [
+          {
+            "factId": "55555555-5555-4555-8555-555555555555"
+          }
+        ]
+      }
     }
   },
   "jobs": {

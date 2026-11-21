@@ -1,5 +1,9 @@
 # Weather package
 
+## 0.1.1
+
+- Offer validated Rust chat tools and approval cards where actions ask first.
+
 ## 0.1.0
 
 - Weather starts as a built-in package. Today's reading, the hourly forecast, the saved place and unit, place search and the chat tools work as before.

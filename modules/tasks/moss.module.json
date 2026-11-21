@@ -4,7 +4,7 @@
   "name": "Tasks",
   "description": "Tasks component with package screens for lists, priority views, task editing, subtasks, tags, activity, focus, at-risk, overdue and summary reads. Full legacy parity remains unfinished.",
   "publisher": "Moss",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -99,7 +99,8 @@
     "listBriefingTasks": "1.0.0",
     "prepareTaskAction": "1.0.0",
     "prepareTaskRoute": "1.0.0",
-    "setBriefingTaskStatus": "1.0.0"
+    "setBriefingTaskStatus": "1.0.0",
+    "prepareChatAction": "1.0.0"
   },
   "navigation": [
     {
@@ -117,13 +118,13 @@
       "label": "Task settings",
       "path": "/tasks",
       "scope": "user",
-      "description": "Open Task settings in Tasks to read or save your assistant task-change preference. Installed chat actions still require one-use approval until automatic-action integration is complete."
+      "description": "Open Task settings in Tasks to read or save your assistant task-change preference. Chat uses your saved task-change approval preference."
     }
   ],
   "features": [
     {
       "id": "tasks.package-data",
-      "description": "Tasks component with validated task, list, tag, activity, view preference and ordered breakdown routes. Other modules can change a suggested task's status (to open or archived) and add a follow-up task through two public calls, both limited to the caller's own tasks. Twenty-three tool handlers cover ten reads and thirteen task, list, tag, activity and breakdown actions. Full parity, automatic assistant actions and full background-job parity remain unfinished.",
+      "description": "Tasks component with validated task, list, tag, activity, view preference and ordered breakdown routes. Other modules can change a suggested task's status (to open or archived) and add a follow-up task through two public calls, both limited to the caller's own tasks. Twenty-three tool handlers cover ten reads and thirteen task, list, tag, activity and breakdown actions. Full parity and full background-job parity remain unfinished.",
       "errors": [
         {
           "code": "tasks-invalid-input",
@@ -167,14 +168,7 @@
     },
     {
       "id": "tasks.package-actions",
-      "description": "Task actions preserve tool-entered text, return legacy result summaries, and run in the account-scoped host transaction. Breakdown preserves step order and adds parent activity; the HTTP route trims steps. The host requires account approval for each tool invocation. Legacy automatic-action policies, presentations and installed chat integration remain unfinished.",
-      "errors": [
-        {
-          "code": "tasks-action-invalid-input",
-          "class": "validation",
-          "description": "A tool input has missing fields or incorrect types. Correct the action inputs and retry."
-        }
-      ]
+      "description": "Moss can read tasks, lists, tags, activity and summaries, and create or change tasks, lists, tags and subtasks. Ordinary changes run without a card unless you have chosen to approve them. Deleting lists or tags asks first. Cards show the proposed values; completed changes show before and after values. Chat cannot clear nullable task fields yet. Oversized approval cards are refused; completed text that exceeds the display limit is marked as truncated."
     },
     {
       "id": "tasks.package-queue",
@@ -186,11 +180,11 @@
     },
     {
       "id": "tasks.package-filtered-list",
-      "description": "The tasks.list tool filters visible persisted tasks by list, tag, status, priority, strict date/completion boundaries and priority quadrant, preserving updated-time/identifier ordering and tag data. Explicit shares remain visible; private tasks remain hidden from other accounts including admins. Stale recurring series first advance to the next occurrence on your local day. Installed chat integration remains unfinished. Correct invalid filter types or date text and retry."
+      "description": "The tasks.list tool filters visible persisted tasks by list, tag, status, priority, strict date/completion boundaries and priority quadrant, preserving updated-time/identifier ordering and tag data. Explicit shares remain visible; private tasks remain hidden from other accounts including admins. Stale recurring series first advance to the next occurrence on your local day. Correct invalid filter types or date text and retry."
     },
     {
       "id": "tasks.package-list-deletion",
-      "description": "Manage lists offers confirmed deletion, optionally moving every task and subtask to another owned list. Tasks are kept and assignments to tags outside the destination are removed. The last list cannot be deleted, including by concurrent package requests. The same behavior is available through tasks.deleteList. Legacy automatic approvals and installed chat integration remain unfinished.",
+      "description": "Manage lists offers confirmed deletion, optionally moving every task and subtask to another owned list. Tasks are kept and assignments to tags outside the destination are removed. The last list cannot be deleted, including by concurrent package requests. The same behavior is available through tasks.deleteList.",
       "errors": [
         {
           "code": "tasks-list-delete-conflict",
@@ -216,7 +210,7 @@
     },
     {
       "id": "tasks.account_policy_routes",
-      "description": "Open Task settings in Tasks to read or change your account\u2019s task-change assistant preference. Canonical policy takes precedence over the older toggle; legacy opt-outs are preserved. The switch stays unavailable until a saved value loads, keeps the last confirmed value after failed refreshes or saves, and offers Retry loading. Installed chat actions still require one-use approval; this control saves the preference only.",
+      "description": "Open Task settings in Tasks to read or change your account’s task-change assistant preference. Canonical policy takes precedence over the older toggle; legacy opt-outs are preserved. The switch stays unavailable until a saved value loads, keeps the last confirmed value after failed refreshes or saves, and offers Retry loading. Chat uses this saved preference when deciding whether to ask first.",
       "errors": [
         {
           "code": "tasks-preference-unavailable",
@@ -387,95 +381,596 @@
   "tools": {
     "tasks.get": {
       "description": "Get a task with its subtasks and ten most recent activity entries.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "required": ["taskId"],
+        "properties": {
+          "taskId": {
+            "type": "string",
+            "description": "Task identifier from Tasks."
+          }
+        }
+      }
     },
     "tasks.listLists": {
-      "description": "List the account\u2019s task lists.",
-      "risk": "read"
+      "description": "List the account’s task lists.",
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
     },
     "tasks.listTags": {
       "description": "List tags in a task list.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "required": ["listId"],
+        "properties": {
+          "listId": {
+            "type": "string",
+            "description": "Task list identifier."
+          }
+        }
+      }
     },
     "tasks.activity": {
-      "description": "Read a task\u2019s activity.",
-      "risk": "read"
+      "description": "Read a task’s activity.",
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "required": ["taskId"],
+        "properties": {
+          "taskId": {
+            "type": "string",
+            "description": "Task identifier from Tasks."
+          }
+        }
+      }
     },
     "tasks.create": {
       "description": "Create a task owned by the signed-in account.",
-      "risk": "write"
+      "risk": "write",
+      "card": "prepareChatAction",
+      "inputSchema": {
+        "type": "object",
+        "required": ["title"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Title to save."
+          },
+          "description": {
+            "type": "string",
+            "description": "Task description; omit to keep it unchanged."
+          },
+          "status": {
+            "type": "string",
+            "enum": ["todo", "suggested", "done", "archived"],
+            "description": "New status."
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "Priority from one (lowest) to five (highest)."
+          },
+          "dueAt": {
+            "type": "string",
+            "description": "Due date and time in ISO 8601."
+          },
+          "listId": {
+            "type": "string",
+            "description": "Task list identifier."
+          },
+          "doAt": {
+            "type": "string",
+            "description": "Planned date and time in ISO 8601."
+          },
+          "effort": {
+            "type": "string",
+            "enum": ["quick", "medium", "large"],
+            "description": "Estimated task effort."
+          },
+          "parentTaskId": {
+            "type": "string",
+            "description": "Parent task identifier."
+          },
+          "recurrence": {
+            "type": "object",
+            "required": ["freq", "interval", "occurrence_date"],
+            "description": "Recurrence schedule; omit when not changing it.",
+            "properties": {
+              "freq": {
+                "type": "string",
+                "enum": ["daily", "weekly", "monthly"],
+                "description": "Repeat frequency."
+              },
+              "interval": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Number of periods between occurrences."
+              },
+              "occurrence_date": {
+                "type": "string",
+                "description": "Occurrence day as YYYY-MM-DD."
+              }
+            }
+          }
+        },
+        "examples": [
+          {
+            "title": "Buy milk"
+          }
+        ]
+      }
     },
     "tasks.update": {
       "description": "Update a visible task using the current account permissions.",
-      "risk": "write"
+      "risk": "write",
+      "card": "prepareChatAction",
+      "inputSchema": {
+        "type": "object",
+        "required": ["taskId"],
+        "properties": {
+          "taskId": {
+            "type": "string",
+            "description": "Task identifier from Tasks."
+          },
+          "title": {
+            "type": "string",
+            "description": "Title to save."
+          },
+          "description": {
+            "type": "string",
+            "description": "Task description; omit to keep it unchanged."
+          },
+          "status": {
+            "type": "string",
+            "enum": ["todo", "suggested", "done", "archived"],
+            "description": "New status."
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "Priority from one (lowest) to five (highest)."
+          },
+          "dueAt": {
+            "type": "string",
+            "description": "Due date and time in ISO 8601."
+          },
+          "listId": {
+            "type": "string",
+            "description": "Task list identifier."
+          },
+          "doAt": {
+            "type": "string",
+            "description": "Planned date and time in ISO 8601."
+          },
+          "effort": {
+            "type": "string",
+            "enum": ["quick", "medium", "large"],
+            "description": "Estimated task effort."
+          },
+          "parentTaskId": {
+            "type": "string",
+            "description": "Parent task identifier."
+          },
+          "recurrence": {
+            "type": "object",
+            "required": ["freq", "interval", "occurrence_date"],
+            "description": "Recurrence schedule; omit when not changing it.",
+            "properties": {
+              "freq": {
+                "type": "string",
+                "enum": ["daily", "weekly", "monthly"],
+                "description": "Repeat frequency."
+              },
+              "interval": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Number of periods between occurrences."
+              },
+              "occurrence_date": {
+                "type": "string",
+                "description": "Occurrence day as YYYY-MM-DD."
+              }
+            }
+          }
+        },
+        "examples": [
+          {
+            "taskId": "11111111-1111-4111-8111-111111111111"
+          }
+        ]
+      }
     },
     "tasks.updateStatus": {
       "description": "Complete, archive or reopen a task.",
-      "risk": "write"
+      "risk": "write",
+      "card": "prepareChatAction",
+      "inputSchema": {
+        "type": "object",
+        "required": ["taskId", "status"],
+        "properties": {
+          "taskId": {
+            "type": "string",
+            "description": "Task identifier from Tasks."
+          },
+          "status": {
+            "type": "string",
+            "enum": ["todo", "done", "archived"],
+            "description": "New status."
+          }
+        },
+        "examples": [
+          {
+            "taskId": "11111111-1111-4111-8111-111111111111",
+            "status": "todo"
+          }
+        ]
+      }
     },
     "tasks.breakDown": {
       "description": "Break an owned task into ordered subtasks.",
-      "risk": "write"
+      "risk": "write",
+      "card": "prepareChatAction",
+      "inputSchema": {
+        "type": "object",
+        "required": ["taskId", "steps"],
+        "properties": {
+          "taskId": {
+            "type": "string",
+            "description": "Task identifier from Tasks."
+          },
+          "steps": {
+            "type": "array",
+            "description": "Ordered subtask titles.",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "examples": [
+          {
+            "taskId": "11111111-1111-4111-8111-111111111111",
+            "steps": ["Buy milk", "Walk home"]
+          }
+        ]
+      }
     },
     "tasks.addActivity": {
       "description": "Add a note or activity entry to a visible task.",
-      "risk": "write"
+      "risk": "write",
+      "card": "prepareChatAction",
+      "inputSchema": {
+        "type": "object",
+        "required": ["taskId"],
+        "properties": {
+          "taskId": {
+            "type": "string",
+            "description": "Task identifier from Tasks."
+          },
+          "activityType": {
+            "type": "string",
+            "description": "Activity type, usually comment."
+          },
+          "body": {
+            "type": "string",
+            "description": "Activity text."
+          }
+        },
+        "examples": [
+          {
+            "taskId": "11111111-1111-4111-8111-111111111111"
+          }
+        ]
+      }
     },
     "tasks.assignTag": {
       "description": "Assign an owned tag to an owned task.",
-      "risk": "write"
+      "risk": "write",
+      "card": "prepareChatAction",
+      "inputSchema": {
+        "type": "object",
+        "required": ["taskId", "tagId"],
+        "properties": {
+          "taskId": {
+            "type": "string",
+            "description": "Task identifier from Tasks."
+          },
+          "tagId": {
+            "type": "string",
+            "description": "Tag identifier in that list."
+          }
+        },
+        "examples": [
+          {
+            "taskId": "11111111-1111-4111-8111-111111111111",
+            "tagId": "44444444-4444-4444-8444-444444444444"
+          }
+        ]
+      }
     },
     "tasks.unassignTag": {
       "description": "Remove a tag from an owned task.",
-      "risk": "write"
+      "risk": "write",
+      "card": "prepareChatAction",
+      "inputSchema": {
+        "type": "object",
+        "required": ["taskId", "tagId"],
+        "properties": {
+          "taskId": {
+            "type": "string",
+            "description": "Task identifier from Tasks."
+          },
+          "tagId": {
+            "type": "string",
+            "description": "Tag identifier in that list."
+          }
+        },
+        "examples": [
+          {
+            "taskId": "11111111-1111-4111-8111-111111111111",
+            "tagId": "44444444-4444-4444-8444-444444444444"
+          }
+        ]
+      }
     },
     "tasks.createList": {
       "description": "Create a task list for the signed-in account.",
-      "risk": "write"
+      "risk": "write",
+      "card": "prepareChatAction",
+      "inputSchema": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name to save."
+          }
+        },
+        "examples": [
+          {
+            "name": "Errands"
+          }
+        ]
+      }
     },
     "tasks.renameList": {
       "description": "Rename an owned task list.",
-      "risk": "write"
+      "risk": "write",
+      "card": "prepareChatAction",
+      "inputSchema": {
+        "type": "object",
+        "required": ["listId", "name"],
+        "properties": {
+          "listId": {
+            "type": "string",
+            "description": "Task list identifier."
+          },
+          "name": {
+            "type": "string",
+            "description": "Name to save."
+          }
+        },
+        "examples": [
+          {
+            "listId": "33333333-3333-4333-8333-333333333333",
+            "name": "Errands"
+          }
+        ]
+      }
     },
     "tasks.createTag": {
       "description": "Create a tag in an owned task list.",
-      "risk": "write"
+      "risk": "write",
+      "card": "prepareChatAction",
+      "inputSchema": {
+        "type": "object",
+        "required": ["listId", "name"],
+        "properties": {
+          "listId": {
+            "type": "string",
+            "description": "Task list identifier."
+          },
+          "name": {
+            "type": "string",
+            "description": "Name to save."
+          }
+        },
+        "examples": [
+          {
+            "listId": "33333333-3333-4333-8333-333333333333",
+            "name": "Errands"
+          }
+        ]
+      }
     },
     "tasks.renameTag": {
       "description": "Rename an owned task tag.",
-      "risk": "write"
+      "risk": "write",
+      "card": "prepareChatAction",
+      "inputSchema": {
+        "type": "object",
+        "required": ["listId", "tagId", "name"],
+        "properties": {
+          "listId": {
+            "type": "string",
+            "description": "Task list identifier."
+          },
+          "tagId": {
+            "type": "string",
+            "description": "Tag identifier in that list."
+          },
+          "name": {
+            "type": "string",
+            "description": "Name to save."
+          }
+        },
+        "examples": [
+          {
+            "listId": "33333333-3333-4333-8333-333333333333",
+            "tagId": "44444444-4444-4444-8444-444444444444",
+            "name": "Errands"
+          }
+        ]
+      }
     },
     "tasks.deleteTag": {
       "description": "Delete an owned task tag.",
-      "risk": "write"
+      "risk": "destructive",
+      "card": "prepareChatAction",
+      "inputSchema": {
+        "type": "object",
+        "required": ["listId", "tagId"],
+        "properties": {
+          "listId": {
+            "type": "string",
+            "description": "Task list identifier."
+          },
+          "tagId": {
+            "type": "string",
+            "description": "Tag identifier in that list."
+          }
+        },
+        "examples": [
+          {
+            "listId": "33333333-3333-4333-8333-333333333333",
+            "tagId": "44444444-4444-4444-8444-444444444444"
+          }
+        ]
+      }
     },
     "tasks.heartbeatWindow": {
       "description": "Read a bounded owner-only overdue/due-soon window and revision without advancing recurrence. Background scheduler integration remains unfinished.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "horizonHours": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 48,
+            "description": "Hours ahead to include, from one to forty-eight."
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "description": "Maximum number of results."
+          }
+        }
+      }
     },
     "tasks.list": {
       "description": "List visible persisted tasks with list, tag, status, priority, date, completion and quadrant filters. Stale recurring series first advance to the next occurrence on your local day.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "listId": {
+            "type": "string",
+            "description": "Task list identifier."
+          },
+          "tagId": {
+            "type": "string",
+            "description": "Tag identifier in that list."
+          },
+          "status": {
+            "type": "string",
+            "enum": ["todo", "done", "archived"],
+            "description": "New status."
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "Priority from one (lowest) to five (highest)."
+          },
+          "dueBefore": {
+            "type": "string",
+            "description": "Due before."
+          },
+          "dueAfter": {
+            "type": "string",
+            "description": "Due after."
+          },
+          "quadrant": {
+            "type": "string",
+            "enum": ["do", "schedule", "delegate", "eliminate"],
+            "description": "Quadrant."
+          },
+          "completedAfter": {
+            "type": "string",
+            "description": "Completed after."
+          }
+        }
+      }
     },
     "tasks.deleteList": {
       "description": "Delete an owned task list, optionally moving its tasks to another owned list. The last list is kept; a nonempty list requires a destination.",
-      "risk": "write"
+      "risk": "destructive",
+      "card": "prepareChatAction",
+      "inputSchema": {
+        "type": "object",
+        "required": ["listId"],
+        "properties": {
+          "listId": {
+            "type": "string",
+            "description": "Task list identifier."
+          },
+          "reassignToListId": {
+            "type": "string",
+            "description": "Owned destination list for existing tasks."
+          }
+        },
+        "examples": [
+          {
+            "listId": "33333333-3333-4333-8333-333333333333"
+          }
+        ]
+      }
     },
     "tasks.summary": {
       "description": "Read a bounded summary of today, overdue, upcoming, undated, completed or all tasks. Persisted occurrences only; this read never advances recurring series. Days use your saved account timezone.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": ["today", "overdue", "upcoming", "undated", "completed", "all"],
+            "description": "Summary time range."
+          }
+        }
+      }
     },
     "tasks.focus": {
       "description": "Get ranked overdue and at-risk tasks. Stale recurring series first advance to the next occurrence on your local day; days use your saved account timezone.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
     },
     "tasks.atRisk": {
       "description": "Get tasks at risk of slipping (priority 3+, due within two days or do-date past, no completed subtask).",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
     },
     "tasks.overdue": {
       "description": "Get overdue open tasks, most overdue first.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
     }
   },
   "jobRetries": {

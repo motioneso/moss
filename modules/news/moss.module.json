@@ -3,7 +3,7 @@
   "id": "news",
   "name": "News",
   "publisher": "Moss",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Keeps each person's own News choices, private to the owner. People can pick catalog sources and topics, exclude publishers by domain, and remove sources they added. A person's added sources, topics and exclusions can be exported, and account deletion covers all nine News tables. A person can add a source by typing a site address or a subreddit. Moss reads the public site, finds its feed, asks the person's own AI model whether the source is acceptable, and shows a preview to confirm. Adding a topic or changing one needs web search, which is not part of this package, so those requests are refused. The News page is compiled from the active sources: stories are filtered, ranked by the person's own AI model with a fixed-order fallback, stored as a snapshot and served by the overview route. Changes to a person's choices queue a refresh job that rebuilds the page, and a daily check at 04:43 UTC re-reads every added source and topic and records its health. Story pictures and publisher icons are served only for stories and publishers the person already sees. Five chat tools read the stored headlines, check a source before it is added, report added-source status and ask for a refresh, and the Briefings module can read the top headlines. A person can mark a story as more or less like this; a story marked less is left out of the page, the chat tools, briefings and its picture. The News page and the Today news widget are package screens, and the News settings screen ships with this package.",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
@@ -227,29 +227,71 @@
     "collectNewsPersonalizationExportSection": "1.0.0",
     "newsTopHeadlinesToday": "1.0.0",
     "prepareNewsAction": "1.0.0",
-    "prepareNewsRoute": "1.0.0"
+    "prepareNewsRoute": "1.0.0",
+    "prepareChatAction": "1.0.0"
   },
   "tools": {
     "news.heartbeatHeadlines": {
       "description": "Read the top stories already stored for the signed-in person. Never contacts a news source. Takes only horizonHours (1 to 48) and limit (1 to 20).",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "horizonHours": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 48,
+            "description": "Accepted compatibility value from 1 to 48; defaults to 24. Reads the stored page without additional time filtering."
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "description": "Maximum number of headlines, from 1 to 20; defaults to 20."
+          }
+        }
+      }
     },
     "news.topHeadlinesToday": {
       "description": "Read today's top stories for the signed-in person as short lines plus the evidence each came from.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
     },
     "news.credentialedSourceStatus": {
       "description": "List the sources the person added with their health and whether a key is saved, with a plain next step. Never shows a key.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
     },
     "news.previewSource": {
       "description": "Check a publisher address or name and return candidates to confirm. Saves nothing and never shows a feed address.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "Publisher address or name to check before adding."
+          }
+        },
+        "required": ["source"]
+      }
     },
     "news.refreshNews": {
       "description": "Ask Moss to rebuild the person's news page. The work runs in the background.",
       "risk": "write",
-      "approvalVersion": true
+      "approvalVersion": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "examples": [{}]
+      },
+      "card": "prepareChatAction"
     }
   },
   "icons": ["icons/news.svg"],
@@ -407,7 +449,7 @@
     },
     {
       "id": "news.chat_tools",
-      "description": "Five chat tools. Reading the top stories, source status and checking a source need no approval. Asking for a refresh shows an approval card for Your news feed, built from the stored record. Story feedback is not part of this package yet, so stories carry no feedback reference.",
+      "description": "Moss can use five News tools in chat: read stored headlines, report source status, check a source and request a refresh. Reads and source checks run without asking. Refresh takes no input and asks first with a pinned Your news feed card; approve to queue the work or reject to leave it alone.",
       "errors": []
     },
     {

@@ -28,6 +28,7 @@ controls = [
     ("single-use", "src/chat_services.rs", r'self.write\(module, access, &key, &Value::Null\)\?;', '', ["--test", "chat_tools", "grant_binds_actor_module_tool_exact_parameters_and_single_use", "--", "--exact"], 1),
     ("grant-expiry", "src/chat_services.rs", r'ensure!\(\s*grant\["expires"\].*?"This tool needs the account\x27s approval"\s*\);', '', ["--test", "chat_tools", "expired_grant_is_refused", "--", "--exact"], 1),
     ("chat-redaction", "src/chat_services.rs", r'crate::credentials::sanitize_with\(.*?\);', '', ["--test", "chat_tools", "privacy::planted_credentials_"], 4),
+    ("sensitive-chat-fields", "src/credentials.rs", r'sensitive_name\(&name\) && !expose.contains\(&name\)', 'false', ["--test", "chat_tools", "privacy::chat_redaction_preserves_only_exact_public_consent_name", "--", "--exact"], 1),
     ("fixed-card-target", "src/chat_tools.rs", r'let target = format!\("\{\}: \{\}", manifest.name, tool.description\);', 'let target = raw["target"].as_str().unwrap_or_default().to_owned();', ["--test", "chat_tools", "card_fixed_parts_come_from_host_and_manifest", "--", "--exact"], 1),
     ("public-tool-boundary", "src/invocation.rs", r'ensure!\(kind != "tool", "Use the validated chat tool entry points"\);', '', ["--test", "chat_tools", "public_dispatch_cannot_bypass_the_tool_gate", "--", "--exact"], 1),
     ("argument-validation", "src/chat_tools.rs", r'chat_schema::validate\(schema, params\)\?;', '', ["--test", "chat_tools", "schema_validation_precedes_all_guest_entry_points", "--", "--exact"], 1),

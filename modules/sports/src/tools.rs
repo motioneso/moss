@@ -52,7 +52,7 @@ pub fn run<H: Host + ?Sized>(host: &H, teams: &dyn TeamList, payload: &str) -> R
             None => Ok(failure("Invalid Sports tool input")),
         },
         LATEST => latest(host, input),
-        FOLLOW => follow_tools::follow(host, teams, input),
-        _ => follow_tools::unfollow(host, teams, input),
+        FOLLOW | UNFOLLOW => crate::chat::change_follow(host, teams, tool, input),
+        _ => unreachable!(),
     }
 }

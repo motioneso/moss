@@ -100,7 +100,9 @@ impl ServicePorts {
         crate::credentials::sanitize_with(
             value,
             &fields.iter().collect::<Vec<_>>(),
-            &Default::default(),
+            // Public publisher consent is not an HTTP authorization header. Keep its
+            // field/schema, while sanitize_with still redacts credential values inside it.
+            &["authorizationAcknowledgement".to_owned()].into(),
         );
         Ok(())
     }
