@@ -107,12 +107,12 @@ describe("CI phase deadlines (#1534, #1724)", () => {
     expect(sw).toContain("timeout --verbose --signal=TERM 5m pnpm test:sw");
     expect(sw).toContain("CI_PHASE_TIMEOUT phase=playwright-sw budget=5m");
     const gate = source.slice(source.indexOf("\n  ci-gate:"), source.indexOf("\n  build-image:"));
-    expect(gate).toContain(
-      "[changes, docs-gate, verify, unit, integration, browser, compose-smoke, prod-compose-smoke]"
+    expect(gate.replace(/\s+/g, "")).toContain(
+      "[changes,docs-gate,verify,unit,integration,browser,compose-smoke,prod-compose-smoke,rust-modules]"
     );
     expect(gate).toContain("if: always()");
     expect(gate).toContain(
-      "for job in changes docs-gate verify unit integration browser compose-smoke prod-compose-smoke"
+      "for job in changes docs-gate verify unit integration browser compose-smoke prod-compose-smoke rust-modules"
     );
     expect(gate).toContain('*) failed="$failed $job=$result" ;;');
     expect(gate).toContain('if [ -n "$failed" ]; then');
