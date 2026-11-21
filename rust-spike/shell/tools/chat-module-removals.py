@@ -54,4 +54,29 @@ for name, module, file, old, new, test in controls:
     finally:
         path.write_bytes(original)
     run(module, name, test, "restored", False)
-print(f"PASS {len(controls)} installed module removal controls; source restored", flush=True)
+# Section 6 also calls for the existing host job-parameter assertion to be re-run.
+# Removing UUID validation allows arbitrary text in an id slot; the same test must fail.
+path = root / "rust-spike/module-host/src/runtime.rs"
+original = path.read_bytes()
+old = """ParameterKind::Id => value
+                    .as_str()
+                    .is_some_and(|s| uuid::Uuid::parse_str(s).is_ok()),"""
+assert original.decode().count(old) == 1, "Job metadata protection anchor changed"
+command = ["cargo", "+1.95.0", "test", "--offline", "--locked", "--manifest-path",
+           "rust-spike/module-host/Cargo.toml", "--test", "enqueue_options",
+           "option_enqueue_retains_schema_and_context_guards", "--", "--exact"]
+try:
+    for phase, removed in [("protected", False), ("removed", True), ("restored", False)]:
+        path.write_text(original.decode().replace(old, "ParameterKind::Id => true,") if removed else original.decode())
+        log = logs / f"job-metadata.{phase}.log"
+        with log.open("w") as out:
+            result = subprocess.run(command, cwd=root, stdout=out, stderr=subprocess.STDOUT)
+        output = log.read_text()
+        expected = "test result: FAILED. 0 passed; 1 failed;" if removed else "test result: ok. 1 passed; 0 failed;"
+        if result.returncode != (101 if removed else 0) or expected not in output:
+            print(output[-4000:], flush=True)
+            raise SystemExit(f"Unexpected job metadata control rc={result.returncode}")
+        print(f"CONTROL job-metadata: {phase} rc={result.returncode}; {'assertion failed' if removed else '1 passed'}", flush=True)
+finally:
+    path.write_bytes(original)
+print(f"PASS {len(controls)} installed module and 1 host job metadata removal controls; source restored", flush=True)
