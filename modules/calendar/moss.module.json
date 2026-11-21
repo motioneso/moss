@@ -379,7 +379,7 @@
     },
     {
       "id": "calendar.chat-approvals",
-      "description": "Moss can read events, save day-plan intent, create focus time and move events without guests. Deleting an event always asks first before removing it from the linked calendar. Other writes ask when you choose to ask."
+      "description": "Moss can read events, save day-plan intent, create focus time and move events with a verified whole-number guest count of zero. Unknown or invalid guest counts block a move; check the event in Google Calendar. Deleting an event always asks first before removing it from the linked calendar. Other writes ask when you choose to ask."
     }
   ],
   "tools": {

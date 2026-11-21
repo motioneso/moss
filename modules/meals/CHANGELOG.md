@@ -2,7 +2,7 @@
 
 ## 0.3.1
 
-- Offer validated chat tools and code-built approval fields. Normal writes show their returned result; deleting and sending ask first.
+- Offer validated chat tools and code-built approval fields. Normal writes show their returned result; deleting asks first.
 
 ## 0.3.0
 

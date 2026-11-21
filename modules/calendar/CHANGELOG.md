@@ -2,7 +2,7 @@
 
 ## 0.32.1
 
-- Offer validated chat tools and code-built approval fields. Normal writes show their returned result; deleting and sending ask first.
+- Offer validated chat tools and code-built approval fields. Normal writes show their returned result; deleting asks first. Event guest counts are whole numbers or unknown; moves require a verified zero count.
 
 ## 0.32.0
 

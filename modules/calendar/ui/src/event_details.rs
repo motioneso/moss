@@ -120,8 +120,8 @@ pub fn EventDetails(
             {event.location.filter(|value|!value.is_empty()).map(|where_|view!{
                 <div class="cal-peek__row"><span class="ic"><DetailIcon icon=Icon::Location/></span><div class="cal-peek__rowmain">{where_}</div></div>
             })}
-            {(event.attendee_count>0.0).then(||view!{
-                <div class="cal-peek__row"><span class="ic"><DetailIcon icon=Icon::People/></span><div class="cal-peek__rowmain">{format!("{} {}",event.attendee_count,if event.attendee_count==1.0 {"person"}else{"people"})}</div></div>
+            {event.attendee_count.filter(|count| *count>0.0).map(|count|view!{
+                <div class="cal-peek__row"><span class="ic"><DetailIcon icon=Icon::People/></span><div class="cal-peek__rowmain">{format!("{} {}",count,if count==1.0 {"person"}else{"people"})}</div></div>
             })}
             <div class="cal-peek__row"><span class="ic"><span class="cal-peek__catdot" style=format!("background:{}", if event.is_moss_block {"var(--accent-fg)"} else {"var(--steel)"}) aria-hidden="true"></span></span><div class="cal-peek__rowmain">{detail_status}</div></div>
         </div>

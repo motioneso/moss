@@ -310,7 +310,10 @@ pub fn reschedule(host: &impl Host, input: &Value) -> Result<Value> {
     if event["readOnly"] == true {
         return Ok(fail("provider_error", OUTLOOK));
     }
-    if event["attendeeCount"].as_u64().unwrap_or(0) > 0 {
+    let Some(attendee_count) = event["attendeeCount"].as_u64() else {
+        return Ok(fail("provider_error", "Couldn't verify this event's guest count. Change it in Google Calendar."));
+    };
+    if attendee_count > 0 {
         return Ok(fail("has_attendees", "This event has other attendees, so Moss will not move it. Change it in Google Calendar."));
     }
     let write = kv(
@@ -339,4 +342,85 @@ pub fn reschedule(host: &impl Host, input: &Value) -> Result<Value> {
             {"label":"Event start","before":event["startsAt"].as_str().unwrap_or(""),"after":iso(start)},
             {"label":"Event end","before":event["endsAt"].as_str().unwrap_or(""),"after":iso(end)}
         ]}))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::RefCell;
+
+    struct EventHost {
+        event: Value,
+        effects: RefCell<Vec<(String, Value)>>,
+    }
+    impl Host for EventHost {
+        fn call(&self, port: &str, operation: &str, resource: &str, params: Value) -> moss_module_sdk::Result<Value> {
+            Ok(match (port, operation, resource) {
+                ("kv", "get", "connectors.context-setup") => json!({
+                    "accounts":[{"id":"g1","providerId":"google","status":"active","scopes":["calendar"]}],
+                    "grants":{"g1":{"calendar":true}},"timezone":"UTC"
+                }),
+                ("api", "call", "calendar") if params["name"] == "getEvent" => json!({"event":self.event}),
+                ("kv", "set", "connectors.write-calendar-patch") => {
+                    self.effects.borrow_mut().push((resource.into(), params));
+                    json!({"result":"ok"})
+                }
+                ("api", "call", "calendar") if params["name"] == "upsertCachedEvent" => {
+                    self.effects.borrow_mut().push(("mirror".into(), params));
+                    json!({"event":{"id":"cached"}})
+                }
+                _ => panic!("Unexpected call {port}.{operation}.{resource}: {params}"),
+            })
+        }
+    }
+    fn host(count: Option<Value>) -> EventHost {
+        let mut event = json!({"id":"cached","connectorAccountId":"g1","externalId":"provider-id",
+            "title":"Saved title","startsAt":"2026-11-20T10:00:00.000Z","endsAt":"2026-11-20T11:00:00.000Z"});
+        if let Some(count) = count { event["attendeeCount"] = count; }
+        EventHost { event, effects: RefCell::default() }
+    }
+    fn input() -> Value {
+        json!({"eventRef":"cached","newStart":"2026-11-21T10:00:00Z","newEnd":"2026-11-21T11:00:00Z"})
+    }
+
+    #[test]
+    fn reschedule_refuses_unverified_attendee_counts() {
+        // Float zero reproduces Calendar's old serializer and the old default-to-zero bypass.
+        for count in [Some(json!(0.0)), Some(json!(1.0)), None, Some(Value::Null), Some(json!(-1)),
+            Some(json!("0")), Some(json!(false)), Some(json!({})), Some(json!([]))] {
+            let h = host(count.clone());
+            let reply = reschedule(&h, &input()).unwrap();
+            assert_eq!(reply["ok"], false, "Unverified count {count:?} was accepted: {reply}");
+            assert_eq!(reply["reason"], "provider_error");
+            assert!(h.effects.borrow().is_empty(), "Unverified count caused a provider or cache write");
+        }
+    }
+
+    #[test]
+    fn reschedule_refuses_events_with_guests() {
+        for count in [1, 3] {
+            let h = host(Some(json!(count)));
+            let reply = reschedule(&h, &input()).unwrap();
+            assert_eq!(reply["reason"], "has_attendees");
+            assert!(h.effects.borrow().is_empty());
+        }
+    }
+
+    #[test]
+    fn reschedule_zero_guests_returns_saved_before_and_after() {
+        let h = host(Some(json!(0)));
+        let reply = reschedule(&h, &input()).unwrap();
+        assert_eq!(reply, json!({"ok":true,"calendarEventId":"cached","changed":[
+            {"label":"Event start","before":"2026-11-20T10:00:00.000Z","after":"2026-11-21T10:00:00.000Z"},
+            {"label":"Event end","before":"2026-11-20T11:00:00.000Z","after":"2026-11-21T11:00:00.000Z"}
+        ]}));
+        let effects = h.effects.borrow();
+        assert_eq!(effects.len(), 2);
+        assert_eq!(effects[0], ("connectors.write-calendar-patch".into(), json!({
+            "accountId":"g1","eventId":"provider-id",
+            "start":{"dateTime":"2026-11-21T10:00:00.000Z","timeZone":"UTC"},
+            "end":{"dateTime":"2026-11-21T11:00:00.000Z","timeZone":"UTC"}
+        })));
+        assert_eq!(effects[1].0, "mirror");
+    }
 }

@@ -106,11 +106,6 @@
               "maxLength": 2048
             },
             "maxItems": 5
-          },
-          "goal": {
-            "type": "string",
-            "description": "What to look for in the pages.",
-            "maxLength": 1000
           }
         },
         "required": ["urls"]

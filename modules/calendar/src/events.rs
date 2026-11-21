@@ -21,7 +21,7 @@ pub fn serialize(row: &Value) -> Value {
     let created = md["jarvisCreated"] == true || (md.get("jarvisCreated").is_none() && legacy);
     let mut out = json!({
         "isMossBlock":!mirror && created,"readOnly":mirror,"unconfirmed":md["mirrorUnconfirmed"]==true,
-        "allDay":md["allDay"]==true,"attendeeCount":md["attendeeCount"].as_f64().unwrap_or(0.0),
+        "allDay":md["allDay"]==true,"attendeeCount":md["attendeeCount"].as_u64(),
         "status":md["status"].as_str(),
     });
     for (source, target) in [
@@ -108,6 +108,23 @@ pub fn follow_through(host: &impl Host, target_ref: &str) -> Result<Vec<Value>> 
         }));
         if done {
             return Ok(found);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn attendee_counts_are_whole_numbers_or_unknown() {
+        for count in [0_u64, 1, 12] {
+            let row = json!({"external_metadata":{"attendeeCount":count}});
+            assert_eq!(serialize(&row)["attendeeCount"].as_u64(), Some(count));
+        }
+        for metadata in [json!({}), json!({"attendeeCount":null}), json!({"attendeeCount":0.0}),
+            json!({"attendeeCount":1.0}), json!({"attendeeCount":-1}), json!({"attendeeCount":"0"})] {
+            assert!(serialize(&json!({"external_metadata":metadata}))["attendeeCount"].is_null());
         }
     }
 }

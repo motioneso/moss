@@ -32,6 +32,14 @@ controls = [
     ("upsert-receipt", "modules/meals/src/chat_changes.rs",
      'if k == \"owner_user_id\" {\n                                    Filter::Owned', 'if k == \"owner_user_id\" {\n                                    Filter::eq(k, Value::Null)',
      "modules/meals/src/Cargo.toml", ["--lib", "upsert_receipt_handles_host_injected_ownership"]),
+    ("reschedule-unknown-guests", "modules/connectors/src/calendar_writes.rs",
+     'let Some(attendee_count) = event["attendeeCount"].as_u64() else {\n        return Ok(fail("provider_error", "Couldn\'t verify this event\'s guest count. Change it in Google Calendar."));\n    };\n    if attendee_count > 0 {',
+     'if event["attendeeCount"].as_u64().unwrap_or(0) > 0 {',
+     "modules/connectors/src/Cargo.toml", ["--lib", "reschedule_refuses_unverified_attendee_counts"]),
+    ("calendar-whole-guest-count", "modules/calendar/src/events.rs",
+     '\"attendeeCount\":md[\"attendeeCount\"].as_u64()',
+     '\"attendeeCount\":md[\"attendeeCount\"].as_f64().unwrap_or(0.0)',
+     "modules/calendar/src/Cargo.toml", ["--lib", "attendee_counts_are_whole_numbers_or_unknown"]),
     ("sending-risk", "modules/connectors/moss.module.json",
      '"risk": "destructive"', '"risk": "write"',
      "rust-spike/module-host/Cargo.toml", ["--test", "chat_part4d_manifests", "sending_tools_always_declare_destructive_and_require_a_card"]),
@@ -57,4 +65,4 @@ for name, source, old, new, manifest, tests in controls:
         print(f"REMOVAL {name}: protected rc=0; removed rc=101 (1 assertion failed); restored rc=0", flush=True)
     finally:
         path.write_bytes(original)
-print("PASS 7 part 4d removal controls; source restored", flush=True)
+print("PASS 9 part 4d removal controls; source restored", flush=True)

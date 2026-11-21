@@ -100,6 +100,7 @@ fn sending_tools_always_declare_destructive_and_require_a_card() {
             let external_delete = name == "calendar.deleteEvent";
             let risk = declaration["risk"].as_str().unwrap();
             if ["meals", "calendar", "connectors", "web"].contains(&module) && risk != "destructive"
+                && !sends && !external_delete
             {
                 assert!(
                     non_sending.contains(&name.as_str()),
