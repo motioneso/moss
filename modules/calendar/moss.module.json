@@ -4,7 +4,7 @@
   "name": "Calendar",
   "description": "Calendar cached-event screens and draft tools; signed-in HTTPS Calendar pages; provider execution and full shell composition remain incomplete.",
   "publisher": "Moss",
-  "version": "0.32.0",
+  "version": "0.32.1",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
   "capabilities": [
@@ -198,7 +198,8 @@
     "upsertCachedEvent": "1.0.0",
     "pruneCachedEvents": "1.0.0",
     "evictCachedEvent": "1.0.0",
-    "importCalendarMirror": "1.0.0"
+    "importCalendarMirror": "1.0.0",
+    "prepareChatAction": "1.0.0"
   },
   "icons": ["icons/calendar.svg"],
   "accounts": {
@@ -375,32 +376,309 @@
     {
       "id": "calendar.preview-busy-check",
       "description": "When Connectors is installed, the day-plan preview checks proposed times against the person's connected calendar events and marks busy times. Without Connectors the preview works as before and skips the check."
+    },
+    {
+      "id": "calendar.chat-approvals",
+      "description": "Moss can read events, save day-plan intent, create focus time and move events with a verified whole-number guest count of zero. Unknown or invalid guest counts block a move; check the event in Google Calendar. Deleting an event always asks first before removing it from the linked calendar. Other writes ask when you choose to ask."
     }
   ],
   "tools": {
     "calendar.heartbeatWindow": {
       "description": "Background cache-only read of the actor's own upcoming events, with bounded results, freshness and material revision.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "horizonHours": {
+            "type": "integer",
+            "description": "Hours ahead to read.",
+            "minimum": 1,
+            "maximum": 48
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum events.",
+            "minimum": 1,
+            "maximum": 20
+          }
+        },
+        "required": []
+      }
     },
     "calendar.dayPlanDraft": {
       "description": "Save evening intent and untimed task additions to the current day-plan draft for dialog review. Does not schedule events.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "planId": {
+            "type": "string",
+            "description": "Saved day-plan id.",
+            "maxLength": 100
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "description": "Revision from the last read.",
+            "minimum": 1,
+            "maximum": 2147483646
+          },
+          "eveningIntent": {
+            "type": "object",
+            "properties": {
+              "priorityTaskIds": {
+                "type": "array",
+                "description": "Priority task ids.",
+                "items": {
+                  "type": "string",
+                  "description": "Task id.",
+                  "maxLength": 100
+                },
+                "maxItems": 40
+              },
+              "capacity": {
+                "type": "string",
+                "description": "Available capacity.",
+                "enum": ["light", "normal", "full"]
+              },
+              "notes": {
+                "type": "string",
+                "description": "Planning notes.",
+                "maxLength": 4096
+              },
+              "corrections": {
+                "type": "array",
+                "description": "Corrections.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "source": {
+                      "type": "string",
+                      "description": "Correction source.",
+                      "enum": ["briefing", "planner", "actor"]
+                    },
+                    "note": {
+                      "type": "string",
+                      "description": "Correction text.",
+                      "maxLength": 4096
+                    },
+                    "taskId": {
+                      "type": "string",
+                      "description": "Related task id.",
+                      "maxLength": 100
+                    }
+                  },
+                  "required": ["source", "note"]
+                },
+                "maxItems": 40
+              },
+              "commitments": {
+                "type": "array",
+                "description": "Task decisions.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "taskId": {
+                      "type": "string",
+                      "description": "Task id.",
+                      "maxLength": 100
+                    },
+                    "decision": {
+                      "type": "string",
+                      "description": "Decision.",
+                      "enum": ["commit", "defer", "drop"]
+                    }
+                  },
+                  "required": ["taskId", "decision"]
+                },
+                "maxItems": 40
+              }
+            },
+            "required": [],
+            "description": "Untimed planning intent patch."
+          },
+          "additions": {
+            "type": "array",
+            "description": "Untimed task additions.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "taskId": {
+                  "type": "string",
+                  "description": "Existing task id.",
+                  "maxLength": 100
+                },
+                "title": {
+                  "type": "string",
+                  "description": "Display title.",
+                  "maxLength": 500
+                }
+              },
+              "required": ["taskId"]
+            },
+            "maxItems": 40
+          }
+        },
+        "required": ["planId", "expectedRevision"],
+        "examples": [
+          {
+            "planId": "00000000-0000-4000-8000-000000000002",
+            "expectedRevision": 1,
+            "eveningIntent": {
+              "capacity": "light"
+            }
+          }
+        ]
+      },
+      "card": "prepareChatAction"
     },
     "calendar.createEvent": {
       "description": "Add a focus-time block to the person's own Google Calendar in the first free slot of the window, then show it in Calendar. Never double-books.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "Local date YYYY-MM-DD; defaults to tomorrow.",
+            "maxLength": 10
+          },
+          "partOfDay": {
+            "type": "string",
+            "description": "Requested part of day.",
+            "enum": ["morning", "afternoon", "evening"]
+          },
+          "start": {
+            "type": "string",
+            "description": "Explicit RFC3339 start; wins over date and partOfDay.",
+            "maxLength": 100
+          },
+          "durationMinutes": {
+            "type": "number",
+            "description": "Length in minutes.",
+            "minimum": 15,
+            "maximum": 480
+          },
+          "title": {
+            "type": "string",
+            "description": "Event title; defaults to Focus time.",
+            "maxLength": 500
+          }
+        },
+        "required": [],
+        "examples": [
+          {
+            "date": "2026-11-20",
+            "partOfDay": "morning",
+            "durationMinutes": 60
+          }
+        ]
+      },
+      "card": "prepareChatAction"
     },
     "calendar.deleteEvent": {
       "description": "Delete one event from the person's own Google Calendar and remove it from Calendar. Outlook events are read-only.",
-      "risk": "write"
+      "risk": "destructive",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "description": "Moss event id from the calendar.",
+            "maxLength": 100
+          },
+          "displayTitle": {
+            "type": "string",
+            "description": "Optional preview value; the saved event is authoritative.",
+            "maxLength": 500
+          },
+          "displayWhen": {
+            "type": "string",
+            "description": "Optional preview value; the saved event is authoritative.",
+            "maxLength": 200
+          }
+        },
+        "required": ["eventId"],
+        "examples": [
+          {
+            "eventId": "00000000-0000-4000-8000-000000000004"
+          }
+        ]
+      },
+      "card": "prepareChatAction"
     },
     "calendar.rescheduleEvent": {
       "description": "Move one event without guests on the person's own Google Calendar and update it in Calendar.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "eventRef": {
+            "type": "string",
+            "description": "Moss or provider event id.",
+            "maxLength": 200
+          },
+          "newStart": {
+            "type": "string",
+            "description": "New start, RFC3339 instant.",
+            "maxLength": 100
+          },
+          "newEnd": {
+            "type": "string",
+            "description": "New end, RFC3339 instant.",
+            "maxLength": 100
+          },
+          "displayTitle": {
+            "type": "string",
+            "description": "Optional preview value.",
+            "maxLength": 500
+          },
+          "displayWhen": {
+            "type": "string",
+            "description": "Optional preview value.",
+            "maxLength": 200
+          }
+        },
+        "required": ["eventRef", "newStart", "newEnd"],
+        "examples": [
+          {
+            "eventRef": "00000000-0000-4000-8000-000000000004",
+            "newStart": "2026-11-20T16:00:00Z",
+            "newEnd": "2026-11-20T17:00:00Z"
+          }
+        ]
+      },
+      "card": "prepareChatAction"
     },
     "calendar.listVisibleEvents": {
       "description": "Read the actor's upcoming events from every connected calendar, live first with a cached fallback, with conflict and travel flags.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "string",
+            "description": "Named local day; wins over explicit instants.",
+            "enum": ["today", "tomorrow"]
+          },
+          "startsAfter": {
+            "type": "string",
+            "description": "Window start, ISO instant.",
+            "maxLength": 100
+          },
+          "startsBefore": {
+            "type": "string",
+            "description": "Window end, ISO instant.",
+            "maxLength": 100
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum events.",
+            "minimum": 1,
+            "maximum": 20
+          }
+        },
+        "required": []
+      }
     }
   },
   "jobs": {

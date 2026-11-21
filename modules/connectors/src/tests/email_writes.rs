@@ -248,3 +248,38 @@ fn non_ascii_subjects_are_encoded() {
     let mime = written(&h).1["mime"].as_str().unwrap().to_string();
     assert!(mime.contains("Subject: =?UTF-8?B?UmU6IENhZsOp?=\r\n"), "{mime}");
 }
+
+#[test]
+fn chat_adapter_keeps_saved_recipient_and_subject_in_fields() {
+    let h = google(message());
+    let body = "MODEL-VALUE-DO-NOT-LABEL";
+    let card = moss_connectors::chat::prepare(
+        &h,
+        &json!({"tool":"email.sendReply","parameters":input(body)}),
+    )
+    .unwrap();
+    assert!(card.get("title").is_none());
+    assert!(card.get("target").is_none());
+    assert_eq!(
+        card["fields"][0],
+        json!({"label":"Action","value":"Send reply"})
+    );
+    assert_eq!(
+        card["fields"][1],
+        json!({"label":"To","value":"Ann Lee <ann@example.com>"})
+    );
+    assert_eq!(
+        card["fields"][2],
+        json!({"label":"Subject","value":"Re: Lunch?"})
+    );
+    assert_eq!(card["fields"][3], json!({"label":"Reply","value":body}));
+    assert_eq!(
+        card["version"],
+        prepare(&h, &input(body)).unwrap()["version"]
+    );
+    assert!(h
+        .calls
+        .borrow()
+        .iter()
+        .all(|(name, _)| !name.starts_with("connectors.write-")));
+}

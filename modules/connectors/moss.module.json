@@ -4,7 +4,7 @@
   "name": "Connectors",
   "description": "Keeps the mail and calendar connections of each account, their sign-in secrets and the Email and Calendar permissions. Connecting Google works by pasting your own Google client details. Yahoo, Proton Bridge, iCloud and Fastmail mail connect with an app password. Google mail and calendar sync into the Email and Calendar caches. Outlook calendar syncing reads the Outlook web page through a dedicated browser, calendar only and read-only. Outlook mail and sign-in are not part of this package yet.",
   "publisher": "Moss",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
@@ -199,10 +199,26 @@
       "path": "/email-refresh/:refresh_id",
       "signIn": true
     },
-    { "method": "GET", "path": "/outlook-calendar", "signIn": true },
-    { "method": "POST", "path": "/outlook-calendar/connect", "signIn": true },
-    { "method": "POST", "path": "/outlook-calendar/refresh", "signIn": true },
-    { "method": "POST", "path": "/outlook-calendar/disconnect", "signIn": true },
+    {
+      "method": "GET",
+      "path": "/outlook-calendar",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/outlook-calendar/connect",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/outlook-calendar/refresh",
+      "signIn": true
+    },
+    {
+      "method": "POST",
+      "path": "/outlook-calendar/disconnect",
+      "signIn": true
+    },
     {
       "method": "GET",
       "path": "/admin/accounts",
@@ -224,7 +240,8 @@
     "prepareEmailAction": "1.0.0",
     "createCalendarEvent": "1.0.0",
     "deleteCalendarEvent": "1.0.0",
-    "rescheduleCalendarEvent": "1.0.0"
+    "rescheduleCalendarEvent": "1.0.0",
+    "prepareChatAction": "1.0.0"
   },
   "icons": ["icons/connectors.svg"],
   "accounts": {
@@ -529,37 +546,154 @@
     {
       "id": "connectors.calendar-writes",
       "description": "Calendar can add a focus-time block to the person's own Google Calendar in the first free slot, move an event that has no guests, and delete an event. Each change shows up in Calendar at once. Outlook events are read-only. A change that needs calendar permission says to reconnect Google in Settings."
+    },
+    {
+      "id": "connectors.chat-approvals",
+      "description": "Moss can guide Google setup, read mail and calendar events, and draft replies. Sending a reply always asks first, showing the saved recipient, subject and reply body. Drafting asks only when you choose to ask."
     }
   ],
   "tools": {
     "email.draftReply": {
       "description": "Save a reply to one cached email as a draft in the person's own mailbox. Input is the cached message id and the body only. The recipient, subject and thread come from the original message.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "cacheMessageId": {
+            "type": "string",
+            "description": "Cached message id from email.listVisibleMessages.",
+            "maxLength": 200
+          },
+          "body": {
+            "type": "string",
+            "description": "Plain-text reply to show before sending.",
+            "maxLength": 4000
+          }
+        },
+        "required": ["cacheMessageId", "body"],
+        "examples": [
+          {
+            "cacheMessageId": "00000000-0000-4000-8000-000000000004",
+            "body": "Thanks, I will be there."
+          }
+        ]
+      },
+      "card": "prepareChatAction"
     },
     "email.sendReply": {
       "description": "Send a reply to one cached email from the person's own mailbox, to the original sender on the same thread. Sends only after the person approves the exact text shown.",
       "risk": "destructive",
-      "approvalVersion": true
+      "approvalVersion": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "cacheMessageId": {
+            "type": "string",
+            "description": "Cached message id from email.listVisibleMessages.",
+            "maxLength": 200
+          },
+          "body": {
+            "type": "string",
+            "description": "Plain-text reply to show before sending.",
+            "maxLength": 4000
+          }
+        },
+        "required": ["cacheMessageId", "body"],
+        "examples": [
+          {
+            "cacheMessageId": "00000000-0000-4000-8000-000000000004",
+            "body": "Thanks, I will be there."
+          }
+        ]
+      },
+      "card": "prepareChatAction"
     },
     "connectors.startGoogleGuidance": {
       "description": "Explain, step by step, how the user connects their Google account (Gmail + Calendar). Read-only guidance; the user completes the secret-entry steps in Settings.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
     },
     "email.listVisibleMessages": {
       "description": "List the user's recent email with a short summary and an action label for each message. Reads Gmail live when it can, and falls back to saved mail. Never returns full bodies.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "description": "Maximum messages.",
+            "minimum": 1,
+            "maximum": 30
+          }
+        },
+        "required": []
+      }
     },
     "gmail.searchLive": {
       "description": "Search the user's live Gmail. Returns bounded message metadata and snippets, not full bodies.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Gmail search query.",
+            "maxLength": 1000
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum messages.",
+            "minimum": 1,
+            "maximum": 20
+          }
+        },
+        "required": []
+      }
     },
     "gmail.getLiveMessage": {
       "description": "Fetch one live Gmail message by id. Returns a capped plain-text body.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Gmail message id.",
+            "maxLength": 200
+          }
+        },
+        "required": ["id"]
+      }
     },
     "calendar.listLiveEvents": {
       "description": "List live primary-calendar events for a bounded time window.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "timeMin": {
+            "type": "string",
+            "description": "Window start, RFC3339 instant.",
+            "maxLength": 100
+          },
+          "timeMax": {
+            "type": "string",
+            "description": "Window end, RFC3339 instant.",
+            "maxLength": 100
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum events.",
+            "minimum": 1,
+            "maximum": 50
+          }
+        },
+        "required": []
+      }
     }
   },
   "jobs": {

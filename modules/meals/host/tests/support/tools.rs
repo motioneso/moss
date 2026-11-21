@@ -8,14 +8,18 @@ pub(crate) fn run(w: &World, actor: uuid::Uuid, tool: &str, parameters: Value, a
             .approve_tool(&w.f.access(actor), "meals", tool, &parameters)
             .unwrap();
     }
-    w.call(
+    let before = receipts::snapshot(w, actor);
+    let reply = w.call(
         actor,
         "POST",
         "/meals/tools/run",
         json!({"tool":tool,"parameters":parameters}),
-    )
+    );
+    receipts::verify(before, receipts::snapshot(w, actor), &reply);
+    reply
 }
 pub(crate) fn compare(mut a: Value, mut b: Value) {
+    a = receipts::legacy_reply(a);
     replay::mask(&mut a);
     replay::mask(&mut b);
     assert_eq!(a, b);
@@ -157,6 +161,8 @@ fn tools_keep_both_tables_private_and_leave_no_text_behind() {
         let view = run(&w, actor, "meals.kitchen.get", json!({}), true);
         assert!(!view.to_string().contains(MARK), "{view}");
         assert_eq!(view["body"]["data"]["members"].as_array().unwrap().len(), 1);
+        let others_before = receipts::other_owners(&w, actor);
+        assert!(receipts::snapshot(&w, actor).is_empty(), "the read must not save defaults");
         let edit = run(
             &w,
             actor,
@@ -165,6 +171,17 @@ fn tools_keep_both_tables_private_and_leave_no_text_behind() {
             true,
         );
         assert_eq!(edit["body"]["data"]["code"], "member_not_found", "{edit}");
+        assert!(edit["body"]["data"].get("changed").is_none());
+        let others_after = receipts::other_owners(&w, actor);
+        assert_eq!(others_before.len(), others_after.len());
+        assert!(others_before.iter().all(|row| others_after.contains(row)),
+            "a rejected edit must leave every other owner's rows unchanged");
+        let defaults = receipts::snapshot(&w, actor);
+        assert!(defaults.iter().all(|(_, row)| row["owner_user_id"] == json!(actor)));
+        assert!(defaults.iter().any(|(label, row)| label == "Kitchen"
+            && row["kitchen_id"] == view["body"]["data"]["kitchenId"]));
+        assert!(defaults.iter().any(|(label, row)| label == "Household member"
+            && row["member_id"] == view["body"]["data"]["members"][0]["memberId"]));
         let removed = run(
             &w,
             actor,
