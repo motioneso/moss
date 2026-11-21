@@ -16,18 +16,32 @@ const TABLES: [(&str, &str); 20] = [
 ];
 
 pub(super) fn snapshot(w: &World, actor: uuid::Uuid) -> Snapshot {
+    read_rows(w, actor, "=")
+}
+
+pub(super) fn other_owners(w: &World, actor: uuid::Uuid) -> Snapshot {
+    read_rows(w, actor, "<>")
+}
+
+fn read_rows(w: &World, actor: uuid::Uuid, comparison: &str) -> Snapshot {
     let sql = TABLES.iter().map(|(label, table)| format!(
-        "SELECT '{label}'::text, to_jsonb(row) FROM app.{table} row WHERE owner_user_id=$1"
+        "SELECT '{label}'::text, to_jsonb(row) FROM app.{table} row WHERE owner_user_id{comparison}$1"
     )).collect::<Vec<_>>().join(" UNION ALL ");
     w.f.rt.block_on(w.f.root.query(&sql, &[&actor])).unwrap().iter()
         .map(|row| (row.get(0), row.get(1))).collect()
 }
 
 pub(super) fn verify(before: Snapshot, after: Snapshot, reply: &Value) {
-    // Done receipts describe successful results. A legacy rejected household edit can
-    // initialize the caller's default kitchen before returning member_not_found.
-    // Error, ownership and activity assertions remain in the original test callers.
-    if reply["body"]["data"].get("error").is_some() {
+    // A rejected first household edit initializes only the caller's two default rows.
+    // It returns no Done receipt. All other failed calls still require unchanged rows.
+    let data = &reply["body"]["data"];
+    if data["code"] == "member_not_found" && before.is_empty() {
+        assert!(data.get("changed").is_none(), "a rejected edit has no Done receipt");
+        assert_eq!(after.len(), 2, "only the default kitchen and self member may be created");
+        assert!(after.iter().any(|(label, row)| label == "Kitchen"
+            && row["units_system"] == "us" && row["default_pantry_mode"] == "prefer"));
+        assert!(after.iter().any(|(label, row)| label == "Household member"
+            && row["is_self"] == true && row["name"] == "You"));
         return;
     }
     let Some(changes) = reply["body"]["data"].get("changed") else {
