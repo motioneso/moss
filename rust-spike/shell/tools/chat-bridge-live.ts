@@ -54,6 +54,15 @@ if (process.env.MOSS_CHAT_NEWS_PROOF === "1") {
   ]);
   process.env.JS386_NEWS_PACKAGE = join(target, "news.mosspkg");
 }
+if (process.env.MOSS_CHAT_FINANCE_PROOF === "1") {
+  run("bash", ["modules/finance/tools/build-component.sh", join(target, "finance.wasm")]);
+  cargo("modules/finance/host/Cargo.toml", ["build", "--bin", "finance-package"]);
+  run(join(target, "debug/finance-package"), [
+    join(target, "finance.wasm"),
+    join(target, "finance.mosspkg")
+  ]);
+  process.env.JS390_FINANCE_PACKAGE = join(target, "finance.mosspkg");
+}
 cargo("rust-spike/shell/Cargo.toml", ["build", "-p", "moss-shell", "--features", "live-proof"]);
 cargo("rust-spike/agents/Cargo.toml", ["build", "--bins"]);
 cargo("rust-spike/network/Cargo.toml", ["build", "--bin", "moss-network"]);
