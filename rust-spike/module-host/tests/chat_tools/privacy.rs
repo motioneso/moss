@@ -110,7 +110,10 @@ fn assert_redacted(value: Value) {
 #[test]
 fn planted_credentials_tool_result() {
     let value = redacted_outputs().remove(0);
-    assert_eq!(value["parameters"]["authorizationAcknowledgement"], "[redacted]");
+    assert_eq!(
+        value["parameters"]["authorizationAcknowledgement"],
+        "[redacted]"
+    );
     assert_redacted(value);
 }
 #[test]
@@ -130,8 +133,51 @@ fn planted_credentials_tool_list() {
         .iter()
         .find(|tool| tool["tool"] == "sample.read")
         .unwrap();
-    assert!(read["input_schema"]["properties"].get("authorizationAcknowledgement").is_some());
+    assert!(read["input_schema"]["properties"]
+        .get("authorizationAcknowledgement")
+        .is_some());
     assert_redacted(value);
+}
+
+#[test]
+fn chat_redaction_preserves_only_exact_public_consent_name() {
+    let mut m = manifest();
+    let hidden = [
+        "Authorization",
+        "authorization",
+        "bearerToken",
+        "authorizationAcknowledgementToken",
+        "authorization_acknowledgement",
+    ];
+    let mut input = params();
+    input["authorizationAcknowledgement"] = json!("I have publisher permission");
+    for name in hidden.into_iter().chain(["authorizationAcknowledgement"]) {
+        m.tools
+            .get_mut("sample.read")
+            .unwrap()
+            .input_schema
+            .as_mut()
+            .unwrap()["properties"][name] = json!({"type":"string","description":"Fixture field"});
+    }
+    for name in hidden {
+        input[name] = json!("Bearer planted-unregistered-header-387");
+    }
+    let f = Fixture::new(m, card(), None);
+    let out = f
+        .host
+        .run_chat_tool(&f.a, MODULE, "sample.read", input)
+        .unwrap();
+    assert_eq!(
+        out["parameters"]["authorizationAcknowledgement"],
+        "I have publisher permission"
+    );
+    for name in hidden {
+        assert!(
+            out["parameters"].get(name).is_none(),
+            "Sensitive field {name} reached chat"
+        );
+    }
+    assert!(!out.to_string().contains("planted-unregistered-header-387"));
 }
 
 #[test]
