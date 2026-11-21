@@ -175,7 +175,15 @@ impl Fixture {
         let card = self.call(approver, "api", json!({"name":"prepareEmailAction","parameters":parameters}));
         let version = card["version"].clone();
         let out = self.call(actor, "tool", json!({"tool":tool,"parameters":parameters,"approvalVersion":version}));
-        out["data"].clone()
+        let mut data = out["data"].clone();
+        if tool == "email.draftReply" && data["ok"] == true {
+            let changed = data.as_object_mut().unwrap().remove("changed")
+                .expect("A saved reply draft must report its receipt");
+            assert_eq!(changed, json!([
+                {"label":"Reply draft","before":"No new draft","after":BODY}
+            ]));
+        }
+        data
     }
 
     fn tool(&self, actor: Uuid, tool: &str, parameters: Value) -> Value {

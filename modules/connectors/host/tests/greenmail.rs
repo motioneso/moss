@@ -131,7 +131,15 @@ impl Fixture {
         let parameters = json!({"cacheMessageId":"c1","body":body});
         let card = self.call("api", json!({"name":"prepareEmailAction","parameters":parameters}));
         let out = self.call("tool", json!({"tool":tool,"parameters":parameters,"approvalVersion":card["version"].clone()}));
-        out["data"].clone()
+        let mut data = out["data"].clone();
+        if tool == "email.draftReply" && data["ok"] == true {
+            let changed = data.as_object_mut().unwrap().remove("changed")
+                .expect("A saved reply draft must report its receipt");
+            assert_eq!(changed, json!([
+                {"label":"Reply draft","before":"No new draft","after":body}
+            ]));
+        }
+        data
     }
 }
 
