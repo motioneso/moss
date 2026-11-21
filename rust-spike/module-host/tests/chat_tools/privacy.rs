@@ -44,7 +44,12 @@ fn redacted_outputs() -> Vec<Value> {
         .input_schema
         .as_mut()
         .unwrap()["properties"]["text"]["maxLength"] = json!(1000);
-    m.tools.get_mut("sample.read").unwrap().input_schema.as_mut().unwrap()["properties"]["authorizationAcknowledgement"] =
+    m.tools
+        .get_mut("sample.read")
+        .unwrap()
+        .input_schema
+        .as_mut()
+        .unwrap()["properties"]["authorizationAcknowledgement"] =
         json!({"type":"string","description":"Public publisher consent text."});
     let raw = json!({"title":ACCOUNT,"target":format!("{ACCOUNT} {INSTANCE}"),"fields":[{"label":"Text","value":encoded}],"content":ACCOUNT,"version":"v1"});
     let f = Fixture::new(m, raw, None);
@@ -105,7 +110,7 @@ fn assert_redacted(value: Value) {
 #[test]
 fn planted_credentials_tool_result() {
     let value = redacted_outputs().remove(0);
-    assert_eq!(value["authorizationAcknowledgement"], "[redacted]");
+    assert_eq!(value["parameters"]["authorizationAcknowledgement"], "[redacted]");
     assert_redacted(value);
 }
 #[test]
@@ -119,7 +124,12 @@ fn planted_credentials_card() {
 #[test]
 fn planted_credentials_tool_list() {
     let value = redacted_outputs().remove(3);
-    let read = value.as_array().unwrap().iter().find(|tool| tool["tool"] == "sample.read").unwrap();
+    let read = value
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|tool| tool["tool"] == "sample.read")
+        .unwrap();
     assert!(read["input_schema"]["properties"].get("authorizationAcknowledgement").is_some());
     assert_redacted(value);
 }
