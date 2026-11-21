@@ -206,7 +206,9 @@ Chat: [Review entire batch]
    identity, with an authenticated page endpoint for full details. No client-supplied params,
    version, counts or section IDs can mint a grant. Record section exposure server-side against
    the frozen presentation; approve checks complete preparation and all sections exposed. Reload
-   restores progress from the record. Expiry or invalidation disables the entire group.
+   restores progress from the record. Exposure reports are client-controlled review aids, not a
+   security boundary; complete disclosure, exact-call binding and host rechecks remain mandatory.
+   Expiry or invalidation disables the entire group.
 6. Keep `consume`'s exact JSON match, actor/open-turn match and single use. Keep offered-tool and
    call-ID checks and host rechecks of current installation, account enablement, policy and pinned
    version. All sections share one Approve/Reject footer. Reject, timeout, changed snapshot or any
@@ -228,7 +230,10 @@ limits), and replace presentation-driven aggregate limits with chunked transport
 staged data referenced by a bound handle. The canonical full argument value remains the identity
 used for exact-call comparison; a handle cannot substitute for unvalidated or mutable parameters.
 Staging must be actor-scoped, immutable and verified before dispatch, and the guest must consume
-that same staged value inside one batch transaction. No global runtime-limit increase or arbitrary
+that same staged value inside one batch transaction. Replace the model-facing 64 KiB aggregate
+argument rejection too: accept and validate the full tool-call value before bounded staging/guest
+transport. Card paging cannot rescue arguments rejected at ingress; test that boundary explicitly.
+No global runtime-limit increase or arbitrary
 new maximum batch size is an acceptable substitute. Domain validation limits remain only when
 justified by the operation itself, not by card capacity. This transport work is part of the build,
 not a follow-up hidden behind a claim of unlimited batches.
@@ -266,7 +271,10 @@ confirm -> Approved | Declined | PreparationFailed(safe_error)
 Host normalization/paged preparation, shell approval store and contract/page endpoint, Leptos
 cards, runner wire protocol and Moss gateway outcome propagation ship together. Adapt Finance's
 builder and remove only its presentation-driven schema caps/split guidance in the same build so
-one actual oversized batch exercises the shared path. Audit legacy callers for compatibility.
+one actual oversized batch exercises the shared path. Before editing schemas, list each affected
+Finance cap and its domain or presentation rationale in the build PR; include bulk categorize,
+bulk confirm and import apply rather than assuming every array cap is a card workaround.
+Audit legacy callers for compatibility.
 Update core chat app-map declarations and Finance feature errors/remediations with the product
 change; this docs-only phase deliberately changes no app-map behavior.
 
