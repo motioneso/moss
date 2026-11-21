@@ -63,6 +63,17 @@ if (process.env.MOSS_CHAT_NEWS_PROOF === "1") {
   ]);
   process.env.JS386_NEWS_PACKAGE = join(target, "news.mosspkg");
 }
+if (process.env.MOSS_CHAT_PART4B_PROOF === "1") {
+  for (const module of ["sports", "wellness", "weather", "briefings"]) {
+    run("bash", [`modules/${module}/tools/build-component.sh`, join(target, `${module}.wasm`)]);
+    cargo(`modules/${module}/host/Cargo.toml`, ["build", "--bin", `${module}-package`]);
+    run(join(target, `debug/${module}-package`), [
+      join(target, `${module}.wasm`),
+      join(target, `${module}.mosspkg`)
+    ]);
+    process.env[`JS387_${module.toUpperCase()}_PACKAGE`] = join(target, `${module}.mosspkg`);
+  }
+}
 if (process.env.MOSS_CHAT_FINANCE_PROOF === "1") {
   run("bash", ["modules/finance/tools/build-component.sh", join(target, "finance.wasm")]);
   cargo("modules/finance/host/Cargo.toml", ["build", "--bin", "finance-package"]);

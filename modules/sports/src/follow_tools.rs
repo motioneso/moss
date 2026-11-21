@@ -1,5 +1,5 @@
 //! The follow and unfollow chat tools. Following saves exactly what the follow route saves, and
-//! both tools touch only the signed-in person's own follows, so neither needs an approval card.
+//! both tools touch only the signed-in person's own follows. The explicit ask-first policy adds a card.
 use crate::teams::TeamList;
 use crate::{catalog, follows};
 use moss_module_sdk::{
@@ -54,7 +54,7 @@ pub fn follow<H: Host + ?Sized>(host: &H, teams: &dyn TeamList, input: &Map<Stri
 }
 
 /// The saved follow a request means, found by the provider's permanent team id and never by name.
-fn saved<H: Host + ?Sized>(host: &H, teams: &dyn TeamList, competition: &str, team: Option<&str>) -> Result<Option<Value>> {
+pub(crate) fn saved<H: Host + ?Sized>(host: &H, teams: &dyn TeamList, competition: &str, team: Option<&str>) -> Result<Option<Value>> {
     let rows = Client(host).query(follows::TABLE, &Query::select(Filter::All))?;
     let in_competition = rows.into_iter().filter(|row| row["competition_key"] == competition);
     let Some(team) = team else {

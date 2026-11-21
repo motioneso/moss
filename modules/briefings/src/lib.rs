@@ -103,6 +103,8 @@ fn api<H: Host + ?Sized>(host: &H, payload: &str) -> moss_module_sdk::Result<Str
         Export(#[allow(dead_code)] Value),
         #[serde(rename = "prepareBriefingAction")]
         Prepare(Prepare),
+        #[serde(rename = "prepareBriefingChatAction")]
+        Chat(Value),
         #[serde(rename = "verifyBriefingFeedbackTarget")]
         Verify(feedback::Verify),
     }
@@ -114,6 +116,7 @@ fn api<H: Host + ?Sized>(host: &H, payload: &str) -> moss_module_sdk::Result<Str
         input_json: String,
     }
     Ok(match serde_json::from_str(payload)? {
+        Api::Chat(p) => chat_card::prepare_chat(host, &p)?,
         Api::Export(_) => json!({"ok":lifecycle::collect(host)?}),
         Api::Prepare(p) => chat_card::prepare(host, &p.tool, &p.input_json),
         Api::Verify(v) => feedback::verify(host, &v),

@@ -1,5 +1,9 @@
 # Sports package
 
+## 0.1.1
+
+- Offer validated Rust chat tools and approval cards where actions ask first.
+
 ## 0.1.0
 
 - Sports starts as a built-in package. It keeps the same six tables and saved data as before.

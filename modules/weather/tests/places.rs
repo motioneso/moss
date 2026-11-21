@@ -64,3 +64,31 @@ fn tailnet_private_and_loopback_addresses_are_not_public() {
         assert!(!not_public(ip.parse().unwrap()), "{ip}");
     }
 }
+
+#[test]
+fn chat_preference_cards_and_done_rows_show_the_actual_setting_change() {
+    let host = Fake::new("2026-11-13T10:00:00Z");
+    let payload = json!({"name":"prepareWeatherChatAction","parameters":{"tool":"weather.setUnit","parameters":{"unit":"metric"}}});
+    let card: serde_json::Value = serde_json::from_str(&moss_weather_module::handle(&host, "api", &payload.to_string()).unwrap()).unwrap();
+    assert_eq!(card["fields"], json!([
+        {"label":"Current units","value":"imperial"}, {"label":"New units","value":"metric"}
+    ]));
+    assert_eq!(host.tool("weather.setUnit", json!({"unit":"metric"}))["data"]["changed"], json!([
+        {"label":"Weather units","before":"imperial","after":"metric"}
+    ]));
+    host.serve("geocoding-api.open-meteo.com", json!({"results":[
+        {"name":"Reykjavik","country":"Iceland","latitude":64.14,"longitude":-21.9}
+    ]}));
+    let saved = host.tool("weather.setLocation", json!({"query":"Reykjavik, Iceland"}));
+    assert_eq!(saved["data"]["changed"], json!([
+        {"label":"Weather location","before":"None","after":"Reykjavik, Iceland"}
+    ]));
+    host.serve("geocoding-api.open-meteo.com", json!({"results":[
+        {"name":"Paris","country":"France","latitude":48.85,"longitude":2.35},
+        {"name":"Paris","country":"Other","latitude":1.0,"longitude":2.0}
+    ]}));
+    let ambiguous = host.tool("weather.setLocation", json!({"query":"Paris"}));
+    assert_eq!(ambiguous["data"]["status"], "ambiguous");
+    assert!(ambiguous["data"].get("changed").is_none());
+    assert_eq!(places::saved_place(&host).unwrap().unwrap().label, "Reykjavik, Iceland");
+}

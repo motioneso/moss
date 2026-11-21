@@ -135,8 +135,11 @@ fn api<H: Host + ?Sized>(host: &H, payload: &str) -> moss_module_sdk::Result<Str
     enum Api {
         #[serde(rename = "weatherToday")]
         Today(#[allow(dead_code)] Value),
+        #[serde(rename = "prepareWeatherChatAction")]
+        Chat(Value),
     }
     Ok(match serde_json::from_str(payload)? {
+        Api::Chat(p) => tools::prepare_chat(host, &p)?,
         Api::Today(_) => today::today(host, None)?,
     }
     .to_string())
