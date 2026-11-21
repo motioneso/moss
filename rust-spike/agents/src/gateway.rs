@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
-use crate::approvals::{route, CallFacts, Route, ToolFacts};
+use crate::approvals::{route, CallFacts, Risk, Route, ToolFacts};
 use crate::driver::Answer;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -227,9 +227,40 @@ pub async fn call_tool(
     if !allowed {
         return json!({"isError": true, "route": decision, "text": "The person did not approve this action."});
     }
-    match host.call(account, name, arguments).await {
-        Ok(text) => json!({"isError": false, "route": decision, "text": text}),
-        Err(text) => json!({"isError": true, "route": decision, "text": text}),
+    // Metadata only. A plain read claims nothing.
+    let approval = match decision {
+        Route::Confirm | Route::YoloConfirm => Some("approved"),
+        Route::YoloRun => Some("policy"),
+        Route::AutoRun if def.facts.risk != Risk::Read => Some("policy"),
+        Route::AutoRun => None,
+    };
+    let (is_error, text) = match host.call(account, name, arguments).await {
+        Ok(text) => (false, text),
+        Err(text) => (true, text),
+    };
+    let mut reply = json!({"isError": is_error, "route": decision, "text": text});
+    if let Some(approval) = approval {
+        reply["approval"] = json!(approval);
+    }
+    reply
+}
+
+/// The text the model reads for a finished call. Prepends one plain line saying how the
+/// action was cleared, so the model never tells the person no approval happened.
+pub fn model_text(reply: &Value) -> String {
+    let text = reply["text"].as_str().unwrap_or("No answer from Moss.");
+    let is_error = reply["isError"] != false;
+    match reply["approval"].as_str() {
+        Some("approved") if !is_error => {
+            format!("[Approval: the person approved this action on its card before it ran.]\n{text}")
+        }
+        Some("approved") => format!(
+            "[Approval: the person approved this action on its card, but it then failed.]\n{text}"
+        ),
+        Some("policy") => format!(
+            "[Approval: no card was shown because the person's settings let this action run without one.]\n{text}"
+        ),
+        _ => text.to_string(),
     }
 }
 
