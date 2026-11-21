@@ -29,7 +29,6 @@ fn card<H: Host + ?Sized>(host: &H, tool: &str, input: &Value) -> Result<Value> 
     };
     Ok(json!({
         "title": "Re-run a briefing",
-        "content": "user_authored",
         "target": title,
         "fields": [field],
         "version": version(&definition)?,
