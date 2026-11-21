@@ -49,7 +49,7 @@ scripts/run-gate.sh wait --follow
 `CONNECTORS_TESTS` continues to select the database suites independently. These controls do
 not add CI jobs or change which gates are required.
 
-## Per-file shadow CI entries
+## Required CI tiers
 
 Memory splits its five database files, with `index` and `oracle` in their own jobs.
 News separates `installed` from `reader`.
@@ -57,10 +57,10 @@ News separates `installed` from `reader`.
 The first real per-file PR run (#4420, run 44601271371) still exceeded 30 minutes in
 Memory's `db` and News's `installed`. Under the plan's kill rule, those whole files now run
 on main pushes. News's guard-removal controls are in `installed`. Memory also moves the
-existing guard-removal test in each of `account`, `recording`, and `reembed` to its own
-main-push entry. PRs keep all other tests in those files, plus `dashboard`, `index`, `oracle`,
-and News's `reader`. Main pushes respect the same touched-module/shared-host path filter;
-unknown push scope conservatively runs all promoted modules. Other modules gain no push jobs.
+existing guard-removal test in each of `account`, `recording`, and `reembed` to the
+main-push tier. PRs keep all other tests in those files, plus `dashboard`, `index`, `oracle`,
+and News's `reader`. Every main push now runs the full module matrix, including those deferred files and all
+guard-removal controls. Nightly runs the same full matrix plus all host gates.
 
 `MEMORY_CONTROLS=skip` excludes exactly those three named tests; `only` selects the control
 in the chosen file with an exact test-name filter. The names live in
@@ -82,13 +82,26 @@ Manual workflow runs retain `sync_speed` as an additional entry; pull requests o
 The next real PR run (44615887769) measured Connectors `refresh` at 31.07 minutes, so its
 whole file now runs on main pushes. Its guard-removal control moves with it. The eight
 existing guard-removal tests in `db`, `google_sync`, `google`, `imap`, and `writes` also
-move to main-only entries. This includes the whole upgrade test, which contains a removal
+move to the main tier. This includes the whole upgrade test, which contains a removal
 control; its assertions are unchanged. PRs keep the other nine entries with
-`CONNECTORS_CONTROLS=skip`. Main-only control entries use `only`; unset or `all` retains
-full local/manual coverage. Exact test names live in
+`CONNECTORS_CONTROLS=skip`. Main and nightly run the full files with `all`; `only` remains
+available for local control checks. Unset or `all` retains full local/manual coverage. Exact test names live in
 `modules/connectors/tools/control-selection.ts`. Unknown control modes fail before building.
 
-`scripts/rust-gate-matrix.mjs` expands the existing touched-module list. Unrelated modules keep
-their existing commands. The jobs remain optional shadow jobs outside `ci-gate`'s `needs`.
+`scripts/rust-gate-matrix.mjs` expands the touched-module list on PRs. A shared host change
+runs the plan's thirteen host entries (including Calendar's `check.sh`) instead of fanning out
+to all modules; mixed PRs also run directly touched modules. All Rust entries now block
+`ci-gate`, which still accepts a skipped matrix when no Rust paths changed.
+Notes includes its server and ingest companions; Calendar includes its server companion.
+Companions run in separate jobs to preserve the measured package-job time budget.
+The standalone Calendar workflow is replaced by the host tier.
+
+The nightly schedule runs at 08:23 UTC on main, including Scratchpad's account-free live
+gate as the first promoted live suite. Other live gates remain unpromoted.
+Workflow dispatch accepts a `rust_tier` (`pull_request`, `push`, `schedule`) so the same
+routing can be verified on a PR ref; its default is `push` to retain full manual coverage.
+`live_candidate` also includes the Scratchpad live gate when verifying another tier.
+The runner-only `.github/ci-bin/devports` supplies isolated port claims to existing host tests;
+local runs continue to use the machine's allocator.
 Each job prints `GATE_RESULT` with its module and entry, then bounded Cargo compile and test
 file timing summaries, including on cancellation. Setup time is included in the job wall time.
