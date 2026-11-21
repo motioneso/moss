@@ -7,11 +7,39 @@
 // This test is the thing that was missing — the rule from #1534 written down somewhere that fails.
 // It reads the workflow as text rather than parsed YAML deliberately: the repository has no YAML
 // parser dependency, and adding one to assert a handful of strings would cost more than it earns.
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const CI_WORKFLOW = fileURLToPath(new URL("../../.github/workflows/ci.yml", import.meta.url));
+
+// JS-398: obsolete PR runs must yield the runner pool to the latest commit.
+// Release-note publication handles merged PRs serially and must keep every merge.
+describe("PR workflow concurrency", () => {
+  const workflows = new URL("../../.github/workflows/", import.meta.url);
+  const prWorkflows = readdirSync(workflows).filter((file) => {
+    const source = readFileSync(new URL(file, workflows), "utf8");
+    return /^ {2}pull_request:/m.test(source) && file !== "release-notes.yml";
+  });
+
+  it("covers the main CI workflow and the heavy PR workflows", () => {
+    expect(prWorkflows).toContain("ci.yml");
+    expect(prWorkflows).toContain("rust-windows-supervisor.yml");
+    expect(prWorkflows).toContain("trail-marker-mac.yml");
+  });
+
+  it.each(prWorkflows)("%s cancels only outdated PR runs and isolates every other run", (file) => {
+    const source = readFileSync(new URL(file, workflows), "utf8");
+    const concurrency = source.match(/^concurrency:\n((?:[ \t].*\n|[ \t]*\n)+)/m)?.[1];
+    expect(concurrency, `${file} needs workflow-level concurrency`).toBeDefined();
+    expect(concurrency).toContain(
+      "group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.run_id }}"
+    );
+    expect(concurrency).toContain("cancel-in-progress: ${{ github.event_name == 'pull_request' }}");
+    // run_id is essential: cancel-in-progress=false still replaces pending runs
+    // when several main pushes, schedules or manual dispatches share a group.
+  });
+});
 
 /**
  * Steps that take minutes and can hang on something outside this repository — a package mirror, a
