@@ -1,7 +1,7 @@
 //! One club's schedule and completed results from ESPN. The parsers take the response body as
 //! data, so they run the same way on recorded fixtures and on live answers.
 use crate::catalog;
-use crate::espn::{self, encode_component, id_text, IMAGE_HOSTS};
+use crate::espn::{self, encode_component, IMAGE_HOSTS};
 use crate::espn_games;
 use chrono::DateTime;
 use moss_module_sdk::{Error, Host, Result};
@@ -18,35 +18,20 @@ fn schedule_base(competition_key: &str, team_id: &str) -> Result<(String, bool)>
 
 /// The club's season schedule. Soccer answers in two disjoint slices, recent results with no
 /// parameters and upcoming fixtures with `fixture=true`, so both are read and merged by event
-/// id. One failed slice is tolerated and two failed slices fail the read.
+/// id. One failed slice is tolerated and two failed slices fail the read. Both slices read
+/// through the lean page shape, so the unread bulk of a schedule is skipped, not parsed.
 pub fn fetch_schedule<H: Host + ?Sized>(host: &H, competition_key: &str, team_id: &str) -> Result<Vec<Value>> {
     let (url, soccer) = schedule_base(competition_key, team_id)?;
     if !soccer {
-        return events_to_games(&espn::fetch_json(host, &url)?, competition_key);
+        return espn_games::parse_scoreboard_page(&espn::fetch_scoreboard(host, &url)?, competition_key);
     }
-    let first = espn::fetch_json(host, &url);
-    let second = espn::fetch_json(host, &format!("{url}?fixture=true"));
+    let first = espn::fetch_scoreboard(host, &url);
+    let second = espn::fetch_scoreboard(host, &format!("{url}?fixture=true"));
     if let (Err(e), Err(_)) = (&first, &second) {
         return Err(Error::new(e.to_string()));
     }
-    let mut seen: Vec<String> = vec![];
-    let mut games = vec![];
-    for data in [first, second].into_iter().flatten() {
-        for event in data["events"].as_array().into_iter().flatten() {
-            if let Some(id) = id_text(&event["id"]) {
-                if seen.contains(&id) {
-                    continue;
-                }
-                seen.push(id);
-            }
-            games.push(espn_games::game(event, competition_key)?);
-        }
-    }
-    Ok(games)
-}
-
-fn events_to_games(data: &Value, competition_key: &str) -> Result<Vec<Value>> {
-    data["events"].as_array().into_iter().flatten().map(|e| espn_games::game(e, competition_key)).collect()
+    let pages: Vec<_> = [first, second].into_iter().flatten().collect();
+    espn_games::parse_scoreboard_pages(&pages, competition_key)
 }
 
 /// A crest link is kept only when it is plain https on a reviewed image host.

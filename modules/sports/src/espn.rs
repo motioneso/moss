@@ -203,6 +203,21 @@ pub fn fetch_json<H: Host + ?Sized>(host: &H, url: &str) -> Result<Value> {
     Ok(serde_json::from_str(body)?)
 }
 
+/// One ESPN events page — a league-day scoreboard or a club's schedule — deserialized straight
+/// into the lean shape: the body is read once and every field the compact game does not keep is
+/// skipped without building nodes for it, so a busy league day stays inside the per-call
+/// instruction budget the way the team-page shape does.
+pub fn fetch_scoreboard<H: Host + ?Sized>(host: &H, url: &str) -> Result<crate::espn_games::ScoreboardPage> {
+    let name = url.strip_prefix("https://").and_then(|r| r.split('/').next()).unwrap_or_default();
+    let response = host.call("fetch", "get", name, json!({"url": url}))?;
+    let status = response["status"].as_u64().unwrap_or(0);
+    if !(200..300).contains(&status) {
+        return Err(Error::new("ESPN answered with an error status"));
+    }
+    let body = response["body"].as_str().ok_or_else(|| Error::new("ESPN sent no body"))?;
+    Ok(serde_json::from_str(body)?)
+}
+
 // --- Small readers over loose JSON ---------------------------------------------------------
 
 pub(crate) fn at<'a>(value: &'a Value, path: &[&str]) -> &'a Value {
