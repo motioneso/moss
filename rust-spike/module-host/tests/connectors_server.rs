@@ -711,12 +711,17 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
         );
         assert_eq!(status, 409, "{refused}");
         // A busy calendar refuses the addition; once it clears, retry applies it.
+        // The placed block stays in the draft: a recorded placement is never
+        // dropped implicitly.
         let (status, saved) = plan_call(
             Method::PATCH,
             &format!("/day-plans/{plan}/draft"),
             Some(json!({
                 "localDay": tomorrow, "timeZone": "UTC", "expectedRevision": 4,
                 "blocks": [{
+                    "id": block, "kind": "focus", "title": "Applied block proof"
+                },
+                {
                     "kind": "focus", "title": "Second block proof",
                     "pendingChange": {"kind":"add","startsAt":format!("{tomorrow}T10:00:00Z"),"durationMinutes":30}
                 }]
