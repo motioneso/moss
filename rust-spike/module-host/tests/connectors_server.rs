@@ -664,24 +664,25 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
             1,
             "a replay duplicated the event"
         );
-        // The applied block is moved through the confirmed approval.
-        let (status, moved) = plan_call(
-            Method::PATCH,
-            &format!("/day-plans/{plan}/draft"),
-            Some(json!({
-                "localDay": tomorrow, "timeZone": "UTC", "expectedRevision": 3,
-                "blocks": [{
-                    "id": block, "kind": "focus", "title": "Applied block proof",
-                    "actualPlacement": {"startsAt":format!("{tomorrow}T14:00:00Z"),"durationMinutes":30,"calendarEventRef":event_id},
-                    "pendingChange": {"kind":"move","startsAt":format!("{tomorrow}T15:30:00Z"),"durationMinutes":30}
-                }]
-            })),
-        );
-        assert_eq!(status, 200, "{moved}");
+        // The applied block is moved through the confirmed approval. A recorded
+        // placement is never writable through a draft, so the pending move is
+        // seeded straight into storage, as the model requires.
+        let move_block = uuid::Uuid::new_v4();
+        runtime.block_on(async {
+            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+            tokio::spawn(async move { let _ = connection.await; });
+            db.execute(
+                "INSERT INTO app.day_plan_blocks(id,plan_id,owner_user_id,kind,title,position,actual_placement,pending_change) \
+                 VALUES($1,$2,$3,'focus','Applied block proof',1,$4,$5)",
+                &[&move_block, &plan, &owner,
+                  &serde_json::json!({"startsAt":format!("{tomorrow}T14:00:00Z"),"durationMinutes":30,"calendarEventRef":event_id}),
+                  &serde_json::json!({"kind":"move","startsAt":format!("{tomorrow}T15:30:00Z"),"durationMinutes":30})],
+            ).await.unwrap();
+        });
         let (status, gated) = plan_call(
             Method::POST,
             &format!("/day-plans/{plan}/apply"),
-            Some(json!({"expectedRevision":4,"idempotencyKey":"live-apply-proof-2","selectedBlockIds":[block]})),
+            Some(json!({"expectedRevision":3,"idempotencyKey":"live-apply-proof-2","selectedBlockIds":[move_block]})),
         );
         assert_eq!(status, 202, "{gated}");
         assert_eq!(gated["status"], "confirmation-required", "{gated}");
@@ -713,7 +714,7 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
             Method::PATCH,
             &format!("/day-plans/{plan}/draft"),
             Some(json!({
-                "localDay": tomorrow, "timeZone": "UTC", "expectedRevision": 5,
+                "localDay": tomorrow, "timeZone": "UTC", "expectedRevision": 4,
                 "blocks": [{
                     "id": second_block, "kind": "focus", "title": "Second block proof",
                     "pendingChange": {"kind":"add","startsAt":format!("{tomorrow}T10:00:00Z"),"durationMinutes":30}
@@ -724,7 +725,7 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
         let (status, refused_apply) = plan_call(
             Method::POST,
             &format!("/day-plans/{plan}/apply"),
-            Some(json!({"expectedRevision":6,"idempotencyKey":"live-apply-proof-3","selectedBlockIds":[second_block]})),
+            Some(json!({"expectedRevision":5,"idempotencyKey":"live-apply-proof-3","selectedBlockIds":[second_block]})),
         );
         assert_eq!(status, 200, "{refused_apply}");
         assert_eq!(refused_apply["items"][0]["outcome"], "failed", "{refused_apply}");

@@ -123,7 +123,9 @@ fn apply_retry_recover_and_confirm_are_owner_scoped_and_settle_once() {
     };
 
     // A plan of the owner's own, drafted through the routes with one proposed
-    // addition and one placed block carrying a pending move.
+    // addition. The pending move belongs to a block the plan placed earlier,
+    // so its recorded placement is seeded straight into storage, as the model
+    // requires: a draft never writes placements.
     let addition_block = Uuid::new_v4();
     let move_block = Uuid::new_v4();
     let created = call(
@@ -143,14 +145,19 @@ fn apply_retry_recover_and_confirm_are_owner_scoped_and_settle_once() {
             "blocks": [
                 {"id": addition_block, "kind": "focus", "title": "Write the chapter",
                  "pendingChange": {"kind":"add","startsAt":"2026-11-10T09:00:00Z","durationMinutes":30}},
-                {"id": move_block, "kind": "focus", "title": "Recorded block",
-                 "actualPlacement": {"startsAt":"2026-11-10T11:00:00Z","durationMinutes":30,
-                                     "calendarEventRef":"jap-owner-move"},
-                 "pendingChange": {"kind":"move","startsAt":"2026-11-10T14:00:00Z","durationMinutes":30}},
             ]
         }),
     );
     assert_eq!(saved["status"], 200, "{saved}");
+    f.rt.block_on(async {
+        f.root.execute(
+            "INSERT INTO app.day_plan_blocks(id,plan_id,owner_user_id,kind,title,position,actual_placement,pending_change) \
+             VALUES($1,$2,$3,'focus','Recorded block',1,$4,$5)",
+            &[&move_block, &plan, &f.a,
+              &json!({"startsAt":"2026-11-10T11:00:00Z","durationMinutes":30,"calendarEventRef":"jap-owner-move"}),
+              &json!({"kind":"move","startsAt":"2026-11-10T14:00:00Z","durationMinutes":30})],
+        ).await.unwrap();
+    });
     let apply_path = format!("/day-plans/{plan}/apply");
     let operation_path = |operation: &str| {
         format!("/day-plans/{plan}/operations/{operation}")
@@ -328,18 +335,26 @@ fn apply_retry_recover_and_confirm_are_owner_scoped_and_settle_once() {
             "localDay":"2026-11-10","timeZone":"UTC","expectedRevision":1,
             "blocks": [
                 {"id": other_block, "kind": "focus", "title": "Second account",
-                 "actualPlacement": {"startsAt":"2026-11-10T11:00:00Z","durationMinutes":30,
-                                     "calendarEventRef":"jap-second"},
                  "pendingChange": {"kind":"move","startsAt":"2026-11-10T15:00:00Z","durationMinutes":30}},
             ]
         }),
     );
     assert_eq!(other_saved["status"], 200, "{other_saved}");
+    let other_move_block = Uuid::new_v4();
+    f.rt.block_on(async {
+        f.root.execute(
+            "INSERT INTO app.day_plan_blocks(id,plan_id,owner_user_id,kind,title,position,actual_placement,pending_change) \
+             VALUES($1,$2,$3,'focus','Second account placed',1,$4,$5)",
+            &[&other_move_block, &other, &f.b,
+              &json!({"startsAt":"2026-11-10T11:00:00Z","durationMinutes":30,"calendarEventRef":"jap-second"}),
+              &json!({"kind":"move","startsAt":"2026-11-10T15:00:00Z","durationMinutes":30})],
+        ).await.unwrap();
+    });
     let other_apply = call(
         f.b,
         "POST",
         &format!("/day-plans/{other}/apply"),
-        json!({"expectedRevision":2,"idempotencyKey":"second-1","selectedBlockIds":[other_block]}),
+        json!({"expectedRevision":2,"idempotencyKey":"second-1","selectedBlockIds":[other_move_block]}),
     );
     assert_eq!(other_apply["status"], 202, "{other_apply}");
     let second_operation = other_apply["body"]["operationId"].as_str().unwrap().to_owned();
