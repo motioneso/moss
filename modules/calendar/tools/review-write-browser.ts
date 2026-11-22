@@ -30,7 +30,8 @@ try {
     const response = await context.request.fetch(`${origin}/api/m/${module}${path}`, {
       method,
       headers: { origin: origin! },
-      data
+      data,
+      timeout: 60_000
     });
     const body = await response.json();
     assert.ok(
@@ -199,7 +200,8 @@ try {
     console.log(`REVIEW FAILURE HOLD ${origin}`);
     await page.waitForTimeout(Number(process.env.MOSS_CALENDAR_REVIEW_HOLD_SECONDS) * 1000);
   }
-  throw error;
+  // Playwright request errors include cookie headers in their call log.
+  throw new Error(error instanceof Error ? error.message.split("\n")[0] : "Live review failed");
 } finally {
   await browser.close();
 }
