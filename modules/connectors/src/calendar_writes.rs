@@ -146,13 +146,16 @@ impl Provenance {
         })
     }
 
-    /// The cache-mirror metadata, so Calendar's row agrees with the provider tag.
+    /// The cache-mirror metadata, so Calendar's row agrees with the provider tag. The same
+    /// jarvis names the provider carries: the host refuses to carry a bare actorUserId
+    /// through any port call, because the host owns the call identity.
     fn mirror_metadata(&self) -> Value {
         json!({
             "attendeeCount": 0, "source": "applyAddition",
             "provenance": {
-                "actorUserId": self.actor_user_id, "planId": self.plan_id, "blockId": self.block_id,
-                "planRevision": self.plan_revision, "operationId": self.operation_id,
+                "jarvisActorUserId": self.actor_user_id, "jarvisPlanId": self.plan_id,
+                "jarvisBlockId": self.block_id, "jarvisPlanRevision": self.plan_revision.to_string(),
+                "jarvisOperationId": self.operation_id,
             },
         })
     }
@@ -160,7 +163,10 @@ impl Provenance {
 
 /// The provenance of a reserved addition, or None when the call is an ordinary focus block.
 /// A present but unusable provenance is refused rather than silently downgraded: the apply
-/// caller must never get an untagged event back.
+/// caller must never get an untagged event back. The field names are the provider tags
+/// (jarvisActorUserId and friends), because the host refuses a bare actorUserId on any port
+/// call — the host owns the call identity — so the jarvis names are the one vocabulary every
+/// caller can actually send.
 fn provenance_of(input: &Value) -> Result<Option<Provenance>> {
     let Some(given) = input.get("provenance").filter(|p| !p.is_null()) else {
         return Ok(None);
@@ -172,17 +178,17 @@ fn provenance_of(input: &Value) -> Result<Option<Provenance>> {
             .filter(|v| !v.is_empty())
             .map(String::from)
     };
-    let revision = given["planRevision"].as_i64().filter(|r| *r >= 0);
+    let revision = given["jarvisPlanRevision"].as_i64().filter(|r| *r >= 0);
     let (Some(actor), Some(plan), Some(block), Some(revision), Some(operation)) = (
-        text("actorUserId"),
-        text("planId"),
-        text("blockId"),
+        text("jarvisActorUserId"),
+        text("jarvisPlanId"),
+        text("jarvisBlockId"),
         revision,
-        text("operationId"),
+        text("jarvisOperationId"),
     ) else {
         return Err(Error::new(
             400,
-            "provenance requires actorUserId, planId, blockId, planRevision and operationId",
+            "provenance requires jarvisActorUserId, jarvisPlanId, jarvisBlockId, jarvisPlanRevision and jarvisOperationId",
         ));
     };
     Ok(Some(Provenance {
@@ -642,8 +648,8 @@ mod tests {
         json!({
             "windowStart":"2026-11-21T09:00:00Z","windowEnd":"2026-11-21T10:00:00Z",
             "durationMinutes":60,"title":"Write the chapter",
-            "provenance":{"actorUserId":"actor-1","planId":"plan-1","blockId":"block-1",
-                "planRevision":2,"operationId":"op-1"},
+            "provenance":{"jarvisActorUserId":"actor-1","jarvisPlanId":"plan-1","jarvisBlockId":"block-1",
+                "jarvisPlanRevision":2,"jarvisOperationId":"op-1"},
         })
     }
 
@@ -709,8 +715,8 @@ mod tests {
             .expect("a mirror was written");
         assert_eq!(mirror["externalMetadata"], json!({
             "attendeeCount":0,"source":"applyAddition",
-            "provenance":{"actorUserId":"actor-1","planId":"plan-1","blockId":"block-1",
-                "planRevision":2,"operationId":"op-1"},
+            "provenance":{"jarvisActorUserId":"actor-1","jarvisPlanId":"plan-1",
+                "jarvisBlockId":"block-1","jarvisPlanRevision":"2","jarvisOperationId":"op-1"},
         }));
     }
 
@@ -756,11 +762,13 @@ mod tests {
     #[test]
     fn an_unusable_provenance_is_refused_before_any_call() {
         for broken in [
-            json!({"actorUserId":"","planId":"plan-1","blockId":"block-1","planRevision":2,"operationId":"op-1"}),
-            json!({"planId":"plan-1","blockId":"block-1","planRevision":2,"operationId":"op-1"}),
-            json!({"actorUserId":"actor-1","planId":"plan-1","blockId":"block-1","planRevision":-2,"operationId":"op-1"}),
-            json!({"actorUserId":"actor-1","planId":"plan-1","blockId":"block-1","operationId":"op-1"}),
-            json!({"actorUserId":"actor-1","planId":"plan-1","blockId":"block-1","planRevision":"2","operationId":"op-1"}),
+            json!({"jarvisActorUserId":"","jarvisPlanId":"plan-1","jarvisBlockId":"block-1","jarvisPlanRevision":2,"jarvisOperationId":"op-1"}),
+            json!({"jarvisPlanId":"plan-1","jarvisBlockId":"block-1","jarvisPlanRevision":2,"jarvisOperationId":"op-1"}),
+            json!({"jarvisActorUserId":"actor-1","jarvisPlanId":"plan-1","jarvisBlockId":"block-1","jarvisPlanRevision":-2,"jarvisOperationId":"op-1"}),
+            json!({"jarvisActorUserId":"actor-1","jarvisPlanId":"plan-1","jarvisBlockId":"block-1","jarvisOperationId":"op-1"}),
+            json!({"jarvisActorUserId":"actor-1","jarvisPlanId":"plan-1","jarvisBlockId":"block-1","jarvisPlanRevision":"2","jarvisOperationId":"op-1"}),
+            // A bare actorUserId cannot even cross a port call: the host refuses that key.
+            json!({"actorUserId":"actor-1","jarvisPlanId":"plan-1","jarvisBlockId":"block-1","jarvisPlanRevision":2,"jarvisOperationId":"op-1"}),
             json!("not an object"),
         ] {
             let mut input = provenance_input();

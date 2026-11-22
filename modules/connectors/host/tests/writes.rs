@@ -310,10 +310,12 @@ fn a_second_person_cannot_write_to_another_persons_calendar() {
     assert!(f.google.events().iter().all(|e| e["summary"] != "Intrusion"));
 }
 
-/// The provenance one day-plan apply addition carries, as the fixtures use it.
+/// The provenance one day-plan apply addition carries, as the fixtures use it. The jarvis
+/// names are the wire contract: the host refuses to carry a bare actorUserId on any port
+/// call, so the provider-tag names are the one vocabulary a caller can actually send.
 fn plan_provenance(actor: Uuid) -> Value {
-    json!({"actorUserId":actor.to_string(),"planId":"plan-1","blockId":"block-1",
-        "planRevision":2,"operationId":"op-1"})
+    json!({"jarvisActorUserId":actor.to_string(),"jarvisPlanId":"plan-1","jarvisBlockId":"block-1",
+        "jarvisPlanRevision":2,"jarvisOperationId":"op-1"})
 }
 
 fn provenance_create_parameters(actor: Uuid) -> Value {
@@ -348,10 +350,12 @@ fn a_day_plan_addition_creates_once_and_reads_back_its_provenance() {
         "jarvisPlanRevision":"2","jarvisOperationId":"op-1",
     }));
     // The cache mirror agrees with the provider tag.
+    assert_eq!(created["calendarMirror"], "written", "{created}");
+    assert_eq!(created["calendarEventId"], "cal-1", "{created}");
     let mirrors = f.seen.named("upsertCachedEvent");
     assert_eq!(mirrors.len(), 1, "{:?}", f.seen.text());
     assert_eq!(mirrors[0]["externalMetadata"]["source"], "applyAddition");
-    assert_eq!(mirrors[0]["externalMetadata"]["provenance"]["operationId"], "op-1");
+    assert_eq!(mirrors[0]["externalMetadata"]["provenance"]["jarvisOperationId"], "op-1");
     assert_eq!(mirrors[0]["externalMetadata"]["attendeeCount"].as_u64(), Some(0));
     // The readback returns exactly what the apply loop reconciles with.
     let found = lookup(&f, f.a, &id);
@@ -396,7 +400,7 @@ fn a_retried_provenance_insert_collides_instead_of_duplicating() {
     assert_eq!(retried["message"], "This addition is already on your calendar.");
     assert_eq!(f.google.events().len(), 0, "the retried insert duplicated the event: {:?}", f.google.events());
     let inserts: Vec<_> = f.google.requests().into_iter()
-        .filter(|r| r.contains("POST /calendar/v3/calendars/primary/events")).collect();
+        .filter(|r| r.contains("POST /calendar/v3/calendars/") && r.ends_with("/events")).collect();
     assert_eq!(inserts.len(), 2, "the retry really reached Google: {inserts:?}");
 }
 
