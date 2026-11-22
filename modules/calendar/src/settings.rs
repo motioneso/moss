@@ -12,6 +12,9 @@ pub fn save(host: &impl Host, body: Value) -> Result<Value> {
     // A time-block mode change promotes or demotes the writeback tier with
     // it, exactly as the TypeScript settings route does, so the same switch
     // governs both unattended writers and the day-plan apply gate.
+    if body.get("timeBlockMode").is_some() {
+        return Err(Error::new(503, "JS394 before-kv marker"));
+    }
     if let Some(mode) = body.get("timeBlockMode").and_then(Value::as_str) {
         let tier = if mode == "auto" { "trusted_auto" } else { "ask_each_time" };
         let _ = tier;
