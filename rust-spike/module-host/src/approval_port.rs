@@ -25,12 +25,12 @@ pub const MIGRATION: &str = include_str!("../sql/0005_module_approvals.sql");
 /// Operations a module may declare for this port.
 pub const OPERATIONS: &[&str] = &["create", "get", "confirm", "find-pending", "find-confirmed"];
 
-/// The port's reply shape, the TypeScript approval record: identity, owner, state and the
-/// stored input summary. Never a secret; only what the module itself bound to the approval.
 const SUMMARY_LIMIT: usize = 256 * 1024;
 const OPERATION_ID_LIMIT: usize = 100;
 
-/// One stored approval.
+/// One stored approval. The port's reply shape is the TypeScript approval record:
+/// identity, owner, state and the stored input summary. Never a secret; only what the
+/// module itself bound to the approval.
 pub struct Record {
     pub id: String,
     pub owner_user_id: String,

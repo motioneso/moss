@@ -27,7 +27,7 @@ const tail = (text: string) => text.split("\n").slice(-60).join("\n");
 // recreates the table from the exact bytes under test, mutated copies included.
 const freshSchema = () => bootstrap.query("DROP SCHEMA IF EXISTS moss_modules CASCADE");
 
-function run(manifestPath: string, exact?: string) {
+function run(manifestPath: string, suite = "approval_store_database", exact?: string) {
   const args = [
     "+1.95.0",
     "test",
@@ -36,7 +36,7 @@ function run(manifestPath: string, exact?: string) {
     "--manifest-path",
     manifestPath,
     "--test",
-    "approval_store_database",
+    suite,
     "--",
     "--include-ignored",
     "--nocapture",
@@ -55,6 +55,8 @@ type Control = {
   pattern: RegExp;
   replacement: string;
   expect: number;
+  /** The crate's test target that proves this protection. */
+  suite?: string;
   test: string;
 };
 
@@ -83,6 +85,34 @@ const controls: Control[] = [
     replacement: "AND resource = $3",
     expect: 1,
     test: "a_second_confirm_is_refused_and_executes_nothing"
+  },
+  {
+    name: "module scope in confirm",
+    file: "module-host/src/approval_port.rs",
+    // The confirm query keeps its parameter count, so the scope is relaxed, not removed.
+    pattern: /WHERE id = \$1 AND module_id = \$2 AND resource = \$3 AND status = 'pending'/,
+    replacement:
+      "WHERE id = $1 AND (module_id = $2 OR true) AND resource = $3 AND status = 'pending'",
+    expect: 1,
+    test: "a_modules_record_cannot_be_read_by_another_module"
+  },
+  {
+    name: "module scope in find",
+    file: "module-host/src/approval_port.rs",
+    pattern: /WHERE module_id = \$1 AND resource = \$2 AND status = \$3/,
+    replacement: "WHERE (module_id = $1 OR true) AND resource = $2 AND status = $3",
+    expect: 1,
+    test: "a_modules_record_cannot_be_read_by_another_module"
+  },
+  {
+    name: "actor-restatement carve-out",
+    file: "module-host/src/runtime.rs",
+    // Widening the carve-out to every binding key must refuse the restated actor again.
+    pattern: /if key != "actorUserId" \{/,
+    replacement: "if true {",
+    expect: 1,
+    suite: "approval_port",
+    test: "a_binding_may_restate_the_actor_but_never_select_it"
   }
 ];
 
@@ -105,11 +135,15 @@ try {
   copyTree("modules");
   const copy = join(scratch, "rust-spike");
   try {
-    // The protected proof must pass first.
+    // The protected proofs must pass first: the database row-security proof, then the
+    // port suite that guards the binding carve-out.
     await freshSchema();
     const proof = run(join(root, "rust-spike/module-host/Cargo.toml"));
     if (proof.status !== 0) console.error(tail(proof.stdout + proof.stderr));
     check("the protected approvals proof passes", proof.status === 0);
+    const pure = run(join(root, "rust-spike/module-host/Cargo.toml"), "approval_port");
+    if (pure.status !== 0) console.error(tail(pure.stdout + pure.stderr));
+    check("the protected approvals port suite passes", pure.status === 0);
 
     for (const control of controls) {
       const path = join(copy, control.file);
@@ -126,7 +160,7 @@ try {
       }
       writeFileSync(path, mutated);
       await freshSchema();
-      const attempt = run(join(copy, "module-host/Cargo.toml"), control.test);
+      const attempt = run(join(copy, "module-host/Cargo.toml"), control.suite, control.test);
       const caught =
         attempt.status !== 0 && /test result: FAILED/.test(attempt.stdout + attempt.stderr);
       if (!caught) console.error(tail(attempt.stdout + attempt.stderr));
