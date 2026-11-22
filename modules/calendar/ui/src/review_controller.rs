@@ -107,7 +107,7 @@ impl Controller {
             // Always refresh after an attempt: a partially completed operation may have written events.
             let refreshed = self.reload().await;
             if !refreshed && result.is_ok() {
-                self.state.update(|s|s.notice=Some("Changes saved, but the latest schedule couldn't load. Reopen the review to refresh.".into()));
+                self.state.update(|s|s.notice=Some("Changes saved, but the latest schedule couldn't load. Reload Today to refresh.".into()));
             }
             self.state.update(|s| s.busy = false);
         });

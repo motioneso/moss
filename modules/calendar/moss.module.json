@@ -238,7 +238,7 @@
         {
           "code": "calendar_today_review_unavailable",
           "class": "transient",
-          "description": "Saving, previewing or applying a day plan failed, or the saved revision changed.",
+          "description": "Saving, previewing, applying or refreshing a day plan failed, or the saved revision changed.",
           "remediationRef": "retry-today-review"
         }
       ],
@@ -250,7 +250,7 @@
         },
         {
           "id": "retry-today-review",
-          "description": "Review the retained time and placement choices and use Save changes again. Use Retry for unfinished reported items.",
+          "description": "Review the retained time and placement choices and use Save changes again. Use Retry for unfinished reported items. Reload Today if the latest schedule could not load.",
           "path": "/"
         }
       ]
