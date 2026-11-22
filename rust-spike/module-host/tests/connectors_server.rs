@@ -673,7 +673,7 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
             tokio::spawn(async move { let _ = connection.await; });
             db.execute(
                 "INSERT INTO app.day_plan_blocks(id,plan_id,owner_user_id,kind,title,position,actual_placement,pending_change) \
-                 VALUES($1,$2,$3,'focus','Applied block proof',1,$4,$5)",
+                 VALUES($1,$2::uuid,$3,'focus','Applied block proof',1,$4,$5)",
                 &[&move_block, &plan, &owner,
                   &serde_json::json!({"startsAt":format!("{tomorrow}T14:00:00Z"),"durationMinutes":30,"calendarEventRef":event_id}),
                   &serde_json::json!({"kind":"move","startsAt":format!("{tomorrow}T15:30:00Z"),"durationMinutes":30})],

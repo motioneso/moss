@@ -159,7 +159,7 @@ fn apply_retry_recover_and_confirm_are_owner_scoped_and_settle_once() {
     f.rt.block_on(async {
         f.root.execute(
             "INSERT INTO app.day_plan_blocks(id,plan_id,owner_user_id,kind,title,position,actual_placement,pending_change) \
-             VALUES($1,$2,$3,'focus','Recorded block',1,$4,$5)",
+             VALUES($1,$2::uuid,$3,'focus','Recorded block',1,$4,$5)",
             &[&move_block, &plan, &f.a,
               &json!({"startsAt":"2026-11-10T11:00:00Z","durationMinutes":30,"calendarEventRef":"jap-owner-move"}),
               &json!({"kind":"move","startsAt":"2026-11-10T14:00:00Z","durationMinutes":30})],
@@ -347,7 +347,7 @@ fn apply_retry_recover_and_confirm_are_owner_scoped_and_settle_once() {
     f.rt.block_on(async {
         f.root.execute(
             "INSERT INTO app.day_plan_blocks(id,plan_id,owner_user_id,kind,title,position,actual_placement,pending_change) \
-             VALUES($1,$2,$3,'focus','Second account placed',1,$4,$5)",
+             VALUES($1,$2::uuid,$3,'focus','Second account placed',1,$4,$5)",
             &[&other_move_block, &other, &f.b,
               &json!({"startsAt":"2026-11-10T11:00:00Z","durationMinutes":30,"calendarEventRef":"jap-second"}),
               &json!({"kind":"move","startsAt":"2026-11-10T15:00:00Z","durationMinutes":30})],
