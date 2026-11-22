@@ -196,12 +196,8 @@
     "tasks": ">=0.1.6, <1.0.0"
   },
   "policyRoutes": {
-    "calendar_management": {
-      "installTier": "always_confirm"
-    },
-    "calendar_writeback": {
-      "installTier": "ask_each_time"
-    }
+    "calendar_management": { "installTier": "always_confirm" },
+    "calendar_writeback": { "installTier": "ask_each_time" }
   },
   "provides": {
     "listEvents": "1.0.0",
