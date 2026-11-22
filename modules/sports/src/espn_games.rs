@@ -5,8 +5,11 @@
 //! team-page shape in `espn` reads team lists: a busy league day carries megabytes the compact
 //! game never keeps (odds, rosters, broadcasts, articles), and skipping those without building
 //! nodes keeps a full default-slate briefing inside the module's fuel budget. Every field the
-//! game does keep is a plain leaf, so the old loose-tree semantics — a missing or oddly typed
-//! slot reads as empty, never as an error — hold unchanged.
+//! game keeps is a plain leaf, and the lists read through a streaming lenient reader, so an odd
+//! slot reads as empty exactly as the loose tree did; only a list entry with a truly
+//! incompatible shape refuses the page, and that refusal reads downstream as the degraded empty
+//! day a failed fetch already was. The recorded fixtures and the live parity keep the shape
+//! honest.
 use crate::catalog;
 use crate::espn::{id_text, number};
 use moss_module_sdk::{Error, Result};
@@ -169,44 +172,111 @@ struct ScoreboardLeader {
     athlete: Option<ScoreboardAthlete>,
 }
 
-/// The old loose tree read an odd slot as nothing, so a typed list keeps exactly that: a list
-/// deserializes element by element, and a missing, null or non-list slot (or one whose elements
-/// do not fit the shape) reads as empty instead of failing the whole page.
+/// The old loose tree read an odd slot as nothing, so a typed list keeps exactly that. The
+/// reader streams: it never buffers the value it is given, so the skipped bulk costs one pass
+/// and nothing else. A list deserializes entry by entry, and a missing, null or non-list slot
+/// reads as empty instead of failing the page. A list ENTRY that does not fit the shape does
+/// refuse the page (serde cannot resume a half-read entry without buffering it, which would put
+/// the fuel budget back), and that refusal reads downstream as the degraded empty day a failed
+/// fetch already was; the recorded fixtures and the live parity keep the shape honest.
 fn list_or_empty<'de, D, T>(deserializer: D) -> std::result::Result<Option<Vec<T>>, D::Error>
 where
     D: serde::Deserializer<'de>,
-    T: serde::Deserialize<'de>,
+    T: Deserialize<'de>,
 {
-    #[derive(serde::Deserialize)]
-    #[serde(untagged)]
-    enum Shape<T> {
-        List(Vec<T>),
-        Anything(serde::de::IgnoredAny),
+    struct ListVisitor<T>(std::marker::PhantomData<T>);
+    impl<'de, T: Deserialize<'de>> serde::de::Visitor<'de> for ListVisitor<T> {
+        type Value = Option<Vec<T>>;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a list or nothing")
+        }
+        fn visit_unit<E>(self) -> std::result::Result<Self::Value, E> {
+            Ok(None)
+        }
+        fn visit_bool<E>(self, _: bool) -> std::result::Result<Self::Value, E> {
+            Ok(None)
+        }
+        fn visit_i64<E>(self, _: i64) -> std::result::Result<Self::Value, E> {
+            Ok(None)
+        }
+        fn visit_u64<E>(self, _: u64) -> std::result::Result<Self::Value, E> {
+            Ok(None)
+        }
+        fn visit_f64<E>(self, _: f64) -> std::result::Result<Self::Value, E> {
+            Ok(None)
+        }
+        fn visit_str<E>(self, _: &str) -> std::result::Result<Self::Value, E> {
+            Ok(None)
+        }
+        fn visit_string<E>(self, _: String) -> std::result::Result<Self::Value, E> {
+            Ok(None)
+        }
+        /// An odd object slot reads as empty: it is walked through and thrown away, not buffered.
+        fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> std::result::Result<Self::Value, A::Error> {
+            while map.next_entry::<serde::de::IgnoredAny, serde::de::IgnoredAny>()?.is_some() {}
+            Ok(None)
+        }
+        fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error> {
+            let mut out = vec![];
+            while let Some(item) = seq.next_element::<T>()? {
+                out.push(item);
+            }
+            Ok(Some(out))
+        }
     }
-    Ok(match Option::<Shape<T>>::deserialize(deserializer)? {
-        None | Some(Shape::Anything(_)) => None,
-        Some(Shape::List(list)) => Some(list),
-    })
+    deserializer.deserialize_any(ListVisitor(std::marker::PhantomData))
 }
 
 /// The old loose tree also accepted a single category object in the `leaders` slot, not just a
-/// list, so the lean shape keeps accepting one. Anything else odd reads as empty.
+/// list, so the lean shape keeps accepting one — read streaming straight from the map, never
+/// buffered. Anything else odd there reads as empty, like `list_or_empty`.
 fn one_or_list<'de, D>(deserializer: D) -> std::result::Result<Option<Vec<ScoreboardLeaderCategory>>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    #[derive(serde::Deserialize)]
-    #[serde(untagged)]
-    enum Shape {
-        List(Vec<ScoreboardLeaderCategory>),
-        One(ScoreboardLeaderCategory),
-        Anything(serde::de::IgnoredAny),
+    struct CategoryVisitor;
+    impl<'de> serde::de::Visitor<'de> for CategoryVisitor {
+        type Value = Option<Vec<ScoreboardLeaderCategory>>;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a list, one category, or nothing")
+        }
+        fn visit_unit<E>(self) -> std::result::Result<Self::Value, E> {
+            Ok(None)
+        }
+        fn visit_bool<E>(self, _: bool) -> std::result::Result<Self::Value, E> {
+            Ok(None)
+        }
+        fn visit_i64<E>(self, _: i64) -> std::result::Result<Self::Value, E> {
+            Ok(None)
+        }
+        fn visit_u64<E>(self, _: u64) -> std::result::Result<Self::Value, E> {
+            Ok(None)
+        }
+        fn visit_f64<E>(self, _: f64) -> std::result::Result<Self::Value, E> {
+            Ok(None)
+        }
+        fn visit_str<E>(self, _: &str) -> std::result::Result<Self::Value, E> {
+            Ok(None)
+        }
+        fn visit_string<E>(self, _: String) -> std::result::Result<Self::Value, E> {
+            Ok(None)
+        }
+        fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error> {
+            let mut out = vec![];
+            while let Some(item) = seq.next_element::<ScoreboardLeaderCategory>()? {
+                out.push(item);
+            }
+            Ok(Some(out))
+        }
+        /// One lone category object, the way the old loose tree wrapped it into a one-element
+        /// list. Read streaming from the map access, so nothing is buffered.
+        fn visit_map<A: serde::de::MapAccess<'de>>(self, map: A) -> std::result::Result<Self::Value, A::Error> {
+            Ok(Some(vec![ScoreboardLeaderCategory::deserialize(
+                serde::de::value::MapAccessDeserializer::new(map),
+            )?]))
+        }
     }
-    Ok(match Option::<Shape>::deserialize(deserializer)? {
-        None | Some(Shape::Anything(_)) => None,
-        Some(Shape::List(list)) => Some(list),
-        Some(Shape::One(one)) => Some(vec![one]),
-    })
+    deserializer.deserialize_any(CategoryVisitor)
 }
 
 // --- Small readers over the shape ------------------------------------------------------------
