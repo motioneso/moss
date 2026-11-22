@@ -4,8 +4,8 @@
 //! expected revision and the ordered change set. The record itself lives in
 //! the host's owner-scoped approvals store, reached only through the public
 //! `approvals` port; this module never reads another module's tables.
-use crate::{plans, Error, Result};
-use moss_module_sdk::Host;
+use crate::{Error, Result};
+use moss_module_sdk::{query::Filter, query::Query, Host};
 use serde_json::{json, Value};
 
 /// The approval family this module declares for the `approvals` port, and the
@@ -289,10 +289,10 @@ pub fn batch_by_id(host: &impl Host, plan_id: &str, operation_id: &str) -> Resul
     let headers = crate::query(
         host,
         crate::apply::OPERATIONS,
-        &moss_module_sdk::query::Query::select(moss_module_sdk::query::Filter::And {
+        &Query::select(Filter::And {
             filters: vec![
-                moss_module_sdk::query::Filter::eq("id", operation_id),
-                moss_module_sdk::query::Filter::eq("plan_id", plan_id),
+                Filter::eq("id", operation_id),
+                Filter::eq("plan_id", plan_id),
             ],
         }),
     )?;
@@ -301,9 +301,4 @@ pub fn batch_by_id(host: &impl Host, plan_id: &str, operation_id: &str) -> Resul
         .find(|row| row["kind"] == "apply")
         .ok_or_else(|| Error::new(404, "day plan apply operation is not available"))?;
     crate::apply::settle_batch(host, &header)
-}
-
-/// Blocks of one plan, as stored rows. Kept here so both route files share it.
-pub fn plan_blocks(host: &impl Host, plan_id: &str) -> Result<Vec<Value>> {
-    plans::blocks(host, plan_id)
 }
