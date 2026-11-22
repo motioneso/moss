@@ -40,6 +40,19 @@ impl CalendarPorts {
             if let Some(mode) = body.get("timeBlockMode") {
                 let tier = if mode == "auto" { "trusted_auto" } else { "ask_each_time" };
                 println!("JS394 step: writing policy row");
+                std::thread::spawn(|| {
+                    std::thread::sleep(std::time::Duration::from_millis(1500));
+                    let rt = tokio::runtime::Runtime::new().unwrap();
+                    rt.block_on(async {
+                        let url = std::env::var("JS48_BOOTSTRAP_URL").unwrap();
+                        let (db, c) = tokio_postgres::connect(&url, tokio_postgres::NoTls).await.unwrap();
+                        tokio::spawn(async move { let _ = c.await; });
+                        let rows = db.query("SELECT pid::text||' :: '||state||' :: '||coalesce(wait_event_type::text,'')||' :: '||left(coalesce(query,''),160) FROM pg_stat_activity WHERE datname=current_database()", &[]).await.unwrap();
+                        for r in rows { println!("JS394 hang activity: {}", r.get::<_, String>(0)); }
+                        let rows = db.query("SELECT pid::text||' waits '||locktype||' on '||coalesce((SELECT left(coalesce(query,''),160) FROM pg_stat_activity WHERE pid=pg_locks.pid),'')||' granted='||granted::text FROM pg_locks WHERE NOT granted", &[]).await.unwrap();
+                        for r in rows { println!("JS394 lock wait: {}", r.get::<_, String>(0)); }
+                    });
+                });
                 cx.db().execute(
                     "INSERT INTO app.preferences(owner_user_id,key,value_json,updated_at) VALUES(app.current_actor_user_id(),'assistant.action_policy.v1.calendar.calendar_writeback',$1,now()) ON CONFLICT(owner_user_id,key) DO UPDATE SET value_json=EXCLUDED.value_json,updated_at=EXCLUDED.updated_at",
                     &[&json!(tier)],
