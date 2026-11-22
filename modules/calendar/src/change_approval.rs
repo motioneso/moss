@@ -286,6 +286,11 @@ pub fn find_confirmed(host: &impl Host, operation_id: &str) -> Result<Value> {
 /// belong to the named plan and be an apply batch; the item order follows the
 /// frozen selection exactly as the reservation wrote it.
 pub fn batch_by_id(host: &impl Host, plan_id: &str, operation_id: &str) -> Result<Value> {
+    crate::apply::settle_batch(host, &owned_header(host, plan_id, operation_id)?)
+}
+
+/// Read only: reject a foreign operation before calling a provider-capable API.
+pub(crate) fn owned_header(host: &impl Host, plan_id: &str, operation_id: &str) -> Result<Value> {
     let headers = crate::query(
         host,
         crate::apply::OPERATIONS,
@@ -296,9 +301,8 @@ pub fn batch_by_id(host: &impl Host, plan_id: &str, operation_id: &str) -> Resul
             ],
         }),
     )?;
-    let header = headers
+    headers
         .into_iter()
         .find(|row| row["kind"] == "apply")
-        .ok_or_else(|| Error::new(404, "day plan apply operation is not available"))?;
-    crate::apply::settle_batch(host, &header)
+        .ok_or_else(|| Error::new(404, "day plan apply operation is not available"))
 }

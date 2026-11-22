@@ -19,7 +19,10 @@ module. Calendar already reads task references through its host-held public Task
 and its existing execution path writes events through public Connectors calls. The
 `calendar.today-plan` app-map entry describes the actions, outcomes and recovery.
 
-No backend production code, migration or new public module API is added. The installed
+Confirm and retry now check the owner-filtered operation header before probing Connectors,
+because that read can refresh account metadata. Missing-item repair still waits until execution
+is available. Both new ordering assertions were seen failing with the previous ordering.
+No migration or new public module API is added. The installed
 Connectors test's existing Calendar route proof is extracted into a helper so the server test
 stays below the task's file-size limit; that helper also hosts the optional review browser run.
 
@@ -33,7 +36,7 @@ Run from the task worktree in `~/Jarv1s`, with task-owned Cargo home and target 
   duration, leave unscheduled, move/remove review, local times, preview conflicts, retry
   selection and idempotency. It also runs the existing guest, parity and installed-host suites.
 - The installed `day_plan_apply` test snapshots Calendar plan/operation tables, host approvals
-  and scripted provider writes around foreign confirm/retry. The same rejection assertions run
+  and scripted provider writes around foreign confirm/retry, and checks no Connectors probe runs. The same rejection assertions run
   with row security present, removed and restored, printing RED and GREEN results. The claim
   concerns those measured rows and provider calls, not every possible read-side effect.
 - `test:rust-calendar-server`: the installed Today screen, unavailable references, reader,

@@ -475,9 +475,11 @@ pub fn retry_route(
         return Err(invalid("itemIds must not repeat an id"));
     }
     operation_ids(plan_id, operation_id)?;
-    // Fail closed before any item read or write when execution is down.
+    // The owner-filtered read must precede Connectors: even a read can refresh account metadata.
+    // Repairing missing item rows still waits until execution is available.
+    let header = crate::change_approval::owned_header(host, plan_id, operation_id)?;
     let accounts = crate::execution::availability(host).map_err(|_| unavailable())?;
-    let batch = crate::change_approval::batch_by_id(host, plan_id, operation_id)?;
+    let batch = settle_batch(host, &header)?;
     let item_ids: Vec<String> = ids.iter().filter_map(Value::as_str).map(str::to_owned).collect();
     for id in &item_ids {
         let eligible = batch["items"]
@@ -562,10 +564,12 @@ pub fn confirm_route(
         .ok_or_else(|| invalid("approvalId must be an id"))?
         .to_owned();
     operation_ids(plan_id, operation_id)?;
-    // Fail closed before any item read or write when execution is down.
+    // The owner-filtered read must precede Connectors: even a read can refresh account metadata.
+    // Repairing missing item rows still waits until execution is available.
+    let header = crate::change_approval::owned_header(host, plan_id, operation_id)?;
     let accounts = crate::execution::availability(host).map_err(|_| unavailable())?;
     // Foreign plans and operations stay invisible and read as 404.
-    let batch = crate::change_approval::batch_by_id(host, plan_id, operation_id)?;
+    let batch = settle_batch(host, &header)?;
     // A missing approval, including a foreign one invisible to this actor,
     // reads as 409: only the exact pending binding may execute.
     let stored = crate::change_approval::get(host, &approval_id)

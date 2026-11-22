@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex};
 pub struct StandIn {
     pub events: Mutex<std::collections::BTreeMap<String, Value>>,
     pub writes: Mutex<Vec<(&'static str, Value)>>,
+    pub context_probes: std::sync::atomic::AtomicUsize,
 }
 
 /// One reserved addition's provider identity, matching the real Connectors
@@ -45,6 +46,9 @@ impl Ports for Guard {
         let name = request.parameters["name"].as_str().unwrap_or_default().to_owned();
         let params = request.parameters["parameters"].clone();
         let actor = scope.access().actor_user_id().to_string();
+        if name == "listCalendarContext" {
+            self.stand_in.context_probes.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
         let reply = match name.as_str() {
             "listCalendarContext" => json!({
                 "items": [], "accounts": [{"source": "live"}], "gaps": [], "truncated": false,

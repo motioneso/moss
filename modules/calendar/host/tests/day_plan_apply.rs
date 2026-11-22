@@ -415,7 +415,8 @@ fn apply_retry_recover_and_confirm_are_owner_scoped_and_settle_once() {
             }
             out
         });
-        (rows, stand_in.writes.lock().unwrap().clone())
+        (rows, stand_in.writes.lock().unwrap().clone(),
+            stand_in.context_probes.load(std::sync::atomic::Ordering::SeqCst))
     };
     let review_rejection = |action: &str| -> anyhow::Result<()> {
         let before = review_snapshot();
@@ -520,7 +521,7 @@ fn apply_retry_recover_and_confirm_are_owner_scoped_and_settle_once() {
     assert_eq!(green["body"]["error"], "day plan apply approval is not available");
     for action in ["confirm", "retry"] {
         review_rejection(action).unwrap();
-        println!("GREEN Part 10 foreign {action}: 404 and Calendar rows, approvals and provider writes unchanged");
+        println!("GREEN Part 10 foreign {action}: 404 and Calendar rows, approvals and provider writes unchanged; no Connectors probe");
     }
     println!("GREEN row security restored: plans, operations and approvals are owner-scoped again");
     // And the owner's own flow still answers from the stored state.
