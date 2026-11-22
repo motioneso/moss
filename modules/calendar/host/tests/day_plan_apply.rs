@@ -197,7 +197,7 @@ fn apply_retry_recover_and_confirm_are_owner_scoped_and_settle_once() {
                 .root
                 .query(
                     "SELECT status FROM moss_modules.approvals WHERE id=$1 AND owner_user_id=$2",
-                    &[&approval, &f.a],
+                    &[&approval.parse::<uuid::Uuid>().unwrap(), &f.a],
                 )
                 .await
                 .unwrap();
@@ -326,7 +326,7 @@ fn apply_retry_recover_and_confirm_are_owner_scoped_and_settle_once() {
             .root
             .query(
                 "SELECT outcome FROM app.day_plan_operation_items WHERE operation_id=$1",
-                &[&operation],
+                &[&operation.parse::<uuid::Uuid>().unwrap()],
             )
             .await
             .unwrap();
@@ -378,7 +378,7 @@ fn apply_retry_recover_and_confirm_are_owner_scoped_and_settle_once() {
             .root
             .query(
                 "SELECT outcome FROM app.day_plan_operation_items WHERE operation_id=$1",
-                &[&second_operation],
+                &[&second_operation.parse::<uuid::Uuid>().unwrap()],
             )
             .await
             .unwrap();
