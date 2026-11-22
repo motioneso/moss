@@ -47,7 +47,7 @@ pub(crate) fn Review(ctl: Controller, on_close: Callback<()>) -> impl IntoView {
                 <button class="brief-reader__tab brief-reader__tab--selected" type="button" role="tab" aria-selected="true" aria-controls="today-review-panel" id="today-review-tab">"Review task blocks"</button>
             </div></div>
             <div class="brief-reader__body"><div class="brief-reader__grid">
-                {(!wide).then(||view! {<ReviewSchedule snapshot=Signal::derive(move||state.get().snapshot) />})}
+                {(!wide).then(||view! {<ReviewSchedule snapshot=Signal::derive(move||state.get().display_snapshot()) />})}
                 <div class="brief-reader__report" role="tabpanel" id="today-review-panel" aria-labelledby="today-review-tab" data-briefing-surface="review">
                     <h3 class="brief-reader__headline">"Make the plan fit."</h3>
                     <p class="plan-review__lede">"Meetings, lunch, and travel stay in place. Adjust the task blocks around them."</p>
@@ -76,7 +76,7 @@ pub(crate) fn Review(ctl: Controller, on_close: Callback<()>) -> impl IntoView {
                                 <h3 class="plan-review__changes-title">"Confirm calendar changes"</h3>
                                 <ul>{s.approval["changes"].as_array().into_iter().flatten().map(|c|view! {<li>{change_text(c,&s.snapshot)}</li>}).collect_view()}</ul>
                                 <p>"The tasks themselves remain on your list."</p>
-                                <div class="brief-reader__footer-actions">
+                                <div class="plan-review__confirm-actions">
                                     <Button disabled=busy on_click=Callback::new(move |_|ctl.run(Action::Confirm))>"Confirm"</Button>
                                     <Button variant=ButtonVariant::Quiet disabled=busy on_click=Callback::new(move |_|state.update(|s|s.approval=Value::Null))>"Keep reviewing"</Button>
                                 </div>
@@ -92,7 +92,7 @@ pub(crate) fn Review(ctl: Controller, on_close: Callback<()>) -> impl IntoView {
                         })
                     }}
                 </div>
-                {wide.then(||view! {<ReviewSchedule snapshot=Signal::derive(move||state.get().snapshot) />})}
+                {wide.then(||view! {<ReviewSchedule snapshot=Signal::derive(move||state.get().display_snapshot()) />})}
             </div></div>
             <div class="brief-reader__footer"><div class="brief-reader__footer-actions"><Button disabled=Signal::derive(move||state.get().busy || !state.get().invalid.is_empty() || state.get().choices.is_empty()) on_click=Callback::new(move |_|ctl.run(Action::Save))>"Save changes"</Button></div><div class="brief-reader__footer-back"><Button variant=ButtonVariant::Quiet disabled=busy on_click=Callback::new(move |_|dismiss.run(()))>"Back to Today"</Button></div></div>
         </div>

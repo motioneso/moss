@@ -18,6 +18,17 @@ pub struct State {
     pub busy: bool,
 }
 impl State {
+    pub fn display_snapshot(&self) -> Snapshot {
+        let mut snapshot = self.snapshot.clone();
+        if let Some(saved) = snapshot.saved.as_mut() {
+            if let Some(blocks) = saved["plan"]["blocks"].as_array_mut() {
+                for block in blocks {
+                    block["pendingChange"] = model::pending(block, &self.choices);
+                }
+            }
+        }
+        snapshot
+    }
     pub fn plan(&self) -> &Value {
         self.snapshot
             .saved
