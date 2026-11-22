@@ -180,7 +180,7 @@ try {
       .locator('[data-module-section="calendar"]')
       .screenshot({ path: join(out, `review-calendar-${name}.png`) });
     // Calendar screen independently renders the newly written events.
-    await page.goto(`${origin}/module-frame?module=calendar&path=/`);
+    await page.goto(`${origin}/module-frame?module=calendar&path=%2Fcalendar`);
     await expect(
       page.frameLocator("#frame").getByText(a.title, { exact: true }).first()
     ).toBeVisible({ timeout: 60_000 });
