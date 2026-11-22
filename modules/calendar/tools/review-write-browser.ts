@@ -39,9 +39,9 @@ try {
     );
     return body;
   }
-  await call("calendar", "/display-settings", "PATCH", { timezone: "UTC" });
   const display = await call("calendar", "/display-settings");
-  const day = (display.now || new Date().toISOString()).slice(0, 10);
+  assert.equal(display.timezone || "UTC", "UTC", "fixture uses the UTC display zone");
+  const day = display.now.slice(0, 10);
   const created = await call("calendar", "/day-plans", "POST", { date: day, timeZone: "UTC" });
   const id = created.plan.id;
   for (const [name, width, height, first, second] of [
