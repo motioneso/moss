@@ -501,9 +501,9 @@ fn apply_retry_recover_and_confirm_are_owner_scoped_and_settle_once() {
     assert_ne!(leaked_confirm, 404, "the confirm 404 must detect removed row security");
     for (action, (status, effects)) in ["confirm", "retry"].into_iter().zip(review_red) {
         let status = status.expect_err("Part 10 status must detect removed row security");
-        let effects = effects.expect_err("Part 10 zero-write check must detect removed row security");
+        let effects = effects.expect_err("Part 10 no-effects check must detect removed row security");
         assert!(status.to_string().starts_with(&format!("Part 10 foreign {action}: expected 404")));
-        assert!(effects.to_string().contains("Calendar rows changed=true"), "{effects}");
+        assert!(effects.to_string().contains("Connectors probes +1"), "{effects}");
         println!("RED {status}");
         println!("RED {effects}");
     }

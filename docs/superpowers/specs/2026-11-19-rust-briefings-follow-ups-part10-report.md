@@ -39,8 +39,10 @@ Run from the task worktree in `~/Jarv1s`, with task-owned Cargo home and target 
   and scripted provider writes around foreign confirm/retry, and checks no Connectors probe runs. The same rejection assertions run
   with row security present, removed and restored, printing RED and GREEN results. Status and
   unchanged-state checks run independently. The negative control removes item rows to simulate an
-  interrupted reservation; each action's unchanged-state check must detect an unauthorized repair.
-  The exact owner rows are restored after each probe. The claim
+  interrupted reservation. Each action's unchanged-state check independently detects the extra
+  Connectors probe with row security removed. Calendar rows stay unchanged because the remaining
+  ownership constraints and transaction safeguards still reject the repair; removing row security
+  alone does not remove those protections. The exact owner rows are restored after each probe. The claim
   concerns those measured rows and provider calls, not every possible read-side effect.
 - `test:rust-calendar-server`: the installed Today screen, unavailable references, reader,
   keyboard/focus, phone disclosure and opening the editable review without a write.
