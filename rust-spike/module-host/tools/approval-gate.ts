@@ -16,7 +16,10 @@ const spike = join(root, "rust-spike");
 const bootstrap = new pg.Client({ connectionString: urls.bootstrap });
 let failed = false;
 const check = (name: string, ok: boolean, detail?: unknown) => {
-  console[ok ? "log" : "error"](`${ok ? "PASS" : "FAIL"}: ${name}`, ok ? "" : JSON.stringify(detail));
+  console[ok ? "log" : "error"](
+    `${ok ? "PASS" : "FAIL"}: ${name}`,
+    ok ? "" : JSON.stringify(detail)
+  );
   if (!ok) failed = true;
 };
 const tail = (text: string) => text.split("\n").slice(-60).join("\n");

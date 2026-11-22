@@ -198,7 +198,7 @@ fn a_manifest_declares_only_known_operations_and_families() {
     assert!(unknown_operation
         .validate(&"0.1.0".parse().unwrap())
         .is_err());
-    let mut unnamed_family = manifest(&[]);
+    let unnamed_family = manifest(&[]);
     assert!(unnamed_family.validate(&"0.1.0".parse().unwrap()).is_err());
     assert!(manifest(&["day-plan-change", "event-delete"])
         .validate(&"0.1.0".parse().unwrap())

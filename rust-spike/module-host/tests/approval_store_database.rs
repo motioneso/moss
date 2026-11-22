@@ -181,12 +181,17 @@ impl Proof {
     /// The stored row, read past row security only to prove what the port left behind.
     fn stored(&self, id: &str) -> (Uuid, String) {
         self.runtime
-            .block_on(
-                self.bootstrap.query_one(
-                    "SELECT owner_user_id, status FROM moss_modules.approvals WHERE id=$1",
-                    &[&Uuid::parse_str(id).unwrap()],
-                ),
-            )
+            .block_on(async {
+                let row = self
+                    .bootstrap
+                    .query_one(
+                        "SELECT owner_user_id, status FROM moss_modules.approvals WHERE id=$1",
+                        &[&Uuid::parse_str(id).unwrap()],
+                    )
+                    .await
+                    .unwrap();
+                (row.get::<_, Uuid>(0), row.get::<_, String>(1))
+            })
             .unwrap()
     }
 }
