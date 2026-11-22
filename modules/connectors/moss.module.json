@@ -4,7 +4,7 @@
   "name": "Connectors",
   "description": "Keeps the mail and calendar connections of each account, their sign-in secrets and the Email and Calendar permissions. Connecting Google works by pasting your own Google client details. Yahoo, Proton Bridge, iCloud and Fastmail mail connect with an app password. Google mail and calendar sync into the Email and Calendar caches. Outlook calendar syncing reads the Outlook web page through a dedicated browser, calendar only and read-only. Outlook mail and sign-in are not part of this package yet.",
   "publisher": "Moss",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",

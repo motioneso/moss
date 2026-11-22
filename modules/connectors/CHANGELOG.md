@@ -1,5 +1,9 @@
 # Connectors package
 
+## 0.7.2
+
+- Calendar's day-plan apply can add a planned block under a stable plan identity: the event id comes from the operation, not the content, and a retried insert collides instead of duplicating. A new lookup call reads one provider event back with the identity it was created with and its guest count, so a retry can prove the event is its own. Ordinary focus blocks keep today's behaviour.
+
 ## 0.7.1
 
 - Offer validated chat tools and code-built approval fields. Normal writes show their returned result; sending asks first. Moving an event refuses missing or invalid guest counts before contacting the provider.
