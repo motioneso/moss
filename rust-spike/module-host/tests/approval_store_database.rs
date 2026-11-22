@@ -71,6 +71,24 @@ fn binding(actor: Uuid, operation_id: &str) -> Value {
     })
 }
 
+/// Compares JSON ignoring object key order: the database stores jsonb in its own canonical
+/// order, and this crate keeps insertion order, so plain equality would be order-sensitive.
+fn canonical(value: &Value) -> Value {
+    match value {
+        Value::Object(map) => {
+            let mut sorted = serde_json::Map::new();
+            let mut keys: Vec<_> = map.keys().collect();
+            keys.sort();
+            for key in keys {
+                sorted.insert(key.clone(), canonical(&map[key]));
+            }
+            Value::Object(sorted)
+        }
+        Value::Array(items) => Value::Array(items.iter().map(canonical).collect()),
+        other => other.clone(),
+    }
+}
+
 struct Proof {
     a: Uuid,
     b: Uuid,
@@ -208,7 +226,7 @@ fn another_accounts_record_is_not_found_and_changes_nothing() {
     let id = created["id"].as_str().unwrap().to_owned();
     assert_eq!(created["status"], "pending");
     assert_eq!(created["ownerUserId"], proof.a.to_string());
-    assert_eq!(created["inputSummary"], summary);
+    assert_eq!(canonical(&created["inputSummary"]), canonical(&summary));
 
     // Another account reads the same id: not found, its confirm is refused, and its search
     // sees nothing. The record is indistinguishable from a missing one.
@@ -235,7 +253,7 @@ fn another_accounts_record_is_not_found_and_changes_nothing() {
         .call(proof.a, &proof.module_a, "get", json!({"id": id}))
         .unwrap();
     assert_eq!(still["status"], "pending");
-    assert_eq!(still["inputSummary"], summary);
+    assert_eq!(canonical(&still["inputSummary"]), canonical(&summary));
     let (owner, status) = proof.stored(&id);
     assert_eq!(owner, proof.a, "the host pinned the caller as the owner");
     assert_eq!(status, "pending", "the other account's confirm changed nothing");
