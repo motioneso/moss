@@ -56,9 +56,19 @@ const DAY_PLAN_TABLES: [&str; 4] = [
 fn apply_retry_recover_and_confirm_are_owner_scoped_and_settle_once() {
     let f = support::Fixture::new();
     f.rt.block_on(async {
-        f.root.batch_execute(moss_platform_jobs::MIGRATION).await.unwrap();
-        f.root.batch_execute(moss_module_host::jobs::MIGRATION).await.unwrap();
-        // The host approval store the confirm route depends on.
+        // The gate database is shared by the calendar suites; the queue schemas
+        // may already exist, and the host migrations are applied once.
+        let fresh = !f
+            .root
+            .query_one("SELECT to_regnamespace('moss_queue') IS NULL", &[])
+            .await
+            .unwrap()
+            .get::<_, bool>(0);
+        if fresh {
+            f.root.batch_execute(moss_platform_jobs::MIGRATION).await.unwrap();
+            f.root.batch_execute(moss_module_host::jobs::MIGRATION).await.unwrap();
+        }
+        // The host approval store the confirm route depends on; safe to repeat.
         f.root.batch_execute(moss_module_host::approval_port::MIGRATION).await.unwrap();
     });
     let dir = tempfile::tempdir().unwrap();

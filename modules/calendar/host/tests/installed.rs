@@ -40,8 +40,19 @@ impl moss_module_host::ai::Intelligence for NoAi {
 fn signed_rust_package_reuses_data_and_commits_only_successful_drafts() {
     let f = support::Fixture::new();
     f.rt.block_on(async {
-        f.root.batch_execute(moss_platform_jobs::MIGRATION).await.unwrap();
-        f.root.batch_execute(moss_module_host::jobs::MIGRATION).await.unwrap();
+        // The gate database is shared by the calendar suites, so another suite
+        // may already have created the queue schemas; only a fresh database
+        // needs the migrations.
+        let fresh = !f
+            .root
+            .query_one("SELECT to_regnamespace('moss_queue') IS NULL", &[])
+            .await
+            .unwrap()
+            .get::<_, bool>(0);
+        if fresh {
+            f.root.batch_execute(moss_platform_jobs::MIGRATION).await.unwrap();
+            f.root.batch_execute(moss_module_host::jobs::MIGRATION).await.unwrap();
+        }
         f.root.execute("INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'calendar.prep_task_mode','\"auto\"')",&[&f.a]).await.unwrap();
     });
     f.rt.block_on(async {
