@@ -289,6 +289,48 @@ fn every_operation_accepts_only_its_documented_fields() {
 }
 
 #[test]
+fn a_binding_may_restate_the_actor_but_never_select_it() {
+    let store = Arc::new(Store::default());
+    let m = manifest(&["day-plan-change"]);
+    let who = uuid::Uuid::new_v4();
+    // The audited binding restates the actor the host already pinned; the host never trusts
+    // it, so the create carrying it reaches the store.
+    assert!(run(
+        &store,
+        &m,
+        who,
+        "create",
+        "day-plan-change",
+        json!({"inputSummary": summary()})
+    )
+    .is_ok());
+    // Identity and connection fields anywhere else in the binding stay refused.
+    for key in ["role", "connection", "databaseUrl", "sql", "actor"] {
+        let mut body = json!({"inputSummary": summary()});
+        body["inputSummary"][key] = json!("planted");
+        assert!(
+            run(&store, &m, who, "create", "day-plan-change", body).is_err(),
+            "{key}"
+        );
+    }
+    // A nested actor key deeper inside the binding is refused too: only the binding's own
+    // top-level restatement is data.
+    let mut nested = json!({"inputSummary": summary()});
+    nested["inputSummary"]["changes"] = json!([
+        {"blockId": "block-1", "kind": "move", "actorUserId": "planted"}
+    ]);
+    assert!(run(&store, &m, who, "create", "day-plan-change", nested).is_err());
+    // The other operations keep the full refusal.
+    for op in ["get", "confirm", "find-pending", "find-confirmed"] {
+        assert!(
+            run(&store, &m, who, op, "day-plan-change", json!({"actorUserId": who.to_string()})).is_err(),
+            "{op}"
+        );
+    }
+    assert_eq!(store.calls.lock().unwrap().len(), 1);
+}
+
+#[test]
 fn find_pins_the_status_to_the_operation_and_returns_the_record() {
     let found = Arc::new(Store::default());
     let m = manifest(&["day-plan-change"]);
