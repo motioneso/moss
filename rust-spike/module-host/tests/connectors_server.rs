@@ -779,33 +779,8 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
         let (status, settled) = plan_call(Method::GET, &format!("/day-plans/{plan}/operations/{busy_operation}"), None);
         assert_eq!(status, 200, "{settled}");
         assert_eq!(settled["status"], "completed", "{settled}");
-        // A second account never sees the owner's plan or operations.
-        let other_cookie = signup("connectors-day-plan-other@example.test", "Day plan other");
-        let mut foreign = client
-            .post(format!("{origin}/api/m/calendar/day-plans/{plan}/apply"))
-            .header("origin", &origin)
-            .header("cookie", &other_cookie)
-            .json(&json!({"expectedRevision":2,"idempotencyKey":"foreign-live-1","selectedBlockIds":[block]}))
-            .send()
-            .unwrap();
-        assert_eq!(foreign.status().as_u16(), 404, "a foreign plan must read as missing");
-        let mut foreign = client
-            .post(format!("{origin}/api/m/calendar/day-plans/{plan}/operations/{move_operation}/recover"))
-            .header("origin", &origin)
-            .header("cookie", &other_cookie)
-            .json(&json!({}))
-            .send()
-            .unwrap();
-        assert_eq!(foreign.status().as_u16(), 404, "a foreign operation must read as missing");
-        let mut foreign = client
-            .post(format!("{origin}/api/m/calendar/day-plans/{plan}/operations/{move_operation}/confirm"))
-            .header("origin", &origin)
-            .header("cookie", &other_cookie)
-            .json(&json!({"approvalId": approval}))
-            .send()
-            .unwrap();
-        assert_eq!(foreign.status().as_u16(), 404, "a foreign operation must read as missing");
-        println!("PASS day-plan apply on the real server: apply, stored event, confirm and retry through the HTTPS routes, foreign ids 404");
+        // The owner reads the settled operation again through the status route.
+        println!("PASS day-plan apply on the real server: apply, stored event, replay, confirm, denied conflict, recover and retry through the HTTPS routes; the row-security proofs live in the day_plan_apply suite");
     }
 
     // The marker must be in no response, no log line, and no stored job; the stored secret is sealed.
