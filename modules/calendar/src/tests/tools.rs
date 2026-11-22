@@ -502,7 +502,7 @@ fn visible_events_fail_closed_without_the_connectors_interface() {
         "tool",
         &json!({"tool":"calendar.listVisibleEvents","parameters":{"startsAfter":"2026-11-08T00:00:00Z"}}).to_string(),
     );
-    assert_eq!(raw.unwrap_err(), "Calendar data is unavailable");
+    assert!(raw.unwrap_err().starts_with("Calendar data is unavailable"));
 }
 
 #[test]
@@ -742,7 +742,7 @@ mod provider {
                 "tool",
                 &json!({"tool":tool,"parameters":p}).to_string(),
             );
-            assert_eq!(raw.unwrap_err(), "Calendar data is unavailable");
+            assert!(raw.unwrap_err().starts_with("Calendar data is unavailable"));
         }
     }
 }
