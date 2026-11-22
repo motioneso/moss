@@ -29,6 +29,12 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-11-22
+
+#### Fixed
+
+- **Sports briefing failures on busy nights.** The daily sports briefing no longer fails on nights with a lot of live games. [PR #4449](https://github.com/motioneso/moss/pull/4449)
+
 ### 2026-11-21
 
 #### Fixed
