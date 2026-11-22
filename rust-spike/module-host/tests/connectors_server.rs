@@ -728,7 +728,7 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
             })),
         );
         assert_eq!(status, 200, "{saved}");
-        let second_block = saved["plan"]["blocks"][0]["id"].as_str().unwrap().to_owned();
+        let second_block = saved["plan"]["blocks"][1]["id"].as_str().unwrap().to_owned();
         let (status, refused_apply) = plan_call(
             Method::POST,
             &format!("/day-plans/{plan}/apply"),
