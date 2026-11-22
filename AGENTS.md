@@ -28,3 +28,15 @@ linked doc **in full** and follow it.
   output), and stop any server or browser you started. An hourly sweeper removes worktrees whose
   work is merged and whose tree is clean; one stray untracked file keeps the whole worktree alive.
   This applies however you were launched: Claude, Codex, Muse, OpenCode, a pane or a headless run.
+
+## Rust Gate Notes
+
+- Calendar server test fixtures anchor dates to the account zone (`America/Los_Angeles` by
+  default), never UTC's today. A UTC anchor fails in Los Angeles evening hours.
+- The Sports installed gate reads live ESPN data, so a red run can depend on that night's game
+  volume. Rerun near the failing hour before blaming the code.
+- `pnpm test:rust-connectors-live` needs `RUSTUP_HOME` set explicitly
+  (`export RUSTUP_HOME=$HOME/.rustup`), or the live gate refuses after the whole build.
+- Live chat fixture runners need `gateway_bin` pointing at the built `moss-tool-gateway` binary.
+- A script that copies the tree for a protection check must also copy `modules/` and use its own
+  `CARGO_TARGET_DIR`.
