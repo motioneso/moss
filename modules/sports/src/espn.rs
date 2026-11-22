@@ -191,14 +191,21 @@ pub fn headlines_url(competition_key: &str, team: Option<&str>) -> Result<String
     Ok(format!("{SITE_BASE}/{}/{}/news{filter}", e.espn_sport, e.espn_league))
 }
 
-/// One GET through the host. A non-success status is an error, like the old fetch helper.
-pub fn fetch_json<H: Host + ?Sized>(host: &H, url: &str) -> Result<Value> {
+/// One GET through the host, with the response status already checked. A non-success status is
+/// an error, like the old fetch helper; the body stays a borrowed string, never a copy.
+fn fetched<H: Host + ?Sized>(host: &H, url: &str) -> Result<Value> {
     let name = url.strip_prefix("https://").and_then(|r| r.split('/').next()).unwrap_or_default();
     let response = host.call("fetch", "get", name, json!({"url": url}))?;
     let status = response["status"].as_u64().unwrap_or(0);
     if !(200..300).contains(&status) {
         return Err(Error::new("ESPN answered with an error status"));
     }
+    Ok(response)
+}
+
+/// One GET through the host, read as JSON.
+pub fn fetch_json<H: Host + ?Sized>(host: &H, url: &str) -> Result<Value> {
+    let response = fetched(host, url)?;
     let body = response["body"].as_str().ok_or_else(|| Error::new("ESPN sent no body"))?;
     Ok(serde_json::from_str(body)?)
 }
@@ -208,12 +215,7 @@ pub fn fetch_json<H: Host + ?Sized>(host: &H, url: &str) -> Result<Value> {
 /// skipped without building nodes for it, so a busy league day stays inside the per-call
 /// instruction budget the way the team-page shape does.
 pub fn fetch_scoreboard<H: Host + ?Sized>(host: &H, url: &str) -> Result<crate::espn_games::ScoreboardPage> {
-    let name = url.strip_prefix("https://").and_then(|r| r.split('/').next()).unwrap_or_default();
-    let response = host.call("fetch", "get", name, json!({"url": url}))?;
-    let status = response["status"].as_u64().unwrap_or(0);
-    if !(200..300).contains(&status) {
-        return Err(Error::new("ESPN answered with an error status"));
-    }
+    let response = fetched(host, url)?;
     let body = response["body"].as_str().ok_or_else(|| Error::new("ESPN sent no body"))?;
     Ok(serde_json::from_str(body)?)
 }

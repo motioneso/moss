@@ -77,6 +77,40 @@ fn parsers_match_the_old_reader_on_recorded_fixtures() {
 }
 
 #[test]
+fn odd_scoreboards_read_like_the_old_tree_or_leave_the_odd_part_out() {
+    // The lean shape keeps the loose tree's tolerance: a missing, null or non-list slot reads as
+    // empty, and a junk element inside a typed list is dropped rather than becoming a blank
+    // game — a page only ever refuses when a kept leaf lands inside a well-typed element with a
+    // truly incompatible shape, which then reads as a degraded empty day like a failed fetch.
+    let games = |page: Value| Value::Array(espn_games::parse_scoreboard(&page, "nhl").unwrap());
+    let event = |competition: Value| json!({"events":[{"id":"401","date":"2026-11-22T18:00Z","competitions":[competition]}]});
+    let competition = |competitors: Value| json!({"competitors":competitors,"status":{"type":{"state":"post","detail":"Final"}}});
+
+    // A single category object in the `leaders` slot, which the old loose tree wrapped into a
+    // one-element list, still yields the same scorer line.
+    let leaders = json!({"name":"goals","leaders":[{"displayValue":"2","athlete":{"shortName":"A. Svech"}}]});
+    let home = json!({"homeAway":"home","team":{"id":"7","abbreviation":"CAR"},"leaders":leaders});
+    let page = event(competition(json!([home])));
+    let got = games(page.clone());
+    assert_eq!(got[0]["home"]["scorers"], json!(["A. Svech (2)"]), "{got}");
+    assert_eq!(got[0]["home"]["teamKey"], "car");
+
+    // Odd slots read as empty: a non-list events, a null day, and a junk scalar in `leaders`.
+    assert_eq!(games(json!({"events":{"not":"a list"}})), json!([]));
+    assert_eq!(games(json!({})), json!([]));
+    let page = event(competition(json!([{"homeAway":"home","team":{"id":"7"},"leaders":"not a list"}])));
+    assert_eq!(games(page)[0]["home"]["scorers"], Value::Null);
+
+    // A junk element inside a typed list is left out, so the page still answers.
+    let page = event(competition(json!([Value::Null])));
+    let got = games(page);
+    assert_eq!(got[0]["home"]["teamKey"], "", "an empty side reads as blank, as the loose tree did: {got}");
+    assert_eq!(got[0]["id"], "401");
+    let page = event(competition(json!(null)));
+    assert_eq!(games(page.clone())[0]["statusDetail"], "Final", "a null list reads as empty: {}", games(page));
+}
+
+#[test]
 fn cached_datasets_answer_like_the_parsers_and_hit_the_cache() {
     let want = golden("golden.json");
     let host = EspnHost::new();

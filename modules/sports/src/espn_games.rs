@@ -1,16 +1,16 @@
 //! Scoreboard parsing. Soccer scorers come from the play-by-play details and hockey scorers from
 //! the goal leaders, because those are the lists ESPN fills for each sport.
 //!
-//! A scoreboard page is read into the lean `ScoreboardPage` shape instead of a loose tree, the
-//! same way the team-page shape in `espn` reads team lists: a busy league day carries megabytes
-//! the compact game never keeps (odds, rosters, broadcasts, articles), and building a node for
-//! every one of them put a full default-slate briefing over the module's fuel budget on heavy
-//! sports nights. Everything the game does keep is a plain leaf, so the old loose-tree
-//! semantics — a missing or oddly typed field reads as empty, never as an error — hold: serde
-//! skips the unread bulk without building nodes, and the kept fields keep their lenient reads.
+//! A page is read into the lean `ScoreboardPage` shape instead of a loose tree, the same way the
+//! team-page shape in `espn` reads team lists: a busy league day carries megabytes the compact
+//! game never keeps (odds, rosters, broadcasts, articles), and skipping those without building
+//! nodes keeps a full default-slate briefing inside the module's fuel budget. Every field the
+//! game does keep is a plain leaf, so the old loose-tree semantics — a missing or oddly typed
+//! slot reads as empty, never as an error — hold unchanged.
 use crate::catalog;
 use crate::espn::{id_text, number};
 use moss_module_sdk::{Error, Result};
+use serde::Deserialize;
 use serde_json::{json, Value};
 
 fn state(raw: Option<&str>) -> &'static str {
@@ -56,7 +56,7 @@ fn tally(goals: &[(String, Option<String>)]) -> Vec<String> {
 /// answers deserialize through the same shape.
 #[derive(serde::Deserialize, Default)]
 pub struct ScoreboardPage {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "list_or_empty")]
     events: Option<Vec<ScoreboardEvent>>,
 }
 #[derive(serde::Deserialize, Default)]
@@ -65,21 +65,21 @@ struct ScoreboardEvent {
     id: Option<Value>,
     #[serde(default)]
     date: Option<Value>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "list_or_empty")]
     competitions: Option<Vec<ScoreboardCompetition>>,
 }
 #[derive(serde::Deserialize, Default)]
 struct ScoreboardCompetition {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "list_or_empty")]
     competitors: Option<Vec<ScoreboardCompetitor>>,
     /// Kept loose: the game reads only `["type"]["state"]` and `["type"]["detail"]`.
     #[serde(default)]
     status: Option<Value>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "list_or_empty")]
     headlines: Option<Vec<ScoreboardHeadline>>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "list_or_empty")]
     notes: Option<Vec<ScoreboardNote>>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "list_or_empty")]
     details: Option<Vec<ScoreboardDetail>>,
 }
 #[derive(serde::Deserialize, Default)]
@@ -100,11 +100,11 @@ struct ScoreboardCompetitor {
     score: Option<Value>,
     #[serde(default)]
     winner: Option<Value>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "list_or_empty")]
     records: Option<Vec<ScoreboardRecord>>,
     #[serde(default)]
     team: Option<ScoreboardTeam>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "one_or_list")]
     leaders: Option<Vec<ScoreboardLeaderCategory>>,
 }
 #[derive(serde::Deserialize, Default)]
@@ -124,7 +124,7 @@ struct ScoreboardTeam {
     short_display_name: Option<Value>,
     #[serde(default)]
     logo: Option<Value>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "list_or_empty")]
     logos: Option<Vec<ScoreboardLogo>>,
 }
 #[derive(serde::Deserialize, Default)]
@@ -141,7 +141,7 @@ struct ScoreboardDetail {
     kind: Option<Value>,
     #[serde(default)]
     clock: Option<Value>,
-    #[serde(rename = "athletesInvolved", default)]
+    #[serde(rename = "athletesInvolved", default, deserialize_with = "list_or_empty")]
     athletes_involved: Option<Vec<ScoreboardAthlete>>,
     /// The scoring side, kept loose: only `["id"]` is read.
     #[serde(default)]
@@ -158,7 +158,7 @@ struct ScoreboardAthlete {
 struct ScoreboardLeaderCategory {
     #[serde(default)]
     name: Option<Value>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "list_or_empty")]
     leaders: Option<Vec<ScoreboardLeader>>,
 }
 #[derive(serde::Deserialize, Default)]
@@ -167,6 +167,46 @@ struct ScoreboardLeader {
     display_value: Option<Value>,
     #[serde(default)]
     athlete: Option<ScoreboardAthlete>,
+}
+
+/// The old loose tree read an odd slot as nothing, so a typed list keeps exactly that: a list
+/// deserializes element by element, and a missing, null or non-list slot (or one whose elements
+/// do not fit the shape) reads as empty instead of failing the whole page.
+fn list_or_empty<'de, D, T>(deserializer: D) -> std::result::Result<Option<Vec<T>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::Deserialize<'de>,
+{
+    #[derive(serde::Deserialize)]
+    #[serde(untagged)]
+    enum Shape<T> {
+        List(Vec<T>),
+        Anything(serde::de::IgnoredAny),
+    }
+    Ok(match Option::<Shape<T>>::deserialize(deserializer)? {
+        None | Some(Shape::Anything(_)) => None,
+        Some(Shape::List(list)) => Some(list),
+    })
+}
+
+/// The old loose tree also accepted a single category object in the `leaders` slot, not just a
+/// list, so the lean shape keeps accepting one. Anything else odd reads as empty.
+fn one_or_list<'de, D>(deserializer: D) -> std::result::Result<Option<Vec<ScoreboardLeaderCategory>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(serde::Deserialize)]
+    #[serde(untagged)]
+    enum Shape {
+        List(Vec<ScoreboardLeaderCategory>),
+        One(ScoreboardLeaderCategory),
+        Anything(serde::de::IgnoredAny),
+    }
+    Ok(match Option::<Shape>::deserialize(deserializer)? {
+        None | Some(Shape::Anything(_)) => None,
+        Some(Shape::List(list)) => Some(list),
+        Some(Shape::One(one)) => Some(vec![one]),
+    })
 }
 
 // --- Small readers over the shape ------------------------------------------------------------
@@ -354,8 +394,9 @@ pub fn parse_scoreboard_pages(pages: &[ScoreboardPage], competition_key: &str) -
     Ok(games)
 }
 
-/// The recorded-fixture entry: the page arrives as a loose tree, and reads through the same lean
-/// shape, so fixtures and live answers parse identically.
+/// The recorded-fixture entry, used by the golden tests only: the page arrives as a loose tree
+/// (the caller may hold it for other reads), and reads through the same lean shape, so fixtures
+/// and live answers parse identically.
 pub fn parse_scoreboard(data: &Value, competition_key: &str) -> Result<Vec<Value>> {
     let page: ScoreboardPage = serde_json::from_value(data.clone())?;
     parse_scoreboard_page(&page, competition_key)
