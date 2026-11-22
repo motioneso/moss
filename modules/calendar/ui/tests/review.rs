@@ -110,3 +110,59 @@ fn retry_only_failed_or_unknown_and_idempotency_keys_ignore_selection_order() {
         "Applied 1; 1 failed; 1 pending; 1 need checking"
     );
 }
+
+#[test]
+fn refresh_after_partial_apply_reconciles_additions_with_recorded_placements() {
+    let mut saved = plan();
+    saved["blocks"][0]["actualPlacement"] =
+        json!({"startsAt":"2030-05-26T10:30:00Z","durationMinutes":30});
+    saved["blocks"][0]["pendingChange"] = Value::Null;
+    let mut choices = Choices::new();
+    choices.insert(
+        "a".into(),
+        Choice {
+            placement: "add".into(),
+            starts_at: Some("2030-05-26T10:30:00.000Z".into()),
+        },
+    );
+    choices.insert(
+        "b".into(),
+        Choice {
+            placement: "add".into(),
+            starts_at: Some("2030-05-26T14:00:00Z".into()),
+        },
+    );
+    choices.insert(
+        "c".into(),
+        Choice {
+            placement: "leave".into(),
+            starts_at: None,
+        },
+    );
+    reconcile_choices(&saved, &mut choices);
+    assert!(
+        !choices.contains_key("a"),
+        "an already applied choice must not become another addition"
+    );
+    assert_eq!(
+        choices["b"].placement, "move",
+        "a changed placement needs move review"
+    );
+    assert_eq!(
+        choices["c"].placement, "leave",
+        "keep the person's unsaved choice"
+    );
+    assert!(selection(&saved, &choices, true).is_empty());
+    choices.insert(
+        "b".into(),
+        Choice {
+            placement: "add".into(),
+            starts_at: None,
+        },
+    );
+    reconcile_choices(&saved, &mut choices);
+    assert!(
+        !choices.contains_key("b"),
+        "a default-time addition is settled by its saved placement"
+    );
+}

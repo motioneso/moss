@@ -128,6 +128,7 @@ impl Controller {
         let ok = saved.is_ok() && events.is_ok();
         self.state.update(|s| {
             if let Ok(saved) = saved {
+                model::reconcile_choices(&saved["plan"], &mut s.choices);
                 s.snapshot.saved = Some(saved);
             }
             if let Ok(events) = events {

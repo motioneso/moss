@@ -158,3 +158,30 @@ pub fn report_text(report: &Value) -> String {
     }
     text
 }
+
+/// A failed request may already have placed some additions. Refresh the local
+/// choices against those saved facts before another save can propose them again.
+pub fn reconcile_choices(plan: &Value, choices: &mut Choices) {
+    choices.retain(|id, choice| {
+        let Some(block) = blocks(plan).iter().find(|block| block["id"] == id.as_str()) else {
+            return true;
+        };
+        if choice.placement != "add" || !on_calendar(block) {
+            return true;
+        }
+        let wanted = choice
+            .starts_at
+            .as_deref()
+            .and_then(|at| DateTime::parse_from_rfc3339(at).ok());
+        let placed = block["actualPlacement"]["startsAt"]
+            .as_str()
+            .and_then(|at| DateTime::parse_from_rfc3339(at).ok());
+        if (choice.starts_at.is_none() || (wanted.is_some() && wanted == placed))
+            && block["pendingChange"].is_null()
+        {
+            return false;
+        }
+        choice.placement = "move".into();
+        true
+    });
+}

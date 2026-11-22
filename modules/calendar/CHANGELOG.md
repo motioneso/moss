@@ -2,6 +2,8 @@
 
 ## 0.34.0
 
+- Keep saved placements when refreshing after an interrupted review write; batch requests use the host-supported thirty-second call budget.
+
 - Review and save task block times and placements from Today. Accept all time blocks schedules existing task additions; moves and removals show the exact changes for confirmation. Saved outcomes include a retry action for failed or unknown items.
 
 ## 0.33.0

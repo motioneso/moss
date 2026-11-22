@@ -12,7 +12,8 @@ blocks selects proposed task additions. Moves and removals show the returned cha
 require Confirm. Execution results show each outcome and Retry sends only
 those eligible item ids. Choices survive closing the reader and failed writes; revision
 conflicts clear the old approval and ask for another review. The schedule rail reflects the
-current choices. The existing shared dialog owns modal isolation and focus restoration.
+current choices. After an interrupted request, refreshed placements settle matching local
+addition choices; a different requested time becomes a move for review. The existing shared dialog owns modal isolation and focus restoration.
 
 The UI calls Calendar's declared HTTP routes. It does not create Tasks or reach into another
 module. Calendar already reads task references through its host-held public Tasks reference,
@@ -25,6 +26,11 @@ is available. Both new ordering assertions were seen failing with the previous o
 No migration or new public module API is added. The installed
 Connectors test's existing Calendar route proof is extracted into a helper so the server test
 stays below the task's file-size limit; that helper also hosts the optional review browser run.
+
+Calendar requests the host-supported thirty-second call budget for multi-block execution.
+The live flow hit the default five-second deadline before this declaration: temporary diagnostics
+recorded a guest interrupt with no time remaining alongside the failed apply response. Those
+diagnostics were removed before final verification.
 
 ## Executable proof
 
