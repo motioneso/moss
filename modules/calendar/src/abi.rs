@@ -38,7 +38,8 @@ impl Host for Bridge {
             call(request.as_ptr(), request.len(), out.as_mut_ptr());
             let bytes = std::slice::from_raw_parts(out[1] as *const u8, out[2]);
             if out[0] != 0 {
-                return Err(Error::new("Calendar host request failed"));
+                let text = String::from_utf8_lossy(bytes);
+                return Err(Error::new(format!("Calendar host request failed: {text}")));
             }
             Ok(serde_json::from_slice(bytes)?)
         }
