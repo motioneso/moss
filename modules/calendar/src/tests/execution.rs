@@ -552,6 +552,31 @@ fn confirm_refuses_a_foreign_or_drifted_approval_and_writes_nothing() {
     assert_eq!(status, 409, "{refused}");
     assert_eq!(refused["error"], "day plan apply approval is not available");
     assert_eq!(provider_writes(&s), 0);
+    // A stored approval whose bound change set differs from the batch is
+    // refused even when every identity field matches: only the exact change
+    // set may execute.
+    {
+        let approval_id = gated["approvalId"].clone();
+        let mut approvals = s.approvals.borrow_mut();
+        let record = approvals
+            .iter_mut()
+            .find(|record| record["id"] == approval_id)
+            .unwrap();
+        record["inputSummary"]["changes"][0]["startsAt"] = json!("2026-11-10T16:00:00Z");
+    }
+    let (status, tampered) = route(
+        &s,
+        "POST",
+        "/day-plans/:id/operations/:operation_id/confirm",
+        json!({"id": PLAN, "operation_id": operation}),
+        json!({"approvalId": gated["approvalId"]}),
+    );
+    assert_eq!(status, 409, "{tampered}");
+    assert_eq!(
+        tampered["error"],
+        "day plan apply approval does not match the operation"
+    );
+    assert_eq!(provider_writes(&s), 0);
     // A draft that drifted under the reservation needs renewed approval.
     {
         let mut tables = s.tables.borrow_mut();

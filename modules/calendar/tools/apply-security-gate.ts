@@ -12,17 +12,27 @@ if (process.env.JARVIS_GATE_RUN !== "1") throw new Error("Use verify-gate");
 const root = process.cwd();
 let failed = false;
 const check = (name: string, ok: boolean, detail?: unknown) => {
-  console[ok ? "log" : "error"](`${ok ? "PASS" : "FAIL"}: ${name}`, ok ? "" : JSON.stringify(detail));
+  console[ok ? "log" : "error"](
+    `${ok ? "PASS" : "FAIL"}: ${name}`,
+    ok ? "" : JSON.stringify(detail)
+  );
   if (!ok) failed = true;
 };
 const tail = (text: string) => text.split("\n").slice(-40).join("\n");
 
 // The protected suites must pass first: the guest suites that guard the
-// protections this gate removes.
+// protections this gate removes. The guest builds under its own target
+// folder, exactly as the calendar check script does; sharing the outer
+// target with the wasm and host builds makes rustc see two module-sdk
+// crates in one graph.
+const guestTarget = `${process.env.CARGO_TARGET_DIR}/calendar-apply-security`;
 const green = (manifestPath: string, suite?: string) => {
   const args = ["+1.95.0", "test", "--locked", "--offline", "--manifest-path", manifestPath];
   if (suite) args.push("--test", suite);
-  const run = spawnSync("cargo", args, { encoding: "utf8", env: process.env });
+  const run = spawnSync("cargo", args, {
+    encoding: "utf8",
+    env: { ...process.env, CARGO_TARGET_DIR: guestTarget }
+  });
   if (run.status !== 0) console.error(tail(run.stdout + run.stderr));
   return run.status === 0;
 };
@@ -79,7 +89,8 @@ const copyTree = (name: string) => {
   const top = join(root, name);
   cpSync(top, join(scratch, name), {
     recursive: true,
-    filter: (source: string) => source === top || !/\/(target|node_modules)(\/|$)/.test(source.slice(top.length))
+    filter: (source: string) =>
+      source === top || !/\/(target|node_modules)(\/|$)/.test(source.slice(top.length))
   });
 };
 try {
