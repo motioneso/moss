@@ -619,19 +619,19 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
         let (status, created) = plan_call(Method::POST, "/day-plans", Some(json!({"date":tomorrow,"timeZone":"UTC"})));
         assert_eq!(status, 200, "{created}");
         let plan = created["plan"]["id"].as_str().unwrap().to_owned();
-        let block = uuid::Uuid::new_v4();
         let (status, saved) = plan_call(
             Method::PATCH,
             &format!("/day-plans/{plan}/draft"),
             Some(json!({
                 "localDay": tomorrow, "timeZone": "UTC", "expectedRevision": 1,
                 "blocks": [{
-                    "id": block, "kind": "focus", "title": "Applied block proof",
+                    "kind": "focus", "title": "Applied block proof",
                     "pendingChange": {"kind":"add","startsAt":format!("{tomorrow}T14:00:00Z"),"durationMinutes":30}
                 }]
             })),
         );
         assert_eq!(status, 200, "{saved}");
+        let block = saved["plan"]["blocks"][0]["id"].as_str().unwrap().to_owned();
         let (status, applied) = plan_call(
             Method::POST,
             &format!("/day-plans/{plan}/apply"),
@@ -709,19 +709,19 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
         );
         assert_eq!(status, 409, "{refused}");
         // A busy calendar refuses the addition; once it clears, retry applies it.
-        let second_block = uuid::Uuid::new_v4();
         let (status, saved) = plan_call(
             Method::PATCH,
             &format!("/day-plans/{plan}/draft"),
             Some(json!({
                 "localDay": tomorrow, "timeZone": "UTC", "expectedRevision": 4,
                 "blocks": [{
-                    "id": second_block, "kind": "focus", "title": "Second block proof",
+                    "kind": "focus", "title": "Second block proof",
                     "pendingChange": {"kind":"add","startsAt":format!("{tomorrow}T10:00:00Z"),"durationMinutes":30}
                 }]
             })),
         );
         assert_eq!(status, 200, "{saved}");
+        let second_block = saved["plan"]["blocks"][0]["id"].as_str().unwrap().to_owned();
         let (status, refused_apply) = plan_call(
             Method::POST,
             &format!("/day-plans/{plan}/apply"),

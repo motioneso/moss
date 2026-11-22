@@ -136,19 +136,26 @@ fn apply_retry_recover_and_confirm_are_owner_scoped_and_settle_once() {
     );
     assert_eq!(created["status"], 200, "{created}");
     let plan = created["body"]["plan"]["id"].as_str().unwrap().to_owned();
-    let saved = call(
-        f.a,
-        "PATCH",
-        &format!("/day-plans/{plan}/draft"),
-        json!({
-            "localDay":"2026-11-10","timeZone":"UTC","expectedRevision":1,
-            "blocks": [
-                {"id": addition_block, "kind": "focus", "title": "Write the chapter",
-                 "pendingChange": {"kind":"add","startsAt":"2026-11-10T09:00:00Z","durationMinutes":30}},
-            ]
-        }),
-    );
-    assert_eq!(saved["status"], 200, "{saved}");
+    let addition_block: uuid::Uuid = {
+        let saved = call(
+            f.a,
+            "PATCH",
+            &format!("/day-plans/{plan}/draft"),
+            json!({
+                "localDay":"2026-11-10","timeZone":"UTC","expectedRevision":1,
+                "blocks": [
+                    {"kind": "focus", "title": "Write the chapter",
+                     "pendingChange": {"kind":"add","startsAt":"2026-11-10T09:00:00Z","durationMinutes":30}},
+                ]
+            }),
+        );
+        assert_eq!(saved["status"], 200, "{saved}");
+        saved["body"]["plan"]["blocks"][0]["id"]
+            .as_str()
+            .unwrap()
+            .parse()
+            .unwrap()
+    };
     f.rt.block_on(async {
         f.root.execute(
             "INSERT INTO app.day_plan_blocks(id,plan_id,owner_user_id,kind,title,position,actual_placement,pending_change) \
@@ -199,6 +206,16 @@ fn apply_retry_recover_and_confirm_are_owner_scoped_and_settle_once() {
     assert_eq!(stored.len(), 1, "the approval is stored owner-scoped");
     assert_eq!(stored[0].0, "pending");
 
+    // The stand-in provider holds the block's recorded event, so the move's
+    // provenance readback can prove this plan placed it.
+    stand_in.events.lock().unwrap().insert(
+        "jap-owner-move".into(),
+        json!({"start":"2026-11-10T11:00:00Z","end":"2026-11-10T11:30:00Z",
+            "provenance":{"jarvisTool":"applyAddition","jarvisActorUserId":f.a.to_string(),
+                "jarvisPlanId":plan,"jarvisBlockId":move_block.to_string(),
+                "jarvisPlanRevision":"1","jarvisOperationId":"seeded"},
+            "attendeeCount":0}),
+    );
     // The owner confirms; the addition is created and the move patched.
     let confirmed = call(
         f.a,
@@ -326,20 +343,6 @@ fn apply_retry_recover_and_confirm_are_owner_scoped_and_settle_once() {
     );
     assert_eq!(other_plan["status"], 200, "{other_plan}");
     let other = other_plan["body"]["plan"]["id"].as_str().unwrap().to_owned();
-    let other_block = Uuid::new_v4();
-    let other_saved = call(
-        f.b,
-        "PATCH",
-        &format!("/day-plans/{other}/draft"),
-        json!({
-            "localDay":"2026-11-10","timeZone":"UTC","expectedRevision":1,
-            "blocks": [
-                {"id": other_block, "kind": "focus", "title": "Second account",
-                 "pendingChange": {"kind":"move","startsAt":"2026-11-10T15:00:00Z","durationMinutes":30}},
-            ]
-        }),
-    );
-    assert_eq!(other_saved["status"], 200, "{other_saved}");
     let other_move_block = Uuid::new_v4();
     f.rt.block_on(async {
         f.root.execute(
@@ -354,7 +357,7 @@ fn apply_retry_recover_and_confirm_are_owner_scoped_and_settle_once() {
         f.b,
         "POST",
         &format!("/day-plans/{other}/apply"),
-        json!({"expectedRevision":2,"idempotencyKey":"second-1","selectedBlockIds":[other_move_block]}),
+        json!({"expectedRevision":1,"idempotencyKey":"second-1","selectedBlockIds":[other_move_block]}),
     );
     assert_eq!(other_apply["status"], 202, "{other_apply}");
     let second_operation = other_apply["body"]["operationId"].as_str().unwrap().to_owned();
