@@ -3,6 +3,7 @@
 ## 0.7.2
 
 - Calendar's day-plan apply can add a planned block under a stable plan identity: the event id comes from the operation, not the content, and a retried insert collides instead of duplicating. A new lookup call reads one provider event back with the identity it was created with and its guest count, so a retry can prove the event is its own. Ordinary focus blocks keep today's behaviour.
+- The apply create takes `provenance: { jarvisPlanId, jarvisBlockId, jarvisPlanRevision, jarvisOperationId }` — the jarvis names the provider tags use, because the host refuses to carry a bare `actorUserId` through any port call. The actor is never sent: the host names the signed-in person, and the provider event and Calendar's cache row both record that identity. A reserved addition is pinned to its start and never shifts; the caller should look the event up before creating, as the TypeScript apply loop does.
 
 ## 0.7.1
 

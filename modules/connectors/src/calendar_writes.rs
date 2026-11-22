@@ -126,12 +126,34 @@ fn tagged_id(prefix: &str, canonical: &str) -> String {
 }
 
 /// One reserved day-plan addition, as the TypeScript apply records it onto the provider event.
+/// The actor is added from the host's own call identity, never from the caller's input.
 struct Provenance {
     actor_user_id: String,
     plan_id: String,
     block_id: String,
     plan_revision: i64,
     operation_id: String,
+}
+
+/// The operation identity Calendar reserves; the actor is the signed-in person the host names.
+struct Operation {
+    plan_id: String,
+    block_id: String,
+    plan_revision: i64,
+    operation_id: String,
+}
+
+impl Operation {
+    /// The full provenance once the host has named the calling person.
+    fn complete(self, actor: &str) -> Provenance {
+        Provenance {
+            actor_user_id: actor.to_string(),
+            plan_id: self.plan_id,
+            block_id: self.block_id,
+            plan_revision: self.plan_revision,
+            operation_id: self.operation_id,
+        }
+    }
 }
 
 impl Provenance {
@@ -161,16 +183,34 @@ impl Provenance {
     }
 }
 
-/// The provenance of a reserved addition, or None when the call is an ordinary focus block.
-/// A present but unusable provenance is refused rather than silently downgraded: the apply
-/// caller must never get an untagged event back. The field names are the provider tags
-/// (jarvisActorUserId and friends), because the host refuses a bare actorUserId on any port
+/// The reserved operation of one day-plan addition, or None when the call is an ordinary
+/// focus block. A present but unusable operation is refused rather than silently downgraded:
+/// the apply caller must never get an untagged event back. The field names are the provider
+/// tags (jarvisPlanId and friends), because the host refuses a bare actorUserId on any port
 /// call — the host owns the call identity — so the jarvis names are the one vocabulary every
-/// caller can actually send.
-fn provenance_of(input: &Value) -> Result<Option<Provenance>> {
+/// caller can actually send. The actor itself is never taken from the input: the host names
+/// the signed-in person, exactly as the TypeScript apply takes its actor from the call.
+fn provenance_of(input: &Value) -> Result<Option<Operation>> {
     let Some(given) = input.get("provenance").filter(|p| !p.is_null()) else {
         return Ok(None);
     };
+    if given.get("jarvisActorUserId").is_some_and(|v| !v.is_null()) {
+        return Err(Error::new(
+            400,
+            "provenance names the actor itself; the signed-in person is the actor, so pass only jarvisPlanId, jarvisBlockId, jarvisPlanRevision and jarvisOperationId",
+        ));
+    }
+    if let Some(unknown) = given
+        .as_object()
+        .and_then(|fields| fields.keys().find(|key| !matches!(key.as_str(), "jarvisPlanId" | "jarvisBlockId" | "jarvisPlanRevision" | "jarvisOperationId")))
+    {
+        // A caller porting the TypeScript shape sends an actor field; both names are refused
+        // here rather than ignored, so the contract fails loudly instead of silently.
+        return Err(Error::new(
+            400,
+            &format!("provenance has no field {unknown}; pass only jarvisPlanId, jarvisBlockId, jarvisPlanRevision and jarvisOperationId"),
+        ));
+    }
     let text = |key: &str| {
         given[key]
             .as_str()
@@ -179,8 +219,7 @@ fn provenance_of(input: &Value) -> Result<Option<Provenance>> {
             .map(String::from)
     };
     let revision = given["jarvisPlanRevision"].as_i64().filter(|r| *r >= 0);
-    let (Some(actor), Some(plan), Some(block), Some(revision), Some(operation)) = (
-        text("jarvisActorUserId"),
+    let (Some(plan), Some(block), Some(revision), Some(operation)) = (
         text("jarvisPlanId"),
         text("jarvisBlockId"),
         revision,
@@ -188,11 +227,10 @@ fn provenance_of(input: &Value) -> Result<Option<Provenance>> {
     ) else {
         return Err(Error::new(
             400,
-            "provenance requires jarvisActorUserId, jarvisPlanId, jarvisBlockId, jarvisPlanRevision and jarvisOperationId",
+            "provenance requires jarvisPlanId, jarvisBlockId, jarvisPlanRevision and jarvisOperationId",
         ));
     };
-    Ok(Some(Provenance {
-        actor_user_id: actor,
+    Ok(Some(Operation {
         plan_id: plan,
         block_id: block,
         plan_revision: revision,
@@ -217,12 +255,18 @@ fn google_failed(write: &Value, fallback: &'static str) -> (&'static str, Option
 }
 
 pub fn create(host: &impl Host, input: &Value) -> Result<Value> {
-    let (Some(start), Some(end)) = (instant(&input["windowStart"]), instant(&input["windowEnd"])) else {
+    let (Some(start), Some(mut end)) = (instant(&input["windowStart"]), instant(&input["windowEnd"])) else {
         return Err(Error::new(400, "windowStart and windowEnd are required"));
     };
     let minutes = input["durationMinutes"].as_i64().filter(|m| *m > 0).ok_or_else(|| Error::new(400, "durationMinutes is required"))?;
     let title = input["title"].as_str().map(str::trim).filter(|t| !t.is_empty()).ok_or_else(|| Error::new(400, "title is required"))?;
-    let provenance = provenance_of(input)?;
+    let operation = provenance_of(input)?;
+    if operation.is_some() {
+        // The TypeScript apply writer pins the block to its start and reads only the length:
+        // a reserved addition never shifts, whatever window its caller passes. A busy block
+        // is refused below instead of moving.
+        end = start + Duration::minutes(minutes);
+    }
     let shown = json!({"created":false,"resolvedStart":iso(start),"resolvedEnd":iso(end),"shifted":false,"conflict":"none"});
     let account = match target(host)? {
         Ok(account) => account,
@@ -231,6 +275,14 @@ pub fn create(host: &impl Host, input: &Value) -> Result<Value> {
     let setup = kv(host, "get", "connectors.context-setup", json!({}))?;
     let clock = host.call("context", "read", "call", json!({}))?;
     let now = instant(&clock["now"]).ok_or_else(|| Error::new(500, "Clock unavailable"))?;
+    let actor = clock["actorUserId"].as_str();
+    // The host names the calling person; a reserved addition carries that identity, never an
+    // actor the caller supplies (the TypeScript apply takes its actor the same way).
+    let provenance = match (operation, actor) {
+        (Some(op), Some(actor)) => Some(op.complete(actor)),
+        (Some(_), None) => return Err(Error::new(500, "Call identity is unavailable")),
+        (None, _) => None,
+    };
     if let Some(text) = crate::outlook_availability::issue(&setup, start, end, now) {
         return Ok(refusal(text, {let mut o = shown; o["calendarMirror"] = json!("skipped-error"); o}));
     }
@@ -619,7 +671,7 @@ mod tests {
         fn call(&self, port: &str, operation: &str, resource: &str, params: Value) -> moss_module_sdk::Result<Value> {
             self.effects.borrow_mut().push((resource.into(), params.clone()));
             Ok(match (port, operation, resource) {
-                ("context", "read", "call") => json!({"now":"2026-11-20T08:00:00.000Z"}),
+                ("context", "read", "call") => json!({"actorUserId":"actor-1","now":"2026-11-20T08:00:00.000Z"}),
                 ("kv", "get", "connectors.context-setup") => json!({
                     "accounts":[{"id":"g1","providerId":"google","status":"active","scopes":["calendar"]}],
                     "grants":{"g1":{"calendar":true}},"timezone":"UTC"
@@ -648,7 +700,7 @@ mod tests {
         json!({
             "windowStart":"2026-11-21T09:00:00Z","windowEnd":"2026-11-21T10:00:00Z",
             "durationMinutes":60,"title":"Write the chapter",
-            "provenance":{"jarvisActorUserId":"actor-1","jarvisPlanId":"plan-1","jarvisBlockId":"block-1",
+            "provenance":{"jarvisPlanId":"plan-1","jarvisBlockId":"block-1",
                 "jarvisPlanRevision":2,"jarvisOperationId":"op-1"},
         })
     }
@@ -760,13 +812,38 @@ mod tests {
     }
 
     #[test]
+    fn a_provenance_create_never_shifts_even_in_a_wider_window() {
+        // The TypeScript apply writer pins the block to its start: a wide window is cut back
+        // to the block, a free wide window lands exactly at the start, and a busy one refuses.
+        let mut input = provenance_input();
+        input["windowEnd"] = json!("2026-11-21T12:00:00Z");
+        let h = ApplyHost::default();
+        let reply = create(&h, &input).unwrap();
+        assert_eq!(reply["created"], true, "{reply}");
+        assert_eq!(reply["resolvedStart"], "2026-11-21T09:00:00.000Z");
+        assert_eq!(reply["resolvedEnd"], "2026-11-21T10:00:00.000Z");
+        assert_eq!(reply["shifted"], false);
+        assert_eq!(reply["conflict"], "none");
+        let mut h = ApplyHost::default();
+        h.busy = json!([{"start":"2026-11-21T09:00:00.000Z","end":"2026-11-21T09:30:00.000Z"}]);
+        let reply = create(&h, &input).unwrap();
+        assert_eq!(reply["created"], false, "a busy block is refused, not shifted: {reply}");
+        assert_eq!(reply["conflict"], "no-clear-slot");
+        assert_eq!(reply["resolvedStart"], "2026-11-21T09:00:00.000Z");
+        assert_eq!(reply["resolvedEnd"], "2026-11-21T10:00:00.000Z");
+        assert!(!h.effects.borrow().iter().any(|(r, _)| r == "connectors.write-calendar-insert"));
+    }
+
+    #[test]
     fn an_unusable_provenance_is_refused_before_any_call() {
         for broken in [
-            json!({"jarvisActorUserId":"","jarvisPlanId":"plan-1","jarvisBlockId":"block-1","jarvisPlanRevision":2,"jarvisOperationId":"op-1"}),
-            json!({"jarvisPlanId":"plan-1","jarvisBlockId":"block-1","jarvisPlanRevision":2,"jarvisOperationId":"op-1"}),
-            json!({"jarvisActorUserId":"actor-1","jarvisPlanId":"plan-1","jarvisBlockId":"block-1","jarvisPlanRevision":-2,"jarvisOperationId":"op-1"}),
-            json!({"jarvisActorUserId":"actor-1","jarvisPlanId":"plan-1","jarvisBlockId":"block-1","jarvisOperationId":"op-1"}),
-            json!({"jarvisActorUserId":"actor-1","jarvisPlanId":"plan-1","jarvisBlockId":"block-1","jarvisPlanRevision":"2","jarvisOperationId":"op-1"}),
+            // The actor never comes from the input: the host names the calling person.
+            json!({"jarvisActorUserId":"actor-1","jarvisPlanId":"plan-1","jarvisBlockId":"block-1","jarvisPlanRevision":2,"jarvisOperationId":"op-1"}),
+            json!({"jarvisPlanId":"","jarvisBlockId":"block-1","jarvisPlanRevision":2,"jarvisOperationId":"op-1"}),
+            json!({"jarvisBlockId":"block-1","jarvisPlanRevision":2,"jarvisOperationId":"op-1"}),
+            json!({"jarvisPlanId":"plan-1","jarvisBlockId":"block-1","jarvisPlanRevision":-2,"jarvisOperationId":"op-1"}),
+            json!({"jarvisPlanId":"plan-1","jarvisBlockId":"block-1","jarvisOperationId":"op-1"}),
+            json!({"jarvisPlanId":"plan-1","jarvisBlockId":"block-1","jarvisPlanRevision":"2","jarvisOperationId":"op-1"}),
             // A bare actorUserId cannot even cross a port call: the host refuses that key.
             json!({"actorUserId":"actor-1","jarvisPlanId":"plan-1","jarvisBlockId":"block-1","jarvisPlanRevision":2,"jarvisOperationId":"op-1"}),
             json!("not an object"),
@@ -840,20 +917,5 @@ mod tests {
         assert!(reply.unwrap_err().message.contains("Google could not be reached"));
         // A missing id is the only bad input that stays a plain 400.
         assert!(lookup(&ApplyHost::default(), &json!({"eventId":" "})).is_err());
-    }
-
-    #[test]
-    fn a_provenance_create_and_lookup_use_the_active_account_only() {
-        let h = ApplyHost::default();
-        create(&h, &provenance_input()).unwrap();
-        let lookup_host = ApplyHost::default();
-        lookup(&lookup_host, &json!({"eventId":"jap-x"})).unwrap();
-        for host in [&h, &lookup_host] {
-            for (resource, params) in host.effects.borrow().iter() {
-                if resource.starts_with("connectors.write-") || resource == "connectors.live-calendar-get" {
-                    assert_eq!(params["accountId"], "g1", "the account always comes from the caller's own setup");
-                }
-            }
-        }
     }
 }

@@ -140,17 +140,20 @@ fn raw_when(side: &Value) -> Option<&str> {
 
 /// The identity one event readback carries: status, title, timing, the attendee count and the
 /// private properties our own writes recorded. Nothing else leaves the host, and non-string
-/// private values are dropped before they do.
+/// private values are dropped before they do. The jarvis identity keys sort ahead of any
+/// other private property, so an event carrying many of them can never push the identity
+/// out of the cap.
 fn lookup_event(event: &Value) -> Value {
     const PROVENANCE_MAX: usize = 32;
     const PROVENANCE_CHARS: usize = 200;
-    let mut provenance = Map::new();
-    for (key, value) in event["extendedProperties"]["private"]
+    let mut private: Vec<(&String, &Value)> = event["extendedProperties"]["private"]
         .as_object()
         .into_iter()
         .flatten()
-        .take(PROVENANCE_MAX)
-    {
+        .collect();
+    private.sort_by_key(|(key, _)| !key.starts_with("jarvis"));
+    let mut provenance = Map::new();
+    for (key, value) in private.into_iter().take(PROVENANCE_MAX) {
         if let Some(text) = value.as_str() {
             provenance.insert(key.clone(), json!(text.chars().take(PROVENANCE_CHARS).collect::<String>()));
         }

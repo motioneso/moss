@@ -312,15 +312,16 @@ fn a_second_person_cannot_write_to_another_persons_calendar() {
 
 /// The provenance one day-plan apply addition carries, as the fixtures use it. The jarvis
 /// names are the wire contract: the host refuses to carry a bare actorUserId on any port
-/// call, so the provider-tag names are the one vocabulary a caller can actually send.
-fn plan_provenance(actor: Uuid) -> Value {
-    json!({"jarvisActorUserId":actor.to_string(),"jarvisPlanId":"plan-1","jarvisBlockId":"block-1",
+/// call, so the provider-tag names are the one vocabulary a caller can actually send. The
+/// actor itself is never sent: the host names the signed-in person.
+fn plan_provenance() -> Value {
+    json!({"jarvisPlanId":"plan-1","jarvisBlockId":"block-1",
         "jarvisPlanRevision":2,"jarvisOperationId":"op-1"})
 }
 
-fn provenance_create_parameters(actor: Uuid) -> Value {
+fn provenance_create_parameters() -> Value {
     json!({"windowStart":"2026-03-03T09:00:00Z","windowEnd":"2026-03-03T10:00:00Z",
-        "durationMinutes":60,"title":"Planned block","provenance":plan_provenance(actor)})
+        "durationMinutes":60,"title":"Planned block","provenance":plan_provenance()})
 }
 
 fn lookup(f: &Fixture, actor: Uuid, event_id: &str) -> Value {
@@ -336,7 +337,7 @@ fn a_day_plan_addition_creates_once_and_reads_back_its_provenance() {
     let miss = lookup(&f, f.a, "jap-not-there-yet");
     assert_eq!(miss, json!({"found":false}), "{miss}");
     let created = f.call(f.a, "api", json!({"name":"createCalendarEvent",
-        "parameters":provenance_create_parameters(f.a)}));
+        "parameters":provenance_create_parameters()}));
     assert_eq!(created["created"], true, "{created}");
     assert_eq!(created["conflict"], "none");
     assert_eq!(created["shifted"], false);
@@ -373,7 +374,7 @@ fn a_day_plan_addition_creates_once_and_reads_back_its_provenance() {
     // A retried create of the same operation never makes a second event: the window is now
     // filled by its own event, and Google still holds exactly one.
     let retried = f.call(f.a, "api", json!({"name":"createCalendarEvent",
-        "parameters":provenance_create_parameters(f.a)}));
+        "parameters":provenance_create_parameters()}));
     assert_eq!(retried["created"], false, "{retried}");
     assert_eq!(retried["conflict"], "no-clear-slot");
     let with_id = f.google.events().into_iter().filter(|e| e["id"] == json!(id)).count();
@@ -386,14 +387,14 @@ fn a_retried_provenance_insert_collides_instead_of_duplicating() {
     let f = Fixture::new();
     f.connect_google(f.a, "code-plan-retry");
     let created = f.call(f.a, "api", json!({"name":"createCalendarEvent",
-        "parameters":provenance_create_parameters(f.a)}));
+        "parameters":provenance_create_parameters()}));
     assert_eq!(created["created"], true, "{created}");
     let id = created["googleEventId"].as_str().unwrap().to_string();
     // The event is deleted in Google's own UI, but its id stays taken there, exactly as while
     // a first insert is in flight: the next insert of the same id must collide, not duplicate.
     f.google.remove_event_titled("Planned block");
     let retried = f.call(f.a, "api", json!({"name":"createCalendarEvent",
-        "parameters":provenance_create_parameters(f.a)}));
+        "parameters":provenance_create_parameters()}));
     assert_eq!(retried["created"], true, "the collision is an idempotent success: {retried}");
     assert_eq!(retried["googleEventId"], json!(id));
     assert_eq!(retried["calendarMirror"], "not-cached");
@@ -410,7 +411,7 @@ fn a_second_person_cannot_read_another_persons_event() {
     let f = Fixture::new();
     let a_account = f.connect_google(f.a, "code-plan-a");
     let created = f.call(f.a, "api", json!({"name":"createCalendarEvent",
-        "parameters":provenance_create_parameters(f.a)}));
+        "parameters":provenance_create_parameters()}));
     let id = created["googleEventId"].as_str().unwrap().to_string();
     // The second person has their own connected Google account.
     f.connect_google(f.b, "code-plan-b");
