@@ -192,6 +192,9 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
             moss_module_host::migrations::MIGRATION,
             moss_platform_jobs::MIGRATION,
             moss_module_host::jobs::MIGRATION,
+            // The host approval store the day-plan confirm route depends on. The
+            // first-boot install flow applies it; this test installs directly.
+            moss_module_host::approval_port::MIGRATION,
         ] {
             db.batch_execute(migration).await.unwrap();
         }
