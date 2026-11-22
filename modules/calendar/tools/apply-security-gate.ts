@@ -76,7 +76,7 @@ const controls: Control[] = [
     // A probe that answers without the Connectors package must let the route
     // write the reservation before failing.
     file: "modules/calendar/src/execution.rs",
-    pattern: /\)\?;\n    Ok\(Accounts \{/,
+    pattern: /\)\?;\n {4}Ok\(Accounts \{/,
     replacement: ').unwrap_or(json!({"accounts":[],"gaps":[]}));\n    Ok(Accounts {',
     expect: 1,
     suite: "apply",
