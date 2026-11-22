@@ -404,10 +404,11 @@ fn apply_retry_recover_and_confirm_are_owner_scoped_and_settle_once() {
     f.rt.block_on(async {
         for table in DAY_PLAN_TABLES {
             f.root
-                .execute(
-                    &format!("ALTER TABLE {table} ENABLE ROW LEVEL SECURITY; ALTER TABLE {table} FORCE ROW LEVEL SECURITY"),
-                    &[],
-                )
+                .execute(&format!("ALTER TABLE {table} ENABLE ROW LEVEL SECURITY"), &[])
+                .await
+                .unwrap();
+            f.root
+                .execute(&format!("ALTER TABLE {table} FORCE ROW LEVEL SECURITY"), &[])
                 .await
                 .unwrap();
         }
@@ -432,10 +433,11 @@ fn apply_retry_recover_and_confirm_are_owner_scoped_and_settle_once() {
     );
     f.rt.block_on(async {
         f.root
-            .execute(
-                "ALTER TABLE moss_modules.approvals ENABLE ROW LEVEL SECURITY; ALTER TABLE moss_modules.approvals FORCE ROW LEVEL SECURITY",
-                &[],
-            )
+            .execute("ALTER TABLE moss_modules.approvals ENABLE ROW LEVEL SECURITY", &[])
+            .await
+            .unwrap();
+        f.root
+            .execute("ALTER TABLE moss_modules.approvals FORCE ROW LEVEL SECURITY", &[])
             .await
             .unwrap();
     });
