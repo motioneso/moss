@@ -43,7 +43,7 @@ fn signed_rust_package_reuses_data_and_commits_only_successful_drafts() {
         // The gate database is shared by the calendar suites, so another suite
         // may already have created the queue schemas; only a fresh database
         // needs the migrations.
-        let fresh = !f
+        let fresh = f
             .root
             .query_one("SELECT to_regnamespace('moss_queue') IS NULL", &[])
             .await

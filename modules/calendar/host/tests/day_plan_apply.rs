@@ -58,7 +58,7 @@ fn apply_retry_recover_and_confirm_are_owner_scoped_and_settle_once() {
     f.rt.block_on(async {
         // The gate database is shared by the calendar suites; the queue schemas
         // may already exist, and the host migrations are applied once.
-        let fresh = !f
+        let fresh = f
             .root
             .query_one("SELECT to_regnamespace('moss_queue') IS NULL", &[])
             .await
