@@ -667,25 +667,24 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
             1,
             "a replay duplicated the event"
         );
-        // The applied block is moved through the confirmed approval. A recorded
+        // The placed block is moved through the confirmed approval. A recorded
         // placement is never writable through a draft, so the pending move is
-        // seeded straight into storage, as the model requires.
-        let move_block = uuid::Uuid::new_v4();
+        // seeded straight onto the block row the plan itself placed: the move
+        // may only patch an event this plan created, provenance included.
         runtime.block_on(async {
             let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
             tokio::spawn(async move { let _ = connection.await; });
+            let block_uuid = block.parse::<uuid::Uuid>().unwrap();
             db.execute(
-                "INSERT INTO app.day_plan_blocks(id,plan_id,owner_user_id,kind,title,position,actual_placement,pending_change) \
-                 VALUES($1,$2::uuid,$3,'focus','Applied block proof',1,$4,$5)",
-                &[&move_block, &plan.parse::<uuid::Uuid>().unwrap(), &owner,
-                  &serde_json::json!({"startsAt":format!("{tomorrow}T14:00:00Z"),"durationMinutes":30,"calendarEventRef":event_id}),
-                  &serde_json::json!({"kind":"move","startsAt":format!("{tomorrow}T15:30:00Z"),"durationMinutes":30})],
+                "UPDATE app.day_plan_blocks SET pending_change=$1 WHERE id=$2 AND plan_id=$3",
+                &[&serde_json::json!({"kind":"move","startsAt":format!("{tomorrow}T15:30:00Z"),"durationMinutes":30}),
+                  &block_uuid, &plan.parse::<uuid::Uuid>().unwrap()],
             ).await.unwrap();
         });
         let (status, gated) = plan_call(
             Method::POST,
             &format!("/day-plans/{plan}/apply"),
-            Some(json!({"expectedRevision":3,"idempotencyKey":"live-apply-proof-2","selectedBlockIds":[move_block]})),
+            Some(json!({"expectedRevision":3,"idempotencyKey":"live-apply-proof-2","selectedBlockIds":[block]})),
         );
         assert_eq!(status, 202, "{gated}");
         assert_eq!(gated["status"], "confirmation-required", "{gated}");
