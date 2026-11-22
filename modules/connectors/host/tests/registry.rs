@@ -94,7 +94,7 @@ fn connectors_downloads_from_a_signed_folder_registry() {
     let chosen = catalog.select("connectors", None, &"0.1.0".parse().unwrap(), &installed, &seen).unwrap();
     let package = catalog.download(chosen, &"0.1.0".parse().unwrap()).unwrap();
     assert_eq!(package.manifest.id, "connectors");
-    assert_eq!(package.manifest.version, "0.7.1".parse().unwrap());
+    assert_eq!(package.manifest.version, "0.7.2".parse().unwrap());
     assert!(package.files.contains_key("code/module.wasm"));
     moss_module_host::sql::check(&package, &Default::default()).unwrap();
 
