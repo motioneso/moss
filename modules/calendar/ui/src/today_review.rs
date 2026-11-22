@@ -14,11 +14,7 @@ pub(crate) fn Review(ctl: Controller, on_close: Callback<()>) -> impl IntoView {
     let state = ctl.state;
     let snapshot = state.get_untracked().snapshot;
     let busy = Signal::derive(move || state.get().busy);
-    let dismiss = Callback::new(move |()| {
-        if !state.get_untracked().busy {
-            on_close.run(());
-        }
-    });
+    let dismiss = on_close;
     let wide = web_sys::window()
         .unwrap()
         .inner_width()
@@ -40,7 +36,7 @@ pub(crate) fn Review(ctl: Controller, on_close: Callback<()>) -> impl IntoView {
             <div class="brief-reader__head">
                 <p class="brief-reader__eyebrow">{format!("{} / Morning briefing",snapshot.name())}</p>
                 <h2 id="today-review-title" class="brief-reader__title" data-briefing-title tabindex="-1" autofocus>"Your day, prepared."</h2>
-                <Button variant=ButtonVariant::Quiet size=ButtonSize::Small aria_label="Close briefing reader" disabled=busy on_click=Callback::new(move |_|dismiss.run(()))>"Close"</Button>
+                <Button variant=ButtonVariant::Quiet size=ButtonSize::Small aria_label="Close briefing reader" on_click=Callback::new(move |_|dismiss.run(()))>"Close"</Button>
             </div>
             <div class="brief-reader__tabs"><div class="brief-reader__tablist" role="tablist" aria-label="Morning briefing views">
                 <button class="brief-reader__tab" type="button" role="tab" aria-selected="false" disabled>"The briefing"</button>
@@ -87,14 +83,14 @@ pub(crate) fn Review(ctl: Controller, on_close: Callback<()>) -> impl IntoView {
                         let s=state.get();(!s.report.is_null()).then(||view! {
                             <section class="plan-review__status" aria-label="Calendar changes result">
                                 <p role="status">{model::report_text(&s.report)}</p>
-                                {(!model::retry_ids(&s.report).is_empty()).then(||view! {<Button disabled=busy on_click=Callback::new(move |_|ctl.run(Action::Retry))>"Retry failed / unknown"</Button>})}
+                                {(!model::retry_ids(&s.report).is_empty()).then(||view! {<Button disabled=busy on_click=Callback::new(move |_|ctl.run(Action::Retry))>"Retry"</Button>})}
                             </section>
                         })
                     }}
                 </div>
                 {wide.then(||view! {<ReviewSchedule snapshot=Signal::derive(move||state.get().display_snapshot()) />})}
             </div></div>
-            <div class="brief-reader__footer"><div class="brief-reader__footer-actions"><Button disabled=Signal::derive(move||state.get().busy || !state.get().invalid.is_empty() || state.get().choices.is_empty()) on_click=Callback::new(move |_|ctl.run(Action::Save))>"Save changes"</Button></div><div class="brief-reader__footer-back"><Button variant=ButtonVariant::Quiet disabled=busy on_click=Callback::new(move |_|dismiss.run(()))>"Back to Today"</Button></div></div>
+            <div class="brief-reader__footer"><div class="brief-reader__footer-actions"><Button disabled=Signal::derive(move||state.get().busy || !state.get().invalid.is_empty() || state.get().choices.is_empty()) on_click=Callback::new(move |_|ctl.run(Action::Save))>"Save changes"</Button></div><div class="brief-reader__footer-back"><Button variant=ButtonVariant::Quiet on_click=Callback::new(move |_|dismiss.run(()))>"Back to Today"</Button></div></div>
         </div>
     </ReportDialog>}
 }

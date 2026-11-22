@@ -227,7 +227,7 @@
   "features": [
     {
       "id": "calendar.today-plan",
-      "description": "Today shows the saved day plan together with visible calendar events, in the account timezone. Proposed task blocks carry Proposed; saved placements carry Flexible. Review task blocks opens the authored day-plan review and schedule at desktop and phone widths. Time and placement controls let you adjust existing blocks. Save changes previews and applies eligible changes; Accept all time blocks schedules proposed task additions without creating tasks. Moves and removals show a confirmation before writing. Saved results show applied, failed, pending or unknown outcomes, with Retry failed / unknown for eligible items. A changed plan keeps choices and asks you to review and save again; failed writes keep choices and offer another attempt. Another account’s plan is absent; task references that are no longer visible are marked unavailable. Calendar owns this Today section, replacing the sample schedule. Gaps between stored times show a break or open time, followed by a closing line after the last commitment. A preparation block ending within five minutes before a real calendar event names that event and its time. Automatic planning labels the review button Adjust task blocks. Partial failures name the unavailable saved plan or calendar while retaining the readable source, with Try again to reload.",
+      "description": "Today shows the saved day plan together with visible calendar events, in the account timezone. Proposed task blocks carry Proposed; saved placements carry Flexible. Review task blocks opens the authored day-plan review and schedule at desktop and phone widths. Time and placement controls let you adjust existing blocks. Save changes previews and applies eligible changes; Accept all time blocks schedules proposed task additions without creating tasks. Moves and removals show a confirmation before writing. Saved results show applied, failed, pending or unknown outcomes, with Retry for eligible items. A changed plan keeps choices and asks you to review and save again; failed writes keep choices and offer another attempt. Another account’s plan is absent; task references that are no longer visible are marked unavailable. Calendar owns this Today section, replacing the sample schedule. Gaps between stored times show a break or open time, followed by a closing line after the last commitment. A preparation block ending within five minutes before a real calendar event names that event and its time. Automatic planning labels the review button Adjust task blocks. Partial failures name the unavailable saved plan or calendar while retaining the readable source, with Try again to reload.",
       "errors": [
         {
           "code": "calendar_today_unavailable",
@@ -250,7 +250,7 @@
         },
         {
           "id": "retry-today-review",
-          "description": "Review the retained time and placement choices and use Save changes again. Use Retry failed / unknown for unfinished reported items.",
+          "description": "Review the retained time and placement choices and use Save changes again. Use Retry for unfinished reported items.",
           "path": "/"
         }
       ]

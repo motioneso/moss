@@ -9,7 +9,7 @@ building the review controls.
 Calendar's Rust Today review edits stored block times and placements. Save changes saves the
 whole draft, previews the selected changes and applies eligible changes. Accept all time
 blocks selects proposed task additions. Moves and removals show the returned change set and
-require Confirm. Execution results show each outcome and Retry failed / unknown sends only
+require Confirm. Execution results show each outcome and Retry sends only
 those eligible item ids. Choices survive closing the reader and failed writes; revision
 conflicts clear the old approval and ask for another review. The schedule rail reflects the
 current choices. The existing shared dialog owns modal isolation and focus restoration.

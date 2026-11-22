@@ -113,6 +113,11 @@ try {
       additionTime
     );
     await dialog.getByRole("button", { name: "Accept all time blocks", exact: true }).click();
+    // Dismissing the native dialog must also release its parent modal while a write settles.
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(page.locator(".package-section-host.is-modal")).toHaveCount(0);
+    await frame.getByRole("button", { name: "Review task blocks", exact: true }).click();
     await expect(dialog.getByRole("status").filter({ hasText: "Applied 2" })).toBeVisible({
       timeout: 60_000
     });
