@@ -9,7 +9,10 @@ export const connectorsGuardControls: Record<string, string[]> = {
   google_sync: ["a_second_person_can_neither_start_nor_read_through_another_persons_account"],
   google: ["a_second_person_cannot_start_complete_or_revoke_another_persons_connection"],
   imap: ["a_second_person_cannot_see_or_overwrite_another_persons_mail_account"],
-  writes: ["a_second_person_cannot_send_or_draft_through_another_persons_account"]
+  writes: [
+    "a_second_person_cannot_read_another_persons_event",
+    "a_second_person_cannot_send_or_draft_through_another_persons_account"
+  ]
 };
 
 export function connectorsControlArgs(suite: string, mode = "all"): string[] {
