@@ -1,5 +1,7 @@
-//! Apply-batch reservation. Freezes the reviewed selection as one durable batch
-//! before any provider call, so a retried request settles once. Execution is not here.
+//! Apply-batch reservation and the four apply routes. Freezes the reviewed
+//! selection as one durable batch before any provider call, so a retried
+//! request settles once, then executes it through the public Connectors
+//! surface with the change-approval gate the TypeScript apply path defined.
 use crate::{context, operations, plans, query, Error, Result};
 use moss_module_sdk::{
     query::{Conflict, Filter, Query},
@@ -9,8 +11,8 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 
-const OPERATIONS: &str = "app.day_plan_operations";
-const ITEMS: &str = "app.day_plan_operation_items";
+pub(crate) const OPERATIONS: &str = "app.day_plan_operations";
+pub(crate) const ITEMS: &str = "app.day_plan_operation_items";
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -38,6 +40,10 @@ fn reuse() -> Error {
 }
 fn rows(value: Value) -> BTreeMap<String, Value> {
     value.as_object().unwrap().clone().into_iter().collect()
+}
+/// The typed column values one committed write carries.
+pub(crate) fn row_values(value: Value) -> BTreeMap<String, Value> {
+    rows(value)
 }
 
 /// Trimmed, blanks dropped, deduplicated, sorted. Omitted and empty normalize alike.
@@ -166,7 +172,7 @@ pub fn find_unfinished(host: &impl Host, plan_id: &str, key: &str) -> Result<Opt
 /// Writes any missing item rows (unique per batch and block) and returns the batch.
 /// Each host call commits alone, so a crash between header and items is repaired
 /// by the next exact replay.
-fn settle(host: &impl Host, header: &Value) -> Result<Value> {
+pub(crate) fn settle_batch(host: &impl Host, header: &Value) -> Result<Value> {
     let id = header["id"].as_str().ok_or_else(unreadable)?;
     let plan_id = header["plan_id"].as_str().ok_or_else(unreadable)?;
     let (_, selection) = snapshot(&header["selection_snapshot"])?;
@@ -247,7 +253,7 @@ pub fn reserve(host: &impl Host, plan_id: &str, request: Request) -> Result<Valu
         if !same(&header, revision, &request.operation_key, &intent, None)? {
             return Err(reuse());
         }
-        return settle(host, &header);
+        return settle_batch(host, &header);
     }
     if plan["revision"].as_i64() != Some(revision) {
         return Err(Error::new(409, "day plan changed since it was read"));
@@ -290,12 +296,74 @@ pub fn reserve(host: &impl Host, plan_id: &str, request: Request) -> Result<Valu
             winner
         }
     };
-    settle(host, &header)
+    settle_batch(host, &header)
 }
 
-/// The route. Reservation is complete but execution needs a Connectors package,
-/// so the request is validated and then refused before anything is written.
-pub fn route(_host: &impl Host, plan_id: &str, body: Value) -> Result<Value> {
+/// The change-gate answer for a freshly reserved batch that holds any move or
+/// removal: `Proceed` runs the same execution service (which re-checks the tier
+/// on its own entry); `Confirmation` answers 202 with the bound change set.
+/// Replaying apply with the same idempotency key replays the reservation and
+/// returns the same pending approval id, never a second one; a pending approval
+/// whose binding no longer matches conflicts.
+enum Gate {
+    Proceed(String),
+    Confirmation(Value),
+}
+
+fn unavailable() -> Error {
+    Error::new(503, "day plan apply is unavailable")
+}
+
+/// Whether a reserved batch holds anything other than an addition.
+fn batch_has_changes(batch: &Value) -> bool {
+    batch["items"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .any(|item| item["kind"] != "add")
+}
+
+fn gate_reserved_changes(host: &impl Host, batch: &Value) -> Result<Gate> {
+    let tier = crate::change_approval::tier(host, crate::change_approval::MANAGEMENT_FAMILY)
+        .map_err(|_| unavailable())?;
+    if !crate::change_approval::requires_confirmation(&tier) {
+        return Ok(Gate::Proceed(tier));
+    }
+    let operation_id = batch["id"].as_str().unwrap_or_default().to_owned();
+    let pending = crate::change_approval::find_pending(host, &operation_id)?;
+    let actor = context(host, "read", "call")?["actorUserId"].clone();
+    let blocks = plans::blocks(host, batch["planId"].as_str().unwrap_or_default())?;
+    let binding = crate::change_approval::build_binding(
+        actor.as_str().unwrap_or_default(),
+        batch,
+        &blocks,
+    );
+    let approval_id = if pending.is_null() {
+        crate::change_approval::create_pending(host, &binding)?
+            .as_str()
+            .unwrap_or_default()
+            .to_owned()
+    } else {
+        let stored = crate::change_approval::read_binding(&pending["inputSummary"]);
+        if !stored.is_some_and(|stored| stored.equal_to(&binding, None)) {
+            return Err(Error::new(409, "day plan apply approval does not match the reserved batch"));
+        }
+        pending["id"].as_str().unwrap_or_default().to_owned()
+    };
+    Ok(Gate::Confirmation(json!({
+        "status": "confirmation-required",
+        "operationId": batch["id"],
+        "approvalId": approval_id,
+        "changes": binding.changes,
+    })))
+}
+
+/// The apply route. The request is validated, the execution surface is probed
+/// (a missing or incompatible Connectors package fails closed here, before any
+/// write), and the reviewed selection is reserved and executed. A batch holding
+/// any move or removal answers 202 with the bound change set under the default
+/// tier instead of executing.
+pub fn route(host: &impl Host, plan_id: &str, body: Value) -> Result<(u16, Value)> {
     if !operations::uuid(plan_id) {
         return Err(invalid("id must be a uuid"));
     }
@@ -318,7 +386,42 @@ pub fn route(_host: &impl Host, plan_id: &str, body: Value) -> Result<Value> {
     if request.operation_key.as_deref() == Some("") {
         return Err(invalid("operationKey must be text or null"));
     }
-    Err(Error::new(503, "day plan apply is unavailable"))
+    // Fail closed before any read or write when the Connectors package that
+    // owns every calendar write is missing or incompatible.
+    let accounts = crate::execution::availability(host).map_err(|_| unavailable())?;
+    let key = request.idempotency_key.trim().to_owned();
+    let batch = reserve(host, plan_id, request)?;
+    if batch_has_changes(&batch) {
+        return match gate_reserved_changes(host, &batch)? {
+            Gate::Confirmation(gated) => Ok((202, gated)),
+            Gate::Proceed(tier) => {
+                let report = crate::execution::execute(
+                    host,
+                    &crate::execution::Input {
+                        plan_id,
+                        idempotency_key: Some(&key),
+                        operation_id: None,
+                        item_ids: None,
+                        change_auth: Some((tier, None)),
+                        accounts: &accounts,
+                    },
+                )?;
+                Ok((200, report))
+            }
+        };
+    }
+    let report = crate::execution::execute(
+        host,
+        &crate::execution::Input {
+            plan_id,
+            idempotency_key: Some(&key),
+            operation_id: None,
+            item_ids: None,
+            change_auth: None,
+            accounts: &accounts,
+        },
+    )?;
+    Ok((200, report))
 }
 
 fn operation_ids(plan_id: &str, operation_id: &str) -> Result<()> {
@@ -338,9 +441,31 @@ fn only_keys(body: &Value, allowed: &[&str]) -> Result<()> {
     }
 }
 
-/// Retry. The selection is checked like the original, then the request is refused
-/// before anything is read or written because execution needs a Connectors package.
-pub fn retry_route(plan_id: &str, operation_id: &str, body: Value) -> Result<Value> {
+/// The change authorization a retry or recover entry carries: the resolved tier
+/// plus the operation's confirmed binding, if any. The service re-checks both
+/// against the frozen batch before executing.
+fn resolve_change_auth(
+    host: &impl Host,
+    operation_id: &str,
+) -> Result<(String, Option<crate::change_approval::Binding>)> {
+    let tier = crate::change_approval::tier(host, crate::change_approval::MANAGEMENT_FAMILY)
+        .map_err(|_| unavailable())?;
+    let confirmed = crate::change_approval::find_confirmed(host, operation_id)?;
+    let binding = crate::change_approval::read_binding(&confirmed["inputSummary"]);
+    Ok((tier, binding))
+}
+
+/// Retry. The whole selection is accepted or rejected before any facts or
+/// provider work: every named item must be this operation's and hold a failed
+/// or unknown outcome. Retrying a move or removal re-checks the change gate,
+/// so a confirmed approval for the unchanged operation is reused with no
+/// per-item prompt, and applied items are never re-executed.
+pub fn retry_route(
+    host: &impl Host,
+    plan_id: &str,
+    operation_id: &str,
+    body: Value,
+) -> Result<Value> {
     only_keys(&body, &["itemIds"])?;
     let ids = body["itemIds"]
         .as_array()
@@ -350,24 +475,139 @@ pub fn retry_route(plan_id: &str, operation_id: &str, body: Value) -> Result<Val
         return Err(invalid("itemIds must not repeat an id"));
     }
     operation_ids(plan_id, operation_id)?;
-    Err(Error::new(503, "day plan apply is unavailable"))
+    // Fail closed before any item read or write when execution is down.
+    let accounts = crate::execution::availability(host).map_err(|_| unavailable())?;
+    let batch = crate::change_approval::batch_by_id(host, plan_id, operation_id)?;
+    let item_ids: Vec<String> = ids.iter().filter_map(Value::as_str).map(str::to_owned).collect();
+    for id in &item_ids {
+        let eligible = batch["items"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .any(|item| item["id"] == json!(id) && matches!(item["outcome"].as_str(), Some("failed" | "unknown")));
+        if !eligible {
+            return Err(Error::new(409, "day plan apply retry selection is not eligible"));
+        }
+    }
+    let retry_needs_gate = batch["items"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .any(|item| item["kind"] != "add" && item_ids.iter().any(|id| item["id"] == json!(id)));
+    let change_auth = retry_needs_gate.then(|| resolve_change_auth(host, operation_id)).transpose()?;
+    crate::execution::execute(
+        host,
+        &crate::execution::Input {
+            plan_id,
+            idempotency_key: None,
+            operation_id: Some(operation_id),
+            item_ids: Some(item_ids),
+            change_auth,
+            accounts: &accounts,
+        },
+    )
 }
 
-/// Recover takes no selection: the body is absent or an empty object.
-pub fn recover_route(plan_id: &str, operation_id: &str, body: Value) -> Result<Value> {
+/// Recover takes no selection: the body is absent or an empty object. The
+/// service resumes pending and unknown items of any kind; a confirmed approval
+/// for the unchanged operation is reused with no per-item prompt.
+pub fn recover_route(
+    host: &impl Host,
+    plan_id: &str,
+    operation_id: &str,
+    body: Value,
+) -> Result<Value> {
     if !body.is_null() {
         only_keys(&body, &[])?;
     }
     operation_ids(plan_id, operation_id)?;
-    Err(Error::new(503, "day plan apply is unavailable"))
+    // Fail closed before any item read or write when execution is down.
+    let accounts = crate::execution::availability(host).map_err(|_| unavailable())?;
+    let batch = crate::change_approval::batch_by_id(host, plan_id, operation_id)?;
+    let recover_needs_gate = batch["items"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .any(|item| {
+            item["kind"] != "add" && matches!(item["outcome"].as_str(), Some("pending" | "unknown"))
+        });
+    let change_auth = recover_needs_gate.then(|| resolve_change_auth(host, operation_id)).transpose()?;
+    crate::execution::execute(
+        host,
+        &crate::execution::Input {
+            plan_id,
+            idempotency_key: None,
+            operation_id: Some(operation_id),
+            item_ids: None,
+            change_auth,
+            accounts: &accounts,
+        },
+    )
 }
 
-/// Confirm needs a stored approval to match, which the host does not offer yet.
-pub fn confirm_route(plan_id: &str, operation_id: &str, body: Value) -> Result<Value> {
+/// Confirm executes a gated batch through its stored approval. The approval
+/// must be the caller's own pending record and its binding must still match
+/// the live draft exactly; a replayed confirm finds no pending record and is
+/// refused. Nothing is written unless every check passes.
+pub fn confirm_route(
+    host: &impl Host,
+    plan_id: &str,
+    operation_id: &str,
+    body: Value,
+) -> Result<Value> {
     only_keys(&body, &["approvalId"])?;
-    if !body["approvalId"].as_str().is_some_and(operations::uuid) {
-        return Err(invalid("approvalId must be an id"));
-    }
+    let approval_id = body["approvalId"]
+        .as_str()
+        .filter(|id| operations::uuid(id))
+        .ok_or_else(|| invalid("approvalId must be an id"))?
+        .to_owned();
     operation_ids(plan_id, operation_id)?;
-    Err(Error::new(503, "day plan apply is unavailable"))
+    // Fail closed before any item read or write when execution is down.
+    let accounts = crate::execution::availability(host).map_err(|_| unavailable())?;
+    // Foreign plans and operations stay invisible and read as 404.
+    let batch = crate::change_approval::batch_by_id(host, plan_id, operation_id)?;
+    // A missing approval, including a foreign one invisible to this actor,
+    // reads as 409: only the exact pending binding may execute.
+    let stored = crate::change_approval::get(host, &approval_id)
+        .map_err(|_| Error::new(409, "day plan apply approval is not available"))?;
+    if stored["status"] != "pending" {
+        return Err(Error::new(409, "day plan apply approval is not available"));
+    }
+    if query(host, plans::PLANS, &Query::select(Filter::eq("id", plan_id)))?.is_empty() {
+        return Err(Error::new(404, "day plan is not available"));
+    }
+    let actor = context(host, "read", "call")?["actorUserId"].clone();
+    let blocks = plans::blocks(host, plan_id)?;
+    // The live draft must still carry the frozen selection: changed contents
+    // require renewed approval, before anything is resolved.
+    let Some(live) = crate::change_approval::build_live_binding(
+        actor.as_str().unwrap_or_default(),
+        &batch,
+        &blocks,
+    ) else {
+        return Err(Error::new(409, "day plan apply approval does not match the operation"));
+    };
+    let Some(presented) = crate::change_approval::read_binding(&stored["inputSummary"]) else {
+        return Err(Error::new(409, "day plan apply approval does not match the operation"));
+    };
+    if !presented.equal_to(&live, None) {
+        return Err(Error::new(409, "day plan apply approval does not match the operation"));
+    }
+    // Resolve to confirmed in its own committed call before execution starts.
+    // A replayed confirm finds no pending record and stops here.
+    crate::change_approval::confirm(host, &approval_id)
+        .map_err(|_| Error::new(409, "day plan apply approval is not available"))?;
+    let tier = crate::change_approval::tier(host, crate::change_approval::MANAGEMENT_FAMILY)
+        .map_err(|_| unavailable())?;
+    crate::execution::execute(
+        host,
+        &crate::execution::Input {
+            plan_id,
+            idempotency_key: None,
+            operation_id: Some(operation_id),
+            item_ids: None,
+            change_auth: Some((tier, Some(presented))),
+            accounts: &accounts,
+        },
+    )
 }

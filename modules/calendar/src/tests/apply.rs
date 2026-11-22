@@ -27,10 +27,18 @@ fn matches(row: &Value, filter: &Value) -> bool {
 }
 impl Host for Mem {
     fn call(&self, port: &str, op: &str, resource: &str, body: Value) -> Result<Value> {
+        if port == "context" && op == "read" {
+            return Ok(json!({"actorUserId":"actor-1","now":"2026-11-10T08:00:00.000Z"}));
+        }
         if port == "context" {
             let mut n = self.next.borrow_mut();
             *n += 1;
             return Ok(json!({"id": format!("00000000-0000-4000-8000-{:012}", *n)}));
+        }
+        // No Connectors package is installed in this fixture: the route's
+        // availability probe fails closed, exactly as on a bare install.
+        if port == "api" {
+            return Err(moss_module_sdk::Error::new("The required module is not installed"));
         }
         assert_eq!((port, op), ("db", "query"));
         let q: Query = serde_json::from_value(body).unwrap();

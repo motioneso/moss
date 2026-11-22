@@ -14,6 +14,12 @@ fn settings_patch_reaches_the_scoped_host_once() {
     struct Settings;
     impl Host for Settings {
         fn call(&self, port: &str, operation: &str, resource: &str, body: Value) -> Result<Value> {
+            if (port, operation) == ("action-policy", "route-write") {
+                assert_eq!(resource, "calendar_writeback");
+                // A time-block promotion to auto promotes the writeback tier.
+                assert_eq!(body, json!({"tier":"trusted_auto"}));
+                return Ok(json!({"tier":"trusted_auto"}));
+            }
             assert_eq!(
                 (port, operation, resource),
                 ("kv", "set", "calendar.briefing-settings")
@@ -515,7 +521,10 @@ fn trusted_settings_port_stays_strict_despite_http_coercion() {
 fn http_settings_normalize_before_the_scoped_host_call() {
     struct Settings;
     impl Host for Settings {
-        fn call(&self, _: &str, _: &str, _: &str, body: Value) -> Result<Value> {
+        fn call(&self, port: &str, _: &str, _: &str, body: Value) -> Result<Value> {
+            if port == "action-policy" {
+                return Ok(json!({"tier":"trusted_auto"}));
+            }
             assert_eq!(
                 body,
                 json!({"lookaheadDays":1,"timeBlockMode":"auto","blockTime":false})
