@@ -494,6 +494,12 @@ jobs:
             echo "GATE_RESULT gate=$gate module=$MODULE entry=$SUITE exit=$rc seconds=$(( $(date +%s) - start ))"
             if [ "$rc" -ne 0 ]; then
               failed=1
+              # A failing Rust test often panics with an embedded server log (80+ lines);
+              # its header and the harness/playwright error then sit above the tail window.
+              # Print those lines separately so the job log always shows the actual cause.
+              echo "::group::Failure context of the $gate log"
+              grep -aEn "panicked at|TimeoutError|Timeout [0-9]+ms exceeded|^Error:|test result: FAILED|^failures:" "$log" | tail -n 30 || true
+              echo "::endgroup::"
               echo "::group::Last lines of the $gate log"
               tail -n 80 "$log"
               echo "::endgroup::"
