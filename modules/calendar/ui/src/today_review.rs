@@ -10,13 +10,9 @@ use moss_module_ui::{Button, ButtonSize, ButtonVariant, ReportDialog};
 use serde_json::Value;
 
 #[component]
-pub(crate) fn Review(
-    snapshot: Snapshot,
-    parent: RwSignal<Option<Snapshot>>,
-    on_close: Callback<()>,
-) -> impl IntoView {
-    let ctl = Controller::new(snapshot.clone(), parent);
+pub(crate) fn Review(ctl: Controller, on_close: Callback<()>) -> impl IntoView {
     let state = ctl.state;
+    let snapshot = state.get_untracked().snapshot;
     let busy = Signal::derive(move || state.get().busy);
     let dismiss = Callback::new(move |()| {
         if !state.get_untracked().busy {
@@ -66,7 +62,10 @@ pub(crate) fn Review(
                             else {view! {<ul>{selected.iter().map(|id| {
                                 let b=model::blocks(s.plan()).iter().find(|b|b["id"]==*id).unwrap();
                                 let item=rows.iter().find(|i|i.id==format!("block:{id}"));
-                                view! {<li>{format!("{}: {}",item.map(|i|i.title.as_str()).unwrap_or("Task block"),model::pending(b,&s.choices)["kind"].as_str().unwrap_or(""))}</li>}
+                                let pending=model::pending(b,&s.choices);
+                                let at=pending["startsAt"].as_str().map(|at|format!(" at {}",model::local_time(at,s.snapshot.zone()))).unwrap_or_default();
+                                let action=match pending["kind"].as_str() {Some("add")=>"Add",Some("move")=>"Move",Some("remove")=>"Remove",_=>"Change"};
+                                view! {<li>{format!("{action} {}{at}",item.map(|i|i.title.as_str()).unwrap_or("Task block"))}</li>}
                             }).collect_view()}</ul>}.into_any()}
                         }}
                     </div>
@@ -150,16 +149,34 @@ fn ReviewRow(item: Item, ctl: Controller) -> impl IntoView {
             zone,
         )
     });
-    let meta = if item.minutes.is_some() && !item.unavailable {
-        format!(
-            "{} minutes · {}",
-            item.minutes.unwrap(),
-            item.review_reason.as_deref().unwrap_or(item.label)
-        )
-    } else if item.unavailable {
-        "No longer available".into()
-    } else {
-        item.label.into()
+    let row_id = item.id.clone();
+    let unavailable = item.unavailable;
+    let meta = move || {
+        let s = state.get();
+        let block = current.get();
+        let saved = s.snapshot.items().into_iter().find(|i| i.id == row_id);
+        if unavailable {
+            return "No longer available".to_string();
+        }
+        let pending = model::pending(&block, &s.choices);
+        let changed = pending != block["pendingChange"];
+        let transient = if changed {
+            match pending["kind"].as_str() {
+                Some("remove") => Some("Will remove"),
+                Some("move") => Some("Time change"),
+                Some("add") => Some("To schedule"),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        let reason = transient
+            .map(str::to_owned)
+            .or_else(|| saved.as_ref().and_then(|i| i.review_reason.clone()))
+            .unwrap_or_else(|| saved.map(|i| i.label.to_owned()).unwrap_or_default());
+        model::duration(&block)
+            .map(|m| format!("{m} minutes · {reason}"))
+            .unwrap_or(reason)
     };
     view! {<li class="plan-review__row"><div><div class="plan-review__title">{item.title.clone()}</div><div class="plan-review__meta">{meta}</div>
         {move|| {
@@ -173,7 +190,8 @@ fn ReviewRow(item: Item, ctl: Controller) -> impl IntoView {
                 messages.push(c["detail"].as_str().unwrap_or("This time conflicts with another block.").into());
             }
             for i in s.report["items"].as_array().into_iter().flatten().filter(|i|i["blockId"]==id) {
-                messages.push(match i["outcome"].as_str() {Some("applied")=>"Applied",Some("failed")=>"Failed",Some("pending")=>"Pending",_=>"Needs check"}.into());
+                let outcome=match i["outcome"].as_str() {Some("applied")=>"Applied",Some("failed")=>"Failed",Some("pending")=>"Pending",_=>"Needs check"};
+                messages.push(if i["outcome"]=="failed" {i["result"]["reason"].as_str().map(|r|format!("Failed: {}",r.replace('-'," "))).unwrap_or_else(||outcome.into())} else {outcome.into()});
             }
             messages.into_iter().map(|m|view! {<p class="plan-review__meta">{m}</p>}).collect_view()
         }}
@@ -190,7 +208,7 @@ fn ReviewRow(item: Item, ctl: Controller) -> impl IntoView {
                 let at=if matches!(placement.as_str(),"add"|"move") {c.starts_at.or_else(||model::start(&b))} else {None};
                 ctl.edit(b["id"].as_str().unwrap_or_default().into(),placement,at);
             }>
-                {move||if on_calendar.get() {view! {<option value="keep">"Keep as is"</option><option value="move">"Move"</option><option value="remove">"Remove"</option>}.into_any()} else {view! {<option value="add">"Add to calendar"</option><option value=move||if current.get()["taskId"].is_null() {"keep"} else {"keep-proposed"}>"Keep proposed"</option><option value="leave">"Leave unscheduled"</option>}.into_any()}}
+                {move||if on_calendar.get() {view! {<option value="keep">"Keep as is"</option><option value="move" disabled=move||model::duration(&current.get()).is_none()>"Move"</option><option value="remove">"Remove"</option>}.into_any()} else {view! {<option value="add" disabled=move||model::duration(&current.get()).is_none()>"Add to calendar"</option><option value=move||if current.get()["taskId"].is_null() {"keep"} else {"keep-proposed"}>"Keep proposed"</option><option value="leave">"Leave unscheduled"</option>}.into_any()}}
             </select></div>
         </div>})}
     </li>}

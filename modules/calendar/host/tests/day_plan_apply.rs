@@ -401,6 +401,31 @@ fn apply_retry_recover_and_confirm_are_owner_scoped_and_settle_once() {
     assert_eq!(second_items, vec!["pending"]);
     assert!(stand_in.writes.lock().unwrap().len() == 2, "a refused confirm executed something");
 
+    // Part 10 uses these same assertions with the protection present, removed,
+    // and restored. Snapshot every Calendar plan/operation row, the approval
+    // store and provider writes: a rejected review action must leave all unchanged.
+    let review_snapshot = || {
+        let rows: Vec<Value> = f.rt.block_on(async {
+            let mut out = vec![];
+            for table in DAY_PLAN_TABLES.into_iter().chain(["moss_modules.approvals"]) {
+                let row = f.root.query_one(
+                    &format!("SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY id),'[]'::jsonb) FROM {table} t"), &[]
+                ).await.unwrap();
+                out.push(row.get(0));
+            }
+            out
+        });
+        (rows, stand_in.writes.lock().unwrap().clone())
+    };
+    let review_rejection = |action: &str| -> anyhow::Result<()> {
+        let before = review_snapshot();
+        let status = if action == "confirm" { foreign_confirm() } else { foreign_retry() };
+        anyhow::ensure!(status == 404, "Part 10 foreign {action}: expected 404, got {status}");
+        anyhow::ensure!(review_snapshot() == before, "Part 10 foreign {action} wrote data");
+        Ok(())
+    };
+    for action in ["confirm", "retry"] { review_rejection(action).unwrap(); }
+
     // RED: with the day-plan row security removed, the same 404 assertions must
     // detect the leak; with the approval row security removed, the foreign
     // approval must stop reading as unavailable.
@@ -415,6 +440,7 @@ fn apply_retry_recover_and_confirm_are_owner_scoped_and_settle_once() {
     let leaked_retry = foreign_retry();
     let leaked_recover = foreign_recover();
     let leaked_confirm = foreign_confirm();
+    let review_red = ["confirm", "retry"].map(|action| review_rejection(action));
     f.rt.block_on(async {
         for table in DAY_PLAN_TABLES {
             f.root
@@ -431,6 +457,11 @@ fn apply_retry_recover_and_confirm_are_owner_scoped_and_settle_once() {
     assert_ne!(leaked_retry, 404, "the retry 404 must detect removed row security");
     assert_ne!(leaked_recover, 404, "the recover 404 must detect removed row security");
     assert_ne!(leaked_confirm, 404, "the confirm 404 must detect removed row security");
+    for (action, result) in ["confirm", "retry"].into_iter().zip(review_red) {
+        let error = result.expect_err("Part 10 must detect removed row security");
+        assert!(error.to_string().starts_with(&format!("Part 10 foreign {action}: expected 404")));
+        println!("RED {error}");
+    }
     println!("RED day-plan row security: every foreign 404 detects a removed protection");
 
     // RED: with the approval row security removed, the foreign-approval refusal
@@ -487,6 +518,10 @@ fn apply_retry_recover_and_confirm_are_owner_scoped_and_settle_once() {
     let green = foreign_pending(&pending_approval);
     assert_eq!(green["status"], 409);
     assert_eq!(green["body"]["error"], "day plan apply approval is not available");
+    for action in ["confirm", "retry"] {
+        review_rejection(action).unwrap();
+        println!("GREEN Part 10 foreign {action}: 404 and Calendar rows, approvals and provider writes unchanged");
+    }
     println!("GREEN row security restored: plans, operations and approvals are owner-scoped again");
     // And the owner's own flow still answers from the stored state.
     let settled = call(

@@ -86,6 +86,9 @@ pub fn Today() -> impl IntoView {
     let failed = RwSignal::new(false);
     let review = RwSignal::new(false);
     let open_failed = RwSignal::new(false);
+    // Review choices and unfinished reports survive closing the reader.
+    let reader = StoredValue::new(None::<crate::review_controller::Controller>);
+    let owner = Owner::current().expect("Today is mounted");
     let refresh = Callback::new(move |()| {
         if busy.get_untracked() {
             return;
@@ -142,6 +145,15 @@ pub fn Today() -> impl IntoView {
         });
     });
     let open = Callback::new(move |_| {
+        if reader.get_value().is_none() {
+            if let Some(snapshot) = state.get_untracked() {
+                owner.with(|| {
+                    reader.set_value(Some(crate::review_controller::Controller::new(
+                        snapshot, state,
+                    )))
+                });
+            }
+        }
         open_failed.set(false);
         spawn_local(async move {
             match JsFuture::from(present(true)).await {
@@ -153,37 +165,58 @@ pub fn Today() -> impl IntoView {
     view! {
         <section class="jds-brief jds-brief--timeline" id="schedule" aria-busy=move||busy.get()>
             <SectionHead title="Your day, laid out" />
-            {move|| {
-                if let Some(snapshot)=state.get() {
-                    let rows=snapshot.items();
-                    let proposed=rows.iter().any(|i|matches!(i.state,"proposed"|"pending"));
-                    let count=snapshot.count();
-                    let name=snapshot.name();
-                    let automatic=snapshot.automatic;
-                    let notice=match (snapshot.saved.is_none(),snapshot.events.is_none()) {
-                        (true,true)=>Some("Calendar and saved plan aren't available right now."),
-                        (true,false)=>Some("Saved plan unavailable; showing calendar events only"),
-                        (false,true)=>Some("Calendar isn't available right now; showing your saved plan."),
-                        _=>None,
-                    };
-                    view! {
-                        {(count>0 || notice.is_some()).then(||view! {<PlanNote>
-                            {(count>0).then(||view! {<p class="tl-note__text">
-                                <strong>{if proposed {"Your proposed plan."} else {"Your task blocks are on the calendar."}}</strong>" "
-                                {if proposed {format!("{count} task {} around your commitments.",if count==1 {"block fits"} else {"blocks fit"})} else {format!("{name} can adjust its blocks when the day changes.")}}
-                            </p>})}
-                            {notice.map(|text|view! {<p class="cmd-empty" role="status" data-error-code="calendar_today_unavailable">{text}</p>})}
-                            {(count>0).then(||view! {<Button on_click=open>{if automatic {"Adjust task blocks"} else {"Review task blocks"}}</Button>})}
-                        </PlanNote>})}
-                        {notice.map(|_|view! {<Button variant=ButtonVariant::Quiet disabled=busy on_click=Callback::new(move |_|refresh.run(()))>"Try again"</Button>})}
-                        {if rows.is_empty() {view! {<p class="cmd-empty">"Nothing on the schedule yet."</p>}.into_any()} else {view! {<Schedule snapshot=snapshot />}.into_any()}}
-                    }.into_any()
-                } else if failed.get() {view! {<p class="cmd-empty" role="status" data-error-code="calendar_today_unavailable">"Your day plan couldn't load."</p><Button variant=ButtonVariant::Quiet disabled=busy on_click=Callback::new(move |_|refresh.run(()))>"Try again"</Button>}.into_any()}
+            <Show when=move||state.get().is_some() fallback=move|| {
+                if failed.get() {view! {<p class="cmd-empty" role="status" data-error-code="calendar_today_unavailable">"Your day plan couldn't load."</p><Button variant=ButtonVariant::Quiet disabled=busy on_click=Callback::new(move |_|refresh.run(()))>"Try again"</Button>}.into_any()}
                 else {view! {<p class="agenda-clear" role="status">"Gathering your day plan…"</p>}.into_any()}
-            }}
+            }><LoadedToday state=state busy=busy on_open=open refresh=refresh /></Show>
             {move||open_failed.get().then(||view! {<p class="cmd-empty" role="status">"Review couldn't open. Try again."</p>})}
         </section>
-        {move||review.get().then(||state.get_untracked().map(|snapshot|view! {<crate::today_review::Review snapshot=snapshot parent=state on_close=close />}))}
+        {move||review.get().then(||reader.get_value().map(|ctl|view! {<crate::today_review::Review ctl=ctl on_close=close />}))}
+    }
+}
+// Keep the review trigger mounted when writes refresh the timeline, so the shared
+// dialog can restore focus to the same button after closing.
+#[component]
+fn LoadedToday(
+    state: RwSignal<Option<Snapshot>>,
+    busy: RwSignal<bool>,
+    on_open: Callback<leptos::ev::MouseEvent>,
+    refresh: Callback<()>,
+) -> impl IntoView {
+    let snapshot = Signal::derive(move || state.get().expect("loaded Today"));
+    let count = Signal::derive(move || snapshot.get().count());
+    let proposed = Signal::derive(move || {
+        snapshot
+            .get()
+            .items()
+            .iter()
+            .any(|i| matches!(i.state, "proposed" | "pending"))
+    });
+    let notice = Signal::derive(move || {
+        match (
+            snapshot.get().saved.is_none(),
+            snapshot.get().events.is_none(),
+        ) {
+            (true, true) => Some("Calendar and saved plan aren't available right now."),
+            (true, false) => Some("Saved plan unavailable; showing calendar events only"),
+            (false, true) => Some("Calendar isn't available right now; showing your saved plan."),
+            _ => None,
+        }
+    });
+    view! {
+        <Show when=move||{count.get()>0 || notice.get().is_some()}>
+            <PlanNote>
+                <Show when=move||{count.get()>0}>
+                    <p class="tl-note__text"><strong>{move||if proposed.get() {"Your proposed plan."} else {"Your task blocks are on the calendar."}}</strong>" "
+                        {move||if proposed.get() {format!("{} task {} around your commitments.",count.get(),if count.get()==1 {"block fits"} else {"blocks fit"})} else {format!("{} can adjust its blocks when the day changes.",snapshot.get().name())}}
+                    </p>
+                </Show>
+                {move||notice.get().map(|text|view! {<p class="cmd-empty" role="status" data-error-code="calendar_today_unavailable">{text}</p>})}
+                <Show when=move||{count.get()>0}><Button on_click=on_open>{move||if snapshot.get().automatic {"Adjust task blocks"} else {"Review task blocks"}}</Button></Show>
+            </PlanNote>
+        </Show>
+        {move||notice.get().map(|_|view! {<Button variant=ButtonVariant::Quiet disabled=busy on_click=Callback::new(move |_|refresh.run(()))>"Try again"</Button>})}
+        {move||if snapshot.get().items().is_empty() {view! {<p class="cmd-empty">"Nothing on the schedule yet."</p>}.into_any()} else {view! {<Schedule snapshot=snapshot.get() />}.into_any()}}
     }
 }
 #[component]
