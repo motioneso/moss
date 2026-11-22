@@ -419,18 +419,34 @@ fn apply_retry_recover_and_confirm_are_owner_scoped_and_settle_once() {
     assert_ne!(leaked_confirm, 404, "the confirm 404 must detect removed row security");
     println!("RED day-plan row security: every foreign 404 detects a removed protection");
 
+    // RED: with the approval row security removed, the foreign-approval refusal
+    // must stop reading as unavailable. The probe needs a PENDING approval of
+    // the owner's, so a replayed gated apply reserves one first.
+    let reapply = call(
+        f.a,
+        "POST",
+        &apply_path,
+        json!({"expectedRevision":2,"idempotencyKey":"db-proof-1",
+               "selectedBlockIds":[addition_block, move_block]}),
+    );
+    assert_eq!(reapply["status"], 202, "{reapply}");
+    let pending_approval = reapply["body"]["approvalId"].as_str().unwrap().to_owned();
+    assert_ne!(pending_approval, approval, "the replay reserved a fresh approval");
+    let foreign_pending = |approval: &str| {
+        call(
+            f.b,
+            "POST",
+            &format!("/day-plans/{other}/operations/{second_operation}/confirm"),
+            json!({"approvalId": approval}),
+        )
+    };
     f.rt.block_on(async {
         f.root
             .execute("ALTER TABLE moss_modules.approvals DISABLE ROW LEVEL SECURITY", &[])
             .await
             .unwrap();
     });
-    let leaked_approval = call(
-        f.b,
-        "POST",
-        &format!("/day-plans/{other}/operations/{second_operation}/confirm"),
-        json!({"approvalId": approval}),
-    );
+    let leaked_approval = foreign_pending(&pending_approval);
     f.rt.block_on(async {
         f.root
             .execute("ALTER TABLE moss_modules.approvals ENABLE ROW LEVEL SECURITY", &[])
@@ -454,12 +470,7 @@ fn apply_retry_recover_and_confirm_are_owner_scoped_and_settle_once() {
     assert_eq!(foreign_retry(), 404);
     assert_eq!(foreign_recover(), 404);
     assert_eq!(foreign_confirm(), 404);
-    let green = call(
-        f.b,
-        "POST",
-        &format!("/day-plans/{other}/operations/{second_operation}/confirm"),
-        json!({"approvalId": approval}),
-    );
+    let green = foreign_pending(&pending_approval);
     assert_eq!(green["status"], 409);
     assert_eq!(green["body"]["error"], "day plan apply approval is not available");
     println!("GREEN row security restored: plans, operations and approvals are owner-scoped again");
