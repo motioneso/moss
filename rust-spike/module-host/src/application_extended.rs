@@ -49,6 +49,9 @@ impl Application {
         services = services.with_feedback(Arc::new(crate::feedback_port::PostgresFeedback::new(
             database.clone(),
         )?));
+        services = services.with_approvals(Arc::new(crate::approval_port::PostgresApprovals::new(
+            database.clone(),
+        )?));
         if let Some(transport) = crate::network::test_transport() {
             services = services.with_network(transport);
         }

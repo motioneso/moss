@@ -18,7 +18,7 @@ pub struct Event {
     #[serde(default)]
     pub location: Option<String>,
     #[serde(default)]
-    pub attendee_count: f64,
+    pub attendee_count: Option<f64>,
     #[serde(default)]
     pub status: Option<String>,
     #[serde(default)]

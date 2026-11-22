@@ -348,6 +348,8 @@ pub fn authorize(manifest: &Manifest, port: &str, request: &Request) -> Result<(
     );
     if port == "db" && request.operation == "query" {
         reject_context_outside_columns(&request.parameters)?;
+    } else if port == "approvals" && request.operation == "create" {
+        reject_context_outside_binding(&request.parameters)?;
     } else {
         reject_context(&request.parameters)?;
     }
@@ -575,6 +577,30 @@ fn reject_context_outside_columns(parameters: &Value) -> Result<()> {
                 columns.values().try_for_each(reject_context)?;
                 continue;
             }
+        }
+        reject_context(&json!({ name.as_str(): v }))?;
+    }
+    Ok(())
+}
+/// An approval stores an audited binding that restates the actor the host already pinned.
+/// The binding is data — the host owns the owner, module and family and never trusts the
+/// summary — so `actorUserId` inside `inputSummary` is not a selected identity. Everything
+/// else, at every depth, keeps the full refusal.
+fn reject_context_outside_binding(parameters: &Value) -> Result<()> {
+    let Value::Object(fields) = parameters else {
+        return reject_context(parameters);
+    };
+    for (name, v) in fields {
+        if name == "inputSummary" {
+            let Value::Object(summary) = v else {
+                bail!("inputSummary must be an object binding the approval");
+            };
+            for (key, inner) in summary {
+                if key != "actorUserId" {
+                    reject_context(&json!({ key.as_str(): inner }))?;
+                }
+            }
+            continue;
         }
         reject_context(&json!({ name.as_str(): v }))?;
     }

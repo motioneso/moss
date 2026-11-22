@@ -8,6 +8,10 @@ function run(command: string, args: string[]) {
   const result = spawnSync(command, args, { stdio: "inherit", env: process.env });
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
+if (process.env.JS389_REMOVALS === "1") {
+  run("python3", ["rust-spike/shell/tools/chat-part4d-removals.py"]);
+  process.exit(0);
+}
 if (process.env.JS387_REMOVALS === "1") {
   const urls = getMossDatabaseUrls();
   Object.assign(process.env, {

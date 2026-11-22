@@ -106,6 +106,9 @@ fn delete_all<H: Host + ?Sized>(host: &H) -> Result<Value> {
 }
 
 pub fn execute<H: Host + ?Sized>(host: &H, api: Api) -> Result<Value> {
+    if api.name == "prepareChatAction" {
+        return crate::chat::prepare(&api.parameters);
+    }
     if api.parameters != json!({}) {
         return Err(Error::new("Account operation takes no parameters"));
     }

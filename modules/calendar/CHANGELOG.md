@@ -1,5 +1,9 @@
 # Calendar package
 
+## 0.32.1
+
+- Offer validated chat tools and code-built approval fields. Normal writes show their returned result; deleting asks first. Event guest counts are whole numbers or unknown; moves require a verified zero count.
+
 ## 0.32.0
 
 - Replace Today's sample timeline with Calendar's saved plan and visible calendar events, including Proposed, Flexible and unavailable task labels.

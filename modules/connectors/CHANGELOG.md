@@ -1,5 +1,9 @@
 # Connectors package
 
+## 0.7.1
+
+- Offer validated chat tools and code-built approval fields. Normal writes show their returned result; sending asks first. Moving an event refuses missing or invalid guest counts before contacting the provider.
+
 ## 0.1.0
 
 - Add the Connectors package: the list of connection providers, the signed-in person's connection accounts, and the Email and Calendar switches for each account.
