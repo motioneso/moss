@@ -22,6 +22,7 @@
     "test:rust-proactive-server": "tsx rust-spike/module-host/tools/proactive-server-gate.ts",
     "test:rust-module-host": "bash rust-spike/module-host/tools/host-suite.sh && bash rust-spike/module-host/tools/gate.sh",
     "test:rust-proactive-feedback": "bash rust-spike/module-host/tools/proactive-feedback-gate.sh",
+    "test:rust-approvals": "bash rust-spike/module-host/tools/approvals-gate.sh",
     "test:rust-weather-preferences": "bash rust-spike/module-host/tools/weather-preferences-gate.sh",
     "test:rust-module-ai": "tsx rust-spike/module-host/tools/ai-server-gate.ts",
     "test:rust-tasks-server": "tsx rust-spike/module-host/tools/tasks-server-gate.ts",

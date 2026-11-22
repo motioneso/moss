@@ -25,6 +25,7 @@ pub struct ServicePorts {
     pub(crate) network: Arc<dyn crate::network::Transport>,
     public_web: Arc<crate::public_web::PublicWeb>,
     feedback: Arc<dyn crate::feedback_port::Feedback>,
+    approvals: Arc<dyn crate::approval_port::Approvals>,
     browser: Option<crate::browser::BrowserPort>,
     /// Proof only. Files every person's service data under one shared folder.
     #[cfg(feature = "browser-proof")]
@@ -47,6 +48,7 @@ impl ServicePorts {
             network: Arc::new(crate::network::Network),
             public_web: Arc::default(),
             feedback: Arc::new(crate::feedback_port::NoFeedback),
+            approvals: Arc::new(crate::approval_port::NoApprovals),
             browser: None,
             #[cfg(feature = "browser-proof")]
             pooled: false,
@@ -101,6 +103,11 @@ impl ServicePorts {
     /// Supplies the store behind the `feedback` port.
     pub fn with_feedback(mut self, feedback: Arc<dyn crate::feedback_port::Feedback>) -> Self {
         self.feedback = feedback;
+        self
+    }
+    /// Supplies the durable store behind the `approvals` port.
+    pub fn with_approvals(mut self, approvals: Arc<dyn crate::approval_port::Approvals>) -> Self {
+        self.approvals = approvals;
         self
     }
     pub fn with_network(mut self, transport: Arc<dyn crate::network::Transport>) -> Self {
@@ -314,6 +321,7 @@ impl ServicePorts {
         match port {
             "credentials" => self.broker(scope, r),
             "feedback" => crate::feedback_port::invoke(self.feedback.as_ref(), scope, r),
+            "approvals" => crate::approval_port::invoke(self.approvals.as_ref(), scope, r),
             "fetch" if r.resource == crate::public_web::PUBLIC_WEB => {
                 Ok(self
                     .public_web
