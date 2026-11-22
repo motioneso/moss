@@ -109,7 +109,7 @@ fn installed_cooking_rating_and_undo_match_the_old_handlers_step_for_step() {
         let old = replay::old_tool(old_actor, &role(), tool, fill_all(params, &old_state));
         learn(&mut new_state, &new["body"]);
         learn(&mut old_state, &old);
-        let (mut a, mut b) = (new["body"].clone(), old.clone());
+        let (mut a, mut b) = (receipts::legacy_reply(new["body"].clone()), old.clone());
         replay::mask(&mut a);
         replay::mask(&mut b);
         assert_eq!(a, b, "step {n} {tool} {params}");

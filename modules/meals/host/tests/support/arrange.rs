@@ -46,7 +46,7 @@ fn installed_arrangement_tools_match_the_old_handlers_step_for_step() {
         let new = run(&w, new_actor, tool, fill(params, &new_ids), true);
         assert_eq!(new["status"], 200, "step {n} {tool}: {new}");
         let old = replay::old_tool(old_actor, &role(), tool, fill(params, &old_ids));
-        let (mut a, mut b) = (new["body"].clone(), old.clone());
+        let (mut a, mut b) = (receipts::legacy_reply(new["body"].clone()), old.clone());
         replay::mask(&mut a);
         replay::mask(&mut b);
         assert_eq!(a, b, "step {n} {tool} {params}");

@@ -1,4 +1,5 @@
 //! Calendar's guest data layer. Actor identity and storage handles belong to the host.
+pub mod chat;
 use moss_module_sdk::{Host, Response, RouteRequest};
 use serde_json::{json, Value};
 
@@ -80,7 +81,8 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
             _ => Err(Error::new(404, "Calendar tool is unavailable")),
         }
         .map_err(|e| e.message)?;
-        return serde_json::to_string(&result).map_err(|_| "Invalid calendar tool response".into());
+        return serde_json::to_string(&chat::completed(&input.tool, result))
+            .map_err(|_| "Invalid calendar tool response".into());
     }
     if kind == "job" {
         let result = jobs::handle(host, payload).map_err(|e| e.message)?;
@@ -117,6 +119,7 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
 
 fn api(host: &impl Host, name: &str, input: Value) -> Result<Value> {
     match name {
+        "prepareChatAction" => chat::prepare(host, &input),
         "listEvents" => Ok(json!({"events":events::list(host)?})),
         "getEvent" => {
             #[derive(serde::Deserialize)]

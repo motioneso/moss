@@ -276,8 +276,12 @@ fn remove_member<H: Host + ?Sized>(host: &H, input: &Fields) -> Result<Checked<V
 }
 
 pub fn handle<H: Host + ?Sized>(host: &H, req: Request) -> Result<Value> {
-    Ok(match call(host, &req.tool, &req.parameters)? {
-        Ok(data) => json!({"data":data}),
+    let recorded = crate::chat_changes::Recorded::new(host);
+    Ok(match call(&recorded, &req.tool, &req.parameters)? {
+        Ok(mut data) => {
+            recorded.append(&mut data);
+            json!({"data":data})
+        }
         Err(error) => failure(error),
     })
 }

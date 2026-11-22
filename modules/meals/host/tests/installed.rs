@@ -1,6 +1,8 @@
 //! Real installed-package proofs. Run only through scripts/run-gate.sh.
 #[path = "support/registry.rs"]
 mod registry;
+#[path = "support/receipts.rs"]
+mod receipts;
 #[path = "support/replay.rs"]
 mod replay;
 mod support;

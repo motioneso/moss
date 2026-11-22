@@ -8,6 +8,7 @@ mod abi;
 pub mod accounts;
 pub mod calendar_context;
 pub mod calendar_writes;
+pub mod chat;
 pub mod email_context;
 pub mod email_writes;
 pub mod live_tools;
@@ -103,7 +104,11 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
                     name == "email.sendReply",
                     &input["parameters"],
                     input["approvalVersion"].as_str(),
-                )),
+                ).map(|result| {
+                    if name == "email.draftReply" {
+                        chat::completed_draft(&input["parameters"], result)
+                    } else { result }
+                })),
                 _ => Err("Connectors tool is unavailable".into()),
             }
         }
@@ -121,6 +126,7 @@ fn api(host: &impl Host, name: &str, input: &Value) -> Result<Value> {
         "listCalendarContext" => calendar_context::list(host, input),
         "listEmailContext" => email_context::list(host, input),
         "listSavedEmailContext" => email_context::list_saved(host, input["connectorAccountId"].as_str().unwrap_or("")),
+        "prepareChatAction" => chat::prepare(host, input),
         "prepareEmailAction" => email_writes::prepare(host, input),
         "createCalendarEvent" => calendar_writes::create(host, input),
         "deleteCalendarEvent" => calendar_writes::delete(host, input),
