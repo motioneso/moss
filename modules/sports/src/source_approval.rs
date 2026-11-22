@@ -10,6 +10,11 @@ use crate::util::is_uuid;
 use crate::catalog;
 use moss_module_sdk::{Host, Result};
 use serde_json::{json, Map, Value};
+use sha2::Digest;
+
+fn card_version(value: &Value) -> String {
+    format!("{:x}", sha2::Sha256::digest(value.to_string().as_bytes()))
+}
 
 const REMOVAL: [(&str, &str); 1] = [("Source and coverage", "Remove this sports news source and all its coverage assignments.")];
 const REPLACEMENT: &str = "Replace all coverage assignments for this source with the complete list shown. Any assignment not listed will be removed.";
@@ -85,7 +90,7 @@ pub fn card<H: Host + ?Sized>(host: &H, teams: &dyn TeamList, tool: &str, input:
         }
         return Ok(Some(json!({
             "title": title, "content": if kind == "remove" { "user_authored" } else { "outside" },
-            "target": label, "fields": fields, "version": version.to_string(),
+            "target": label, "fields": fields, "version": card_version(&version),
         })));
     }
     let mut keys = vec!["confirmationId", "authorizationAcknowledgement", "canonicalDomain", "confirmedFetchHosts", "targets"];
@@ -158,7 +163,7 @@ pub fn card<H: Host + ?Sized>(host: &H, teams: &dyn TeamList, tool: &str, input:
     }
     let target = source.as_ref().map_or(candidate_label.to_owned(), |(label, _)| label.clone());
     let version = json!([confirmation, preview, source.map(|(_, v)| v), versions]);
-    Ok(Some(json!({"title":title,"content":"outside","target":target,"fields":fields,"version":version.to_string()})))
+    Ok(Some(json!({"title":title,"content":"outside","target":target,"fields":fields,"version":card_version(&version)})))
 }
 
 /// The `prepareSportsSourceAction` public API. Known refusals use fixed text.

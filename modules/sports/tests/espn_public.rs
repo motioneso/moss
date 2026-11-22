@@ -77,6 +77,48 @@ fn parsers_match_the_old_reader_on_recorded_fixtures() {
 }
 
 #[test]
+fn odd_scoreboards_read_like_the_old_tree_or_refuse_the_page() {
+    // The lean shape keeps the loose tree's tolerance for odd SLOTS: missing, null or non-list
+    // reads as empty. A list ENTRY with a truly incompatible shape refuses the page (resuming a
+    // half-read entry would need buffering, which would put the fuel budget back), and that
+    // refusal reads downstream as the degraded empty day a failed fetch already was.
+    let games = |page: Value| Value::Array(espn_games::parse_scoreboard(&page, "nhl").unwrap());
+    let event = |competition: Value| json!({"events":[{"id":"401","date":"2026-11-22T18:00Z","competitions":[competition]}]});
+    let competition = |competitors: Value| json!({"competitors":competitors,"status":{"type":{"state":"post","detail":"Final"}}});
+
+    // A single category object in the `leaders` slot, which the old loose tree wrapped into a
+    // one-element list, still yields the same scorer line.
+    let leaders = json!({"name":"goals","leaders":[{"displayValue":"2","athlete":{"shortName":"A. Svech"}}]});
+    let home = json!({"homeAway":"home","team":{"id":"7","abbreviation":"CAR"},"leaders":leaders});
+    let page = event(competition(json!([home])));
+    let got = games(page.clone());
+    assert_eq!(got[0]["home"]["scorers"], json!(["A. Svech (2)"]), "{got}");
+    assert_eq!(got[0]["home"]["teamKey"], "car");
+
+    // Odd slots read as empty: a non-list events, a page with nothing, a junk scalar in
+    // `leaders`, and a null list where competitors belong.
+    assert_eq!(games(json!({"events":{"not":"a list"}})), json!([]));
+    assert_eq!(games(json!({})), json!([]));
+    let page = event(competition(json!([{"homeAway":"home","team":{"id":"7"},"leaders":"not a list"}])));
+    assert_eq!(games(page)[0]["home"]["scorers"], Value::Null);
+    let page = event(competition(json!(null)));
+    assert_eq!(games(page.clone())[0]["statusDetail"], "Final", "a null list reads as empty: {}", games(page));
+
+    // A list entry that does not fit the shape refuses the page, alone or among good entries.
+    for competitors in [
+        json!([Value::Null]),
+        json!([{"homeAway":"home","team":{"id":"7"}}, Value::Null, {"homeAway":"away","team":{"id":"6"}}]),
+        json!([{"homeAway":"home","team":"not a team object"}]),
+    ] {
+        let page = event(competition(competitors));
+        assert!(
+            espn_games::parse_scoreboard(&page, "nhl").is_err(),
+            "an incompatible entry refuses the page, which reads as the degraded empty day"
+        );
+    }
+}
+
+#[test]
 fn cached_datasets_answer_like_the_parsers_and_hit_the_cache() {
     let want = golden("golden.json");
     let host = EspnHost::new();

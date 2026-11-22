@@ -37,7 +37,7 @@ fn version(parts: Value) -> String {
     Sha256::digest(parts.to_string().as_bytes()).iter().map(|b| format!("{b:02x}")).collect()
 }
 
-fn owned_run<H: Host + ?Sized>(host: &H, actor: &str, id: &str) -> Result<Option<Value>> {
+pub(crate) fn owned_run<H: Host + ?Sized>(host: &H, actor: &str, id: &str) -> Result<Option<Value>> {
     if !is_uuid(id) {
         return Ok(None);
     }

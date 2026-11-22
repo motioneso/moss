@@ -1,5 +1,9 @@
 # Web Research package
 
+## 0.1.1
+
+- Offer validated search and public-page reading tools to chat. These read-only tools run without an approval card.
+
 ## 0.1.0
 
 - Web Research starts as a built-in package. Chat and other modules can search the web, and it says whether search is on and why not.

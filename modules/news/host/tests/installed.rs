@@ -895,3 +895,24 @@ fn story_feedback_belongs_to_the_person_hides_the_story_and_leaks_no_text() {
     assert_eq!(w.call(a, "POST", &format!("/story-feedback/{id}/undo"), Value::Null)["status"], 200);
     assert_eq!(stories(a), 2);
 }
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn chat_refresh_uses_empty_schema_and_the_pinned_card_adapter() {
+    let w = World::new();
+    let access = w.f.access(w.f.a);
+    let tools = w.app.installer.chat_tools(&access).unwrap();
+    assert_eq!(tools.iter().filter(|t| t.module == "news").count(), 5);
+    let refresh = tools.iter().find(|t| t.tool == "news.refreshNews").unwrap();
+    assert_eq!(refresh.rule, moss_module_host::chat_tools::ChatToolRule::Card { pinned: true });
+    assert!(w.app.installer.run_chat_tool(&access, "news", "news.refreshNews", json!({})).is_err());
+    let invalid = json!({"source":"not accepted"});
+    assert!(w.app.installer.chat_tool_card(&access, "news", "news.refreshNews", &invalid).is_err());
+    assert!(w.app.installer.run_approved_chat_tool(&access, "news", "news.refreshNews", invalid, Some("[]")).is_err());
+    let card = w.app.installer.chat_tool_card(&access, "news", "news.refreshNews", &json!({})).unwrap().unwrap();
+    assert_eq!(card.title, "Action request");
+    assert_eq!(card.version.as_deref(), Some("[]"));
+    assert_eq!(card.fields[0].value, "Your news feed");
+    let output = w.app.installer.run_approved_chat_tool(&access, "news", "news.refreshNews", json!({}), card.version.as_deref()).unwrap();
+    assert!(matches!(output["data"]["status"].as_str(), Some("queued" | "accepted")));
+}

@@ -121,7 +121,7 @@ fn compiled_list_deletion_preserves_tasks_and_requires_rls() {
         let exposed = removed.expect("Removed-policy tool must complete");
         assert_eq!(
             exposed.as_ref().unwrap(),
-            &json!({"data":{"summary":"Deleted task list.","deleted":true}})
+            &json!({"data":{"summary":"Deleted task list.","deleted":true,"changed":[{"label":"Name","before":format!("Tool private {actor}"),"after":"Deleted"}]}})
         );
         assert!(
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| assert_tool_private(

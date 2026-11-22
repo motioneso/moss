@@ -305,11 +305,15 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
         });
         let account = uuid::Uuid::new_v4();
         db.execute("INSERT INTO app.connector_accounts(id,provider_id,owner_user_id,encrypted_secret,scopes) VALUES($1,'google',$2,'{}',ARRAY['https://www.googleapis.com/auth/calendar'])", &[&account, &owner]).await.unwrap();
-        // Today at 15:00 UTC, so the Month view of a later run still shows it.
-        let day = chrono::Utc::now().date_naive();
-        let starts = day.and_hms_opt(15, 0, 0).unwrap().and_utc();
-        let ends = day.and_hms_opt(16, 0, 0).unwrap().and_utc();
-        db.execute("INSERT INTO app.calendar_events(id,connector_account_id,owner_user_id,title,starts_at,ends_at,external_id) VALUES($1,$2,$3,$4,$5,$6,'server-gate')", &[&uuid::Uuid::new_v4(), &account, &owner, &event_title, &starts, &ends]).await.unwrap();
+        // Today at 15:00 in the account zone, so every view the browser check opens shows
+        // it. The screens centre on the account zone's today — America/Los_Angeles unless a
+        // locale preference is saved, and this account has none — and the Week window is
+        // Sunday to Saturday around that day. An event anchored to UTC's today falls
+        // outside that window whenever UTC rolls over first: from 16:00 in the account
+        // zone it is already tomorrow there, and on a zone-Saturday it lands on a Sunday
+        // the Week view never shows, so the browser check fails by construction (the red
+        // main run of 2026-11-22 02:51 UTC). The host resolves the zone in SQL the same way.
+        db.execute("INSERT INTO app.calendar_events(id,connector_account_id,owner_user_id,title,starts_at,ends_at,external_id) VALUES($1,$2,$3,$4,((now() AT TIME ZONE 'America/Los_Angeles')::date + time '15:00') AT TIME ZONE 'America/Los_Angeles',((now() AT TIME ZONE 'America/Los_Angeles')::date + time '16:00') AT TIME ZONE 'America/Los_Angeles','server-gate')", &[&uuid::Uuid::new_v4(), &account, &owner, &event_title]).await.unwrap();
     });
     private(
         &root.join("modules.json"),

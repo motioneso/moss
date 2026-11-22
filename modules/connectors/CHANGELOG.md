@@ -1,5 +1,15 @@
 # Connectors package
 
+## 0.7.2
+
+- Calendar's day-plan apply can add a planned block under a stable plan identity: the event id comes from the operation, not the content, and a retried insert collides instead of duplicating. A new lookup call reads one provider event back with the identity it was created with and its guest count, so a retry can prove the event is its own. Ordinary focus blocks keep today's behaviour.
+- The apply create takes `provenance: { jarvisPlanId, jarvisBlockId, jarvisPlanRevision, jarvisOperationId }` — the jarvis names the provider tags use, because the host refuses to carry a bare `actorUserId` through any port call. The actor is never sent: the host names the signed-in person, and the provider event records that identity. Calendar's cache row records it too, under the same jarvis names with the revision as text (the TypeScript cache used plain names; a bare `actorUserId` cannot cross a port call, so this is the one shape every caller can send). A reserved addition is pinned to its start and never shifts; the caller should look the event up before creating, as the TypeScript apply loop does.
+- The lookup answers `found:false` only for a clean miss or a cancelled event. Every error from it — a refused scope, a sign-in problem, an unreachable Google — means the outcome is unknown, never that the event is gone, exactly as the TypeScript apply records an unknown outcome on a failed readback.
+
+## 0.7.1
+
+- Offer validated chat tools and code-built approval fields. Normal writes show their returned result; sending asks first. Moving an event refuses missing or invalid guest counts before contacting the provider.
+
 ## 0.1.0
 
 - Add the Connectors package: the list of connection providers, the signed-in person's connection accounts, and the Email and Calendar switches for each account.

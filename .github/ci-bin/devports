@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Isolated hosted-runner claims for tests that use the shared devports interface.
+# This PATH entry is added only by CI; local gates keep the machine's allocator.
+set -euo pipefail
+claims="${RUNNER_TEMP:?CI runner only}/devports"
+case "${1:-}" in
+  claim)
+    mkdir -p "$claims"
+    for ((port=5180; port<=5299; port++)); do
+      if ss -ltn "( sport = :$port )" | grep -q LISTEN; then continue; fi
+      if mkdir "$claims/$port" 2>/dev/null; then
+        echo "${2:?claim name required}" > "$claims/$port/owner"
+        echo "$port"
+        exit 0
+      fi
+    done
+    echo 'No free CI port' >&2
+    exit 1
+    ;;
+  release)
+    port="${2:?port required}"
+    if [[ "$port" =~ ^[0-9]+$ ]] && ((port>=5180 && port<=5299)); then
+      rm -rf "$claims/$port"
+    else
+      echo 'Invalid CI port' >&2
+      exit 1
+    fi
+    ;;
+  *) echo 'Use claim <name> or release <port>' >&2; exit 1 ;;
+esac

@@ -36,9 +36,49 @@ fn cached<H: Host + ?Sized>(
 /// One Eastern day of games, `day` as YYYY-MM-DD.
 pub fn scoreboard<H: Host + ?Sized>(host: &H, competition_key: &str, day: &str) -> Result<Answer> {
     cached(host, cache::SCOREBOARD, &format!("{competition_key}|{day}"), cache::SCOREBOARD_TTL_MS, json!([]), || {
-        let data = espn::fetch_json(host, &espn::scoreboard_url(competition_key, day)?)?;
-        Ok(Value::Array(espn_games::parse_scoreboard(&data, competition_key)?))
+        let page = espn::fetch_scoreboard(host, &espn::scoreboard_url(competition_key, day)?)?;
+        Ok(Value::Array(espn_games::parse_scoreboard_page(&page, competition_key)?))
     })
+}
+
+/// The scoreboard cache read once for a whole request and written back once, the way `Feeds`
+/// reads the news cache: a multi-day read otherwise reloads and rewrites the whole namespace
+/// once per day.
+pub struct Boards {
+    store: Store,
+    now: i64,
+}
+
+impl Boards {
+    pub fn open<H: Host + ?Sized>(host: &H) -> Result<Self> {
+        Ok(Self { store: Store::load(host, cache::SCOREBOARD)?, now: cache::now_ms(host)? })
+    }
+
+    /// One Eastern day of games from the shared session, `day` as YYYY-MM-DD. A miss is fetched
+    /// and kept in the session; a provider failure reads as the degraded empty answer, like
+    /// `scoreboard`, and is not cached.
+    pub fn day<H: Host + ?Sized>(&mut self, host: &H, competition_key: &str, day: &str) -> Result<Answer> {
+        let key = format!("{competition_key}|{day}");
+        if let Some(hit) = self.store.get(&key, self.now) {
+            return Ok(Answer { data: hit.clone(), degraded: false });
+        }
+        let loaded = || -> Result<Value> {
+            let page = espn::fetch_scoreboard(host, &espn::scoreboard_url(competition_key, day)?)?;
+            Ok(Value::Array(espn_games::parse_scoreboard_page(&page, competition_key)?))
+        };
+        match loaded() {
+            Ok(data) => {
+                self.store.put(&key, data.clone(), cache::SCOREBOARD_TTL_MS, self.now);
+                Ok(Answer { data, degraded: false })
+            }
+            Err(_) => Ok(Answer { data: json!([]), degraded: true }),
+        }
+    }
+
+    /// Writes back only when something changed. A failed write loses cache, never the answer.
+    pub fn save<H: Host + ?Sized>(&mut self, host: &H) {
+        self.store.save(host);
+    }
 }
 
 pub fn standings<H: Host + ?Sized>(host: &H, competition_key: &str) -> Result<Answer> {

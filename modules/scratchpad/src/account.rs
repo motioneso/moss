@@ -13,6 +13,7 @@ pub struct Api {
 
 pub fn execute<H: Host + ?Sized>(host: &H, api: Api) -> Result<Value> {
     match api.name.as_str() {
+        "prepareChatAction" => crate::tools::prepare_chat(host, &api.parameters),
         "prepareScratchpadSettings" => crate::tools::prepare_settings(host, &api.parameters),
         "prepareScratchpadAction" => crate::tools::prepare(host, &api.parameters),
         "collectScratchpadExportSection" | "deleteScratchpadAccountData" => {

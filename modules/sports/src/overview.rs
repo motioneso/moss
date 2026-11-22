@@ -45,11 +45,13 @@ fn label_of(key: &str) -> String {
 }
 
 /// Games for every Eastern day in `from..=to`, one cached read per day, deduped by event id.
+/// One store session serves the whole window, so the namespace is loaded and written back once.
 pub fn scoreboard_for_days<H: Host + ?Sized>(host: &H, key: &str, from: &str, to: &str, degraded: &mut bool) -> Result<Vec<Value>> {
+    let mut boards = datasets::Boards::open(host)?;
     let mut seen: Vec<String> = vec![];
     let mut games = vec![];
     for day in eastern::days_inclusive(from, to) {
-        let answer = datasets::scoreboard(host, key, &day)?;
+        let answer = boards.day(host, key, &day)?;
         *degraded |= answer.degraded;
         for game in answer.data.as_array().cloned().unwrap_or_default() {
             let id = game["id"].as_str().unwrap_or_default().to_owned();
@@ -62,6 +64,7 @@ pub fn scoreboard_for_days<H: Host + ?Sized>(host: &H, key: &str, from: &str, to
             games.push(game);
         }
     }
+    boards.save(host);
     Ok(games)
 }
 

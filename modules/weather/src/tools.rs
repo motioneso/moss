@@ -26,10 +26,12 @@ fn set_location<H: Host + ?Sized>(host: &H, query: &str) -> Result<Value> {
     match found.as_slice() {
         [] => Ok(refusal("No weather location matched that place")),
         [only] => {
-            if places::saved_place(host)?.as_ref() != Some(only) {
+            let before = places::saved_place(host)?;
+            if before.as_ref() != Some(only) {
                 places::save_place(host, Some(only))?;
             }
-            Ok(json!({"data": {"status": "saved", "lat": only.lat, "lon": only.lon, "label": only.label}}))
+            Ok(json!({"data": {"status": "saved", "lat": only.lat, "lon": only.lon, "label": only.label,
+                "changed": [{"label":"Weather location","before":before.map(|p| p.label).unwrap_or_else(|| "None".into()),"after":only.label}]}}))
         }
         many => Ok(json!({"data": {"status": "ambiguous", "candidates": candidates(many)}})),
     }
@@ -57,11 +59,32 @@ pub fn handle<H: Host + ?Sized>(host: &H, request: ToolRequest) -> Result<Value>
         "weather.getUnit" => Ok(json!({"data": {"unit": places::unit(host)?}})),
         "weather.setUnit" => match request.parameters["unit"].as_str() {
             Some(unit @ ("metric" | "imperial")) => {
+                let before = places::unit(host)?;
                 places::save_unit(host, unit)?;
-                Ok(json!({"data": {"unit": unit}}))
+                Ok(json!({"data": {"unit": unit, "changed": [{"label":"Weather units","before":before,"after":unit}]}}))
             }
             _ => Ok(refusal("unit must be metric or imperial")),
         },
         _ => Err(moss_module_sdk::Error::new("Unknown Weather tool")),
     }
+}
+
+/// Cards for the person's optional ask-first policy on normal preference changes.
+pub fn prepare_chat<H: Host + ?Sized>(host: &H, input: &Value) -> Result<Value> {
+    let parameters = &input["parameters"];
+    Ok(match input["tool"].as_str() {
+        Some("weather.setUnit") => match parameters["unit"].as_str() {
+            Some(unit @ ("metric" | "imperial")) => json!({"target":"Weather units","fields":[
+                {"label":"Current units","value":places::unit(host)?},
+                {"label":"New units","value":unit}]}),
+            _ => Value::Null,
+        },
+        Some("weather.setLocation") => match parameters["query"].as_str().map(str::trim).filter(|s| !s.is_empty()) {
+            Some(query) => json!({"target":"Weather location","fields":[
+                {"label":"Current location","value":places::saved_place(host)?.map(|p| p.label).unwrap_or_else(|| "None".into())},
+                {"label":"Search for place","value":query}]}),
+            _ => Value::Null,
+        },
+        _ => Value::Null,
+    })
 }

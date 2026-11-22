@@ -1,3 +1,7 @@
+# 0.1.4
+
+- Chat can append without asking by default and shows the text added in a Done row; an explicit ask policy uses the append card.
+
 # 0.1.3
 
 - Moss can read your Scratchpad through the Rust chat runner and signed-in server.

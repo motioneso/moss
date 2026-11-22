@@ -170,9 +170,18 @@ fn tools_share_route_writes_and_get_only_ten_newest_evidence_summaries() {
         json!({"title":"Ship","desiredOutcome":"Done"}),
     );
     let id = created["data"]["id"].as_str().unwrap();
+    let mut saved = created["data"].clone();
+    let receipt = saved.as_object_mut().unwrap().remove("changed").unwrap();
+    assert_eq!(
+        receipt,
+        json!([
+            {"label":"Title","before":"None","after":"Ship"},
+            {"label":"Desired outcome","before":"None","after":"Done"}
+        ])
+    );
     assert_eq!(
         f.route("GET", "/goals/:id", &[("id", id)], Value::Null).1,
-        created["data"]
+        saved
     );
     for n in 0..12 {
         let evidence = tool(
@@ -295,4 +304,26 @@ fn tool_validation_and_errors_do_not_echo_private_input_or_host_failures() {
         )
     );
     assert_eq!(f.calls.borrow().last().unwrap().0, "tools");
+}
+
+#[test]
+fn chat_cards_and_done_fields_use_the_saved_goal_and_proposed_values() {
+    let f = Fake::new();
+    let (_, goal) = create(&f, "Saved goal");
+    let p = json!({"goalId":goal["id"],"title":"Changed title","priority":5});
+    let card: Value = serde_json::from_str(&moss_goals_module::handle(&f,"api",&json!({"name":"prepareChatAction","parameters":{"tool":"goals.update","parameters":p}}).to_string()).unwrap()).unwrap();
+    assert_eq!(card["target"], "Saved goal");
+    assert_eq!(
+        card["fields"],
+        json!([{"label":"Title","value":"Changed title"},{"label":"Priority","value":"5"}])
+    );
+    let result = moss_goals_module::tools::handle(
+        &f,
+        serde_json::from_value(json!({"tool":"goals.update","parameters":p})).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        result["data"]["changed"],
+        json!([{"label":"Title","before":"Saved goal","after":"Changed title"},{"label":"Priority","before":"3","after":"5"}])
+    );
 }

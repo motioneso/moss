@@ -5,12 +5,30 @@ on:
     branches:
       - main
   pull_request:
+  schedule:
+    - cron: "23 8 * * *"
   workflow_dispatch:
     inputs:
       pr_number:
         description: "Pull request number for change detection"
         required: false
         type: string
+
+      rust_tier:
+        description: "Rust tier to verify on this ref (same routing as PR, main, nightly)"
+        type: choice
+        options: [pull_request, push, schedule]
+        default: push
+      live_candidate:
+        description: "Include the nightly Scratchpad live gate in another tier"
+        type: boolean
+        default: false
+
+# Superseded PR commits yield runners; other events get independent groups so
+# even pending main, nightly and manual runs cannot replace one another.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -35,6 +53,7 @@ jobs:
       rust_modules: ${{ steps.scope.outputs.rust_modules }}
       rust_entries: ${{ steps.scope.outputs.rust_entries }}
       host_changed: ${{ steps.scope.outputs.host_changed }}
+      rust_tier: ${{ steps.scope.outputs.rust_tier }}
 
     steps:
       - name: Check out gate matrix definition
@@ -50,6 +69,8 @@ jobs:
           # attacker-controllable on fork PRs.
           GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
+          RUST_TIER: ${{ inputs.rust_tier || github.event_name }}
+          LIVE_CANDIDATE: ${{ inputs.live_candidate || false }}
           PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
           REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
@@ -59,16 +80,21 @@ jobs:
           # Both outputs default to the full gate; any early exit below keeps them false.
           echo "docs_only=false" >> "$GITHUB_OUTPUT"
           echo "rust_only=false" >> "$GITHUB_OUTPUT"
-          echo "host_changed=false" >> "$GITHUB_OUTPUT"
-          # Modules the shadow rust-modules job gates: every module with a package gate.
+          echo "host_changed=true" >> "$GITHUB_OUTPUT"
+          echo "rust_tier=$RUST_TIER" >> "$GITHUB_OUTPUT"
+          host_changed=true
+          # Modules the required rust-modules job gates: every module with a package gate.
           ALL_MODULES='["backtrack","briefings","calendar","commitments","connectors","email","finance","goals","meals","meetings","memory","news","notes","people","scratchpad","sports","tasks","weather","web-research","wellness"]'
           emit_modules() {
             echo "rust_modules=$1" >> "$GITHUB_OUTPUT"
-            echo "rust_entries=$(node scripts/rust-gate-matrix.mjs "$1" "$EVENT_NAME")" >> "$GITHUB_OUTPUT"
+            echo "rust_entries=$(node scripts/rust-gate-matrix.mjs "$1" "$RUST_TIER" "$host_changed" "$LIVE_CANDIDATE")" >> "$GITHUB_OUTPUT"
           }
-          # Unknown file list on a pull request or manual run gates every covered module.
-          # Pushes retain only the measured Memory/News/Connectors kill tier in the helper.
+          # Unknown PR scope conservatively runs all modules and host gates.
+          # Main and nightly always run all modules; nightly also runs every host gate.
           emit_modules "$ALL_MODULES"
+          # Keep main's existing legacy-JS classification below; Rust still runs its
+          # full matrix regardless of the paths. Manual main/nightly proof needs no file list.
+          if [ "$RUST_TIER" != "pull_request" ] && [ "$EVENT_NAME" != "push" ]; then exit 0; fi
           # Push events have no pull request file list, so look up the PR that produced the
           # commit. That PR only covers the whole push when the push is exactly one commit
           # (squash merges), so a longer range, a failed compare or an empty lookup runs the
@@ -102,17 +128,18 @@ jobs:
           fi
           # Touched modules: a path under the module or its SQL, or a change to anything the
           # gates build against (all of rust-spike, crates the host pulls in from modules, the
-          # test harness packages) or this workflow. Those run every covered module.
-          host_re='^(rust-spike/|modules/email/host/|modules/people/src/|packages/db/|package\.json$|pnpm-lock\.yaml$|infra/postgres/migrations/|scripts/(run-gate\.sh|rust-gate-matrix\.mjs)$|\.github/workflows/ci\.yml$)'
+          # test harness packages) or this workflow. Shared changes run the host tier.
+          host_re='^(rust-spike/|modules/email/host/|modules/people/src/|packages/db/|package\.json$|pnpm-lock\.yaml$|infra/postgres/migrations/|scripts/(run-gate\.sh|rust-gate-matrix\.mjs)$|\.github/ci-bin/|\.github/workflows/ci\.yml$)'
           host_changed=false
           if grep -qE "$host_re" files.txt; then host_changed=true; fi
           touched=""
           for m in $(echo "$ALL_MODULES" | jq -r '.[]'); do
-            if [ "$host_changed" = true ] || grep -qE "^(modules/$m/|packages/$m/sql/)" files.txt; then
+            if grep -qE "^(modules/$m/|packages/$m/sql/)" files.txt; then
               touched="$touched $m"
             fi
           done
           rust_modules=$(printf '%s\n' $touched | jq -R . | jq -sc 'map(select(length>0))')
+          if [ "$RUST_TIER" = "push" ]; then rust_modules="$ALL_MODULES"; fi
           echo "host_changed=$host_changed" >> "$GITHUB_OUTPUT"
           emit_modules "$rust_modules"
           echo "Rust module gates: $rust_modules (host changed: $host_changed)"
@@ -127,7 +154,7 @@ jobs:
             echo "rust_only=true" >> "$GITHUB_OUTPUT"
             echo "Rust-only change — the old browser and unit tests are skipped."
           fi
-          # Pushes never skip the other jobs, so docs_only stays false for them.
+          # Main keeps the full legacy gate except its existing Rust-only JS skips.
           if [ "$EVENT_NAME" = "push" ]; then exit 0; fi
           # docs-only == every changed path is under docs/ or is a markdown file.
           non_docs=$(grep -vcE '(^docs/|\.md$)' files.txt || true)
@@ -339,15 +366,13 @@ jobs:
         if: always()
         run: docker compose -f infra/docker-compose.yml down -v
 
-  # Shadow job (rollout step 3 of docs/superpowers/plans/2026-11-18-rust-module-gates-in-ci.md).
-  # Runs every module's package gates through scripts/run-gate.sh, one matrix job per touched
-  # module (per test file for Memory, News and Connectors). All run on a shared-host change.
-  # Not listed in ci-gate's needs, so a red run
-  # here never blocks a merge.
+  # Required module gates for direct module changes; host gates for shared-code PRs.
+  # Main runs all module files and controls; nightly adds all host gates.
   rust-modules:
     name: Rust gate (${{ matrix.module }} / ${{ matrix.suite }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # Playwright currently supports Ubuntu 24.04, not the newer ubuntu-latest image.
+    runs-on: ${{ matrix.module == 'calendar' && matrix.suite == 'server' && 'ubuntu-24.04' || 'ubuntu-latest' }}
+    timeout-minutes: ${{ needs.changes.outputs.rust_tier == 'pull_request' && 60 || 120 }}
     needs: changes
     if: needs.changes.outputs.rust_entries != '[]'
     strategy:
@@ -359,6 +384,8 @@ jobs:
       RUSTUP_HOME: ${{ github.workspace }}/.rust-gate/rustup
       CARGO_TARGET_DIR: ${{ github.workspace }}/.rust-gate/target
       # Keep target folders small enough for a hosted runner disk.
+      RUST_TEST_THREADS: "1"
+      JARVIS_GATE_DIR: ${{ github.workspace }}/.rust-gate/logs
       CARGO_INCREMENTAL: "0"
       CARGO_PROFILE_DEV_DEBUG: "0"
       CARGO_PROFILE_TEST_DEBUG: "0"
@@ -381,6 +408,27 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Make runner port claims available to the host and live suites
+        run: echo "$GITHUB_WORKSPACE/.github/ci-bin" >> "$GITHUB_PATH"
+
+      - name: Install Calendar gate Chromium
+        if: matrix.module == 'calendar' && matrix.suite == 'server'
+        run: |
+          sudo python3 scripts/prepare-browser-apt-mirror.py
+          sudo env "PATH=$PATH" timeout --verbose --signal=TERM --kill-after=15s 5m pnpm exec playwright install-deps chromium
+          timeout --verbose --signal=TERM --kill-after=15s 5m pnpm exec playwright install chromium
+
+      - name: Provision the assembly gate's declared Linux dependencies
+        if: matrix.module == 'host' && matrix.suite == 'module-assembly'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev python3-gi dbus-daemon
+          # The notification fixture imports system GIO bindings. Use the matching
+          # distro Python rather than a runner tool-cache Python with a different ABI.
+          mkdir -p "$RUNNER_TEMP/assembly-bin"
+          ln -s /usr/bin/python3 "$RUNNER_TEMP/assembly-bin/python3"
+          echo "$RUNNER_TEMP/assembly-bin" >> "$GITHUB_PATH"
 
       - name: Disk before
         run: df -h / /tmp
@@ -420,7 +468,7 @@ jobs:
           GATES: ${{ matrix.gates }}
           MEMORY_CONTROLS: ${{ matrix.controls || 'all' }}
           CONNECTORS_CONTROLS: ${{ matrix.controls || 'all' }}
-          EVENT_NAME: ${{ github.event_name }}
+          EVENT_NAME: ${{ needs.changes.outputs.rust_tier }}
         run: |
           set -uo pipefail
           # Per-PR tier (docs/rust-gate-controls.md): skip Connectors' long speed test on PRs.
@@ -446,6 +494,12 @@ jobs:
             echo "GATE_RESULT gate=$gate module=$MODULE entry=$SUITE exit=$rc seconds=$(( $(date +%s) - start ))"
             if [ "$rc" -ne 0 ]; then
               failed=1
+              # A failing Rust test often panics with an embedded server log (80+ lines);
+              # its header and the harness/playwright error then sit above the tail window.
+              # Print those lines separately so the job log always shows the actual cause.
+              echo "::group::Failure context of the $gate log"
+              grep -aEn "panicked at|TimeoutError|Timeout [0-9]+ms exceeded|^Error:|test result: FAILED|^failures:" "$log" | tail -n 30 || true
+              echo "::endgroup::"
               echo "::group::Last lines of the $gate log"
               tail -n 80 "$log"
               echo "::endgroup::"
@@ -666,7 +720,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs:
-      [changes, docs-gate, verify, unit, integration, browser, compose-smoke, prod-compose-smoke]
+      [
+        changes,
+        docs-gate,
+        verify,
+        unit,
+        integration,
+        browser,
+        compose-smoke,
+        prod-compose-smoke,
+        rust-modules
+      ]
     if: always()
 
     steps:
@@ -676,7 +740,7 @@ jobs:
         run: |
           set -euo pipefail
           failed=""
-          for job in changes docs-gate verify unit integration browser compose-smoke prod-compose-smoke; do
+          for job in changes docs-gate verify unit integration browser compose-smoke prod-compose-smoke rust-modules; do
             result=$(echo "$NEEDS_JSON" | jq -r --arg job "$job" '.[$job].result')
             echo "$job: $result"
             case "$result" in

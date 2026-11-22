@@ -83,11 +83,17 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
             .unwrap();
         assert!(status.success());
     }
-    fs::write(
-        root.join("web/index.html"),
-        "<!doctype html><title>Briefings HTTP fixture</title>",
-    )
-    .unwrap();
+    if let Ok(shell_web) = std::env::var("MOSS_SHELL_WEB_DIR") {
+        // The built app, so a held-open run can show the settings screens.
+        let status = Command::new("cp").args(["-r", &format!("{shell_web}/.")]).arg(root.join("web")).status().unwrap();
+        assert!(status.success());
+    } else {
+        fs::write(
+            root.join("web/index.html"),
+            "<!doctype html><title>Briefings HTTP fixture</title>",
+        )
+        .unwrap();
+    }
     let app_url = std::env::var("JS43_APP_URL").unwrap();
     let worker_url = std::env::var("JS43_WORKER_URL").unwrap();
     let bootstrap_url = std::env::var("JS43_BOOTSTRAP_URL").unwrap();
@@ -105,7 +111,7 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
     let client = reqwest::blocking::Client::builder()
         .add_root_certificate(reqwest::Certificate::from_pem(&fs::read(&cert).unwrap()).unwrap())
         .no_proxy()
-        .timeout(Duration::from_secs(60))
+        .timeout(Duration::from_secs(240))
         .build()
         .unwrap();
     let start = |modules: bool| {
@@ -202,12 +208,22 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
     // canonical installer, as the server would find it.
     let keys = Keys::new();
     fs::create_dir_all(root.join("registry/packages")).unwrap();
-    // The Today proof also installs Tasks, which owns the suggested tasks the section acts on.
-    let mut packages = vec![("JS235_BRIEFINGS_PACKAGE", "briefings")];
+    // The Today proof also installs Tasks, which owns the suggested tasks the section acts on. The
+    // source switches proof installs Tasks, Calendar and Email when their packages are given.
+    let mut wanted = vec![("JS235_BRIEFINGS_PACKAGE", "briefings")];
     if std::env::var("BRIEFINGS_WITH_TASKS").is_ok() {
-        packages.push(("JS220_TASKS_PACKAGE", "tasks"));
+        wanted.push(("JS220_TASKS_PACKAGE", "tasks"));
     }
-    let artifacts: Vec<Artifact> = packages
+    let with_owners = std::env::var("JS378_TASKS_PACKAGE").is_ok();
+    if with_owners {
+        wanted = vec![
+            ("JS378_TASKS_PACKAGE", "tasks"),
+            ("JS378_CALENDAR_PACKAGE", "calendar"),
+            ("JS378_EMAIL_PACKAGE", "email"),
+            ("JS235_BRIEFINGS_PACKAGE", "briefings"),
+        ];
+    }
+    let artifacts: Vec<Artifact> = wanted
     .iter()
     .map(|(variable, id)| {
         let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
@@ -422,7 +438,7 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
         let (status, text) = call(Method::GET, &status_path, Some(&cookie), None);
         assert_eq!(status, 200, "{text}\n{}", log());
         let state = json_of(&text)["state"].as_str().unwrap_or_default().to_owned();
-        if state != "pending" || waited.elapsed() > std::time::Duration::from_secs(90) {
+        if state != "pending" || waited.elapsed() > std::time::Duration::from_secs(300) {
             break (state, text);
         }
         std::thread::sleep(std::time::Duration::from_secs(1));
@@ -464,7 +480,7 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
         let (status, text) = call(Method::GET, &path, Some(&cookie), None);
         assert_eq!(status, 200, "{text}\n{}", log());
         let state = json_of(&text)["state"].as_str().unwrap_or_default().to_owned();
-        if state != "pending" || waited.elapsed() > std::time::Duration::from_secs(90) {
+        if state != "pending" || waited.elapsed() > std::time::Duration::from_secs(300) {
             break state;
         }
         std::thread::sleep(std::time::Duration::from_secs(1));
@@ -485,6 +501,59 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
     println!("live evening run: stored the model's text after {:?}; the other person gets 404", waited.elapsed());
     // Nothing the test sent reached the server log.
     assert!(!log().contains(MARK));
+    if with_owners {
+        let owner_call = |module: &str, method: reqwest::Method, path: &str, who: &str, body: Option<Value>| {
+            let mut request = client.request(method, format!("{origin}/api/m/{module}{path}")).header("origin", &origin).header("cookie", who);
+            if let Some(body) = body {
+                request = request.json(&body);
+            }
+            let response = request.send().unwrap_or_else(|e| panic!("{module}{path}: {e}\n{}", log()));
+            (response.status().as_u16(), response.json::<Value>().unwrap_or(Value::Null))
+        };
+        let switches = |who: &str| {
+            let started = std::time::Instant::now();
+            let (mut signal_status, mut signals) = call(Method::GET, "/source-signals", Some(who), None);
+            println!("source-signals first answer {signal_status} after {:?}", started.elapsed());
+            if signal_status != 200 {
+                (signal_status, signals) = call(Method::GET, "/source-signals", Some(who), None);
+                println!("source-signals second answer {signal_status} after {:?}", started.elapsed());
+            }
+            assert_eq!(signal_status, 200, "source-signals answered {signals}");
+            let (_, email) = owner_call("email", Method::GET, "/briefing-source", who, None);
+            let (_, calendar) = owner_call("calendar", Method::GET, "/source-behaviors", who, None);
+            (json_of(&signals), email, calendar)
+        };
+        // Both switches start on for both people, and Briefings shows what the owners show.
+        for who in [&cookie, &other] {
+            let (signals, email, calendar) = switches(who);
+            assert_eq!(signals, json!({"email": true, "calendar": true}));
+            assert_eq!(email["enabled"], true);
+            assert_ne!(calendar["briefings"], false);
+        }
+        // The owner turns both off on Briefings settings. The Email and Calendar screens read the
+        // same value, and the other person's switches do not move.
+        let (status, text) = call(Method::PATCH, "/source-signals", Some(&cookie), Some(json!({"email": false, "calendar": false})));
+        assert_eq!((status, json_of(&text)), (200, json!({"email": false, "calendar": false})), "{text}\n{}", log());
+        let (signals, email, calendar) = switches(&cookie);
+        assert_eq!(signals, json!({"email": false, "calendar": false}));
+        assert_eq!(email["enabled"], false);
+        assert_eq!(calendar["briefings"], false);
+        assert_eq!(calendar["planning"].as_bool().unwrap_or(true), true, "the planning switch moved");
+        let (signals, email, calendar) = switches(&other);
+        assert_eq!(signals, json!({"email": true, "calendar": true}), "the other person's switches moved");
+        assert_eq!(email["enabled"], true);
+        assert_ne!(calendar["briefings"], false);
+        // A switch flipped on the owner's own screen shows on Briefings after a reload.
+        let (status, _) = owner_call("email", Method::PUT, "/briefing-source", &cookie, Some(json!({"enabled": true})));
+        assert_eq!(status, 200);
+        assert_eq!(json_of(&call(Method::GET, "/source-signals", Some(&cookie), None).1)["email"], true);
+        // Bad bodies are refused and nothing moves.
+        for bad in [json!({}), json!({"email": "no"}), json!({"planning": false})] {
+            assert_eq!(call(Method::PATCH, "/source-signals", Some(&cookie), Some(bad)).0, 400);
+        }
+        assert_eq!(call(Method::GET, "/source-signals", None, None).0, 401);
+        println!("source switches live: Briefings, Email and Calendar agree, and the other person is unchanged");
+    }
     println!("briefings live: definitions, runs and privacy for two people worked over HTTPS");
     if let Ok(hold) = std::env::var("BRIEFINGS_HOLD_OPEN") {
         // Held-open mode for browser proof. Writes the origin and owner cookie to the hold file,

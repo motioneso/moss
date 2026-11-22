@@ -4,955 +4,459 @@
   "name": "Finance",
   "description": "Private money accounts and transactions. You can list your accounts, add manual accounts and transactions, connect a bank and pull its balances and transactions every six hours or on demand, sort and review transactions, set rules, split, add notes, import a CSV bank file, and plan a monthly budget with drafts. It also plans bills, sets targets, shares a flexible pool and reserves money for card payments. You can share a bank account with the household, read spending and net worth reports, export your history, review the activity list and undo a change, and archive an empty category. The Finance screen shows Start, the budget, transactions, accounts, reports and upcoming bills, and a settings page opens from the header cog.",
   "publisher": "Moss",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "callLimitMs": 30000,
   "abi": "moss:module@1",
   "capabilities": [
-    {
-      "port": "db",
-      "operations": ["query"],
-      "resources": [
-        "app.finance_accounts",
-        "app.finance_transactions",
-        "app.finance_activity",
-        "app.finance_items",
-        "app.finance_categories",
-        "app.finance_budget_policy",
-        "app.finance_merchant_rules",
-        "app.finance_imports",
-        "app.finance_bank_links",
-        "app.finance_link_sessions",
-        "app.finance_balance_snapshots",
-        "app.finance_budget_assignments",
-        "app.finance_budget_drafts",
-        "app.finance_budget_draft_lines",
-        "app.finance_transfer_corrections",
-        "app.finance_shared_accounts",
-        "app.finance_shared_transactions",
-        "app.finance_targets",
-        "app.finance_bill_plans",
-        "app.finance_bill_occurrences",
-        "app.finance_bill_adjustments",
-        "app.finance_bill_suggestion_dismissals",
-        "app.finance_flex_policies",
-        "app.finance_card_policies",
-        "app.finance_card_assignments"
-      ]
-    },
-    {
-      "port": "context",
-      "operations": ["local-date", "read", "uuid"],
-      "resources": ["account", "call", "new"]
-    },
-    {
-      "port": "tools",
-      "operations": ["run"],
-      "resources": [
-        "finance.manual.account-create",
-        "finance.manual.entry-create",
-        "finance.transactions.categorize",
-        "finance.transactions.categorize-new",
-        "finance.transactions.review-apply",
-        "finance.transactions.bulk-categorize",
-        "finance.transactions.bulk-confirm",
-        "finance.transactions.notes.save",
-        "finance.transactions.splits",
-        "finance.rule.set",
-        "finance.import.apply",
-        "finance.connect.start",
-        "finance.connect.poll",
-        "finance.sync.run-now",
-        "finance.budget.configure",
-        "finance.budget.assign",
-        "finance.budget.move",
-        "finance.budget.apply",
-        "finance.budget.draft.build",
-        "finance.budget.draft.update",
-        "finance.budget.draft.start",
-        "finance.account.set-shared",
-        "finance.category.archive",
-        "finance.activity.undo",
-        "finance.bill.create",
-        "finance.bill.decide",
-        "finance.bill.stop",
-        "finance.bill.clear",
-        "finance.bill.adjust",
-        "finance.bill.adjust-reset",
-        "finance.bills.suggestions.dismiss",
-        "finance.bill.entry-record",
-        "finance.target.set",
-        "finance.target.remove",
-        "finance.targets.fund",
-        "finance.flex.configure",
-        "finance.flex.assign",
-        "finance.card-reserve.save"
-      ]
-    },
-    {
-      "port": "credentials",
-      "operations": ["status", "request", "exchange", "forget"],
-      "resources": ["sandbox.plaid.com", "production.plaid.com"]
-    },
-    {
-      "port": "jobs",
-      "operations": ["schedule", "enqueue-after-commit", "enqueue-options"],
-      "resources": ["finance.sync-run", "finance.connect-poll"]
-    },
-    {
-      "port": "action-policy",
-      "operations": ["route-read"],
-      "resources": ["sorting", "sorting_new"]
-    }
+    {"port": "db", "operations": ["query"], "resources": ["app.finance_accounts", "app.finance_transactions", "app.finance_activity", "app.finance_items", "app.finance_categories", "app.finance_budget_policy", "app.finance_merchant_rules", "app.finance_imports", "app.finance_bank_links", "app.finance_link_sessions", "app.finance_balance_snapshots", "app.finance_budget_assignments", "app.finance_budget_drafts", "app.finance_budget_draft_lines", "app.finance_transfer_corrections", "app.finance_shared_accounts", "app.finance_shared_transactions", "app.finance_targets", "app.finance_bill_plans", "app.finance_bill_occurrences", "app.finance_bill_adjustments", "app.finance_bill_suggestion_dismissals", "app.finance_flex_policies", "app.finance_card_policies", "app.finance_card_assignments"]},
+    {"port": "context", "operations": ["local-date", "read", "uuid"], "resources": ["account", "call", "new"]},
+    {"port": "tools", "operations": ["run"], "resources": ["finance.manual.account-create", "finance.manual.entry-create", "finance.transactions.categorize", "finance.transactions.categorize-new", "finance.transactions.review-apply", "finance.transactions.bulk-categorize", "finance.transactions.bulk-confirm", "finance.transactions.notes.save", "finance.transactions.splits", "finance.rule.set", "finance.import.apply", "finance.connect.start", "finance.connect.poll", "finance.sync.run-now", "finance.budget.configure", "finance.budget.assign", "finance.budget.move", "finance.budget.apply", "finance.budget.draft.build", "finance.budget.draft.update", "finance.budget.draft.start", "finance.account.set-shared", "finance.category.archive", "finance.activity.undo", "finance.bill.create", "finance.bill.decide", "finance.bill.stop", "finance.bill.clear", "finance.bill.adjust", "finance.bill.adjust-reset", "finance.bills.suggestions.dismiss", "finance.bill.entry-record", "finance.target.set", "finance.target.remove", "finance.targets.fund", "finance.flex.configure", "finance.flex.assign", "finance.card-reserve.save"]},
+    {"port": "credentials", "operations": ["status", "request", "exchange", "forget"], "resources": ["sandbox.plaid.com", "production.plaid.com"]},
+    {"port": "jobs", "operations": ["schedule", "enqueue-after-commit", "enqueue-options"], "resources": ["finance.sync-run", "finance.connect-poll"]},
+    {"port": "action-policy", "operations": ["route-read"], "resources": ["sorting", "sorting_new"]}
   ],
   "database": {
-    "migrations": [
-      "sql/0001_create_finance_items.sql",
-      "sql/0002_create_finance_accounts.sql",
-      "sql/0003_index_finance_accounts_item.sql",
-      "sql/0004_create_finance_transactions.sql",
-      "sql/0005_index_finance_transactions_account_date.sql",
-      "sql/0006_index_finance_transactions_date.sql",
-      "sql/0007_create_finance_balance_snapshots.sql",
-      "sql/0008_create_finance_budget_assignments.sql",
-      "sql/0009_add_finance_items_last_error_detail.sql",
-      "sql/0010_create_finance_categories.sql",
-      "sql/0011_add_finance_transactions_review.sql",
-      "sql/0012_index_finance_transactions_review.sql",
-      "sql/0013_create_finance_activity.sql",
-      "sql/0014_index_finance_activity_at.sql",
-      "sql/0015_add_finance_items_institution_name.sql",
-      "sql/0016_flag_uncategorized_finance_transactions.sql",
-      "sql/0017_create_finance_budget_drafts.sql",
-      "sql/0018_create_finance_budget_draft_lines.sql",
-      "sql/0019_add_finance_transaction_splits.sql",
-      "sql/0020_add_finance_manual_ledger.sql",
-      "sql/0021_add_finance_manual_entries.sql",
-      "sql/0022_add_finance_statement_baseline.sql",
-      "sql/0023_create_finance_reconciliations.sql",
-      "sql/0024_create_finance_imports.sql",
-      "sql/0025_create_finance_budget_policy.sql",
-      "sql/0026_add_finance_taxonomy_cutover.sql",
-      "sql/0027_create_finance_targets.sql",
-      "sql/0028_create_finance_bill_plans.sql",
-      "sql/0029_create_finance_bill_occurrences.sql",
-      "sql/0030_create_finance_flex_policies.sql",
-      "sql/0031_create_finance_manual_transfers.sql",
-      "sql/0032_add_finance_transfer_legs.sql",
-      "sql/0033_create_finance_merchant_rules.sql",
-      "sql/0034_create_finance_bill_adjustments.sql",
-      "sql/0035_index_finance_bill_adjustments.sql",
-      "sql/0036_create_finance_transfer_corrections.sql",
-      "sql/0037_add_finance_weekly_targets.sql",
-      "sql/0038_add_finance_refill_targets.sql",
-      "sql/0039_create_finance_provider_handoffs.sql",
-      "sql/0040_create_finance_card_policies.sql",
-      "sql/0041_create_finance_card_assignments.sql",
-      "sql/0042_create_finance_bill_suggestion_dismissals.sql",
-      "sql/0368_finance_bank_links.sql",
-      "sql/0369_finance_link_sessions.sql",
-      "sql/0371_finance_shared_accounts.sql",
-      "sql/0372_finance_shared_transactions.sql"
-    ],
-    "ownedTables": [
-      "app.finance_accounts",
-      "app.finance_activity",
-      "app.finance_balance_snapshots",
-      "app.finance_bill_adjustments",
-      "app.finance_bill_occurrences",
-      "app.finance_bill_plans",
-      "app.finance_bill_suggestion_dismissals",
-      "app.finance_budget_assignments",
-      "app.finance_budget_draft_lines",
-      "app.finance_budget_drafts",
-      "app.finance_budget_policy",
-      "app.finance_card_assignments",
-      "app.finance_card_policies",
-      "app.finance_categories",
-      "app.finance_flex_policies",
-      "app.finance_imports",
-      "app.finance_items",
-      "app.finance_manual_transfers",
-      "app.finance_merchant_rules",
-      "app.finance_provider_handoffs",
-      "app.finance_reconciliations",
-      "app.finance_targets",
-      "app.finance_transactions",
-      "app.finance_transfer_corrections",
-      "app.finance_bank_links",
-      "app.finance_link_sessions",
-      "app.finance_shared_accounts",
-      "app.finance_shared_transactions"
-    ],
+    "migrations": ["sql/0001_create_finance_items.sql", "sql/0002_create_finance_accounts.sql", "sql/0003_index_finance_accounts_item.sql", "sql/0004_create_finance_transactions.sql", "sql/0005_index_finance_transactions_account_date.sql", "sql/0006_index_finance_transactions_date.sql", "sql/0007_create_finance_balance_snapshots.sql", "sql/0008_create_finance_budget_assignments.sql", "sql/0009_add_finance_items_last_error_detail.sql", "sql/0010_create_finance_categories.sql", "sql/0011_add_finance_transactions_review.sql", "sql/0012_index_finance_transactions_review.sql", "sql/0013_create_finance_activity.sql", "sql/0014_index_finance_activity_at.sql", "sql/0015_add_finance_items_institution_name.sql", "sql/0016_flag_uncategorized_finance_transactions.sql", "sql/0017_create_finance_budget_drafts.sql", "sql/0018_create_finance_budget_draft_lines.sql", "sql/0019_add_finance_transaction_splits.sql", "sql/0020_add_finance_manual_ledger.sql", "sql/0021_add_finance_manual_entries.sql", "sql/0022_add_finance_statement_baseline.sql", "sql/0023_create_finance_reconciliations.sql", "sql/0024_create_finance_imports.sql", "sql/0025_create_finance_budget_policy.sql", "sql/0026_add_finance_taxonomy_cutover.sql", "sql/0027_create_finance_targets.sql", "sql/0028_create_finance_bill_plans.sql", "sql/0029_create_finance_bill_occurrences.sql", "sql/0030_create_finance_flex_policies.sql", "sql/0031_create_finance_manual_transfers.sql", "sql/0032_add_finance_transfer_legs.sql", "sql/0033_create_finance_merchant_rules.sql", "sql/0034_create_finance_bill_adjustments.sql", "sql/0035_index_finance_bill_adjustments.sql", "sql/0036_create_finance_transfer_corrections.sql", "sql/0037_add_finance_weekly_targets.sql", "sql/0038_add_finance_refill_targets.sql", "sql/0039_create_finance_provider_handoffs.sql", "sql/0040_create_finance_card_policies.sql", "sql/0041_create_finance_card_assignments.sql", "sql/0042_create_finance_bill_suggestion_dismissals.sql", "sql/0368_finance_bank_links.sql", "sql/0369_finance_link_sessions.sql", "sql/0371_finance_shared_accounts.sql", "sql/0372_finance_shared_transactions.sql"],
+    "ownedTables": ["app.finance_accounts", "app.finance_activity", "app.finance_balance_snapshots", "app.finance_bill_adjustments", "app.finance_bill_occurrences", "app.finance_bill_plans", "app.finance_bill_suggestion_dismissals", "app.finance_budget_assignments", "app.finance_budget_draft_lines", "app.finance_budget_drafts", "app.finance_budget_policy", "app.finance_card_assignments", "app.finance_card_policies", "app.finance_categories", "app.finance_flex_policies", "app.finance_imports", "app.finance_items", "app.finance_manual_transfers", "app.finance_merchant_rules", "app.finance_provider_handoffs", "app.finance_reconciliations", "app.finance_targets", "app.finance_transactions", "app.finance_transfer_corrections", "app.finance_bank_links", "app.finance_link_sessions", "app.finance_shared_accounts", "app.finance_shared_transactions"],
     "ledger": "module-legacy",
-    "access": {
-      "app.finance_accounts": {
-        "access": "owner-only"
-      },
-      "app.finance_activity": {
-        "access": "owner-only"
-      },
-      "app.finance_balance_snapshots": {
-        "access": "owner-only"
-      },
-      "app.finance_bill_adjustments": {
-        "access": "owner-only"
-      },
-      "app.finance_bill_occurrences": {
-        "access": "owner-only"
-      },
-      "app.finance_bill_plans": {
-        "access": "owner-only"
-      },
-      "app.finance_bill_suggestion_dismissals": {
-        "access": "owner-only"
-      },
-      "app.finance_budget_assignments": {
-        "access": "owner-only"
-      },
-      "app.finance_budget_draft_lines": {
-        "access": "owner-only"
-      },
-      "app.finance_budget_drafts": {
-        "access": "owner-only"
-      },
-      "app.finance_budget_policy": {
-        "access": "owner-only"
-      },
-      "app.finance_card_assignments": {
-        "access": "owner-only"
-      },
-      "app.finance_card_policies": {
-        "access": "owner-only"
-      },
-      "app.finance_categories": {
-        "access": "owner-only"
-      },
-      "app.finance_flex_policies": {
-        "access": "owner-only"
-      },
-      "app.finance_imports": {
-        "access": "owner-only"
-      },
-      "app.finance_items": {
-        "access": "owner-only"
-      },
-      "app.finance_manual_transfers": {
-        "access": "owner-only"
-      },
-      "app.finance_merchant_rules": {
-        "access": "owner-only"
-      },
-      "app.finance_provider_handoffs": {
-        "access": "owner-only"
-      },
-      "app.finance_reconciliations": {
-        "access": "owner-only"
-      },
-      "app.finance_targets": {
-        "access": "owner-only"
-      },
-      "app.finance_transactions": {
-        "access": "owner-only"
-      },
-      "app.finance_transfer_corrections": {
-        "access": "owner-only"
-      },
-      "app.finance_bank_links": {
-        "access": "owner-only"
-      },
-      "app.finance_link_sessions": {
-        "access": "owner-only"
-      },
-      "app.finance_shared_accounts": {
-        "access": "household-read"
-      },
-      "app.finance_shared_transactions": {
-        "access": "household-read"
-      }
-    }
+    "access": {"app.finance_accounts": {"access": "owner-only"}, "app.finance_activity": {"access": "owner-only"}, "app.finance_balance_snapshots": {"access": "owner-only"}, "app.finance_bill_adjustments": {"access": "owner-only"}, "app.finance_bill_occurrences": {"access": "owner-only"}, "app.finance_bill_plans": {"access": "owner-only"}, "app.finance_bill_suggestion_dismissals": {"access": "owner-only"}, "app.finance_budget_assignments": {"access": "owner-only"}, "app.finance_budget_draft_lines": {"access": "owner-only"}, "app.finance_budget_drafts": {"access": "owner-only"}, "app.finance_budget_policy": {"access": "owner-only"}, "app.finance_card_assignments": {"access": "owner-only"}, "app.finance_card_policies": {"access": "owner-only"}, "app.finance_categories": {"access": "owner-only"}, "app.finance_flex_policies": {"access": "owner-only"}, "app.finance_imports": {"access": "owner-only"}, "app.finance_items": {"access": "owner-only"}, "app.finance_manual_transfers": {"access": "owner-only"}, "app.finance_merchant_rules": {"access": "owner-only"}, "app.finance_provider_handoffs": {"access": "owner-only"}, "app.finance_reconciliations": {"access": "owner-only"}, "app.finance_targets": {"access": "owner-only"}, "app.finance_transactions": {"access": "owner-only"}, "app.finance_transfer_corrections": {"access": "owner-only"}, "app.finance_bank_links": {"access": "owner-only"}, "app.finance_link_sessions": {"access": "owner-only"}, "app.finance_shared_accounts": {"access": "household-read"}, "app.finance_shared_transactions": {"access": "household-read"}}
   },
   "routes": [
-    {
-      "method": "GET",
-      "path": "/finance/accounts",
-      "signIn": true
-    },
-    {
-      "method": "GET",
-      "path": "/finance/manual/context",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/manual/accounts",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/manual/entries",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/manual/account-create",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/manual/entry-create",
-      "signIn": true
-    },
-    {
-      "method": "GET",
-      "path": "/finance/transactions",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/transactions/category",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/transactions/review",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/transactions/bulk-categorize",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/transactions/bulk-confirm",
-      "signIn": true
-    },
-    {
-      "method": "GET",
-      "path": "/finance/transactions/notes",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/transactions/notes",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/transactions/splits",
-      "signIn": true
-    },
-    {
-      "method": "GET",
-      "path": "/finance/rules",
-      "signIn": true
-    },
-    {
-      "method": "GET",
-      "path": "/finance/rules/preview",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/rules",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/categories",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/import/parse",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/import/preview",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/import/apply",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/sorting/run",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/transactions/categorize",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/transactions/categorize-new",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/transactions/review",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/transactions/bulk-categorize",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/transactions/bulk-confirm",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/transactions/notes",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/transactions/splits",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/rules/set",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/import/apply",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/connect/start",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/connect/poll",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/sync/run-now",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/connect/start",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/connect/poll",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/sync/run-now",
-      "signIn": true
-    },
-    {
-      "method": "GET",
-      "path": "/finance/budget/status",
-      "signIn": true
-    },
-    {
-      "method": "GET",
-      "path": "/finance/budget/draft",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/budget/configure",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/budget/assign",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/budget/move",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/budget/apply",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/budget/draft/build",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/budget/draft/update",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/budget/draft/start",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/budget/configure",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/budget/assign",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/budget/move",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/budget/apply",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/budget/draft/build",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/budget/draft/update",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/budget/draft/start",
-      "signIn": true
-    },
-    { "method": "GET", "path": "/finance/transactions/export", "signIn": true },
-    { "method": "GET", "path": "/finance/reports/spending", "signIn": true },
-    { "method": "GET", "path": "/finance/reports/net-worth", "signIn": true },
-    { "method": "GET", "path": "/finance/reports/transactions", "signIn": true },
-    { "method": "GET", "path": "/finance/setup/status", "signIn": true },
-    { "method": "GET", "path": "/finance/activity", "signIn": true },
-    { "method": "POST", "path": "/finance/activity/undo", "signIn": true },
-    { "method": "POST", "path": "/finance/accounts/shared", "signIn": true },
-    { "method": "POST", "path": "/finance/categories/archive", "signIn": true },
-    { "method": "POST", "path": "/finance/chat/accounts/set-shared", "signIn": true },
-    { "method": "POST", "path": "/finance/chat/categories/archive", "signIn": true },
-    { "method": "POST", "path": "/finance/chat/activity/undo", "signIn": true },
-    {
-      "method": "GET",
-      "path": "/finance/bills",
-      "signIn": true
-    },
-    {
-      "method": "GET",
-      "path": "/finance/bills/suggestions",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/bills/entry-preview",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/flex/preview",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/cards/preview",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/bills",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/bills",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/bills/decide",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/bills/decide",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/bills/stop",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/bills/stop",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/bills/clear",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/bills/clear",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/bills/adjust",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/bills/adjust",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/bills/adjust-reset",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/bills/adjust-reset",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/bills/suggestions/dismiss",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/bills/suggestions/dismiss",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/bills/entry-record",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/bills/entry-record",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/targets",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/targets",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/targets/remove",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/targets/remove",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/targets/fund",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/targets/fund",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/flex/configure",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/flex/configure",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/flex/assign",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/flex/assign",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/cards/save",
-      "signIn": true
-    },
-    {
-      "method": "POST",
-      "path": "/finance/chat/cards/save",
-      "signIn": true
-    }
+    {"method": "GET", "path": "/finance/accounts", "signIn": true},
+    {"method": "GET", "path": "/finance/manual/context", "signIn": true},
+    {"method": "POST", "path": "/finance/manual/accounts", "signIn": true},
+    {"method": "POST", "path": "/finance/manual/entries", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/manual/account-create", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/manual/entry-create", "signIn": true},
+    {"method": "GET", "path": "/finance/transactions", "signIn": true},
+    {"method": "POST", "path": "/finance/transactions/category", "signIn": true},
+    {"method": "POST", "path": "/finance/transactions/review", "signIn": true},
+    {"method": "POST", "path": "/finance/transactions/bulk-categorize", "signIn": true},
+    {"method": "POST", "path": "/finance/transactions/bulk-confirm", "signIn": true},
+    {"method": "GET", "path": "/finance/transactions/notes", "signIn": true},
+    {"method": "POST", "path": "/finance/transactions/notes", "signIn": true},
+    {"method": "POST", "path": "/finance/transactions/splits", "signIn": true},
+    {"method": "GET", "path": "/finance/rules", "signIn": true},
+    {"method": "GET", "path": "/finance/rules/preview", "signIn": true},
+    {"method": "POST", "path": "/finance/rules", "signIn": true},
+    {"method": "POST", "path": "/finance/categories", "signIn": true},
+    {"method": "POST", "path": "/finance/import/parse", "signIn": true},
+    {"method": "POST", "path": "/finance/import/preview", "signIn": true},
+    {"method": "POST", "path": "/finance/import/apply", "signIn": true},
+    {"method": "POST", "path": "/finance/sorting/run", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/transactions/categorize", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/transactions/categorize-new", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/transactions/review", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/transactions/bulk-categorize", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/transactions/bulk-confirm", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/transactions/notes", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/transactions/splits", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/rules/set", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/import/apply", "signIn": true},
+    {"method": "POST", "path": "/finance/connect/start", "signIn": true},
+    {"method": "POST", "path": "/finance/connect/poll", "signIn": true},
+    {"method": "POST", "path": "/finance/sync/run-now", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/connect/start", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/connect/poll", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/sync/run-now", "signIn": true},
+    {"method": "GET", "path": "/finance/budget/status", "signIn": true},
+    {"method": "GET", "path": "/finance/budget/draft", "signIn": true},
+    {"method": "POST", "path": "/finance/budget/configure", "signIn": true},
+    {"method": "POST", "path": "/finance/budget/assign", "signIn": true},
+    {"method": "POST", "path": "/finance/budget/move", "signIn": true},
+    {"method": "POST", "path": "/finance/budget/apply", "signIn": true},
+    {"method": "POST", "path": "/finance/budget/draft/build", "signIn": true},
+    {"method": "POST", "path": "/finance/budget/draft/update", "signIn": true},
+    {"method": "POST", "path": "/finance/budget/draft/start", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/budget/configure", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/budget/assign", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/budget/move", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/budget/apply", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/budget/draft/build", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/budget/draft/update", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/budget/draft/start", "signIn": true},
+    {"method": "GET", "path": "/finance/transactions/export", "signIn": true},
+    {"method": "GET", "path": "/finance/reports/spending", "signIn": true},
+    {"method": "GET", "path": "/finance/reports/net-worth", "signIn": true},
+    {"method": "GET", "path": "/finance/reports/transactions", "signIn": true},
+    {"method": "GET", "path": "/finance/setup/status", "signIn": true},
+    {"method": "GET", "path": "/finance/activity", "signIn": true},
+    {"method": "POST", "path": "/finance/activity/undo", "signIn": true},
+    {"method": "POST", "path": "/finance/accounts/shared", "signIn": true},
+    {"method": "POST", "path": "/finance/categories/archive", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/accounts/set-shared", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/categories/archive", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/activity/undo", "signIn": true},
+    {"method": "GET", "path": "/finance/bills", "signIn": true},
+    {"method": "GET", "path": "/finance/bills/suggestions", "signIn": true},
+    {"method": "POST", "path": "/finance/bills/entry-preview", "signIn": true},
+    {"method": "POST", "path": "/finance/flex/preview", "signIn": true},
+    {"method": "POST", "path": "/finance/cards/preview", "signIn": true},
+    {"method": "POST", "path": "/finance/bills", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/bills", "signIn": true},
+    {"method": "POST", "path": "/finance/bills/decide", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/bills/decide", "signIn": true},
+    {"method": "POST", "path": "/finance/bills/stop", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/bills/stop", "signIn": true},
+    {"method": "POST", "path": "/finance/bills/clear", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/bills/clear", "signIn": true},
+    {"method": "POST", "path": "/finance/bills/adjust", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/bills/adjust", "signIn": true},
+    {"method": "POST", "path": "/finance/bills/adjust-reset", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/bills/adjust-reset", "signIn": true},
+    {"method": "POST", "path": "/finance/bills/suggestions/dismiss", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/bills/suggestions/dismiss", "signIn": true},
+    {"method": "POST", "path": "/finance/bills/entry-record", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/bills/entry-record", "signIn": true},
+    {"method": "POST", "path": "/finance/targets", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/targets", "signIn": true},
+    {"method": "POST", "path": "/finance/targets/remove", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/targets/remove", "signIn": true},
+    {"method": "POST", "path": "/finance/targets/fund", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/targets/fund", "signIn": true},
+    {"method": "POST", "path": "/finance/flex/configure", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/flex/configure", "signIn": true},
+    {"method": "POST", "path": "/finance/flex/assign", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/flex/assign", "signIn": true},
+    {"method": "POST", "path": "/finance/cards/save", "signIn": true},
+    {"method": "POST", "path": "/finance/chat/cards/save", "signIn": true}
   ],
   "tools": {
     "finance.accounts.list": {
       "description": "List your accounts, currencies, current balances and bank sync status. Manual account balances come from the ledger. Account names are outside content.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {"type": "object", "properties": {}}
     },
     "finance.manual.context": {
       "description": "Read manual entry setup. Manual records only; no bank money is moved.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {"type": "object", "properties": {}}
     },
     "finance.manual.account-create": {
       "description": "Add a manual account. Manual records only; no bank money is moved.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"operationId": {"type": "string", "description": "New lowercase UUID v4 for this operation; reuse only to retry the same operation."}, "name": {"type": "string", "maxLength": 320, "description": "Display name; treated as outside content."}, "accountType": {"type": "string", "enum": ["checking", "savings", "cash", "credit", "loan", "asset"], "description": "Account type."}, "isoCurrency": {"type": "string", "description": "Supported two-decimal ISO currency code, such as USD."}, "openingDate": {"type": "string", "description": "Opening date in YYYY-MM-DD format; cannot be in the future."}, "openingBalanceCents": {"type": "integer", "minimum": -9007199254740991, "maximum": 9007199254740991, "description": "Opening balance in whole cents."}}, "required": ["operationId", "name", "accountType", "isoCurrency", "openingDate", "openingBalanceCents"], "examples": [{"operationId": "11111111-1111-4111-8111-111111111111", "name": "Everyday", "accountType": "checking", "isoCurrency": "USD", "openingDate": "2026-11-01", "openingBalanceCents": 100000}]},
+      "card": "prepareChatAction"
     },
     "finance.manual.entry-create": {
       "description": "Add a manual transaction. Manual records only; no bank money is moved.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"operationId": {"type": "string", "description": "New lowercase UUID v4 for this operation; reuse only to retry the same operation."}, "accountId": {"type": "string", "description": "Account identifier returned by Finance reads."}, "name": {"type": "string", "maxLength": 640, "description": "Display name; treated as outside content."}, "date": {"type": "string", "description": "Posting date in YYYY-MM-DD format."}, "amountCents": {"type": "integer", "minimum": -9007199254740991, "maximum": 9007199254740991, "description": "Amount in whole cents; positive spending, negative income for transactions."}, "isoCurrency": {"type": "string", "description": "Supported two-decimal ISO currency code, such as USD."}, "categoryId": {"type": "string", "description": "Current category identifier returned by Finance reads."}, "notes": {"type": "string", "maxLength": 4000, "description": "Transaction note text; treated as outside content."}, "cleared": {"type": "boolean", "description": "Whether the entry has cleared the account."}}, "required": ["operationId", "accountId", "name", "date", "amountCents", "isoCurrency", "cleared"], "examples": [{"operationId": "11111111-1111-4111-8111-111111111111", "accountId": "manual:22222222-2222-4222-8222-222222222222", "name": "Everyday", "date": "2026-11-10", "amountCents": 2500, "isoCurrency": "USD", "cleared": true}]},
+      "card": "prepareChatAction"
     },
     "finance.transactions.query": {
       "description": "List your transactions for a month, with filters, notes, splits and review state. Payee names and notes are outside content.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {"type": "object", "properties": {"month": {"type": "string", "description": "Calendar month in YYYY-MM format."}, "accountId": {"type": "string", "description": "Account identifier returned by Finance reads."}, "categoryId": {"type": "string", "description": "Current category identifier returned by Finance reads."}, "search": {"type": "string", "description": "Search."}, "pendingOnly": {"type": "boolean", "description": "Pending only."}, "needsLookOnly": {"type": "boolean", "description": "Needs look only."}, "limit": {"type": "integer", "minimum": 1, "maximum": 2000, "description": "Limit."}, "postingState": {"type": "string", "enum": ["pending", "posted"], "description": "Posting state."}, "ledgerState": {"type": "string", "enum": ["uncleared", "cleared", "reconciled"], "description": "Ledger state."}, "direction": {"type": "string", "enum": ["inflow", "outflow"], "description": "Direction."}, "uncategorizedOnly": {"type": "boolean", "description": "Uncategorized only."}, "duplicatesOnly": {"type": "boolean", "description": "Duplicates only."}, "transactionId": {"type": "string", "description": "Transaction identifier returned by Finance reads."}}}
     },
     "finance.transactions.categorize": {
       "description": "Put a transaction you have seen before into a category. Moss's guess is trusted without asking by default.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"transactionId": {"type": "string", "description": "Transaction identifier returned by Finance reads."}, "accountId": {"type": "string", "description": "Account identifier returned by Finance reads."}, "month": {"type": "string", "description": "Calendar month in YYYY-MM format."}, "categoryId": {"type": "string", "description": "Current category identifier returned by Finance reads."}, "amountCents": {"type": "integer", "description": "Amount in whole cents; positive spending, negative income for transactions."}, "notes": {"type": "string", "maxLength": 500, "description": "Transaction note text; treated as outside content."}}, "required": ["transactionId", "accountId", "month", "categoryId", "amountCents"], "examples": [{"transactionId": "manual:33333333-3333-4333-8333-333333333333", "accountId": "manual:22222222-2222-4222-8222-222222222222", "month": "2026-11", "categoryId": "groceries", "amountCents": 2500}]},
+      "card": "prepareChatAction"
     },
     "finance.transactions.categorize-new": {
-      "description": "Put a transaction from a new payee into a category. This asks each time by default.",
-      "risk": "write"
+      "description": "Put a transaction from a new payee into a category. Chat runs it normally unless you chose to ask first.",
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"transactionId": {"type": "string", "description": "Transaction identifier returned by Finance reads."}, "accountId": {"type": "string", "description": "Account identifier returned by Finance reads."}, "month": {"type": "string", "description": "Calendar month in YYYY-MM format."}, "categoryId": {"type": "string", "description": "Current category identifier returned by Finance reads."}, "amountCents": {"type": "integer", "description": "Amount in whole cents; positive spending, negative income for transactions."}, "notes": {"type": "string", "maxLength": 500, "description": "Transaction note text; treated as outside content."}}, "required": ["transactionId", "accountId", "month", "categoryId", "amountCents"], "examples": [{"transactionId": "manual:33333333-3333-4333-8333-333333333333", "accountId": "manual:22222222-2222-4222-8222-222222222222", "month": "2026-11", "categoryId": "groceries", "amountCents": 2500}]},
+      "card": "prepareChatAction"
     },
     "finance.transactions.review-apply": {
-      "description": "Confirm or change the category of transactions that need a look, optionally saving a rule.",
-      "risk": "write"
+      "description": "Confirm or change the category of transactions that need a look, optionally saving a rule. Split larger jobs into calls of at most 3 items; read fresh revisions between calls. Each call saves separately.",
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"transactionIds": {"type": "array", "maxItems": 3, "items": {"type": "string", "maxLength": 256}, "description": "Transaction identifiers."}, "accountIds": {"type": "array", "maxItems": 3, "items": {"type": "string", "maxLength": 256}, "description": "Account identifiers."}, "months": {"type": "array", "maxItems": 3, "items": {"type": "string", "maxLength": 7}, "description": "Report window in months."}, "categoryIds": {"type": "array", "maxItems": 3, "items": {"type": "string", "maxLength": 128}, "description": "Current category identifiers, in the same order as their amounts."}, "createRule": {"type": "object", "properties": {"merchant": {"type": "string", "description": "Payee name used to identify a merchant rule; treated as outside content.", "maxLength": 640}}, "required": ["merchant"], "description": "Create rule."}}, "required": ["transactionIds", "accountIds", "months", "categoryIds"], "examples": [{"transactionIds": ["manual:33333333-3333-4333-8333-333333333333"], "accountIds": ["manual:22222222-2222-4222-8222-222222222222"], "months": ["2026-11"], "categoryIds": ["groceries"]}]},
+      "card": "prepareChatAction"
     },
     "finance.transactions.bulk-categorize": {
-      "description": "Put several transactions into one category.",
-      "risk": "write"
+      "description": "Put several transactions into one category. Split larger jobs into calls of at most 12 items; read fresh revisions between calls. Each call saves separately.",
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"categoryId": {"type": "string", "description": "Current category identifier returned by Finance reads.", "maxLength": 128}, "transactions": {"type": "array", "maxItems": 12, "items": {"type": "object", "properties": {"id": {"type": "string", "maxLength": 256, "description": "Id."}, "writeRevision": {"type": "string", "description": "Current transaction writeRevision returned by the transaction read. Never invent it.", "maxLength": 64}}, "required": ["id", "writeRevision"]}, "description": "Selected transactions with their current write revisions; read transactions first."}}, "required": ["categoryId", "transactions"], "examples": [{"categoryId": "groceries", "transactions": [{"id": "manual:33333333-3333-4333-8333-333333333333", "writeRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}]},
+      "card": "prepareChatAction"
     },
     "finance.transactions.bulk-confirm": {
-      "description": "Confirm several transactions that Moss sorted.",
-      "risk": "write"
+      "description": "Confirm several transactions that Moss sorted. Split larger jobs into calls of at most 12 items; read fresh revisions between calls. Each call saves separately.",
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"transactions": {"type": "array", "maxItems": 12, "items": {"type": "object", "properties": {"id": {"type": "string", "maxLength": 256, "description": "Id."}, "writeRevision": {"type": "string", "description": "Current transaction writeRevision returned by the transaction read. Never invent it.", "maxLength": 64}}, "required": ["id", "writeRevision"]}, "description": "Selected transactions with their current write revisions; read transactions first."}}, "required": ["transactions"], "examples": [{"transactions": [{"id": "manual:33333333-3333-4333-8333-333333333333", "writeRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}]},
+      "card": "prepareChatAction"
     },
     "finance.transactions.notes.read": {
       "description": "Read the note on one transaction. Notes are outside content.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {"type": "object", "properties": {"transactionId": {"type": "string", "maxLength": 500, "description": "Transaction identifier returned by Finance reads."}, "accountId": {"type": "string", "maxLength": 500, "description": "Account identifier returned by Finance reads."}, "month": {"type": "string", "description": "Calendar month in YYYY-MM format."}}, "required": ["transactionId", "accountId", "month"]}
     },
     "finance.transactions.notes.save": {
       "description": "Save the note on one transaction.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"transactionId": {"type": "string", "maxLength": 500, "description": "Transaction identifier returned by Finance reads."}, "accountId": {"type": "string", "maxLength": 500, "description": "Account identifier returned by Finance reads."}, "month": {"type": "string", "description": "Calendar month in YYYY-MM format."}, "writeRevision": {"type": "string", "description": "Current transaction writeRevision returned by the transaction read. Never invent it."}, "notes": {"type": "string", "maxLength": 4000, "description": "Transaction note text; treated as outside content."}}, "required": ["transactionId", "accountId", "month", "writeRevision", "notes"], "examples": [{"transactionId": "manual:33333333-3333-4333-8333-333333333333", "accountId": "manual:22222222-2222-4222-8222-222222222222", "month": "2026-11", "writeRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "notes": "Weekly groceries"}]},
+      "card": "prepareChatAction"
     },
     "finance.transactions.splits": {
       "description": "Split a transaction across categories, or remove the split.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"transactionId": {"type": "string", "description": "Transaction identifier returned by Finance reads."}, "accountId": {"type": "string", "description": "Account identifier returned by Finance reads."}, "month": {"type": "string", "description": "Calendar month in YYYY-MM format."}, "expectedAmountCents": {"type": "integer", "description": "Expected amount cents."}, "expectedCurrency": {"type": "string", "description": "Expected currency."}, "expectedRevision": {"type": "integer", "minimum": 0, "description": "Current revision returned by the matching read or preview. Read again before saving."}, "categoryIds": {"type": "array", "maxItems": 20, "items": {"type": "string"}, "description": "Current category identifiers, in the same order as their amounts."}, "amountsCents": {"type": "array", "maxItems": 20, "items": {"type": "integer"}, "description": "Whole cents for each category, in categoryIds order."}}, "required": ["transactionId", "accountId", "month", "expectedAmountCents", "expectedCurrency", "expectedRevision", "categoryIds", "amountsCents"], "examples": [{"transactionId": "manual:33333333-3333-4333-8333-333333333333", "accountId": "manual:22222222-2222-4222-8222-222222222222", "month": "2026-11", "expectedAmountCents": 2500, "expectedCurrency": "USD", "expectedRevision": 1, "categoryIds": ["groceries"], "amountsCents": [2500]}]},
+      "card": "prepareChatAction"
     },
     "finance.rule.set": {
       "description": "Always put a payee into a category from now on.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"merchant": {"type": "string", "maxLength": 200, "description": "Payee name used to identify a merchant rule; treated as outside content."}, "categoryId": {"type": "string", "description": "Current category identifier returned by Finance reads."}}, "required": ["merchant", "categoryId"], "examples": [{"merchant": "Corner shop", "categoryId": "groceries"}]},
+      "card": "prepareChatAction"
     },
     "finance.rules.list": {
       "description": "List your payee rules.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {"type": "object", "properties": {"search": {"type": "string", "maxLength": 200, "description": "Search."}, "limit": {"type": "integer", "minimum": 1, "maximum": 1000, "description": "Limit."}}}
     },
     "finance.rules.preview": {
       "description": "Show which transactions a payee rule would change, without changing any.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {"type": "object", "properties": {"merchant": {"type": "string", "maxLength": 200, "description": "Payee name used to identify a merchant rule; treated as outside content."}, "month": {"type": "string", "description": "Calendar month in YYYY-MM format."}}, "required": ["merchant", "month"]}
     },
     "finance.import.preview": {
       "description": "Check a parsed bank file for duplicates before importing. Nothing is saved.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {"type": "object", "properties": {"accountId": {"type": "string", "maxLength": 128, "description": "Account identifier returned by Finance reads."}, "isoCurrency": {"type": "string", "description": "Supported two-decimal ISO currency code, such as USD."}, "rows": {"type": "array", "maxItems": 200, "items": {"type": "object", "properties": {"sourceRow": {"type": "integer", "minimum": 1, "maximum": 200, "description": "Source row."}, "date": {"type": "string", "description": "Posting date in YYYY-MM-DD format."}, "name": {"type": "string", "maxLength": 640, "description": "Display name; treated as outside content."}, "amountCents": {"type": "integer", "minimum": -9007199254740991, "maximum": 9007199254740991, "description": "Amount in whole cents; positive spending, negative income for transactions."}, "notes": {"type": "string", "maxLength": 4000, "description": "Transaction note text; treated as outside content."}, "allowDuplicate": {"type": "boolean", "description": "Allow duplicate."}}, "required": ["sourceRow", "date", "name", "amountCents", "allowDuplicate"]}, "description": "Rows."}}, "required": ["accountId", "isoCurrency", "rows"]}
     },
     "finance.import.apply": {
-      "description": "Import rows from a bank file into a manual account. Manual records only; no bank money is moved.",
-      "risk": "write"
+      "description": "Import rows from a bank file into a manual account. Manual records only; no bank money is moved. Split larger jobs into calls of at most 1 row; use a fresh operationId and revision for each call. Each call saves separately.",
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"accountId": {"type": "string", "maxLength": 128, "description": "Account identifier returned by Finance reads."}, "isoCurrency": {"type": "string", "description": "Supported two-decimal ISO currency code, such as USD.", "maxLength": 128}, "rows": {"type": "array", "maxItems": 1, "items": {"type": "object", "properties": {"sourceRow": {"type": "integer", "minimum": 1, "maximum": 200, "description": "Source row."}, "date": {"type": "string", "description": "Posting date in YYYY-MM-DD format.", "maxLength": 128}, "name": {"type": "string", "maxLength": 640, "description": "Display name; treated as outside content."}, "amountCents": {"type": "integer", "minimum": -9007199254740991, "maximum": 9007199254740991, "description": "Amount in whole cents; positive spending, negative income for transactions."}, "notes": {"type": "string", "maxLength": 4000, "description": "Transaction note text; treated as outside content."}, "allowDuplicate": {"type": "boolean", "description": "Allow duplicate."}}, "required": ["sourceRow", "date", "name", "amountCents", "allowDuplicate"]}, "description": "Rows."}, "operationId": {"type": "string", "description": "New lowercase UUID v4 for this operation; reuse only to retry the same operation.", "maxLength": 128}, "expectedRevision": {"type": "integer", "minimum": 0, "description": "Current revision returned by the matching read or preview. Read again before saving."}, "cleared": {"type": "boolean", "description": "Whether the entry has cleared the account."}}, "required": ["accountId", "isoCurrency", "rows", "operationId", "expectedRevision", "cleared"], "examples": [{"accountId": "manual:22222222-2222-4222-8222-222222222222", "isoCurrency": "USD", "rows": [{"sourceRow": 1, "date": "2026-11-10", "name": "Everyday", "amountCents": 2500, "allowDuplicate": false}], "operationId": "11111111-1111-4111-8111-111111111111", "expectedRevision": 1, "cleared": true}]},
+      "card": "prepareChatAction"
     },
     "finance.connect.start": {
-      "description": "Start linking a bank, or reconnect one that needs a new sign-in. Returns a page address for the person to open. Needs approval.",
-      "risk": "write"
+      "description": "Start linking a bank, or reconnect one that needs a new sign-in. Returns a page address for you to open.",
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {}, "examples": [{}]},
+      "card": "prepareChatAction"
     },
     "finance.connect.poll": {
       "description": "Check whether the person has finished the bank page and, if so, save the bank and pull its first data.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {}, "examples": [{}]},
+      "card": "prepareChatAction"
     },
     "finance.sync.run-now": {
       "description": "Pull the latest balances and transactions from every connected bank now.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {}, "examples": [{}]},
+      "card": "prepareChatAction"
     },
     "finance.budget.configure": {
       "description": "Choose the budget currency once and start the saved category list. The currency cannot be changed later.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"isoCurrency": {"type": "string", "enum": ["USD", "EUR", "GBP", "CAD", "AUD", "NZD", "CHF", "CNY", "HKD", "SGD", "INR", "MXN"], "description": "Supported two-decimal ISO currency code, such as USD."}, "acknowledgeLegacy": {"type": "boolean", "description": "Acknowledge the interpretation of existing assignments or open drafts."}}, "required": ["isoCurrency", "acknowledgeLegacy"], "examples": [{"isoCurrency": "USD", "acknowledgeLegacy": false}]},
+      "card": "prepareChatAction"
     },
     "finance.budget.status": {
       "description": "Read one month of the budget: money in each category, what is ready to assign, and the review numbers a save needs.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {"type": "object", "properties": {"month": {"type": "string", "description": "Calendar month in YYYY-MM format."}}, "required": ["month"]}
     },
     "finance.budget.assign": {
       "description": "Set the amount assigned to one category for a month.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"month": {"type": "string", "description": "Calendar month in YYYY-MM format."}, "categoryId": {"type": "string", "description": "Current category identifier returned by Finance reads."}, "amountCents": {"type": "integer", "minimum": -100000000, "maximum": 100000000, "description": "Assigned amount in whole cents for this category and month."}, "previousCents": {"type": "integer", "minimum": -100000000, "maximum": 100000000, "description": "Previously saved amount in cents, from the current budget read."}, "expectedRevision": {"type": "integer", "minimum": 0, "maximum": 9007199254740991, "description": "Current revision returned by the matching read or preview. Read again before saving."}, "expectedFingerprint": {"type": "string", "description": "Current fingerprint returned by the matching read or preview. Never invent it."}}, "required": ["month", "categoryId", "amountCents", "previousCents", "expectedRevision", "expectedFingerprint"], "examples": [{"month": "2026-11", "categoryId": "groceries", "amountCents": 2500, "previousCents": 0, "expectedRevision": 1, "expectedFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]},
+      "card": "prepareChatAction"
     },
     "finance.budget.move": {
       "description": "Move money between two categories, or from ready to assign into a category, for one month.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"month": {"type": "string", "description": "Calendar month in YYYY-MM format."}, "fromCategoryId": {"type": "string", "description": "Category to take from, or ready_to_assign for unassigned money."}, "toCategoryId": {"type": "string", "description": "Category to give to. Must be a real category id."}, "amountCents": {"type": "integer", "minimum": 1, "maximum": 100000000, "description": "Positive whole cents to move from the source to the destination."}, "expectedRevision": {"type": "integer", "minimum": 0, "maximum": 9007199254740991, "description": "Current revision returned by the matching read or preview. Read again before saving."}, "expectedFingerprint": {"type": "string", "description": "Current fingerprint returned by the matching read or preview. Never invent it."}}, "required": ["month", "fromCategoryId", "toCategoryId", "amountCents", "expectedRevision", "expectedFingerprint"], "examples": [{"month": "2026-11", "fromCategoryId": "ready_to_assign", "toCategoryId": "groceries", "amountCents": 2500, "expectedRevision": 1, "expectedFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]},
+      "card": "prepareChatAction"
     },
     "finance.budget.apply": {
       "description": "Save the amounts for one category or a batch of up to 20 categories for a month, as the person typed them.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"month": {"type": "string", "description": "Calendar month in YYYY-MM format."}, "expectedRevision": {"type": "integer", "minimum": 0, "maximum": 9007199254740991, "description": "Current revision returned by the matching read or preview. Read again before saving."}, "expectedFingerprint": {"type": "string", "description": "Current fingerprint returned by the matching read or preview. Never invent it."}, "categoryIds": {"type": "array", "maxItems": 20, "items": {"type": "string"}, "description": "Current category identifiers, in the same order as their amounts."}, "amountsCents": {"type": "array", "maxItems": 20, "items": {"type": "integer"}, "description": "Whole cents for each category, in categoryIds order."}, "previousAmountsCents": {"type": "array", "maxItems": 20, "items": {"type": "integer"}, "description": "Previously saved cents for each category, in categoryIds order."}}, "required": ["month", "expectedRevision", "expectedFingerprint", "categoryIds", "amountsCents", "previousAmountsCents"], "examples": [{"month": "2026-11", "expectedRevision": 1, "expectedFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "categoryIds": ["groceries"], "amountsCents": [2500], "previousAmountsCents": [0]}]},
+      "card": "prepareChatAction"
     },
     "finance.budget.draft.build": {
       "description": "Build a first budget draft from the last three full months of saved spending.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {}, "examples": [{}]},
+      "card": "prepareChatAction"
     },
     "finance.budget.draft.get": {
       "description": "Read the current budget draft.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {"type": "object", "properties": {}}
     },
     "finance.budget.draft.update": {
       "description": "Change, add or drop one line of the open budget draft.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"draftId": {"type": "string", "description": "The draft id from finance.budget.draft.get."}, "categoryKey": {"type": "string", "description": "The line's category key from the draft, or a new lowercase slug to add a line."}, "amountCents": {"type": "integer", "minimum": 0, "maximum": 100000000, "description": "Planned amount in whole cents for this draft line."}, "categoryName": {"type": "string", "maxLength": 80, "description": "Category name."}, "groupName": {"type": "string", "enum": ["Bills", "Everyday", "Fun", "Savings"], "description": "Group name."}, "dropped": {"type": "boolean", "description": "True takes the line out of the budget."}, "expectedRevision": {"type": "integer", "minimum": 0, "maximum": 9007199254740991, "description": "Current revision returned by the matching read or preview. Read again before saving."}, "expectedFingerprint": {"type": "string", "description": "Current fingerprint returned by the matching read or preview. Never invent it."}}, "required": ["draftId", "categoryKey", "expectedRevision", "expectedFingerprint"], "examples": [{"draftId": "44444444-4444-4444-8444-444444444444", "categoryKey": "groceries", "expectedRevision": 1, "expectedFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "amountCents": 2500}]},
+      "card": "prepareChatAction"
     },
     "finance.budget.draft.start": {
       "description": "Turn the open draft into this month's budget amounts.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"draftId": {"type": "string", "description": "Draft identifier."}, "expectedRevision": {"type": "integer", "minimum": 0, "maximum": 9007199254740991, "description": "Current revision returned by the matching read or preview. Read again before saving."}, "expectedFingerprint": {"type": "string", "description": "Current fingerprint returned by the matching read or preview. Never invent it."}}, "required": ["draftId", "expectedRevision", "expectedFingerprint"], "examples": [{"draftId": "44444444-4444-4444-8444-444444444444", "expectedRevision": 1, "expectedFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]},
+      "card": "prepareChatAction"
     },
     "finance.transactions.export": {
       "description": "Prepare a spreadsheet of your own transaction history. Another person's shared rows are never included. Payee names are outside content.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {"type": "object", "properties": {"from": {"type": "string", "description": "First date in YYYY-MM-DD format."}, "through": {"type": "string", "description": "Last date in YYYY-MM-DD format."}, "accountId": {"type": "string", "maxLength": 256, "description": "Account identifier returned by Finance reads."}}}
     },
     "finance.reports.spending": {
       "description": "Read your monthly spending report, with other people's shared accounts listed apart.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {"type": "object", "properties": {"months": {"type": "integer", "minimum": 1, "maximum": 24, "description": "Report window in months."}, "currency": {"type": "string", "description": "Currency."}}}
     },
     "finance.reports.net-worth": {
       "description": "Read your net worth over time. Net worth is never shared with other people.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {"type": "object", "properties": {"months": {"type": "integer", "minimum": 1, "maximum": 24, "description": "Report window in months."}, "currency": {"type": "string", "description": "Currency."}}}
     },
     "finance.reports.transactions": {
       "description": "List the transactions behind one report figure. Payee names are outside content.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {"type": "object", "properties": {"months": {"type": "integer", "minimum": 1, "maximum": 24, "description": "Report window in months."}, "month": {"type": "string", "description": "Calendar month in YYYY-MM format."}, "currency": {"type": "string", "description": "Currency."}, "group": {"type": "string", "enum": ["category", "payee", "income", "outflow"], "description": "Group."}, "key": {"type": "string", "maxLength": 2000, "description": "Key."}, "sharedOwnerIds": {"type": "array", "maxItems": 100, "items": {"type": "string", "maxLength": 64}, "description": "Shared owner identifiers."}, "offset": {"type": "integer", "minimum": 0, "maximum": 1000000, "description": "Offset."}, "limit": {"type": "integer", "minimum": 1, "maximum": 200, "description": "Limit."}}, "required": ["month", "currency", "group"]}
     },
     "finance.activity.list": {
       "description": "List recent changes made to your finance data, with whether each can be undone.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {"type": "object", "properties": {"from": {"type": "string", "description": "First date in YYYY-MM-DD format."}, "to": {"type": "string", "description": "Last date in YYYY-MM-DD format."}, "limit": {"type": "integer", "minimum": 1, "maximum": 200, "description": "Limit."}}, "required": ["from", "to"]}
     },
     "finance.account.set-shared": {
       "description": "Share a bank account with the household, or stop sharing it. Others see balances and transactions, never notes.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"accountId": {"type": "string", "description": "Account identifier returned by Finance reads."}, "shared": {"type": "boolean", "description": "Whether to share the account balances and transactions with the household."}}, "required": ["accountId", "shared"], "examples": [{"accountId": "manual:22222222-2222-4222-8222-222222222222", "shared": false}]},
+      "card": "prepareChatAction"
     },
     "finance.category.archive": {
       "description": "Archive a category that holds no budget money. Income and transfers cannot be archived.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"id": {"type": "string", "description": "Id of the category to archive."}}, "required": ["id"], "examples": [{"id": "groceries"}]},
+      "card": "prepareChatAction"
     },
     "finance.activity.undo": {
       "description": "Undo one earlier change, such as a category choice, if nothing has moved on since.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"activityId": {"type": "string", "maxLength": 64, "description": "Activity identifier returned by finance.activity.list."}}, "required": ["activityId"], "examples": [{"activityId": "55555555-5555-4555-8555-555555555555"}]},
+      "card": "prepareChatAction"
     },
     "finance.bills.read": {
       "description": "Read the bill plans and the coming bills for a month.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {"type": "object", "properties": {"from": {"type": "string", "description": "First date in YYYY-MM-DD format."}, "to": {"type": "string", "description": "Last date in YYYY-MM-DD format."}}, "required": ["from", "to"]}
     },
     "finance.bills.suggestions": {
       "description": "Suggest bills found in saved spending.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {"type": "object", "properties": {}}
     },
     "finance.bill.entry-preview": {
       "description": "Preview the entry that would record a bill as paid.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {"type": "object", "properties": {"operationId": {"type": "string", "description": "New lowercase UUID v4 for this operation; reuse only to retry the same operation."}, "planId": {"type": "string", "description": "Plan identifier."}, "dueDate": {"type": "string", "description": "Occurrence or target due date in YYYY-MM-DD format."}, "accountId": {"type": "string", "maxLength": 128, "description": "Account identifier returned by Finance reads."}, "categoryId": {"type": "string", "maxLength": 256, "description": "Current category identifier returned by Finance reads."}, "name": {"type": "string", "maxLength": 160, "description": "Display name; treated as outside content."}, "isoCurrency": {"type": "string", "description": "Supported two-decimal ISO currency code, such as USD."}, "date": {"type": "string", "description": "Posting date in YYYY-MM-DD format."}, "expectedFingerprint": {"type": "string", "description": "Current fingerprint returned by the matching read or preview. Never invent it."}, "amountCents": {"type": "integer", "minimum": 1, "maximum": 9007199254740991, "description": "Amount in whole cents; positive spending, negative income for transactions."}, "cleared": {"type": "boolean", "description": "Whether the entry has cleared the account."}, "expectedRevision": {"type": "integer", "minimum": 0, "maximum": 9007199254740991, "description": "Current revision returned by the matching read or preview. Read again before saving."}}, "required": ["operationId", "planId", "dueDate", "accountId", "categoryId", "name", "isoCurrency", "date", "expectedFingerprint", "amountCents", "cleared", "expectedRevision"]}
     },
     "finance.flex.preview": {
       "description": "Preview a flexible pool for a month.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {"type": "object", "properties": {"month": {"type": "string", "description": "Calendar month in YYYY-MM format."}, "mode": {"type": "string", "enum": ["flex", "envelopes"], "description": "Mode."}, "flexIds": {"type": "array", "maxItems": 100, "items": {"type": "string"}, "description": "Flex identifiers."}, "nonMonthlyIds": {"type": "array", "maxItems": 100, "items": {"type": "string"}, "description": "Non monthly identifiers."}, "distribution": {"type": "array", "maxItems": 100, "description": "When leaving the pool, choose an available amount for every flexible category exactly once.", "items": {"type": "object", "properties": {"categoryId": {"type": "string", "description": "Flexible category identifier from the preview."}, "amountCents": {"type": "integer", "minimum": 0, "maximum": 9007199254740991, "description": "Available amount in whole cents."}}, "required": ["categoryId", "amountCents"]}}}, "required": ["month", "mode"]}
     },
     "finance.card-reserve.preview": {
       "description": "Preview a card payment reserve.",
-      "risk": "read"
+      "risk": "read",
+      "inputSchema": {"type": "object", "properties": {"month": {"type": "string", "description": "Calendar month in YYYY-MM format."}, "accountId": {"type": "string", "maxLength": 160, "description": "Account identifier returned by Finance reads."}, "action": {"type": "string", "enum": ["enroll", "fund"], "description": "Action."}, "availableCents": {"type": "integer", "minimum": 0, "maximum": 9007199254740991, "description": "Available cents."}}, "required": ["month", "accountId", "action", "availableCents"]}
     },
     "finance.bill.create": {
       "description": "Create a bill plan.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"id": {"type": "string", "description": "Bill plan UUID; use the saved bill id for changes."}, "name": {"type": "string", "maxLength": 160, "description": "Display name; treated as outside content."}, "accountId": {"type": "string", "description": "Account identifier returned by Finance reads."}, "categoryId": {"type": "string", "description": "Current category identifier returned by Finance reads."}, "amountCents": {"type": "integer", "minimum": 1, "maximum": 100000000, "description": "Positive scheduled bill amount in whole cents."}, "anchorDate": {"type": "string", "description": "First bill date in YYYY-MM-DD format."}, "cadence": {"type": "string", "enum": ["once", "weekly", "fortnightly", "monthly", "yearly"], "description": "Cadence."}, "expectedRevision": {"type": "integer", "minimum": 0, "description": "Current revision returned by the matching read or preview. Read again before saving."}, "expectedFingerprint": {"type": "string", "description": "Current fingerprint returned by the matching read or preview. Never invent it."}}, "required": ["id", "name", "accountId", "categoryId", "amountCents", "anchorDate", "cadence", "expectedRevision", "expectedFingerprint"], "examples": [{"id": "66666666-6666-4666-8666-666666666666", "name": "Everyday", "accountId": "manual:22222222-2222-4222-8222-222222222222", "categoryId": "groceries", "amountCents": 2500, "anchorDate": "2026-11-20", "cadence": "monthly", "expectedRevision": 1, "expectedFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]},
+      "card": "prepareChatAction"
     },
     "finance.bill.decide": {
       "description": "Confirm, skip or match one coming bill.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"planId": {"type": "string", "description": "Plan identifier."}, "dueDate": {"type": "string", "description": "Occurrence or target due date in YYYY-MM-DD format."}, "state": {"type": "string", "enum": ["skipped", "matched"], "description": "State."}, "transactionId": {"type": "string", "description": "Transaction identifier returned by Finance reads."}, "expectedRevision": {"type": "integer", "minimum": 0, "description": "Current revision returned by the matching read or preview. Read again before saving."}, "expectedFingerprint": {"type": "string", "description": "Current fingerprint returned by the matching read or preview. Never invent it."}}, "required": ["planId", "dueDate", "state", "expectedRevision", "expectedFingerprint"], "examples": [{"planId": "66666666-6666-4666-8666-666666666666", "dueDate": "2026-11-20", "state": "skipped", "expectedRevision": 1, "expectedFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]},
+      "card": "prepareChatAction"
     },
     "finance.bill.stop": {
       "description": "Stop a bill plan.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"id": {"type": "string", "description": "Bill plan UUID; use the saved bill id for changes."}, "endDate": {"type": "string", "description": "Last bill date in YYYY-MM-DD format."}, "expectedRevision": {"type": "integer", "minimum": 0, "description": "Current revision returned by the matching read or preview. Read again before saving."}, "expectedFingerprint": {"type": "string", "description": "Current fingerprint returned by the matching read or preview. Never invent it."}}, "required": ["id", "endDate", "expectedRevision", "expectedFingerprint"], "examples": [{"id": "66666666-6666-4666-8666-666666666666", "endDate": "2026-11-20", "expectedRevision": 1, "expectedFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]},
+      "card": "prepareChatAction"
     },
     "finance.bill.clear": {
       "description": "Clear a bill occurrence.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"planId": {"type": "string", "description": "Plan identifier."}, "dueDate": {"type": "string", "description": "Occurrence or target due date in YYYY-MM-DD format."}, "expectedRevision": {"type": "integer", "minimum": 0, "description": "Current revision returned by the matching read or preview. Read again before saving."}, "expectedFingerprint": {"type": "string", "description": "Current fingerprint returned by the matching read or preview. Never invent it."}}, "required": ["planId", "dueDate", "expectedRevision", "expectedFingerprint"], "examples": [{"planId": "66666666-6666-4666-8666-666666666666", "dueDate": "2026-11-20", "expectedRevision": 1, "expectedFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]},
+      "card": "prepareChatAction"
     },
     "finance.bill.adjust": {
       "description": "Change the amount or date of one coming bill.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"planId": {"type": "string", "description": "Plan identifier."}, "dueDate": {"type": "string", "description": "Occurrence or target due date in YYYY-MM-DD format."}, "expectedRevision": {"type": "integer", "minimum": 0, "description": "Current revision returned by the matching read or preview. Read again before saving."}, "expectedFingerprint": {"type": "string", "description": "Current fingerprint returned by the matching read or preview. Never invent it."}, "plannedDate": {"type": "string", "description": "Adjusted bill date in YYYY-MM-DD format."}, "amountCents": {"type": "integer", "minimum": 1, "maximum": 100000000, "description": "Positive replacement amount in whole cents for this bill occurrence."}}, "required": ["planId", "dueDate", "expectedRevision", "expectedFingerprint", "plannedDate", "amountCents"], "examples": [{"planId": "66666666-6666-4666-8666-666666666666", "dueDate": "2026-11-20", "expectedRevision": 1, "expectedFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "plannedDate": "2026-11-21", "amountCents": 2500}]},
+      "card": "prepareChatAction"
     },
     "finance.bill.adjust-reset": {
       "description": "Put one coming bill back to its plan.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"planId": {"type": "string", "description": "Plan identifier."}, "dueDate": {"type": "string", "description": "Occurrence or target due date in YYYY-MM-DD format."}, "expectedRevision": {"type": "integer", "minimum": 0, "description": "Current revision returned by the matching read or preview. Read again before saving."}, "expectedFingerprint": {"type": "string", "description": "Current fingerprint returned by the matching read or preview. Never invent it."}}, "required": ["planId", "dueDate", "expectedRevision", "expectedFingerprint"], "examples": [{"planId": "66666666-6666-4666-8666-666666666666", "dueDate": "2026-11-20", "expectedRevision": 1, "expectedFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]},
+      "card": "prepareChatAction"
     },
     "finance.bills.suggestions.dismiss": {
       "description": "Dismiss a bill suggestion.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"accountId": {"type": "string", "description": "Account identifier returned by Finance reads."}, "payeeKey": {"type": "string", "maxLength": 160, "description": "Payee key."}, "cadence": {"type": "string", "enum": ["weekly", "fortnightly", "monthly", "yearly"], "description": "Cadence."}, "amountCents": {"type": "integer", "minimum": 1, "maximum": 100000000, "description": "Positive suggested bill amount in whole cents."}}, "required": ["accountId", "payeeKey", "cadence", "amountCents"], "examples": [{"accountId": "manual:22222222-2222-4222-8222-222222222222", "payeeKey": "corner shop", "cadence": "monthly", "amountCents": 2500}]},
+      "card": "prepareChatAction"
     },
     "finance.bill.entry-record": {
       "description": "Record a bill as paid with a manual entry.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"operationId": {"type": "string", "description": "New lowercase UUID v4 for this operation; reuse only to retry the same operation."}, "planId": {"type": "string", "description": "Plan identifier."}, "dueDate": {"type": "string", "description": "Occurrence or target due date in YYYY-MM-DD format."}, "accountId": {"type": "string", "maxLength": 128, "description": "Account identifier returned by Finance reads."}, "categoryId": {"type": "string", "maxLength": 256, "description": "Current category identifier returned by Finance reads."}, "name": {"type": "string", "maxLength": 160, "description": "Display name; treated as outside content."}, "isoCurrency": {"type": "string", "description": "Supported two-decimal ISO currency code, such as USD."}, "date": {"type": "string", "description": "Posting date in YYYY-MM-DD format."}, "expectedFingerprint": {"type": "string", "description": "Current fingerprint returned by the matching read or preview. Never invent it."}, "amountCents": {"type": "integer", "minimum": 1, "maximum": 9007199254740991, "description": "Positive payment amount in whole cents."}, "cleared": {"type": "boolean", "description": "Whether the entry has cleared the account."}, "expectedRevision": {"type": "integer", "minimum": 0, "maximum": 9007199254740991, "description": "Current revision returned by the matching read or preview. Read again before saving."}}, "required": ["operationId", "planId", "dueDate", "accountId", "categoryId", "name", "isoCurrency", "date", "expectedFingerprint", "amountCents", "cleared", "expectedRevision"], "examples": [{"operationId": "11111111-1111-4111-8111-111111111111", "planId": "66666666-6666-4666-8666-666666666666", "dueDate": "2026-11-20", "accountId": "manual:22222222-2222-4222-8222-222222222222", "categoryId": "groceries", "name": "Everyday", "isoCurrency": "USD", "date": "2026-11-10", "expectedFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "amountCents": 2500, "cleared": true, "expectedRevision": 1}]},
+      "card": "prepareChatAction"
     },
     "finance.target.set": {
       "description": "Set a category target.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"month": {"type": "string", "description": "Calendar month in YYYY-MM format."}, "categoryId": {"type": "string", "description": "Current category identifier returned by Finance reads."}, "kind": {"type": "string", "enum": ["monthly", "weekly", "refill", "balance"], "description": "Kind."}, "amountCents": {"type": "integer", "minimum": 1, "maximum": 9007199254740991, "description": "Positive target amount in whole cents; interpreted according to the target kind."}, "dueDate": {"type": "string", "description": "Occurrence or target due date in YYYY-MM-DD format."}, "weekday": {"type": "integer", "minimum": 0, "maximum": 6, "description": "Weekday for weekly targets: Sunday is zero and Saturday is six."}, "expectedRevision": {"type": "integer", "minimum": 0, "description": "Current revision returned by the matching read or preview. Read again before saving."}, "expectedFingerprint": {"type": "string", "description": "Current fingerprint returned by the matching read or preview. Never invent it."}}, "required": ["month", "categoryId", "kind", "amountCents", "expectedRevision", "expectedFingerprint"], "examples": [{"month": "2026-11", "categoryId": "groceries", "kind": "monthly", "amountCents": 2500, "expectedRevision": 1, "expectedFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]},
+      "card": "prepareChatAction"
     },
     "finance.target.remove": {
       "description": "Remove a category target.",
-      "risk": "destructive"
+      "risk": "destructive",
+      "inputSchema": {"type": "object", "properties": {"month": {"type": "string", "description": "Calendar month in YYYY-MM format."}, "categoryId": {"type": "string", "description": "Current category identifier returned by Finance reads."}, "expectedRevision": {"type": "integer", "minimum": 0, "description": "Current revision returned by the matching read or preview. Read again before saving."}, "expectedFingerprint": {"type": "string", "description": "Current fingerprint returned by the matching read or preview. Never invent it."}}, "required": ["month", "categoryId", "expectedRevision", "expectedFingerprint"], "examples": [{"month": "2026-11", "categoryId": "groceries", "expectedRevision": 1, "expectedFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]},
+      "card": "prepareChatAction"
     },
     "finance.targets.fund": {
       "description": "Fund targets from what is ready to assign.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"month": {"type": "string", "description": "Calendar month in YYYY-MM format."}, "categoryIds": {"type": "array", "maxItems": 20, "items": {"type": "string", "maxLength": 128}, "description": "Current category identifiers, in the same order as their amounts."}, "expectedAmountsCents": {"type": "array", "maxItems": 20, "items": {"type": "integer", "minimum": 1, "maximum": 100000000}, "description": "Suggested cents per selected category, from the current budget read."}, "expectedRevision": {"type": "integer", "minimum": 0, "description": "Current revision returned by the matching read or preview. Read again before saving."}, "expectedFingerprint": {"type": "string", "description": "Current fingerprint returned by the matching read or preview. Never invent it."}}, "required": ["month", "categoryIds", "expectedAmountsCents", "expectedRevision", "expectedFingerprint"], "examples": [{"month": "2026-11", "categoryIds": ["groceries"], "expectedAmountsCents": [2500], "expectedRevision": 1, "expectedFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]},
+      "card": "prepareChatAction"
     },
     "finance.flex.configure": {
       "description": "Choose which categories share the flexible pool.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"month": {"type": "string", "description": "Calendar month in YYYY-MM format."}, "mode": {"type": "string", "enum": ["flex", "envelopes"], "description": "Mode."}, "flexIds": {"type": "array", "maxItems": 100, "items": {"type": "string"}, "description": "Flex identifiers."}, "nonMonthlyIds": {"type": "array", "maxItems": 100, "items": {"type": "string"}, "description": "Non monthly identifiers."}, "distribution": {"type": "array", "maxItems": 100, "description": "When leaving the pool, choose an available amount for every flexible category exactly once.", "items": {"type": "object", "properties": {"categoryId": {"type": "string", "description": "Flexible category identifier from the preview."}, "amountCents": {"type": "integer", "minimum": 0, "maximum": 9007199254740991, "description": "Available amount in whole cents."}}, "required": ["categoryId", "amountCents"]}}, "expectedRevision": {"type": "integer", "minimum": 0, "description": "Current revision returned by the matching read or preview. Read again before saving."}, "expectedFingerprint": {"type": "string", "description": "Current fingerprint returned by the matching read or preview. Never invent it."}}, "required": ["month", "mode", "expectedRevision", "expectedFingerprint"], "examples": [{"month": "2026-11", "mode": "flex", "expectedRevision": 1, "expectedFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "flexIds": ["groceries", "dining"], "nonMonthlyIds": ["savings"]}]},
+      "card": "prepareChatAction"
     },
     "finance.flex.assign": {
       "description": "Set the total of the flexible pool.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"month": {"type": "string", "description": "Calendar month in YYYY-MM format."}, "amountCents": {"type": "integer", "minimum": 0, "maximum": 100000000, "description": "Total assigned amount in whole cents for the flexible pool."}, "previousCents": {"type": "integer", "minimum": -9007199254740991, "maximum": 9007199254740991, "description": "Previously saved amount in cents, from the current budget read."}, "expectedRevision": {"type": "integer", "minimum": 0, "maximum": 9007199254740991, "description": "Current revision returned by the matching read or preview. Read again before saving."}, "expectedFingerprint": {"type": "string", "description": "Current fingerprint returned by the matching read or preview. Never invent it."}}, "required": ["month", "amountCents", "previousCents", "expectedRevision", "expectedFingerprint"], "examples": [{"month": "2026-11", "amountCents": 2500, "previousCents": 0, "expectedRevision": 1, "expectedFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]},
+      "card": "prepareChatAction"
     },
     "finance.card-reserve.save": {
       "description": "Enroll a card or set its payment reserve.",
-      "risk": "write"
+      "risk": "write",
+      "inputSchema": {"type": "object", "properties": {"month": {"type": "string", "description": "Calendar month in YYYY-MM format."}, "accountId": {"type": "string", "maxLength": 160, "description": "Account identifier returned by Finance reads."}, "action": {"type": "string", "enum": ["enroll", "fund"], "description": "Action."}, "availableCents": {"type": "integer", "minimum": 0, "maximum": 9007199254740991, "description": "Available cents."}, "expectedRevision": {"type": "integer", "minimum": 0, "maximum": 9007199254740991, "description": "Current revision returned by the matching read or preview. Read again before saving."}, "expectedFingerprint": {"type": "string", "description": "Current fingerprint returned by the matching read or preview. Never invent it."}}, "required": ["month", "accountId", "action", "availableCents", "expectedRevision", "expectedFingerprint"], "examples": [{"month": "2026-11", "accountId": "manual:22222222-2222-4222-8222-222222222222", "action": "enroll", "availableCents": 2500, "expectedRevision": 1, "expectedFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]},
+      "card": "prepareChatAction"
     }
   },
   "requires": {},
   "provides": {
     "collectFinanceExportSection": "1.0.0",
-    "deleteFinanceAccountData": "1.0.0"
+    "deleteFinanceAccountData": "1.0.0",
+    "prepareChatAction": "1.0.0"
   },
-  "icons": ["icons/finance.svg"],
+  "icons": [
+    "icons/finance.svg"
+  ],
   "accounts": {
     "supportsUserDisable": true,
     "defaultEnabled": true
@@ -967,559 +471,44 @@
     "/settings/finance": "ui/settings.html"
   },
   "navigation": [
-    {
-      "id": "finance",
-      "label": "Finance",
-      "description": "Your budget by month, a searchable list of transactions you can sort into categories, your accounts with balances, net worth and bank connection status, spending and cash flow reports, and upcoming bills. A Start page opens first when you have no accounts and needs no bank keys.",
-      "path": "/finance",
-      "icon": "Landmark",
-      "order": 38
-    }
+    {"id": "finance", "label": "Finance", "description": "Your budget by month, a searchable list of transactions you can sort into categories, your accounts with balances, net worth and bank connection status, spending and cash flow reports, and upcoming bills. A Start page opens first when you have no accounts and needs no bank keys.", "path": "/finance", "icon": "Landmark", "order": 38}
   ],
   "settings": [
-    {
-      "id": "finance.settings",
-      "label": "Finance",
-      "path": "/settings/finance",
-      "scope": "user",
-      "description": "Shows how much Moss sorts on its own, whether bank keys are saved, your merchant rules and this week's activity with Undo."
-    }
+    {"id": "finance.settings", "label": "Finance", "path": "/settings/finance", "scope": "user", "description": "Shows how much Moss sorts on its own, whether bank keys are saved, your merchant rules and this week's activity with Undo."}
   ],
   "features": [
-    {
-      "id": "finance.account-data",
-      "description": "The whole-account export collects a person's accounts, transactions, categories, rules, budget, bills, targets and undo records, and the whole-account delete removes all of them and drops any saved bank token. Bank links and link sessions are left out of the export because they name a stored credential. Each call touches only the signed-in person's rows.",
-      "errors": []
-    },
-    {
-      "id": "finance.start",
-      "description": "With no accounts, Finance opens on Start, which offers a manual account without any bank keys and shows whether a bank can be connected. A person with an account opens on Budget.",
-      "errors": []
-    },
-    {
-      "id": "finance.settings",
-      "description": "The settings page, opened from the cog in the Finance header, shows how much Moss sorts alone, whether bank keys are saved, the person's merchant rules and the last week of activity with an Undo button. Changing the sorting limits and the dollar limit is not available from this page yet.",
-      "errors": []
-    },
-    {
-      "id": "finance.accounts",
-      "description": "A person can list their own accounts with current balances, currencies and, for manual accounts, the opening date and balance. With no accounts, the list suggests adding a manual account. Accounts shared by other people and bank links are not built yet. The Finance screen shows it.",
-      "errors": [
-        {
-          "code": "finance_accounts_unavailable",
-          "class": "transient",
-          "description": "Accounts could not be read. Try again in a moment."
-        }
-      ]
-    },
-    {
-      "id": "finance.manual-accounts",
-      "description": "A person can add a private manual account (checking, savings, cash, credit, loan or asset) in one of twelve currencies, with an opening date that is not in the future and an opening balance. Repeating the same operation id with the same values changes nothing. The assistant's version needs the account's one-use approval. No bank money is moved.",
-      "errors": [
-        {
-          "code": "invalid_input",
-          "class": "validation",
-          "description": "A value was not accepted. Fix the field named in the message and try again."
-        },
-        {
-          "code": "unsupported_currency",
-          "class": "validation",
-          "description": "Choose one of the twelve supported two-decimal currencies and try again."
-        },
-        {
-          "code": "future_date",
-          "class": "validation",
-          "description": "The date is after today in your time zone. Choose today or an earlier date."
-        },
-        {
-          "code": "manual_conflict",
-          "class": "validation",
-          "description": "This operation id already saved different values. Check the saved account and use a new operation id for a new one."
-        }
-      ]
-    },
-    {
-      "id": "finance.manual-entries",
-      "description": "A person can add a manual transaction to a manual account. It moves the account balance (down for cash-like accounts, up for credit and loans), needs a current category or is marked for a look, and cannot be dated before the account opened, in a reconciled period or in the future. Repeating the same operation id with the same values changes nothing. The assistant's version needs the account's one-use approval.",
-      "errors": [
-        {
-          "code": "invalid_category",
-          "class": "validation",
-          "description": "Choose a current category. Linked transfers need their own workflow."
-        },
-        {
-          "code": "manual_unavailable",
-          "class": "validation",
-          "description": "The manual account is missing, closed or uses a different currency. Check the account and try again."
-        },
-        {
-          "code": "manual_invalid_date",
-          "class": "validation",
-          "description": "The date is before the account's opening date. Choose a later date."
-        },
-        {
-          "code": "manual_reconciled_period",
-          "class": "validation",
-          "description": "The date falls in a reconciled statement period. Choose a later date."
-        },
-        {
-          "code": "manual_overflow",
-          "class": "validation",
-          "description": "The new balance would be too large to store. Check the amount and try again."
-        }
-      ]
-    },
-    {
-      "id": "finance.transactions",
-      "description": "A person can list their own transactions for a month with filters, search, notes and splits. They can set or change a category, confirm what Moss sorted, save a note, split a transaction across categories, and sort many at once. Moss sorts by payee rule first, then the bank's own category, and only confirms on its own when the sorting tier allows it. The Finance screen shows it.",
-      "errors": [
-        {
-          "code": "stale_transaction",
-          "class": "validation",
-          "description": "The transaction changed since you opened it. Reload and try again."
-        },
-        {
-          "code": "split_transaction",
-          "class": "validation",
-          "description": "This transaction is split. Remove the split before choosing one category."
-        },
-        {
-          "code": "linked_transfer",
-          "class": "validation",
-          "description": "This transaction is part of a transfer. Use the transfer workflow instead."
-        },
-        {
-          "code": "amount_mismatch",
-          "class": "validation",
-          "description": "The parts of a split must add up to the transaction amount."
-        },
-        {
-          "code": "new_merchant",
-          "class": "validation",
-          "description": "This payee is new, so the category needs your approval."
-        }
-      ]
-    },
-    {
-      "id": "finance.rules",
-      "description": "A person can list payee rules, preview what a rule would change, and turn rules on, off or remove them. A rule always confirms the category it sets.",
-      "errors": [
-        {
-          "code": "stale_rules",
-          "class": "validation",
-          "description": "Your rules changed since you opened them. Reload and try again."
-        }
-      ]
-    },
-    {
-      "id": "finance.categories",
-      "description": "A person can add or rename a category inside a group. Archiving a category is not built yet.",
-      "errors": [
-        {
-          "code": "duplicate_name",
-          "class": "validation",
-          "description": "A category with this name already exists. Choose another name."
-        }
-      ]
-    },
-    {
-      "id": "finance.import",
-      "description": "A person can read a CSV bank file of up to 1 MiB and 200 rows, check the rows against what is already saved, choose what to do with each duplicate, and import the rest into a manual account. Importing the same file twice with the same operation id saves it once. No bank money is moved.",
-      "errors": [
-        {
-          "code": "invalid_csv",
-          "class": "validation",
-          "description": "The file could not be read. The message names the row and what to fix."
-        },
-        {
-          "code": "stale_import",
-          "class": "validation",
-          "description": "The account changed since the preview. Preview again and import."
-        }
-      ]
-    },
-    {
-      "id": "finance.bank-connect",
-      "description": "A person can link a bank. Starting returns a page address to open, the person signs in there, and a check then saves the bank and pulls its first accounts and transactions. Starting again for a bank that needs a new sign-in reconnects it without a second copy. The assistant's version of starting needs a one-use approval. The bank's sign-in token never leaves the host.",
-      "errors": [
-        {
-          "code": "bank_unavailable",
-          "class": "transient",
-          "description": "The bank service is not set up or could not start the link. Check the bank service keys in settings, then try again."
-        },
-        {
-          "code": "token_read_failed",
-          "class": "transient",
-          "description": "The saved bank sign-in could not be read. Try again, or reconnect the bank."
-        }
-      ]
-    },
-    {
-      "id": "finance.bank-sync",
-      "description": "Balances and transactions for every connected bank are pulled every six hours and on request. Each bank is handled on its own, so one failing bank never stops the others. If the bank changes its pages during a read, Moss retries from the start of that read, up to three times. A bank that needs a new sign-in is marked as needing a reconnect and keeps its saved data. A person's own category and note on a bank transaction are kept, and manual entries are never overwritten. Categorizing new transactions is not built yet.",
-      "errors": []
-    },
-    {
-      "id": "finance.budget",
-      "description": "A person can choose a budget currency once, see a month of the budget with each category's assigned, spent and available money and what is ready to assign, set the amount for one category or up to 20 at once, and move money between categories or from ready to assign. Every save needs the review numbers from the screen. If the budget or the ledger changed since, nothing is saved. The Finance screen shows the budget. Flexible pools, targets, card payments and bills are not built yet.",
-      "errors": [
-        {
-          "code": "stale_budget",
-          "class": "validation",
-          "description": "The budget or ledger changed. Refresh and review the amounts again before saving."
-        },
-        {
-          "code": "stale_previous",
-          "class": "validation",
-          "description": "The amount shown for a category is out of date. Refresh and try again."
-        },
-        {
-          "code": "invalid_category",
-          "class": "validation",
-          "description": "The category is not one that can be budgeted."
-        },
-        {
-          "code": "not_enough_ready",
-          "class": "validation",
-          "description": "The amount is more than is ready to assign."
-        },
-        {
-          "code": "not_enough_available",
-          "class": "validation",
-          "description": "The amount is more than the source category holds."
-        },
-        {
-          "code": "funding_unavailable",
-          "class": "validation",
-          "description": "Ready to assign cannot be worked out for that month."
-        },
-        {
-          "code": "budget_currency_required",
-          "class": "validation",
-          "description": "Choose a budget currency first."
-        },
-        {
-          "code": "budget_currency_fixed",
-          "class": "validation",
-          "description": "The budget currency is already chosen and cannot be changed."
-        },
-        {
-          "code": "legacy_review_required",
-          "class": "validation",
-          "description": "Earlier budget data exists. Review it and confirm before starting over."
-        },
-        {
-          "code": "storage_upgrade_required",
-          "class": "validation",
-          "description": "Finish the category upgrade before budgeting."
-        }
-      ]
-    },
-    {
-      "id": "finance.budget-drafts",
-      "description": "A person can ask for a first budget built from the last three full months of saved spending, edit its lines, and start it so its amounts become this month's budget. A draft is built once and never overwrites an existing budget.",
-      "errors": [
-        {
-          "code": "draft_not_found",
-          "class": "validation",
-          "description": "That draft is not the current draft."
-        },
-        {
-          "code": "draft_not_open",
-          "class": "validation",
-          "description": "The draft has already been started."
-        },
-        {
-          "code": "protected_category",
-          "class": "validation",
-          "description": "Income and transfers cannot be budgeted."
-        },
-        {
-          "code": "archived_category",
-          "class": "validation",
-          "description": "A planned line points at an archived category."
-        },
-        {
-          "code": "category_not_in_draft",
-          "class": "validation",
-          "description": "That category is not in the draft. To add a line, give its name, group and amount."
-        }
-      ]
-    },
-    {
-      "id": "finance.sharing",
-      "description": "A person can share a bank account with the household or stop sharing it. Others then see its name, balance and transactions with date, payee, merchant, bank category, category, amount, pending state and any transfer link, never notes, review state, who chose the category, or bank link details. Manual accounts cannot be shared yet. No screen is built yet.",
-      "errors": [
-        {
-          "code": "unknown_account",
-          "class": "validation",
-          "description": "That account is not on record."
-        },
-        {
-          "code": "manual_sharing_unavailable",
-          "class": "validation",
-          "description": "Manual accounts stay private for now."
-        }
-      ]
-    },
-    {
-      "id": "finance.reports",
-      "description": "A person can read a monthly spending report and a net worth chart, and list the transactions behind a figure. Other people's shared accounts appear in spending apart from the person's own. Net worth never includes other people. No screen is built yet.",
-      "errors": [
-        {
-          "code": "report_scope_changed",
-          "class": "validation",
-          "description": "The report changed since you opened it. Reload and try again."
-        }
-      ]
-    },
-    {
-      "id": "finance.export",
-      "description": "A person can export their own transaction history as a spreadsheet, for all dates or a range, or for one account. Other people's rows are never included. Very large histories are refused with the count.",
-      "errors": [
-        {
-          "code": "export_failed",
-          "class": "validation",
-          "description": "Choose valid dates, with the start on or before the end."
-        }
-      ]
-    },
-    {
-      "id": "finance.activity",
-      "description": "A person can list recent changes to their finance data and undo a category choice, a rule, a new category or an archive when nothing has changed since. Budget changes cannot be undone yet. No screen is built yet.",
-      "errors": [
-        {
-          "code": "not_undoable",
-          "class": "validation",
-          "description": "That change cannot be undone."
-        },
-        {
-          "code": "changed_since",
-          "class": "validation",
-          "description": "Something changed since, so this cannot be undone safely."
-        },
-        {
-          "code": "not_found",
-          "class": "validation",
-          "description": "That change is not on record."
-        }
-      ]
-    },
-    {
-      "id": "finance.category-archive",
-      "description": "A person can archive a category with no budget money assigned. Income and transfer categories are protected. A budget currency must be saved first.",
-      "errors": [
-        {
-          "code": "protected_category",
-          "class": "validation",
-          "description": "Income and transfers cannot be archived."
-        },
-        {
-          "code": "has_assignments",
-          "class": "validation",
-          "description": "Move the budget money out of this category first."
-        }
-      ]
-    },
-    {
-      "id": "finance.bills",
-      "description": "A person can plan bills that repeat, adjust one coming bill, accept or dismiss suggestions found in saved spending, and record a bill as paid.",
-      "errors": [
-        {
-          "code": "bill_entry_conflict",
-          "class": "validation",
-          "description": "The bill entry clashes with an existing one."
-        },
-        {
-          "code": "bill_entry_duplicate",
-          "class": "validation",
-          "description": "That bill is already recorded."
-        },
-        {
-          "code": "bill_already_reviewed",
-          "class": "validation",
-          "description": "That bill was already reviewed."
-        },
-        {
-          "code": "bill_entry_account",
-          "class": "validation",
-          "description": "Pick a manual account in the budget currency."
-        },
-        {
-          "code": "bill_entry_period",
-          "class": "validation",
-          "description": "That date falls in a reconciled period."
-        },
-        {
-          "code": "bill_entry_overflow",
-          "class": "validation",
-          "description": "The amount is too large."
-        },
-        {
-          "code": "bill_not_due",
-          "class": "validation",
-          "description": "That bill is not due yet."
-        },
-        {
-          "code": "invalid_bill_projection",
-          "class": "validation",
-          "description": "The bill dates cannot be worked out."
-        },
-        {
-          "code": "invalid_occurrence",
-          "class": "validation",
-          "description": "That coming bill does not exist."
-        },
-        {
-          "code": "invalid_date",
-          "class": "validation",
-          "description": "Choose a valid planned date."
-        },
-        {
-          "code": "invalid_category",
-          "class": "validation",
-          "description": "Choose a current category for the payment."
-        }
-      ]
-    },
-    {
-      "id": "finance.targets",
-      "description": "A person can set monthly, weekly, refill or balance targets, and fund them from what is ready to assign.",
-      "errors": [
-        {
-          "code": "stale_target_guidance",
-          "class": "validation",
-          "description": "The target guidance is out of date. Refresh and try again."
-        },
-        {
-          "code": "target_unavailable",
-          "class": "validation",
-          "description": "That category cannot have a target."
-        },
-        {
-          "code": "current_month_required",
-          "class": "validation",
-          "description": "Funding works on the current month only."
-        },
-        {
-          "code": "invalid_selection",
-          "class": "validation",
-          "description": "Pick between 1 and 20 different targets."
-        },
-        {
-          "code": "not_enough_ready",
-          "class": "validation",
-          "description": "The targets cost more than is ready to assign."
-        },
-        {
-          "code": "cover_overspending",
-          "class": "validation",
-          "description": "Cover overspent categories and card payments before funding targets."
-        },
-        {
-          "code": "funding_unavailable",
-          "class": "validation",
-          "description": "Ready to assign cannot be worked out for that month."
-        }
-      ]
-    },
-    {
-      "id": "finance.flex-pool",
-      "description": "A person can let several categories share one pool, set the pool total, and leave it again.",
-      "errors": [
-        {
-          "code": "flex_member",
-          "class": "validation",
-          "description": "That category is in the flexible pool."
-        },
-        {
-          "code": "flex_active",
-          "class": "validation",
-          "description": "The flexible pool is active for that month."
-        },
-        {
-          "code": "flex_target",
-          "class": "validation",
-          "description": "A flexible category cannot have a target."
-        },
-        {
-          "code": "future_assignments",
-          "class": "validation",
-          "description": "Later months already have amounts."
-        },
-        {
-          "code": "open_draft",
-          "class": "validation",
-          "description": "Finish the open draft first."
-        },
-        {
-          "code": "current_month_required",
-          "class": "validation",
-          "description": "This works on the current month only."
-        }
-      ]
-    },
-    {
-      "id": "finance.card-reserves",
-      "description": "A person can set aside money for a manual credit card payment, month by month.",
-      "errors": [
-        {
-          "code": "card_ledger_review_required",
-          "class": "validation",
-          "description": "The card ledger needs repair before reserves work."
-        },
-        {
-          "code": "insufficient_ready",
-          "class": "validation",
-          "description": "Choose less payment cash or release other assignments before saving."
-        },
-        {
-          "code": "current_month_required",
-          "class": "validation",
-          "description": "This works on the current month only."
-        }
-      ]
-    }
+    {"id": "finance.account-data", "description": "The whole-account export collects a person's accounts, transactions, categories, rules, budget, bills, targets and undo records, and the whole-account delete removes all of them and drops any saved bank token. Bank links and link sessions are left out of the export because they name a stored credential. Each call touches only the signed-in person's rows.", "errors": []},
+    {"id": "finance.start", "description": "With no accounts, Finance opens on Start, which offers a manual account without any bank keys and shows whether a bank can be connected. A person with an account opens on Budget.", "errors": []},
+    {"id": "finance.settings", "description": "The settings page, opened from the cog in the Finance header, shows how much Moss sorts alone, whether bank keys are saved, the person's merchant rules and the last week of activity with an Undo button. Changing the sorting limits and the dollar limit is not available from this page yet.", "errors": []},
+    {"id": "finance.accounts", "description": "A person can list their own accounts with current balances, currencies and, for manual accounts, the opening date and balance. With no accounts, the list suggests adding a manual account. Accounts shared by other people and bank links are not built yet. The Finance screen shows it.", "errors": [{"code": "finance_accounts_unavailable", "class": "transient", "description": "Accounts could not be read. Try again in a moment."}]},
+    {"id": "finance.manual-accounts", "description": "A person can add a private manual account (checking, savings, cash, credit, loan or asset) in one of twelve currencies, with an opening date that is not in the future and an opening balance. Repeating the same operation id with the same values changes nothing. The assistant's version needs the account's one-use approval. No bank money is moved.", "errors": [{"code": "invalid_input", "class": "validation", "description": "A value was not accepted. Fix the field named in the message and try again."}, {"code": "unsupported_currency", "class": "validation", "description": "Choose one of the twelve supported two-decimal currencies and try again."}, {"code": "future_date", "class": "validation", "description": "The date is after today in your time zone. Choose today or an earlier date."}, {"code": "manual_conflict", "class": "validation", "description": "This operation id already saved different values. Check the saved account and use a new operation id for a new one."}]},
+    {"id": "finance.manual-entries", "description": "A person can add a manual transaction to a manual account. It moves the account balance (down for cash-like accounts, up for credit and loans), needs a current category or is marked for a look, and cannot be dated before the account opened, in a reconciled period or in the future. Repeating the same operation id with the same values changes nothing. The assistant's version needs the account's one-use approval.", "errors": [{"code": "invalid_category", "class": "validation", "description": "Choose a current category. Linked transfers need their own workflow."}, {"code": "manual_unavailable", "class": "validation", "description": "The manual account is missing, closed or uses a different currency. Check the account and try again."}, {"code": "manual_invalid_date", "class": "validation", "description": "The date is before the account's opening date. Choose a later date."}, {"code": "manual_reconciled_period", "class": "validation", "description": "The date falls in a reconciled statement period. Choose a later date."}, {"code": "manual_overflow", "class": "validation", "description": "The new balance would be too large to store. Check the amount and try again."}]},
+    {"id": "finance.transactions", "description": "A person can list their own transactions for a month with filters, search, notes and splits. They can set or change a category, confirm what Moss sorted, save a note, split a transaction across categories, and sort many at once. Moss sorts by payee rule first, then the bank's own category, and only confirms on its own when the sorting tier allows it. The Finance screen shows it.", "errors": [{"code": "stale_transaction", "class": "validation", "description": "The transaction changed since you opened it. Reload and try again."}, {"code": "split_transaction", "class": "validation", "description": "This transaction is split. Remove the split before choosing one category."}, {"code": "linked_transfer", "class": "validation", "description": "This transaction is part of a transfer. Use the transfer workflow instead."}, {"code": "amount_mismatch", "class": "validation", "description": "The parts of a split must add up to the transaction amount."}, {"code": "new_merchant", "class": "validation", "description": "This payee is new, so the category needs your approval."}]},
+    {"id": "finance.rules", "description": "A person can list payee rules, preview what a rule would change, and turn rules on, off or remove them. A rule always confirms the category it sets.", "errors": [{"code": "stale_rules", "class": "validation", "description": "Your rules changed since you opened them. Reload and try again."}]},
+    {"id": "finance.categories", "description": "A person can add or rename a category inside a group. Archiving a category is not built yet.", "errors": [{"code": "duplicate_name", "class": "validation", "description": "A category with this name already exists. Choose another name."}]},
+    {"id": "finance.import", "description": "A person can read a CSV bank file of up to 1 MiB and 200 rows, check the rows against what is already saved, choose what to do with each duplicate, and import the rest into a manual account. Importing the same file twice with the same operation id saves it once. No bank money is moved.", "errors": [{"code": "invalid_csv", "class": "validation", "description": "The file could not be read. The message names the row and what to fix."}, {"code": "stale_import", "class": "validation", "description": "The account changed since the preview. Preview again and import."}]},
+    {"id": "finance.bank-connect", "description": "A person can link a bank. Starting returns a page address to open, the person signs in there, and a check then saves the bank and pulls its first accounts and transactions. Starting again for a bank that needs a new sign-in reconnects it without a second copy. The assistant's version of starting needs a one-use approval. The bank's sign-in token never leaves the host.", "errors": [{"code": "bank_unavailable", "class": "transient", "description": "The bank service is not set up or could not start the link. Check the bank service keys in settings, then try again."}, {"code": "token_read_failed", "class": "transient", "description": "The saved bank sign-in could not be read. Try again, or reconnect the bank."}]},
+    {"id": "finance.bank-sync", "description": "Balances and transactions for every connected bank are pulled every six hours and on request. Each bank is handled on its own, so one failing bank never stops the others. If the bank changes its pages during a read, Moss retries from the start of that read, up to three times. A bank that needs a new sign-in is marked as needing a reconnect and keeps its saved data. A person's own category and note on a bank transaction are kept, and manual entries are never overwritten. Categorizing new transactions is not built yet.", "errors": []},
+    {"id": "finance.budget", "description": "A person can choose a budget currency once, see a month of the budget with each category's assigned, spent and available money and what is ready to assign, set the amount for one category or up to 20 at once, and move money between categories or from ready to assign. Every save needs the review numbers from the screen. If the budget or the ledger changed since, nothing is saved. The Finance screen shows the budget. Flexible pools, targets, card payments and bills are not built yet.", "errors": [{"code": "stale_budget", "class": "validation", "description": "The budget or ledger changed. Refresh and review the amounts again before saving."}, {"code": "stale_previous", "class": "validation", "description": "The amount shown for a category is out of date. Refresh and try again."}, {"code": "invalid_category", "class": "validation", "description": "The category is not one that can be budgeted."}, {"code": "not_enough_ready", "class": "validation", "description": "The amount is more than is ready to assign."}, {"code": "not_enough_available", "class": "validation", "description": "The amount is more than the source category holds."}, {"code": "funding_unavailable", "class": "validation", "description": "Ready to assign cannot be worked out for that month."}, {"code": "budget_currency_required", "class": "validation", "description": "Choose a budget currency first."}, {"code": "budget_currency_fixed", "class": "validation", "description": "The budget currency is already chosen and cannot be changed."}, {"code": "legacy_review_required", "class": "validation", "description": "Earlier budget data exists. Review it and confirm before starting over."}, {"code": "storage_upgrade_required", "class": "validation", "description": "Finish the category upgrade before budgeting."}]},
+    {"id": "finance.budget-drafts", "description": "A person can ask for a first budget built from the last three full months of saved spending, edit its lines, and start it so its amounts become this month's budget. A draft is built once and never overwrites an existing budget.", "errors": [{"code": "draft_not_found", "class": "validation", "description": "That draft is not the current draft."}, {"code": "draft_not_open", "class": "validation", "description": "The draft has already been started."}, {"code": "protected_category", "class": "validation", "description": "Income and transfers cannot be budgeted."}, {"code": "archived_category", "class": "validation", "description": "A planned line points at an archived category."}, {"code": "category_not_in_draft", "class": "validation", "description": "That category is not in the draft. To add a line, give its name, group and amount."}]},
+    {"id": "finance.sharing", "description": "A person can share a bank account with the household or stop sharing it. Others then see its name, balance and transactions with date, payee, merchant, bank category, category, amount, pending state and any transfer link, never notes, review state, who chose the category, or bank link details. Manual accounts cannot be shared yet. No screen is built yet.", "errors": [{"code": "unknown_account", "class": "validation", "description": "That account is not on record."}, {"code": "manual_sharing_unavailable", "class": "validation", "description": "Manual accounts stay private for now."}]},
+    {"id": "finance.reports", "description": "A person can read a monthly spending report and a net worth chart, and list the transactions behind a figure. Other people's shared accounts appear in spending apart from the person's own. Net worth never includes other people. No screen is built yet.", "errors": [{"code": "report_scope_changed", "class": "validation", "description": "The report changed since you opened it. Reload and try again."}]},
+    {"id": "finance.export", "description": "A person can export their own transaction history as a spreadsheet, for all dates or a range, or for one account. Other people's rows are never included. Very large histories are refused with the count.", "errors": [{"code": "export_failed", "class": "validation", "description": "Choose valid dates, with the start on or before the end."}]},
+    {"id": "finance.activity", "description": "A person can list recent changes to their finance data and undo a category choice, a rule, a new category or an archive when nothing has changed since. Budget changes cannot be undone yet. No screen is built yet.", "errors": [{"code": "not_undoable", "class": "validation", "description": "That change cannot be undone."}, {"code": "changed_since", "class": "validation", "description": "Something changed since, so this cannot be undone safely."}, {"code": "not_found", "class": "validation", "description": "That change is not on record."}]},
+    {"id": "finance.category-archive", "description": "A person can archive a category with no budget money assigned. Income and transfer categories are protected. A budget currency must be saved first.", "errors": [{"code": "protected_category", "class": "validation", "description": "Income and transfers cannot be archived."}, {"code": "has_assignments", "class": "validation", "description": "Move the budget money out of this category first."}]},
+    {"id": "finance.bills", "description": "A person can plan bills that repeat, adjust one coming bill, accept or dismiss suggestions found in saved spending, and record a bill as paid.", "errors": [{"code": "bill_entry_conflict", "class": "validation", "description": "The bill entry clashes with an existing one."}, {"code": "bill_entry_duplicate", "class": "validation", "description": "That bill is already recorded."}, {"code": "bill_already_reviewed", "class": "validation", "description": "That bill was already reviewed."}, {"code": "bill_entry_account", "class": "validation", "description": "Pick a manual account in the budget currency."}, {"code": "bill_entry_period", "class": "validation", "description": "That date falls in a reconciled period."}, {"code": "bill_entry_overflow", "class": "validation", "description": "The amount is too large."}, {"code": "bill_not_due", "class": "validation", "description": "That bill is not due yet."}, {"code": "invalid_bill_projection", "class": "validation", "description": "The bill dates cannot be worked out."}, {"code": "invalid_occurrence", "class": "validation", "description": "That coming bill does not exist."}, {"code": "invalid_date", "class": "validation", "description": "Choose a valid planned date."}, {"code": "invalid_category", "class": "validation", "description": "Choose a current category for the payment."}]},
+    {"id": "finance.targets", "description": "A person can set monthly, weekly, refill or balance targets, and fund them from what is ready to assign.", "errors": [{"code": "stale_target_guidance", "class": "validation", "description": "The target guidance is out of date. Refresh and try again."}, {"code": "target_unavailable", "class": "validation", "description": "That category cannot have a target."}, {"code": "current_month_required", "class": "validation", "description": "Funding works on the current month only."}, {"code": "invalid_selection", "class": "validation", "description": "Pick between 1 and 20 different targets."}, {"code": "not_enough_ready", "class": "validation", "description": "The targets cost more than is ready to assign."}, {"code": "cover_overspending", "class": "validation", "description": "Cover overspent categories and card payments before funding targets."}, {"code": "funding_unavailable", "class": "validation", "description": "Ready to assign cannot be worked out for that month."}]},
+    {"id": "finance.flex-pool", "description": "A person can let several categories share one pool, set the pool total, and leave it again.", "errors": [{"code": "flex_member", "class": "validation", "description": "That category is in the flexible pool."}, {"code": "flex_active", "class": "validation", "description": "The flexible pool is active for that month."}, {"code": "flex_target", "class": "validation", "description": "A flexible category cannot have a target."}, {"code": "future_assignments", "class": "validation", "description": "Later months already have amounts."}, {"code": "open_draft", "class": "validation", "description": "Finish the open draft first."}, {"code": "current_month_required", "class": "validation", "description": "This works on the current month only."}]},
+    {"id": "finance.card-reserves", "description": "A person can set aside money for a manual credit card payment, month by month.", "errors": [{"code": "card_ledger_review_required", "class": "validation", "description": "The card ledger needs repair before reserves work."}, {"code": "insufficient_ready", "class": "validation", "description": "Choose less payment cash or release other assignments before saving."}, {"code": "current_month_required", "class": "validation", "description": "This works on the current month only."}]},
+    {"id": "finance.chat-tools", "description": "Moss can use the 57 Finance chat tools when Finance is installed and switched on: read accounts, transactions and reports; record manual entries; sort and review; plan budgets, bills, targets, flexible pools and card reserves. Plain writes show a Done row with saved changes. Removing a target always asks first in the chat drawer; other writes ask if you chose to require approval. Review every labelled value before approving. If an approval expires or a saved review is stale, ask Moss to read again and retry."}
   ],
   "policyRoutes": {
-    "sorting": {
-      "installTier": "trusted_auto"
-    },
-    "sorting_new": {
-      "installTier": "ask_each_time"
-    }
+    "sorting": {"installTier": "trusted_auto"},
+    "sorting_new": {"installTier": "ask_each_time"}
   },
   "credentials": {
-    "plaid-keys": {
-      "scope": "instance",
-      "hosts": ["sandbox.plaid.com", "production.plaid.com"],
-      "attachment": {
-        "kind": "fields",
-        "name": {
-          "client_id": "clientId",
-          "secret": "clientSecret"
-        }
-      },
-      "exposeFields": ["link_token", "public_token", "hosted_link_url", "expiration"]
-    },
-    "plaid-item": {
-      "scope": "account",
-      "hosts": ["sandbox.plaid.com", "production.plaid.com"],
-      "attachment": {
-        "kind": "fields",
-        "name": {
-          "access_token": "accessToken"
-        }
-      },
-      "with": ["plaid-keys"],
-      "exchange": {
-        "endpoint": "https://production.plaid.com/item/public_token/exchange",
-        "grantType": "token_swap",
-        "format": "json",
-        "input": "public_token"
-      },
-      "exposeFields": ["link_token", "hosted_link_url", "expiration"]
-    }
+    "plaid-keys": {"scope": "instance", "hosts": ["sandbox.plaid.com", "production.plaid.com"], "attachment": {"kind": "fields", "name": {"client_id": "clientId", "secret": "clientSecret"}}, "exposeFields": ["link_token", "public_token", "hosted_link_url", "expiration"]},
+    "plaid-item": {"scope": "account", "hosts": ["sandbox.plaid.com", "production.plaid.com"], "attachment": {"kind": "fields", "name": {"access_token": "accessToken"}}, "with": ["plaid-keys"], "exchange": {"endpoint": "https://production.plaid.com/item/public_token/exchange", "grantType": "token_swap", "format": "json", "input": "public_token"}, "exposeFields": ["link_token", "hosted_link_url", "expiration"]}
   },
   "jobRetries": {
     "finance.sync-run": 3,

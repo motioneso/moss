@@ -4,6 +4,8 @@ mod registry;
 #[path = "support/replay.rs"]
 mod replay;
 mod support;
+#[path = "support/clock.rs"]
+mod clock;
 use moss_module_host::{
     application::{Application, Configuration},
     registry::Source,
@@ -76,6 +78,9 @@ struct World {
 }
 impl World {
     fn new(zone: &str) -> Self {
+        Self::with_clock(zone, None)
+    }
+    fn with_clock(zone: &str, now: Option<clock::Clock>) -> Self {
         let f = support::Fixture::new();
         f.rt.block_on(async {
             // The queue tables are created once per database, however many tests run here.
@@ -102,7 +107,11 @@ impl World {
         let reg = tempfile::tempdir().unwrap();
         let bytes = moss_briefings_host::package::pack(&root(), &component()).unwrap();
         let (key, publisher, artifact) = registry::publish(reg.path(), &bytes);
-        let app = Application::open_extended(
+        let open = |data: &std::path::Path, database, admin, config| match now {
+            Some(now) => clock::application(data, database, admin, config, now),
+            None => Application::open_extended(data, database, admin, config),
+        };
+        let app = open(
             dir.path(),
             f.db.clone(),
             f.access(f.a),
@@ -380,7 +389,8 @@ fn make_definition(w: &World, who: uuid::Uuid, cadence: &str) -> String {
 #[test]
 #[ignore = "Only through verify-gate"]
 fn manual_and_scheduled_runs_store_once_notify_once_and_keep_text_out_of_every_side_table() {
-    let w = World::new("UTC");
+    let now = Arc::new(std::sync::Mutex::new("2026-11-19T23:59:59.000Z".to_owned()));
+    let w = World::with_clock("UTC", Some(now.clone()));
     let (a, b) = (w.f.a, w.f.b);
     zone_for(&w, b, "UTC");
     let id = make_definition(&w, a, "daily");
@@ -425,6 +435,7 @@ fn manual_and_scheduled_runs_store_once_notify_once_and_keep_text_out_of_every_s
     assert_eq!(runs("manual"), 3);
     println!("PASS key: refused while queued (409), accepted again once the first finished");
 
+    // Keep both fires on the same local day, even if the real clock crosses UTC midnight.
     // A scheduled fire stores one run and notifies once. A second fire the same day does neither.
     w.make_schedule_due(a);
     w.work();
@@ -475,6 +486,13 @@ fn manual_and_scheduled_runs_store_once_notify_once_and_keep_text_out_of_every_s
         assert!(keys.is_subset(&["definition-id", "briefing-run-id", "briefing-type", "run-kind"].into_iter().collect()), "{payload}");
     }
     println!("PASS privacy: scanned {} tables and {} job payloads, found no briefing text", tables.len(), payloads.len());
+
+    // A new local day is allowed another briefing; time advances only when this test chooses.
+    *now.lock().unwrap() = "2026-11-20T00:00:01.000Z".to_owned();
+    w.make_schedule_due(a);
+    w.work();
+    assert_eq!((runs("scheduled"), notes()), (2, 2), "the next local day gets its own run and notification");
+    println!("PASS next local day: advancing the test clock past midnight permits a second run and notification");
 }
 
 #[test]
@@ -797,3 +815,6 @@ fn dismissed_items_stay_hidden_for_their_owner_only_and_undo_brings_them_back() 
     assert_eq!(read(a).as_array().unwrap().len(), 1);
     println!("GREEN: Undo brings the item, the entry and the run back");
 }
+
+#[path = "chat.rs"]
+mod chat;

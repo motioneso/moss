@@ -29,10 +29,24 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-11-22
+
+#### Fixed
+
+- **Sports briefing failures on busy nights.** The daily sports briefing no longer fails on nights with a lot of live games. [PR #4449](https://github.com/motioneso/moss/pull/4449)
+
+### 2026-11-21
+
+#### Fixed
+
+- **Moss knows when you approved an action.** When you approve an action card in chat, Moss now knows you approved it instead of saying no approval was needed. [PR #4442](https://github.com/motioneso/moss/pull/4442)
+
 ### 2026-11-19
 
 #### Added
 
+- **Email and calendar switches in Briefings settings.** Briefings settings now let you turn the email and calendar signals on or off, and the change shows on the Email and Calendar settings too. [PR #4428](https://github.com/motioneso/moss/pull/4428)
+- **Catch-up on Today.** Today now lists emails from your morning briefing that still need a look, so you can add a follow-up task or dismiss each one, and undo either. [PR #4426](https://github.com/motioneso/moss/pull/4426)
 - **Needs you on Today.** Today now lists the things your morning briefing flagged for you, so you can accept or dismiss each suggested task right there. [PR #4421](https://github.com/motioneso/moss/pull/4421)
 - **Manage linked devices in Meetings.** You can now see, rename and unlink the Macs and phones linked to Meetings, and approve a new device from a simple question on screen. [PR #4387](https://github.com/motioneso/moss/pull/4387)
 - **Review commitments on Today.** Review things you said you would do on Today, then accept, reject or snooze each suggestion. [PR #4378](https://github.com/motioneso/moss/pull/4378)
@@ -40,6 +54,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Your saved plan on Today.** Today shows your saved schedule and lets you read the task-block review on a computer or phone. [PR #4425](https://github.com/motioneso/moss/pull/4425)
 - **Today shows your morning briefing status.** The Today screen now tells you whether your morning briefing is switched off, running, failed, or still due, instead of showing placeholder text. [PR #4410](https://github.com/motioneso/moss/pull/4410)
 
 ### 2026-11-18

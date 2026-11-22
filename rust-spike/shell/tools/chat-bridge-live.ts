@@ -32,6 +32,57 @@ if (process.env.MOSS_CHAT_COMMITMENTS_PROOF === "1") {
   ]);
   process.env.JS383_COMMITMENTS_PACKAGE = join(target, "commitments.mosspkg");
 }
+if (process.env.MOSS_CHAT_PART4D_PROOF === "1") {
+  run("bash", ["rust-spike/shell/tools/chat-part4d-live.sh"]);
+  for (const module of ["tasks", "calendar", "email", "connectors", "meals", "web-research"]) {
+    process.env[`JS389_${module.replaceAll("-", "_").toUpperCase()}_PACKAGE`] = join(
+      target,
+      `${module}.mosspkg`
+    );
+  }
+}
+if (process.env.MOSS_CHAT_NOTES_PROOF === "1") {
+  run("bash", ["modules/notes/tools/build-component.sh", join(target, "notes.wasm")], {
+    NOTES_TOOL_CHECKPOINT: "1",
+    CARGO_TARGET_DIR: join(target, "notes-guest"),
+    MOSS_HOST_TARGET_DIR: target
+  });
+  cargo("modules/notes/tools/Cargo.toml", ["build", "--bin", "notes-pack"]);
+  run(join(target, "debug/notes-pack"), [
+    join(target, "notes.wasm"),
+    join(target, "notes.mosspkg")
+  ]);
+  process.env.JS388_NOTES_PACKAGE = join(target, "notes.mosspkg");
+}
+if (process.env.MOSS_CHAT_NEWS_PROOF === "1") {
+  run("bash", ["modules/news/tools/build-component.sh", join(target, "news.wasm")]);
+  cargo("modules/news/host/Cargo.toml", ["build", "--bin", "news-package"]);
+  run(join(target, "debug/news-package"), [
+    join(target, "news.wasm"),
+    join(target, "news.mosspkg")
+  ]);
+  process.env.JS386_NEWS_PACKAGE = join(target, "news.mosspkg");
+}
+if (process.env.MOSS_CHAT_PART4B_PROOF === "1") {
+  for (const module of ["sports", "wellness", "weather", "briefings"]) {
+    run("bash", [`modules/${module}/tools/build-component.sh`, join(target, `${module}.wasm`)]);
+    cargo(`modules/${module}/host/Cargo.toml`, ["build", "--bin", `${module}-package`]);
+    run(join(target, `debug/${module}-package`), [
+      join(target, `${module}.wasm`),
+      join(target, `${module}.mosspkg`)
+    ]);
+    process.env[`JS387_${module.toUpperCase()}_PACKAGE`] = join(target, `${module}.mosspkg`);
+  }
+}
+if (process.env.MOSS_CHAT_FINANCE_PROOF === "1") {
+  run("bash", ["modules/finance/tools/build-component.sh", join(target, "finance.wasm")]);
+  cargo("modules/finance/host/Cargo.toml", ["build", "--bin", "finance-package"]);
+  run(join(target, "debug/finance-package"), [
+    join(target, "finance.wasm"),
+    join(target, "finance.mosspkg")
+  ]);
+  process.env.JS390_FINANCE_PACKAGE = join(target, "finance.mosspkg");
+}
 cargo("rust-spike/shell/Cargo.toml", ["build", "-p", "moss-shell", "--features", "live-proof"]);
 cargo("rust-spike/agents/Cargo.toml", ["build", "--bins"]);
 cargo("rust-spike/network/Cargo.toml", ["build", "--bin", "moss-network"]);

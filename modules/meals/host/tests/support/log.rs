@@ -96,7 +96,7 @@ fn installed_log_tools_match_the_old_handlers_step_for_step() {
                         (new_entry, old_entry) = (a.to_owned(), b.to_owned());
                     }
                 }
-                let (mut a, mut b) = (new["body"].clone(), old.clone());
+                let (mut a, mut b) = (receipts::legacy_reply(new["body"].clone()), old.clone());
                 replay::mask(&mut a);
                 replay::mask(&mut b);
                 assert_eq!(a, b, "step {n} {tool} {params}");

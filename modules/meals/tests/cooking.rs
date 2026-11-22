@@ -58,6 +58,14 @@ fn quantity(f: &Fake, id: &str) -> Value {
     f.rows(PANTRY).into_iter().find(|r| r["item_id"] == id).unwrap()["quantity"].clone()
 }
 
+fn undo_result(mut result: Value, restored: u32, label: &str) {
+    let changes = result.as_object_mut().unwrap().remove("changed").unwrap();
+    assert!(changes.as_array().unwrap().iter().any(|field| {
+        field["label"] == label && field["before"] != field["after"]
+    }));
+    assert_eq!(result, json!({"restored":restored,"skipped":0}));
+}
+
 #[test]
 fn cooking_takes_the_scaled_amounts_out_of_the_pantry_and_never_below_zero() {
     let f = Fake::new();
@@ -115,7 +123,7 @@ fn undoing_a_cooked_meal_puts_back_the_meal_and_the_pantry() {
     let done = f.ok("meals.meal.cooked", json!({"mealId":MEAL}));
     let action = done["undo"]["actionId"].clone();
     let undone = f.ok("meals.undo", json!({"actionId":action}));
-    assert_eq!(undone, json!({"restored":3,"skipped":0}));
+    undo_result(undone, 3, "Pantry item");
     let quantities = |rows: Vec<Value>| rows.iter().map(|r| r["quantity"].clone()).collect::<Vec<_>>();
     assert_eq!(quantities(f.rows(PANTRY)), quantities(before));
     assert!(f.rows(MEALS).iter().find(|m| m["meal_id"] == MEAL).unwrap()["cooked_at"].is_null());
@@ -134,7 +142,7 @@ fn undoing_a_bought_list_removes_the_pantry_row_and_reopens_the_line() {
     let bought = f.ok("meals.list.bought", json!({}));
     assert_eq!(f.rows(PANTRY).len(), 1);
     let undone = f.ok("meals.undo", json!({"actionId":bought["undo"]["actionId"]}));
-    assert_eq!(undone, json!({"restored":1,"skipped":0}));
+    undo_result(undone, 1, "Pantry item");
     assert!(f.rows(PANTRY).is_empty());
     assert!(f.rows(ITEMS)[0]["bought_at"].is_null());
 }
@@ -148,7 +156,7 @@ fn undoing_a_removed_line_or_pantry_item_brings_it_back_once() {
     let removed = f.ok("meals.list.edit", json!({"action":"remove","lineId":id}));
     assert!(f.rows(ITEMS).is_empty());
     let undone = f.ok("meals.undo", json!({"actionId":removed["undo"]["actionId"]}));
-    assert_eq!(undone, json!({"restored":1,"skipped":0}));
+    undo_result(undone, 1, "Shopping item");
     assert_eq!(without_times(f.rows(ITEMS)), without_times(before));
 
     let item = f.ok("meals.pantry.edit", json!({"action":"add","name":"Rice","quantity":2,"unit":"kg"}));
@@ -157,7 +165,7 @@ fn undoing_a_removed_line_or_pantry_item_brings_it_back_once() {
     let gone = f.ok("meals.pantry.edit", json!({"action":"remove","itemId":item_id}));
     assert!(f.rows(PANTRY).is_empty());
     let back = f.ok("meals.undo", json!({"actionId":gone["undo"]["actionId"]}));
-    assert_eq!(back, json!({"restored":1,"skipped":0}));
+    undo_result(back, 1, "Pantry item");
     assert_eq!(without_times(f.rows(PANTRY)), without_times(pantry_before));
 }
 

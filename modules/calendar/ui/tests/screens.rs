@@ -14,7 +14,7 @@ fn month_escapes_private_event_text() {
         all_day: false,
         is_moss_block: false,
         location: None,
-        attendee_count: 0.0,
+        attendee_count: Some(0.0),
         status: None,
         read_only: true,
         unconfirmed: true,
@@ -59,6 +59,18 @@ fn unsaved_locale_uses_the_production_twenty_four_hour_clock() {
     assert!(!moss_calendar_ui::model::twelve(Some("24")));
     assert!(moss_calendar_ui::model::twelve(Some("12")));
     assert_eq!(moss_calendar_ui::model::time(13 * 60 + 30, false), "13:30");
+}
+
+#[test]
+fn unknown_guest_count_keeps_the_calendar_event_readable() {
+    let event: Event = serde_json::from_value(serde_json::json!({
+        "id":"meeting", "title":"Review", "startsAt":"2026-11-08T10:00:00Z",
+        "endsAt":"2026-11-08T11:30:00Z", "attendeeCount":null
+    })).unwrap();
+    assert_eq!(event.attendee_count, None);
+    let output = view!{<EventDetails event=event timezone="UTC".to_string() twelve=false on_close=Callback::new(|_|{})/>}.to_html();
+    assert!(output.contains("Review"));
+    assert!(!output.contains("0 people"));
 }
 
 #[test]

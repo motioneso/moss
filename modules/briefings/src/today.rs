@@ -3,7 +3,7 @@
 //! owns every change and every ownership check.
 use crate::action_rows::project_action_rows;
 use crate::gather::{api, items};
-use crate::runs::{is_uuid, payload_of, run_rows};
+use crate::runs::{is_uuid, payload_of, run_rows, visible_catch_up, Hidden};
 use crate::util::{bad_request, call};
 use crate::definitions;
 use moss_module_sdk::{Host, Response, Result, RouteRequest};
@@ -32,7 +32,16 @@ fn latest_run<H: Host + ?Sized>(host: &H, actor: &str) -> Result<Option<Value>> 
 
 fn reply(state: &str, rows: Vec<Value>, run: Option<&Value>, tasks: bool) -> Response {
     let run = run.map(|r| json!({"id": r["id"], "createdAt": r["created_at"]}));
-    Response::new(200, json!({"state": state, "rows": rows, "run": run, "tasks": tasks}))
+    Response::new(200, json!({"state": state, "rows": rows, "run": run, "tasks": tasks, "catchUp": null}))
+}
+
+/// The run's catch-up entries the caller has not added or dismissed. The ratings come from the
+/// feedback port, which answers for the caller only.
+fn with_catch_up<H: Host + ?Sized>(host: &H, run: &Value, mut response: Response) -> Response {
+    let catch_up = payload_of(&run["source_metadata"])["catchUp"].clone();
+    let visible = visible_catch_up(&catch_up, &Hidden::load(host, false).handled);
+    response.body["catchUp"] = visible;
+    response
 }
 
 /// Rows with a live status. With no Tasks answer the rows still show, without a status.
@@ -54,7 +63,7 @@ pub fn get<H: Host + ?Sized>(host: &H) -> Result<Response> {
     let live = api(host, "tasks", "listBriefingTasks", json!({"ids": ids}));
     let Ok(live) = live else {
         let rows = stored.into_iter().map(|mut r| { r["status"] = Value::Null; r }).collect();
-        return Ok(reply("rows", rows, Some(&run), false));
+        return Ok(with_catch_up(host, &run, reply("rows", rows, Some(&run), false)));
     };
     let live = items(&live);
     // A row whose task is gone, or is not the caller's, is dropped. Tasks answers for the caller only.
@@ -66,7 +75,7 @@ pub fn get<H: Host + ?Sized>(host: &H) -> Result<Response> {
             Some(row)
         })
         .collect();
-    Ok(reply("rows", rows, Some(&run), true))
+    Ok(with_catch_up(host, &run, reply("rows", rows, Some(&run), true)))
 }
 
 /// Accept or dismiss one task. Tasks decides whether the caller owns it and whether the move is

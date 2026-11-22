@@ -1,5 +1,6 @@
 //! Goals package: long-running goals and their evidence, private to each owner. All effects
 //! cross the guest-safe SDK Host interface. Chat tools share the route mutations; the Today package screen reads active goals.
+mod chat;
 pub mod goals;
 pub mod input;
 pub mod tools;
@@ -41,6 +42,13 @@ pub fn handle<H: Host + ?Sized>(
                 .and_then(|request| tools::handle(host, request))
                 .map_err(|_| moss_module_sdk::Error::new("Goals tool failed"))?;
             Ok(serde_json::to_string(&result)?)
+        }
+        "api" => {
+            let call: serde_json::Value = serde_json::from_str(payload)?;
+            if call["name"] != "prepareChatAction" {
+                return Err(moss_module_sdk::Error::new("Unknown Goals API"));
+            }
+            Ok(chat::prepare(host, &call["parameters"])?.to_string())
         }
         "route" => {
             let request: RouteRequest = serde_json::from_str(payload)?;
