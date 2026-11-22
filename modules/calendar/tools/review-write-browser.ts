@@ -184,6 +184,14 @@ try {
       `PASS Part 10 ${width}x${height}: accept two existing task additions; edit time; save/preview/apply; confirm; real calendar events at saved times; no new tasks`
     );
   }
+} catch (error) {
+  await page.screenshot({ path: join(out, "review-failure.png") });
+  console.log(`Review failure at ${new URL(page.url()).pathname}; frames: ${page.frames().length}`);
+  if (process.env.MOSS_CALENDAR_REVIEW_HOLD_SECONDS) {
+    console.log(`REVIEW FAILURE HOLD ${origin}`);
+    await page.waitForTimeout(Number(process.env.MOSS_CALENDAR_REVIEW_HOLD_SECONDS) * 1000);
+  }
+  throw error;
 } finally {
   await browser.close();
 }
