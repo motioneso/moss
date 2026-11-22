@@ -40,11 +40,15 @@ struct Seen {
 }
 
 impl Ports for Seen {
-    fn invoke(&self, _: &CallScope, port: &str, request: &Request) -> anyhow::Result<Value> {
+    fn invoke(&self, scope: &CallScope, port: &str, request: &Request) -> anyhow::Result<Value> {
         let name = request.parameters["name"].as_str().unwrap_or(&request.operation).to_string();
         self.calls.lock().unwrap().push((name.clone(), request.parameters.clone()));
         Ok(match (port, name.as_str()) {
-            ("context", "read") => json!({"now":"2026-03-02T08:00:00.000Z"}),
+            // The real host's context port answers the same shape, call identity included.
+            ("context", "read") => json!({
+                "actorUserId": scope.access().actor_user_id().to_string(),
+                "now": "2026-03-02T08:00:00.000Z",
+            }),
             ("api", "replyContext") => self.original.lock().unwrap().clone(),
             ("api", "listEvents") => json!({"events":*self.events.lock().unwrap()}),
             ("api", "getEvent") => {
