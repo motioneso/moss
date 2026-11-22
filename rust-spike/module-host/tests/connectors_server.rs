@@ -579,6 +579,206 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
         events.len() == 2 && !events.iter().any(|t| t == "Offsite") && account_row()["lastSyncStatus"] == "success"
     });
     println!("PASS Google sync second run: the event removed in Google is pruned under the runtime role");
+    // The day-plan apply routes, live through Calendar's own HTTPS surface: a
+    // plan with one proposed block is applied and the event lands in the
+    // calendar, a planned move answers 202 and executes through its stored
+    // approval, and an addition the busy calendar refused retries clean once
+    // the conflicting event is gone.
+    {
+        let civil = |days: i64| {
+            let z = days + 719_468;
+            let era = z.div_euclid(146_097);
+            let doe = z.rem_euclid(146_097);
+            let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+            let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+            let mp = (5 * doy + 2) / 153;
+            let d = doy - (153 * mp + 2) / 5 + 1;
+            let m = if mp < 10 { mp + 3 } else { mp - 9 };
+            (yoe + era * 400 + i64::from(m <= 2), m, d)
+        };
+        let today = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64
+            / 86_400;
+        let (y, m, d) = civil(today + 1);
+        let tomorrow = format!("{y:04}-{m:02}-{d:02}");
+        let plan_call = |method: reqwest::Method, path: &str, body: Option<Value>| {
+            let mut request = client
+                .request(method, format!("{origin}/api/m/calendar{path}"))
+                .header("origin", &origin)
+                .header("cookie", &cookie);
+            if let Some(body) = body {
+                request = request.json(&body);
+            }
+            let response = request.send().unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
+            let status = response.status().as_u16();
+            let text = response.text().unwrap_or_default();
+            (status, json_of(&text))
+        };
+        let (status, created) = plan_call(Method::POST, "/day-plans", Some(json!({"date":tomorrow,"timeZone":"UTC"})));
+        assert_eq!(status, 200, "{created}");
+        let plan = created["plan"]["id"].as_str().unwrap().to_owned();
+        let block = uuid::Uuid::new_v4();
+        let (status, saved) = plan_call(
+            Method::PATCH,
+            &format!("/day-plans/{plan}/draft"),
+            Some(json!({
+                "localDay": tomorrow, "timeZone": "UTC", "expectedRevision": 1,
+                "blocks": [{
+                    "id": block, "kind": "focus", "title": "Applied block proof",
+                    "pendingChange": {"kind":"add","startsAt":format!("{tomorrow}T14:00:00Z"),"durationMinutes":30}
+                }]
+            })),
+        );
+        assert_eq!(status, 200, "{saved}");
+        let (status, applied) = plan_call(
+            Method::POST,
+            &format!("/day-plans/{plan}/apply"),
+            Some(json!({"expectedRevision":2,"idempotencyKey":"live-apply-proof-1"})),
+        );
+        assert_eq!(status, 200, "{applied}");
+        assert_eq!(applied["status"], "completed", "{applied}");
+        assert_eq!(applied["items"][0]["outcome"], "applied", "{applied}");
+        let event_id = applied["items"][0]["result"]["providerEventId"].as_str().unwrap().to_owned();
+        assert!(event_id.starts_with("jap"), "{applied}");
+        // The event is on the calendar: the cache mirror carries it with the
+        // plan's own provider reference.
+        let mirrored = saved_events()
+            .iter()
+            .find(|e| e["title"] == "Applied block proof")
+            .unwrap_or_else(|| panic!("applied event missing: {:?}", saved_events()))
+            .clone();
+        assert_eq!(mirrored["externalId"], event_id.as_str());
+        // A replayed idempotency key answers the stored result.
+        let (status, replay) = plan_call(
+            Method::POST,
+            &format!("/day-plans/{plan}/apply"),
+            Some(json!({"expectedRevision":2,"idempotencyKey":"live-apply-proof-1"})),
+        );
+        assert_eq!(status, 200, "{replay}");
+        assert_eq!(replay["items"][0]["outcome"], "applied");
+        assert_eq!(replay["items"][0]["result"]["providerEventId"], event_id.as_str());
+        assert_eq!(
+            saved_events().iter().filter(|e| e["title"] == "Applied block proof").count(),
+            1,
+            "a replay duplicated the event"
+        );
+        // The applied block is moved through the confirmed approval.
+        let (status, moved) = plan_call(
+            Method::PATCH,
+            &format!("/day-plans/{plan}/draft"),
+            Some(json!({
+                "localDay": tomorrow, "timeZone": "UTC", "expectedRevision": 3,
+                "blocks": [{
+                    "id": block, "kind": "focus", "title": "Applied block proof",
+                    "actualPlacement": {"startsAt":format!("{tomorrow}T14:00:00Z"),"durationMinutes":30,"calendarEventRef":event_id},
+                    "pendingChange": {"kind":"move","startsAt":format!("{tomorrow}T15:30:00Z"),"durationMinutes":30}
+                }]
+            })),
+        );
+        assert_eq!(status, 200, "{moved}");
+        let (status, gated) = plan_call(
+            Method::POST,
+            &format!("/day-plans/{plan}/apply"),
+            Some(json!({"expectedRevision":4,"idempotencyKey":"live-apply-proof-2","selectedBlockIds":[block]})),
+        );
+        assert_eq!(status, 202, "{gated}");
+        assert_eq!(gated["status"], "confirmation-required", "{gated}");
+        let approval = gated["approvalId"].as_str().unwrap().to_owned();
+        let move_operation = gated["operationId"].as_str().unwrap().to_owned();
+        let (status, confirmed) = plan_call(
+            Method::POST,
+            &format!("/day-plans/{plan}/operations/{move_operation}/confirm"),
+            Some(json!({"approvalId": approval})),
+        );
+        assert_eq!(status, 200, "{confirmed}");
+        assert_eq!(confirmed["status"], "completed", "{confirmed}");
+        assert_eq!(confirmed["items"][0]["outcome"], "applied", "{confirmed}");
+        let placed = saved_events()
+            .iter()
+            .find(|e| e["title"] == "Applied block proof")
+            .unwrap()
+            .clone();
+        assert_eq!(placed["startsAt"], format!("{tomorrow}T15:30:00Z"), "{placed}");
+        let (status, refused) = plan_call(
+            Method::POST,
+            &format!("/day-plans/{plan}/operations/{move_operation}/confirm"),
+            Some(json!({"approvalId": approval})),
+        );
+        assert_eq!(status, 409, "{refused}");
+        // A busy calendar refuses the addition; once it clears, retry applies it.
+        let second_block = uuid::Uuid::new_v4();
+        let (status, saved) = plan_call(
+            Method::PATCH,
+            &format!("/day-plans/{plan}/draft"),
+            Some(json!({
+                "localDay": tomorrow, "timeZone": "UTC", "expectedRevision": 5,
+                "blocks": [{
+                    "id": second_block, "kind": "focus", "title": "Second block proof",
+                    "pendingChange": {"kind":"add","startsAt":format!("{tomorrow}T10:00:00Z"),"durationMinutes":30}
+                }]
+            })),
+        );
+        assert_eq!(status, 200, "{saved}");
+        let (status, refused_apply) = plan_call(
+            Method::POST,
+            &format!("/day-plans/{plan}/apply"),
+            Some(json!({"expectedRevision":6,"idempotencyKey":"live-apply-proof-3","selectedBlockIds":[second_block]})),
+        );
+        assert_eq!(status, 200, "{refused_apply}");
+        assert_eq!(refused_apply["items"][0]["outcome"], "failed", "{refused_apply}");
+        assert_eq!(refused_apply["items"][0]["result"]["reason"], "conflict", "{refused_apply}");
+        let busy_operation = refused_apply["operationId"].as_str().unwrap().to_owned();
+        let busy_item = refused_apply["items"][0]["itemId"].as_str().unwrap().to_owned();
+        {
+            use std::io::Write;
+            writeln!(google_commands, "remove-event Planning").unwrap();
+            google_commands.flush().unwrap();
+        }
+        let (status, retried) = plan_call(
+            Method::POST,
+            &format!("/day-plans/{plan}/operations/{busy_operation}/retry"),
+            Some(json!({"itemIds":[busy_item]})),
+        );
+        assert_eq!(status, 200, "{retried}");
+        assert_eq!(retried["items"][0]["outcome"], "applied", "{retried}");
+        assert!(
+            saved_events().iter().any(|e| e["title"] == "Second block proof"),
+            "the retried addition is on the calendar"
+        );
+        let (status, settled) = plan_call(Method::GET, &format!("/day-plans/{plan}/operations/{busy_operation}"), None);
+        assert_eq!(status, 200, "{settled}");
+        assert_eq!(settled["status"], "completed", "{settled}");
+        // A second account never sees the owner's plan or operations.
+        let other_cookie = signup("connectors-day-plan-other@example.test", "Day plan other");
+        let mut foreign = client
+            .post(format!("{origin}/api/m/calendar/day-plans/{plan}/apply"))
+            .header("origin", &origin)
+            .header("cookie", &other_cookie)
+            .json(&json!({"expectedRevision":2,"idempotencyKey":"foreign-live-1","selectedBlockIds":[block]}))
+            .send()
+            .unwrap();
+        assert_eq!(foreign.status().as_u16(), 404, "a foreign plan must read as missing");
+        let mut foreign = client
+            .post(format!("{origin}/api/m/calendar/day-plans/{plan}/operations/{move_operation}/recover"))
+            .header("origin", &origin)
+            .header("cookie", &other_cookie)
+            .json(&json!({}))
+            .send()
+            .unwrap();
+        assert_eq!(foreign.status().as_u16(), 404, "a foreign operation must read as missing");
+        let mut foreign = client
+            .post(format!("{origin}/api/m/calendar/day-plans/{plan}/operations/{move_operation}/confirm"))
+            .header("origin", &origin)
+            .header("cookie", &other_cookie)
+            .json(&json!({"approvalId": approval}))
+            .send()
+            .unwrap();
+        assert_eq!(foreign.status().as_u16(), 404, "a foreign operation must read as missing");
+        println!("PASS day-plan apply on the real server: apply, stored event, confirm and retry through the HTTPS routes, foreign ids 404");
+    }
+
     // The marker must be in no response, no log line, and no stored job; the stored secret is sealed.
     let markers = [MARKER, MARKER_TOKEN, MARKER_REFRESH];
     for body in &seen {

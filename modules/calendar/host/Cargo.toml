@@ -43,6 +43,11 @@ base64 = "0.22"
 ring = "0.17"
 chrono = "0.4"
 tempfile = "3"
+sha2 = "0.10"
+
+[[test]]
+name = "day_plan_apply"
+path = "tests/day_plan_apply.rs"
 
 [profile.dev]
 debug = 0
