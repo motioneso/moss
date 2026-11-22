@@ -101,12 +101,12 @@ try {
       .click({ timeout: 60_000 });
     const dialog = frame.getByRole("dialog");
     await expect(dialog).toBeVisible();
-    assert.deepEqual(writes, [], "opening review does not write");
+    assert.equal(writes.length, 0, "opening review does not write");
     const additionTime = name === "desktop" ? "05:30" : "18:30";
     const proposedTime = dialog.getByLabel(`${a.title}: start time`, { exact: true });
     await proposedTime.fill(additionTime);
     await proposedTime.dispatchEvent("change");
-    assert.deepEqual(writes, [], "editing a proposal writes only when saved or accepted");
+    assert.equal(writes.length, 0, "editing a proposal writes only when saved or accepted");
     await dialog.getByRole("button", { name: "Back to Today", exact: true }).click();
     await frame.getByRole("button", { name: "Review task blocks", exact: true }).click();
     await expect(dialog.getByLabel(`${a.title}: start time`, { exact: true })).toHaveValue(
