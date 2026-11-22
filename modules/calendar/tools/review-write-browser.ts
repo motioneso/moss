@@ -17,6 +17,14 @@ mkdirSync(out, { recursive: true });
 const browser = await chromium.launch({ channel: process.env.PW_CHANNEL || undefined });
 const context = await browser.newContext({ ignoreHTTPSErrors: true });
 const page = await context.newPage();
+page.on("response", async (response) => {
+  const request = response.request();
+  if (!response.url().includes("/api/m/calendar/") || request.method() === "GET") return;
+  const body = await response.json().catch(() => null);
+  console.log(
+    `Review ${request.method()} ${new URL(response.url()).pathname}: ${response.status()}${typeof body?.error === "string" ? ` ${body.error}` : ""}`
+  );
+});
 try {
   const signed = await context.request.post(`${origin}/api/auth/sign-in/email`, {
     headers: { origin },
@@ -195,13 +203,15 @@ try {
   }
 } catch (error) {
   await page.screenshot({ path: join(out, "review-failure.png") });
+  const message = error instanceof Error ? error.message.split("\n")[0] : "Live review failed";
+  console.log(message);
   console.log(`Review failure at ${new URL(page.url()).pathname}; frames: ${page.frames().length}`);
   if (process.env.MOSS_CALENDAR_REVIEW_HOLD_SECONDS) {
     console.log(`REVIEW FAILURE HOLD ${origin}`);
     await page.waitForTimeout(Number(process.env.MOSS_CALENDAR_REVIEW_HOLD_SECONDS) * 1000);
   }
   // Playwright request errors include cookie headers in their call log.
-  throw new Error(error instanceof Error ? error.message.split("\n")[0] : "Live review failed");
+  throw new Error(message);
 } finally {
   await browser.close();
 }
