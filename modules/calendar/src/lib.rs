@@ -49,8 +49,8 @@ impl Error {
     }
 }
 impl From<moss_module_sdk::Error> for Error {
-    fn from(e: moss_module_sdk::Error) -> Self {
-        Self::new(503, format!("Calendar data is unavailable: {}", e.message))
+    fn from(_: moss_module_sdk::Error) -> Self {
+        Self::new(503, "Calendar data is unavailable")
     }
 }
 impl From<serde_json::Error> for Error {

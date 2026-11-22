@@ -19,7 +19,8 @@ pub fn save(host: &impl Host, body: Value) -> Result<Value> {
             "route-write",
             crate::change_approval::WRITEBACK_FAMILY,
             json!({"tier": tier}),
-        )?;
+        )
+        .map_err(|e| Error::new(503, format!("JS394 route-write failed: {}", e.message)))?;
     }
     let saved = host.call("kv", "set", "calendar.briefing-settings", body)?;
     Ok(json!({"settings":derive(&saved)}))
