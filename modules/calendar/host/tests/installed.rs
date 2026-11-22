@@ -53,6 +53,10 @@ fn signed_rust_package_reuses_data_and_commits_only_successful_drafts() {
             f.root.batch_execute(moss_platform_jobs::MIGRATION).await.unwrap();
             f.root.batch_execute(moss_module_host::jobs::MIGRATION).await.unwrap();
         }
+        // The module catalog is shared through the gate database; this suite
+        // installs its own packages, so it starts from an empty catalog the
+        // same way a fresh database would.
+        f.root.execute("DELETE FROM moss_modules.catalog", &[]).await.unwrap();
         f.root.execute("INSERT INTO app.preferences(owner_user_id,key,value_json) VALUES($1,'calendar.prep_task_mode','\"auto\"')",&[&f.a]).await.unwrap();
     });
     f.rt.block_on(async {

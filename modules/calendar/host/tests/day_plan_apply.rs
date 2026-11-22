@@ -70,6 +70,10 @@ fn apply_retry_recover_and_confirm_are_owner_scoped_and_settle_once() {
         }
         // The host approval store the confirm route depends on; safe to repeat.
         f.root.batch_execute(moss_module_host::approval_port::MIGRATION).await.unwrap();
+        // The module catalog is shared through the gate database; this suite
+        // installs its own packages, so it starts from an empty catalog the
+        // same way a fresh database would.
+        f.root.execute("DELETE FROM moss_modules.catalog", &[]).await.unwrap();
     });
     let dir = tempfile::tempdir().unwrap();
     let registry_folder = tempfile::tempdir().unwrap();
