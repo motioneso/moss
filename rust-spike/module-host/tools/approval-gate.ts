@@ -12,7 +12,6 @@ import { getMossDatabaseUrls } from "@moss/db";
 if (process.env.JARVIS_GATE_RUN !== "1") throw new Error("Use verify-gate");
 const urls = getMossDatabaseUrls();
 const root = process.cwd();
-const spike = join(root, "rust-spike");
 const bootstrap = new pg.Client({ connectionString: urls.bootstrap });
 let failed = false;
 const check = (name: string, ok: boolean, detail?: unknown) => {
@@ -89,14 +88,21 @@ const controls: Control[] = [
 
 try {
   await bootstrap.connect();
+  const scratch = mkdtempSync(join(tmpdir(), "js399-approvals-"));
   // One disposable copy serves every control: each protection is planted, tested and
   // reverted in place, so the dependency build happens once, never in the working tree.
-  const scratch = mkdtempSync(join(tmpdir(), "js399-approvals-"));
-  cpSync(spike, join(scratch, "rust-spike"), {
-    recursive: true,
-    filter: (source: string) =>
-      source === spike || !/\/target(\/|$)/.test(source.slice(spike.length))
-  });
+  // `modules` comes along because module-host declares path dependencies outside the
+  // rust-spike folder (moss-email-host, moss-people).
+  const copyTree = (name: string) => {
+    const top = join(root, name);
+    cpSync(top, join(scratch, name), {
+      recursive: true,
+      filter: (source: string) =>
+        source === top || !/\/(target|node_modules)(\/|$)/.test(source.slice(top.length))
+    });
+  };
+  copyTree("rust-spike");
+  copyTree("modules");
   const copy = join(scratch, "rust-spike");
   try {
     // The protected proof must pass first.
