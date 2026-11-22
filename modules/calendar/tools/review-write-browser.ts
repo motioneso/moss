@@ -22,7 +22,7 @@ page.on("response", async (response) => {
   if (!response.url().includes("/api/m/calendar/") || request.method() === "GET") return;
   const body = await response.json().catch(() => null);
   console.log(
-    `Review ${request.method()} ${new URL(response.url()).pathname}: ${response.status()}${typeof body?.error === "string" ? ` ${body.error}` : ""}`
+    `Review ${request.method()} ${new URL(response.url()).pathname}: ${response.status()}${response.ok() ? "" : ` ${JSON.stringify(body)}`}`
   );
 });
 try {
