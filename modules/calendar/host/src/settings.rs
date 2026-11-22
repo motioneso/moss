@@ -18,6 +18,7 @@ impl CalendarPorts {
                 .contains_key(&call),
             "Only one settings patch per call"
         );
+        println!("JS394 save_settings remaining: {:?}, body: {}", scope.remaining(), body);
         let (cx, values) = self.runtime.block_on(async {
             tokio::time::timeout(scope.remaining(), async {
             let cx = DataContext::open_bounded(&self.database, scope.access(), scope.remaining())
