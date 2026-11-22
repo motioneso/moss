@@ -275,6 +275,7 @@ impl Host {
                         );
                         Ok(output)
                     })();
+                    if let Err(e) = &result { println!("JS394 port error: {e:#}"); }
                     // Backend errors can contain credentials or private provider replies.
                     Ok((result.map_err(|_| "The host refused this module request".to_string()),))
                 },
