@@ -11,15 +11,8 @@ type Block = {
   pendingChange: unknown;
 };
 type Event = { title: string; startsAt: string };
-const {
-  ORIGIN: origin,
-  PUBLIC_ORIGIN: publicOrigin,
-  EMAIL: email,
-  PASSWORD: password,
-  OUT: out
-} = process.env;
-if (!origin || !publicOrigin || !email || !password || !out)
-  throw new Error("Live server environment required");
+const { PUBLIC_ORIGIN: origin, EMAIL: email, PASSWORD: password, OUT: out } = process.env;
+if (!origin || !email || !password || !out) throw new Error("Live server environment required");
 mkdirSync(out, { recursive: true });
 const browser = await chromium.launch({ channel: process.env.PW_CHANNEL || undefined });
 const context = await browser.newContext({ ignoreHTTPSErrors: true });
@@ -30,9 +23,9 @@ try {
     data: { email, password }
   });
   assert.equal(signed.status(), 200);
-  const remote = await context.request.get(`${publicOrigin}/api/hello`);
+  const remote = await context.request.get(`${origin}/api/hello`);
   assert.equal(remote.status(), 200, "LAN/tailnet server responds");
-  console.log("PASS review write server reachable over LAN/tailnet");
+  console.log("PASS review write server and browser use the LAN/tailnet origin");
   async function call(module: string, path: string, method = "GET", data?: unknown) {
     const response = await context.request.fetch(`${origin}/api/m/${module}${path}`, {
       method,

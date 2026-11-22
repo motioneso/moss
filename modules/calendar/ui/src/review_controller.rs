@@ -96,7 +96,11 @@ impl Controller {
                     s.preview = Value::Null;
                     s.notice = Some(
                         if status == 409 {
-                            "The saved plan changed. Choices kept; review and save again."
+                            match action {
+                                Action::Confirm => "The confirmation expired. Review your choices and save again.",
+                                Action::Retry => "These items can no longer be retried. Review the latest plan.",
+                                _ => "The saved plan changed. Choices kept; review and save again.",
+                            }
                         } else {
                             "Calendar changes couldn't finish. Your choices are kept. Try again."
                         }

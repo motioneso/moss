@@ -37,12 +37,15 @@ Run from the task worktree in `~/Jarv1s`, with task-owned Cargo home and target 
   selection and idempotency. It also runs the existing guest, parity and installed-host suites.
 - The installed `day_plan_apply` test snapshots Calendar plan/operation tables, host approvals
   and scripted provider writes around foreign confirm/retry, and checks no Connectors probe runs. The same rejection assertions run
-  with row security present, removed and restored, printing RED and GREEN results. The claim
+  with row security present, removed and restored, printing RED and GREEN results. Status and
+  unchanged-state checks run independently. The negative control removes item rows to simulate an
+  interrupted reservation; each action's unchanged-state check must detect an unauthorized repair.
+  The exact owner rows are restored after each probe. The claim
   concerns those measured rows and provider calls, not every possible read-side effect.
 - `test:rust-calendar-server`: the installed Today screen, unavailable references, reader,
   keyboard/focus, phone disclosure and opening the editable review without a write.
 - `test:rust-calendar-review-live`: real installed Tasks, Calendar, Email and Connectors on the
-  HTTPS Rust server, bound to the shared dev-port range and reachable through the machine's
+  HTTPS Rust server, with the browser navigating the LAN/tailnet origin, bound to the shared dev-port range and reachable through the machine's
   LAN/tailnet address. Playwright runs at desktop and phone widths. It creates real tasks and
   drafts through public routes, changes a proposed time, closes and reopens the review,
   accepts two additions, checks the task count is unchanged, moves a placed block, checks the
@@ -61,5 +64,5 @@ database, installed packages and browser UI run unchanged. This is not proof aga
 Google account or a physical second device. Phone width is exercised by Playwright; the server
 is checked through its LAN/tailnet URL. Live UI proof covers addition and move confirmation;
 retry eligibility is checked by the model and installed route suites. It does not inject a
-provider failure through the review UI. The fixture stops its servers and releases its claimed
+provider failure through the review UI or exercise removal through the screen. The fixture stops its servers and releases its claimed
 port when the run ends.
