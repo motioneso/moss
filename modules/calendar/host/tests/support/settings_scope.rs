@@ -20,6 +20,7 @@ impl Scopes {
         Self {
             host: Host::new(Limits {
                 deadline: budget,
+                deadline_ceiling: budget,
                 ..Limits::default()
             })
             .unwrap(),

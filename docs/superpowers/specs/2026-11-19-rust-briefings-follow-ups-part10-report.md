@@ -31,6 +31,8 @@ Calendar requests the host-supported thirty-second call budget for multi-block e
 The live flow hit the default five-second deadline before this declaration: temporary diagnostics
 recorded a guest interrupt with no time remaining alongside the failed apply response. Those
 diagnostics were removed before final verification.
+Trusted-port fault-test scopes pin their host deadline ceiling to the explicit test budget,
+so the module's longer request cannot override the short settings-lock deadline test.
 
 ## Executable proof
 

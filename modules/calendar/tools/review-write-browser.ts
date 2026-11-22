@@ -211,6 +211,7 @@ try {
     await page.waitForTimeout(Number(process.env.MOSS_CALENDAR_REVIEW_HOLD_SECONDS) * 1000);
   }
   // Playwright request errors include cookie headers in their call log.
+  // eslint-disable-next-line preserve-caught-error -- Keep request headers out of the sanitized failure.
   throw new Error(message);
 } finally {
   await browser.close();
