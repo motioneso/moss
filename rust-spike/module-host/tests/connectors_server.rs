@@ -735,8 +735,16 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
             Some(json!({"expectedRevision":5,"idempotencyKey":"live-apply-proof-3","selectedBlockIds":[second_block]})),
         );
         assert_eq!(status, 200, "{refused_apply}");
-        assert_eq!(refused_apply["items"][0]["outcome"], "failed", "{refused_apply}");
-        assert_eq!(refused_apply["items"][0]["result"]["reason"], "conflict", "{refused_apply}");
+        assert_eq!(refused_apply["status"], "denied", "{refused_apply}");
+        assert!(
+            refused_apply["denialReason"]
+                .as_str()
+                .unwrap()
+                .starts_with("conflict: reserved additions overlap protected time"),
+            "{refused_apply}"
+        );
+        // The denial wrote nothing: the item stays pending for a recover.
+        assert_eq!(refused_apply["items"][0]["outcome"], "pending", "{refused_apply}");
         let busy_operation = refused_apply["operationId"].as_str().unwrap().to_owned();
         let busy_item = refused_apply["items"][0]["itemId"].as_str().unwrap().to_owned();
         {
@@ -746,11 +754,24 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
         }
         let (status, retried) = plan_call(
             Method::POST,
-            &format!("/day-plans/{plan}/operations/{busy_operation}/retry"),
-            Some(json!({"itemIds":[busy_item]})),
+            &format!("/day-plans/{plan}/operations/{busy_operation}/recover"),
+            Some(json!({})),
         );
         assert_eq!(status, 200, "{retried}");
         assert_eq!(retried["items"][0]["outcome"], "applied", "{retried}");
+        assert!(retried["items"][0]["itemId"] == json!(busy_item), "{retried}");
+        // A settled item is never re-executed: the retry route answers that the
+        // selection is not eligible.
+        let (status, ineligible) = plan_call(
+            Method::POST,
+            &format!("/day-plans/{plan}/operations/{busy_operation}/retry"),
+            Some(json!({"itemIds":[busy_item]})),
+        );
+        assert_eq!(status, 409, "{ineligible}");
+        assert_eq!(
+            ineligible["error"],
+            "day plan apply retry selection is not eligible"
+        );
         assert!(
             saved_events().iter().any(|e| e["title"] == "Second block proof"),
             "the retried addition is on the calendar"
