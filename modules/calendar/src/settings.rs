@@ -14,6 +14,7 @@ pub fn save(host: &impl Host, body: Value) -> Result<Value> {
     // governs both unattended writers and the day-plan apply gate.
     if let Some(mode) = body.get("timeBlockMode").and_then(Value::as_str) {
         let tier = if mode == "auto" { "trusted_auto" } else { "ask_each_time" };
+        let _ = tier;
         host.call(
             "action-policy",
             "route-write",
