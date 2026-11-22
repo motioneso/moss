@@ -9,7 +9,7 @@ use axum::{
     extract::{Path, Query, State},
     http::{header, HeaderMap, StatusCode},
     response::{IntoResponse, Response},
-    routing::{delete, get, post},
+    routing::{get, post},
     Router,
 };
 use base64::{
@@ -58,6 +58,11 @@ struct State_ {
     codes: HashSet<String>,
     refresh_tokens: HashMap<String, bool>, // token -> revoked
     access_tokens: HashMap<String, bool>,  // token -> valid
+    // Access token -> the sign-in (refresh token) it belongs to. The one-account stand-in
+    // uses this to let events.get tell two connected accounts apart, as real Google would.
+    token_families: HashMap<String, String>,
+    // Event id -> the sign-in that created it. Absent means visible to every account.
+    event_owners: HashMap<String, String>,
     counter: u64,
     messages: Vec<GMessage>,
     changes: Vec<(u64, Change)>,
@@ -92,6 +97,8 @@ impl GoogleStandIn {
             codes: HashSet::new(),
             refresh_tokens: HashMap::new(),
             access_tokens: HashMap::new(),
+            token_families: HashMap::new(),
+            event_owners: HashMap::new(),
             counter: 0,
             messages: vec![],
             changes: vec![],
@@ -115,7 +122,10 @@ impl GoogleStandIn {
             .route("/gmail/v1/users/me/history", get(history))
             .route("/calendar/v3/users/me/calendarList", get(calendar_list))
             .route("/calendar/v3/calendars/{cal}/events", get(list_events).post(insert_event))
-            .route("/calendar/v3/calendars/{cal}/events/{id}", delete(delete_event).patch(patch_event))
+            .route(
+                "/calendar/v3/calendars/{cal}/events/{id}",
+                get(get_event).delete(delete_event).patch(patch_event),
+            )
             .with_state(state.clone());
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("bind google");
         let addr = listener.local_addr().unwrap();
@@ -318,6 +328,7 @@ async fn token(State(st): State<Shared>, body: Bytes) -> Response {
             let (access, refresh) = (format!("ya29.fake-access-{}", s.counter), format!("1//fake-refresh-{}", s.counter));
             s.access_tokens.insert(access.clone(), true);
             s.refresh_tokens.insert(refresh.clone(), false);
+            s.token_families.insert(access.clone(), refresh.clone());
             json_response(200, fill(fx::TOKEN_AUTHORIZATION_CODE, &[("ACCESS_TOKEN", &access), ("REFRESH_TOKEN", &refresh)]))
         }
         "refresh_token" => match s.refresh_tokens.get(&get("refresh_token")) {
@@ -325,6 +336,7 @@ async fn token(State(st): State<Shared>, body: Bytes) -> Response {
                 s.counter += 1;
                 let access = format!("ya29.fake-access-{}", s.counter);
                 s.access_tokens.insert(access.clone(), true);
+                s.token_families.insert(access.clone(), get("refresh_token"));
                 json_response(200, fill(fx::TOKEN_REFRESH, &[("ACCESS_TOKEN", &access)]))
             }
             Some(true) => json_response(400, fx::ERROR_TOKEN_REVOKED.into()),
@@ -613,7 +625,42 @@ async fn insert_event(State(st): State<Shared>, h: HeaderMap, Path(_cal): Path<S
     for (k, v) in input.as_object().cloned().unwrap_or_default() {
         ev[k] = v;
     }
+    // The inserting sign-in owns the event, so events.get can tell accounts apart.
+    let chosen = input["id"].as_str().map(String::from);
+    let family = h
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .and_then(|t| s.token_families.get(t).cloned());
+    if let (Some(chosen), Some(family)) = (chosen, family) {
+        s.event_owners.insert(chosen, family);
+    }
     s.events.push(ev.clone());
+    json_response(200, ev.to_string())
+}
+
+/// One event by id, as Google's events.get. A deleted id answers gone; an id from another
+/// connected account reads as absent, because the stand-in's one calendar otherwise cannot
+/// show what a second person's own calendar would look like.
+async fn get_event(State(st): State<Shared>, h: HeaderMap, Path((_cal, id)): Path<(String, String)>) -> Response {
+    guarded!(st, "GET", "/calendar/v3/calendars/{cal}/events/{id}", h);
+    let s = st.lock().unwrap();
+    if s.deleted_events.contains(&id) {
+        return json_response(410, fx::ERROR_410_DELETED.into());
+    }
+    let family = h
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .and_then(|t| s.token_families.get(t));
+    if let Some(family) = family {
+        if s.event_owners.get(&id).is_some_and(|owner| owner != family) {
+            return json_response(404, fx::ERROR_404.into());
+        }
+    }
+    let Some(ev) = s.events.iter().find(|e| e["id"] == id.as_str()) else {
+        return json_response(404, fx::ERROR_404.into());
+    };
     json_response(200, ev.to_string())
 }
 
