@@ -703,7 +703,7 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
             .find(|e| e["title"] == "Applied block proof")
             .unwrap()
             .clone();
-        assert_eq!(placed["startsAt"], format!("{tomorrow}T15:30:00Z"), "{placed}");
+        assert_eq!(placed["startsAt"], format!("{tomorrow}T15:30:00.000Z"), "{placed}");
         let (status, refused) = plan_call(
             Method::POST,
             &format!("/day-plans/{plan}/operations/{move_operation}/confirm"),
