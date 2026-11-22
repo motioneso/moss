@@ -27,7 +27,12 @@ const tail = (text: string) => text.split("\n").slice(-60).join("\n");
 // recreates the table from the exact bytes under test, mutated copies included.
 const freshSchema = () => bootstrap.query("DROP SCHEMA IF EXISTS moss_modules CASCADE");
 
-function run(manifestPath: string, suite = "approval_store_database", exact?: string) {
+function run(
+  manifestPath: string,
+  suite = "approval_store_database",
+  exact?: string,
+  targetDir?: string
+) {
   const args = [
     "+1.95.0",
     "test",
@@ -45,7 +50,15 @@ function run(manifestPath: string, suite = "approval_store_database", exact?: st
   if (exact) args.push("--exact", exact);
   return spawnSync("cargo", args, {
     encoding: "utf8",
-    env: { ...process.env, JS43_APP_URL: urls.app, JS43_BOOTSTRAP_URL: urls.bootstrap }
+    env: {
+      ...process.env,
+      // A copy must never share a target directory with the protected build: cargo would
+      // reuse the copy's path-dependency artifacts for the protected tree and rustc would
+      // then see two crates of the same name in one graph.
+      ...(targetDir ? { CARGO_TARGET_DIR: targetDir } : {}),
+      JS43_APP_URL: urls.app,
+      JS43_BOOTSTRAP_URL: urls.bootstrap
+    }
   });
 }
 
@@ -134,6 +147,8 @@ try {
   copyTree("rust-spike");
   copyTree("modules");
   const copy = join(scratch, "rust-spike");
+  // The copy builds against its own target directory, deleted with the scratch.
+  const copyTarget = join(scratch, "target");
   try {
     // The protected proofs must pass first: the database row-security proof, then the
     // port suite that guards the binding carve-out.
@@ -160,7 +175,12 @@ try {
       }
       writeFileSync(path, mutated);
       await freshSchema();
-      const attempt = run(join(copy, "module-host/Cargo.toml"), control.suite, control.test);
+      const attempt = run(
+        join(copy, "module-host/Cargo.toml"),
+        control.suite,
+        control.test,
+        copyTarget
+      );
       const caught =
         attempt.status !== 0 && /test result: FAILED/.test(attempt.stdout + attempt.stderr);
       if (!caught) console.error(tail(attempt.stdout + attempt.stderr));
