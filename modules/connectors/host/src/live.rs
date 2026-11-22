@@ -38,6 +38,7 @@ pub async fn run(
     let deadline = Instant::now() + BUDGET;
     let answer = match request.resource.as_str() {
         "connectors.live-calendar" => calendar(cx, cipher, config, p, deadline).await?,
+        "connectors.live-calendar-get" => calendar_event_get(cx, cipher, config, p, deadline).await?,
         "connectors.live-gmail-list" => gmail_list(cx, cipher, config, p, deadline).await?,
         "connectors.live-gmail-get" => gmail_get(cx, cipher, config, p, deadline).await?,
         _ => bail!("Unknown connectors resource"),
@@ -105,6 +106,64 @@ async fn calendar(
     }
     // A page token left after the last allowed page means events were not read.
     Ok(Ok(json!({"events":events,"more":token.is_some()})))
+}
+
+/// One calendar event by id, as the apply path reads its own writes back. A clean miss
+/// answers `event: null`; every other failure stays a failure so the caller never mistakes
+/// a refused read for a proven absence.
+async fn calendar_event_get(
+    cx: &DataContext,
+    cipher: &JsonSecretCipher,
+    config: &GoogleConfig,
+    p: &Value,
+    deadline: Instant,
+) -> Result<std::result::Result<Value, Failure>> {
+    let id = store::text(p, "eventId")?;
+    let url = list_url(
+        config.calendar_base(),
+        &format!("calendars/{}/events/{}", urlencode("primary"), urlencode(&id)),
+        &[],
+    )?;
+    let event = match call(cx, cipher, config, url, "calendar.events.get", deadline).await? {
+        Ok(event) => event,
+        Err(failure) if failure.status == Some(404) => return Ok(Ok(json!({"result":"ok","event":null}))),
+        Err(failure) => return Ok(Err(failure)),
+    };
+    Ok(Ok(json!({"result":"ok","event":lookup_event(&event)})))
+}
+
+/// `dateTime` when the event has one, else its all-day `date`, exactly as the TypeScript
+/// readback reports timing.
+fn raw_when(side: &Value) -> Option<&str> {
+    side["dateTime"].as_str().or_else(|| side["date"].as_str())
+}
+
+/// The identity one event readback carries: status, title, timing, the attendee count and the
+/// private properties our own writes recorded. Nothing else leaves the host, and non-string
+/// private values are dropped before they do. The jarvis identity keys sort ahead of any
+/// other private property, so an event carrying many of them can never push the identity
+/// out of the cap.
+fn lookup_event(event: &Value) -> Value {
+    const PROVENANCE_MAX: usize = 32;
+    const PROVENANCE_CHARS: usize = 200;
+    let mut private: Vec<(&String, &Value)> = event["extendedProperties"]["private"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .collect();
+    private.sort_by_key(|(key, _)| !key.starts_with("jarvis"));
+    let mut provenance = Map::new();
+    for (key, value) in private.into_iter().take(PROVENANCE_MAX) {
+        if let Some(text) = value.as_str() {
+            provenance.insert(key.clone(), json!(text.chars().take(PROVENANCE_CHARS).collect::<String>()));
+        }
+    }
+    json!({
+        "id": event["id"], "status": event["status"], "summary": event["summary"],
+        "start": raw_when(&event["start"]), "end": raw_when(&event["end"]),
+        "attendeeCount": event["attendees"].as_array().map_or(0, Vec::len),
+        "provenance": provenance,
+    })
 }
 
 const HEADERS: [&str; 6] = ["From", "To", "Cc", "Subject", "Message-ID", "References"];

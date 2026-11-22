@@ -40,11 +40,15 @@ struct Seen {
 }
 
 impl Ports for Seen {
-    fn invoke(&self, _: &CallScope, port: &str, request: &Request) -> anyhow::Result<Value> {
+    fn invoke(&self, scope: &CallScope, port: &str, request: &Request) -> anyhow::Result<Value> {
         let name = request.parameters["name"].as_str().unwrap_or(&request.operation).to_string();
         self.calls.lock().unwrap().push((name.clone(), request.parameters.clone()));
         Ok(match (port, name.as_str()) {
-            ("context", "read") => json!({"now":"2026-03-02T08:00:00.000Z"}),
+            // The real host's context port answers the same shape, call identity included.
+            ("context", "read") => json!({
+                "actorUserId": scope.access().actor_user_id().to_string(),
+                "now": "2026-03-02T08:00:00.000Z",
+            }),
             ("api", "replyContext") => self.original.lock().unwrap().clone(),
             ("api", "listEvents") => json!({"events":*self.events.lock().unwrap()}),
             ("api", "getEvent") => {
@@ -308,4 +312,127 @@ fn a_second_person_cannot_write_to_another_persons_calendar() {
     assert_eq!(out["created"], false, "{out}");
     assert_eq!(f.google.requests().len(), before);
     assert!(f.google.events().iter().all(|e| e["summary"] != "Intrusion"));
+}
+
+/// The provenance one day-plan apply addition carries, as the fixtures use it. The jarvis
+/// names are the wire contract: the host refuses to carry a bare actorUserId on any port
+/// call, so the provider-tag names are the one vocabulary a caller can actually send. The
+/// actor itself is never sent: the host names the signed-in person.
+fn plan_provenance() -> Value {
+    json!({"jarvisPlanId":"plan-1","jarvisBlockId":"block-1",
+        "jarvisPlanRevision":2,"jarvisOperationId":"op-1"})
+}
+
+fn provenance_create_parameters() -> Value {
+    json!({"windowStart":"2026-03-03T09:00:00Z","windowEnd":"2026-03-03T10:00:00Z",
+        "durationMinutes":60,"title":"Planned block","provenance":plan_provenance()})
+}
+
+fn lookup(f: &Fixture, actor: Uuid, event_id: &str) -> Value {
+    f.call(actor, "api", json!({"name":"lookupCalendarEvent","parameters":{"eventId":event_id}}))
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_day_plan_addition_creates_once_and_reads_back_its_provenance() {
+    let f = Fixture::new();
+    f.connect_google(f.a, "code-plan");
+    // A reserved addition is reconciled before it is created: an unknown id reads as absent.
+    let miss = lookup(&f, f.a, "jap-not-there-yet");
+    assert_eq!(miss, json!({"found":false}), "{miss}");
+    let created = f.call(f.a, "api", json!({"name":"createCalendarEvent",
+        "parameters":provenance_create_parameters()}));
+    assert_eq!(created["created"], true, "{created}");
+    assert_eq!(created["conflict"], "none");
+    assert_eq!(created["shifted"], false);
+    let id = created["googleEventId"].as_str().expect("the operation id").to_string();
+    assert!(id.starts_with("jap"), "{created}");
+    // The provider event carries the operation identity the TypeScript apply writes.
+    let event = f.google.events().into_iter().find(|e| e["id"] == json!(id)).expect("created in Google");
+    assert_eq!(event["extendedProperties"]["private"], json!({
+        "jarvisCreated":"true","jarvisTool":"applyAddition",
+        "jarvisActorUserId":f.a.to_string(),"jarvisPlanId":"plan-1","jarvisBlockId":"block-1",
+        "jarvisPlanRevision":"2","jarvisOperationId":"op-1",
+    }));
+    // The cache mirror agrees with the provider tag.
+    assert_eq!(created["calendarMirror"], "written", "{created}");
+    assert_eq!(created["calendarEventId"], "cal-1", "{created}");
+    let mirrors = f.seen.named("upsertCachedEvent");
+    assert_eq!(mirrors.len(), 1, "{:?}", f.seen.text());
+    assert_eq!(mirrors[0]["externalMetadata"]["source"], "applyAddition");
+    assert_eq!(mirrors[0]["externalMetadata"]["provenance"]["jarvisOperationId"], "op-1");
+    assert_eq!(mirrors[0]["externalMetadata"]["attendeeCount"].as_u64(), Some(0));
+    // The readback returns exactly what the apply loop reconciles with.
+    let found = lookup(&f, f.a, &id);
+    assert_eq!(found["found"], true, "{found}");
+    assert_eq!(found["id"], json!(id));
+    assert_eq!(found["summary"], "Planned block");
+    assert_eq!(found["start"], "2026-03-03T09:00:00.000Z");
+    assert_eq!(found["end"], "2026-03-03T10:00:00.000Z");
+    assert_eq!(found["attendeeCount"].as_u64(), Some(0));
+    assert_eq!(found["provenance"], json!({
+        "jarvisCreated":"true","jarvisTool":"applyAddition",
+        "jarvisActorUserId":f.a.to_string(),"jarvisPlanId":"plan-1","jarvisBlockId":"block-1",
+        "jarvisPlanRevision":"2","jarvisOperationId":"op-1",
+    }));
+    // A retried create of the same operation never makes a second event: the window is now
+    // filled by its own event, and Google still holds exactly one.
+    let retried = f.call(f.a, "api", json!({"name":"createCalendarEvent",
+        "parameters":provenance_create_parameters()}));
+    assert_eq!(retried["created"], false, "{retried}");
+    assert_eq!(retried["conflict"], "no-clear-slot");
+    let with_id = f.google.events().into_iter().filter(|e| e["id"] == json!(id)).count();
+    assert_eq!(with_id, 1, "a retried create made a second event: {:?}", f.google.events());
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_retried_provenance_insert_collides_instead_of_duplicating() {
+    let f = Fixture::new();
+    f.connect_google(f.a, "code-plan-retry");
+    let created = f.call(f.a, "api", json!({"name":"createCalendarEvent",
+        "parameters":provenance_create_parameters()}));
+    assert_eq!(created["created"], true, "{created}");
+    let id = created["googleEventId"].as_str().unwrap().to_string();
+    // The event is deleted in Google's own UI, but its id stays taken there, exactly as while
+    // a first insert is in flight: the next insert of the same id must collide, not duplicate.
+    f.google.remove_event_titled("Planned block");
+    let retried = f.call(f.a, "api", json!({"name":"createCalendarEvent",
+        "parameters":provenance_create_parameters()}));
+    assert_eq!(retried["created"], true, "the collision is an idempotent success: {retried}");
+    assert_eq!(retried["googleEventId"], json!(id));
+    assert_eq!(retried["calendarMirror"], "not-cached");
+    assert_eq!(retried["message"], "This addition is already on your calendar.");
+    assert_eq!(f.google.events().len(), 0, "the retried insert duplicated the event: {:?}", f.google.events());
+    let inserts: Vec<_> = f.google.requests().into_iter()
+        .filter(|r| r.contains("POST /calendar/v3/calendars/") && r.ends_with("/events")).collect();
+    assert_eq!(inserts.len(), 2, "the retry really reached Google: {inserts:?}");
+}
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_second_person_cannot_read_another_persons_event() {
+    let f = Fixture::new();
+    let a_account = f.connect_google(f.a, "code-plan-a");
+    let created = f.call(f.a, "api", json!({"name":"createCalendarEvent",
+        "parameters":provenance_create_parameters()}));
+    let id = created["googleEventId"].as_str().unwrap().to_string();
+    // The second person has their own connected Google account.
+    f.connect_google(f.b, "code-plan-b");
+    // Their lookup of the first person's event id reads their own calendar: absent.
+    let out = lookup(&f, f.b, &id);
+    assert_eq!(out, json!({"found":false}), "{out} {created}");
+    // The first person still reads their own event back.
+    let own = lookup(&f, f.a, &id);
+    assert_eq!(own["found"], true, "{own}");
+    // With row-level security off the same call reaches the first person's account and reads
+    // their event's identity, so the refusal above is the protection itself. Other tests
+    // leave accounts behind, and the account pick takes the only visible active one.
+    f.rt.block_on(f.root.execute("UPDATE app.connector_accounts SET status='error' WHERE id <> $1 AND status <> 'revoked'", &[&a_account])).unwrap();
+    f.rt.block_on(f.root.batch_execute("ALTER TABLE app.connector_accounts NO FORCE ROW LEVEL SECURITY; ALTER TABLE app.connector_accounts DISABLE ROW LEVEL SECURITY")).unwrap();
+    let open = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| lookup(&f, f.b, &id)));
+    f.rt.block_on(f.root.batch_execute("ALTER TABLE app.connector_accounts ENABLE ROW LEVEL SECURITY; ALTER TABLE app.connector_accounts FORCE ROW LEVEL SECURITY")).unwrap();
+    let open = open.expect("the lookup ran");
+    assert_eq!(open["found"], true, "without the protection the foreign read lands: {open}");
+    assert_eq!(open["provenance"]["jarvisActorUserId"], json!(f.a.to_string()));
 }

@@ -4,9 +4,10 @@
   "name": "Calendar",
   "description": "Calendar cached-event screens and draft tools; signed-in HTTPS Calendar pages; provider execution and full shell composition remain incomplete.",
   "publisher": "Moss",
-  "version": "0.32.1",
+  "version": "0.34.0",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "abi": "moss:module@1",
+  "callLimitMs": 30000,
   "capabilities": [
     {
       "port": "db",
@@ -46,6 +47,16 @@
         "calendar.source-behaviors",
         "calendar.cache-write"
       ]
+    },
+    {
+      "port": "approvals",
+      "operations": ["create", "get", "confirm", "find-pending", "find-confirmed"],
+      "resources": ["calendar.day-plan-changes"]
+    },
+    {
+      "port": "action-policy",
+      "operations": ["route-read"],
+      "resources": ["calendar_management", "calendar_writeback"]
     }
   ],
   "database": {
@@ -185,6 +196,10 @@
   "requires": {
     "tasks": ">=0.1.6, <1.0.0"
   },
+  "policyRoutes": {
+    "calendar_management": { "installTier": "always_confirm" },
+    "calendar_writeback": { "installTier": "ask_each_time" }
+  },
   "provides": {
     "listEvents": "1.0.0",
     "getEvent": "1.0.0",
@@ -209,19 +224,30 @@
   "features": [
     {
       "id": "calendar.today-plan",
-      "description": "Today shows the saved day plan together with visible calendar events, in the account timezone. Proposed task blocks carry Proposed; saved placements carry Flexible. Review task blocks opens the authored day-plan review and schedule at desktop and phone widths. This part is read only: time, placement, Accept all time blocks and Save changes are disabled. Another account’s plan is absent; task references that are no longer visible are marked unavailable. Calendar owns this Today section, replacing the sample schedule. Gaps between stored times show a break or open time, followed by a closing line after the last commitment. A preparation block ending within five minutes before a real calendar event names that event and its time. Automatic planning labels the review button Adjust task blocks. Partial failures name the unavailable saved plan or calendar while retaining the readable source, with Try again to reload.",
+      "description": "Today shows the saved day plan together with visible calendar events, in the account timezone. Proposed task blocks carry Proposed; saved placements carry Flexible. Review task blocks opens the authored day-plan review and schedule at desktop and phone widths. Time and placement controls let you adjust existing blocks. Save changes previews and applies eligible changes; Accept all time blocks schedules proposed task additions without creating tasks. Moves and removals show a confirmation before writing. Saved results show applied, failed, pending or unknown outcomes, with Retry for eligible items. A changed plan keeps choices and asks you to review and save again; failed writes keep choices and offer another attempt. After an interrupted write, saved placements settle matching addition choices before another attempt. Another account’s plan is absent; task references that are no longer visible are marked unavailable. Calendar owns this Today section, replacing the sample schedule. Gaps between stored times show a break or open time, followed by a closing line after the last commitment. A preparation block ending within five minutes before a real calendar event names that event and its time. Automatic planning labels the review button Adjust task blocks. Partial failures name the unavailable saved plan or calendar while retaining the readable source, with Try again to reload.",
       "errors": [
         {
           "code": "calendar_today_unavailable",
           "class": "transient",
           "description": "The Today plan, calendar events or installed screen could not load.",
           "remediationRef": "retry-today-plan"
+        },
+        {
+          "code": "calendar_today_review_unavailable",
+          "class": "transient",
+          "description": "Saving, previewing, applying or refreshing a day plan failed, or the saved revision changed.",
+          "remediationRef": "retry-today-review"
         }
       ],
       "remediations": [
         {
           "id": "retry-today-plan",
           "description": "Use Try again to reload the saved day plan and calendar. If the package screen cannot start, reload Today.",
+          "path": "/"
+        },
+        {
+          "id": "retry-today-review",
+          "description": "Review the retained time and placement choices and use Save changes again. Use Retry for unfinished reported items. Reload Today if the latest schedule could not load.",
           "path": "/"
         }
       ]
@@ -371,7 +397,7 @@
     },
     {
       "id": "calendar.saved_day_plan_operation_status",
-      "description": "Read saved apply progress through the installed API and original Calendar URL. Preserves selected item order, pending or completed status and access-denied guidance. Owner-only stored operations remain private. Reading never runs a provider action; apply, retry, recovery and confirmation execution remain unavailable. Invalid ids are rejected, missing operations return not found, and unreadable stored batches return an error. Read the current account’s plan and operation ids before retrying."
+      "description": "Read saved apply progress through the installed API and original Calendar URL. Preserves selected item order, pending or completed status and access-denied guidance. Owner-only stored operations remain private. Reading never runs a provider action. Applying a plan runs through the installed Connectors package: additions are created with the operation's identity and confirmed by reading the event back, moves and removals run only after the person confirms the stored approval that binds the exact plan, operation and change set, and a replayed apply returns the settled result without executing twice. Without Connectors the routes say apply is unavailable and write nothing. Invalid ids are rejected, missing operations return not found, and unreadable stored batches return an error. Read the current account’s plan and operation ids before retrying."
     },
     {
       "id": "calendar.preview-busy-check",

@@ -43,6 +43,10 @@ name = "apply"
 path = "tests/apply.rs"
 
 [[test]]
+name = "execution"
+path = "tests/execution.rs"
+
+[[test]]
 name = "auto_plan"
 path = "tests/auto_plan.rs"
 

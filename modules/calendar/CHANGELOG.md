@@ -1,5 +1,17 @@
 # Calendar package
 
+## 0.34.0
+
+- Keep saved placements when refreshing after an interrupted review write; Calendar calls use the host-supported thirty-second call budget so multi-block reviews can finish.
+
+- Review and save task block times and placements from Today. Accept all time blocks schedules existing task additions; moves and removals show the exact changes for confirmation. Saved outcomes include a retry action for failed or unknown items.
+
+## 0.33.0
+
+- Make the day-plan apply, retry, recover and confirm routes execute. Apply reserves the reviewed selection and writes the events through the public Connectors calls: each addition carries the operation's identity so a retried insert collides instead of duplicating, and is confirmed by reading the event back before anything is recorded.
+- Moves and removals answer 202 with the bound change set and a stored approval (actor, plan, operation, revision, ordered changes) until the person confirms; confirm matches that binding exactly, executes once, and a replay is refused. Retry reruns failed or unknown items and recover resumes every unfinished one, reusing a confirmed approval without asking again.
+- Without a Connectors package the routes answer that apply is unavailable and write nothing. The time-block mode, the Use for planning switch and the stored writeback tier gate every write and record an access denial on the batch; the settings screen already promotes the writeback tier with the time-block mode.
+
 ## 0.32.1
 
 - Offer validated chat tools and code-built approval fields. Normal writes show their returned result; deleting asks first. Event guest counts are whole numbers or unknown; moves require a verified zero count.

@@ -4,7 +4,7 @@
   "name": "Connectors",
   "description": "Keeps the mail and calendar connections of each account, their sign-in secrets and the Email and Calendar permissions. Connecting Google works by pasting your own Google client details. Yahoo, Proton Bridge, iCloud and Fastmail mail connect with an app password. Google mail and calendar sync into the Email and Calendar caches. Outlook calendar syncing reads the Outlook web page through a dedicated browser, calendar only and read-only. Outlook mail and sign-in are not part of this package yet.",
   "publisher": "Moss",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "requiresMoss": ">=0.1.0, <1.0.0",
   "fuelLimit": 200000000,
   "abi": "moss:module@1",
@@ -41,6 +41,7 @@
         "connectors.refresh-sweep",
         "connectors.context-setup",
         "connectors.live-calendar",
+        "connectors.live-calendar-get",
         "connectors.live-gmail-list",
         "connectors.live-gmail-get",
         "connectors.write-gmail-draft",
@@ -241,6 +242,7 @@
     "createCalendarEvent": "1.0.0",
     "deleteCalendarEvent": "1.0.0",
     "rescheduleCalendarEvent": "1.0.0",
+    "lookupCalendarEvent": "1.0.0",
     "prepareChatAction": "1.0.0"
   },
   "icons": ["icons/connectors.svg"],
@@ -545,7 +547,7 @@
     },
     {
       "id": "connectors.calendar-writes",
-      "description": "Calendar can add a focus-time block to the person's own Google Calendar in the first free slot, move an event that has no guests, and delete an event. Each change shows up in Calendar at once. Outlook events are read-only. A change that needs calendar permission says to reconnect Google in Settings."
+      "description": "Calendar can add a focus-time block to the person's own Google Calendar in the first free slot, move an event that has no guests, and delete an event. Each change shows up in Calendar at once. Outlook events are read-only. A change that needs calendar permission says to reconnect Google in Settings. Calendar's day-plan apply can also add its planned block under a stable plan identity, read that event back from Google, and a retried apply never puts the block on the calendar twice."
     },
     {
       "id": "connectors.chat-approvals",

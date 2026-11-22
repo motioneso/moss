@@ -131,6 +131,7 @@ fn api(host: &impl Host, name: &str, input: &Value) -> Result<Value> {
         "createCalendarEvent" => calendar_writes::create(host, input),
         "deleteCalendarEvent" => calendar_writes::delete(host, input),
         "rescheduleCalendarEvent" => calendar_writes::reschedule(host, input),
+        "lookupCalendarEvent" => calendar_writes::lookup(host, input),
         "connectionDiagnostics" => accounts::diagnostics(host, input["limit"].as_i64().unwrap_or(10)),
         "captureWorkMail" => work_mail::capture(host, input),
         _ => Err(Error::new(404, "Connectors operation not found")),
