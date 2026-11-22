@@ -416,7 +416,8 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
         Some(json!({"expectedRevision":1,"idempotencyKey":"k","surprise":true})),
     );
     assert_eq!((status, bad["code"].as_str()), (400, Some("day_plan_invalid")), "{bad}");
-    // Retry, recover and confirm validate the request and then fail closed, like apply.
+    // Missing confirm/retry operations are rejected before probing Connectors.
+    // Recover retains its existing availability-first refusal.
     let plan_id = created["plan"]["id"].as_str().unwrap();
     let operation = uuid::Uuid::new_v4();
     let item = uuid::Uuid::new_v4();
@@ -429,7 +430,12 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
         let path = operation_path(action);
         assert_eq!(call(Method::POST, &path, None, Some(body.clone())).0, 401, "{action}");
         let (status, refused) = call(Method::POST, &path, Some(&cookie), Some(body));
-        assert_eq!((status, refused["error"].as_str()), (503, Some("day plan apply is unavailable")), "{action}: {refused}");
+        let expected = if action == "recover" {
+            (503, Some("day plan apply is unavailable"))
+        } else {
+            (404, Some("day plan apply operation is not available"))
+        };
+        assert_eq!((status, refused["error"].as_str()), expected, "{action}: {refused}");
     }
     let (status, bad) = call(Method::POST, &operation_path("retry"), Some(&cookie), Some(json!({"itemIds":[]})),
     );

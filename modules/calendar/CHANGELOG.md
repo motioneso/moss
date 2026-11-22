@@ -1,5 +1,11 @@
 # Calendar package
 
+## 0.34.0
+
+- Keep saved placements when refreshing after an interrupted review write; Calendar calls use the host-supported thirty-second call budget so multi-block reviews can finish.
+
+- Review and save task block times and placements from Today. Accept all time blocks schedules existing task additions; moves and removals show the exact changes for confirmation. Saved outcomes include a retry action for failed or unknown items.
+
 ## 0.33.0
 
 - Make the day-plan apply, retry, recover and confirm routes execute. Apply reserves the reviewed selection and writes the events through the public Connectors calls: each addition carries the operation's identity so a retried insert collides instead of duplicating, and is confirmed by reading the event back before anything is recorded.

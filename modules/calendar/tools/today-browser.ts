@@ -39,8 +39,8 @@ export async function checkToday(page: Page, context: BrowserContext, origin: st
     await expect(dialog.getByRole("button", { name: "Save changes", exact: true })).toBeDisabled();
     await expect(
       dialog.getByRole("button", { name: "Accept all time blocks", exact: true })
-    ).toBeDisabled();
-    assert.equal(await dialog.locator("input:not(:disabled), select:not(:disabled)").count(), 0);
+    ).toBeEnabled();
+    assert.ok((await dialog.locator("input:not(:disabled), select:not(:disabled)").count()) > 0);
     assert.equal(
       await dialog.evaluate((el) => el.scrollWidth > el.clientWidth),
       false,
@@ -62,7 +62,7 @@ export async function checkToday(page: Page, context: BrowserContext, origin: st
     await dialog.getByRole("button", { name: "Back to Today", exact: true }).click();
     await expect(dialog).toHaveCount(0);
     console.log(
-      `PASS Today ${width}x${height}: real proposed/flexible/unavailable blocks, read-only review, phone schedule disclosure, Escape and Back to Today`
+      `PASS Today ${width}x${height}: real proposed/flexible/unavailable blocks, editable review (no writes until chosen), phone schedule disclosure, Escape and Back to Today`
     );
   }
   assert.deepEqual(writes, [], "viewing and reviewing Today issues no Calendar writes");
