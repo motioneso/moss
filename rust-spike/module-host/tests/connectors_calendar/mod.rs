@@ -2,7 +2,6 @@
 use reqwest::{blocking::Client, Method};
 use serde_json::{json, Value};
 use std::{io::Write, process::Command};
-use super::json_of;
 
 pub fn routes(client: &Client, origin: &str, cookie: &str, runtime: &tokio::runtime::Runtime,
     bootstrap_url: &str, google_commands: &mut impl Write, log: impl Fn()->String,
@@ -36,7 +35,7 @@ pub fn routes(client: &Client, origin: &str, cookie: &str, runtime: &tokio::runt
         let response = request.send().unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
         let status = response.status().as_u16();
         let text = response.text().unwrap_or_default();
-        (status, json_of(&text))
+        (status, serde_json::from_str::<Value>(&text).unwrap_or(Value::Null))
     };
     let (status, created) = plan_call(Method::POST, "/day-plans", Some(json!({"date":tomorrow,"timeZone":"UTC"})));
     assert_eq!(status, 200, "{created}");
@@ -167,7 +166,6 @@ pub fn routes(client: &Client, origin: &str, cookie: &str, runtime: &tokio::runt
     let busy_operation = refused_apply["operationId"].as_str().unwrap().to_owned();
     let busy_item = refused_apply["items"][0]["itemId"].as_str().unwrap().to_owned();
     {
-        use std::io::Write;
         writeln!(google_commands, "remove-event Planning").unwrap();
         google_commands.flush().unwrap();
     }
