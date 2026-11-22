@@ -30,17 +30,21 @@ impl CalendarPorts {
             cx.db().execute("SELECT pg_advisory_xact_lock(hashtextextended(app.current_actor_user_id()::text || ':calendar.briefing-settings',0))", &[]).await?;
             println!("JS394 step: locked");
             for (key, value) in writes {
+                println!("JS394 step: writing {key}");
                 cx.db().execute(
                     "INSERT INTO app.preferences(owner_user_id,key,value_json,updated_at) VALUES(app.current_actor_user_id(),$1,$2,now()) ON CONFLICT(owner_user_id,key) DO UPDATE SET value_json=EXCLUDED.value_json,revision=app.preferences.revision+1,updated_at=EXCLUDED.updated_at",
                     &[&key, &value],
                 ).await?;
+                println!("JS394 step: wrote {key}");
             }
             if let Some(mode) = body.get("timeBlockMode") {
                 let tier = if mode == "auto" { "trusted_auto" } else { "ask_each_time" };
+                println!("JS394 step: writing policy row");
                 cx.db().execute(
                     "INSERT INTO app.preferences(owner_user_id,key,value_json,updated_at) VALUES(app.current_actor_user_id(),'assistant.action_policy.v1.calendar.calendar_writeback',$1,now()) ON CONFLICT(owner_user_id,key) DO UPDATE SET value_json=EXCLUDED.value_json,updated_at=EXCLUDED.updated_at",
                     &[&json!(tier)],
                 ).await?;
+                println!("JS394 step: wrote policy row");
             }
             println!("JS394 step: inserted");
             let keys: &[&str] = &PREFERENCE_KEYS;
