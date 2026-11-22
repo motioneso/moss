@@ -51,7 +51,13 @@ impl Store {
 impl Approvals for Store {
     fn create(&self, access: &AccessContext, module: &str, resource: &str, summary: &Value) -> Result<Record> {
         self.note(access, module, resource, "create", summary.clone());
-        Ok(Self::record("approval-1", "pending"))
+        Ok(Record {
+            id: "approval-1".into(),
+            // The host pins the owner; the stored binding is returned as written.
+            owner_user_id: access.actor_user_id().to_string(),
+            status: "pending".into(),
+            input_summary: summary.clone(),
+        })
     }
     fn get(&self, access: &AccessContext, module: &str, resource: &str, _: &str) -> Result<Record> {
         self.note(access, module, resource, "get", json!({}));
@@ -223,7 +229,7 @@ fn the_owner_module_and_family_come_from_the_call_never_the_request() {
         out,
         json!({
             "id": "approval-1",
-            "ownerUserId": "owner-1",
+            "ownerUserId": caller.to_string(),
             "status": "pending",
             "inputSummary": summary(),
         })
