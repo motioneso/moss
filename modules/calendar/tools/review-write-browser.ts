@@ -40,9 +40,20 @@ try {
     return body;
   }
   const display = await call("calendar", "/display-settings");
-  assert.equal(display.timezone || "UTC", "UTC", "fixture uses the UTC display zone");
-  const day = display.now.slice(0, 10);
-  const created = await call("calendar", "/day-plans", "POST", { date: day, timeZone: "UTC" });
+  const timeZone = display.timezone || "America/Los_Angeles";
+  assert.equal(timeZone, "America/Los_Angeles", "fixture uses Calendar's fresh-account zone");
+  const day = new Intl.DateTimeFormat("sv-SE", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(new Date(display.now));
+  const offset = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "longOffset" })
+    .formatToParts(new Date(`${day}T12:00:00Z`))
+    .find((part) => part.type === "timeZoneName")!
+    .value.replace("GMT", "");
+  const instant = (time: string) => new Date(`${day}T${time}:00${offset}`).toISOString();
+  const created = await call("calendar", "/day-plans", "POST", { date: day, timeZone });
   const id = created.plan.id;
   for (const [name, width, height, first, second] of [
     ["desktop", 1440, 900, "05:00", "07:00"],
@@ -52,7 +63,7 @@ try {
     // Setup uses public routes too; each width gets new real tasks and proposals.
     const a = (await call("tasks", "/tasks", "POST", { title: `Prepare ${name} workshop` })).task;
     const b = (await call("tasks", "/tasks", "POST", { title: `Review ${name} checklist` })).task;
-    const saved = (await call("calendar", `/day-plan?date=${day}&timeZone=UTC`)).plan;
+    const saved = (await call("calendar", `/day-plan?date=${day}&timeZone=${timeZone}`)).plan;
     const existing = saved.blocks.map((b: Block) => ({
       id: b.id,
       kind: b.kind,
@@ -62,7 +73,7 @@ try {
     }));
     await call("calendar", `/day-plans/${id}/draft`, "PATCH", {
       date: day,
-      timeZone: "UTC",
+      timeZone,
       expectedRevision: saved.revision,
       blocks: [
         ...existing,
@@ -70,13 +81,13 @@ try {
           kind: "focus",
           taskId: a.id,
           title: a.title,
-          pendingChange: { kind: "add", startsAt: `${day}T${first}:00Z`, durationMinutes: 30 }
+          pendingChange: { kind: "add", startsAt: instant(first), durationMinutes: 30 }
         },
         {
           kind: "focus",
           taskId: b.id,
           title: b.title,
-          pendingChange: { kind: "add", startsAt: `${day}T${second}:00Z`, durationMinutes: 30 }
+          pendingChange: { kind: "add", startsAt: instant(second), durationMinutes: 30 }
         }
       ]
     });
@@ -135,7 +146,7 @@ try {
     events = (await call("calendar", "/events")).events;
     assert.equal(
       events.find((e: Event) => e.title === a.title).startsAt,
-      `${day}T${additionTime}:00.000Z`,
+      instant(additionTime),
       "move waits for confirmation"
     );
     assert.equal(
@@ -149,10 +160,7 @@ try {
     await expect(confirm).toHaveCount(0, { timeout: 60_000 });
     await expect(dialog.getByRole("status").filter({ hasText: "Applied 1" })).toBeVisible();
     events = (await call("calendar", "/events")).events;
-    assert.equal(
-      events.find((e: Event) => e.title === a.title).startsAt,
-      `${day}T${changed}:00.000Z`
-    );
+    assert.equal(events.find((e: Event) => e.title === a.title).startsAt, instant(changed));
     await dialog.getByRole("button", { name: "Back to Today", exact: true }).click();
     await expect(dialog).toHaveCount(0);
     await expect(
