@@ -18,48 +18,26 @@ impl CalendarPorts {
                 .contains_key(&call),
             "Only one settings patch per call"
         );
-        println!("JS394 save_settings remaining: {:?}, body: {}", scope.remaining(), body);
         let (cx, values) = self.runtime.block_on(async {
             tokio::time::timeout(scope.remaining(), async {
             let cx = DataContext::open_bounded(&self.database, scope.access(), scope.remaining())
                 .await.map_err(|_| anyhow::anyhow!("Calendar settings unavailable"))?;
-            println!("JS394 step: opened");
             let timeout = scope.remaining().as_millis().clamp(1, 30_000).to_string();
             cx.db().query_one("SELECT set_config('statement_timeout',$1,true)", &[&timeout]).await?;
-            println!("JS394 step: timeout set");
             cx.db().execute("SELECT pg_advisory_xact_lock(hashtextextended(app.current_actor_user_id()::text || ':calendar.briefing-settings',0))", &[]).await?;
-            println!("JS394 step: locked");
             for (key, value) in writes {
-                println!("JS394 step: writing {key}");
                 cx.db().execute(
                     "INSERT INTO app.preferences(owner_user_id,key,value_json,updated_at) VALUES(app.current_actor_user_id(),$1,$2,now()) ON CONFLICT(owner_user_id,key) DO UPDATE SET value_json=EXCLUDED.value_json,revision=app.preferences.revision+1,updated_at=EXCLUDED.updated_at",
                     &[&key, &value],
                 ).await?;
-                println!("JS394 step: wrote {key}");
             }
             if let Some(mode) = body.get("timeBlockMode") {
                 let tier = if mode == "auto" { "trusted_auto" } else { "ask_each_time" };
-                println!("JS394 step: writing policy row");
-                std::thread::spawn(|| {
-                    std::thread::sleep(std::time::Duration::from_millis(1500));
-                    let rt = tokio::runtime::Runtime::new().unwrap();
-                    rt.block_on(async {
-                        let url = std::env::var("JS48_BOOTSTRAP_URL").unwrap();
-                        let (db, c) = tokio_postgres::connect(&url, tokio_postgres::NoTls).await.unwrap();
-                        tokio::spawn(async move { let _ = c.await; });
-                        let rows = db.query("SELECT pid::text||' :: '||state||' :: '||coalesce(wait_event_type::text,'')||' :: '||left(coalesce(query,''),160) FROM pg_stat_activity WHERE datname=current_database()", &[]).await.unwrap();
-                        for r in rows { println!("JS394 hang activity: {}", r.get::<_, String>(0)); }
-                        let rows = db.query("SELECT pid::text||' waits '||locktype||' on '||coalesce((SELECT left(coalesce(query,''),160) FROM pg_stat_activity WHERE pid=pg_locks.pid),'')||' granted='||granted::text FROM pg_locks WHERE NOT granted", &[]).await.unwrap();
-                        for r in rows { println!("JS394 lock wait: {}", r.get::<_, String>(0)); }
-                    });
-                });
                 cx.db().execute(
                     "INSERT INTO app.preferences(owner_user_id,key,value_json,updated_at) VALUES(app.current_actor_user_id(),'assistant.action_policy.v1.calendar.calendar_writeback',$1,now()) ON CONFLICT(owner_user_id,key) DO UPDATE SET value_json=EXCLUDED.value_json,updated_at=EXCLUDED.updated_at",
                     &[&json!(tier)],
                 ).await?;
-                println!("JS394 step: wrote policy row");
             }
-            println!("JS394 step: inserted");
             let keys: &[&str] = &PREFERENCE_KEYS;
             let rows = cx.db().query("SELECT key,value_json FROM app.preferences WHERE key=ANY($1)", &[&keys]).await?;
             let mut values = Map::new();

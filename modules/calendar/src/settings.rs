@@ -9,20 +9,6 @@ pub fn read(host: &impl Host) -> Result<Value> {
 }
 pub fn save(host: &impl Host, body: Value) -> Result<Value> {
     patch(&body)?;
-    // A time-block mode change promotes or demotes the writeback tier with
-    // it, exactly as the TypeScript settings route does, so the same switch
-    // governs both unattended writers and the day-plan apply gate.
-    if let Some(mode) = body.get("timeBlockMode").and_then(Value::as_str) {
-        let tier = if mode == "auto" { "trusted_auto" } else { "ask_each_time" };
-        let _ = tier;
-        host.call(
-            "action-policy",
-            "route-write",
-            crate::change_approval::WRITEBACK_FAMILY,
-            json!({"tier": tier}),
-        )
-        .map_err(|e| Error::new(503, format!("JS394 route-write failed: {}", e.message)))?;
-    }
     let saved = host.call("kv", "set", "calendar.briefing-settings", body)?;
     Ok(json!({"settings":derive(&saved)}))
 }

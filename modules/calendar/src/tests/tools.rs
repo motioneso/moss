@@ -14,12 +14,6 @@ fn settings_patch_reaches_the_scoped_host_once() {
     struct Settings;
     impl Host for Settings {
         fn call(&self, port: &str, operation: &str, resource: &str, body: Value) -> Result<Value> {
-            if (port, operation) == ("action-policy", "route-write") {
-                assert_eq!(resource, "calendar_writeback");
-                // A time-block promotion to auto promotes the writeback tier.
-                assert_eq!(body, json!({"tier":"trusted_auto"}));
-                return Ok(json!({"tier":"trusted_auto"}));
-            }
             assert_eq!(
                 (port, operation, resource),
                 ("kv", "set", "calendar.briefing-settings")
@@ -502,7 +496,7 @@ fn visible_events_fail_closed_without_the_connectors_interface() {
         "tool",
         &json!({"tool":"calendar.listVisibleEvents","parameters":{"startsAfter":"2026-11-08T00:00:00Z"}}).to_string(),
     );
-    assert!(raw.unwrap_err().starts_with("Calendar data is unavailable"));
+    assert_eq!(raw.unwrap_err(), "Calendar data is unavailable");
 }
 
 #[test]
@@ -521,10 +515,7 @@ fn trusted_settings_port_stays_strict_despite_http_coercion() {
 fn http_settings_normalize_before_the_scoped_host_call() {
     struct Settings;
     impl Host for Settings {
-        fn call(&self, port: &str, _: &str, _: &str, body: Value) -> Result<Value> {
-            if port == "action-policy" {
-                return Ok(json!({"tier":"trusted_auto"}));
-            }
+        fn call(&self, _: &str, _: &str, _: &str, body: Value) -> Result<Value> {
             assert_eq!(
                 body,
                 json!({"lookaheadDays":1,"timeBlockMode":"auto","blockTime":false})
@@ -742,7 +733,7 @@ mod provider {
                 "tool",
                 &json!({"tool":tool,"parameters":p}).to_string(),
             );
-            assert!(raw.unwrap_err().starts_with("Calendar data is unavailable"));
+            assert_eq!(raw.unwrap_err(), "Calendar data is unavailable");
         }
     }
 }

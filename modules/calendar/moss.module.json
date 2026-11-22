@@ -54,7 +54,7 @@
     },
     {
       "port": "action-policy",
-      "operations": ["route-read", "route-write"],
+      "operations": ["route-read"],
       "resources": ["calendar_management", "calendar_writeback"]
     }
   ],

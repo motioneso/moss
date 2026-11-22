@@ -83,20 +83,6 @@ pub fn verify(app: &Application, f: &Fixture, captured: &Captured) {
             let before = snapshot(f, actor);
             let actual = call(app, f, actor, "PATCH", patch.clone());
             if actual["status"] != 200 {
-                let locks: Vec<String> = f
-                    .rt
-                    .block_on(async {
-                        let rows = f
-                            .root
-                            .query(
-                                "SELECT pid::text||' '||state||' '||coalesce(wait_event_type::text,'')||' '||left(coalesce(query,''),120) FROM pg_stat_activity WHERE datname=current_database()",
-                                &[],
-                            )
-                            .await
-                            .unwrap();
-                        rows.iter().map(|r| r.get::<_, String>(0)).collect()
-                    });
-                println!("JS394 pg_stat_activity after a refused patch {patch}:\n{}", locks.join("\n"));
                 assert_eq!(
                     snapshot(f, actor),
                     before,
