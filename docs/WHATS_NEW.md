@@ -35,6 +35,10 @@ feature that is not present in the image you are running.
 
 - **Sports briefing failures on busy nights.** The daily sports briefing no longer fails on nights with a lot of live games. [PR #4449](https://github.com/motioneso/moss/pull/4449)
 
+#### Added
+
+- **Review and save your day plan.** You can adjust proposed task blocks, add them to your calendar, and confirm moves or removals. [PR #4454](https://github.com/motioneso/moss/pull/4454)
+
 ### 2026-11-21
 
 #### Fixed
