@@ -24,6 +24,7 @@ pub const PORTS: &[&str] = &[
     "action-policy",
     "context",
     "feedback",
+    "approvals",
 ];
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -356,6 +357,19 @@ impl Manifest {
                             .iter()
                             .all(|r| crate::feedback_port::MODULE_TARGET_KINDS.contains(&r.as_str())),
                     "A module may declare only briefing, news and sports target kinds"
+                );
+            }
+            if cap.port == "approvals" {
+                ensure!(
+                    cap.operations
+                        .iter()
+                        .all(|op| crate::approval_port::OPERATIONS.contains(&op.as_str())),
+                    "Unknown approvals operation"
+                );
+                ensure!(
+                    !cap.resources.is_empty()
+                        && cap.resources.iter().all(|r| identifier(r)),
+                    "An approvals permission must name its approval families"
                 );
             }
             if matches!(cap.port.as_str(), "fetch" | "credentials" | "browser") {
