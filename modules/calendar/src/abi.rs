@@ -8,6 +8,10 @@ extern "C" {
     fn db(ptr: *const u8, len: usize, out: *mut usize);
     fn context(ptr: *const u8, len: usize, out: *mut usize);
     fn kv(ptr: *const u8, len: usize, out: *mut usize);
+    fn api(ptr: *const u8, len: usize, out: *mut usize);
+    fn approvals(ptr: *const u8, len: usize, out: *mut usize);
+    #[link_name = "action-policy"]
+    fn action_policy(ptr: *const u8, len: usize, out: *mut usize);
 }
 struct Bridge;
 impl Host for Bridge {
@@ -26,6 +30,9 @@ impl Host for Bridge {
                 "db" => db,
                 "context" => context,
                 "kv" => kv,
+                "api" => api,
+                "approvals" => approvals,
+                "action-policy" => action_policy,
                 _ => return Err(Error::new("Undeclared Calendar port")),
             };
             call(request.as_ptr(), request.len(), out.as_mut_ptr());
