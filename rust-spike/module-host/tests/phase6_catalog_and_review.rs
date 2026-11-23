@@ -514,6 +514,31 @@ fn phase6_catalog_and_review() {
         .0,
         400
     );
+    // A different trusted folder cannot inherit a review, even with identical signed bytes.
+    let changed_source = review();
+    let original_configuration = fs::read(root.join("registry.json")).unwrap();
+    let moved_registry = root.join("moved-registry");
+    fs::create_dir_all(moved_registry.join("packages")).unwrap();
+    for name in ["registry.json", "registry.json.sig", "index.json", "index.json.sig"] {
+        fs::copy(registry.join(name), moved_registry.join(name)).unwrap();
+    }
+    let package = format!("packages/{}.mosspkg", first.digest);
+    fs::copy(registry.join(&package), moved_registry.join(&package)).unwrap();
+    let mut configuration: Value = serde_json::from_slice(&original_configuration).unwrap();
+    configuration["registries"][0]["folder"] = json!(moved_registry);
+    fs::remove_file(root.join("registry.json")).unwrap();
+    private(&root.join("registry.json"), &configuration);
+    assert_eq!(execute_review(&changed_source).0, 202);
+    let changed_result = wait(changed_source["id"].as_str().unwrap());
+    assert_eq!(
+        changed_result["stage"], "failed",
+        "a changed trusted source must require a new review: {changed_result}"
+    );
+    fs::remove_file(root.join("registry.json")).unwrap();
+    private(
+        &root.join("registry.json"),
+        &serde_json::from_slice(&original_configuration).unwrap(),
+    );
     // A newer signed selection cannot inherit approval of the previously reviewed digest.
     let next = fixtures::publish(&keys, &registry, "2.0.0", 2);
     let stale = review();
@@ -585,6 +610,6 @@ fn phase6_catalog_and_review() {
         api(Method::GET, &status_path, None, Some(&cookie)).1,
         completed
     );
-    println!("PASS phase6_catalog_and_review: signed sources, review, auth, concurrent execution, restart and changed bytes refusal with old digest retained");
+    println!("PASS phase6_catalog_and_review: signed sources and configuration binding, review, auth, concurrent execution, restart and changed bytes refusal with old digest retained");
     println!("NOT PROVEN: UI, remote HTTPS registry, process kill during SQL, three-OS behavior");
 }

@@ -55,9 +55,14 @@ async fn projection(admin: &Admin, access: &AccessContext) -> Result<ModuleCatal
         let mut result = ModuleCatalog { sources: vec![], modules: vec![] };
         let mut publishers = BTreeMap::new();
         for source in sources {
-            match module_admin::run_json(&instance, &source, &["--list".into()], &[], &actor) {
-                Ok(value) => {
-                    let modules: Vec<CatalogModule> = serde_json::from_value(value["modules"].clone()).map_err(|_| "Unreadable module catalog".to_owned())?;
+            let reply = module_admin::run_json(&instance, &source, &["--list".into()], &[], &actor)
+                .and_then(|value| {
+                    let modules: Vec<CatalogModule> = serde_json::from_value(value["modules"].clone())
+                        .map_err(|_| "Unreadable module catalog".to_owned())?;
+                    Ok((value, modules))
+                });
+            match reply {
+                Ok((value, modules)) => {
                     for module in &modules {
                         if publishers.insert(module.id.clone(), module.publisher.clone()).is_some_and(|key| key != module.publisher) {
                             return Err("Two sources assign this module to different publishers".into());
