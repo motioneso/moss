@@ -41,11 +41,11 @@ Read on this branch; these are source observations, not executed acceptance resu
 
 ## Ranked presentation options
 
-| Rank | Option | Assessment |
-| --- | --- | --- |
-| 2 | Several numbered cards inside one approval group | Alternative. Clear item ranges, manageable layout on phones, bounded loading, one decision for the whole batch. More navigation, addressed with progress and Back/Next. |
-| 1 | One scrolling card | Approved recommendation. Familiar, fewer controls. Long nested scrolling is harder on phones and makes the end easy to miss; virtualization needs accessible navigation and complete disclosure. |
-| 3 | Full-width review sheet opened from chat | Most room for very large imports, but adds a modal/screen, focus lifecycle and navigation away from chat. Defer unless real use shows numbered cards inadequate. |
+| Rank | Option                                           | Assessment                                                                                                                                                                                       |
+| ---- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2    | Several numbered cards inside one approval group | Alternative. Clear item ranges, manageable layout on phones, bounded loading, one decision for the whole batch. More navigation, addressed with progress and Back/Next.                          |
+| 1    | One scrolling card                               | Approved recommendation. Familiar, fewer controls. Long nested scrolling is harder on phones and makes the end easy to miss; virtualization needs accessible navigation and complete disclosure. |
+| 3    | Full-width review sheet opened from chat         | Most room for very large imports, but adds a modal/screen, focus lifecycle and navigation away from chat. Defer unless real use shows numbered cards inadequate.                                 |
 
 All options share the same backend presentation and one approval ID. Choosing a different layout
 must never change execution semantics. Separate tool calls with separate Approve buttons are not
@@ -180,72 +180,40 @@ Chat: [Review entire batch]
 
 ## Approved host and shell contract
 
-1. Introduce a host-owned `ApprovalPresentation`: shared fixed title/target/danger, one optional
-   version, ordered sections with stable item and continuation labels, and a completeness marker.
-   Keep `ApprovalCardRecord` as a legacy one-section input adapter. A module supplies data, never
-   executable markup or approval IDs. Only one top-level version is allowed; conflicting section
-   versions are invalid. Host-owned labels and escaping retain the current trust boundary.
-2. Add an opt-in paged card-builder API declaration alongside the existing `card` API. Its first
-   request uses the original validated parameters; subsequent requests use a host-held preparation
-   handle and cursor. The module produces a frozen disclosure snapshot for those parameters and
-   source version. The host associates that handle with actor, module, tool and exact parameters;
-   it is not a runnable approval token. Each reply has ordered sections, next cursor or explicit
-   completion, and the same snapshot identity/version. Reject gaps, duplicate/repeating cursors,
-   changed identity/version and missing completion. Legacy cards become one completed section.
-3. Preserve every value. UTF-8-safe continuations retain the same item identity, label and order.
-   Pack sections to bounded transport chunks; the present byte/field limits become chunk targets,
-   not aggregate rejection limits. Never cut a long note or content preview. The module must
-   disclose every affected item/effect; the host cannot infer semantic coverage from arbitrary
-   prose. Finance provides row counts and stable row indexes so coverage can be checked.
-4. Prepare and validate the complete disclosure before making an approval actionable. For large
-   presentations, spool account-private, sanitized sections behind the host-held snapshot rather
-   than allocate all sections into the chat response. Shell fetches pages by approval ID/index
-   through actor/turn checks, never by arbitrary file paths. Clean up on expiry, turn end, account
-   removal and startup recovery. Resource exhaustion is a safe, distinct preparation failure,
-   never a truncated card or an automatic split into smaller writes.
-5. `Book` retains one `Record`, `Action`, expiry and runner ID for the whole group. Store the
-   complete parameters server-side; `ApprovalView` exposes summary, page counts and presentation
-   identity, with an authenticated page endpoint for full details. No client-supplied params,
-   version, counts or section IDs can mint a grant. Any optional navigation progress belongs to
-   the frozen presentation only if useful for navigation; approve checks complete preparation,
-   never exposure, scrolling or visitation. Complete disclosure, exact-call binding and host
-   rechecks remain mandatory. Expiry or invalidation disables the entire group.
-6. Keep `consume`'s exact JSON match, actor/open-turn match and single use. Keep offered-tool and
-   call-ID checks and host rechecks of current installation, account enablement, policy and pinned
-   version. All sections share one Approve/Reject footer. Reject, timeout, changed snapshot or any
-   missing section affects the entire batch. One approval dispatches the original tool once;
-   presentation paging never invokes a write. Atomic commit/rollback remains the module's batch
-   transaction responsibility: do not claim the shared host makes a non-atomic handler atomic.
-7. Render one scrolling card with a labelled, keyboard-scrollable details region. Every row and
-   value is available in full within it. Approve entire batch and Reject entire batch sit outside
-   the scroll region and are usable immediately once the complete presentation is valid. No
-   scroll-to-end, visit-every-card or reading-progress gate. On phones use stacked actions and
-   wrapped values, without horizontal tables. Reuse existing Action request styling and danger
-   treatments. Loading or incomplete/invalid data never offers Approve. Reject remains reachable.
+Coordinator t6n approved this simplification on 2026-11-22: retain the single complete card record;
+no paged builder API, staging handles, spooled sections or exposure tracking. The previous proposed
+paged transport is superseded alongside the numbered-card preference.
 
-
-### Size limits beyond the card
-
-Removing only `normalize_card`'s checks is insufficient. The build must inventory the entire
-argument/result/socket/guest path (including the current 64 KiB argument and 1 MiB runtime message
-limits), and replace presentation-driven aggregate limits with chunked transport or host-held
-staged data referenced by a bound handle. The canonical full argument value remains the identity
-used for exact-call comparison; a handle cannot substitute for unvalidated or mutable parameters.
-Staging must be actor-scoped, immutable and verified before dispatch, and the guest must consume
-that same staged value inside one batch transaction. Replace the model-facing 64 KiB aggregate
-argument rejection too: accept and validate the full tool-call value before bounded staging/guest
-transport. Card paging cannot rescue arguments rejected at ingress; test that boundary explicitly.
-No global runtime-limit increase or arbitrary
-new maximum batch size is an acceptable substitute. Domain validation limits remain only when
-justified by the operation itself, not by card capacity. This transport work is part of the build,
-not a follow-up hidden behind a claim of unlimited batches.
+1. Keep the existing `ApprovalCardRecord`, `ApprovalView`, `Book::Record` and one server-held
+   `Action`. The host validates and sanitizes the entire presentation before it creates the record.
+   Remove the aggregate card-byte/field-count limits and value/content length barriers. Preserve
+   structural validation, fixed host title/target/danger and the existing version contract.
+2. Finance displays all rows and full values in their original order; no clipping, shortening or
+   automatic division into separate tool calls. Remove Finance's presentation-driven array/schema
+   restrictions and split guidance. Inventory their replacements against real Finance domain
+   constraints in the build PR; keep business-validation rules.
+3. Remove the chat-specific 64 KiB argument cap. For chat card preparation and execution only,
+   scale the per-invocation message allowance from the full serialized call, accounting for JSON
+   escaping and card-label overhead, with room for the complete result. Keep Wasm memory, fuel,
+   deadline, capability checks and ordinary non-chat message budgets unchanged. Resource failures
+   fail preparation explicitly; they never yield a partial actionable card.
+4. Render one labelled, keyboard-scrollable details region containing the entire fields/content
+   disclosure. Values wrap on desktop and phone without horizontal tables. Actions sit outside the
+   scrolling region: Approve entire batch and Reject entire batch are available immediately once
+   the complete card is valid. No scroll listener, visitation record or progress gate.
+5. Preserve `consume`'s actor/open-turn/module/tool/exact JSON parameter match and single use,
+   offered-tool and call-ID checks, current installation/account/policy rechecks and displayed
+   pinned version. One approval dispatches the unchanged original tool once. Presentation never
+   invokes writes. Atomic commit/rollback remains the module's transaction responsibility.
+6. Missing/invalid details create no runnable approval. Reject, timeout, turn close or source-version
+   invalidation affects the entire batch. Keep native agent permission cards separate.
 
 ## Card-builder failures must reach the model
 
 Use an explicit result, not `Option` or a denial boolean:
 
 ```text
-prepare -> Ready(presentation) | Failed(code, safe_message, recovery)
+prepare -> Ready(complete_card) | Failed(code, safe_message, recovery)
 confirm -> Approved | Declined | PreparationFailed(safe_error)
 ```
 
@@ -270,8 +238,8 @@ confirm -> Approved | Declined | PreparationFailed(safe_error)
 
 ## Build scope and acceptance after approval
 
-Host normalization/paged preparation, shell approval store and contract/page endpoint, Leptos
-cards, runner wire protocol and Moss gateway outcome propagation ship together. Adapt Finance's
+Host normalization and chat invocation sizing, Leptos scrolling cards, runner wire protocol and
+Moss gateway outcome propagation ship together. Adapt Finance's
 builder and remove only its presentation-driven schema caps/split guidance in the same build so
 one actual oversized batch exercises the shared path. Before editing schemas, list each affected
 Finance cap and its domain or presentation rationale in the build PR; include bulk categorize,
@@ -285,9 +253,9 @@ Required build evidence (not run or claimed in phase 1):
 - First reproduce a supported Finance batch failing the old field/byte limits and demonstrate
   the same call succeeds after the change. Include more than 32 fields, more than 32 KiB,
   a value over 4096 bytes, multibyte continuation boundaries, and cross-transport-boundary cases.
-- Assert every row/field/value round-trips in order without loss. Test multi-page source changes,
-  repeated cursors, missing final page, interrupted loads, cleanup and reload. Approval stays
-  disabled/ineligible on incomplete data; all pages belong to the same frozen presentation.
+- Assert every row/field/value round-trips in order without loss, including values spanning the
+  old transport boundary. Invalid or interrupted preparation produces no actionable record.
+  Approve is available before scrolling; details remain fully accessible by keyboard and touch.
 - Assert exactly one original tool invocation and one batch commit. Inject a failing middle item
   and observe rollback of the whole Finance batch, not partial success. Existing domain limits
   are distinguished from presentation limits.
@@ -310,4 +278,5 @@ Required build evidence (not run or claimed in phase 1):
 Phase 1 committed the spec and opened draft PR #4441 with Release note `Category: N/A`.
 On 2026-11-22 coordinator t6n relayed Ben’s approval of option B and authorized the build, with
 Approve/Reject immediately available once the entire disclosure is valid. The earlier preference
-for numbered cards and any scroll/visit gate are superseded. Keep auto-merge off.
+for numbered cards and any scroll/visit gate are superseded. The coordinator subsequently approved
+the single-record backend above, without a paged/staged protocol. Keep auto-merge off.
