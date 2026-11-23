@@ -4,8 +4,6 @@
  * only by environment, never by argument or settings file.
  */
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
-
 import {
   MOSS_OPENCODE_API_KEY_ENV,
   MOSS_OPENCODE_PROVIDER_ID,
@@ -20,7 +18,12 @@ import { providerTokenPath } from "./provider-token-store.js";
 export type AcpCredential = RpcAcpSpawnCredential;
 
 export interface AgentCredentialLaunch {
-  readonly agentHome: string;
+  /**
+   * The OpenCode settings file this ONE launch owns (#3558). Each launch reads its own file
+   * through XDG_CONFIG_HOME, so writing or clearing a provider entry here can never change
+   * what an overlapping launch of the same person sees.
+   */
+  readonly configPath: string | null;
   readonly homeBase: string;
   readonly providerKind: AcpProviderKind;
   readonly credential: AcpCredential | null;
@@ -51,7 +54,8 @@ export async function applyAgentCredential(
   }
   if (providerKind !== "opencode") return undefined;
 
-  const path = join(launch.agentHome, ".config", "opencode", "opencode.json");
+  const path = launch.configPath;
+  if (!path) throw new Error("an OpenCode launch needs its own settings path");
   if (!credential) return { path, id: MOSS_OPENCODE_PROVIDER_ID, entry: null };
   env[MOSS_OPENCODE_API_KEY_ENV] = credential.apiKey;
   return {
