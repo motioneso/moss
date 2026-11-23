@@ -359,3 +359,47 @@ impl Fixture {
         });
     }
 }
+
+impl Fixture {
+    pub fn artifact_layout(&self) {
+        let index: Value = serde_json::from_slice(
+            &std::fs::read(self.dir.path().join("registry/index.json")).unwrap(),
+        )
+        .unwrap();
+        for a in index["modules"].as_array().unwrap() {
+            std::fs::write(
+                self.dir.path().join(format!(
+                    "registry/packages/{}.mosspkg.sig",
+                    a["digest"].as_str().unwrap()
+                )),
+                format!("{}\n", a["signature"].as_str().unwrap()),
+            )
+            .unwrap();
+        }
+        self.write_json("selection.json", &json!({"default":{"modules":[{"id":"sample.counter","registry":"moss","version":"1.0.0"}]},"optional":{"modules":[]}}));
+    }
+}
+
+impl Fixture {
+    pub fn first_party_bundle(&self) {
+        let mut artifacts = Vec::new();
+        for id in ["tasks", "finance", "meals"] {
+            let mut files = self.files.borrow().clone();
+            let mut manifest: Value = serde_json::from_slice(&files["moss.module.json"]).unwrap();
+            manifest["id"] = json!(id);
+            files.insert(
+                "moss.module.json".into(),
+                serde_json::to_vec(&manifest).unwrap(),
+            );
+            let mut artifact = self.store_prior(&files);
+            artifact.publisher_key = "first".into();
+            artifact.signature = sign(&self.root, artifact.digest.as_bytes());
+            artifacts.push(artifact);
+        }
+        let identity = json!({"id":"moss","name":"Bundle fixture","rootFingerprint":trust::digest(self.root.public_key().as_ref()),"indexKeys":{"online":public(&self.index)},"publishers":{"first":{"key":public(&self.root),"prefix":""}}});
+        self.write_signed("registry.json", &identity, &self.root);
+        self.edit_index(|i| i["modules"] = json!(artifacts));
+        self.artifact_layout();
+        self.write_json("selection.json", &json!({"default":{"modules":[{"id":"tasks","registry":"moss"}]},"optional":{"modules":[{"id":"meals","registry":"moss"},{"id":"finance","registry":"moss"}]}}));
+    }
+}
