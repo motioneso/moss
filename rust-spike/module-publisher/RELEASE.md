@@ -33,7 +33,10 @@ The first-party builder compiles `tools/repro-rustc.rs` with the pinned compiler
 uses it only for guest/UI builds and their dependencies. It derives crate metadata
 from the locked package name/version, crate name/type, target and feature cfgs,
 while preserving Cargo's output filenames. This gives the local SDK the same
-identity on each runner. The wrapper source digest selects a separate guest/UI
+identity on each runner. For the locked Wasm `wasm_split_helpers` dependency only,
+it also supplies a stable virtual `CARGO_MANIFEST_PATH`: that dependency hashes
+this environment value into its exported version marker. Other crates retain their
+real manifest paths so file-reading macros keep working. The wrapper source digest selects a separate guest/UI
 cache because Cargo does not invalidate outputs when `RUSTC_WRAPPER` changes.
 This wrapper is scoped to these locked first-party graphs, not arbitrary publisher inputs.
 Unsigned build inputs are retained per platform for investigating a failed comparison.

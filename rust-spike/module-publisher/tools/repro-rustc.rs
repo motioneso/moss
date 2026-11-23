@@ -29,18 +29,29 @@ fn normalize(args: &mut [String], package: &str, version: &str) {
     }
 }
 
+// wasm_split_helpers 0.2.3 exports a version marker whose proc macro hashes
+// CARGO_MANIFEST_PATH rather than a remappable source span. Give only this
+// locked Wasm dependency a stable virtual manifest identity; other crates keep
+// their real manifest paths for macros that read files relative to them.
+fn manifest_override(package: &str, version: &str, args: &[String]) -> Option<String> {
+    let wasm = args
+        .windows(2)
+        .any(|pair| pair[0] == "--target" && pair[1].starts_with("wasm32-"));
+    (package == "wasm_split_helpers" && wasm)
+        .then(|| format!("/moss/cargo/{package}-{version}/Cargo.toml"))
+}
+
 fn main() {
     let mut args: Vec<_> = env::args().skip(1).collect();
     let compiler = args.remove(0);
-    normalize(
-        &mut args,
-        &env::var("CARGO_PKG_NAME").unwrap_or_default(),
-        &env::var("CARGO_PKG_VERSION").unwrap_or_default(),
-    );
-    let status = Command::new(compiler)
-        .args(args)
-        .status()
-        .expect("start rustc");
+    let package = env::var("CARGO_PKG_NAME").unwrap_or_default();
+    let version = env::var("CARGO_PKG_VERSION").unwrap_or_default();
+    normalize(&mut args, &package, &version);
+    let mut command = Command::new(compiler);
+    if let Some(manifest) = manifest_override(&package, &version, &args) {
+        command.env("CARGO_MANIFEST_PATH", manifest);
+    }
+    let status = command.args(args).status().expect("start rustc");
     std::process::exit(status.code().unwrap_or(1));
 }
 
@@ -87,6 +98,26 @@ mod tests {
         assert_eq!(args[1], "metadata=keep");
         assert!(args[2].starts_with("-Cmetadata=moss"));
         assert_ne!(args[2], "-Cmetadata=old");
+    }
+
+    #[test]
+    fn split_marker_manifest_identity_is_stable_and_scoped() {
+        let wasm = invocation("metadata=cargo", "feature=\"component\"");
+        assert_eq!(
+            manifest_override("wasm_split_helpers", "0.2.3", &wasm).as_deref(),
+            Some("/moss/cargo/wasm_split_helpers-0.2.3/Cargo.toml")
+        );
+        assert_ne!(
+            manifest_override("wasm_split_helpers", "0.2.3", &wasm),
+            manifest_override("wasm_split_helpers", "0.2.4", &wasm)
+        );
+        assert_eq!(manifest_override("other", "0.2.3", &wasm), None);
+        let mut native = wasm.clone();
+        native[5] = "x86_64-unknown-linux-gnu".into();
+        assert_eq!(
+            manifest_override("wasm_split_helpers", "0.2.3", &native),
+            None
+        );
     }
 
     #[test]
