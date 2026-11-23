@@ -278,6 +278,7 @@ fn finance_links_and_syncs_a_real_plaid_sandbox_bank() {
         lifted_revocations: BTreeSet::new(),
     };
     let index = Index {
+        publish_reviews: Default::default(),
         serial: 1,
         expires: chrono::Utc::now() + chrono::Duration::days(1),
         signing_key: "online".into(),
@@ -335,13 +336,20 @@ fn finance_links_and_syncs_a_real_plaid_sandbox_bank() {
         .spawn()
         .unwrap();
     let mut first = String::new();
-    std::io::BufRead::read_line(&mut std::io::BufReader::new(relay.stdout.take().unwrap()), &mut first).unwrap();
+    std::io::BufRead::read_line(
+        &mut std::io::BufReader::new(relay.stdout.take().unwrap()),
+        &mut first,
+    )
+    .unwrap();
     let _relay = Server(relay);
     let bank_url = first.trim().strip_prefix("endpoint ").unwrap().to_owned();
     let services = moss_module_host::services::ServicePorts::new(
         &root.join("data"),
         std::sync::Arc::new(
-            safety_core::secret::SecretCipher::connectors(&[("JARVIS_CONNECTOR_SECRET_KEY".into(), connector_key.clone())].into()).unwrap(),
+            safety_core::secret::SecretCipher::connectors(
+                &[("JARVIS_CONNECTOR_SECRET_KEY".into(), connector_key.clone())].into(),
+            )
+            .unwrap(),
         ),
         std::sync::Arc::new(NoModel),
         std::sync::Arc::new(moss_module_host::runtime::DenyPorts),
@@ -354,7 +362,10 @@ fn finance_links_and_syncs_a_real_plaid_sandbox_bank() {
             "plaid-keys",
             &safety_core::secret::SecretFields::new()
                 .with("clientId", safety_core::secret::Secret::new(&bank_client))
-                .with("clientSecret", safety_core::secret::Secret::new(&bank_secret)),
+                .with(
+                    "clientSecret",
+                    safety_core::secret::Secret::new(&bank_secret),
+                ),
         )
         .unwrap();
     private(
@@ -419,10 +430,19 @@ fn finance_links_and_syncs_a_real_plaid_sandbox_bank() {
         if ready {
             break;
         }
-        assert!(started.elapsed() < std::time::Duration::from_secs(240), "module host start deadline\n{}", log());
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(240),
+            "module host start deadline\n{}",
+            log()
+        );
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
-    let marks = [bank_client.as_str(), bank_secret.as_str(), "access-sandbox", "public-sandbox"];
+    let marks = [
+        bank_client.as_str(),
+        bank_secret.as_str(),
+        "access-sandbox",
+        "public-sandbox",
+    ];
     let clean = |label: &str, text: &str| {
         for m in marks {
             assert!(!text.contains(m), "{label} reply holds a key or bank token");
@@ -438,35 +458,72 @@ fn finance_links_and_syncs_a_real_plaid_sandbox_bank() {
     let now = chrono::Utc::now();
     let months = [
         now.format("%Y-%m").to_string(),
-        (now - chrono::Duration::days(31)).format("%Y-%m").to_string(),
+        (now - chrono::Duration::days(31))
+            .format("%Y-%m")
+            .to_string(),
     ];
     let transactions_of = |who: &str| -> usize {
         let mut count = 0;
         for month in &months {
-            let (status, text) = call(Method::GET, &format!("/finance/transactions?month={month}"), Some(who), None);
+            let (status, text) = call(
+                Method::GET,
+                &format!("/finance/transactions?month={month}"),
+                Some(who),
+                None,
+            );
             assert_eq!(status, 200, "{text}");
             clean("transactions", &text);
-            count += json_of(&text)["transactions"].as_array().map_or(0, |t| t.len());
+            count += json_of(&text)["transactions"]
+                .as_array()
+                .map_or(0, |t| t.len());
         }
         count
     };
     assert_eq!(accounts_of(&cookie).len(), 0);
-    let (status, text) = call(Method::POST, "/finance/connect/start", Some(&cookie), Some(json!({})));
+    let (status, text) = call(
+        Method::POST,
+        "/finance/connect/start",
+        Some(&cookie),
+        Some(json!({})),
+    );
     assert_eq!(status, 200, "{text}\n{}", log());
-    clean("connect start", &text.replace(&json_of(&text)["hostedLinkUrl"].as_str().unwrap_or_default().to_owned(), ""));
-    let url = json_of(&text)["hostedLinkUrl"].as_str().expect("a hosted bank page address").to_owned();
+    clean(
+        "connect start",
+        &text.replace(
+            &json_of(&text)["hostedLinkUrl"]
+                .as_str()
+                .unwrap_or_default()
+                .to_owned(),
+            "",
+        ),
+    );
+    let url = json_of(&text)["hostedLinkUrl"]
+        .as_str()
+        .expect("a hosted bank page address")
+        .to_owned();
     assert!(url.starts_with("https://"), "hosted page is not https");
     println!("PASS real Plaid sandbox issued a hosted bank page address");
     fs::write(dir.join("hosted-url.txt"), &url).unwrap();
-    println!("WAITING for the bank page to be finished (file {})", dir.join("done").display());
+    println!(
+        "WAITING for the bank page to be finished (file {})",
+        dir.join("done").display()
+    );
     let wait = Instant::now();
     while !dir.join("done").exists() {
-        assert!(wait.elapsed() < Duration::from_secs(1800), "bank page never finished");
+        assert!(
+            wait.elapsed() < Duration::from_secs(1800),
+            "bank page never finished"
+        );
         std::thread::sleep(Duration::from_secs(2));
     }
     let mut completed = 0;
     for _ in 0..20 {
-        let (status, text) = call(Method::POST, "/finance/connect/poll", Some(&cookie), Some(json!({})));
+        let (status, text) = call(
+            Method::POST,
+            "/finance/connect/poll",
+            Some(&cookie),
+            Some(json!({})),
+        );
         clean("connect poll", &text);
         if status != 200 {
             println!("poll answered {status}: {text}");
@@ -486,7 +543,12 @@ fn finance_links_and_syncs_a_real_plaid_sandbox_bank() {
     let mut owned = accounts_of(&cookie);
     let mut tx = 0;
     for _ in 0..12 {
-        let (status, text) = call(Method::POST, "/finance/sync/run-now", Some(&cookie), Some(json!({})));
+        let (status, text) = call(
+            Method::POST,
+            "/finance/sync/run-now",
+            Some(&cookie),
+            Some(json!({})),
+        );
         clean("sync", &text);
         if status != 200 {
             println!("run-now answered {status}: [{text}]");
@@ -504,10 +566,18 @@ fn finance_links_and_syncs_a_real_plaid_sandbox_bank() {
     assert!(!owned.is_empty(), "no accounts after the sync\n{}", log());
     assert!(tx > 0, "no transactions after the sync");
     let names: Vec<&str> = owned.iter().filter_map(|a| a["name"].as_str()).collect();
-    println!("PASS real accounts appear for the owner: {} ({names:?}); real transactions: {tx}", owned.len());
+    println!(
+        "PASS real accounts appear for the owner: {} ({names:?}); real transactions: {tx}",
+        owned.len()
+    );
     assert_eq!(accounts_of(&other).len(), 0);
     assert_eq!(transactions_of(&other), 0);
-    let (_, text) = call(Method::POST, "/finance/sync/run-now", Some(&other), Some(json!({})));
+    let (_, text) = call(
+        Method::POST,
+        "/finance/sync/run-now",
+        Some(&other),
+        Some(json!({})),
+    );
     assert_eq!(json_of(&text)["items"], json!([]), "{text}");
     println!("PASS second person sees no accounts or transactions and has nothing to sync");
     runtime.block_on(async {
@@ -537,4 +607,3 @@ fn finance_links_and_syncs_a_real_plaid_sandbox_bank() {
     }
     println!("PASS no key or bank token in any reply, table, job, activity row or the server log");
 }
-

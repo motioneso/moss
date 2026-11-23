@@ -24,7 +24,12 @@ fn sign(k: &Ed25519KeyPair, b: &[u8]) -> String {
     STANDARD.encode(k.sign(b).as_ref())
 }
 pub fn publish(folder: &Path, bytes: &[u8]) -> (String, String, Artifact) {
-    publish_as(folder, bytes, moss_meetings_host::package::manifest().unwrap(), "meetings")
+    publish_as(
+        folder,
+        bytes,
+        moss_meetings_host::package::manifest().unwrap(),
+        "meetings",
+    )
 }
 
 /// Publishes any module's package into its own disposable registry named `<label>-test-registry`,
@@ -76,6 +81,7 @@ pub fn publish_as(
         lifted_revocations: Default::default(),
     };
     let listing = Index {
+        publish_reviews: Default::default(),
         serial: 1,
         expires: chrono::Utc::now() + chrono::Duration::days(1),
         signing_key: "online".into(),

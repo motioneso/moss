@@ -162,7 +162,10 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
         let response = client.post(format!("{origin}/api/auth/sign-up/email")).header("origin", &origin).json(&json!({"name":name,"email":email,"password":"temporary-calendar-password-181-not-a-real-secret"})).send().unwrap();
         let status = response.status();
         if status != 200 {
-            panic!("sign-up answered {status}: {}", response.text().unwrap_or_default());
+            panic!(
+                "sign-up answered {status}: {}",
+                response.text().unwrap_or_default()
+            );
         }
         response.headers()["set-cookie"]
             .to_str()
@@ -223,8 +226,11 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
         let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
         let manifest = &package.manifest;
         assert_eq!(manifest.id, *id);
-        fs::write(root.join(format!("registry/packages/{digest}.mosspkg")), &bytes,
-        ).unwrap();
+        fs::write(
+            root.join(format!("registry/packages/{digest}.mosspkg")),
+            &bytes,
+        )
+        .unwrap();
         Artifact {
             id: manifest.id.clone(),
             version: manifest.version.clone(),
@@ -259,6 +265,7 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
         lifted_revocations: BTreeSet::new(),
     };
     let index = Index {
+        publish_reviews: Default::default(),
         serial: 1,
         expires: chrono::Utc::now() + chrono::Duration::days(1),
         signing_key: "online".into(),
@@ -266,14 +273,23 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
         revoked: vec![],
     };
     for (name, data, key) in [
-        ("registry.json", serde_json::to_vec(&identity).unwrap(), &keys.root,
+        (
+            "registry.json",
+            serde_json::to_vec(&identity).unwrap(),
+            &keys.root,
         ),
-        ("index.json", serde_json::to_vec(&index).unwrap(), &keys.index,
+        (
+            "index.json",
+            serde_json::to_vec(&index).unwrap(),
+            &keys.index,
         ),
     ] {
         fs::write(root.join("registry").join(name), &data).unwrap();
-        fs::write(root.join("registry").join(format!("{name}.sig")), Keys::sign(key, &data),
-        ).unwrap();
+        fs::write(
+            root.join("registry").join(format!("{name}.sig")),
+            Keys::sign(key, &data),
+        )
+        .unwrap();
     }
     let installer = installed::reopen(
         &root.join("data"),
@@ -395,7 +411,12 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
         Some(&cookie),
         Some(json!({"date":"2026-11-12","timeZone":"UTC"})),
     );
-    assert_eq!(status, 200, "{created}\n{}", fs::read_to_string(root.join("server.log")).unwrap_or_default());
+    assert_eq!(
+        status,
+        200,
+        "{created}\n{}",
+        fs::read_to_string(root.join("server.log")).unwrap_or_default()
+    );
     let (status, read) = call(
         Method::GET,
         "/day-plan?date=2026-11-12&timeZone=UTC",
@@ -404,48 +425,83 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
     );
     assert_eq!(status, 200, "{read}");
     assert_eq!(read["plan"]["localDay"], "2026-11-12", "{read}");
-    let apply = format!("/day-plans/{}/apply", created["plan"]["id"].as_str().unwrap());
+    let apply = format!(
+        "/day-plans/{}/apply",
+        created["plan"]["id"].as_str().unwrap()
+    );
     let good = json!({"expectedRevision":1,"idempotencyKey":"live-apply-1"});
     assert_eq!(call(Method::POST, &apply, None, Some(good.clone())).0, 401);
     let (status, refused) = call(Method::POST, &apply, Some(&cookie), Some(good));
-    assert_eq!((status, refused["error"].as_str()), (503, Some("day plan apply is unavailable")), "{refused}");
+    assert_eq!(
+        (status, refused["error"].as_str()),
+        (503, Some("day plan apply is unavailable")),
+        "{refused}"
+    );
     let (status, bad) = call(
         Method::POST,
         &apply,
         Some(&cookie),
         Some(json!({"expectedRevision":1,"idempotencyKey":"k","surprise":true})),
     );
-    assert_eq!((status, bad["code"].as_str()), (400, Some("day_plan_invalid")), "{bad}");
+    assert_eq!(
+        (status, bad["code"].as_str()),
+        (400, Some("day_plan_invalid")),
+        "{bad}"
+    );
     // Missing confirm/retry operations are rejected before probing Connectors.
     // Recover retains its existing availability-first refusal.
     let plan_id = created["plan"]["id"].as_str().unwrap();
     let operation = uuid::Uuid::new_v4();
     let item = uuid::Uuid::new_v4();
-    let operation_path = |action: &str| format!("/day-plans/{plan_id}/operations/{operation}/{action}");
+    let operation_path =
+        |action: &str| format!("/day-plans/{plan_id}/operations/{operation}/{action}");
     for (action, body) in [
         ("retry", json!({"itemIds":[item]})),
         ("recover", json!({})),
         ("confirm", json!({"approvalId":uuid::Uuid::new_v4()})),
     ] {
         let path = operation_path(action);
-        assert_eq!(call(Method::POST, &path, None, Some(body.clone())).0, 401, "{action}");
+        assert_eq!(
+            call(Method::POST, &path, None, Some(body.clone())).0,
+            401,
+            "{action}"
+        );
         let (status, refused) = call(Method::POST, &path, Some(&cookie), Some(body));
         let expected = if action == "recover" {
             (503, Some("day plan apply is unavailable"))
         } else {
             (404, Some("day plan apply operation is not available"))
         };
-        assert_eq!((status, refused["error"].as_str()), expected, "{action}: {refused}");
+        assert_eq!(
+            (status, refused["error"].as_str()),
+            expected,
+            "{action}: {refused}"
+        );
     }
-    let (status, bad) = call(Method::POST, &operation_path("retry"), Some(&cookie), Some(json!({"itemIds":[]})),
+    let (status, bad) = call(
+        Method::POST,
+        &operation_path("retry"),
+        Some(&cookie),
+        Some(json!({"itemIds":[]})),
     );
-    assert_eq!((status, bad["code"].as_str()), (400, Some("day_plan_invalid")), "{bad}");
+    assert_eq!(
+        (status, bad["code"].as_str()),
+        (400, Some("day_plan_invalid")),
+        "{bad}"
+    );
     let (status, settings) = call(Method::GET, "/briefing-settings", Some(&cookie), None);
     println!("briefing settings read -> {status}: {settings}");
     assert_eq!(call(Method::GET, "/source-behaviors", None, None).0, 401);
     let (status, sources) = call(Method::GET, "/source-behaviors", Some(&cookie), None);
-    assert_eq!((status, &sources), (200, &json!({"briefings":true,"planning":true})));
-    let (status, bad) = call(Method::PATCH, "/source-behaviors", Some(&cookie), Some(json!({"writeback":true})),
+    assert_eq!(
+        (status, &sources),
+        (200, &json!({"briefings":true,"planning":true}))
+    );
+    let (status, bad) = call(
+        Method::PATCH,
+        "/source-behaviors",
+        Some(&cookie),
+        Some(json!({"writeback":true})),
     );
     assert_eq!(status, 400, "{bad}");
     // Day plans check task references through the installed Tasks package, under the caller's account.
@@ -477,11 +533,22 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
         (ids[0], ids[1])
     });
     // The owner turns one switch off and must not reach the second account's saved switches.
-    let (status, saved) = call(Method::PATCH, "/source-behaviors", Some(&cookie), Some(json!({"briefings":false})),
+    let (status, saved) = call(
+        Method::PATCH,
+        "/source-behaviors",
+        Some(&cookie),
+        Some(json!({"briefings":false})),
     );
-    assert_eq!((status, &saved), (200, &json!({"briefings":false,"planning":true})), "{saved}");
+    assert_eq!(
+        (status, &saved),
+        (200, &json!({"briefings":false,"planning":true})),
+        "{saved}"
+    );
     let (status, sources) = call(Method::GET, "/source-behaviors", Some(&cookie), None);
-    assert_eq!((status, &sources), (200, &json!({"briefings":false,"planning":true})));
+    assert_eq!(
+        (status, &sources),
+        (200, &json!({"briefings":false,"planning":true}))
+    );
     let other_switches: Value = runtime.block_on(async {
         let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
         tokio::spawn(async move {
@@ -492,11 +559,23 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
             .unwrap()
             .get(0)
     });
-    assert_eq!(other_switches, json!({"calendar.briefings":true,"calendar.planning":false}), "an owner switch write reached another account");
-    // Put the owner's switch back so the browser check starts from the defaults.
-    let (status, restored) = call(Method::PATCH, "/source-behaviors", Some(&cookie), Some(json!({"briefings":true})),
+    assert_eq!(
+        other_switches,
+        json!({"calendar.briefings":true,"calendar.planning":false}),
+        "an owner switch write reached another account"
     );
-    assert_eq!((status, &restored), (200, &json!({"briefings":true,"planning":true})), "{restored}");
+    // Put the owner's switch back so the browser check starts from the defaults.
+    let (status, restored) = call(
+        Method::PATCH,
+        "/source-behaviors",
+        Some(&cookie),
+        Some(json!({"briefings":true})),
+    );
+    assert_eq!(
+        (status, &restored),
+        (200, &json!({"briefings":true,"planning":true})),
+        "{restored}"
+    );
     // The first call into Tasks compiles its package, which a debug build does slowly. Warm it
     // so the day plan checks below run inside the module time limit.
     let warm = client
@@ -515,10 +594,16 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
             Method::POST,
             "/day-plans",
             Some(who),
-            Some(json!({"localDay":day,"timeZone":"UTC","eveningIntent":{"priorityTaskIds":[task]}}),
+            Some(
+                json!({"localDay":day,"timeZone":"UTC","eveningIntent":{"priorityTaskIds":[task]}}),
             ),
         );
-        assert_eq!(status, expected, "{day}: {reply}\n{}", fs::read_to_string(root.join("server.log")).unwrap_or_default());
+        assert_eq!(
+            status,
+            expected,
+            "{day}: {reply}\n{}",
+            fs::read_to_string(root.join("server.log")).unwrap_or_default()
+        );
     }
     calendar_today::check(
         &client,
@@ -544,27 +629,50 @@ fn installed_calendar_package_serves_routes_from_the_real_server() {
     // The signed-in owner gets the verified screen address; the files need no session.
     let screen_url = format!("{origin}/api/modules/calendar/screen?path=/calendar");
     assert_eq!(client.get(&screen_url).send().unwrap().status(), 401);
-    let screen: Value = client.get(&screen_url).header("cookie", &cookie).send().unwrap().json().unwrap();
+    let screen: Value = client
+        .get(&screen_url)
+        .header("cookie", &cookie)
+        .send()
+        .unwrap()
+        .json()
+        .unwrap();
     let src = screen["src"].as_str().expect("screen address");
     assert!(src.starts_with("/module-ui/calendar/"), "{screen}");
-    assert_eq!(client.get(format!("{origin}{src}")).header("origin", "null").header("sec-fetch-site", "cross-site").send().unwrap().status(), 200);
+    assert_eq!(
+        client
+            .get(format!("{origin}{src}"))
+            .header("origin", "null")
+            .header("sec-fetch-site", "cross-site")
+            .send()
+            .unwrap()
+            .status(),
+        200
+    );
     println!("PASS Calendar screen address and files served over HTTPS");
     // Real-browser check of the Calendar screens against this server.
     {
-        let script = std::env::var("MOSS_CALENDAR_BROWSER_SCRIPT").expect("the gate must supply the browser script");
-        let out = std::env::var("MOSS_CALENDAR_BROWSER_OUT").unwrap_or_else(|_| root.display().to_string());
+        let script = std::env::var("MOSS_CALENDAR_BROWSER_SCRIPT")
+            .expect("the gate must supply the browser script");
+        let out = std::env::var("MOSS_CALENDAR_BROWSER_OUT")
+            .unwrap_or_else(|_| root.display().to_string());
         let status = Command::new("pnpm")
             .args(["exec", "tsx", &script])
             .env("ORIGIN", &origin)
             .env("PUBLIC_ORIGIN", &public)
             .env("EMAIL", "calendar-owner@example.test")
-            .env("PASSWORD", "temporary-calendar-password-181-not-a-real-secret",
+            .env(
+                "PASSWORD",
+                "temporary-calendar-password-181-not-a-real-secret",
             )
             .env("EVENT_TITLE", event_title)
             .env("OUT", out)
             .status()
             .unwrap();
-        assert!(status.success(), "browser check failed\n{}", fs::read_to_string(root.join("server.log")).unwrap_or_default());
+        assert!(
+            status.success(),
+            "browser check failed\n{}",
+            fs::read_to_string(root.join("server.log")).unwrap_or_default()
+        );
     }
     // Optional manual browser check: keep the server up and print where it is.
     if let Ok(seconds) = std::env::var("MOSS_CALENDAR_HOLD_SECONDS") {

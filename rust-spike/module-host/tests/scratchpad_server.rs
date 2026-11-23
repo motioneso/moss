@@ -310,6 +310,7 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
         lifted_revocations: BTreeSet::new(),
     };
     let index = Index {
+        publish_reviews: Default::default(),
         serial: 1,
         expires: chrono::Utc::now() + chrono::Duration::days(1),
         signing_key: "online".into(),
@@ -352,7 +353,9 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
         .unwrap();
     for artifact in &artifacts {
         // Finance joins only after Scratchpad's exact export/delete checks below.
-        if artifact.id == "finance" { continue; }
+        if artifact.id == "finance" {
+            continue;
+        }
         installer.install(&access, &source, artifact, true).unwrap();
     }
     drop(installer);
@@ -700,20 +703,32 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
     println!("scratchpad live: read, save, conflict, append and settings worked over HTTPS for two people");
     let _server = if let Some(finance) = artifacts.iter().find(|a| a.id == "finance") {
         drop(_server);
-        let app = runtime.block_on(Database::connect(&app_url, 4, RuntimeRole::App)).unwrap();
+        let app = runtime
+            .block_on(Database::connect(&app_url, 4, RuntimeRole::App))
+            .unwrap();
         let installer = installed::reopen(
-            &root.join("data"), app, &access,
+            &root.join("data"),
+            app,
+            &access,
             std::sync::Arc::new(moss_module_host::runtime::DenyPorts),
         );
         installer.install(&access, &source, finance, true).unwrap();
         if std::env::var_os("JS395_FINANCE_BATCH_PROOF").is_some() {
             // Seed the person's ask policy; the proof still uses real model calls and UI decisions.
-            services.set_action_policy(&access, "finance", &[("finance.import.apply".into(), true)].into()).unwrap();
+            services
+                .set_action_policy(
+                    &access,
+                    "finance",
+                    &[("finance.import.apply".into(), true)].into(),
+                )
+                .unwrap();
         }
 
         drop(installer);
         start(true)
-    } else { _server };
+    } else {
+        _server
+    };
     // Keep the real server and the gate's isolated database alive for browser proof.
     if let Ok(hold) = std::env::var("MOSS_SCRATCHPAD_HOLD") {
         let hold = Path::new(&hold);

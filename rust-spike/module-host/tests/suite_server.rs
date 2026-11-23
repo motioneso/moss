@@ -3,16 +3,16 @@
 mod common;
 #[path = "people_routes/installed.rs"]
 mod installed;
+use access_context::AccessContext;
 use common::Keys;
 use moss_module_host::{
     archive::Package,
     registry::{Artifact, Channel, Index, Source},
     trust::{self, Publisher, RegistryIdentity},
 };
-use std::collections::{BTreeMap, BTreeSet};
-use access_context::AccessContext;
 use safety_core::db::{Database, RuntimeRole};
 use serde_json::{json, Value};
+use std::collections::{BTreeMap, BTreeSet};
 use std::{
     fs,
     path::Path,
@@ -65,7 +65,9 @@ fn installed_news_sports_weather_and_briefings_work_together() {
     assert!(!port.0.is_empty());
     let origin = format!("https://localhost:{}", port.0);
     // A second device reaches the same server by the LAN address when SUITE_LAN_HOST is set.
-    let lan = std::env::var("SUITE_LAN_HOST").ok().map(|h| format!("https://{h}:{}", port.0));
+    let lan = std::env::var("SUITE_LAN_HOST")
+        .ok()
+        .map(|h| format!("https://{h}:{}", port.0));
     let cert = root.join("tls/certificate.pem");
     assert!(Command::new(std::env::var("JS170_CERTIFICATE").unwrap())
         .args(["local-certificate"])
@@ -167,7 +169,10 @@ fn installed_news_sports_weather_and_briefings_work_together() {
         let response = client.post(format!("{origin}/api/auth/sign-up/email")).header("origin", &origin).json(&json!({"name":name,"email":email,"password":"temporary-suite-password-340-not-a-real-secret"})).send().unwrap();
         let status = response.status();
         if status != 200 {
-            panic!("sign-up answered {status}: {}", response.text().unwrap_or_default());
+            panic!(
+                "sign-up answered {status}: {}",
+                response.text().unwrap_or_default()
+            );
         }
         response.headers()["set-cookie"]
             .to_str()
@@ -216,7 +221,12 @@ fn installed_news_sports_weather_and_briefings_work_together() {
     // canonical installer, as the server would find it.
     let keys = Keys::new();
     fs::create_dir_all(root.join("registry/packages")).unwrap();
-    let artifacts: Vec<Artifact> = [("JS235_WEATHER_PACKAGE", "weather"), ("JS235_NEWS_PACKAGE", "news"), ("JS235_SPORTS_PACKAGE", "sports"), ("JS235_BRIEFINGS_PACKAGE", "briefings")]
+    let artifacts: Vec<Artifact> = [
+        ("JS235_WEATHER_PACKAGE", "weather"),
+        ("JS235_NEWS_PACKAGE", "news"),
+        ("JS235_SPORTS_PACKAGE", "sports"),
+        ("JS235_BRIEFINGS_PACKAGE", "briefings"),
+    ]
     .iter()
     .map(|(variable, id)| {
         let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
@@ -224,7 +234,11 @@ fn installed_news_sports_weather_and_briefings_work_together() {
         let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
         let manifest = &package.manifest;
         assert_eq!(manifest.id, *id);
-        fs::write(root.join(format!("registry/packages/{digest}.mosspkg")), &bytes).unwrap();
+        fs::write(
+            root.join(format!("registry/packages/{digest}.mosspkg")),
+            &bytes,
+        )
+        .unwrap();
         Artifact {
             id: manifest.id.clone(),
             version: manifest.version.clone(),
@@ -259,6 +273,7 @@ fn installed_news_sports_weather_and_briefings_work_together() {
         lifted_revocations: BTreeSet::new(),
     };
     let index = Index {
+        publish_reviews: Default::default(),
         serial: 1,
         expires: chrono::Utc::now() + chrono::Duration::days(1),
         signing_key: "online".into(),
@@ -266,11 +281,23 @@ fn installed_news_sports_weather_and_briefings_work_together() {
         revoked: vec![],
     };
     for (name, data, key) in [
-        ("registry.json", serde_json::to_vec(&identity).unwrap(), &keys.root),
-        ("index.json", serde_json::to_vec(&index).unwrap(), &keys.index),
+        (
+            "registry.json",
+            serde_json::to_vec(&identity).unwrap(),
+            &keys.root,
+        ),
+        (
+            "index.json",
+            serde_json::to_vec(&index).unwrap(),
+            &keys.index,
+        ),
     ] {
         fs::write(root.join("registry").join(name), &data).unwrap();
-        fs::write(root.join("registry").join(format!("{name}.sig")), Keys::sign(key, &data)).unwrap();
+        fs::write(
+            root.join("registry").join(format!("{name}.sig")),
+            Keys::sign(key, &data),
+        )
+        .unwrap();
     }
     let installer = installed::reopen(
         &root.join("data"),
@@ -297,7 +324,9 @@ fn installed_news_sports_weather_and_briefings_work_together() {
     let copy = std::env::var("SUITE_DEV_COPY").ok();
     let seeded_topic = "Seeded upgrade topic";
     if let Some(path) = &copy {
-        let sql = fs::read_to_string(path).unwrap().replace("__OWNER__", &owner.to_string());
+        let sql = fs::read_to_string(path)
+            .unwrap()
+            .replace("__OWNER__", &owner.to_string());
         runtime.block_on(async {
             let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
             tokio::spawn(async move { let _ = connection.await; });
@@ -334,16 +363,24 @@ fn installed_news_sports_weather_and_briefings_work_together() {
                 }
                 let mut body = vec![0; length];
                 reader.read_exact(&mut body).unwrap();
-                requests.lock().unwrap().push(serde_json::from_slice(&body).unwrap_or(Value::Null));
+                requests
+                    .lock()
+                    .unwrap()
+                    .push(serde_json::from_slice(&body).unwrap_or(Value::Null));
                 let answer = json!({"choices":[{"message":{"content":"Steady morning.\n\n## Prepare\nBring notes at 9 AM. WRITTEN-BY-STANDIN-MODEL"}}]}).to_string();
                 let mut stream = stream;
                 let _ = write!(stream, "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{answer}", answer.len());
             }
         });
     }
-    let sealed = safety_core::secret::SecretCipher::ai(&[("JARVIS_AI_SECRET_KEY".into(), ai_key.clone())].into())
-        .unwrap()
-        .seal(&safety_core::secret::SecretFields::new().with("apiKey", safety_core::secret::Secret::new("TEST-NOT-A-REAL-KEY-267")));
+    let sealed = safety_core::secret::SecretCipher::ai(
+        &[("JARVIS_AI_SECRET_KEY".into(), ai_key.clone())].into(),
+    )
+    .unwrap()
+    .seal(&safety_core::secret::SecretFields::new().with(
+        "apiKey",
+        safety_core::secret::Secret::new("TEST-NOT-A-REAL-KEY-267"),
+    ));
     let (provider, model) = (uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
     runtime.block_on(async {
         let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
@@ -354,11 +391,16 @@ fn installed_news_sports_weather_and_briefings_work_together() {
     let _server = start(true);
     let log = || fs::read_to_string(root.join("server.log")).unwrap_or_default();
     let call = |module: &str, method: reqwest::Method, path: &str, body: Option<Value>| {
-        let mut request = client.request(method, format!("{origin}/api/m/{module}{path}")).header("origin", &origin).header("cookie", &cookie);
+        let mut request = client
+            .request(method, format!("{origin}/api/m/{module}{path}"))
+            .header("origin", &origin)
+            .header("cookie", &cookie);
         if let Some(body) = body {
             request = request.json(&body);
         }
-        let response = request.send().unwrap_or_else(|e| panic!("{module}{path}: {e}\n{}", log()));
+        let response = request
+            .send()
+            .unwrap_or_else(|e| panic!("{module}{path}: {e}\n{}", log()));
         let status = response.status().as_u16();
         let text = response.text().unwrap_or_default();
         println!("{module}{path} -> {status}");
@@ -368,19 +410,52 @@ fn installed_news_sports_weather_and_briefings_work_together() {
     use reqwest::Method;
     // The server answers 503 until its module host has finished starting.
     let started = Instant::now();
-    for (module, path) in [("weather", "/unit"), ("news", "/prefs"), ("sports", "/follows"), ("briefings", "/definitions")] {
+    for (module, path) in [
+        ("weather", "/unit"),
+        ("news", "/prefs"),
+        ("sports", "/follows"),
+        ("briefings", "/definitions"),
+    ] {
         // A request made while the module host starts can be held until the client times out.
         let mut last = String::from("no answer");
-        while !client.get(format!("{origin}/api/m/{module}{path}")).header("origin", &origin).header("cookie", &cookie).send().map(|r| { let code = r.status().as_u16(); last = format!("status {code}"); code != 503 }).unwrap_or_else(|e| { last = e.to_string(); false }) {
-            assert!(started.elapsed() < Duration::from_secs(600), "module host start deadline on {module}{path} ({last})\n{}", log());
+        while !client
+            .get(format!("{origin}/api/m/{module}{path}"))
+            .header("origin", &origin)
+            .header("cookie", &cookie)
+            .send()
+            .map(|r| {
+                let code = r.status().as_u16();
+                last = format!("status {code}");
+                code != 503
+            })
+            .unwrap_or_else(|e| {
+                last = e.to_string();
+                false
+            })
+        {
+            assert!(
+                started.elapsed() < Duration::from_secs(600),
+                "module host start deadline on {module}{path} ({last})\n{}",
+                log()
+            );
             std::thread::sleep(Duration::from_millis(500));
         }
     }
     let count = |table: &str| -> i64 {
         runtime.block_on(async {
-            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
-            tokio::spawn(async move { let _ = connection.await; });
-            db.query_one(&format!("SELECT count(*) FROM app.{table} WHERE owner_user_id = $1"), &[&owner]).await.unwrap().get(0)
+            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
+                .await
+                .unwrap();
+            tokio::spawn(async move {
+                let _ = connection.await;
+            });
+            db.query_one(
+                &format!("SELECT count(*) FROM app.{table} WHERE owner_user_id = $1"),
+                &[&owner],
+            )
+            .await
+            .unwrap()
+            .get(0)
         })
     };
     let len = |v: &Value, key: &str| v[key].as_array().map_or(0, |a| a.len() as i64);
@@ -389,14 +464,25 @@ fn installed_news_sports_weather_and_briefings_work_together() {
         let (_, t) = call("sports", Method::GET, "/follows", None);
         assert_eq!(len(&json_of(&t), "follows"), count("sports_follows"), "{t}");
         let (_, t) = call("sports", Method::GET, "/sources", None);
-        assert_eq!(len(&json_of(&t), "sources"), count("sports_custom_sources") + 1, "custom sources plus ESPN: {t}");
+        assert_eq!(
+            len(&json_of(&t), "sources"),
+            count("sports_custom_sources") + 1,
+            "custom sources plus ESPN: {t}"
+        );
         let (_, t) = call("news", Method::GET, "/prefs", None);
         assert_eq!(len(&json_of(&t), "prefs"), count("news_prefs"), "{t}");
         let (_, t) = call("news", Method::GET, "/personalization", None);
-        assert_eq!(len(&json_of(&t), "customSources"), count("news_custom_sources"), "{t}");
+        assert_eq!(
+            len(&json_of(&t), "customSources"),
+            count("news_custom_sources"),
+            "{t}"
+        );
         assert!(t.contains(seeded_topic), "the saved topic is missing: {t}");
         let (_, t) = call("weather", Method::GET, "/location", None);
-        let place = json_of(&t)["location"]["label"].as_str().unwrap_or_default().to_owned();
+        let place = json_of(&t)["location"]["label"]
+            .as_str()
+            .unwrap_or_default()
+            .to_owned();
         assert!(!place.is_empty(), "the saved place is missing: {t}");
         let (_, t) = call("sports", Method::GET, "/standings-preferences", None);
         println!("upgrade: standings choices {t}");
@@ -405,10 +491,18 @@ fn installed_news_sports_weather_and_briefings_work_together() {
     }
     // Weather: a saved place gives a real Open-Meteo reading.
     if copy.is_none() {
-        let (status, text) = call("weather", Method::GET, "/location/search?query=Seattle", None);
+        let (status, text) = call(
+            "weather",
+            Method::GET,
+            "/location/search?query=Seattle",
+            None,
+        );
         assert_eq!(status, 200, "{text}\n{}", log());
         let first = json_of(&text)["candidates"][0].clone();
-        assert_eq!(call("weather", Method::PUT, "/location", Some(first)).0, 200);
+        assert_eq!(
+            call("weather", Method::PUT, "/location", Some(first)).0,
+            200
+        );
     }
     // The forecast service is sometimes unreachable from this machine. A refusal is retried, the real
     // answer is printed, and a service that stays down is reported as not proven.
@@ -418,10 +512,23 @@ fn installed_news_sports_weather_and_briefings_work_together() {
         assert_eq!(status, 200, "{text}\n{}", log());
         let today = json_of(&text);
         if today["data"]["temp"].is_number() {
-            println!("weather live: {} {}", today["data"]["location"], today["data"]["temp"]);
-            let (status, text) = call("weather", Method::GET, "/forecast?startHour=8&endHour=20", None);
+            println!(
+                "weather live: {} {}",
+                today["data"]["location"], today["data"]["temp"]
+            );
+            let (status, text) = call(
+                "weather",
+                Method::GET,
+                "/forecast?startHour=8&endHour=20",
+                None,
+            );
             assert_eq!(status, 200, "{text}");
-            assert!(!json_of(&text)["forecast"]["intervals"].as_array().map_or(true, |a| a.is_empty()), "{text}");
+            assert!(
+                !json_of(&text)["forecast"]["intervals"]
+                    .as_array()
+                    .map_or(true, |a| a.is_empty()),
+                "{text}"
+            );
             weather_ok = true;
             break;
         }
@@ -432,34 +539,79 @@ fn installed_news_sports_weather_and_briefings_work_together() {
         println!("weather live: NOT PROVEN: the forecast service did not answer, so no real reading was taken");
     }
     // Sports: real ESPN follow, overview, standings and result.
-    let (status, text) = call("sports", Method::POST, "/follows", Some(json!({"competitionKey":"nfl","teamKey":"dal"})));
-    println!("sports follow dal -> {status} {}", text.chars().take(80).collect::<String>());
+    let (status, text) = call(
+        "sports",
+        Method::POST,
+        "/follows",
+        Some(json!({"competitionKey":"nfl","teamKey":"dal"})),
+    );
+    println!(
+        "sports follow dal -> {status} {}",
+        text.chars().take(80).collect::<String>()
+    );
     // A cold overview over several followed leagues can be refused empty on its first try. Each try
     // fills the cache, so the status of every try is printed and the call is repeated.
     let (mut status, mut text) = (0, String::new());
     for attempt in 1..=6 {
         (status, text) = call("sports", Method::GET, "/overview", None);
-        println!("sports overview attempt {attempt} -> {status} ({} bytes)", text.len());
+        println!(
+            "sports overview attempt {attempt} -> {status} ({} bytes)",
+            text.len()
+        );
         if status == 200 {
             break;
         }
     }
     assert_eq!(status, 200, "{text}\n{}", log());
     let overview = json_of(&text);
-    assert!(overview["followed"].as_array().is_some_and(|c| !c.is_empty()), "{text}");
-    assert!(overview["standings"].as_array().is_some_and(|s| !s.is_empty()), "{text}");
-    println!("sports live: {} followed cards, degraded {}", len(&overview, "followed"), overview["degraded"]);
+    assert!(
+        overview["followed"]
+            .as_array()
+            .is_some_and(|c| !c.is_empty()),
+        "{text}"
+    );
+    assert!(
+        overview["standings"]
+            .as_array()
+            .is_some_and(|s| !s.is_empty()),
+        "{text}"
+    );
+    println!(
+        "sports live: {} followed cards, degraded {}",
+        len(&overview, "followed"),
+        overview["degraded"]
+    );
     let (status, text) = call("sports", Method::GET, "/standings?competitionKey=nfl", None);
     assert_eq!(status, 200, "{text}");
-    assert!(json_of(&text)["group"]["sections"].as_array().is_some_and(|s| !s.is_empty()), "{text}");
-    let (status, text) = call("sports", Method::GET, "/results/latest?competitionKey=nfl&teamName=dallas", None);
+    assert!(
+        json_of(&text)["group"]["sections"]
+            .as_array()
+            .is_some_and(|s| !s.is_empty()),
+        "{text}"
+    );
+    let (status, text) = call(
+        "sports",
+        Method::GET,
+        "/results/latest?competitionKey=nfl&teamName=dallas",
+        None,
+    );
     assert_eq!(status, 200, "{text}");
     println!("sports live: latest result {}", json_of(&text)["status"]);
     // Sports: a real subreddit. Reddit refuses this machine now and then, so each answer is printed.
     for attempt in 1..=4 {
-        let (status, text) = call("sports", Method::POST, "/sources/preview", Some(json!({"url":"r/nfl","assignments":[{"target":{"kind":"sport","sportKey":"football"}}]})));
+        let (status, text) = call(
+            "sports",
+            Method::POST,
+            "/sources/preview",
+            Some(
+                json!({"url":"r/nfl","assignments":[{"target":{"kind":"sport","sportKey":"football"}}]}),
+            ),
+        );
         let shown = json_of(&text);
-        println!("sports live: reddit preview attempt {attempt} -> {status} {}", text.chars().take(600).collect::<String>());
+        println!(
+            "sports live: reddit preview attempt {attempt} -> {status} {}",
+            text.chars().take(600).collect::<String>()
+        );
         if status == 200 && shown["status"] == "ok" {
             break;
         }
@@ -472,35 +624,81 @@ fn installed_news_sports_weather_and_briefings_work_together() {
         tokio::spawn(async move { let _ = connection.await; });
         db.execute("INSERT INTO app.news_policy_verdicts (owner_user_id, canonical_domain, fingerprint, verdict, expires_at) VALUES ($1, 'feeds.bbci.co.uk', 'host-ai-v1', 'approved', now() + interval '1 hour') ON CONFLICT DO NOTHING", &[&owner]).await.unwrap();
     });
-    let (status, text) = call("news", Method::POST, "/sources/preview", Some(json!({"input":FEED})));
+    let (status, text) = call(
+        "news",
+        Method::POST,
+        "/sources/preview",
+        Some(json!({"input":FEED})),
+    );
     let shown = json_of(&text);
-    assert_eq!((status, &shown["status"]), (200, &json!("ok")), "{text}\n{}", log());
-    println!("news live: real feed previewed: {}", shown["candidates"][0]["label"]);
+    assert_eq!(
+        (status, &shown["status"]),
+        (200, &json!("ok")),
+        "{text}\n{}",
+        log()
+    );
+    println!(
+        "news live: real feed previewed: {}",
+        shown["candidates"][0]["label"]
+    );
     let waited = Instant::now();
     let page = loop {
         let (_, text) = call("news", Method::GET, "/overview", None);
         let page = json_of(&text);
         let (_, p) = call("news", Method::GET, "/personalization", None);
-        if json_of(&p)["refresh"]["state"] == json!("idle") && !page["rankedStories"].as_array().map_or(true, |s| s.is_empty()) {
+        if json_of(&p)["refresh"]["state"] == json!("idle")
+            && !page["rankedStories"]
+                .as_array()
+                .map_or(true, |s| s.is_empty())
+        {
             break page;
         }
-        assert!(waited.elapsed() < Duration::from_secs(240), "the news refresh never finished\n{}", log());
+        assert!(
+            waited.elapsed() < Duration::from_secs(240),
+            "the news refresh never finished\n{}",
+            log()
+        );
         std::thread::sleep(Duration::from_secs(3));
     };
-    println!("news live: {} real stories, first: {}", len(&page, "rankedStories"), page["rankedStories"][0]["title"]);
+    println!(
+        "news live: {} real stories, first: {}",
+        len(&page, "rankedStories"),
+        page["rankedStories"][0]["title"]
+    );
     // Briefings with all three installed. The model is the stand-in, so the prompt it receives shows
     // what the briefing gathered from Weather, Sports and News.
-    let (status, text) = call("briefings", Method::POST, "/definitions", Some(json!({"title":"Suite morning","briefingType":"morning","cadence":"manual"})));
+    let (status, text) = call(
+        "briefings",
+        Method::POST,
+        "/definitions",
+        Some(json!({"title":"Suite morning","briefingType":"morning","cadence":"manual"})),
+    );
     assert_eq!(status, 201, "{text}\n{}", log());
-    let id = json_of(&text)["definition"]["id"].as_str().unwrap().to_owned();
+    let id = json_of(&text)["definition"]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
     let before = requests.lock().unwrap().len();
-    let (status, text) = call("briefings", Method::POST, &format!("/definitions/{id}/run"), Some(json!({})));
+    let (status, text) = call(
+        "briefings",
+        Method::POST,
+        &format!("/definitions/{id}/run"),
+        Some(json!({})),
+    );
     assert_eq!(status, 202, "{text}\n{}", log());
     let queued = json_of(&text);
-    let (job, run) = (queued["jobId"].as_str().unwrap().to_owned(), queued["runId"].as_str().unwrap().to_owned());
+    let (job, run) = (
+        queued["jobId"].as_str().unwrap().to_owned(),
+        queued["runId"].as_str().unwrap().to_owned(),
+    );
     let waited = Instant::now();
     let state = loop {
-        let (_, t) = call("briefings", Method::GET, &format!("/definitions/{id}/runs/{run}?jobId={job}"), None);
+        let (_, t) = call(
+            "briefings",
+            Method::GET,
+            &format!("/definitions/{id}/runs/{run}?jobId={job}"),
+            None,
+        );
         let state = json_of(&t)["state"].as_str().unwrap_or_default().to_owned();
         if state != "pending" || waited.elapsed() > Duration::from_secs(180) {
             break state;
@@ -508,59 +706,129 @@ fn installed_news_sports_weather_and_briefings_work_together() {
         std::thread::sleep(Duration::from_secs(2));
     };
     assert_eq!(state, "ready", "{}", log());
-    let (_, t) = call("briefings", Method::GET, &format!("/definitions/{id}/runs/{run}"), None);
+    let (_, t) = call(
+        "briefings",
+        Method::GET,
+        &format!("/definitions/{id}/runs/{run}"),
+        None,
+    );
     let detail = json_of(&t);
-    println!("briefings source metadata: {}", detail["run"]["sourceMetadata"]);
+    println!(
+        "briefings source metadata: {}",
+        detail["run"]["sourceMetadata"]
+    );
     let sent = requests.lock().unwrap().clone();
     assert!(sent.len() > before, "the briefing never reached the model");
-    let prompt = sent[before]["messages"][0]["content"].as_str().unwrap_or_default().to_owned();
+    let prompt = sent[before]["messages"][0]["content"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
     fs::write(root.join("briefing-prompt.txt"), &prompt).unwrap();
     if let Ok(keep) = std::env::var("SUITE_PROMPT_COPY") {
         fs::write(keep, &prompt).unwrap();
     }
     let lower = prompt.to_lowercase();
-    for (name, word) in [("weather", "weather"), ("sports", "cowboys"), ("news", "news")] {
+    for (name, word) in [
+        ("weather", "weather"),
+        ("sports", "cowboys"),
+        ("news", "news"),
+    ] {
         println!("briefing prompt mentions {name}: {}", lower.contains(word));
     }
     println!("briefing prompt length: {}", prompt.len());
     // The briefing must carry each module's own block. Sports may read "none today" on a day with no game.
-    assert!(prompt.contains("<external_source type=\"news\">\n- "), "no news headlines reached the prompt");
-    assert!(prompt.contains("<external_source type=\"sports\">"), "no sports block reached the prompt");
+    assert!(
+        prompt.contains("<external_source type=\"news\">\n- "),
+        "no news headlines reached the prompt"
+    );
+    assert!(
+        prompt.contains("<external_source type=\"sports\">"),
+        "no sports block reached the prompt"
+    );
     if weather_ok {
-        assert!(prompt.contains("<external_source type=\"weather\">"), "no weather block reached the prompt");
+        assert!(
+            prompt.contains("<external_source type=\"weather\">"),
+            "no weather block reached the prompt"
+        );
     }
-    for line in prompt.lines().filter(|l| { let l = l.to_lowercase(); l.contains("sport") || l.contains("follow") || l.contains("nfl") || l.contains("gap") }).take(12) {
-        println!("prompt sports line: {}", line.chars().take(240).collect::<String>());
+    for line in prompt
+        .lines()
+        .filter(|l| {
+            let l = l.to_lowercase();
+            l.contains("sport") || l.contains("follow") || l.contains("nfl") || l.contains("gap")
+        })
+        .take(12)
+    {
+        println!(
+            "prompt sports line: {}",
+            line.chars().take(240).collect::<String>()
+        );
     }
     // Optional real-model pass through a local OpenAI-compatible proxy. The key comes from a file.
-    if let (Ok(url), Ok(key_file), Ok(model_name)) = (std::env::var("BRIEFINGS_REAL_MODEL_URL"), std::env::var("BRIEFINGS_REAL_MODEL_KEY_FILE"), std::env::var("BRIEFINGS_REAL_MODEL_NAME")) {
+    if let (Ok(url), Ok(key_file), Ok(model_name)) = (
+        std::env::var("BRIEFINGS_REAL_MODEL_URL"),
+        std::env::var("BRIEFINGS_REAL_MODEL_KEY_FILE"),
+        std::env::var("BRIEFINGS_REAL_MODEL_NAME"),
+    ) {
         let real_key = fs::read_to_string(key_file).unwrap().trim().to_owned();
-        let sealed = safety_core::secret::SecretCipher::ai(&[("JARVIS_AI_SECRET_KEY".into(), ai_key.clone())].into())
-            .unwrap()
-            .seal(&safety_core::secret::SecretFields::new().with("apiKey", safety_core::secret::Secret::new(&real_key)));
+        let sealed = safety_core::secret::SecretCipher::ai(
+            &[("JARVIS_AI_SECRET_KEY".into(), ai_key.clone())].into(),
+        )
+        .unwrap()
+        .seal(
+            &safety_core::secret::SecretFields::new()
+                .with("apiKey", safety_core::secret::Secret::new(&real_key)),
+        );
         runtime.block_on(async {
             let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
             tokio::spawn(async move { let _ = connection.await; });
             db.execute("UPDATE app.ai_provider_configs SET base_url=$1, encrypted_credential=$2 WHERE id=$3", &[&url, &sealed, &provider]).await.unwrap();
             db.execute("UPDATE app.ai_configured_models SET provider_model_id=$1 WHERE id=$2", &[&model_name, &model]).await.unwrap();
         });
-        let (_, text) = call("briefings", Method::POST, &format!("/definitions/{id}/run"), Some(json!({})));
+        let (_, text) = call(
+            "briefings",
+            Method::POST,
+            &format!("/definitions/{id}/run"),
+            Some(json!({})),
+        );
         let queued = json_of(&text);
-        let (job, run) = (queued["jobId"].as_str().unwrap_or_default().to_owned(), queued["runId"].as_str().unwrap_or_default().to_owned());
+        let (job, run) = (
+            queued["jobId"].as_str().unwrap_or_default().to_owned(),
+            queued["runId"].as_str().unwrap_or_default().to_owned(),
+        );
         let waited = Instant::now();
         let mut poll_text = String::new();
         loop {
-            let (_, t) = call("briefings", Method::GET, &format!("/definitions/{id}/runs/{run}?jobId={job}"), None);
+            let (_, t) = call(
+                "briefings",
+                Method::GET,
+                &format!("/definitions/{id}/runs/{run}?jobId={job}"),
+                None,
+            );
             poll_text = t.clone();
-            if json_of(&t)["state"] != json!("pending") || waited.elapsed() > Duration::from_secs(240) {
+            if json_of(&t)["state"] != json!("pending")
+                || waited.elapsed() > Duration::from_secs(240)
+            {
                 break;
             }
             std::thread::sleep(Duration::from_secs(2));
         }
-        let (_, t) = call("briefings", Method::GET, &format!("/definitions/{id}/runs/{run}"), None);
+        let (_, t) = call(
+            "briefings",
+            Method::GET,
+            &format!("/definitions/{id}/runs/{run}"),
+            None,
+        );
         let d = json_of(&t);
-        println!("REAL MODEL: after {:?}: {}", waited.elapsed(), t.chars().take(1500).collect::<String>());
-        println!("REAL MODEL poll: {}", poll_text.chars().take(600).collect::<String>());
+        println!(
+            "REAL MODEL: after {:?}: {}",
+            waited.elapsed(),
+            t.chars().take(1500).collect::<String>()
+        );
+        println!(
+            "REAL MODEL poll: {}",
+            poll_text.chars().take(600).collect::<String>()
+        );
         if let Ok(keep) = std::env::var("SUITE_REAL_TEXT_COPY") {
             fs::write(keep, d["run"]["summaryText"].as_str().unwrap_or_default()).unwrap();
         }
@@ -568,7 +836,11 @@ fn installed_news_sports_weather_and_briefings_work_together() {
     println!("suite live: Weather, Sports, News and Briefings worked together over HTTPS");
     // Held-open mode for browser proof from a second device.
     if let Ok(hold) = std::env::var("SUITE_HOLD_OPEN") {
-        fs::write(&hold, json!({"origin":origin,"lan":lan,"cookie":cookie,"certificate":cert}).to_string()).unwrap();
+        fs::write(
+            &hold,
+            json!({"origin":origin,"lan":lan,"cookie":cookie,"certificate":cert}).to_string(),
+        )
+        .unwrap();
         while !Path::new(&format!("{hold}.stop")).exists() {
             std::thread::sleep(Duration::from_millis(500));
         }

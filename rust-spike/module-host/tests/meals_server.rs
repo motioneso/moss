@@ -278,6 +278,7 @@ fn installed_meals_package_serves_routes_from_the_real_server() {
         lifted_revocations: BTreeSet::new(),
     };
     let index = Index {
+        publish_reviews: Default::default(),
         serial: 1,
         expires: chrono::Utc::now() + chrono::Duration::days(1),
         signing_key: "online".into(),
@@ -429,7 +430,12 @@ fn installed_meals_package_serves_routes_from_the_real_server() {
         )
     };
     for who in [&cookie, &other] {
-        let (status, text) = call(Method::POST, "/meals/tools/run", Some(who), Some(json!({"tool":"meals.kitchen.get","parameters":{}})));
+        let (status, text) = call(
+            Method::POST,
+            "/meals/tools/run",
+            Some(who),
+            Some(json!({"tool":"meals.kitchen.get","parameters":{}})),
+        );
         assert_eq!(status, 403, "a tool without approval is refused: {text}");
     }
     let policies = BTreeMap::from([
@@ -437,51 +443,103 @@ fn installed_meals_package_serves_routes_from_the_real_server() {
         ("meals.list.get".into(), false),
         ("meals.pantry.get".into(), false),
     ]);
-    services.set_action_policy(&access, "meals", &policies).unwrap();
+    services
+        .set_action_policy(&access, "meals", &policies)
+        .unwrap();
     let (status, text) = tool("meals.kitchen.get", json!({}), false);
     assert_eq!(status, 200, "{text}\n{}", log());
-    assert_eq!(json_of(&text)["data"]["members"].as_array().unwrap().len(), 1);
-    let save = json!({"unitsSystem":"metric","slotRules":[{"slotName":"lunch","usualTime":"12:30"}]});
+    assert_eq!(
+        json_of(&text)["data"]["members"].as_array().unwrap().len(),
+        1
+    );
+    let save =
+        json!({"unitsSystem":"metric","slotRules":[{"slotName":"lunch","usualTime":"12:30"}]});
     assert_eq!(tool("meals.kitchen.save", save.clone(), false).0, 403);
     let (status, text) = tool("meals.kitchen.save", save.clone(), true);
     assert_eq!(status, 200, "{text}\n{}", log());
-    assert_eq!(tool("meals.kitchen.save", save, false).0, 403, "an approval is used once");
+    assert_eq!(
+        tool("meals.kitchen.save", save, false).0,
+        403,
+        "an approval is used once"
+    );
     let member = json!({"name":MARK,"preferences":[MARK]});
     let (status, text) = tool("meals.household.save", member, true);
     assert_eq!(status, 200, "{text}");
-    let member_id = json_of(&text)["data"]["memberId"].as_str().unwrap().to_owned();
+    let member_id = json_of(&text)["data"]["memberId"]
+        .as_str()
+        .unwrap()
+        .to_owned();
     // The second person sees none of it and cannot change or remove it.
     let (_, mine) = tool("meals.kitchen.get", json!({}), true);
     assert!(mine.contains(MARK));
-    let (status, text) = call(Method::POST, "/meals/tools/run", Some(&other), Some(json!({"tool":"meals.household.remove","parameters":{"memberId":member_id}})));
+    let (status, text) = call(
+        Method::POST,
+        "/meals/tools/run",
+        Some(&other),
+        Some(json!({"tool":"meals.household.remove","parameters":{"memberId":member_id}})),
+    );
     assert!(status == 403 && !text.contains(MARK), "{text}");
     let (_, again) = tool("meals.kitchen.get", json!({}), true);
     assert!(again.contains(MARK), "the other person removed nothing");
-    let (_, removed) = tool("meals.household.remove", json!({"memberId":member_id}), true);
+    let (_, removed) = tool(
+        "meals.household.remove",
+        json!({"memberId":member_id}),
+        true,
+    );
     assert_eq!(json_of(&removed)["data"], json!({"removed":true}));
     // Lists and pantry through the same route. The second person sees and changes none of it.
-    let (status, text) = tool("meals.list.edit", json!({"action":"add","name":MARK,"quantity":2,"unit":"kg"}), true);
+    let (status, text) = tool(
+        "meals.list.edit",
+        json!({"action":"add","name":MARK,"quantity":2,"unit":"kg"}),
+        true,
+    );
     assert_eq!(status, 200, "{text}\n{}", log());
-    let line_id = json_of(&text)["data"]["list"]["lines"][0]["lineId"].as_str().unwrap().to_owned();
-    let (status, text) = tool("meals.pantry.edit", json!({"action":"add","name":MARK}), true);
+    let line_id = json_of(&text)["data"]["list"]["lines"][0]["lineId"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let (status, text) = tool(
+        "meals.pantry.edit",
+        json!({"action":"add","name":MARK}),
+        true,
+    );
     assert_eq!(status, 200, "{text}");
     let (_, listed) = tool("meals.list.get", json!({}), false);
-    assert!(listed.contains(MARK) && listed.contains(&line_id), "{listed}");
+    assert!(
+        listed.contains(MARK) && listed.contains(&line_id),
+        "{listed}"
+    );
     let (_, stocked) = tool("meals.pantry.get", json!({}), false);
     assert!(stocked.contains(MARK), "{stocked}");
-    let (status, text) = call(Method::POST, "/meals/tools/run", Some(&other), Some(json!({"tool":"meals.list.clear","parameters":{}})));
+    let (status, text) = call(
+        Method::POST,
+        "/meals/tools/run",
+        Some(&other),
+        Some(json!({"tool":"meals.list.clear","parameters":{}})),
+    );
     assert!(status == 403 && !text.contains(MARK), "{text}");
     let (_, still) = tool("meals.list.get", json!({}), false);
     assert!(still.contains(&line_id), "the other person cleared nothing");
-    let (status, text) = tool("meals.list.bought", json!({"lines":[{"lineId":line_id}]}), true);
+    let (status, text) = tool(
+        "meals.list.bought",
+        json!({"lines":[{"lineId":line_id}]}),
+        true,
+    );
     assert_eq!(status, 200, "{text}");
     let (status, text) = tool("meals.list.clear", json!({}), true);
     assert_eq!(status, 200, "{text}");
     let (_, after) = tool("meals.pantry.get", json!({}), false);
-    assert!(after.contains(MARK), "clearing the list left the pantry alone");
+    assert!(
+        after.contains(MARK),
+        "clearing the list left the pantry alone"
+    );
     // Cooking, ratings and undo through the same route. The plan and meal rows are set up in the
     // database because writing a plan needs a model; every call after that goes through the server.
-    let milk = tool("meals.pantry.edit", json!({"action":"add","name":"Milk","quantity":5,"unit":"cup"}), true);
+    let milk = tool(
+        "meals.pantry.edit",
+        json!({"action":"add","name":"Milk","quantity":5,"unit":"cup"}),
+        true,
+    );
     assert_eq!(milk.0, 200, "{}", milk.1);
     let meal_id = runtime.block_on(async {
         let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
@@ -516,50 +574,115 @@ fn installed_meals_package_serves_routes_from_the_real_server() {
     });
     let (plan_id, day_id) = ids;
     let (_, kitchen) = tool("meals.kitchen.get", json!({}), true);
-    let me = json_of(&kitchen)["data"]["members"][0]["memberId"].as_str().unwrap().to_owned();
-    let (status, text) = tool("meals.meal.rate", json!({"mealId":meal_id,"ratings":[{"memberId":me,"stars":4}]}), true);
+    let me = json_of(&kitchen)["data"]["members"][0]["memberId"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let (status, text) = tool(
+        "meals.meal.rate",
+        json!({"mealId":meal_id,"ratings":[{"memberId":me,"stars":4}]}),
+        true,
+    );
     assert_eq!(status, 200, "{text}\n{}", log());
     let (status, text) = tool("meals.meal.cooked", json!({"mealId":meal_id}), true);
     assert_eq!(status, 200, "{text}\n{}", log());
     let cooked = json_of(&text);
     assert_eq!(cooked["data"]["pantryChanges"][0]["after"], 4.0, "{text}");
-    let action = cooked["data"]["undo"]["actionId"].as_str().unwrap().to_owned();
-    let (status, text) = call(Method::POST, "/meals/tools/run", Some(&other), Some(json!({"tool":"meals.undo","parameters":{"actionId":action}})));
-    assert_eq!(status, 403, "the second person is refused before anything runs: {text}");
+    let action = cooked["data"]["undo"]["actionId"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let (status, text) = call(
+        Method::POST,
+        "/meals/tools/run",
+        Some(&other),
+        Some(json!({"tool":"meals.undo","parameters":{"actionId":action}})),
+    );
+    assert_eq!(
+        status, 403,
+        "the second person is refused before anything runs: {text}"
+    );
     let (status, text) = tool("meals.undo", json!({"actionId":action}), true);
     assert_eq!(status, 200, "{text}\n{}", log());
-    assert_eq!(json_of(&text)["data"], json!({"restored":1,"skipped":0}), "{text}");
+    assert_eq!(
+        json_of(&text)["data"],
+        json!({"restored":1,"skipped":0}),
+        "{text}"
+    );
     let (_, back) = tool("meals.pantry.get", json!({}), false);
-    assert!(back.contains("\"quantity\":5"), "undo put the milk back: {back}");
+    assert!(
+        back.contains("\"quantity\":5"),
+        "undo put the milk back: {back}"
+    );
     let (status, text) = tool("meals.undo", json!({"actionId":action}), true);
-    assert_eq!(json_of(&text)["data"]["code"], "invalid_input", "a second undo is refused: {text} {status}");
+    assert_eq!(
+        json_of(&text)["data"]["code"],
+        "invalid_input",
+        "a second undo is refused: {text} {status}"
+    );
     println!("PASS live cooking: rate, cook, undo and a refused second undo through the real server; second person refused");
     // Arranging the plan through the same route. The second person is refused before anything runs.
     for (name, params) in [
         ("meals.meal.edit", json!({"mealId":meal_id,"action":"lock"})),
-        ("meals.meal.swap", json!({"mealId":meal_id,"action":"request_choices"})),
-        ("meals.day.edit", json!({"action":"set_text","mealId":meal_id,"text":MARK})),
+        (
+            "meals.meal.swap",
+            json!({"mealId":meal_id,"action":"request_choices"}),
+        ),
+        (
+            "meals.day.edit",
+            json!({"action":"set_text","mealId":meal_id,"text":MARK}),
+        ),
         ("meals.plan.delete", json!({"planId":plan_id})),
     ] {
-        let (status, text) = call(Method::POST, "/meals/tools/run", Some(&other), Some(json!({"tool":name,"parameters":params})));
+        let (status, text) = call(
+            Method::POST,
+            "/meals/tools/run",
+            Some(&other),
+            Some(json!({"tool":name,"parameters":params})),
+        );
         assert!(status == 403 && !text.contains(MARK), "{name}: {text}");
     }
     let (status, text) = tool("meals.meal.get", json!({"mealId":meal_id}), true);
     assert_eq!(status, 200, "{text}\n{}", log());
     assert_eq!(json_of(&text)["data"]["meal"]["title"], "Live", "{text}");
-    let (status, text) = tool("meals.meal.servings", json!({"mealId":meal_id,"servings":3}), true);
+    let (status, text) = tool(
+        "meals.meal.servings",
+        json!({"mealId":meal_id,"servings":3}),
+        true,
+    );
     assert_eq!(status, 200, "{text}\n{}", log());
-    for params in [json!({"mealId":meal_id,"action":"lock"}), json!({"mealId":meal_id,"action":"unlock"})] {
+    for params in [
+        json!({"mealId":meal_id,"action":"lock"}),
+        json!({"mealId":meal_id,"action":"unlock"}),
+    ] {
         let (status, text) = tool("meals.meal.edit", params, true);
         assert_eq!(status, 200, "{text}\n{}", log());
     }
-    let (status, text) = tool("meals.meal.swap", json!({"mealId":meal_id,"action":"request_choices"}), true);
+    let (status, text) = tool(
+        "meals.meal.swap",
+        json!({"mealId":meal_id,"action":"request_choices"}),
+        true,
+    );
     assert_eq!(status, 200, "{text}\n{}", log());
-    assert_eq!(json_of(&text)["data"]["swapChoices"].as_array().unwrap_or_else(|| panic!("{text}")).len(), 3, "{text}");
-    let (status, text) = tool("meals.day.edit", json!({"action":"set_cook_limit","dayId":day_id,"minutes":45}), true);
+    assert_eq!(
+        json_of(&text)["data"]["swapChoices"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{text}"))
+            .len(),
+        3,
+        "{text}"
+    );
+    let (status, text) = tool(
+        "meals.day.edit",
+        json!({"action":"set_cook_limit","dayId":day_id,"minutes":45}),
+        true,
+    );
     assert_eq!(status, 200, "{text}\n{}", log());
     let (_, still) = tool("meals.plan.get", json!({"planId":plan_id}), true);
-    assert!(still.contains(&day_id), "the other person deleted nothing: {still}");
+    assert!(
+        still.contains(&day_id),
+        "the other person deleted nothing: {still}"
+    );
     // The screen route. A signed-in click runs a tool with no chat approval, a person who is not
     // signed in is refused, a removal needs the confirmation the screen collects, and the second
     // person reads only their own rows.
@@ -571,19 +694,55 @@ fn installed_meals_package_serves_routes_from_the_real_server() {
         call(Method::POST, "/meals/screen/tool", who, Some(body))
     };
     assert_eq!(screen(None, "meals.pantry.get", json!({}), false).0, 401);
-    let (status, text) = screen(Some(&cookie), "meals.plan.get", json!({"planId":plan_id}), false);
+    let (status, text) = screen(
+        Some(&cookie),
+        "meals.plan.get",
+        json!({"planId":plan_id}),
+        false,
+    );
     assert_eq!(status, 200, "{text}\n{}", log());
     assert!(text.contains(&day_id), "the owner reads the plan: {text}");
-    let (status, text) = screen(Some(&cookie), "meals.meal.edit", json!({"mealId":meal_id,"action":"lock"}), false);
-    assert_eq!(status, 200, "a click needs no chat approval: {text}\n{}", log());
-    let (_, text) = screen(Some(&cookie), "meals.meal.edit", json!({"mealId":meal_id,"action":"unlock"}), false);
+    let (status, text) = screen(
+        Some(&cookie),
+        "meals.meal.edit",
+        json!({"mealId":meal_id,"action":"lock"}),
+        false,
+    );
+    assert_eq!(
+        status,
+        200,
+        "a click needs no chat approval: {text}\n{}",
+        log()
+    );
+    let (_, text) = screen(
+        Some(&cookie),
+        "meals.meal.edit",
+        json!({"mealId":meal_id,"action":"unlock"}),
+        false,
+    );
     assert!(text.contains("data"), "{text}");
-    let (status, _) = screen(Some(&cookie), "meals.household.remove", json!({"memberId":"00000000-0000-0000-0000-000000000000"}), false);
+    let (status, _) = screen(
+        Some(&cookie),
+        "meals.household.remove",
+        json!({"memberId":"00000000-0000-0000-0000-000000000000"}),
+        false,
+    );
     assert_eq!(status, 409, "a removal without confirmation is refused");
-    let (_, theirs) = screen(Some(&other), "meals.plan.get", json!({"planId":plan_id}), false);
-    assert!(!theirs.contains(&day_id), "the second person cannot read the plan: {theirs}");
+    let (_, theirs) = screen(
+        Some(&other),
+        "meals.plan.get",
+        json!({"planId":plan_id}),
+        false,
+    );
+    assert!(
+        !theirs.contains(&day_id),
+        "the second person cannot read the plan: {theirs}"
+    );
     let (_, theirs) = screen(Some(&other), "meals.pantry.get", json!({}), false);
-    assert!(!theirs.contains("milk") && !theirs.contains("Milk"), "the second person has an empty Pantry: {theirs}");
+    assert!(
+        !theirs.contains("milk") && !theirs.contains("Milk"),
+        "the second person has an empty Pantry: {theirs}"
+    );
     println!("PASS live screen route: no chat approval for a click, 401 signed out, 409 for a removal without confirmation, second person sees only their own rows");
     // MOSS_MEALS_HOLD names a folder. The test then keeps the server up for a browser check,
     // writes the address to url.txt, and waits for a file named finished in that folder.
@@ -604,16 +763,25 @@ fn installed_meals_package_serves_routes_from_the_real_server() {
     assert!(!log().to_lowercase().contains(&MARK.to_lowercase()));
     // The food log with a real model. The key comes from the box's own proxy file and is never
     // printed. Without that file the proof is reported as not run, never as passed.
-    let key_file = std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".config/cliproxyapi/client-key");
+    let key_file = std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default())
+        .join(".config/cliproxyapi/client-key");
     let proxy_port = fs::read_to_string(key_file.with_file_name("port")).unwrap_or_default();
-    let model_key = fs::read_to_string(&key_file).map(|k| k.trim().to_owned()).ok().filter(|k| !k.is_empty());
+    let model_key = fs::read_to_string(&key_file)
+        .map(|k| k.trim().to_owned())
+        .ok()
+        .filter(|k| !k.is_empty());
     let (Some(model_key), false) = (model_key, proxy_port.trim().is_empty()) else {
         println!("NOT RUN live model: no local model proxy key on this box");
         return;
     };
-    let sealed = safety_core::secret::SecretCipher::ai(&[("JARVIS_AI_SECRET_KEY".into(), ai_key.clone())].into())
-        .unwrap()
-        .seal(&safety_core::secret::SecretFields::new().with("apiKey", safety_core::secret::Secret::new(&model_key)));
+    let sealed = safety_core::secret::SecretCipher::ai(
+        &[("JARVIS_AI_SECRET_KEY".into(), ai_key.clone())].into(),
+    )
+    .unwrap()
+    .seal(
+        &safety_core::secret::SecretFields::new()
+            .with("apiKey", safety_core::secret::Secret::new(&model_key)),
+    );
     runtime.block_on(async {
         let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
         tokio::spawn(async move { let _ = connection.await; });
@@ -627,16 +795,37 @@ fn installed_meals_package_serves_routes_from_the_real_server() {
             &[&model, &provider, &owner],
         ).await.unwrap();
     });
-    let manifest: Value = serde_json::from_str(&fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../modules/meals/moss.module.json")).unwrap()).unwrap();
-    assert_eq!(manifest["callLimitMs"], 30000, "the module asks for the longer model call limit");
+    let manifest: Value = serde_json::from_str(
+        &fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../modules/meals/moss.module.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        manifest["callLimitMs"], 30000,
+        "the module asks for the longer model call limit"
+    );
     let mut policies = policies.clone();
     policies.insert("meals.log.list".into(), false);
-    services.set_action_policy(&access, "meals", &policies).unwrap();
-    let (status, text) = tool("meals.log.add", json!({"description":"two scrambled eggs and a slice of buttered toast","idempotencyKey":"live-1","consumedAt":"2026-11-10T08:00:00-08:00"}), true);
+    services
+        .set_action_policy(&access, "meals", &policies)
+        .unwrap();
+    let (status, text) = tool(
+        "meals.log.add",
+        json!({"description":"two scrambled eggs and a slice of buttered toast","idempotencyKey":"live-1","consumedAt":"2026-11-10T08:00:00-08:00"}),
+        true,
+    );
     assert_eq!(status, 200, "{text}\n{}", log());
     let added = json_of(&text)["data"]["entry"].clone();
-    assert_eq!(added["estimateState"], "pending", "a new entry shows as waiting for an estimate");
-    assert!(added["nutrients"].is_null(), "no figures before the model answers");
+    assert_eq!(
+        added["estimateState"], "pending",
+        "a new entry shows as waiting for an estimate"
+    );
+    assert!(
+        added["nutrients"].is_null(),
+        "no figures before the model answers"
+    );
     let waited = Instant::now();
     let entry = loop {
         let (_, text) = tool("meals.log.list", json!({"localDate":"2026-11-10"}), false);
@@ -644,16 +833,44 @@ fn installed_meals_package_serves_routes_from_the_real_server() {
         if found["estimateState"] != "pending" {
             break found;
         }
-        assert!(waited.elapsed() < Duration::from_secs(120), "estimate did not finish: {found}\n{}", log());
+        assert!(
+            waited.elapsed() < Duration::from_secs(120),
+            "estimate did not finish: {found}\n{}",
+            log()
+        );
         std::thread::sleep(Duration::from_secs(2));
     };
-    assert_eq!(entry["estimateState"], "estimated", "real model estimate: {entry}\n{}", log());
-    let kcal = entry["nutrients"]["caloriesKcal"].as_f64().expect("calories known");
-    assert!((100.0..=1500.0).contains(&kcal), "a plausible breakfast, got {kcal}");
-    assert!(entry["items"].as_array().is_some_and(|i| !i.is_empty()), "foods listed: {entry}");
-    let (_, theirs) = call(Method::POST, "/meals/tools/run", Some(&other), Some(json!({"tool":"meals.log.list","parameters":{}})));
-    assert!(!theirs.contains("scrambled"), "the second person sees no entries");
-    assert!(!log().contains(&model_key), "the model key never reaches the server log");
+    assert_eq!(
+        entry["estimateState"],
+        "estimated",
+        "real model estimate: {entry}\n{}",
+        log()
+    );
+    let kcal = entry["nutrients"]["caloriesKcal"]
+        .as_f64()
+        .expect("calories known");
+    assert!(
+        (100.0..=1500.0).contains(&kcal),
+        "a plausible breakfast, got {kcal}"
+    );
+    assert!(
+        entry["items"].as_array().is_some_and(|i| !i.is_empty()),
+        "foods listed: {entry}"
+    );
+    let (_, theirs) = call(
+        Method::POST,
+        "/meals/tools/run",
+        Some(&other),
+        Some(json!({"tool":"meals.log.list","parameters":{}})),
+    );
+    assert!(
+        !theirs.contains("scrambled"),
+        "the second person sees no entries"
+    );
+    assert!(
+        !log().contains(&model_key),
+        "the model key never reaches the server log"
+    );
     println!("PASS live model: gpt-5.6-luna estimated a real entry in {:?}: {kcal} kcal, shown as an estimate; key absent from the log", waited.elapsed());
     println!("PASS live HTTPS: kitchen, household, list and pantry tools, one-use approval, second person refused, private text absent from activity and the server log");
 }

@@ -115,8 +115,12 @@ fn installed_goals_package_serves_routes_from_the_real_server() {
     )
     .unwrap();
     if let Ok(web) = std::env::var("GOALS_WEB_DIR") {
-        assert!(Command::new("cp").args(["-r", &format!("{web}/.")])
-            .arg(root.join("web")).status().unwrap().success());
+        assert!(Command::new("cp")
+            .args(["-r", &format!("{web}/.")])
+            .arg(root.join("web"))
+            .status()
+            .unwrap()
+            .success());
     }
     let app_url = std::env::var("JS43_APP_URL").unwrap();
     let worker_url = std::env::var("JS43_WORKER_URL").unwrap();
@@ -282,6 +286,7 @@ fn installed_goals_package_serves_routes_from_the_real_server() {
         lifted_revocations: BTreeSet::new(),
     };
     let index = Index {
+        publish_reviews: Default::default(),
         serial: 1,
         expires: chrono::Utc::now() + chrono::Duration::days(1),
         signing_key: "online".into(),

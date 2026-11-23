@@ -44,6 +44,8 @@ pub enum Channel {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Index {
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub publish_reviews: BTreeMap<String, crate::registry_review::PublishReview>,
     pub serial: u64,
     pub expires: DateTime<Utc>,
     pub signing_key: String,
@@ -182,7 +184,6 @@ impl SeenRegistry {
                 && self.targets_package(&revocation.target, digest, publisher_id, public_key)
         })
     }
-
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(

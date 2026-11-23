@@ -13,7 +13,12 @@ use ring::{
 use std::collections::BTreeMap;
 
 fn key() -> Ed25519KeyPair {
-    Ed25519KeyPair::from_pkcs8(Ed25519KeyPair::generate_pkcs8(&SystemRandom::new()).unwrap().as_ref()).unwrap()
+    Ed25519KeyPair::from_pkcs8(
+        Ed25519KeyPair::generate_pkcs8(&SystemRandom::new())
+            .unwrap()
+            .as_ref(),
+    )
+    .unwrap()
 }
 fn public(k: &Ed25519KeyPair) -> String {
     STANDARD.encode(k.public_key().as_ref())
@@ -23,7 +28,10 @@ fn sign(k: &Ed25519KeyPair, b: &[u8]) -> String {
 }
 
 fn core() -> Vec<u8> {
-    std::fs::read(std::env::var("CONNECTORS_CORE_WASM").expect("Run modules/connectors/tools/check.sh")).unwrap()
+    std::fs::read(
+        std::env::var("CONNECTORS_CORE_WASM").expect("Run modules/connectors/tools/check.sh"),
+    )
+    .unwrap()
 }
 
 #[test]
@@ -57,11 +65,16 @@ fn connectors_downloads_from_a_signed_folder_registry() {
         index_keys: BTreeMap::from([("online".into(), public(&index_key))]),
         publishers: BTreeMap::from([(
             "connectors-test".into(),
-            Publisher { key: public(&publisher), prefix: String::new(), replaces: Default::default() },
+            Publisher {
+                key: public(&publisher),
+                prefix: String::new(),
+                replaces: Default::default(),
+            },
         )]),
         lifted_revocations: Default::default(),
     };
     let listing = Index {
+        publish_reviews: Default::default(),
         serial: 1,
         expires: chrono::Utc::now() + chrono::Duration::days(1),
         signing_key: "online".into(),
@@ -70,14 +83,30 @@ fn connectors_downloads_from_a_signed_folder_registry() {
     };
     let folder = tempfile::tempdir().unwrap();
     for (name, data, signer) in [
-        ("registry.json", serde_json::to_vec(&identity).unwrap(), &root_key),
-        ("index.json", serde_json::to_vec(&listing).unwrap(), &index_key),
+        (
+            "registry.json",
+            serde_json::to_vec(&identity).unwrap(),
+            &root_key,
+        ),
+        (
+            "index.json",
+            serde_json::to_vec(&listing).unwrap(),
+            &index_key,
+        ),
     ] {
         std::fs::write(folder.path().join(name), &data).unwrap();
-        std::fs::write(folder.path().join(format!("{name}.sig")), sign(signer, &data)).unwrap();
+        std::fs::write(
+            folder.path().join(format!("{name}.sig")),
+            sign(signer, &data),
+        )
+        .unwrap();
     }
     std::fs::create_dir(folder.path().join("packages")).unwrap();
-    std::fs::write(folder.path().join(format!("packages/{digest}.mosspkg")), &bytes).unwrap();
+    std::fs::write(
+        folder.path().join(format!("packages/{digest}.mosspkg")),
+        &bytes,
+    )
+    .unwrap();
 
     let mut seen = SeenRegistry::default();
     let catalog = Catalog::fetch(
@@ -91,7 +120,15 @@ fn connectors_downloads_from_a_signed_folder_registry() {
         ("email".to_string(), "0.4.0".parse().unwrap()),
         ("calendar".to_string(), "0.30.0".parse().unwrap()),
     ]);
-    let chosen = catalog.select("connectors", None, &"0.1.0".parse().unwrap(), &installed, &seen).unwrap();
+    let chosen = catalog
+        .select(
+            "connectors",
+            None,
+            &"0.1.0".parse().unwrap(),
+            &installed,
+            &seen,
+        )
+        .unwrap();
     let package = catalog.download(chosen, &"0.1.0".parse().unwrap()).unwrap();
     assert_eq!(package.manifest.id, "connectors");
     assert_eq!(package.manifest.version, "0.7.2".parse().unwrap());
@@ -101,5 +138,7 @@ fn connectors_downloads_from_a_signed_folder_registry() {
     // A tampered package no longer matches its digest and is refused.
     let mut bad = bytes.clone();
     bad.push(0);
-    assert!(catalog.read_download(chosen, &bad, &"0.1.0".parse().unwrap()).is_err());
+    assert!(catalog
+        .read_download(chosen, &bad, &"0.1.0".parse().unwrap())
+        .is_err());
 }

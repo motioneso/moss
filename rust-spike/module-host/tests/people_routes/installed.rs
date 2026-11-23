@@ -151,6 +151,7 @@ fn publish_with_keys(registry: &Path) -> (Keys, Vec<Artifact>) {
         lifted_revocations: BTreeSet::new(),
     };
     let index = Index {
+        publish_reviews: Default::default(),
         serial: 1,
         expires: chrono::Utc::now() + chrono::Duration::days(1),
         signing_key: "online".into(),

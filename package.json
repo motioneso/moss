@@ -359,7 +359,8 @@
     "test:rust-meetings-companion": "tsx modules/meetings/tools/companion-gate.ts",
     "test:rust-meetings-companion-server": "MOSS_COMPANION_STARTUP_ONLY=1 bash modules/meetings/tools/live.sh",
     "test:rust-chat-bridge": "tsx rust-spike/shell/tools/chat-bridge-gate.ts",
-    "test:rust-chat-bridge-live": "tsx rust-spike/shell/tools/chat-bridge-live.ts"
+    "test:rust-chat-bridge-live": "tsx rust-spike/shell/tools/chat-bridge-live.ts",
+    "test:rust-module-publisher": "bash rust-spike/module-publisher/tools/check.sh"
   },
   "dependencies": {
     "@fastify/helmet": "^13",

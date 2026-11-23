@@ -59,6 +59,7 @@ pub fn write(folder: &Path, bytes: &[u8], manifest: &Manifest) -> Result<(String
         urgent: false,
     };
     let index = Index {
+        publish_reviews: Default::default(),
         serial: 1,
         expires: chrono::Utc::now() + chrono::Duration::days(1),
         signing_key: "online".into(),
@@ -79,4 +80,3 @@ pub fn write(folder: &Path, bytes: &[u8], manifest: &Manifest) -> Result<(String
     std::fs::write(folder.join(format!("packages/{digest}.mosspkg")), bytes)?;
     Ok((public(&root), public(&publisher)))
 }
-

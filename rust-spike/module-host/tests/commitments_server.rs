@@ -1,19 +1,19 @@
 //! Installed Commitments package over real HTTPS, optionally with the full Today screen proof.
 mod common;
-#[path = "commitments_screen/mod.rs"]
-mod screen_proof;
 #[path = "people_routes/installed.rs"]
 mod installed;
+#[path = "commitments_screen/mod.rs"]
+mod screen_proof;
+use access_context::AccessContext;
 use common::Keys;
 use moss_module_host::{
     archive::Package,
     registry::{Artifact, Channel, Index, Source},
     trust::{self, Publisher, RegistryIdentity},
 };
-use std::collections::{BTreeMap, BTreeSet};
-use access_context::AccessContext;
 use safety_core::db::{Database, RuntimeRole};
 use serde_json::{json, Value};
+use std::collections::{BTreeMap, BTreeSet};
 use std::{
     fs,
     path::Path,
@@ -54,7 +54,10 @@ fn installed_commitments_package_serves_routes_from_the_real_server() {
     let port = Port(
         String::from_utf8(
             Command::new("devports")
-                .args(["claim", &format!("js293-commitments-{}", std::process::id())])
+                .args([
+                    "claim",
+                    &format!("js293-commitments-{}", std::process::id()),
+                ])
                 .output()
                 .unwrap()
                 .stdout,
@@ -65,7 +68,10 @@ fn installed_commitments_package_serves_routes_from_the_real_server() {
     );
     assert!(!port.0.is_empty());
     let origin = format!("https://localhost:{}", port.0);
-    let address: std::net::IpAddr = std::env::var("JS299_PROOF_ADDRESS").unwrap().parse().unwrap();
+    let address: std::net::IpAddr = std::env::var("JS299_PROOF_ADDRESS")
+        .unwrap()
+        .parse()
+        .unwrap();
     assert!(!address.is_loopback() && address.is_ipv4());
     let remote_origin = format!("https://{address}:{}", port.0);
     let cert = root.join("tls/certificate.pem");
@@ -95,7 +101,13 @@ fn installed_commitments_package_serves_routes_from_the_real_server() {
     )
     .unwrap();
     if let Ok(web) = std::env::var("MOSS_SHELL_WEB_DIR") {
-        assert!(Command::new("cp").arg("-r").arg(format!("{web}/.")).arg(root.join("web")).status().unwrap().success());
+        assert!(Command::new("cp")
+            .arg("-r")
+            .arg(format!("{web}/."))
+            .arg(root.join("web"))
+            .status()
+            .unwrap()
+            .success());
     }
     let app_url = std::env::var("JS43_APP_URL").unwrap();
     let worker_url = std::env::var("JS43_WORKER_URL").unwrap();
@@ -162,7 +174,10 @@ fn installed_commitments_package_serves_routes_from_the_real_server() {
         let response = client.post(format!("{origin}/api/auth/sign-up/email")).header("origin", &origin).json(&json!({"name":name,"email":email,"password":"temporary-commitments-password-293-not-a-real-secret"})).send().unwrap();
         let status = response.status();
         if status != 200 {
-            panic!("sign-up answered {status}: {}", response.text().unwrap_or_default());
+            panic!(
+                "sign-up answered {status}: {}",
+                response.text().unwrap_or_default()
+            );
         }
         response.headers()["set-cookie"]
             .to_str()
@@ -221,32 +236,36 @@ fn installed_commitments_package_serves_routes_from_the_real_server() {
         ]);
     }
     let artifacts: Vec<Artifact> = packages
-    .iter()
-    .map(|(variable, id)| {
-        let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
-        let digest = trust::digest(&bytes);
-        let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
-        let manifest = &package.manifest;
-        assert_eq!(manifest.id, *id);
-        fs::write(root.join(format!("registry/packages/{digest}.mosspkg")), &bytes).unwrap();
-        Artifact {
-            id: manifest.id.clone(),
-            version: manifest.version.clone(),
-            digest: digest.clone(),
-            size: bytes.len() as u64,
-            publisher_key: "commitments-test".into(),
-            signature: Keys::sign(&keys.publisher, digest.as_bytes()),
-            requires_moss: manifest.requires_moss.clone(),
-            abi: manifest.abi.clone(),
-            capabilities: manifest.capabilities.clone(),
-            migrations: manifest.database.migrations.clone(),
-            requires: manifest.requires.clone(),
-            changelog: "Commitments live gate".into(),
-            channel: Channel::Stable,
-            urgent: false,
-        }
-    })
-    .collect();
+        .iter()
+        .map(|(variable, id)| {
+            let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
+            let digest = trust::digest(&bytes);
+            let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
+            let manifest = &package.manifest;
+            assert_eq!(manifest.id, *id);
+            fs::write(
+                root.join(format!("registry/packages/{digest}.mosspkg")),
+                &bytes,
+            )
+            .unwrap();
+            Artifact {
+                id: manifest.id.clone(),
+                version: manifest.version.clone(),
+                digest: digest.clone(),
+                size: bytes.len() as u64,
+                publisher_key: "commitments-test".into(),
+                signature: Keys::sign(&keys.publisher, digest.as_bytes()),
+                requires_moss: manifest.requires_moss.clone(),
+                abi: manifest.abi.clone(),
+                capabilities: manifest.capabilities.clone(),
+                migrations: manifest.database.migrations.clone(),
+                requires: manifest.requires.clone(),
+                changelog: "Commitments live gate".into(),
+                channel: Channel::Stable,
+                urgent: false,
+            }
+        })
+        .collect();
     let identity = RegistryIdentity {
         id: "commitments-test-registry".into(),
         name: "Commitments test registry".into(),
@@ -263,6 +282,7 @@ fn installed_commitments_package_serves_routes_from_the_real_server() {
         lifted_revocations: BTreeSet::new(),
     };
     let index = Index {
+        publish_reviews: Default::default(),
         serial: 1,
         expires: chrono::Utc::now() + chrono::Duration::days(1),
         signing_key: "online".into(),
@@ -270,11 +290,23 @@ fn installed_commitments_package_serves_routes_from_the_real_server() {
         revoked: vec![],
     };
     for (name, data, key) in [
-        ("registry.json", serde_json::to_vec(&identity).unwrap(), &keys.root),
-        ("index.json", serde_json::to_vec(&index).unwrap(), &keys.index),
+        (
+            "registry.json",
+            serde_json::to_vec(&identity).unwrap(),
+            &keys.root,
+        ),
+        (
+            "index.json",
+            serde_json::to_vec(&index).unwrap(),
+            &keys.index,
+        ),
     ] {
         fs::write(root.join("registry").join(name), &data).unwrap();
-        fs::write(root.join("registry").join(format!("{name}.sig")), Keys::sign(key, &data)).unwrap();
+        fs::write(
+            root.join("registry").join(format!("{name}.sig")),
+            Keys::sign(key, &data),
+        )
+        .unwrap();
     }
     let installer = installed::reopen(
         &root.join("data"),
@@ -316,18 +348,28 @@ fn installed_commitments_package_serves_routes_from_the_real_server() {
         let signed = client.post(format!("{remote_origin}/api/auth/sign-in/email")).header("origin", &remote_origin)
             .json(&json!({"email":"commitments-other@example.test","password":"temporary-commitments-password-293-not-a-real-secret"})).send().unwrap();
         assert_eq!(signed.status(), 200, "second person sign-in");
-        signed.headers()["set-cookie"].to_str().unwrap().split(';').next().unwrap().to_owned()
+        signed.headers()["set-cookie"]
+            .to_str()
+            .unwrap()
+            .split(';')
+            .next()
+            .unwrap()
+            .to_owned()
     };
     let log = || fs::read_to_string(root.join("server.log")).unwrap_or_default();
     let call = |method: reqwest::Method, path: &str, cookie: Option<&str>, body: Option<Value>| {
-        let mut request = client.request(method, format!("{remote_origin}/api/m/commitments{path}")).header("origin", &remote_origin);
+        let mut request = client
+            .request(method, format!("{remote_origin}/api/m/commitments{path}"))
+            .header("origin", &remote_origin);
         if let Some(cookie) = cookie {
             request = request.header("cookie", cookie);
         }
         if let Some(body) = body {
             request = request.json(&body);
         }
-        let response = request.send().unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
+        let response = request
+            .send()
+            .unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
         let status = response.status().as_u16();
         let text = response.text().unwrap_or_default();
         println!("{method_path} -> {status}", method_path = path);
@@ -349,7 +391,11 @@ fn installed_commitments_package_serves_routes_from_the_real_server() {
         if ready {
             break;
         }
-        assert!(started.elapsed() < std::time::Duration::from_secs(240), "module host start deadline\n{}", log());
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(240),
+            "module host start deadline\n{}",
+            log()
+        );
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
     for who in [&cookie, &other] {
@@ -358,7 +404,12 @@ fn installed_commitments_package_serves_routes_from_the_real_server() {
         assert_eq!(json_of(&text), json!([]));
     }
     // No create route exists yet, so the owner's suggestions go straight into the table.
-    let seed = |signature: &str, title: &str, status: &str, resolution: Option<&str>, age: i32| -> uuid::Uuid {
+    let seed = |signature: &str,
+                title: &str,
+                status: &str,
+                resolution: Option<&str>,
+                age: i32|
+     -> uuid::Uuid {
         runtime.block_on(async {
             let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
             tokio::spawn(async move {
@@ -376,69 +427,206 @@ fn installed_commitments_package_serves_routes_from_the_real_server() {
         })
     };
     let first = seed("live-one", MARK, "pending_review", None, 1);
-    let resolved = seed("live-two", "Already resolved", "accepted", Some("task:live"), 2);
+    let resolved = seed(
+        "live-two",
+        "Already resolved",
+        "accepted",
+        Some("task:live"),
+        2,
+    );
     let driver = seed("live-three", "Not owed", "explicit_non_action", None, 3);
     let (status, list) = call(Method::GET, "/candidates", Some(&cookie), None);
     assert_eq!(status, 200, "{list}\n{}", log());
     assert_eq!(json_of(&list).as_array().unwrap().len(), 3, "{list}");
-    let (_, only) = call(Method::GET, "/candidates?status=accepted", Some(&cookie), None);
+    let (_, only) = call(
+        Method::GET,
+        "/candidates?status=accepted",
+        Some(&cookie),
+        None,
+    );
     assert_eq!(json_of(&only).as_array().unwrap().len(), 1, "{only}");
-    let (status, text) = call(Method::GET, &format!("/candidates/{first}"), Some(&cookie), None);
+    let (status, text) = call(
+        Method::GET,
+        &format!("/candidates/{first}"),
+        Some(&cookie),
+        None,
+    );
     assert_eq!(status, 200, "{text}");
     assert_eq!(json_of(&text)["evidence"].as_array().unwrap().len(), 1);
     // The other person sees and changes none of it.
     let (_, text) = call(Method::GET, "/candidates", Some(&other), None);
     assert_eq!(json_of(&text), json!([]), "{text}");
     assert!(!text.to_lowercase().contains(&MARK.to_lowercase()));
-    assert_eq!(call(Method::GET, &format!("/candidates/{first}"), Some(&other), None).0, 404);
-    assert_eq!(call(Method::PATCH, &format!("/candidates/{first}/status"), Some(&other), Some(json!({"status":"rejected"}))).0, 404);
+    assert_eq!(
+        call(
+            Method::GET,
+            &format!("/candidates/{first}"),
+            Some(&other),
+            None
+        )
+        .0,
+        404
+    );
+    assert_eq!(
+        call(
+            Method::PATCH,
+            &format!("/candidates/{first}/status"),
+            Some(&other),
+            Some(json!({"status":"rejected"}))
+        )
+        .0,
+        404
+    );
     // The owner changes a status, and a resolved suggestion stays resolved.
-    let (status, text) = call(Method::PATCH, &format!("/candidates/{first}/status"), Some(&cookie), Some(json!({"status":"snoozed","snoozedUntil":"2099-01-01T00:00:00.000Z"})));
+    let (status, text) = call(
+        Method::PATCH,
+        &format!("/candidates/{first}/status"),
+        Some(&cookie),
+        Some(json!({"status":"snoozed","snoozedUntil":"2099-01-01T00:00:00.000Z"})),
+    );
     assert_eq!(status, 200, "{text}\n{}", log());
     assert_eq!(json_of(&text)["status"], "snoozed");
-    let (status, text) = call(Method::PATCH, &format!("/candidates/{resolved}/status"), Some(&cookie), Some(json!({"status":"rejected"})));
+    let (status, text) = call(
+        Method::PATCH,
+        &format!("/candidates/{resolved}/status"),
+        Some(&cookie),
+        Some(json!({"status":"rejected"})),
+    );
     assert_eq!(status, 200, "{text}");
     assert_eq!(json_of(&text)["hasResolutionRef"], true);
-    let (status, text) = call(Method::POST, &format!("/candidates/{resolved}/suppress"), Some(&cookie), Some(json!({"suppressedBy":driver.to_string()})));
+    let (status, text) = call(
+        Method::POST,
+        &format!("/candidates/{resolved}/suppress"),
+        Some(&cookie),
+        Some(json!({"suppressedBy":driver.to_string()})),
+    );
     assert_eq!(status, 200, "{text}");
     assert_eq!(json_of(&text)["status"], "explicit_non_action");
     assert_eq!(json_of(&text)["hasResolutionRef"], true);
     let kept: Option<String> = runtime.block_on(async {
-        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
+            .await
+            .unwrap();
         tokio::spawn(async move {
             let _ = connection.await;
         });
-        db.query_one("SELECT resolution_ref FROM app.commitment_candidates WHERE id = $1", &[&resolved]).await.unwrap().get(0)
+        db.query_one(
+            "SELECT resolution_ref FROM app.commitment_candidates WHERE id = $1",
+            &[&resolved],
+        )
+        .await
+        .unwrap()
+        .get(0)
     });
     assert_eq!(kept.as_deref(), Some("task:live"));
     // Resolve is refused because no checker is connected yet.
-    let (status, text) = call(Method::POST, &format!("/candidates/{first}/resolve"), Some(&cookie), Some(json!({"resolutionRef":"task:new"})));
+    let (status, text) = call(
+        Method::POST,
+        &format!("/candidates/{first}/resolve"),
+        Some(&cookie),
+        Some(json!({"resolutionRef":"task:new"})),
+    );
     assert_eq!(status, 503, "{text}");
-    assert_eq!(json_of(&text), json!({"error":"Resolution verifier unavailable"}));
+    assert_eq!(
+        json_of(&text),
+        json!({"error":"Resolution verifier unavailable"})
+    );
     // Extraction. The request queues a job and the answer carries no text.
-    assert_eq!(client.get(format!("{remote_origin}/api/m/commitments/candidates")).header("origin", "https://untrusted.example").header("cookie", &cookie).send().unwrap().status().as_u16(), 403);
-    assert_eq!(client.post(format!("{remote_origin}/api/m/commitments/extract")).header("origin", "https://untrusted.example").header("cookie", &cookie).json(&json!({"sourceKind":"notes"})).send().unwrap().status().as_u16(), 403);
-    let (status, text) = call(Method::POST, "/extract", Some(&cookie), Some(json!({"sourceKind":"notes","text":MARK})));
-    assert_eq!((status, json_of(&text)), (202, json!({"queued":true})), "{text}\n{}", log());
-    assert_eq!(call(Method::POST, "/extract", Some(&cookie), Some(json!({"sourceKind":"mail"}))).0, 400);
-    assert_eq!(call(Method::POST, "/extract", None, Some(json!({"sourceKind":"notes"}))).0, 401);
+    assert_eq!(
+        client
+            .get(format!("{remote_origin}/api/m/commitments/candidates"))
+            .header("origin", "https://untrusted.example")
+            .header("cookie", &cookie)
+            .send()
+            .unwrap()
+            .status()
+            .as_u16(),
+        403
+    );
+    assert_eq!(
+        client
+            .post(format!("{remote_origin}/api/m/commitments/extract"))
+            .header("origin", "https://untrusted.example")
+            .header("cookie", &cookie)
+            .json(&json!({"sourceKind":"notes"}))
+            .send()
+            .unwrap()
+            .status()
+            .as_u16(),
+        403
+    );
+    let (status, text) = call(
+        Method::POST,
+        "/extract",
+        Some(&cookie),
+        Some(json!({"sourceKind":"notes","text":MARK})),
+    );
+    assert_eq!(
+        (status, json_of(&text)),
+        (202, json!({"queued":true})),
+        "{text}\n{}",
+        log()
+    );
+    assert_eq!(
+        call(
+            Method::POST,
+            "/extract",
+            Some(&cookie),
+            Some(json!({"sourceKind":"mail"}))
+        )
+        .0,
+        400
+    );
+    assert_eq!(
+        call(
+            Method::POST,
+            "/extract",
+            None,
+            Some(json!({"sourceKind":"notes"}))
+        )
+        .0,
+        401
+    );
     let (status, text) = call(Method::GET, "/extraction-state", Some(&cookie), None);
     assert_eq!(status, 200, "{text}\n{}", log());
     let (_, text) = call(Method::GET, "/extraction-state", Some(&other), None);
     assert_eq!(json_of(&text), json!([]), "{text}");
     let payloads: Vec<String> = runtime.block_on(async {
-        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
+            .await
+            .unwrap();
         tokio::spawn(async move {
             let _ = connection.await;
         });
-        db.query("SELECT payload::text FROM moss_queue.jobs WHERE queue LIKE '%commitments-extraction'", &[]).await.unwrap().iter().map(|r| r.get(0)).collect()
+        db.query(
+            "SELECT payload::text FROM moss_queue.jobs WHERE queue LIKE '%commitments-extraction'",
+            &[],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|r| r.get(0))
+        .collect()
     });
-    assert!(!payloads.is_empty() && payloads.iter().all(|p| !p.contains(MARK)), "{payloads:?}");
+    assert!(
+        !payloads.is_empty() && payloads.iter().all(|p| !p.contains(MARK)),
+        "{payloads:?}"
+    );
     println!("PASS live extract: queued over HTTPS on a non-loopback address, job carries no text, untrusted origin refused");
     // Nothing the test sent reached the server log.
     assert!(!log().to_lowercase().contains(&MARK.to_lowercase()));
     if std::env::var("COMMITMENTS_SCREEN_LIVE").is_ok() {
-        screen_proof::run(root, &runtime, &bootstrap_url, &app_url, &owner, &ai_key, &client, &remote_origin, &cookie);
+        screen_proof::run(
+            root,
+            &runtime,
+            &bootstrap_url,
+            &app_url,
+            &owner,
+            &ai_key,
+            &client,
+            &remote_origin,
+            &cookie,
+        );
     }
     println!("commitments live: list, read, status, suppress, refused resolve and two-person privacy worked over HTTPS");
 }

@@ -2,16 +2,16 @@
 mod common;
 #[path = "people_routes/installed.rs"]
 mod installed;
+use access_context::AccessContext;
 use common::Keys;
 use moss_module_host::{
     archive::Package,
     registry::{Artifact, Channel, Index, Source},
     trust::{self, Publisher, RegistryIdentity},
 };
-use std::collections::{BTreeMap, BTreeSet};
-use access_context::AccessContext;
 use safety_core::db::{Database, RuntimeRole};
 use serde_json::{json, Value};
+use std::collections::{BTreeMap, BTreeSet};
 use std::{
     fs,
     path::Path,
@@ -85,7 +85,11 @@ fn installed_news_package_serves_routes_from_the_real_server() {
     }
     if let Ok(shell_web) = std::env::var("NEWS_LIVE_WEB") {
         // A built shell, so the screen opens inside the real app frame.
-        let status = Command::new("cp").args(["-r", "-T", &shell_web]).arg(root.join("web")).status().unwrap();
+        let status = Command::new("cp")
+            .args(["-r", "-T", &shell_web])
+            .arg(root.join("web"))
+            .status()
+            .unwrap();
         assert!(status.success());
     } else {
         fs::write(
@@ -97,7 +101,9 @@ fn installed_news_package_serves_routes_from_the_real_server() {
             // The browser check opens the screens through the shell's own frame page.
             for name in ["module-frame.html", "module-frame.css", "module-frame.js"] {
                 fs::copy(
-                    Path::new(env!("CARGO_MANIFEST_DIR")).join("../shell/assets").join(name),
+                    Path::new(env!("CARGO_MANIFEST_DIR"))
+                        .join("../shell/assets")
+                        .join(name),
                     root.join("web").join(name),
                 )
                 .unwrap();
@@ -169,7 +175,10 @@ fn installed_news_package_serves_routes_from_the_real_server() {
         let response = client.post(format!("{origin}/api/auth/sign-up/email")).header("origin", &origin).json(&json!({"name":name,"email":email,"password":"temporary-news-password-276-not-a-real-secret"})).send().unwrap();
         let status = response.status();
         if status != 200 {
-            panic!("sign-up answered {status}: {}", response.text().unwrap_or_default());
+            panic!(
+                "sign-up answered {status}: {}",
+                response.text().unwrap_or_default()
+            );
         }
         response.headers()["set-cookie"]
             .to_str()
@@ -219,32 +228,36 @@ fn installed_news_package_serves_routes_from_the_real_server() {
     let keys = Keys::new();
     fs::create_dir_all(root.join("registry/packages")).unwrap();
     let artifacts: Vec<Artifact> = [("JS235_NEWS_PACKAGE", "news")]
-    .iter()
-    .map(|(variable, id)| {
-        let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
-        let digest = trust::digest(&bytes);
-        let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
-        let manifest = &package.manifest;
-        assert_eq!(manifest.id, *id);
-        fs::write(root.join(format!("registry/packages/{digest}.mosspkg")), &bytes).unwrap();
-        Artifact {
-            id: manifest.id.clone(),
-            version: manifest.version.clone(),
-            digest: digest.clone(),
-            size: bytes.len() as u64,
-            publisher_key: "news-test".into(),
-            signature: Keys::sign(&keys.publisher, digest.as_bytes()),
-            requires_moss: manifest.requires_moss.clone(),
-            abi: manifest.abi.clone(),
-            capabilities: manifest.capabilities.clone(),
-            migrations: manifest.database.migrations.clone(),
-            requires: manifest.requires.clone(),
-            changelog: "News live gate".into(),
-            channel: Channel::Stable,
-            urgent: false,
-        }
-    })
-    .collect();
+        .iter()
+        .map(|(variable, id)| {
+            let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
+            let digest = trust::digest(&bytes);
+            let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
+            let manifest = &package.manifest;
+            assert_eq!(manifest.id, *id);
+            fs::write(
+                root.join(format!("registry/packages/{digest}.mosspkg")),
+                &bytes,
+            )
+            .unwrap();
+            Artifact {
+                id: manifest.id.clone(),
+                version: manifest.version.clone(),
+                digest: digest.clone(),
+                size: bytes.len() as u64,
+                publisher_key: "news-test".into(),
+                signature: Keys::sign(&keys.publisher, digest.as_bytes()),
+                requires_moss: manifest.requires_moss.clone(),
+                abi: manifest.abi.clone(),
+                capabilities: manifest.capabilities.clone(),
+                migrations: manifest.database.migrations.clone(),
+                requires: manifest.requires.clone(),
+                changelog: "News live gate".into(),
+                channel: Channel::Stable,
+                urgent: false,
+            }
+        })
+        .collect();
     let identity = RegistryIdentity {
         id: "news-test-registry".into(),
         name: "News test registry".into(),
@@ -261,6 +274,7 @@ fn installed_news_package_serves_routes_from_the_real_server() {
         lifted_revocations: BTreeSet::new(),
     };
     let index = Index {
+        publish_reviews: Default::default(),
         serial: 1,
         expires: chrono::Utc::now() + chrono::Duration::days(1),
         signing_key: "online".into(),
@@ -268,11 +282,23 @@ fn installed_news_package_serves_routes_from_the_real_server() {
         revoked: vec![],
     };
     for (name, data, key) in [
-        ("registry.json", serde_json::to_vec(&identity).unwrap(), &keys.root),
-        ("index.json", serde_json::to_vec(&index).unwrap(), &keys.index),
+        (
+            "registry.json",
+            serde_json::to_vec(&identity).unwrap(),
+            &keys.root,
+        ),
+        (
+            "index.json",
+            serde_json::to_vec(&index).unwrap(),
+            &keys.index,
+        ),
     ] {
         fs::write(root.join("registry").join(name), &data).unwrap();
-        fs::write(root.join("registry").join(format!("{name}.sig")), Keys::sign(key, &data)).unwrap();
+        fs::write(
+            root.join("registry").join(format!("{name}.sig")),
+            Keys::sign(key, &data),
+        )
+        .unwrap();
     }
     let installer = installed::reopen(
         &root.join("data"),
@@ -314,18 +340,28 @@ fn installed_news_package_serves_routes_from_the_real_server() {
         let signed = client.post(format!("{origin}/api/auth/sign-in/email")).header("origin", &origin)
             .json(&json!({"email":"news-other@example.test","password":"temporary-news-password-276-not-a-real-secret"})).send().unwrap();
         assert_eq!(signed.status(), 200, "second person sign-in");
-        signed.headers()["set-cookie"].to_str().unwrap().split(';').next().unwrap().to_owned()
+        signed.headers()["set-cookie"]
+            .to_str()
+            .unwrap()
+            .split(';')
+            .next()
+            .unwrap()
+            .to_owned()
     };
     let log = || fs::read_to_string(root.join("server.log")).unwrap_or_default();
     let call = |method: reqwest::Method, path: &str, cookie: Option<&str>, body: Option<Value>| {
-        let mut request = client.request(method, format!("{origin}/api/m/news{path}")).header("origin", &origin);
+        let mut request = client
+            .request(method, format!("{origin}/api/m/news{path}"))
+            .header("origin", &origin);
         if let Some(cookie) = cookie {
             request = request.header("cookie", cookie);
         }
         if let Some(body) = body {
             request = request.json(&body);
         }
-        let response = request.send().unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
+        let response = request
+            .send()
+            .unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
         let status = response.status().as_u16();
         let text = response.text().unwrap_or_default();
         println!("{method_path} -> {status}", method_path = path);
@@ -347,7 +383,11 @@ fn installed_news_package_serves_routes_from_the_real_server() {
         if ready {
             break;
         }
-        assert!(started.elapsed() < std::time::Duration::from_secs(240), "module host start deadline\n{}", log());
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(240),
+            "module host start deadline\n{}",
+            log()
+        );
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
     for who in [&cookie, &other] {
@@ -356,49 +396,128 @@ fn installed_news_package_serves_routes_from_the_real_server() {
         assert_eq!(json_of(&text), json!({"prefs":[]}));
     }
     // The owner saves a choice twice and keeps one row.
-    let (status, text) = call(Method::POST, "/prefs", Some(&cookie), Some(json!({"kind":"source","key":"bbc"})));
+    let (status, text) = call(
+        Method::POST,
+        "/prefs",
+        Some(&cookie),
+        Some(json!({"kind":"source","key":"bbc"})),
+    );
     assert_eq!(status, 200, "{text}\n{}", log());
     let pref = json_of(&text)["pref"]["id"].as_str().unwrap().to_owned();
-    let (_, again) = call(Method::POST, "/prefs", Some(&cookie), Some(json!({"kind":"source","key":"bbc"})));
+    let (_, again) = call(
+        Method::POST,
+        "/prefs",
+        Some(&cookie),
+        Some(json!({"kind":"source","key":"bbc"})),
+    );
     assert_eq!(json_of(&again)["pref"]["id"], json!(pref));
     let (_, list) = call(Method::GET, "/prefs", Some(&cookie), None);
-    assert_eq!(json_of(&list)["prefs"].as_array().unwrap().len(), 1, "{list}");
+    assert_eq!(
+        json_of(&list)["prefs"].as_array().unwrap().len(),
+        1,
+        "{list}"
+    );
     // The owner excludes a publisher. The typed text lands only in that row.
-    let (status, text) = call(Method::POST, "/source-exclusions", Some(&cookie), Some(json!({"source":format!("{MARK}.example.com")})));
+    let (status, text) = call(
+        Method::POST,
+        "/source-exclusions",
+        Some(&cookie),
+        Some(json!({"source":format!("{MARK}.example.com")})),
+    );
     assert_eq!(status, 200, "{text}\n{}", log());
-    let excl = json_of(&text)["exclusion"]["id"].as_str().unwrap().to_owned();
-    let (status, text) = call(Method::POST, "/source-exclusions", Some(&cookie), Some(json!({"source":"bad host name"})));
+    let excl = json_of(&text)["exclusion"]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let (status, text) = call(
+        Method::POST,
+        "/source-exclusions",
+        Some(&cookie),
+        Some(json!({"source":"bad host name"})),
+    );
     assert_eq!(status, 400, "{text}");
-    let (status, text) = call(Method::POST, "/topics", Some(&cookie), Some(json!({"label":"Space"})));
+    let (status, text) = call(
+        Method::POST,
+        "/topics",
+        Some(&cookie),
+        Some(json!({"label":"Space"})),
+    );
     assert_eq!(status, 503, "{text}");
     let (status, text) = call(Method::GET, "/personalization", Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
     let read = json_of(&text);
-    assert_eq!(read["sourceExclusions"].as_array().unwrap().len(), 1, "{text}");
-    assert!(matches!(read["refresh"]["state"].as_str(), Some("idle" | "queued" | "running")), "{text}");
+    assert_eq!(
+        read["sourceExclusions"].as_array().unwrap().len(),
+        1,
+        "{text}"
+    );
+    assert!(
+        matches!(
+            read["refresh"]["state"].as_str(),
+            Some("idle" | "queued" | "running")
+        ),
+        "{text}"
+    );
     // The other person sees none of it and cannot remove it.
     let (_, text) = call(Method::GET, "/personalization", Some(&other), None);
     assert_eq!(json_of(&text)["sourceExclusions"], json!([]), "{text}");
     assert!(!text.to_lowercase().contains(&MARK.to_lowercase()));
-    let (status, text) = call(Method::DELETE, &format!("/source-exclusions/{excl}"), Some(&other), None);
+    let (status, text) = call(
+        Method::DELETE,
+        &format!("/source-exclusions/{excl}"),
+        Some(&other),
+        None,
+    );
     assert_eq!((status, json_of(&text)), (200, json!({"ok":false})));
-    let (status, text) = call(Method::DELETE, &format!("/prefs/{pref}"), Some(&other), None);
+    let (status, text) = call(
+        Method::DELETE,
+        &format!("/prefs/{pref}"),
+        Some(&other),
+        None,
+    );
     assert_eq!((status, json_of(&text)), (200, json!({"ok":false})));
     let (_, list) = call(Method::GET, "/prefs", Some(&cookie), None);
-    assert_eq!(json_of(&list)["prefs"].as_array().unwrap().len(), 1, "B's delete must not remove A's choice");
+    assert_eq!(
+        json_of(&list)["prefs"].as_array().unwrap().len(),
+        1,
+        "B's delete must not remove A's choice"
+    );
     // The owner removes both.
-    let (_, text) = call(Method::DELETE, &format!("/source-exclusions/{excl}"), Some(&cookie), None);
+    let (_, text) = call(
+        Method::DELETE,
+        &format!("/source-exclusions/{excl}"),
+        Some(&cookie),
+        None,
+    );
     assert_eq!(json_of(&text), json!({"ok":true}));
-    let (_, text) = call(Method::DELETE, &format!("/prefs/{pref}"), Some(&cookie), None);
+    let (_, text) = call(
+        Method::DELETE,
+        &format!("/prefs/{pref}"),
+        Some(&cookie),
+        None,
+    );
     assert_eq!(json_of(&text), json!({"ok":true}));
     // Adding a real public feed. The page and the feed are read from the real internet through the
     // server's own public-web fetch, with nothing rewritten on the way.
     const FEED: &str = "https://feeds.bbci.co.uk/news/rss.xml";
-    let (status, text) = call(Method::POST, "/sources/preview", Some(&cookie), Some(json!({"input":FEED})));
+    let (status, text) = call(
+        Method::POST,
+        "/sources/preview",
+        Some(&cookie),
+        Some(json!({"input":FEED})),
+    );
     let first = json_of(&text);
-    println!("news live: first preview with no model set up -> {status} {}", first["status"]);
+    println!(
+        "news live: first preview with no model set up -> {status} {}",
+        first["status"]
+    );
     // This server has no text model, so a new site cannot get its policy verdict from one.
-    assert_eq!((status, &first["status"]), (200, &json!("unavailable")), "{text}\n{}", log());
+    assert_eq!(
+        (status, &first["status"]),
+        (200, &json!("unavailable")),
+        "{text}\n{}",
+        log()
+    );
     // The person's own remembered verdict stands in for the model. The feed itself is still fetched live.
     runtime.block_on(async {
         let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
@@ -412,22 +531,57 @@ fn installed_news_package_serves_routes_from_the_real_server() {
         .await
         .unwrap();
     });
-    let (status, text) = call(Method::POST, "/sources/preview", Some(&cookie), Some(json!({"input":FEED})));
+    let (status, text) = call(
+        Method::POST,
+        "/sources/preview",
+        Some(&cookie),
+        Some(json!({"input":FEED})),
+    );
     let shown = json_of(&text);
-    assert_eq!((status, &shown["status"]), (200, &json!("ok")), "{text}\n{}", log());
+    assert_eq!(
+        (status, &shown["status"]),
+        (200, &json!("ok")),
+        "{text}\n{}",
+        log()
+    );
     assert_eq!(shown["candidates"][0]["retrievalMethod"], "feed", "{text}");
-    println!("news live: real feed previewed: {}", shown["candidates"][0]["label"]);
+    println!(
+        "news live: real feed previewed: {}",
+        shown["candidates"][0]["label"]
+    );
     let confirmation = shown["confirmationId"].clone();
-    let (status, text) = call(Method::POST, "/sources", Some(&other), Some(json!({"confirmationId":confirmation})));
-    assert_eq!(status, 409, "another person must not save this preview: {text}");
-    let (status, text) = call(Method::POST, "/sources", Some(&cookie), Some(json!({"confirmationId":confirmation})));
+    let (status, text) = call(
+        Method::POST,
+        "/sources",
+        Some(&other),
+        Some(json!({"confirmationId":confirmation})),
+    );
+    assert_eq!(
+        status, 409,
+        "another person must not save this preview: {text}"
+    );
+    let (status, text) = call(
+        Method::POST,
+        "/sources",
+        Some(&cookie),
+        Some(json!({"confirmationId":confirmation})),
+    );
     assert_eq!(status, 201, "{text}\n{}", log());
-    assert_eq!(json_of(&text)["source"]["canonicalDomain"], "feeds.bbci.co.uk");
+    assert_eq!(
+        json_of(&text)["source"]["canonicalDomain"],
+        "feeds.bbci.co.uk"
+    );
     let (_, text) = call(Method::GET, "/personalization", Some(&cookie), None);
-    assert_eq!(json_of(&text)["customSources"].as_array().unwrap().len(), 1, "{text}");
+    assert_eq!(
+        json_of(&text)["customSources"].as_array().unwrap().len(),
+        1,
+        "{text}"
+    );
     let (_, text) = call(Method::GET, "/personalization", Some(&other), None);
     assert_eq!(json_of(&text)["customSources"], json!([]), "{text}");
-    println!("news live: the real feed was saved for the owner and is invisible to the other person");
+    println!(
+        "news live: the real feed was saved for the owner and is invisible to the other person"
+    );
     // The overview compiles the page from the real sources on the real server. Nothing is
     // intercepted: the catalog and saved feeds are read live through the public-web fetch.
     // The first read queues a refresh. The server's own worker runs it, and the page appears once
@@ -440,76 +594,209 @@ fn installed_news_package_serves_routes_from_the_real_server() {
         let page = json_of(&text);
         let (_, p) = call(Method::GET, "/personalization", Some(&cookie), None);
         let state = json_of(&p)["refresh"]["state"].clone();
-        if state == json!("idle") && !page["rankedStories"].as_array().map_or(true, |s| s.is_empty()) {
+        if state == json!("idle")
+            && !page["rankedStories"]
+                .as_array()
+                .map_or(true, |s| s.is_empty())
+        {
             break page;
         }
-        assert!(waited.elapsed() < Duration::from_secs(180), "the refresh never finished (state {state})\n{}", log());
+        assert!(
+            waited.elapsed() < Duration::from_secs(180),
+            "the refresh never finished (state {state})\n{}",
+            log()
+        );
         std::thread::sleep(Duration::from_secs(3));
     };
-    let stories = overview["rankedStories"].as_array().expect("ranked stories");
-    assert!(!overview["topStories"].as_array().unwrap().is_empty(), "{overview}");
+    let stories = overview["rankedStories"]
+        .as_array()
+        .expect("ranked stories");
+    assert!(
+        !overview["topStories"].as_array().unwrap().is_empty(),
+        "{overview}"
+    );
     assert_eq!(overview["degraded"], json!(false), "{overview}");
-    println!("news live: the queued refresh compiled {} real stories, first: {}", stories.len(), stories[0]["title"]);
+    println!(
+        "news live: the queued refresh compiled {} real stories, first: {}",
+        stories.len(),
+        stories[0]["title"]
+    );
     // Pictures and icons come back from the real server as real bytes. The shell re-checks them.
     let raw = |path: &str, cookie: &str| {
-        let response = client.get(format!("{origin}{path}")).header("origin", &origin).header("cookie", cookie).send().unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
+        let response = client
+            .get(format!("{origin}{path}"))
+            .header("origin", &origin)
+            .header("cookie", cookie)
+            .send()
+            .unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
         let status = response.status().as_u16();
-        let kind = response.headers().get("content-type").and_then(|v| v.to_str().ok()).unwrap_or("").to_owned();
-        let cache = response.headers().get("cache-control").and_then(|v| v.to_str().ok()).unwrap_or("").to_owned();
-        (status, kind, cache, response.bytes().unwrap_or_default().to_vec())
+        let kind = response
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .to_owned();
+        let cache = response
+            .headers()
+            .get("cache-control")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .to_owned();
+        (
+            status,
+            kind,
+            cache,
+            response.bytes().unwrap_or_default().to_vec(),
+        )
     };
-    let with_picture: Vec<&Value> = stories.iter().filter(|s| s["imageUrl"].is_string()).collect();
-    println!("news live: {} of {} real stories carry a picture address", with_picture.len(), stories.len());
+    let with_picture: Vec<&Value> = stories
+        .iter()
+        .filter(|s| s["imageUrl"].is_string())
+        .collect();
+    println!(
+        "news live: {} of {} real stories carry a picture address",
+        with_picture.len(),
+        stories.len()
+    );
     let mut served = 0;
     let mut served_id = String::new();
     for story in with_picture.iter().take(6) {
         let id = story["id"].as_str().unwrap();
         let (status, kind, cache, bytes) = raw(&format!("/api/m/news/images/{id}"), &cookie);
-        println!("news live: picture for story -> {status} {kind} {} bytes ({cache})", bytes.len());
+        println!(
+            "news live: picture for story -> {status} {kind} {} bytes ({cache})",
+            bytes.len()
+        );
         if status == 200 {
-            assert!(kind.starts_with("image/") && cache.starts_with("private, max-age="), "{kind} {cache}");
-            assert!(bytes.starts_with(&[0xff, 0xd8, 0xff]) || bytes.starts_with(b"\x89PNG") || bytes.starts_with(b"GIF8") || (bytes.len() > 12 && &bytes[8..12] == b"WEBP"), "bytes are a real picture");
+            assert!(
+                kind.starts_with("image/") && cache.starts_with("private, max-age="),
+                "{kind} {cache}"
+            );
+            assert!(
+                bytes.starts_with(&[0xff, 0xd8, 0xff])
+                    || bytes.starts_with(b"\x89PNG")
+                    || bytes.starts_with(b"GIF8")
+                    || (bytes.len() > 12 && &bytes[8..12] == b"WEBP"),
+                "bytes are a real picture"
+            );
             // The other person may have compiled the same public story into their own page. They
             // get a picture only for a story their own page holds.
             let theirs = json_of(&call(Method::GET, "/overview", Some(&other), None).1);
-            let held = theirs["rankedStories"].as_array().is_some_and(|l| l.iter().any(|s| s["id"] == story["id"]));
+            let held = theirs["rankedStories"]
+                .as_array()
+                .is_some_and(|l| l.iter().any(|s| s["id"] == story["id"]));
             let expect = if held { 200 } else { 404 };
-            assert_eq!(raw(&format!("/api/m/news/images/{id}"), &other).0, expect, "another person's picture follows their own page");
+            assert_eq!(
+                raw(&format!("/api/m/news/images/{id}"), &other).0,
+                expect,
+                "another person's picture follows their own page"
+            );
             served += 1;
             served_id = id.to_owned();
         }
     }
     if !with_picture.is_empty() {
         assert!(served > 0, "no real picture could be served\n{}", log());
-        assert_eq!(raw(&format!("/api/news/images/{served_id}"), &cookie).0, 200, "the old picture address still works");
+        assert_eq!(
+            raw(&format!("/api/news/images/{served_id}"), &cookie).0,
+            200,
+            "the old picture address still works"
+        );
     }
     assert_eq!(raw("/api/m/news/images/not-a-story", &cookie).0, 404);
-    let (icon_status, icon_kind, _, icon_bytes) = raw("/api/m/news/favicon/feeds.bbci.co.uk", &cookie);
-    println!("news live: icon for the saved publisher -> {icon_status} {icon_kind} {} bytes", icon_bytes.len());
+    let (icon_status, icon_kind, _, icon_bytes) =
+        raw("/api/m/news/favicon/feeds.bbci.co.uk", &cookie);
+    println!(
+        "news live: icon for the saved publisher -> {icon_status} {icon_kind} {} bytes",
+        icon_bytes.len()
+    );
     // The feed host itself publishes no icon (the real site answers 404), so the saved feed has
     // none. The catalog publisher's own site has one and it must arrive as a real icon.
-    assert_eq!(icon_status, 404, "the feed host has no icon, so none is served");
+    assert_eq!(
+        icon_status, 404,
+        "the feed host has no icon, so none is served"
+    );
     let (status, kind, _, bytes) = raw("/api/m/news/favicon/www.bbc.com", &cookie);
-    println!("news live: icon for the catalog publisher -> {status} {kind} {} bytes", bytes.len());
+    println!(
+        "news live: icon for the catalog publisher -> {status} {kind} {} bytes",
+        bytes.len()
+    );
     assert_eq!(status, 200, "the catalog publisher's icon is served");
     assert!(kind.starts_with("image/") && bytes.len() > 100, "{kind}");
-    assert_eq!(raw("/api/m/news/favicon/www.bbc.com", &other).0, 200, "a catalog publisher is not private data");
-    assert_eq!(raw("/api/m/news/favicon/unsaved.example.org", &cookie).0, 404, "an unseen publisher is refused");
-    assert_eq!(raw("/api/m/news/favicon/feeds.bbci.co.uk", &other).0, 404, "another person has no such publisher");
+    assert_eq!(
+        raw("/api/m/news/favicon/www.bbc.com", &other).0,
+        200,
+        "a catalog publisher is not private data"
+    );
+    assert_eq!(
+        raw("/api/m/news/favicon/unsaved.example.org", &cookie).0,
+        404,
+        "an unseen publisher is refused"
+    );
+    assert_eq!(
+        raw("/api/m/news/favicon/feeds.bbci.co.uk", &other).0,
+        404,
+        "another person has no such publisher"
+    );
     // Story feedback on the real server. A story marked "less" leaves the owner's overview and
     // stays on the other person's page.
     let first = stories[0]["id"].as_str().unwrap().to_owned();
-    let (status, text) = call(Method::POST, "/story-feedback", Some(&cookie), Some(json!({"storyRef":first,"kind":"less_like_this","reason":"live check"})));
+    let (status, text) = call(
+        Method::POST,
+        "/story-feedback",
+        Some(&cookie),
+        Some(json!({"storyRef":first,"kind":"less_like_this","reason":"live check"})),
+    );
     assert_eq!(status, 200, "{text}\n{}", log());
-    let feedback_id = json_of(&text)["feedback"]["id"].as_str().unwrap().to_owned();
+    let feedback_id = json_of(&text)["feedback"]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
     let (_, text) = call(Method::GET, "/overview", Some(&cookie), None);
-    let ids = |text: &str| -> Vec<String> { json_of(text)["rankedStories"].as_array().unwrap().iter().map(|s| s["id"].as_str().unwrap().to_owned()).collect() };
-    assert!(!ids(&text).contains(&first), "the marked story is left out of the owner's overview");
+    let ids = |text: &str| -> Vec<String> {
+        json_of(text)["rankedStories"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|s| s["id"].as_str().unwrap().to_owned())
+            .collect()
+    };
+    assert!(
+        !ids(&text).contains(&first),
+        "the marked story is left out of the owner's overview"
+    );
     let (_, text) = call(Method::GET, "/story-feedback", Some(&other), None);
     assert_eq!(json_of(&text)["feedback"], json!([]), "{text}");
-    assert_eq!(call(Method::PATCH, &format!("/story-feedback/{feedback_id}"), Some(&other), Some(json!({"reason":"x"}))).0, 404);
-    assert_eq!(call(Method::POST, &format!("/story-feedback/{feedback_id}/undo"), Some(&other), None).0, 404);
-    assert_eq!(call(Method::POST, &format!("/story-feedback/{feedback_id}/undo"), Some(&cookie), None).0, 200);
+    assert_eq!(
+        call(
+            Method::PATCH,
+            &format!("/story-feedback/{feedback_id}"),
+            Some(&other),
+            Some(json!({"reason":"x"}))
+        )
+        .0,
+        404
+    );
+    assert_eq!(
+        call(
+            Method::POST,
+            &format!("/story-feedback/{feedback_id}/undo"),
+            Some(&other),
+            None
+        )
+        .0,
+        404
+    );
+    assert_eq!(
+        call(
+            Method::POST,
+            &format!("/story-feedback/{feedback_id}/undo"),
+            Some(&cookie),
+            None
+        )
+        .0,
+        200
+    );
     let (_, text) = call(Method::GET, "/overview", Some(&cookie), None);
     assert!(ids(&text).contains(&first), "undo brings the story back");
     println!("news live: story feedback hid the story for the owner only and undo brought it back");
@@ -524,15 +811,26 @@ fn installed_news_package_serves_routes_from_the_real_server() {
             .unwrap();
         assert_eq!(response.status().as_u16(), 200, "screen {path}\n{}", log());
         let screen = json_of(&response.text().unwrap());
-        assert!(screen["title"].as_str().unwrap_or("").contains(title_word), "{screen}");
+        assert!(
+            screen["title"].as_str().unwrap_or("").contains(title_word),
+            "{screen}"
+        );
         let page = client
             .get(format!("{origin}{}", screen["src"].as_str().unwrap()))
             .header("cookie", &cookie)
             .send()
             .unwrap();
         assert_eq!(page.status().as_u16(), 200, "page for {path}");
-        let policy = page.headers().get("content-security-policy").and_then(|v| v.to_str().ok()).unwrap_or("").to_owned();
-        assert!(policy.contains("img-src") && policy.contains("data:"), "{policy}");
+        let policy = page
+            .headers()
+            .get("content-security-policy")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .to_owned();
+        assert!(
+            policy.contains("img-src") && policy.contains("data:"),
+            "{policy}"
+        );
         assert!(policy.contains("default-src 'none'"), "{policy}");
     }
     println!("news live: both News screens resolve and carry the frame policy");
@@ -553,7 +851,9 @@ fn installed_news_package_serves_routes_from_the_real_server() {
     // The refresh left a success time and the other person has no refresh record of their own work.
     let rows = |sql: &'static str, who: uuid::Uuid| -> Vec<tokio_postgres::Row> {
         runtime.block_on(async {
-            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
+                .await
+                .unwrap();
             tokio::spawn(async move {
                 let _ = connection.await;
             });
@@ -561,61 +861,112 @@ fn installed_news_package_serves_routes_from_the_real_server() {
         })
     };
     let done = rows("SELECT last_success_at IS NOT NULL, compiled_generation = requested_generation FROM app.news_refresh_state WHERE owner_user_id=$1", owner);
-    assert_eq!((done[0].get::<_, bool>(0), done[0].get::<_, bool>(1)), (true, true));
+    assert_eq!(
+        (done[0].get::<_, bool>(0), done[0].get::<_, bool>(1)),
+        (true, true)
+    );
     println!("news live: refresh history shows a success for the owner");
     // A check of the saved sites through the real route and the server's worker.
     let (status, text) = call(Method::POST, "/revalidation", Some(&cookie), None);
-    assert_eq!((status, json_of(&text)["queued"].clone()), (202, json!(true)), "{text}");
+    assert_eq!(
+        (status, json_of(&text)["queued"].clone()),
+        (202, json!(true)),
+        "{text}"
+    );
     let waited = std::time::Instant::now();
     loop {
         let open = rows("SELECT 1 FROM moss_queue.jobs WHERE actor_user_id=$1 AND queue LIKE '%.news-revalidate' AND state IN ('pending','running')", owner);
         if open.is_empty() {
             break;
         }
-        assert!(waited.elapsed() < Duration::from_secs(180), "the check never finished\n{}", log());
+        assert!(
+            waited.elapsed() < Duration::from_secs(180),
+            "the check never finished\n{}",
+            log()
+        );
         std::thread::sleep(Duration::from_secs(2));
     }
     let (_, text) = call(Method::GET, "/personalization", Some(&cookie), None);
     let health = json_of(&text)["customSources"][0]["healthStatus"].clone();
-    let stored = rows("SELECT health_status FROM app.news_custom_sources WHERE owner_user_id=$1", owner);
-    assert_eq!(health, json!(stored[0].get::<_, String>(0)), "the page shows the stored health");
+    let stored = rows(
+        "SELECT health_status FROM app.news_custom_sources WHERE owner_user_id=$1",
+        owner,
+    );
+    assert_eq!(
+        health,
+        json!(stored[0].get::<_, String>(0)),
+        "the page shows the stored health"
+    );
     println!("news live: after a real check the saved feed shows health {health}, read from the stored record");
     let other_id: uuid::Uuid = runtime.block_on(async {
-        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
+            .await
+            .unwrap();
         tokio::spawn(async move {
             let _ = connection.await;
         });
-        db.query_one("SELECT id FROM app.users WHERE email='news-other@example.test'", &[]).await.unwrap().get(0)
+        db.query_one(
+            "SELECT id FROM app.users WHERE email='news-other@example.test'",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0)
     });
     // The other person's own reads queue their own jobs. Every job in the queue, theirs and the
     // owner's, carries only the queue name and one fixed word.
     let jobs = runtime.block_on(async {
-        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
+            .await
+            .unwrap();
         tokio::spawn(async move {
             let _ = connection.await;
         });
-        db.query("SELECT payload::text FROM moss_queue.jobs WHERE queue LIKE '%.news-%'", &[]).await.unwrap()
+        db.query(
+            "SELECT payload::text FROM moss_queue.jobs WHERE queue LIKE '%.news-%'",
+            &[],
+        )
+        .await
+        .unwrap()
     });
     assert!(!jobs.is_empty());
     for row in &jobs {
         let text: String = row.get(0);
-        assert!(!text.to_lowercase().contains(&MARK.to_lowercase()) && !text.contains("bbci"), "job payload {text}");
+        assert!(
+            !text.to_lowercase().contains(&MARK.to_lowercase()) && !text.contains("bbci"),
+            "job payload {text}"
+        );
         let payload: Value = serde_json::from_str(&text).unwrap();
-        assert!(matches!(payload["params"], Value::Object(ref m) if m.len() == 1 && m.contains_key("kind")), "{text}");
+        assert!(
+            matches!(payload["params"], Value::Object(ref m) if m.len() == 1 && m.contains_key("kind")),
+            "{text}"
+        );
     }
     let _ = other_id;
-    println!("news live: {} queued News jobs, all metadata only", jobs.len());
+    println!(
+        "news live: {} queued News jobs, all metadata only",
+        jobs.len()
+    );
 
     // Hold the server open so the real screen can be opened in a browser with the real data above.
     if let Ok(hold) = std::env::var("NEWS_LIVE_HOLD") {
         // A real model through the local test endpoint with the person's own stored provider, so a
         // new site can get its policy verdict from a model. The key is read from its config file and
         // never printed.
-        let key_path = std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".config/cliproxyapi/client-key");
-        if let (Ok(model_name), Ok(key)) = (std::env::var("NEWS_LIVE_MODEL"), fs::read_to_string(&key_path)) {
-            let sealed = safety_core::secret::SecretCipher::ai(&[("JARVIS_AI_SECRET_KEY".into(), ai_key.clone())].into())
-                .unwrap()
-                .seal(&safety_core::secret::SecretFields::new().with("apiKey", safety_core::secret::Secret::new(key.trim())));
+        let key_path = std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default())
+            .join(".config/cliproxyapi/client-key");
+        if let (Ok(model_name), Ok(key)) = (
+            std::env::var("NEWS_LIVE_MODEL"),
+            fs::read_to_string(&key_path),
+        ) {
+            let sealed = safety_core::secret::SecretCipher::ai(
+                &[("JARVIS_AI_SECRET_KEY".into(), ai_key.clone())].into(),
+            )
+            .unwrap()
+            .seal(
+                &safety_core::secret::SecretFields::new()
+                    .with("apiKey", safety_core::secret::Secret::new(key.trim())),
+            );
             let provider: uuid::Uuid = uuid::Uuid::new_v4();
             let model: uuid::Uuid = uuid::Uuid::new_v4();
             runtime.block_on(async {
@@ -632,7 +983,11 @@ fn installed_news_package_serves_routes_from_the_real_server() {
             });
             println!("news live: a real model ({model_name}) is set up for the hold");
         }
-        fs::write(format!("{hold}/ready.txt"), format!("{origin}\n{cookie}\n{origin}/module-frame?module=news&path=/settings/news\n")).unwrap();
+        fs::write(
+            format!("{hold}/ready.txt"),
+            format!("{origin}\n{cookie}\n{origin}/module-frame?module=news&path=/settings/news\n"),
+        )
+        .unwrap();
         while !std::path::Path::new(&format!("{hold}/stop")).exists() {
             std::thread::sleep(Duration::from_millis(500));
         }

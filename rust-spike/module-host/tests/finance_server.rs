@@ -278,6 +278,7 @@ fn installed_finance_package_serves_routes_from_the_real_server() {
         lifted_revocations: BTreeSet::new(),
     };
     let index = Index {
+        publish_reviews: Default::default(),
         serial: 1,
         expires: chrono::Utc::now() + chrono::Duration::days(1),
         signing_key: "online".into(),
@@ -340,13 +341,20 @@ fn installed_finance_package_serves_routes_from_the_real_server() {
         .unwrap();
     let mut bank_in = bank.stdin.take().unwrap();
     let mut first = String::new();
-    std::io::BufRead::read_line(&mut std::io::BufReader::new(bank.stdout.take().unwrap()), &mut first).unwrap();
+    std::io::BufRead::read_line(
+        &mut std::io::BufReader::new(bank.stdout.take().unwrap()),
+        &mut first,
+    )
+    .unwrap();
     let _bank = Server(bank);
     let bank_url = first.trim().strip_prefix("endpoint ").unwrap().to_owned();
     let services = moss_module_host::services::ServicePorts::new(
         &root.join("data"),
         std::sync::Arc::new(
-            safety_core::secret::SecretCipher::connectors(&[("JARVIS_CONNECTOR_SECRET_KEY".into(), connector_key.clone())].into()).unwrap(),
+            safety_core::secret::SecretCipher::connectors(
+                &[("JARVIS_CONNECTOR_SECRET_KEY".into(), connector_key.clone())].into(),
+            )
+            .unwrap(),
         ),
         std::sync::Arc::new(NoModel),
         std::sync::Arc::new(moss_module_host::runtime::DenyPorts),
@@ -359,7 +367,10 @@ fn installed_finance_package_serves_routes_from_the_real_server() {
             "plaid-keys",
             &safety_core::secret::SecretFields::new()
                 .with("clientId", safety_core::secret::Secret::new(BANK_CLIENT))
-                .with("clientSecret", safety_core::secret::Secret::new(BANK_SECRET)),
+                .with(
+                    "clientSecret",
+                    safety_core::secret::Secret::new(BANK_SECRET),
+                ),
         )
         .unwrap();
     private(
@@ -440,7 +451,11 @@ fn installed_finance_package_serves_routes_from_the_real_server() {
         if ready {
             break;
         }
-        assert!(started.elapsed() < std::time::Duration::from_secs(240), "module host start deadline\n{}", log());
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(240),
+            "module host start deadline\n{}",
+            log()
+        );
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
     for who in [&cookie, &other] {
@@ -454,7 +469,9 @@ fn installed_finance_package_serves_routes_from_the_real_server() {
         Method::POST,
         "/finance/manual/accounts",
         Some(&cookie),
-        Some(json!({"operationId":op,"name":NAME,"accountType":"checking","isoCurrency":"USD","openingDate":"2026-01-01","openingBalanceCents":CENTS})),
+        Some(
+            json!({"operationId":op,"name":NAME,"accountType":"checking","isoCurrency":"USD","openingDate":"2026-01-01","openingBalanceCents":CENTS}),
+        ),
     );
     assert_eq!(status, 200, "{text}\n{}", log());
     let account = json_of(&text)["id"].as_str().unwrap().to_owned();
@@ -463,7 +480,9 @@ fn installed_finance_package_serves_routes_from_the_real_server() {
         Method::POST,
         "/finance/manual/entries",
         Some(&cookie),
-        Some(json!({"operationId":uuid::Uuid::new_v4().to_string(),"accountId":account,"name":NAME,"date":"2026-11-10","amountCents":-500,"isoCurrency":"USD","notes":NOTE,"cleared":true})),
+        Some(
+            json!({"operationId":uuid::Uuid::new_v4().to_string(),"accountId":account,"name":NAME,"date":"2026-11-10","amountCents":-500,"isoCurrency":"USD","notes":NOTE,"cleared":true}),
+        ),
     );
     assert_eq!(status, 200, "{text}\n{}", log());
     let (_, text) = call(Method::GET, "/finance/accounts", Some(&cookie), None);
@@ -475,7 +494,9 @@ fn installed_finance_package_serves_routes_from_the_real_server() {
         Method::POST,
         "/finance/manual/accounts",
         Some(&cookie),
-        Some(json!({"operationId":op,"name":NAME,"accountType":"checking","isoCurrency":"USD","openingDate":"2026-01-01","openingBalanceCents":CENTS})),
+        Some(
+            json!({"operationId":op,"name":NAME,"accountType":"checking","isoCurrency":"USD","openingDate":"2026-01-01","openingBalanceCents":CENTS}),
+        ),
     );
     assert_eq!(json_of(&text)["unchanged"], true, "{text}");
     // The other person sees none of it and cannot add to it.
@@ -486,7 +507,9 @@ fn installed_finance_package_serves_routes_from_the_real_server() {
         Method::POST,
         "/finance/manual/entries",
         Some(&other),
-        Some(json!({"operationId":uuid::Uuid::new_v4().to_string(),"accountId":account,"name":"Stolen","date":"2026-11-10","amountCents":-1,"isoCurrency":"USD","cleared":true})),
+        Some(
+            json!({"operationId":uuid::Uuid::new_v4().to_string(),"accountId":account,"name":"Stolen","date":"2026-11-10","amountCents":-1,"isoCurrency":"USD","cleared":true}),
+        ),
     );
     assert_eq!(status, 404, "{text}");
     assert_eq!(json_of(&text)["code"], "manual_unavailable");
@@ -495,7 +518,12 @@ fn installed_finance_package_serves_routes_from_the_real_server() {
     // Transactions: query, categorize, note, rule, sort, CSV import with a replay, two people.
     const PAYEE: &str = "PLANTED-LIVE-PAYEE-77c2";
     const IMPORT_NOTE: &str = "PLANTED-LIVE-IMPORT-NOTE-1e44";
-    let (status, text) = call(Method::GET, "/finance/transactions?month=2026-11", Some(&cookie), None);
+    let (status, text) = call(
+        Method::GET,
+        "/finance/transactions?month=2026-11",
+        Some(&cookie),
+        None,
+    );
     assert_eq!(status, 200, "{text}\n{}", log());
     let listed = json_of(&text);
     let first = listed["transactions"][0].clone();
@@ -505,95 +533,217 @@ fn installed_finance_package_serves_routes_from_the_real_server() {
         Method::POST,
         "/finance/transactions/category",
         Some(&cookie),
-        Some(json!({"transactionId":tx_id,"accountId":account,"month":"2026-11","categoryId":"groceries","writeRevision":first["writeRevision"]})),
+        Some(
+            json!({"transactionId":tx_id,"accountId":account,"month":"2026-11","categoryId":"groceries","writeRevision":first["writeRevision"]}),
+        ),
     );
     assert_eq!(status, 200, "{text}\n{}", log());
-    let (_, text) = call(Method::GET, &format!("/finance/transactions?month=2026-11&transactionId={tx_id}"), Some(&cookie), None);
-    let revision_now = json_of(&text)["transactions"][0]["writeRevision"].as_str().unwrap().to_owned();
+    let (_, text) = call(
+        Method::GET,
+        &format!("/finance/transactions?month=2026-11&transactionId={tx_id}"),
+        Some(&cookie),
+        None,
+    );
+    let revision_now = json_of(&text)["transactions"][0]["writeRevision"]
+        .as_str()
+        .unwrap()
+        .to_owned();
     let (status, text) = call(
         Method::POST,
         "/finance/transactions/notes",
         Some(&cookie),
-        Some(json!({"transactionId":tx_id,"accountId":account,"month":"2026-11","writeRevision":revision_now,"notes":IMPORT_NOTE})),
+        Some(
+            json!({"transactionId":tx_id,"accountId":account,"month":"2026-11","writeRevision":revision_now,"notes":IMPORT_NOTE}),
+        ),
     );
     assert_eq!(status, 200, "{text}\n{}", log());
-    let (status, text) = call(Method::GET, &format!("/finance/transactions/notes?transactionId={tx_id}&accountId={account}&month=2026-11"), Some(&cookie), None);
+    let (status, text) = call(
+        Method::GET,
+        &format!(
+            "/finance/transactions/notes?transactionId={tx_id}&accountId={account}&month=2026-11"
+        ),
+        Some(&cookie),
+        None,
+    );
     assert_eq!(status, 200, "{text}");
     assert!(text.contains(IMPORT_NOTE), "{text}");
     let csv = format!("date,name,amount,notes\n2026-11-11,{PAYEE},12.34,{IMPORT_NOTE}\n2026-11-12,{PAYEE} Two,5.00,\n");
     let map = json!({"csv":csv,"isoCurrency":"USD","date":0,"name":1,"amount":2,"notes":3,"dateFormat":"iso","amountMode":"positive-out"});
-    let (status, text) = call(Method::POST, "/finance/import/parse", Some(&cookie), Some(map));
+    let (status, text) = call(
+        Method::POST,
+        "/finance/import/parse",
+        Some(&cookie),
+        Some(map),
+    );
     assert_eq!(status, 200, "{text}\n{}", log());
     let rows = json_of(&text)["rows"].clone();
     assert_eq!(rows.as_array().unwrap().len(), 2);
     let (_, text) = call(Method::GET, "/finance/accounts", Some(&cookie), None);
-    let revision = json_of(&text)["accounts"][0]["ledgerRevision"].as_i64().unwrap_or(1);
+    let revision = json_of(&text)["accounts"][0]["ledgerRevision"]
+        .as_i64()
+        .unwrap_or(1);
     let import_op = uuid::Uuid::new_v4().to_string();
     let apply = json!({"operationId":import_op,"accountId":account,"isoCurrency":"USD","expectedRevision":revision,"rows":rows,"cleared":true});
-    let (status, text) = call(Method::POST, "/finance/import/apply", Some(&cookie), Some(apply.clone()));
+    let (status, text) = call(
+        Method::POST,
+        "/finance/import/apply",
+        Some(&cookie),
+        Some(apply.clone()),
+    );
     assert_eq!(status, 200, "{text}\n{}", log());
     assert_eq!(json_of(&text)["entryCount"], 2);
-    let (status, text) = call(Method::POST, "/finance/import/apply", Some(&cookie), Some(apply));
+    let (status, text) = call(
+        Method::POST,
+        "/finance/import/apply",
+        Some(&cookie),
+        Some(apply),
+    );
     assert_eq!(status, 200, "{text}");
     assert_eq!(json_of(&text)["unchanged"], true, "{text}");
-    let (_, text) = call(Method::GET, "/finance/transactions?month=2026-11", Some(&cookie), None);
-    assert_eq!(json_of(&text)["transactions"].as_array().unwrap().len(), 3, "a replay added rows: {text}");
-    let (status, text) = call(Method::POST, "/finance/sorting/run", Some(&cookie), Some(json!({})));
+    let (_, text) = call(
+        Method::GET,
+        "/finance/transactions?month=2026-11",
+        Some(&cookie),
+        None,
+    );
+    assert_eq!(
+        json_of(&text)["transactions"].as_array().unwrap().len(),
+        3,
+        "a replay added rows: {text}"
+    );
+    let (status, text) = call(
+        Method::POST,
+        "/finance/sorting/run",
+        Some(&cookie),
+        Some(json!({})),
+    );
     assert_eq!(status, 200, "{text}\n{}", log());
     let (status, text) = call(Method::GET, "/finance/rules", Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
     for who_path in ["/finance/transactions?month=2026-11", "/finance/rules"] {
         let (status, text) = call(Method::GET, who_path, Some(&other), None);
         assert_eq!(status, 200, "{text}");
-        assert!(!text.contains(PAYEE) && !text.contains(NAME) && !text.contains(IMPORT_NOTE), "the other person saw private text: {text}");
+        assert!(
+            !text.contains(PAYEE) && !text.contains(NAME) && !text.contains(IMPORT_NOTE),
+            "the other person saw private text: {text}"
+        );
     }
     let (status, text) = call(
         Method::POST,
         "/finance/transactions/notes",
         Some(&other),
-        Some(json!({"transactionId":tx_id,"accountId":account,"month":"2026-11","writeRevision":"0".repeat(32),"notes":"stolen"})),
+        Some(
+            json!({"transactionId":tx_id,"accountId":account,"month":"2026-11","writeRevision":"0".repeat(32),"notes":"stolen"}),
+        ),
     );
     assert_ne!(status, 200, "{text}");
     println!("PASS live finance transactions: query, category, note, import, replay and sorting worked over HTTPS, and the second person saw none of it");
     // Budget: set up, assign against a review, a stale review saves nothing, a draft from stored rows, two people.
-    let (status, text) = call(Method::GET, "/finance/budget/status?month=2026-11", Some(&cookie), None);
+    let (status, text) = call(
+        Method::GET,
+        "/finance/budget/status?month=2026-11",
+        Some(&cookie),
+        None,
+    );
     assert_eq!(status, 200, "{text}\n{}", log());
     assert_eq!(json_of(&text)["setupRequired"], true, "{text}");
-    let (status, text) = call(Method::POST, "/finance/budget/configure", Some(&cookie), Some(json!({"isoCurrency":"USD","acknowledgeLegacy":false})));
+    let (status, text) = call(
+        Method::POST,
+        "/finance/budget/configure",
+        Some(&cookie),
+        Some(json!({"isoCurrency":"USD","acknowledgeLegacy":false})),
+    );
     assert_eq!(status, 200, "{text}\n{}", log());
-    let (_, text) = call(Method::GET, "/finance/budget/status?month=2026-11", Some(&cookie), None);
+    let (_, text) = call(
+        Method::GET,
+        "/finance/budget/status?month=2026-11",
+        Some(&cookie),
+        None,
+    );
     let review = json_of(&text);
     assert!(review["setupRequired"] != json!(true), "{text}");
-    let assign = |review: &Value, cents: i64| {
-        json!({"month":"2026-11","expectedRevision":review["revision"],"expectedFingerprint":review["fingerprint"],"categoryId":"groceries","amountCents":cents,"previousCents":0})
-    };
-    let (status, text) = call(Method::POST, "/finance/budget/assign", Some(&cookie), Some(assign(&review, 40_000)));
+    let assign = |review: &Value, cents: i64| json!({"month":"2026-11","expectedRevision":review["revision"],"expectedFingerprint":review["fingerprint"],"categoryId":"groceries","amountCents":cents,"previousCents":0});
+    let (status, text) = call(
+        Method::POST,
+        "/finance/budget/assign",
+        Some(&cookie),
+        Some(assign(&review, 40_000)),
+    );
     assert_eq!(status, 200, "{text}\n{}", log());
     // The same review is now old, so a second save is refused and nothing changes.
-    let (status, text) = call(Method::POST, "/finance/budget/assign", Some(&cookie), Some(assign(&review, 77_000)));
+    let (status, text) = call(
+        Method::POST,
+        "/finance/budget/assign",
+        Some(&cookie),
+        Some(assign(&review, 77_000)),
+    );
     assert_eq!(status, 409, "{text}");
-    let (_, text) = call(Method::GET, "/finance/budget/status?month=2026-11", Some(&cookie), None);
-    assert_eq!(json_of(&text)["state"]["categories"]["groceries"]["assignedCents"], 40_000, "{text}");
-    let (status, text) = call(Method::POST, "/finance/budget/draft/build", Some(&cookie), Some(json!({})));
+    let (_, text) = call(
+        Method::GET,
+        "/finance/budget/status?month=2026-11",
+        Some(&cookie),
+        None,
+    );
+    assert_eq!(
+        json_of(&text)["state"]["categories"]["groceries"]["assignedCents"],
+        40_000,
+        "{text}"
+    );
+    let (status, text) = call(
+        Method::POST,
+        "/finance/budget/draft/build",
+        Some(&cookie),
+        Some(json!({})),
+    );
     assert_eq!(status, 200, "{text}\n{}", log());
     let (status, text) = call(Method::GET, "/finance/budget/draft", Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
     // The assistant's route is refused without the host's one-use approval.
-    let (status, text) = call(Method::POST, "/finance/chat/budget/assign", Some(&cookie), Some(assign(&review, 1)));
+    let (status, text) = call(
+        Method::POST,
+        "/finance/chat/budget/assign",
+        Some(&cookie),
+        Some(assign(&review, 1)),
+    );
     assert_ne!(status, 200, "{text}");
-    for path in ["/finance/budget/status?month=2026-11", "/finance/budget/draft"] {
+    for path in [
+        "/finance/budget/status?month=2026-11",
+        "/finance/budget/draft",
+    ] {
         let (status, text) = call(Method::GET, path, Some(&other), None);
         assert!(status == 200 || status == 404, "{status} {text}");
-        assert!(!text.contains("40000") && !text.contains(NAME) && !text.contains(PAYEE), "the other person saw budget data: {text}");
+        assert!(
+            !text.contains("40000") && !text.contains(NAME) && !text.contains(PAYEE),
+            "the other person saw budget data: {text}"
+        );
     }
-    let (status, text) = call(Method::POST, "/finance/budget/assign", Some(&other), Some(assign(&review, 5)));
+    let (status, text) = call(
+        Method::POST,
+        "/finance/budget/assign",
+        Some(&other),
+        Some(assign(&review, 5)),
+    );
     assert_ne!(status, 200, "{text}");
-    assert_eq!(call(Method::GET, "/finance/budget/status?month=2026-11", None, None).0, 401);
+    assert_eq!(
+        call(
+            Method::GET,
+            "/finance/budget/status?month=2026-11",
+            None,
+            None
+        )
+        .0,
+        401
+    );
     println!("PASS live finance budget: setup, assign, a stale review refused, a draft from stored rows and two people worked over HTTPS");
     // Part 24: bills, targets, the flexible pool and card reserves over the same real route path.
     const BILL: &str = "PLANTED-LIVE-BILL-8f2c";
     let fresh = || {
-        let (_, text) = call(Method::GET, "/finance/budget/status?month=2026-11", Some(&cookie), None);
+        let (_, text) = call(
+            Method::GET,
+            "/finance/budget/status?month=2026-11",
+            Some(&cookie),
+            None,
+        );
         let r = json_of(&text);
         json!({"month":"2026-11","expectedRevision":r["revision"],"expectedFingerprint":r["fingerprint"]})
     };
@@ -605,35 +755,93 @@ fn installed_finance_package_serves_routes_from_the_real_server() {
     };
     let plan = uuid::Uuid::new_v4().to_string();
     let old_review = fresh();
-    let bill = with(old_review.clone(), json!({"id":plan,"name":BILL,"accountId":account,"categoryId":"groceries","amountCents":123_457,"anchorDate":"2026-11-20","cadence":"monthly"}));
-    let (status, text) = call(Method::POST, "/finance/bills", Some(&cookie), Some(bill.clone()));
+    let bill = with(
+        old_review.clone(),
+        json!({"id":plan,"name":BILL,"accountId":account,"categoryId":"groceries","amountCents":123_457,"anchorDate":"2026-11-20","cadence":"monthly"}),
+    );
+    let (status, text) = call(
+        Method::POST,
+        "/finance/bills",
+        Some(&cookie),
+        Some(bill.clone()),
+    );
     assert_eq!(status, 200, "{text}\n{}", log());
     let (status, text) = call(Method::POST, "/finance/bills", Some(&cookie), Some(bill));
-    assert_eq!(status, 409, "a repeated save with an old review must be refused: {text}");
-    let (status, text) = call(Method::GET, "/finance/bills?from=2026-11-01&to=2026-12-31", Some(&cookie), None);
+    assert_eq!(
+        status, 409,
+        "a repeated save with an old review must be refused: {text}"
+    );
+    let (status, text) = call(
+        Method::GET,
+        "/finance/bills?from=2026-11-01&to=2026-12-31",
+        Some(&cookie),
+        None,
+    );
     assert_eq!(status, 200, "{text}\n{}", log());
     assert!(text.contains(BILL) && text.contains("123457"), "{text}");
-    let (status, text) = call(Method::POST, "/finance/targets", Some(&cookie), Some(with(fresh(), json!({"categoryId":"dining","kind":"monthly","amountCents":25_000}))));
+    let (status, text) = call(
+        Method::POST,
+        "/finance/targets",
+        Some(&cookie),
+        Some(with(
+            fresh(),
+            json!({"categoryId":"dining","kind":"monthly","amountCents":25_000}),
+        )),
+    );
     assert_eq!(status, 200, "{text}\n{}", log());
-    let (status, text) = call(Method::POST, "/finance/flex/preview", Some(&cookie), Some(json!({"month":"2026-11","mode":"flex","flexIds":["groceries"],"nonMonthlyIds":[]})));
+    let (status, text) = call(
+        Method::POST,
+        "/finance/flex/preview",
+        Some(&cookie),
+        Some(json!({"month":"2026-11","mode":"flex","flexIds":["groceries"],"nonMonthlyIds":[]})),
+    );
     assert_eq!(status, 200, "{text}\n{}", log());
     assert_eq!(json_of(&text)["mode"], "flex", "{text}");
-    let (status, text) = call(Method::GET, "/finance/bills/suggestions?from=2026-11-01&to=2026-12-31", Some(&cookie), None);
+    let (status, text) = call(
+        Method::GET,
+        "/finance/bills/suggestions?from=2026-11-01&to=2026-12-31",
+        Some(&cookie),
+        None,
+    );
     assert_eq!(status, 200, "{text}\n{}", log());
-    let (status, text) = call(Method::POST, "/finance/chat/targets", Some(&cookie), Some(with(fresh(), json!({"categoryId":"dining","kind":"monthly","amountCents":1}))));
-    assert_ne!(status, 200, "the assistant route needs the one-use approval: {text}");
-    for path in ["/finance/bills?from=2026-11-01&to=2026-12-31", "/finance/bills/suggestions?from=2026-11-01&to=2026-12-31"] {
+    let (status, text) = call(
+        Method::POST,
+        "/finance/chat/targets",
+        Some(&cookie),
+        Some(with(
+            fresh(),
+            json!({"categoryId":"dining","kind":"monthly","amountCents":1}),
+        )),
+    );
+    assert_ne!(
+        status, 200,
+        "the assistant route needs the one-use approval: {text}"
+    );
+    for path in [
+        "/finance/bills?from=2026-11-01&to=2026-12-31",
+        "/finance/bills/suggestions?from=2026-11-01&to=2026-12-31",
+    ] {
         let (status, text) = call(Method::GET, path, Some(&other), None);
         assert!(status == 200 || status == 404, "{status} {text}");
-        assert!(!text.contains(BILL) && !text.contains("123457") && !text.contains("25000"), "the other person saw bill data: {text}");
+        assert!(
+            !text.contains(BILL) && !text.contains("123457") && !text.contains("25000"),
+            "the other person saw bill data: {text}"
+        );
     }
-    let (status, text) = call(Method::POST, "/finance/targets/remove", Some(&other), Some(with(fresh(), json!({"categoryId":"dining"}))));
+    let (status, text) = call(
+        Method::POST,
+        "/finance/targets/remove",
+        Some(&other),
+        Some(with(fresh(), json!({"categoryId":"dining"}))),
+    );
     assert_ne!(status, 200, "{text}");
     println!("PASS live finance part 24: a bill, a target and the pool preview worked over HTTPS, an old review was refused, and the second person saw none of it");
     // Activity rows and the server log hold none of the text the test sent.
     let services = moss_module_host::services::ServicePorts::new(
         &root.join("data"),
-        std::sync::Arc::new(safety_core::secret::SecretCipher::connectors(&Default::default()).unwrap()),
+        std::sync::Arc::new(
+            safety_core::secret::SecretCipher::connectors(&Default::default()).unwrap(),
+        ),
         std::sync::Arc::new(NoModel),
         std::sync::Arc::new(moss_module_host::runtime::DenyPorts),
     )
@@ -676,64 +884,188 @@ fn installed_finance_package_serves_routes_from_the_real_server() {
     };
     let names = |who: &str| -> Vec<String> {
         let (_, text) = call(Method::GET, "/finance/accounts", Some(who), None);
-        json_of(&text)["accounts"].as_array().unwrap().iter().map(|a| a["name"].as_str().unwrap_or_default().to_owned()).collect()
+        json_of(&text)["accounts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|a| a["name"].as_str().unwrap_or_default().to_owned())
+            .collect()
     };
-    let (status, text) = call(Method::POST, "/finance/connect/start", Some(&cookie), Some(json!({})));
+    let (status, text) = call(
+        Method::POST,
+        "/finance/connect/start",
+        Some(&cookie),
+        Some(json!({})),
+    );
     assert_eq!(status, 200, "{text}\n{}", log());
     assert_eq!(json_of(&text)["status"], "pending");
-    assert!(json_of(&text)["hostedLinkUrl"].as_str().unwrap().starts_with("https://"));
-    let (_, text) = call(Method::POST, "/finance/connect/poll", Some(&cookie), Some(json!({})));
+    assert!(json_of(&text)["hostedLinkUrl"]
+        .as_str()
+        .unwrap()
+        .starts_with("https://"));
+    let (_, text) = call(
+        Method::POST,
+        "/finance/connect/poll",
+        Some(&cookie),
+        Some(json!({})),
+    );
     assert_eq!(json_of(&text)["pending"], 1, "{text}");
     finish(&mut bank_in, "finish");
-    let (status, text) = call(Method::POST, "/finance/connect/poll", Some(&cookie), Some(json!({})));
-    assert_eq!((status, json_of(&text)["completed"].clone()), (200, json!(1)), "{text}\n{}", log());
+    let (status, text) = call(
+        Method::POST,
+        "/finance/connect/poll",
+        Some(&cookie),
+        Some(json!({})),
+    );
+    assert_eq!(
+        (status, json_of(&text)["completed"].clone()),
+        (200, json!(1)),
+        "{text}\n{}",
+        log()
+    );
     let owned = names(&cookie);
-    assert_eq!(owned.iter().filter(|n| n.contains(BANK_TEXT)).count(), 2, "{owned:?}");
+    assert_eq!(
+        owned.iter().filter(|n| n.contains(BANK_TEXT)).count(),
+        2,
+        "{owned:?}"
+    );
     assert_eq!(names(&other).len(), 0);
-    let (_, text) = call(Method::POST, "/finance/sync/run-now", Some(&other), Some(json!({})));
+    let (_, text) = call(
+        Method::POST,
+        "/finance/sync/run-now",
+        Some(&other),
+        Some(json!({})),
+    );
     assert_eq!(json_of(&text)["items"], json!([]), "{text}");
-    let (_, text) = call(Method::POST, "/finance/sync/run-now", Some(&cookie), Some(json!({})));
+    let (_, text) = call(
+        Method::POST,
+        "/finance/sync/run-now",
+        Some(&cookie),
+        Some(json!({})),
+    );
     assert_eq!(json_of(&text)["items"][0]["status"], "connected", "{text}");
     println!("PASS live bank: connected, synced and kept private from the second person");
     finish(&mut bank_in, "fail 0 ITEM_LOGIN_REQUIRED");
-    let (_, text) = call(Method::POST, "/finance/sync/run-now", Some(&cookie), Some(json!({})));
-    assert_eq!(json_of(&text)["items"][0]["status"], "reauth-required", "{text}");
-    assert_eq!(names(&cookie).len(), owned.len(), "a failed bank keeps its data");
+    let (_, text) = call(
+        Method::POST,
+        "/finance/sync/run-now",
+        Some(&cookie),
+        Some(json!({})),
+    );
+    assert_eq!(
+        json_of(&text)["items"][0]["status"],
+        "reauth-required",
+        "{text}"
+    );
+    assert_eq!(
+        names(&cookie).len(),
+        owned.len(),
+        "a failed bank keeps its data"
+    );
     println!("PASS live bank: a failing bank is marked as needing a reconnect and keeps its data");
-    let (status, text) = call(Method::POST, "/finance/connect/start", Some(&cookie), Some(json!({})));
+    let (status, text) = call(
+        Method::POST,
+        "/finance/connect/start",
+        Some(&cookie),
+        Some(json!({})),
+    );
     assert_eq!(status, 200, "{text}\n{}", log());
     finish(&mut bank_in, "finish");
-    let (_, text) = call(Method::POST, "/finance/connect/poll", Some(&cookie), Some(json!({})));
+    let (_, text) = call(
+        Method::POST,
+        "/finance/connect/poll",
+        Some(&cookie),
+        Some(json!({})),
+    );
     assert_eq!(json_of(&text)["completed"], 1, "{text}");
-    let (_, text) = call(Method::POST, "/finance/sync/run-now", Some(&cookie), Some(json!({})));
+    let (_, text) = call(
+        Method::POST,
+        "/finance/sync/run-now",
+        Some(&cookie),
+        Some(json!({})),
+    );
     assert_eq!(json_of(&text)["items"][0]["status"], "connected", "{text}");
-    assert_eq!(names(&cookie).len(), owned.len(), "a reconnect adds no second bank");
+    assert_eq!(
+        names(&cookie).len(),
+        owned.len(),
+        "a reconnect adds no second bank"
+    );
     println!("PASS live bank: reconnected, one bank, sync works again");
     // Household sharing through the real routes, on the account the stand-in bank synced.
     let (_, text) = call(Method::GET, "/finance/accounts", Some(&cookie), None);
-    let account = json_of(&text)["accounts"][0]["accountId"].as_str().unwrap().to_owned();
+    let account = json_of(&text)["accounts"][0]["accountId"]
+        .as_str()
+        .unwrap()
+        .to_owned();
     assert_eq!(names(&other).len(), 0, "nothing is shared yet");
-    let (status, text) = call(Method::POST, "/finance/accounts/shared", Some(&cookie), Some(json!({"accountId":account,"shared":true})));
+    let (status, text) = call(
+        Method::POST,
+        "/finance/accounts/shared",
+        Some(&cookie),
+        Some(json!({"accountId":account,"shared":true})),
+    );
     assert_eq!(status, 200, "{text}\n{}", log());
     let (_, text) = call(Method::GET, "/finance/accounts", Some(&other), None);
     let seen = json_of(&text);
     assert_eq!(seen["accounts"].as_array().unwrap().len(), 1, "{text}");
-    assert_eq!(seen["accounts"][0]["ownerUserId"], json!(owner.to_string()), "{text}");
+    assert_eq!(
+        seen["accounts"][0]["ownerUserId"],
+        json!(owner.to_string()),
+        "{text}"
+    );
     assert!(seen["accounts"][0].get("officialName").is_none(), "{text}");
-    let (status, text) = call(Method::POST, "/finance/accounts/shared", Some(&other), Some(json!({"accountId":account,"shared":false})));
-    assert_eq!((status, json_of(&text)["code"].clone()), (404, json!("unknown_account")), "the other person cannot unshare it: {text}");
-    let (status, mine) = call(Method::GET, "/finance/transactions/export", Some(&cookie), None);
+    let (status, text) = call(
+        Method::POST,
+        "/finance/accounts/shared",
+        Some(&other),
+        Some(json!({"accountId":account,"shared":false})),
+    );
+    assert_eq!(
+        (status, json_of(&text)["code"].clone()),
+        (404, json!("unknown_account")),
+        "the other person cannot unshare it: {text}"
+    );
+    let (status, mine) = call(
+        Method::GET,
+        "/finance/transactions/export",
+        Some(&cookie),
+        None,
+    );
     assert_eq!(status, 200, "{mine}");
-    let (status, theirs) = call(Method::GET, "/finance/transactions/export", Some(&other), None);
+    let (status, theirs) = call(
+        Method::GET,
+        "/finance/transactions/export",
+        Some(&other),
+        None,
+    );
     assert_eq!(status, 200, "{theirs}");
-    assert!(json_of(&mine)["totalCount"].as_i64().unwrap() >= 1, "{mine}");
-    assert_eq!(json_of(&theirs)["totalCount"], 0, "the other person's export holds someone else's rows: {theirs}");
-    for path in ["/finance/reports/spending?months=1", "/finance/reports/net-worth", "/finance/activity?from=2020-01-01T00:00:00Z&to=2099-01-01T00:00:00Z"] {
+    assert!(
+        json_of(&mine)["totalCount"].as_i64().unwrap() >= 1,
+        "{mine}"
+    );
+    assert_eq!(
+        json_of(&theirs)["totalCount"],
+        0,
+        "the other person's export holds someone else's rows: {theirs}"
+    );
+    for path in [
+        "/finance/reports/spending?months=1",
+        "/finance/reports/net-worth",
+        "/finance/activity?from=2020-01-01T00:00:00Z&to=2099-01-01T00:00:00Z",
+    ] {
         let (status, text) = call(Method::GET, path, Some(&other), None);
         assert_eq!(status, 200, "{path} {text}");
-        assert!(!text.contains(NOTE) && !text.contains(BANK_TOKEN), "{path} showed private text");
+        assert!(
+            !text.contains(NOTE) && !text.contains(BANK_TOKEN),
+            "{path} showed private text"
+        );
     }
-    let (status, text) = call(Method::POST, "/finance/accounts/shared", Some(&cookie), Some(json!({"accountId":account,"shared":false})));
+    let (status, text) = call(
+        Method::POST,
+        "/finance/accounts/shared",
+        Some(&cookie),
+        Some(json!({"accountId":account,"shared":false})),
+    );
     assert_eq!(status, 200, "{text}");
     assert_eq!(names(&other).len(), 0, "stopping removes the copy");
     println!("PASS live sharing: shared, seen by the second person only as allowed, export own rows only, unshared");
