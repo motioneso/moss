@@ -34,6 +34,11 @@ pub struct Fixture {
     index: Ed25519KeyPair,
     reviewer: Ed25519KeyPair,
 }
+impl Default for Fixture {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl Fixture {
     pub fn new() -> Self {
         let dir = tempfile::tempdir().unwrap();
@@ -361,7 +366,20 @@ impl Fixture {
 }
 
 impl Fixture {
+    #[allow(dead_code)] // Used by the artifact CLI suite, not the publish-review suite.
     pub fn artifact_layout(&self) {
+        // Signed formatting is deliberately noncanonical so a mirror cannot reserialize it.
+        for (name, key) in [("registry.json", &self.root), ("index.json", &self.index)] {
+            let path = self.dir.path().join("registry").join(name);
+            let value: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+            let bytes = serde_json::to_vec_pretty(&value).unwrap();
+            std::fs::write(&path, &bytes).unwrap();
+            std::fs::write(
+                path.with_file_name(format!("{name}.sig")),
+                format!("{}\n", sign(key, &bytes)),
+            )
+            .unwrap();
+        }
         let index: Value = serde_json::from_slice(
             &std::fs::read(self.dir.path().join("registry/index.json")).unwrap(),
         )
@@ -381,6 +399,7 @@ impl Fixture {
 }
 
 impl Fixture {
+    #[allow(dead_code)] // Used by the artifact CLI suite, not the publish-review suite.
     pub fn first_party_bundle(&self) {
         let mut artifacts = Vec::new();
         for id in ["tasks", "finance", "meals"] {

@@ -3,6 +3,7 @@ name = "moss-module-publisher"
 version = "0.1.0"
 edition = "2021"
 publish = false
+default-run = "moss-module-publisher"
 
 [workspace]
 
