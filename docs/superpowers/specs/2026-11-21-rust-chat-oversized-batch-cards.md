@@ -307,3 +307,7 @@ Builder errors use an explicit public code/message envelope that the host saniti
 forwarding. Internal errors, traps, invalid replies and unavailable redaction use fixed safe
 errors. The shell creates no approval record for failed preparation; the runner returns the
 failure for the original tool call instead of reporting that the person declined.
+
+Live phone verification found that repeated chat polls scrolled the outer conversation to the
+bottom while a tall card was pending. The drawer now follows a newly arriving request once,
+then preserves the person’s review position until that request is resolved or replaced.
