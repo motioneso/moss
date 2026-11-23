@@ -47,9 +47,9 @@ Dialog focus/isolation behavior; static sections are intentionally not presented
 Source registry appears wherever a draft names a module. Delete copy states all-account scope and
 30-day retention. The local package path is builder-private and is not presented as registry review.
 
-Module settings are reached only through the header cog. The `module-preferences` destination
-illustrates that affordance; its automatic-update control is a management preference, not a
-replacement Finance settings screen. An actual Finance cog opens its existing `/settings/finance`.
+Module settings are reached only through the header cog. The management cog opens `module-preferences`; its automatic-update control is a management
+preference. The Finance cog opens a separate `finance-settings` illustration of its existing
+settings. The product route remains `/settings/finance`; this task does not redesign it.
 No module-settings text link is introduced.
 
 The coordinator sends S1–S11 to Ben. Before any screen is built, record his approval and changed
