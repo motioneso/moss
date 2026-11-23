@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Approve complete batches in chat.** Large batches show every item in one scrolling card, so you can approve or reject the whole batch together. [PR #4441](https://github.com/motioneso/moss/pull/4441)
 - **Sports briefing failures on busy nights.** The daily sports briefing no longer fails on nights with a lot of live games. [PR #4449](https://github.com/motioneso/moss/pull/4449)
 
 #### Added
