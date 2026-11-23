@@ -93,7 +93,6 @@ impl Snapshot {
             registry::compare_manifest(&package.manifest, artifact)?;
             // Structural archive/index validation only: historical versions need not run on
             // the current host. Install-time SQL/import validation remains in verify/publish.
-            let _ = package;
             let sig_name = format!("{name}.sig");
             let signature = catalog.source.fetch(&sig_name, 4096)?;
             catalog.trust.verify_package(
@@ -209,9 +208,12 @@ impl Snapshot {
     }
     fn write(self, destination: &Path) -> Result<Value> {
         // create_dir refuses an existing destination, including symlinks. Nothing is overwritten.
-        fs::create_dir(destination).context("Output folder already exists or cannot be created")?;
+        fs::create_dir(destination).with_context(|| format!("Could not create output folder {}; its parent must exist and the output must be new", destination.display()))?;
         let result = (|| -> Result<()> {
-            for (name, bytes) in &self.files {
+            let mut files: Vec<_> = self.files.iter().collect();
+            // Blobs precede metadata, even though atomic deployment is a separate release step.
+            files.sort_by_key(|(name, _)| !name.contains('/'));
+            for (name, bytes) in files {
                 let path = destination.join(name);
                 fs::create_dir_all(path.parent().context("Missing parent")?)?;
                 artifacts::write_new(&path, bytes)?;
@@ -260,6 +262,10 @@ pub fn verify(config: &Path, others: &[String]) -> Result<Value> {
 }
 pub fn assemble(config: &Path, selection: &Path, key: &Path, output: &Path) -> Result<Value> {
     let mut snapshot = Snapshot::open(config)?;
+    ensure!(
+        !snapshot.files.contains_key("bundle.json"),
+        "Assembly input already contains a signed bundle"
+    );
     ensure!(
         snapshot.catalog.index.expires > chrono::Utc::now(),
         "The registry index has expired"

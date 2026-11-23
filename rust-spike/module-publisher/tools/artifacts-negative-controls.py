@@ -14,8 +14,12 @@ host = Path("rust-spike/module-host/src")
 artifact = base / "src/artifacts.rs"
 registry = base / "src/registry_artifacts.rs"
 controls = [
+    (registry, '!seen.blocks_package(&a.digest, &a.publisher_key, public)', 'true', ['assembly_refuses_blocked_digest', 'assembly_refuses_blocked_publisher']),
+    (artifact, '!seen.blocks_package(&digest, &submission.publisher_key, &publisher.key)', 'true', ['verify_refuses_blocked_candidate']),
+    (registry, 'trust::digest(&bytes) == digest', 'true', ['mirror_refuses_corrupt_media']),
+    (registry, '!snapshot.files.contains_key("bundle.json")', 'true', ['assembly_refuses_to_replace_a_signed_bundle']),
     (host / "archive.rs", "trust::digest(bytes) == expected", "true", ["mirror_refuses_tampered_archive_without_creating_output"]),
-    # Removing the final cryptographic guard proves all four signature paths reach it.
+    # Removing the final cryptographic guard proves the signature paths reach it.
     (host / "trust.rs", '''UnparsedPublicKey::new(&ED25519, key)
         .verify(bytes, &sig)
         .map_err(|_| anyhow::anyhow!("The signature does not match; nothing was installed"))''', "Ok(())", ["verify_authenticates_package_and_refuses_tampering", "registry_refuses_tampered_index_signature", "registry_refuses_tampered_identity_signature", "registry_refuses_tampered_detached_package_signature", "bundle_tampering_is_refused"]),

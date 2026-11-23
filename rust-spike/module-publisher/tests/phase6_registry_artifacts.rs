@@ -174,7 +174,7 @@ fn registry_assembly_and_mirror_preserve_signed_bytes() {
             &config,
             &mirrored,
         ],
-        "exists",
+        "Could not create output folder",
     );
     assert_eq!(fs::read(marker).unwrap(), b"existing snapshot");
 }
@@ -468,4 +468,104 @@ fn bundle_keeps_finance_and_meals_optional_and_copies_media() {
             ))
             .exists());
     }
+}
+
+fn assembly_refuses_blocked(publisher: bool) {
+    let f = Fixture::new();
+    f.artifact_layout();
+    f.edit_index(|i| {
+        let target = if publisher {
+            "sample".to_owned()
+        } else {
+            i["modules"][0]["digest"].as_str().unwrap().to_owned()
+        };
+        i["revoked"] =
+            serde_json::json!([{"target":target,"reason":"Fixture block","level":"block"}]);
+    });
+    let output = f.dir.path().join("assembled");
+    refused(
+        &[
+            Path::new("registry"),
+            Path::new("assemble"),
+            &f.dir.path().join("config.json"),
+            &f.dir.path().join("selection.json"),
+            &f.dir.path().join("index.pk8"),
+            &output,
+        ],
+        "Selected module is blocked",
+    );
+    assert!(!output.exists());
+}
+#[test]
+fn assembly_refuses_blocked_digest() {
+    assembly_refuses_blocked(false);
+}
+#[test]
+fn assembly_refuses_blocked_publisher() {
+    assembly_refuses_blocked(true);
+}
+#[test]
+fn verify_refuses_blocked_candidate() {
+    let f = Fixture::new();
+    f.edit_index(|i| {
+        i["revoked"] =
+            serde_json::json!([{"target":f.digest(),"reason":"Fixture block","level":"block"}])
+    });
+    refused(
+        &[
+            Path::new("verify"),
+            &f.dir.path().join("config.json"),
+            &f.dir.path().join("submission.json"),
+        ],
+        "Package or publisher is blocked",
+    );
+}
+#[test]
+fn mirror_refuses_corrupt_media() {
+    let f = Fixture::new();
+    f.artifact_layout();
+    fs::create_dir(f.dir.path().join("registry/media")).unwrap();
+    let name = format!(
+        "registry/media/{}.svg",
+        moss_module_host::trust::digest(b"original")
+    );
+    fs::write(f.dir.path().join(name), b"corrupt").unwrap();
+    let output = f.dir.path().join("mirror");
+    refused(
+        &[
+            Path::new("registry"),
+            Path::new("mirror"),
+            &f.dir.path().join("config.json"),
+            &output,
+        ],
+        "Media digest does not match",
+    );
+    assert!(!output.exists());
+}
+#[test]
+fn assembly_refuses_to_replace_a_signed_bundle() {
+    let f = Fixture::new();
+    f.artifact_layout();
+    let output = f.dir.path().join("assembled");
+    let config = f.dir.path().join("config.json");
+    ok(&[
+        Path::new("registry"),
+        Path::new("assemble"),
+        &config,
+        &f.dir.path().join("selection.json"),
+        &f.dir.path().join("index.pk8"),
+        &output,
+    ]);
+    f.edit_config(|c| c["registryPath"] = serde_json::json!(output));
+    refused(
+        &[
+            Path::new("registry"),
+            Path::new("assemble"),
+            &config,
+            &f.dir.path().join("selection.json"),
+            &f.dir.path().join("index.pk8"),
+            &f.dir.path().join("replacement"),
+        ],
+        "already contains a signed bundle",
+    );
 }

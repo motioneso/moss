@@ -27,7 +27,8 @@ publisher signatures. Stage the exact signed index string returned by part 3's p
 do not reserialize it. Root identity provisioning remains a release-owner responsibility. Assembly
 validates the layout and adds a signed `bundle.json`, without changing any existing signed bytes.
 The supplied PKCS#8 key must match the index's authorized signing key. Inputs and outputs must be
-separate; output folders must not exist. This avoids overwriting immutable blobs or a published
+separate; output folders must not exist; their parent must exist. Assembly also refuses inputs
+that already contain a signed bundle. This avoids overwriting immutable blobs or a published
 version. Atomic deployment and concurrent publication serialization belong to part 5.
 
 Selection uses the existing additive module-list contract twice:
@@ -54,8 +55,10 @@ snapshot too; it does not make that snapshot usable for new installs.
 Mirroring checks the signed metadata, archive digests and detached signatures before copying.
 It preserves bytes, including signature whitespace, bundle files and digest-named media. Additional
 pipeline configurations check cross-registry publisher conflicts; they are not merged into the
-output. No command changes an existing output folder. Folder sources only are supported by this
-release's CLI; the host retains its existing HTTPS registry client.
+output. No command changes an existing output folder. Media files with names outside the digest
+layout are refused, including temporary files. Verified package and media bytes are currently held
+in memory; memory use grows with registry history. Streaming large histories is deferred. Folder
+sources only are supported by this release's CLI; the host retains its existing HTTPS registry client.
 
 These are build/release tools with no new Moss screen or setting. The legacy TypeScript registry
 workflow remains unchanged.
