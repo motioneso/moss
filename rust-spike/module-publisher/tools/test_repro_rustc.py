@@ -13,7 +13,8 @@ with tempfile.TemporaryDirectory(prefix="moss-repro-paths-") as scratch:
     subprocess.run(["rustc", "+1.95.0", "--edition=2021", "-Cdebuginfo=0",
                     str(WRAPPER), "-o", str(wrapper)], check=True)
     outputs = []
-    for case, filename in (("native source", "nested/lib.rs"), ("windows source", "nested\\lib.rs")):
+    for case, filename in (("native source", "nested/lib.rs"), ("windows source", "nested\\lib.rs"),
+                           ("cargo argfile", "nested\\lib.rs")):
         source_root = root / case
         source = source_root / filename
         source.parent.mkdir(parents=True)
@@ -26,11 +27,18 @@ with tempfile.TemporaryDirectory(prefix="moss-repro-paths-") as scratch:
         env = os.environ | {"CARGO_MANIFEST_DIR": str(source_root),
                             "CARGO_PKG_NAME": "path-fixture", "CARGO_PKG_VERSION": "0.1.0"}
         env.pop("OUT_DIR", None)
-        subprocess.run([str(wrapper), COMPILER, "--edition=2021",
+        arguments = ["--edition=2021", "--cfg", 'feature="fixture"',
+                        "-Cmetadata=" + ("cargo-input" if case == "cargo argfile" else "direct-input"),
                         "--crate-name", "fixture", "--crate-type", "cdylib",
                         "--target", "wasm32-unknown-unknown", "-Cdebuginfo=0",
                         f"--remap-path-prefix={source_root}=/moss/source",
-                        str(source), "-o", str(output)], env=env, check=True)
+                        str(source), "-o", str(output)]
+        if case == "cargo argfile":
+            argfile = source_root / "cargo arguments.txt"
+            # Cargo's line-based format, including paths with spaces and quotes in cfgs.
+            argfile.write_text("\n".join(arguments) + "\n", newline="\n")
+            arguments = ["@" + str(argfile)]
+        subprocess.run([str(wrapper), COMPILER, *arguments], env=env, check=True)
         data = output.read_bytes()
         assert b"/moss/source/nested/lib.rs" in data, "Compiler lost the stable source location"
         outputs.append(data)

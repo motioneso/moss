@@ -43,8 +43,10 @@ Prefix remapping leaves Windows separators in the remaining source path. The
 wrapper adds exact file mappings for the current crate and generated sources,
 spelling their diagnostic paths with forward slashes. It passes compiler arguments
 through a temporary response file so those mappings cannot exceed Windows' command
-line limit, then removes that file. A compiled Wasm fixture checks path spelling,
-spaces and a large mapping set on every runner before the full package build.
+line limit, then removes that file. Cargo's incoming argument files are expanded
+before normalizing compiler options; rustc does not expand nested response files.
+A compiled Wasm fixture checks path spelling, spaces, Cargo argument-file input
+and a large mapping set on every runner before the full package build.
 Unsigned build inputs are retained per platform for investigating a failed comparison.
 The artifact handoff includes hidden paths explicitly and fails if packages are absent.
 

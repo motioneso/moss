@@ -106,6 +106,20 @@ fn source_remaps(args: &[String], directories: &[PathBuf], cwd: &Path) -> io::Re
     Ok(maps)
 }
 
+// Match rustc's one-level, one-literal-argument-per-line expansion. Cargo can
+// already use an argument file before this wrapper adds its source mappings.
+fn expand_args(args: Vec<String>) -> io::Result<Vec<String>> {
+    let mut expanded = Vec::new();
+    for arg in args {
+        if let Some(path) = arg.strip_prefix('@') {
+            expanded.extend(fs::read_to_string(path)?.lines().map(String::from));
+        } else {
+            expanded.push(arg);
+        }
+    }
+    Ok(expanded)
+}
+
 // Exact mappings can exceed Windows' command-line limit. rustc response files
 // accept one literal argument per line, including spaces and backslashes.
 fn run_compiler(command: &mut Command, args: &[String]) -> io::Result<ExitStatus> {
@@ -139,6 +153,7 @@ fn run_compiler(command: &mut Command, args: &[String]) -> io::Result<ExitStatus
 fn main() {
     let mut args: Vec<_> = env::args().skip(1).collect();
     let compiler = args.remove(0);
+    let mut args = expand_args(args).expect("expand Cargo rustc argument files");
     let package = env::var("CARGO_PKG_NAME").unwrap_or_default();
     let version = env::var("CARGO_PKG_VERSION").unwrap_or_default();
     normalize(&mut args, &package, &version);
@@ -257,6 +272,33 @@ mod tests {
             Path::new("nested/lib.rs").display()
         )));
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn cargo_argument_files_preserve_literals_order_and_single_level_expansion() {
+        let path = env::temp_dir().join(format!("moss-cargo-args-{}.txt", std::process::id()));
+        fs::write(
+            &path,
+            "--cfg\nfeature=\"space value\"\n@not-a-recursive-include\n",
+        )
+        .unwrap();
+        let expanded = expand_args(vec![
+            "before".into(),
+            format!("@{}", path.display()),
+            "after".into(),
+        ])
+        .unwrap();
+        assert_eq!(
+            expanded,
+            [
+                "before",
+                "--cfg",
+                "feature=\"space value\"",
+                "@not-a-recursive-include",
+                "after"
+            ]
+        );
+        fs::remove_file(path).unwrap();
     }
 
     #[test]
