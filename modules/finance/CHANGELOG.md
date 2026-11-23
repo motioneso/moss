@@ -1,5 +1,11 @@
 # Finance package
 
+## 0.6.2
+
+- Chat can show every row of an import or transaction batch in one scrolling approval card.
+- You can approve or reject the whole batch immediately; reviewing the scroll area is optional.
+- A failed approval preparation gives Moss a safe reason to help it recover.
+
 ## 0.6.1
 
 - Finance chat tools declare their inputs and examples. Writes return saved-change receipts; target removal and writes set to ask use labelled approval cards.

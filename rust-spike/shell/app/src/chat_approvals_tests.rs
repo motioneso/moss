@@ -3,6 +3,7 @@ use std::time::Duration;
 
 fn record(actor: &str, turn: &str, kind: ApprovalKind, runner_id: u64) -> Record {
     Record {
+        batch: false,
         id: Uuid::new_v4(),
         actor: actor.into(),
         turn: turn.into(),
@@ -136,10 +137,9 @@ fn action_book() -> (Book, String) {
 fn approved_record_binds_actor_turn_tool_and_exact_parameters_once() {
     let (mut book, id) = action_book();
     let p = serde_json::json!({"candidateId":"one"});
-    assert!(
-        book.consume("a", "t1", "commitments", "commitments.accept", &p)
-            .is_none()
-    );
+    assert!(book
+        .consume("a", "t1", "commitments", "commitments.accept", &p)
+        .is_none());
     book.decide("a", &id, Decision::Approve).unwrap();
     for (actor, turn, module, tool, params) in [
         ("b", "t1", "commitments", "commitments.accept", p.clone()),
@@ -160,24 +160,70 @@ fn approved_record_binds_actor_turn_tool_and_exact_parameters_once() {
         .consume("a", "t1", "commitments", "commitments.accept", &p)
         .unwrap();
     assert_eq!(matched.version.as_deref(), Some("shown-version"));
-    assert!(
-        book.consume("a", "t1", "commitments", "commitments.accept", &p)
-            .is_none()
-    );
+    assert!(book
+        .consume("a", "t1", "commitments", "commitments.accept", &p)
+        .is_none());
 }
 #[test]
 fn voided_action_cannot_be_used_in_a_later_turn() {
     let (mut book, id) = action_book();
     book.decide("a", &id, Decision::Approve).unwrap();
     book.void_turn("t1");
-    assert!(
-        book.consume(
+    assert!(book
+        .consume(
             "a",
             "t1",
             "commitments",
             "commitments.accept",
             &serde_json::json!({"candidateId":"one"})
         )
-        .is_none()
+        .is_none());
+}
+
+#[test]
+fn a_complete_batch_record_keeps_every_value_and_binds_array_order() {
+    let rows: Vec<_> = (0..60)
+        .map(|n| serde_json::json!({"row":n,"note":"界".repeat(2000)}))
+        .collect();
+    let parameters = serde_json::json!({"rows":rows});
+    let mut r = record("a", "t1", ApprovalKind::Action, 8);
+    r.batch = true;
+    r.fields = rows
+        .iter()
+        .enumerate()
+        .map(|(n, row)| moss_shell_contract::CardField {
+            label: format!("Row {n}"),
+            value: row["note"].as_str().unwrap().to_owned(),
+        })
+        .collect();
+    r.action = Some(Action {
+        module: "finance".into(),
+        tool: "finance.import.apply".into(),
+        parameters: parameters.clone(),
+        version: None,
+    });
+    let fields = r.fields.clone();
+    let (mut book, id) = book_with(r);
+    let view = book.views("a").remove(0);
+    assert!(view.batch);
+    assert_eq!(view.fields, fields);
+    book.decide("a", &id, Decision::Approve).unwrap();
+    let mut reordered = parameters.clone();
+    reordered["rows"].as_array_mut().unwrap().swap(0, 1);
+    let mut shortened = parameters.clone();
+    shortened["rows"].as_array_mut().unwrap().pop();
+    for changed in [reordered, shortened] {
+        assert!(book
+            .consume("a", "t1", "finance", "finance.import.apply", &changed)
+            .is_none());
+    }
+    assert_eq!(
+        book.consume("a", "t1", "finance", "finance.import.apply", &parameters)
+            .unwrap()
+            .parameters,
+        parameters
     );
+    assert!(book
+        .consume("a", "t1", "finance", "finance.import.apply", &parameters)
+        .is_none());
 }

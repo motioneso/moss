@@ -72,7 +72,7 @@ async fn main() {
         "probe",
         &work,
         host,
-        Arc::new(|_, _| Box::pin(async { Answer::Deny })),
+        Arc::new(|_, _| Box::pin(async { Ok(Answer::Deny) })),
         Arc::new(CallFacts::default),
     )
     .expect("gateway");

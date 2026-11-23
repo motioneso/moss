@@ -119,6 +119,15 @@ impl Ports for DenyPorts {
         bail!("This host service is not connected")
     }
 }
+/// Only explicit public guest errors can be inspected by the chat adapter. Display stays generic.
+#[derive(Debug)]
+pub(crate) struct PublicModuleError(pub moss_module_sdk::PublicError);
+impl std::fmt::Display for PublicModuleError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("The module could not finish this request")
+    }
+}
+impl std::error::Error for PublicModuleError {}
 struct State {
     scope: CallScope,
     ports: Arc<dyn Ports>,
@@ -234,6 +243,47 @@ impl Host {
         kind: &str,
         payload: &str,
     ) -> Result<String> {
+        self.call_with_message_bytes(
+            wasm,
+            manifest,
+            access,
+            ports,
+            kind,
+            payload,
+            self.limits.message_bytes,
+        )
+    }
+    /// Only validated chat invocations opt in. Memory, fuel, deadline and capabilities are unchanged.
+    pub(crate) fn call_chat(
+        &self,
+        wasm: &[u8],
+        manifest: Arc<Manifest>,
+        access: AccessContext,
+        ports: Arc<dyn Ports>,
+        kind: &str,
+        payload: &str,
+    ) -> Result<String> {
+        // A small call can disclose large stored values. Allow the complete guest memory envelope,
+        // rather than guessing presentation size from arguments. The guest still has to allocate
+        // the complete request/result within its unchanged memory, fuel and deadline budgets.
+        let message_bytes = self
+            .limits
+            .message_bytes
+            .max(self.limits.memory_bytes)
+            .max(payload.len());
+        self.call_with_message_bytes(wasm, manifest, access, ports, kind, payload, message_bytes)
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn call_with_message_bytes(
+        &self,
+        wasm: &[u8],
+        manifest: Arc<Manifest>,
+        access: AccessContext,
+        ports: Arc<dyn Ports>,
+        kind: &str,
+        payload: &str,
+        message_bytes: usize,
+    ) -> Result<String> {
         ensure!(
             matches!(
                 kind,
@@ -242,7 +292,7 @@ impl Host {
             "Unknown module handler"
         );
         ensure!(
-            payload.len() <= self.limits.message_bytes,
+            payload.len() <= message_bytes,
             "The module request is too large"
         );
         self.validate(wasm, &manifest)?;
@@ -306,7 +356,7 @@ impl Host {
                     .tables(8)
                     .table_elements(10_000)
                     .build(),
-                message_bytes: self.limits.message_bytes,
+                message_bytes,
             },
         );
         store.limiter(|state| &mut state.limits);
@@ -319,10 +369,14 @@ impl Host {
             )?;
         let (response,) = handle.call(&mut store, (kind.into(), payload.into()))?;
         handle.post_return(&mut store)?;
-        let response =
-            response.map_err(|_| anyhow::anyhow!("The module could not finish this request"))?;
+        let response = response.map_err(|raw| {
+            match serde_json::from_str::<moss_module_sdk::PublicErrorEnvelope>(&raw) {
+                Ok(envelope) => anyhow::Error::new(PublicModuleError(envelope.moss_public_error)),
+                Err(_) => anyhow::anyhow!("The module could not finish this request"),
+            }
+        })?;
         ensure!(
-            response.len() <= self.limits.message_bytes,
+            response.len() <= message_bytes,
             "The module response is too large"
         );
         let success = kind != "route"

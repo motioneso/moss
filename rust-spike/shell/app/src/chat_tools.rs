@@ -1,12 +1,19 @@
 //! Build the current account's offered list for each chat op.
+use moss_agents::gateway::PreparationError;
 use moss_agents::{
     approvals::{FamilyFacts, Risk, Tier, ToolFacts},
     gateway::ToolDef,
 };
-use moss_module_host::chat_tools::ChatToolRule;
+use moss_module_host::chat_tools::{CardBuildError, ChatToolRule};
 use safety_core::access::AccessContext;
 use std::sync::Arc;
 
+fn preparation_error(message: &str) -> PreparationError {
+    PreparationError {
+        code: "approval_preparation_failed".into(),
+        message: message.into(),
+    }
+}
 pub trait ChatTools: Send + Sync {
     fn list(&self) -> Result<Vec<ToolDef>, String>;
     fn card(
@@ -14,8 +21,8 @@ pub trait ChatTools: Send + Sync {
         _: &str,
         _: &str,
         _: &serde_json::Value,
-    ) -> Result<moss_module_host::chat_tools::ApprovalCardRecord, String> {
-        Err("Approval details are unavailable".into())
+    ) -> Result<moss_module_host::chat_tools::ApprovalCardRecord, PreparationError> {
+        Err(preparation_error("Approval details are unavailable"))
     }
     fn run_approved(
         &self,
@@ -27,7 +34,7 @@ pub trait ChatTools: Send + Sync {
         Err("Approved tools are unavailable".into())
     }
     fn run(&self, module: &str, tool: &str, arguments: serde_json::Value)
-    -> Result<String, String>;
+        -> Result<String, String>;
 }
 pub type Source = Arc<dyn ChatTools>;
 struct InstalledTools {
@@ -93,18 +100,30 @@ impl ChatTools for InstalledTools {
         module: &str,
         tool: &str,
         arguments: &serde_json::Value,
-    ) -> Result<moss_module_host::chat_tools::ApprovalCardRecord, String> {
+    ) -> Result<moss_module_host::chat_tools::ApprovalCardRecord, PreparationError> {
         let app = self
             .modules
             .lock()
-            .map_err(|_| "Module host is busy")?
+            .map_err(|_| preparation_error("Module host is busy"))?
             .as_ref()
             .map(|m| m.application.clone())
-            .ok_or("Module host unavailable")?;
+            .ok_or_else(|| preparation_error("Module host unavailable"))?;
         app.installer
             .chat_tool_card(&self.access, module, tool, arguments)
-            .map_err(|_| "Approval details are unavailable")?
-            .ok_or("Approval details are unavailable".into())
+            .map_err(|error| {
+                error
+                    .downcast_ref::<CardBuildError>()
+                    .map(|error| PreparationError {
+                        code: error.code.clone(),
+                        message: error.message.clone(),
+                    })
+                    .unwrap_or_else(|| {
+                        preparation_error(
+                            "Approval details could not be prepared. Try again later.",
+                        )
+                    })
+            })?
+            .ok_or_else(|| preparation_error("This tool has no approval details builder."))
     }
     fn run_approved(
         &self,

@@ -1,0 +1,313 @@
+# Rust chat: oversized batch approvals and card errors
+
+- Task: JS-395, follow-up to JS-390 (Finance chat cards).
+- Status: approved for build, 2026-11-22, via coordinator t6n. Ben chose option B: one scrolling card.
+- Ben: “I don’t want users to have to click through all of them before they can approve all.”
+  Approve entire batch and Reject entire batch are available as soon as the full presentation is valid;
+  scrolling, reading progress and card visitation never gate approval.
+- Repository: `~/Jarv1s`. Build on current `origin/main` after approval, including parts 4b/4d.
+
+## Problem and outcome
+
+One tool call must remain one approval and one execution, even when its disclosure needs many
+cards. The person must be able to inspect every item and every effect they approve. Never shorten
+values, omit rows, or ask the model to split an atomic batch to fit a presentation limit.
+A builder failure must reach the model as a tool error with a safe reason, rather than being
+reported as a person's refusal. No failed presentation may authorize execution.
+
+### Verified starting point
+
+Read on this branch; these are source observations, not executed acceptance results:
+
+- `rust-spike/module-host/src/chat_tools.rs`, `normalize_card`: 32 KiB serialized card,
+  32 supplied fields, 4096 bytes per value, 8192 bytes for content. A raw target adds an Item field.
+  `chat_manifest` also caps serialized tool arguments at 64 KiB.
+- `chat_tool_card` returns `Ok(card.ok())`, losing builder/normalization/redaction errors.
+  `rust-spike/shell/app/src/chat_tools.rs` replaces both missing cards and errors with generic text.
+- `rust-spike/shell/app/src/runner_data.rs`, `raise_approval`, returns false on a builder error;
+  the event handler sends `allow:false`. `rust-spike/agents/src/bin/moss-runner.rs` maps that
+  to `Answer::Deny`; `agents/src/gateway.rs`, `call_tool`, reports that the person did not approve.
+- Shell `Book::consume` binds actor, turn, module, tool and exact JSON parameters and consumes
+  once. `ToolTurn::dispatch_with` checks offered names and single-use turn call IDs.
+  The displayed version is retained in `Action` and passed to the host. Host
+  `approved_chat_payload` mints/consumes its versioned grant under the serial lock.
+- `shell/contract/src/lib.rs`, `ApprovalView`, and `shell/ui/src/chat_cards.rs` carry/render one
+  fields vector and one content string per approval. Permission cards are a separate kind.
+- `modules/finance/src/chat.rs` already continues values at UTF-8 boundaries but rejects the
+  resulting card above the field/byte caps. Finance schemas include presentation-driven batch
+  restrictions (for example `finance.import.apply` has `rows.maxItems: 1`).
+- `module-host/src/runtime.rs` defaults guest messages to 1 MiB and guest memory to 64 MiB.
+  Returning an unlimited card array in the current API would move the failure, not solve it.
+
+## Ranked presentation options
+
+| Rank | Option                                           | Assessment                                                                                                                                                                                       |
+| ---- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2    | Several numbered cards inside one approval group | Alternative. Clear item ranges, manageable layout on phones, bounded loading, one decision for the whole batch. More navigation, addressed with progress and Back/Next.                          |
+| 1    | One scrolling card                               | Approved recommendation. Familiar, fewer controls. Long nested scrolling is harder on phones and makes the end easy to miss; virtualization needs accessible navigation and complete disclosure. |
+| 3    | Full-width review sheet opened from chat         | Most room for very large imports, but adds a modal/screen, focus lifecycle and navigation away from chat. Defer unless real use shows numbered cards inadequate.                                 |
+
+All options share the same backend presentation and one approval ID. Choosing a different layout
+must never change execution semantics. Separate tool calls with separate Approve buttons are not
+an option: they lose the original batch's all-or-nothing boundary.
+
+## Plain mockups
+
+Illustrative design sketches only, not screenshots or live proof. Example: one import of 60 rows.
+Each item includes its complete supplied values and effects; compact rows here stand for those
+labelled fields. The ellipses describe additional visible/scrollable content, never omitted data.
+Use the existing Action request card, type, spacing, button and danger treatments from
+`docs/design-system.md`; no new visual brand. Values wrap at phone width, without horizontal scroll.
+
+### A. Several cards, one approval group (alternative)
+
+Desktop, 760px chat area:
+
+```text
++------------------------------------------------------------------+
+| Action request · Finance import                                  |
+| 60 transactions · one batch · nothing changes until you approve    |
+| Card 1 of 6 · Rows 1–10 · 0 of 6 cards reviewed                    |
+| +--------------------------------------------------------------+ |
+| | Row 1 · Date: Nov 20 · Name: Market · Amount: $25.00           | |
+| | Account: Everyday · Note: [complete wrapped note]              | |
+| | ... complete rows 2–10; scroll this card to its end ...        | |
+| +--------------------------------------------------------------+ |
+| [Back]                         [Review next card]                 |
+| [Approve entire batch — available once valid]        |
+| [Reject entire batch]                                            |
++------------------------------------------------------------------+
+```
+
+Phone, 360px viewport (with normal page padding):
+
+```text
++--------------------------------+
+| Action request                 |
+| Finance · Import 60 rows       |
+| One batch                      |
+| Card 1 of 6 · Rows 1–10         |
+| Reviewed: 0 of 6               |
+| +----------------------------+ |
+| | Row 1                      | |
+| | Date: Nov 20               | |
+| | Name: Market               | |
+| | Amount: $25.00             | |
+| | Note: full text wraps      | |
+| | ... scroll to row 10 ...   | |
+| +----------------------------+ |
+| [Back] [Review next card]      |
+| [Approve entire batch] available  |
+| [Reject entire batch]          |
++--------------------------------+
+```
+
+Back and direct card navigation remain available in this alternative. Approve never depends on
+visiting cards or reaching the end. All options require the full presentation to be valid first.
+
+### B. One scrolling card (approved)
+
+Desktop, 760px:
+
+```text
++------------------------------------------------------------------+
+| Action request · Finance import · 60 transactions                 |
+| +--------------------------------------------------------------+ |
+| | Row 1 · Date / Name / Amount / Account / full Note             | |
+| | Row 2 · all fields                                           | |
+| | ... scroll through all 60 rows ...                            | |
+| | Row 60 · all fields                                          | |
+| +--------------------------------------------------------------+ |
+| Reviewed through row 12 of 60                                     |
+| [Approve entire batch — available once valid] [Reject entire batch]   |
++------------------------------------------------------------------+
+```
+
+Phone, 360px:
+
+```text
++--------------------------------+
+| Finance import · 60 rows       |
+| +----------------------------+ |
+| | Row 1                      | |
+| | Date: Nov 20               | |
+| | Name: Market               | |
+| | Amount: $25.00             | |
+| | Note: full wrapped text    | |
+| | ... scroll all rows ...    | |
+| +----------------------------+ |
+| Reviewed through row 12       |
+| [Approve entire batch] available |
+| [Reject entire batch]         |
++--------------------------------+
+```
+
+### C. Review sheet opened from chat (alternative)
+
+Desktop, 1000px sheet:
+
+```text
+Chat: [Finance wants to import 60 rows] [Review entire batch]
++------------------------------------------------------------------------+
+| Review Finance import                                      [Back to chat]|
+| One batch · 60 rows · 12 reviewed                                        |
+| Row | Date   | Name   | Account  | Amount | Full details (wrapped)       |
+| 1   | Nov 20 | Market | Everyday | $25.00 | Full note and effects         |
+| ... scroll all rows; no hidden or clipped cells ...                     |
+| [Approve entire batch — available once valid] [Reject entire batch]    |
++------------------------------------------------------------------------+
+```
+
+Phone, 360px full-height sheet:
+
+```text
+Chat: [Review entire batch]
++--------------------------------+
+| [Back to chat]                 |
+| Review Finance import          |
+| 60 rows · one batch            |
+| Row 1                          |
+| Date: Nov 20                   |
+| Name: Market                   |
+| Account: Everyday              |
+| Amount: $25.00                 |
+| Note: full wrapped text        |
+| ... scroll remaining rows ... |
+| [Approve entire batch] available  |
+| [Reject entire batch]          |
++--------------------------------+
+```
+
+## Approved host and shell contract
+
+Coordinator t6n approved this simplification on 2026-11-22: retain the single complete card record;
+no paged builder API, staging handles, spooled sections or exposure tracking. The previous proposed
+paged transport is superseded alongside the numbered-card preference.
+
+1. Keep the existing `ApprovalCardRecord`, `ApprovalView`, `Book::Record` and one server-held
+   `Action`. The host validates and sanitizes the entire presentation before it creates the record.
+   Remove the aggregate card-byte/field-count limits and value/content length barriers. Preserve
+   structural validation, fixed host title/target/danger and the existing version contract.
+2. Finance displays all rows and full values in their original order; no clipping, shortening or
+   automatic division into separate tool calls. Remove Finance's presentation-driven array/schema
+   restrictions and split guidance. Inventory their replacements against real Finance domain
+   constraints in the build PR; keep business-validation rules.
+3. Remove the chat-specific 64 KiB argument cap. For chat card preparation and execution only,
+   scale the per-invocation message allowance to fit the full serialized call and the guest's
+   memory envelope. Small arguments can resolve large stored values, so argument length alone
+   cannot predict the disclosure size. Keep Wasm memory, fuel,
+   deadline, capability checks and ordinary non-chat message budgets unchanged. Resource failures
+   fail preparation explicitly; they never yield a partial actionable card.
+4. Render one labelled, keyboard-scrollable details region containing the entire fields/content
+   disclosure. Values wrap on desktop and phone without horizontal tables. Actions sit outside the
+   scrolling region: Approve entire batch and Reject entire batch are available immediately once
+   the complete card is valid. No scroll listener, visitation record or progress gate.
+5. Preserve `consume`'s actor/open-turn/module/tool/exact JSON parameter match and single use,
+   offered-tool and call-ID checks, current installation/account/policy rechecks and displayed
+   pinned version. One approval dispatches the unchanged original tool once. Presentation never
+   invokes writes. Atomic commit/rollback remains the module's transaction responsibility.
+6. Missing/invalid details create no runnable approval. Reject, timeout, turn close or source-version
+   invalidation affects the entire batch. Keep native agent permission cards separate.
+
+## Card-builder failures must reach the model
+
+Use an explicit result, not `Option` or a denial boolean:
+
+```text
+prepare -> Ready(complete_card) | Failed(code, safe_message, recovery)
+confirm -> Approved | Declined | PreparationFailed(safe_error)
+```
+
+- Host distinguishes missing builder, invalid arguments, adapter refusal, malformed/incomplete
+  presentation, unavailable service and source-version change. Declared adapter errors use a typed
+  public error envelope; ordinary traps/internal errors get host-owned messages, not raw anyhow
+  chains, SQL, credentials or private paths. Apply existing chat sanitization to public errors;
+  sanitization failure uses a fixed generic preparation error and cannot authorize execution.
+- Shell `ChatTools::card` preserves the typed safe failure. `raise_approval` returns a typed
+  outcome and creates no pending record for a failed preparation.
+- Extend shell-to-runner `op:answer` with a distinct preparation-error outcome, correlated to the
+  pending approval request ID. Update the runner pending channel, Moss confirm callback and
+  gateway to preserve it. Keep native agent permission answers Allow/Deny; do not force public
+  adapter errors into agent permission driver protocols. A separate Moss confirmation outcome
+  avoids changing the meaning of the shared `Answer` enum.
+- Gateway returns `isError:true` with the safe code/message/recovery for the original MCP call.
+  No tool dispatch, no grant, no “person declined” wording. Explicit Reject remains an actual
+  denial. Disconnects, malformed answers, timeouts and unknown IDs continue to fail closed.
+- Recovery can say “Read the current revision and try again” or “Approval details could not be
+  prepared; retry later.” Do not direct the model to split an atomic operation to fit cards.
+  An adapter's safe validation guidance must survive end to end, rather than become generic text.
+
+## Build scope and acceptance after approval
+
+Host normalization and chat invocation sizing, Leptos scrolling cards, runner wire protocol and
+Moss gateway outcome propagation ship together. Adapt Finance's
+builder and remove only its presentation-driven schema caps/split guidance in the same build so
+one actual oversized batch exercises the shared path. Before editing schemas, list each affected
+Finance cap and its domain or presentation rationale in the build PR; include bulk categorize,
+bulk confirm and import apply rather than assuming every array cap is a card workaround.
+Audit legacy callers for compatibility.
+Update core chat app-map declarations and Finance feature errors/remediations with the product
+change; this docs-only phase deliberately changes no app-map behavior.
+
+Required build evidence (not run or claimed in phase 1):
+
+- First reproduce a supported Finance batch failing the old field/byte limits and demonstrate
+  the same call succeeds after the change. Include more than 32 fields, more than 32 KiB,
+  a value over 4096 bytes, multibyte continuation boundaries, and cross-transport-boundary cases.
+- Assert every row/field/value round-trips in order without loss, including values spanning the
+  old transport boundary. Invalid or interrupted preparation produces no actionable record.
+  Approve is available before scrolling; details remain fully accessible by keyboard and touch.
+- Assert exactly one original tool invocation and one batch commit. Inject a failing middle item
+  and observe rollback of the whole Finance batch, not partial success. Existing domain limits
+  are distinguished from presentation limits.
+- Negative checks: another actor, closed/wrong turn, altered/reordered array arguments, tool or
+  module substitution, wrong version, replayed call/approval IDs and partial-card approval cannot
+  execute. Observe protection tests fail with the relevant binding protection removed.
+- Drive an ask-policy builder refusal through real shell -> runner -> gateway and assert the
+  model's tool result contains the safe specific reason, with no dispatch/grant. Cover malformed
+  builder replies, safe redaction, redaction failure, missing builder, native permissions and an
+  actual person's Reject separately.
+- Live installed Finance UI acceptance at desktop and phone widths: inspect first/middle/last
+  rows, long values, scrolling, immediate Approve/Reject, failure state, expiry and final stored
+  effects through the real app. Screenshots are real build proof, not these design sketches.
+- Run scoped Rust/format/contract checks and required project gates after implementation. Every
+  heavy gate/live run takes the shared heavy-gate flock, with `CARGO_BUILD_JOBS=1` and
+  `RUST_TEST_THREADS=1`; scripts/logs go to the task scratch directory specified in the brief.
+
+## Phase 1 record and build authorization
+
+Phase 1 committed the spec and opened draft PR #4441 with Release note `Category: N/A`.
+On 2026-11-22 coordinator t6n relayed Ben’s approval of option B and authorized the build, with
+Approve/Reject immediately available once the entire disclosure is valid. The earlier preference
+for numbered cards and any scroll/visit gate are superseded. The coordinator subsequently approved
+the single-record backend above, without a paged/staged protocol. Keep auto-merge off.
+
+## Build record
+
+The single-card implementation uses the unchanged guest memory envelope for chat messages,
+with room for the entire serialized call. This covers calls with short identifiers that resolve
+large stored values; a multiplier of argument length would still reject those disclosures.
+Ordinary non-chat messages retain their existing allowance.
+
+Finance's presentation-driven schema caps change as follows:
+
+| Chat input                   | Previous presentation cap | Domain limit retained                        |
+| ---------------------------- | ------------------------- | -------------------------------------------- |
+| Review apply parallel arrays | 3 items                   | 200 transactions (`transactions::MAX_BATCH`) |
+| Bulk categorize / confirm    | 12 transactions           | 200 transactions (`transactions::MAX_BATCH`) |
+| Import apply                 | 1 row                     | 200 rows (`csv_import::MAX_ROWS`)            |
+
+Other domain validation remains: CSV file size, transaction note byte length, supported money
+precision, category/target selection rules, current revisions and account eligibility. The
+host no longer limits presentation field count, field value length or aggregate card bytes.
+Code-owned label and pinned-version validation remains. Existing adapters need no protocol
+migration: omitted `batch` defaults to false; batch adapters set it for the whole-batch controls.
+
+Builder errors use an explicit public code/message envelope that the host sanitizes before
+forwarding. Internal errors, traps, invalid replies and unavailable redaction use fixed safe
+errors. The shell creates no approval record for failed preparation; the runner returns the
+failure for the original tool call instead of reporting that the person declined.
+
+Live phone verification found that repeated chat polls scrolled the outer conversation to the
+bottom while a tall card was pending. The drawer now follows a newly arriving request once,
+then preserves the person’s review position until that request is resolved or replaced.

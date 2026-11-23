@@ -258,3 +258,57 @@ fn export_holds_only_the_callers_rows_and_sharing_leaves_no_private_text_in_logs
     assert_eq!(shared_rows, 2, "each sharing change is logged once");
     println!("PASS privacy: scanned {} tables, sharing leaves no private text outside the ledger and its allowed copy", tables.len());
 }
+
+#[test]
+#[ignore = "Only through verify-gate"]
+fn a_complete_chat_import_commits_once_and_a_middle_failure_rolls_back_every_row() {
+    let w = World::new();
+    let a = w.f.a;
+    let access = w.f.access(a);
+    let account = w.call(a, "POST", "/finance/manual/accounts", json!({
+        "operationId":Uuid::new_v4(),"name":"Complete batch proof","accountType":"checking",
+        "isoCurrency":"USD","openingDate":"2026-01-01","openingBalanceCents":0,"cleared":true
+    }));
+    assert_eq!(account["status"], 200, "{account}");
+    let account_id = account["body"]["id"].as_str().unwrap();
+    let today = w.call(a, "GET", "/finance/manual/context", Value::Null)["body"]["today"].clone();
+    let rows: Vec<_> = (1..=20).map(|n| json!({"sourceRow":n,"date":today,"name":format!("JS395 item {n}"),
+        "amountCents":n*100,"notes":"界".repeat(800),"allowDuplicate":false})).collect();
+    let mut p = json!({"accountId":account_id,"isoCurrency":"USD","rows":rows,
+        "operationId":Uuid::new_v4(),"expectedRevision":0,"cleared":true});
+    let preview = w.call(a, "POST", "/finance/import/preview", p.clone());
+    assert_eq!(preview["status"], 200, "{preview}");
+    p["expectedRevision"] = json!(preview["body"]["view"]["revision"].as_i64().expect("preview has an integer account revision"));
+    w.app.services.set_action_policy(&access, "finance", &[("finance.import.apply".into(), true)].into()).unwrap();
+    let before = w.visible(a, "app.finance_transactions");
+    let card = w.app.installer.chat_tool_card(&access, "finance", "finance.import.apply", &p).unwrap().unwrap();
+    assert!(card.batch && card.fields.len() > 32);
+    assert!(serde_json::to_vec(&card).unwrap().len() > 32768);
+    for n in 1..=20 {
+        assert!(card.fields.iter().any(|f| f.value == format!("JS395 item {n}")));
+        assert!(card.fields.iter().any(|f| f.label.starts_with(&format!("Row {n}:")) && f.value == "界".repeat(800)));
+    }
+    assert!(w.app.installer.run_chat_tool(&access, "finance", "finance.import.apply", p.clone()).is_err());
+    assert_eq!(w.visible(a, "app.finance_transactions"), before);
+    let saved = w.app.installer.run_approved_chat_tool(&access, "finance", "finance.import.apply", p.clone(), None).unwrap();
+    assert_eq!(saved["entryCount"], 20, "{saved}");
+    assert_eq!(w.visible(a, "app.finance_transactions"), before + 20);
+    let replay = w.app.installer.run_approved_chat_tool(&access, "finance", "finance.import.apply", p.clone(), None).unwrap();
+    assert_eq!(replay["unchanged"], true);
+    assert_eq!(w.visible(a, "app.finance_transactions"), before + 20);
+
+    // A real database failure after earlier inserts must roll back the account and all rows.
+    w.f.rt.block_on(w.f.root.batch_execute("CREATE FUNCTION app.js395_fail_middle() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.name = 'JS395 fail middle' THEN RAISE EXCEPTION 'injected middle insert failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER js395_fail_middle BEFORE INSERT ON app.finance_transactions FOR EACH ROW EXECUTE FUNCTION app.js395_fail_middle();")).unwrap();
+    p["operationId"] = json!(Uuid::new_v4());
+    p["rows"][9]["name"] = json!("JS395 fail middle");
+    for row in p["rows"].as_array_mut().unwrap() { row["allowDuplicate"] = json!(true); }
+    let preview = w.call(a, "POST", "/finance/import/preview", p.clone());
+    p["expectedRevision"] = json!(preview["body"]["view"]["revision"].as_i64().expect("preview has an integer account revision"));
+    let balance_before = w.call(a, "GET", "/finance/accounts", Value::Null);
+    w.app.installer.chat_tool_card(&access, "finance", "finance.import.apply", &p).unwrap().unwrap();
+    assert!(w.app.installer.run_approved_chat_tool(&access, "finance", "finance.import.apply", p, None).is_err());
+    assert_eq!(w.visible(a, "app.finance_transactions"), before + 20);
+    assert_eq!(w.call(a, "GET", "/finance/accounts", Value::Null), balance_before);
+    w.f.rt.block_on(w.f.root.batch_execute("DROP TRIGGER js395_fail_middle ON app.finance_transactions; DROP FUNCTION app.js395_fail_middle();")).unwrap();
+    println!("PASS complete Finance chat batch: full card, one commit, replay unchanged, middle insert failure rolls back every row and balance");
+}

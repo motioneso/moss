@@ -5,7 +5,7 @@ use crate::turn_tools::TurnTools;
 use tokio::time::{timeout, Duration};
 
 fn deny() -> Confirm {
-    Arc::new(|_, _| Box::pin(async { Answer::Deny }))
+    Arc::new(|_, _| Box::pin(async { Ok(Answer::Deny) }))
 }
 
 #[tokio::test]
@@ -140,7 +140,7 @@ impl ToolHost for ProbeHost {
 }
 
 fn allow() -> Confirm {
-    Arc::new(|_, _| Box::pin(async { Answer::Allow }))
+    Arc::new(|_, _| Box::pin(async { Ok(Answer::Allow) }))
 }
 
 #[tokio::test]
@@ -178,9 +178,50 @@ async fn a_yolo_run_says_no_card_was_shown() {
         stored_tier: None,
     }));
     let host = ProbeHost(tool);
-    let facts: CallFactsFn = Arc::new(|| crate::approvals::CallFacts { yolo: true, ..Default::default() });
+    let facts: CallFactsFn = Arc::new(|| crate::approvals::CallFacts {
+        yolo: true,
+        ..Default::default()
+    });
     let reply = call_tool(&host, &deny(), &facts, "alice", "probe", json!({})).await;
     let text = model_text(&reply);
     assert!(text.contains("no card was shown"), "{text}");
     assert!(!text.contains("the person approved"), "{text}");
+}
+
+#[tokio::test]
+async fn preparation_failure_reaches_the_model_without_execution_or_a_false_denial() {
+    struct NeverRun;
+    impl ToolHost for NeverRun {
+        fn tools(&self, _: &str) -> Vec<ToolDef> {
+            vec![probe_tool(crate::approvals::Risk::Destructive)]
+        }
+        fn call(&self, _: &str, _: &str, _: Value) -> ToolFuture {
+            panic!("preparation failure dispatched a write")
+        }
+    }
+    let confirm: Confirm = Arc::new(|_, _| {
+        Box::pin(async {
+            Err(PreparationError {
+                code: "stale_source".into(),
+                message: "Read the current revision and try again.".into(),
+            })
+        })
+    });
+    let name = NeverRun.tools("alice")[0].name.clone();
+    let reply = call_tool(
+        &NeverRun,
+        &confirm,
+        &plain_facts(),
+        "alice",
+        &name,
+        json!({}),
+    )
+    .await;
+    assert_eq!(reply["isError"], true);
+    assert_eq!(reply["code"], "stale_source");
+    assert!(reply.get("approval").is_none());
+    assert_eq!(
+        model_text(&reply),
+        "Read the current revision and try again."
+    );
 }
