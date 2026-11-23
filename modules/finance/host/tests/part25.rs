@@ -278,7 +278,7 @@ fn a_complete_chat_import_commits_once_and_a_middle_failure_rolls_back_every_row
         "operationId":Uuid::new_v4(),"expectedRevision":0,"cleared":true});
     let preview = w.call(a, "POST", "/finance/import/preview", p.clone());
     assert_eq!(preview["status"], 200, "{preview}");
-    p["expectedRevision"] = preview["body"]["revision"].clone();
+    p["expectedRevision"] = json!(preview["body"]["view"]["revision"].as_i64().expect("preview has an integer account revision"));
     w.app.services.set_action_policy(&access, "finance", &[("finance.import.apply".into(), true)].into()).unwrap();
     let before = w.visible(a, "app.finance_transactions");
     let card = w.app.installer.chat_tool_card(&access, "finance", "finance.import.apply", &p).unwrap().unwrap();
@@ -303,7 +303,7 @@ fn a_complete_chat_import_commits_once_and_a_middle_failure_rolls_back_every_row
     p["rows"][9]["name"] = json!("JS395 fail middle");
     for row in p["rows"].as_array_mut().unwrap() { row["allowDuplicate"] = json!(true); }
     let preview = w.call(a, "POST", "/finance/import/preview", p.clone());
-    p["expectedRevision"] = preview["body"]["revision"].clone();
+    p["expectedRevision"] = json!(preview["body"]["view"]["revision"].as_i64().expect("preview has an integer account revision"));
     let balance_before = w.call(a, "GET", "/finance/accounts", Value::Null);
     w.app.installer.chat_tool_card(&access, "finance", "finance.import.apply", &p).unwrap().unwrap();
     assert!(w.app.installer.run_approved_chat_tool(&access, "finance", "finance.import.apply", p, None).is_err());
