@@ -23,7 +23,7 @@ RUSTUP_HOME=$HOME/.rustup CARGO_TARGET_DIR=/tmp/js409-target CARGO_BUILD_JOBS=2 
 ```
 
 The launcher starts an isolated PostgreSQL gate. Its completed result was **exit 0**, not merely
-a successful launch. The receipt was `task_409_rust_phase_6_part_7_local_packa-20261123-124854-TKEUPz.log`.
+a successful launch. The task proof artifact contains the completed gate receipt.
 
 The runner removed each of 21 ownership/declaration enforcement checks separately and required
 exit 101 plus the matching planted-marker assertion. It restored each source file in `finally`
@@ -48,3 +48,21 @@ sealed local state; sharing the decoder restored queue reconciliation.
 This slice adds no management API or screens. It does not qualify private package screens in a
 browser, production data, non-Unix local signing, or the later installer/release work. Its proof
 is the installed host and isolated database boundary, as specified for ordered part 7/M.
+
+## Review and remaining minor notes
+
+The first independent review found an unkeyed catalog reader in the registry CLI and the bundle
+stand-in. The reader was reproduced failing with a sealed local entry. The CLI now reads the
+existing application's account projection; the bundle stand-in passes the standard host cipher
+keyring to both readers and filters its account-facing output. The database test covers a keyed
+catalog plus registry installation/listing/removal alongside an active local package.
+
+The first review also recorded minor limitations below the task's must-fix threshold: error
+messages can reveal existence before dispatch refuses; a declared downloaded dependency can
+delay local removal; the mutation runner restores in `finally` but cannot survive SIGKILL; the
+legacy ownership/signing-identity and network allowlist checks have no separate source-removal
+control; and losing the host cipher key prevents catalog loading. The sealing check was observed
+failing before sealing was implemented, rather than included in the automatic mutation runner.
+Invalid registry inputs can report a different first validation error. Opaque-frame browser use
+remains unqualified and out of this slice's screens scope. These notes are not claims of private
+content being accessible to another account.

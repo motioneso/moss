@@ -48,7 +48,7 @@ fn run() -> Result<()> {
         ensure!(args[2] == "--postgres", "Unknown bootstrap option");
         use safety_core::{
             db::{Database, RuntimeRole},
-            secret::Secret,
+            secret::{Secret, SecretCipher},
         };
         let url = std::env::var("MOSS_BUNDLE_APP_URL").context("Missing MOSS_BUNDLE_APP_URL")?;
         let migrations = std::env::var("MOSS_BUNDLE_MIGRATIONS_URL")
@@ -57,16 +57,36 @@ fn run() -> Result<()> {
         let database = runtime
             .block_on(Database::connect(&url, 4, RuntimeRole::App))
             .map_err(|_| anyhow::anyhow!("Could not open bootstrap runtime database"))?;
+        // Use the same standard keyring names as the host; never log their values.
+        let keyring = [
+            "NODE_ENV",
+            "JARVIS_CONNECTOR_SECRET_KEY",
+            "MOSS_CONNECTOR_SECRET_KEY",
+            "JARVIS_CONNECTOR_SECRET_KEY_ID",
+            "MOSS_CONNECTOR_SECRET_KEY_ID",
+            "JARVIS_CONNECTOR_SECRET_KEYS",
+            "MOSS_CONNECTOR_SECRET_KEYS",
+        ]
+        .into_iter()
+        .filter_map(|name| std::env::var(name).ok().map(|value| (name.into(), value)))
+        .collect();
+        let cipher = Arc::new(
+            SecretCipher::connectors(&keyring)
+                .map_err(|_| anyhow::anyhow!("Invalid host catalog keyring"))?,
+        );
         (
-            Arc::new(moss_module_host::postgres::PostgresCatalog::new(
-                database.clone(),
-                access.clone(),
-            )?),
-            Arc::new(moss_module_host::migrations::PostgresLifecycle::new(
-                Secret::new(migrations),
-                database,
-                data,
-            )?),
+            Arc::new(
+                moss_module_host::postgres::PostgresCatalog::new(database.clone(), access.clone())?
+                    .with_cipher(cipher.clone()),
+            ),
+            Arc::new(
+                moss_module_host::migrations::PostgresLifecycle::new(
+                    Secret::new(migrations),
+                    database,
+                    data,
+                )?
+                .with_cipher(cipher),
+            ),
         )
     } else {
         (
@@ -85,7 +105,11 @@ fn run() -> Result<()> {
     )?;
     bundle.bootstrap(&installer, &access)?;
     let state = catalog.load()?;
-    let installed: Vec<_> = state.installed.keys().collect();
+    let installed: Vec<_> = installer
+        .installed_for(&access)?
+        .into_iter()
+        .map(|m| m.manifest.id)
+        .collect();
     let cached: Vec<_> = bundle
         .packages
         .iter()

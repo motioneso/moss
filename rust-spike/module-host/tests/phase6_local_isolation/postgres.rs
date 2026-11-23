@@ -134,6 +134,51 @@ fn installed_postgres_local_lifecycle_and_job_isolation() {
         );
         cx.commit().await.unwrap();
     });
+    {
+        use moss_module_host::store::CatalogStore;
+        // The registry CLI previously constructed this second reader without its host key.
+        let catalog =
+            moss_module_host::postgres::PostgresCatalog::new(database.clone(), f.admin.clone())
+                .unwrap()
+                .with_cipher(f.cipher.clone());
+        assert_eq!(catalog.load().unwrap().installed.len(), 1);
+        let registry = tempfile::tempdir().unwrap();
+        let keys = super::common::Keys::new();
+        keys.write(registry.path(), "1.0.0", 1, vec![]);
+        let trusted = app
+            .installer
+            .refresh(
+                &f.admin,
+                moss_module_host::registry::Source::Folder(registry.path().into()),
+                &super::common::Keys::public(&keys.root),
+                &super::common::Keys::public(&keys.root),
+                "sample-registry",
+            )
+            .unwrap();
+        let bytes =
+            archive::pack(&super::common::files(&super::common::manifest("1.0.0"))).unwrap();
+        app.installer
+            .import_file(
+                &f.admin,
+                &trusted,
+                &bytes,
+                &super::common::Keys::sign(
+                    &keys.publisher,
+                    moss_module_host::trust::digest(&bytes).as_bytes(),
+                ),
+                "sample",
+                true,
+            )
+            .unwrap();
+        // The registry CLI uses this projection on the already assembled, keyed host.
+        let visible = app.installer.installed_for(&f.admin).unwrap();
+        assert_eq!(visible.len(), 1);
+        assert_eq!(visible[0].manifest.id, "sample.counter");
+        assert_eq!(catalog.load().unwrap().installed.len(), 2);
+        app.installer
+            .remove(&f.admin, "sample.counter", Some("Sample counter"))
+            .unwrap();
+    }
     let manifest = Package::read_for_review(&first, &signature.digest)
         .unwrap()
         .manifest;
