@@ -44,3 +44,7 @@ linked doc **in full** and follow it.
   target folder makes rustc see two `moss_module_sdk` crates.
 - Calendar deadline fault fixtures set `deadline_ceiling` as well as `deadline`. A manifest call
   budget overrides the fixture default.
+- Format Rust with `cargo +1.95.0 fmt` (rustfmt 1.95.0), not the default toolchain's rustfmt.
+- Finance import previews return the ledger revision as `view.revision`.
+- Browser proof on this box runs `herdr-browser` with
+  `AGENT_BROWSER_ARGS='--no-sandbox,--force-prefers-reduced-motion'`.
