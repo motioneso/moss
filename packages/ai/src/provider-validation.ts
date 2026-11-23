@@ -9,7 +9,11 @@ import type {
 import { decisionModelDialect } from "@moss/shared";
 
 import { inferWebSearchCapability, isNonChatModelId } from "./model-discovery.js";
-import { PROVIDER_MODEL_ID_PATTERN, providerBaseUrl } from "./provider-base-url.js";
+import {
+  openAiCompatibleApiRoot,
+  PROVIDER_MODEL_ID_PATTERN,
+  providerBaseUrl
+} from "./provider-base-url.js";
 
 export const PROVIDER_CREDENTIAL_MISSING_MESSAGE = "Provider credential is missing.";
 export const PROVIDER_CREDENTIAL_VALID_MESSAGE = "Provider credential is valid.";
@@ -177,8 +181,8 @@ function fetchModels(input: ProviderValidationInput, apiKey: string): Promise<Re
     case "openai-compatible":
     case "ollama":
     case "custom": {
-      const base = providerBaseUrl("openai-compatible", input.baseUrl);
-      return f(`${base}/v1/models`, { headers: { authorization: `Bearer ${apiKey}` } });
+      const base = openAiCompatibleApiRoot(input.baseUrl);
+      return f(`${base}/models`, { headers: { authorization: `Bearer ${apiKey}` } });
     }
   }
 }

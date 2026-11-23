@@ -5,7 +5,6 @@ import {
   type CliToolVersionReader,
   type CliToolVersions
 } from "./cli-tool-versions.js";
-import { providerBaseUrl } from "./provider-base-url.js";
 import {
   PROVIDER_CREDENTIAL_MISSING_MESSAGE,
   PROVIDER_REJECTED_CREDENTIAL_MESSAGE,
@@ -87,7 +86,7 @@ export class ApiKeyChatReadiness {
     const result = await testProviderCredential({
       providerKind: input.providerKind,
       authMethod: "api_key",
-      baseUrl: providerBaseUrl(input.providerKind, input.baseUrl),
+      baseUrl: input.baseUrl,
       credential,
       fetch: (url, init) =>
         baseFetch(url, { ...init, signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) })

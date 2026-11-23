@@ -1,7 +1,6 @@
 import {
   PROVIDER_REJECTED_CREDENTIAL_MESSAGE,
   type ProviderKind,
-  providerBaseUrl,
   testProviderCredential
 } from "@moss/ai";
 
@@ -23,7 +22,10 @@ export function apiKeyRejectionProbe(
     const result = await testProviderCredential({
       providerKind: provider,
       authMethod: "api_key",
-      baseUrl: providerBaseUrl(provider, credential.baseUrl),
+      // The stored address goes through untouched: the key test owns the address rule, and a
+      // pre-normalized value would already have lost a custom version path such as /api/v1
+      // before that rule saw it (#3559).
+      baseUrl: credential.baseUrl,
       credential: { apiKey: credential.apiKey },
       fetch: (url, init) =>
         baseFetch(url, { ...init, signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) })
