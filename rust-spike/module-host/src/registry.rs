@@ -73,6 +73,10 @@ pub struct SeenRegistry {
     pub index_digest: String,
     pub revocations: BTreeMap<String, Revocation>,
     pub versions: BTreeMap<String, String>,
+    /// Resolve publisher aliases to the key revoked at observation time. A root-approved
+    /// replacement using the alias does not inherit the compromised key's revocation.
+    #[serde(default)]
+    pub revoked_publisher_keys: BTreeMap<String, String>,
     #[serde(default)]
     pub publishers: BTreeMap<String, String>,
     #[serde(default)]
@@ -128,13 +132,55 @@ impl SeenRegistry {
             }
             next.revocations.insert(rev.target.clone(), rev.clone());
         }
+        for revocation in next.revocations.values() {
+            if let Some(publisher) = trust.identity.publishers.get(&revocation.target) {
+                next.revoked_publisher_keys
+                    .entry(revocation.target.clone())
+                    .or_insert_with(|| {
+                        let key = if self.revocations.contains_key(&revocation.target) {
+                            self.publishers
+                                .get(&publisher.prefix)
+                                .unwrap_or(&publisher.key)
+                        } else {
+                            &publisher.key
+                        };
+                        key.clone()
+                    });
+            }
+        }
         for target in &trust.identity.lifted_revocations {
             next.revocations.remove(target);
+            next.revoked_publisher_keys.remove(target);
         }
         next.serial = index.serial;
         next.index_digest = digest;
         *self = next;
         Ok(())
+    }
+    pub(crate) fn targets_package(
+        &self,
+        target: &str,
+        digest: &str,
+        publisher_id: &str,
+        public_key: &str,
+    ) -> bool {
+        target == digest
+            || target == public_key
+            || self
+                .revoked_publisher_keys
+                .get(target)
+                .map_or(target == publisher_id, |key| key == public_key)
+    }
+    pub(crate) fn blocks_package(
+        &self,
+        digest: &str,
+        publisher_id: &str,
+        public_key: &str,
+    ) -> bool {
+        self.revocations.values().any(|revocation| {
+            revocation.level == RevocationLevel::Block
+                && self.targets_package(&revocation.target, digest, publisher_id, public_key)
+        })
     }
     pub fn blocked(&self, artifact: &Artifact) -> bool {
         [&artifact.digest, &artifact.publisher_key].iter().any(|k| {
@@ -422,7 +468,14 @@ impl Catalog {
             .max_by_key(|a| &a.version)
             .context("This module version is not in the registry")?;
         ensure!(
-            !seen.blocked(artifact),
+            !seen.blocks_package(
+                &artifact.digest,
+                &artifact.publisher_key,
+                &self
+                    .trust
+                    .publisher(&artifact.publisher_key, &artifact.id)?
+                    .key
+            ),
             "This package or its publisher has been blocked"
         );
         ensure!(

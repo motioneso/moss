@@ -410,10 +410,14 @@ impl Installer {
             .context("Trust and refresh the registry before importing a file")?;
         catalog.assert_current(seen)?;
         ensure!(
-            ![&digest, &publisher_key.to_string()].iter().any(|k| seen
-                .revocations
-                .get(*k)
-                .is_some_and(|r| r.level == crate::registry::RevocationLevel::Block)),
+            !seen.blocks_package(
+                &digest,
+                publisher_key,
+                &catalog
+                    .trust
+                    .publisher(publisher_key, &package.manifest.id)?
+                    .key
+            ),
             "This package or publisher is blocked"
         );
         for (id, range) in &package.manifest.requires {
@@ -545,6 +549,7 @@ impl Installer {
                     revocations: Vec::new(),
                 },
             );
+            state.apply_revocations();
             state.revision += 1;
             self.catalog.commit(revision, &state)?;
             Ok(())
@@ -900,9 +905,15 @@ impl Installer {
     /// Hold the same fences as removal while a trusted host operation uses a module's data.
     /// The callback must not call another Installer method.
     pub fn while_installed<T>(&self, id: &str, action: impl FnOnce() -> Result<T>) -> Result<T> {
-        let _fence = self.fence.read().map_err(|_| anyhow::anyhow!("Module changes are busy"))?;
+        let _fence = self
+            .fence
+            .read()
+            .map_err(|_| anyhow::anyhow!("Module changes are busy"))?;
         let _disk_lock = self.disk_lock(false)?;
-        ensure!(self.catalog.load()?.installed.contains_key(id), "This module is not installed");
+        ensure!(
+            self.catalog.load()?.installed.contains_key(id),
+            "This module is not installed"
+        );
         action()
     }
 

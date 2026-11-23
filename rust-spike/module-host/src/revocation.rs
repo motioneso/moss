@@ -64,11 +64,15 @@ impl State {
                 .registries
                 .get(&installed.registry)
                 .into_iter()
-                .flat_map(|seen| seen.revocations.values())
-                .filter(|r| {
-                    r.target == installed.digest
-                        || r.target == installed.publisher_key
-                        || r.target == installed.publisher_public_key
+                .flat_map(|seen| {
+                    seen.revocations.values().filter(|r| {
+                        seen.targets_package(
+                            &r.target,
+                            &installed.digest,
+                            &installed.publisher_key,
+                            &installed.publisher_public_key,
+                        )
+                    })
                 })
                 .map(|r| AppliedRevocation {
                     source: installed.registry.clone(),
@@ -125,12 +129,19 @@ impl Installer {
 
     pub(crate) fn reconcile_runtime(&self, state: &State) -> Result<()> {
         for (id, module) in &state.installed {
-            if module.is_blocked() {
-                self.lifecycle.pause_jobs(id)?;
-            } else {
-                self.lifecycle.resume_jobs(id)?;
-            }
+            self.reconcile_module_runtime(id, Some(module))?;
         }
         Ok(())
+    }
+    pub(crate) fn reconcile_module_runtime(
+        &self,
+        id: &str,
+        module: Option<&Installed>,
+    ) -> Result<()> {
+        if module.is_some_and(Installed::is_blocked) {
+            self.lifecycle.pause_jobs(id)
+        } else {
+            self.lifecycle.resume_jobs(id)
+        }
     }
 }

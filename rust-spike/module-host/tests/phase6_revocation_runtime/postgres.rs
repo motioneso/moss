@@ -55,9 +55,12 @@ fn publish(keys: &common::Keys, folder: &Path) -> (Artifact, Manifest) {
         sign_in: true,
     });
     manifest.jobs.insert("tick".into(), Default::default());
-    manifest.capabilities.push(serde_json::from_value(json!({
-        "port":"jobs", "operations":["enqueue"], "resources":["tick"]
-    })).unwrap());
+    manifest.capabilities.push(
+        serde_json::from_value(json!({
+            "port":"jobs", "operations":["enqueue"], "resources":["tick"]
+        }))
+        .unwrap(),
+    );
     manifest.tools.insert(
         "sample.read".into(),
         serde_json::from_value(json!({

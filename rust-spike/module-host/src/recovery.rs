@@ -104,7 +104,9 @@ impl Installer {
                 return Err(anyhow::anyhow!(errors.join("; ")));
             }
         }
-        if let Err(error) = self.lifecycle.resume_jobs(id) {
+        if let Err(error) =
+            self.reconcile_module_runtime(id, self.catalog.load()?.installed.get(id))
+        {
             errors.push(format!("Resuming the queue remains pending: {error}"));
             return Err(anyhow::anyhow!(errors.join("; ")));
         }
@@ -152,7 +154,7 @@ impl Installer {
         if !committed {
             self.lifecycle.restore(&journal.module, &journal.snapshot)?;
         }
-        self.lifecycle.resume_jobs(&journal.module)?;
+        self.reconcile_module_runtime(&journal.module, current.installed.get(&journal.module))?;
         self.clear_journal()
     }
     pub fn snapshots(&self, access: &AccessContext) -> Result<Vec<Snapshot>> {
@@ -239,7 +241,7 @@ impl Installer {
             .find(|s| s.module == snapshot.module && s.id == snapshot.id)
             .context("The snapshot is unavailable")?;
         ensure!(stored.expires > Utc::now(), "The snapshot has expired");
-        let module = stored
+        let mut module = stored
             .previous
             .context("This snapshot contains no previous module data")?;
         ensure!(
@@ -248,6 +250,13 @@ impl Installer {
         );
         let mut state = self.catalog.load()?;
         let revision = state.revision;
+        if let Some(current) = state
+            .installed
+            .get(&snapshot.module)
+            .or_else(|| state.retained.get(&snapshot.module))
+        {
+            module.disabled = current.disabled.clone();
+        }
         self.lifecycle.pause_jobs(&snapshot.module)?;
         let backup = match self.lifecycle.snapshot(&snapshot.module) {
             Ok(s) => s,
@@ -264,6 +273,7 @@ impl Installer {
             self.stage(&package, &bytes)?;
             state.retained.remove(&snapshot.module);
             state.installed.insert(snapshot.module.clone(), module);
+            state.apply_revocations();
             state.revision += 1;
             self.catalog.commit(revision, &state)
         })();

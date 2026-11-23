@@ -241,3 +241,149 @@ fn a_root_lift_preserves_manual_off_and_journals_only_policy_metadata() {
         );
     }
 }
+
+#[test]
+fn restoring_a_snapshot_cannot_bypass_a_later_cached_revocation() {
+    let (f, host) = Fixture::new();
+    let update = f.keys.write(f.registry.path(), "2.0.0", 2, vec![]);
+    let catalog = f.refresh(&host);
+    host.install(&f.a, &catalog, &update, true).unwrap();
+    let snapshot = host
+        .snapshots(&f.a)
+        .unwrap()
+        .into_iter()
+        .find(|s| s.previous.as_ref().is_some_and(|m| m.digest == f.digest))
+        .unwrap();
+    f.keys.write(
+        f.registry.path(),
+        "2.0.0",
+        3,
+        vec![Revocation {
+            target: f.digest.clone(),
+            reason: "Unsafe older package".into(),
+            level: RevocationLevel::Block,
+        }],
+    );
+    f.refresh(&host);
+    host.restore_snapshot(&f.a, &snapshot, "Sample counter", true)
+        .unwrap();
+    f.assert_calls(&host, true);
+}
+
+#[test]
+fn a_root_approved_replacement_key_can_serve_while_the_old_key_stays_blocked() {
+    let (mut f, host) = Fixture::new();
+    let old_key = common::Keys::public(&f.keys.publisher);
+    f.keys.write(
+        f.registry.path(),
+        "1.0.0",
+        2,
+        vec![Revocation {
+            target: "sample".into(),
+            reason: "Compromised publisher".into(),
+            level: RevocationLevel::Block,
+        }],
+    );
+    f.refresh(&host);
+    f.assert_calls(&host, true);
+    f.keys.publisher = common::Keys::new().publisher;
+    let replacement = f.keys.write(f.registry.path(), "2.0.0", 3, vec![]);
+    let unapproved = f.refresh(&host);
+    let error = host
+        .install(&f.a, &unapproved, &replacement, true)
+        .unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("Only the registry root may approve a publisher replacement"));
+
+    let path = f.registry.path().join("registry.json");
+    let mut identity: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    identity["publishers"]["sample"]["replaces"] = serde_json::json!([old_key]);
+    let bytes = serde_json::to_vec(&identity).unwrap();
+    std::fs::write(path, &bytes).unwrap();
+    std::fs::write(
+        f.registry.path().join("registry.json.sig"),
+        common::Keys::sign(&f.keys.root, &bytes),
+    )
+    .unwrap();
+    let catalog = f.refresh(&host);
+    f.assert_calls(&host, true);
+    host.install(&f.a, &catalog, &replacement, true).expect(
+        "root-approved replacement must be installable without lifting the compromised key",
+    );
+    assert_eq!(
+        host.call("sample.counter", f.a.clone(), "health", "{}")
+            .unwrap(),
+        "healthy"
+    );
+    drop(host);
+    std::fs::remove_dir_all(f.registry.path()).unwrap();
+    let host = f.open();
+    assert_eq!(
+        host.call("sample.counter", f.b.clone(), "health", "{}")
+            .unwrap(),
+        "healthy"
+    );
+}
+
+#[test]
+fn a_compromised_publisher_key_cannot_escape_through_another_alias() {
+    let (f, host) = Fixture::new();
+    f.keys.write(
+        f.registry.path(),
+        "1.0.0",
+        2,
+        vec![Revocation {
+            target: "sample".into(),
+            reason: "Compromised publisher".into(),
+            level: RevocationLevel::Block,
+        }],
+    );
+    f.refresh(&host);
+    let mut artifact = f.keys.write(f.registry.path(), "2.0.0", 3, vec![]);
+    artifact.publisher_key = "another-alias".into();
+    let path = f.registry.path().join("registry.json");
+    let mut identity: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    identity["publishers"]["another-alias"] = identity["publishers"]["sample"].clone();
+    let bytes = serde_json::to_vec(&identity).unwrap();
+    std::fs::write(path, &bytes).unwrap();
+    std::fs::write(
+        f.registry.path().join("registry.json.sig"),
+        common::Keys::sign(&f.keys.root, &bytes),
+    )
+    .unwrap();
+    let path = f.registry.path().join("index.json");
+    let mut index: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    index["modules"][0] = serde_json::to_value(&artifact).unwrap();
+    let bytes = serde_json::to_vec(&index).unwrap();
+    std::fs::write(path, &bytes).unwrap();
+    std::fs::write(
+        f.registry.path().join("index.json.sig"),
+        common::Keys::sign(&f.keys.index, &bytes),
+    )
+    .unwrap();
+    let catalog = f.refresh(&host);
+    assert!(
+        host.install(&f.a, &catalog, &artifact, true).is_err(),
+        "a publisher alias must not hide a revoked signing key"
+    );
+    let bytes = common::bytes("2.0.0");
+    assert!(
+        host.import_file(
+            &f.a,
+            &catalog,
+            &bytes,
+            &common::Keys::sign(
+                &f.keys.publisher,
+                moss_module_host::trust::digest(&bytes).as_bytes()
+            ),
+            "another-alias",
+            true
+        )
+        .is_err(),
+        "file import must reject the same compromised key"
+    );
+}
