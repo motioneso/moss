@@ -243,6 +243,7 @@ fn installed_email_package_serves_routes_from_the_real_server() {
         lifted_revocations: BTreeSet::new(),
     };
     let index = Index {
+        publish_reviews: Default::default(),
         serial: 1,
         expires: chrono::Utc::now() + chrono::Duration::days(1),
         signing_key: "online".into(),

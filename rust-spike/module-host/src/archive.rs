@@ -19,6 +19,15 @@ pub struct Package {
 }
 impl Package {
     pub fn read(bytes: &[u8], expected: &str, moss: &Version) -> Result<Self> {
+        let package = Self::read_for_review(bytes, expected)?;
+        package.manifest.check_moss_version(moss)?;
+        Ok(package)
+    }
+    /// Validate historical bytes for comparison, without claiming they run on today's host.
+    /// All archive, manifest and digest checks still run. Never use this to install code.
+    /// This reader supports today's schema/ABI only; a future format change needs an explicit
+    /// historical decoder before it can review releases of that older format.
+    pub fn read_for_review(bytes: &[u8], expected: &str) -> Result<Self> {
         ensure!(
             bytes.len() as u64 <= MAX_PACKAGE,
             "The package is too large"
@@ -74,7 +83,7 @@ impl Package {
             );
         }
         let manifest: Manifest = serde_json::from_slice(&files["moss.module.json"])?;
-        manifest.validate(moss)?;
+        manifest.validate_package()?;
         ensure!(
             files.contains_key("code/module.wasm") || !manifest.screens.is_empty(),
             "A package needs code or a screen"

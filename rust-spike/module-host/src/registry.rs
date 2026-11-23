@@ -15,6 +15,8 @@ use std::{
 };
 use url::Url;
 
+pub const MAX_INDEX: u64 = 8 * 1024 * 1024;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Artifact {
@@ -44,6 +46,8 @@ pub enum Channel {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Index {
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub publish_reviews: BTreeMap<String, crate::registry_review::PublishReview>,
     pub serial: u64,
     pub expires: DateTime<Utc>,
     pub signing_key: String,
@@ -171,7 +175,8 @@ impl SeenRegistry {
                 .get(target)
                 .map_or(target == publisher_id, |key| key == public_key)
     }
-    pub(crate) fn blocks_package(
+    /// Shared block policy for installers, runtime dispatch and publisher validation.
+    pub fn blocks_package(
         &self,
         digest: &str,
         publisher_id: &str,
@@ -369,7 +374,7 @@ impl Catalog {
         let sig = String::from_utf8(source.fetch("registry.json.sig", 4096)?)?;
         let root_signature = sig.as_bytes().to_vec();
         let trust = TrustedRegistry::open(&identity, &sig, root_key, first_party_key)?;
-        let bytes = source.fetch("index.json", 8 * 1024 * 1024)?;
+        let bytes = source.fetch("index.json", MAX_INDEX)?;
         let sig = String::from_utf8(source.fetch("index.json.sig", 4096)?)?;
         let index: Index = serde_json::from_slice(&bytes)?;
         let key = trust
@@ -489,11 +494,26 @@ impl Catalog {
         let bytes = self.source.fetch(&path, artifact.size)?;
         self.read_download(artifact, &bytes, moss)
     }
+    /// Authenticate a historical release for publish review, regardless of its host range.
+    pub fn download_for_review(&self, artifact: &Artifact) -> Result<crate::archive::Package> {
+        let path = format!("packages/{}.mosspkg", artifact.digest);
+        let bytes = self.source.fetch(&path, artifact.size)?;
+        self.read_download_for_review(artifact, &bytes)
+    }
     pub fn read_download(
         &self,
         artifact: &Artifact,
         bytes: &[u8],
         moss: &Version,
+    ) -> Result<crate::archive::Package> {
+        let package = self.read_download_for_review(artifact, bytes)?;
+        package.manifest.check_moss_version(moss)?;
+        Ok(package)
+    }
+    fn read_download_for_review(
+        &self,
+        artifact: &Artifact,
+        bytes: &[u8],
     ) -> Result<crate::archive::Package> {
         ensure!(
             bytes.len() as u64 == artifact.size,
@@ -505,7 +525,7 @@ impl Catalog {
             &artifact.digest,
             &artifact.signature,
         )?;
-        let package = crate::archive::Package::read(bytes, &artifact.digest, moss)?;
+        let package = crate::archive::Package::read_for_review(bytes, &artifact.digest)?;
         compare_manifest(&package.manifest, artifact)?;
         Ok(package)
     }

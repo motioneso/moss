@@ -259,6 +259,7 @@ fn installed_news_sports_weather_and_briefings_work_together() {
         lifted_revocations: BTreeSet::new(),
     };
     let index = Index {
+        publish_reviews: Default::default(),
         serial: 1,
         expires: chrono::Utc::now() + chrono::Duration::days(1),
         signing_key: "online".into(),

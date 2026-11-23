@@ -2,6 +2,7 @@
 pub mod archive;
 pub mod manifest;
 pub mod registry;
+pub mod registry_review;
 pub mod runtime;
 pub mod sql;
 pub mod staged;

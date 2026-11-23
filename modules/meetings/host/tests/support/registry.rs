@@ -76,6 +76,7 @@ pub fn publish_as(
         lifted_revocations: Default::default(),
     };
     let listing = Index {
+        publish_reviews: Default::default(),
         serial: 1,
         expires: chrono::Utc::now() + chrono::Duration::days(1),
         signing_key: "online".into(),

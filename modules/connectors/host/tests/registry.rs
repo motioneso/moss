@@ -62,6 +62,7 @@ fn connectors_downloads_from_a_signed_folder_registry() {
         lifted_revocations: Default::default(),
     };
     let listing = Index {
+        publish_reviews: Default::default(),
         serial: 1,
         expires: chrono::Utc::now() + chrono::Duration::days(1),
         signing_key: "online".into(),
