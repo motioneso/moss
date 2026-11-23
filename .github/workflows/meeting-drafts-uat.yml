@@ -86,8 +86,12 @@ jobs:
           for attempt in 1 2; do
             if [ "$attempt" -eq 2 ]; then sudo python3 scripts/prepare-browser-apt-mirror.py; fi
             status=0
-            timeout --verbose --signal=TERM --kill-after=15s 5m \
-              pnpm exec playwright install --with-deps chromium || status=$?
+            # The timeout must own apt's privileges so it can stop apt before retrying.
+            sudo env "PATH=$PATH" timeout --verbose --signal=TERM --kill-after=15s 5m \
+              pnpm exec playwright install-deps chromium \
+              && timeout --verbose --signal=TERM --kill-after=15s 5m \
+                pnpm exec playwright install chromium \
+              || status=$?
             if [ "$status" -eq 0 ]; then break; fi
           done
           exit "$status"
@@ -165,8 +169,12 @@ jobs:
           for attempt in 1 2; do
             if [ "$attempt" -eq 2 ]; then sudo python3 scripts/prepare-browser-apt-mirror.py; fi
             status=0
-            timeout --verbose --signal=TERM --kill-after=15s 5m \
-              pnpm exec playwright install --with-deps chromium || status=$?
+            # The timeout must own apt's privileges so it can stop apt before retrying.
+            sudo env "PATH=$PATH" timeout --verbose --signal=TERM --kill-after=15s 5m \
+              pnpm exec playwright install-deps chromium \
+              && timeout --verbose --signal=TERM --kill-after=15s 5m \
+                pnpm exec playwright install chromium \
+              || status=$?
             if [ "$status" -eq 0 ]; then break; fi
           done
           exit "$status"
