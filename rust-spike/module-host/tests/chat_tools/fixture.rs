@@ -71,11 +71,16 @@ fn wat_bytes(text: &str) -> String {
 /// Real Wasm fixture. Routes forward port requests; tools either echo their invocation or
 /// perform one fixed port request; the card API returns the supplied stored-record fixture.
 pub fn wasm(card: &Value, port: &str, request: Option<Value>) -> Vec<u8> {
-    let card = card.to_string();
+    let error = card.get("fixtureError").and_then(Value::as_str);
+    let tag = if error.is_some() { 1 } else { 0 };
+    let card = error.map(str::to_owned).unwrap_or_else(|| card.to_string());
     let request = request.map(|v| v.to_string());
     let source = include_str!("../../sample/module.wat")
         .replace("moss:module/kv@", &format!("moss:module/{port}@"));
-    let mut source = source;
+    let mut source = source
+        .replace("memory\") 4 1024", "memory\") 128 1024")
+        .replace("(memory 4 1024)", "(memory 128 1024)")
+        .replace("(i32.const 65536)", "(i32.const 4194304)");
     let tool = if let Some(request) = &request {
         format!(
             "i32.const 8192 i32.const {} i32.const 32 call $kv",
@@ -99,7 +104,8 @@ pub fn wasm(card: &Value, port: &str, request: Option<Value>) -> Vec<u8> {
         else
           i32.const 32 i32.const 0 i32.store
           local.get $kind i32.load8_u i32.const 97 i32.eq
-          if i32.const 36 i32.const 1024 i32.store i32.const 40 i32.const {} i32.store
+          if i32.const 32 i32.const {tag} i32.store
+             i32.const 36 i32.const 1024 i32.store i32.const 40 i32.const {} i32.store
           else i32.const 36 i32.const 128 i32.store i32.const 40 i32.const 7 i32.store
           end
         end

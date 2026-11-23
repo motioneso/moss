@@ -706,6 +706,11 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
             std::sync::Arc::new(moss_module_host::runtime::DenyPorts),
         );
         installer.install(&access, &source, finance, true).unwrap();
+        if std::env::var_os("JS395_FINANCE_BATCH_PROOF").is_some() {
+            // Seed the person's ask policy; the proof still uses real model calls and UI decisions.
+            services.set_action_policy(&access, "finance", &[("finance.import.apply".into(), true)].into()).unwrap();
+        }
+
         drop(installer);
         start(true)
     } else { _server };

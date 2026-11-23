@@ -46,6 +46,25 @@ impl Installer {
         kind: &str,
         payload: &str,
     ) -> Result<String> {
+        self.call_unfenced_with_chat_budget(id, access, kind, payload, false)
+    }
+    pub(crate) fn call_chat_unfenced(
+        &self,
+        id: &str,
+        access: AccessContext,
+        kind: &str,
+        payload: &str,
+    ) -> Result<String> {
+        self.call_unfenced_with_chat_budget(id, access, kind, payload, true)
+    }
+    fn call_unfenced_with_chat_budget(
+        &self,
+        id: &str,
+        access: AccessContext,
+        kind: &str,
+        payload: &str,
+        chat: bool,
+    ) -> Result<String> {
         ensure!(
             !self.root.path().join("operation.json").exists(),
             "Module recovery must finish before calls resume"
@@ -80,7 +99,13 @@ impl Installer {
             .files
             .get("code/module.wasm")
             .context("This module has no code handler")?;
-        self.host.call(
+        let call = if chat {
+            crate::runtime::Host::call_chat
+        } else {
+            crate::runtime::Host::call
+        };
+        call(
+            &self.host,
             wasm,
             Arc::new(installed.manifest.clone()),
             access,

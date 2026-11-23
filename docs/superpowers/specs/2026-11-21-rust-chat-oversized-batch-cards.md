@@ -193,8 +193,9 @@ paged transport is superseded alongside the numbered-card preference.
    restrictions and split guidance. Inventory their replacements against real Finance domain
    constraints in the build PR; keep business-validation rules.
 3. Remove the chat-specific 64 KiB argument cap. For chat card preparation and execution only,
-   scale the per-invocation message allowance from the full serialized call, accounting for JSON
-   escaping and card-label overhead, with room for the complete result. Keep Wasm memory, fuel,
+   scale the per-invocation message allowance to fit the full serialized call and the guest's
+   memory envelope. Small arguments can resolve large stored values, so argument length alone
+   cannot predict the disclosure size. Keep Wasm memory, fuel,
    deadline, capability checks and ordinary non-chat message budgets unchanged. Resource failures
    fail preparation explicitly; they never yield a partial actionable card.
 4. Render one labelled, keyboard-scrollable details region containing the entire fields/content
@@ -280,3 +281,29 @@ On 2026-11-22 coordinator t6n relayed Ben’s approval of option B and authorize
 Approve/Reject immediately available once the entire disclosure is valid. The earlier preference
 for numbered cards and any scroll/visit gate are superseded. The coordinator subsequently approved
 the single-record backend above, without a paged/staged protocol. Keep auto-merge off.
+
+## Build record
+
+The single-card implementation uses the unchanged guest memory envelope for chat messages,
+with room for the entire serialized call. This covers calls with short identifiers that resolve
+large stored values; a multiplier of argument length would still reject those disclosures.
+Ordinary non-chat messages retain their existing allowance.
+
+Finance's presentation-driven schema caps change as follows:
+
+| Chat input                   | Previous presentation cap | Domain limit retained                        |
+| ---------------------------- | ------------------------- | -------------------------------------------- |
+| Review apply parallel arrays | 3 items                   | 200 transactions (`transactions::MAX_BATCH`) |
+| Bulk categorize / confirm    | 12 transactions           | 200 transactions (`transactions::MAX_BATCH`) |
+| Import apply                 | 1 row                     | 200 rows (`csv_import::MAX_ROWS`)            |
+
+Other domain validation remains: CSV file size, transaction note byte length, supported money
+precision, category/target selection rules, current revisions and account eligibility. The
+host no longer limits presentation field count, field value length or aggregate card bytes.
+Code-owned label and pinned-version validation remains. Existing adapters need no protocol
+migration: omitted `batch` defaults to false; batch adapters set it for the whole-batch controls.
+
+Builder errors use an explicit public code/message envelope that the host sanitizes before
+forwarding. Internal errors, traps, invalid replies and unavailable redaction use fixed safe
+errors. The shell creates no approval record for failed preparation; the runner returns the
+failure for the original tool call instead of reporting that the person declined.

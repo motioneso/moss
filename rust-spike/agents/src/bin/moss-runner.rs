@@ -23,6 +23,7 @@
 //!   -> {"op":"tool_result","call_id":"<turn>:1","ok":true,"text":"..."}
 //!   <- {"event":"done","text":"...","tools_used":[...]} | {"event":"error","message":"..."}
 
+use moss_agents::gateway::{Confirmation, PreparationError};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -81,6 +82,8 @@ enum Op {
     Answer {
         id: u64,
         allow: bool,
+        #[serde(default)]
+        error: Option<PreparationError>,
     },
 }
 
@@ -186,7 +189,7 @@ async fn serve(
     });
     let _ = out_tx.send(json!({"event": "ready"}));
 
-    let pending: Arc<Mutex<HashMap<u64, oneshot::Sender<Answer>>>> = Arc::default();
+    let pending: Arc<Mutex<HashMap<u64, oneshot::Sender<Confirmation>>>> = Arc::default();
     let next_id = Arc::new(AtomicU64::new(1));
     let active: Arc<Mutex<Option<Arc<ToolBridge>>>> = Arc::default();
     let mut chat_task: Option<(String, tokio::task::JoinHandle<()>)> = None;
@@ -288,9 +291,13 @@ async fn serve(
                     eprintln!("moss-runner: refused unmatched tool result");
                 }
             }
-            Ok(Op::Answer { id, allow }) => {
+            Ok(Op::Answer { id, allow, error }) => {
                 if let Some(tx) = pending.lock().unwrap().remove(&id) {
-                    let _ = tx.send(if allow { Answer::Allow } else { Answer::Deny });
+                    let _ = tx.send(match (allow, error) {
+                        (false, Some(error)) => Err(error),
+                        (true, None) => Ok(Answer::Allow),
+                        _ => Ok(Answer::Deny),
+                    });
                 }
             }
             _ => {
@@ -320,10 +327,13 @@ async fn serve(
 const ASK_LIMIT: std::time::Duration = std::time::Duration::from_secs(11 * 60);
 
 /// An ask with no answer inside `limit`, or whose sender is dropped, is a refusal.
-async fn await_answer(rx: oneshot::Receiver<Answer>, limit: std::time::Duration) -> Answer {
+async fn await_answer(
+    rx: oneshot::Receiver<Confirmation>,
+    limit: std::time::Duration,
+) -> Confirmation {
     match tokio::time::timeout(limit, rx).await {
         Ok(Ok(answer)) => answer,
-        _ => Answer::Deny,
+        _ => Ok(Answer::Deny),
     }
 }
 
@@ -412,29 +422,26 @@ mod tests {
             .await
             .expect("hello check did not close or answer")
             .unwrap();
-        assert!(
-            first.is_none(),
-            "wrong hello secret opened a turn socket"
-        );
+        assert!(first.is_none(), "wrong hello secret opened a turn socket");
         task.await.unwrap().unwrap();
     }
 
     #[tokio::test]
     async fn an_unanswered_ask_is_refused_when_its_timer_runs_out() {
-        let (tx, rx) = oneshot::channel::<Answer>();
+        let (tx, rx) = oneshot::channel::<Confirmation>();
         let answer = tokio::time::timeout(
             std::time::Duration::from_secs(5),
             await_answer(rx, std::time::Duration::from_millis(20)),
         )
         .await
         .expect("the ask waited past its own timer");
-        assert_eq!(answer, Answer::Deny);
+        assert_eq!(answer, Ok(Answer::Deny));
         drop(tx);
         let (tx, rx) = oneshot::channel();
-        tx.send(Answer::Allow).unwrap();
+        tx.send(Ok(Answer::Allow)).unwrap();
         assert_eq!(
             await_answer(rx, std::time::Duration::from_secs(5)).await,
-            Answer::Allow
+            Ok(Answer::Allow)
         );
     }
 

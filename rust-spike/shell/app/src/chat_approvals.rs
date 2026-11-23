@@ -22,6 +22,7 @@ pub struct Action {
 }
 
 pub struct Record {
+    pub batch: bool,
     pub id: Uuid,
     pub actor: String,
     pub turn: String,
@@ -144,6 +145,7 @@ impl Book {
             .iter()
             .filter(|r| r.actor == actor)
             .map(|r| ApprovalView {
+                batch: r.batch,
                 id: r.id.to_string(),
                 kind: r.kind,
                 state: r.state,

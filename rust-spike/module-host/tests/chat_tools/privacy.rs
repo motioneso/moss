@@ -338,3 +338,74 @@ fn chat_tool_reads_use_the_actor_under_real_rls_including_admin() {
     assert_eq!(read(&f.admin), json!([]));
     println!("PASS signed installed Wasm chat tool -> ServicePorts -> DatabasePorts -> actor DataContext -> owner-only PostgreSQL RLS; A/B/admin");
 }
+
+#[test]
+fn planted_credentials_card_error_and_private_errors_stay_generic() {
+    const PLANTED: &str = "planted-card-builder-credential-395";
+    let mut m = manifest();
+    m.credentials.insert(
+        "remote".into(),
+        Credential {
+            exchange: None,
+            scope: CredentialScope::Account,
+            hosts: ["example.test".into()].into(),
+            attachment: Attachment::Header("authorization".into()),
+            with: vec![],
+            expose_fields: Default::default(),
+        },
+    );
+    let public =
+        moss_module_sdk::Error::public("stale_source", &format!("Refresh {PLANTED} and retry."));
+    let f = Fixture::new(m, json!({"fixtureError":public.message}), None);
+    f.services
+        .set_credential(
+            &f.a,
+            MODULE,
+            "remote",
+            &SecretFields::new().with("accessToken", Secret::new(PLANTED)),
+        )
+        .unwrap();
+    let error = f
+        .host
+        .chat_tool_card(&f.a, MODULE, "sample.erase", &params())
+        .unwrap_err();
+    let error = error
+        .downcast_ref::<moss_module_host::chat_tools::CardBuildError>()
+        .unwrap();
+    assert_eq!(error.code, "stale_source");
+    assert_eq!(error.message, "Refresh [redacted] and retry.");
+    // Unavailable redaction must never return the public payload as an unsafe fallback.
+    let root = vault::Root::open(&f._data.path().join("modules/files").join(MODULE)).unwrap();
+    let context = vault::VaultContext::for_module_files(&root, &f.a).unwrap();
+    context
+        .write("host/credential-remote.json", br#"{"broken":true}"#)
+        .unwrap();
+    let error = f
+        .host
+        .chat_tool_card(&f.a, MODULE, "sample.erase", &params())
+        .unwrap_err();
+    let error = error
+        .downcast_ref::<moss_module_host::chat_tools::CardBuildError>()
+        .unwrap();
+    assert_eq!(error.code, "approval_preparation_failed");
+    assert_eq!(
+        error.message,
+        "Approval details could not be prepared. Try again later."
+    );
+
+    let f = Fixture::new(
+        manifest(),
+        json!({"fixtureError":"private database path /private/records.db"}),
+        None,
+    );
+    let error = f
+        .host
+        .chat_tool_card(&f.a, MODULE, "sample.erase", &params())
+        .unwrap_err();
+    let error = error
+        .downcast_ref::<moss_module_host::chat_tools::CardBuildError>()
+        .unwrap();
+    assert_eq!(error.code, "approval_preparation_failed");
+    assert!(!error.message.contains("private"));
+    assert!(!error.message.contains("records.db"));
+}

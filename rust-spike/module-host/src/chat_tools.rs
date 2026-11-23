@@ -47,6 +47,8 @@ pub struct CardField {
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct ApprovalCardRecord {
+    #[serde(default)]
+    pub batch: bool,
     pub title: String,
     pub target: String,
     pub fields: Vec<CardField>,
@@ -56,10 +58,6 @@ pub struct ApprovalCardRecord {
 }
 // Module adapters build labels in code; only the manifest supplies the fixed target.
 fn normalize_card(manifest: &Manifest, tool: &Tool, raw: Value) -> Result<ApprovalCardRecord> {
-    ensure!(
-        raw.to_string().len() <= 32 * 1024,
-        "Approval card too large"
-    );
     let object = raw.as_object().context("Invalid approval card")?;
     let text = |key: &str, max: usize| -> Result<Option<String>> {
         match object.get(key) {
@@ -69,18 +67,17 @@ fn normalize_card(manifest: &Manifest, tool: &Tool, raw: Value) -> Result<Approv
         }
     };
     let mut fields = Vec::new();
-    if let Some(item) = text("target", 4096)? {
+    if let Some(item) = text("target", usize::MAX)? {
         fields.push(CardField {
             label: "Item".into(),
             value: item,
         });
     }
     let values = raw["fields"].as_array().context("Card fields required")?;
-    ensure!(values.len() <= 32, "Too many card fields");
     for field in values {
         let field: CardField = serde_json::from_value(field.clone())?;
         ensure!(
-            !field.label.is_empty() && field.label.len() <= 120 && field.value.len() <= 4096,
+            !field.label.trim().is_empty() && field.label.len() <= 120,
             "Invalid card field size"
         );
         fields.push(field);
@@ -91,17 +88,73 @@ fn normalize_card(manifest: &Manifest, tool: &Tool, raw: Value) -> Result<Approv
         "Pinned card version required"
     );
     let target = format!("{}: {}", manifest.name, tool.description);
-    ensure!(target.len() <= 1024, "Card target too long");
     Ok(ApprovalCardRecord {
+        batch: raw
+            .get("batch")
+            .map(|value| value.as_bool().context("Invalid batch flag"))
+            .transpose()?
+            .unwrap_or(false),
         title: "Action request".into(),
         target,
         fields,
         version,
-        content: text("content", 8192)?,
+        content: text("content", usize::MAX)?,
         danger: matches!(tool.risk.as_str(), "destructive" | "outbound"),
     })
 }
+/// A caller-visible preparation failure. Only these messages may reach the model.
+#[derive(Clone, Debug)]
+pub struct CardBuildError {
+    pub code: String,
+    pub message: String,
+}
+impl CardBuildError {
+    fn invalid() -> Self {
+        Self {
+            code: "invalid_approval_details".into(),
+            message: "The module returned invalid approval details. Ask Moss to try again.".into(),
+        }
+    }
+}
+impl std::fmt::Display for CardBuildError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+impl std::error::Error for CardBuildError {}
 impl Installer {
+    fn card_failure(
+        &self,
+        manifest: &Manifest,
+        access: &AccessContext,
+        error: anyhow::Error,
+    ) -> anyhow::Error {
+        let fallback = || CardBuildError {
+            code: "approval_preparation_failed".into(),
+            message: "Approval details could not be prepared. Try again later.".into(),
+        };
+        let Some(public) = error.downcast_ref::<crate::runtime::PublicModuleError>() else {
+            return fallback().into();
+        };
+        let mut value = json!({"code":public.0.code,"message":public.0.message});
+        if self
+            .chat_services()
+            .and_then(|services| services.sanitize_chat(manifest, access, &mut value))
+            .is_err()
+        {
+            return fallback().into();
+        }
+        match (value["code"].as_str(), value["message"].as_str()) {
+            (Some(code), Some(message)) if !code.is_empty() && !message.trim().is_empty() => {
+                CardBuildError {
+                    code: code.into(),
+                    message: message.into(),
+                }
+                .into()
+            }
+            _ => fallback().into(),
+        }
+    }
     fn chat_services(&self) -> Result<std::sync::Arc<crate::services::ServicePorts>> {
         self.chat_services
             .read()
@@ -178,10 +231,6 @@ impl Installer {
             .input_schema
             .as_ref()
             .context("Chat tool has no input schema")?;
-        ensure!(
-            params.to_string().len() <= 64 * 1024,
-            "Tool arguments too large"
-        );
         chat_schema::validate(schema, params)?;
         Ok((manifest, tool))
     }
@@ -237,7 +286,7 @@ impl Installer {
         };
         // Grant lock has been released: guest ports may re-enter ServicePorts.
         let result = self
-            .call_unfenced(module, access.clone(), "tool", &payload.to_string())
+            .call_chat_unfenced(module, access.clone(), "tool", &payload.to_string())
             .map_err(|_| anyhow::anyhow!("Chat tool failed"))?;
         let mut value: Value = serde_json::from_str(&result)
             .map_err(|_| anyhow::anyhow!("Invalid chat tool reply"))?;
@@ -263,9 +312,13 @@ impl Installer {
         ensure!(manifest.provides.contains_key(api), "Card API unavailable");
         let payload = json!({"name":api,"parameters":{"tool":name,"parameters":params}});
         let card = (|| -> Result<ApprovalCardRecord> {
-            let result = self.call_unfenced(module, access.clone(), "api", &payload.to_string())?;
-            let raw: Value = serde_json::from_str(&result)?;
-            let card = normalize_card(&manifest, &tool, raw)?;
+            let result = self
+                .call_chat_unfenced(module, access.clone(), "api", &payload.to_string())
+                .map_err(|error| self.card_failure(&manifest, access, error))?;
+            let raw: Value =
+                serde_json::from_str(&result).map_err(|_| CardBuildError::invalid())?;
+            let card =
+                normalize_card(&manifest, &tool, raw).map_err(|_| CardBuildError::invalid())?;
             let mut value = serde_json::to_value(&card)?;
             self.chat_services()?
                 .sanitize_chat(&manifest, access, &mut value)?;
@@ -276,6 +329,7 @@ impl Installer {
             );
             Ok(clean)
         })();
-        Ok(card.ok()) // Failed/malformed card is a denial, never a runnable fallback.
+        // Failures remain errors and can never become a runnable fallback.
+        card.map(Some)
     }
 }
