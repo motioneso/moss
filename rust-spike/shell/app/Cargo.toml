@@ -9,6 +9,7 @@ description = "The Moss server: serves the UI shell to browsers, phones and the 
 live-proof = ["moss-agents/live-proof"]
 
 [dependencies]
+base64 = "0.22"
 moss-agents = { path = "../../agents" }
 moss-shell-contract = { path = "../contract", features = ["stub"] }
 moss-network = { path = "../../network" }

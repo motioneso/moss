@@ -454,10 +454,7 @@ impl Installer {
             approved,
             pin_override,
         } = options;
-        crate::sql::check(&package, &self.inventory)?;
-        if let Some(wasm) = package.files.get("code/module.wasm") {
-            self.host.validate(wasm, &package.manifest)?;
-        }
+        crate::archive::validate_install(&package, &self.host, &self.inventory)?;
         let mut state = self.catalog.load()?;
         let revision = state.revision;
         let id = &package.manifest.id;

@@ -262,6 +262,17 @@ pub fn identifier(s: &str) -> bool {
                     .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
         })
 }
+/// Local owner segment is the canonical account UUID, never a display name.
+fn package_identifier(id: &str) -> bool {
+    if let Some(local) = id.strip_prefix("local.") {
+        return local.split_once('.').is_some_and(|(owner, name)| {
+            uuid::Uuid::parse_str(owner).is_ok_and(|id| id.to_string() == owner)
+                && identifier(name)
+                && id.len() <= 100
+        });
+    }
+    identifier(id)
+}
 /// A JSON field or stored-secret field name chosen by a manifest or a caller.
 pub fn wire_name(s: &str) -> bool {
     !s.is_empty()
@@ -331,7 +342,7 @@ impl Manifest {
             "This package uses an unsupported manifest version"
         );
         ensure!(
-            identifier(&self.id),
+            package_identifier(&self.id),
             "The module name is not a safe identifier"
         );
         ensure!(

@@ -1,5 +1,6 @@
 //! Review proposals are recomputed from authenticated package and registry bytes on every run.
 pub mod artifacts;
+pub mod local;
 pub mod registry_artifacts;
 pub mod release;
 use anyhow::{ensure, Context, Result};

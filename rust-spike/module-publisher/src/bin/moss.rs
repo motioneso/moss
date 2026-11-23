@@ -3,6 +3,13 @@ use moss_module_publisher::{artifacts, registry_artifacts};
 use std::path::Path;
 fn run() -> Result<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some("local") {
+        println!(
+            "{}",
+            serde_json::to_string(&moss_module_publisher::local::command(&args[1..])?)?
+        );
+        return Ok(());
+    }
     if args.first().map(String::as_str) == Some("release") {
         if args.len() < 3 {
             bail!("Usage: moss release PACKAGES OUTPUT [PREVIOUS_FOLDER] [--dry-run]");

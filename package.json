@@ -361,6 +361,7 @@
     "test:rust-chat-bridge": "tsx rust-spike/shell/tools/chat-bridge-gate.ts",
     "test:rust-chat-bridge-live": "tsx rust-spike/shell/tools/chat-bridge-live.ts",
     "test:rust-phase6-offline-bundle": "bash rust-spike/module-publisher/tools/release-check.sh",
+    "test:rust-phase6-local-trust": "tsx rust-spike/module-host/tools/phase6-local-trust-gate.ts",
     "test:rust-phase6-registry-artifacts": "bash rust-spike/module-publisher/tools/artifacts-check.sh",
     "test:rust-module-publisher": "bash rust-spike/module-publisher/tools/check.sh"
   },

@@ -14,6 +14,7 @@ pub mod database;
 pub mod lifecycle;
 pub mod linked_notes;
 pub mod local;
+pub mod local_packages;
 pub mod migrations;
 pub mod postgres;
 
