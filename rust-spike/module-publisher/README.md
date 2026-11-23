@@ -26,11 +26,13 @@ cargo run --locked --manifest-path rust-spike/module-publisher/Cargo.toml -- \
 
 The command authenticates the base registry and candidate, finds the greatest published version
 of this module (across channels), checks that the version increases and old SQL stays unchanged,
-and prints the computed request. A publisher is new when its actual public key has not signed
+and prints the computed request. Historical packages are authenticated and structurally validated
+without requiring their old Moss version range to match the candidate host; candidate validation
+and installation still enforce the host range. A publisher is new when its actual public key has not signed
 any artifact in this registry. An existing publisher's new module still requests approval for
 its initial capabilities and fetch hosts. Permission growth uses the host's permission comparison,
 including operation/resource/private-access and permission metadata changes. Fetch hosts are also
-listed separately. Removals alone do not request human review.
+listed separately, including credential broker destinations. Removals alone do not request human review.
 
 An authorized human signs the request after inspecting the exact package and diff. The approval
 JSON contains `request` (the complete request), `reviewer` and `signature`. Sign the bytes from
@@ -70,4 +72,15 @@ RUSTUP_HOME="$HOME/.rustup" CARGO_TARGET_DIR=/tmp/moss-publisher-check \
 
 The registered runner is `pnpm test:rust-module-publisher`. It exercises the real CLI, Wasmtime
 validation, archives and signed registry with temporary generated keys and no database/network.
-Use only one cargo build at a time. Negative controls are described in the task proof report.
+Use only one cargo build at a time. To prove the refusals depend on their guards:
+
+```bash
+RUSTUP_HOME="$HOME/.rustup" CARGO_TARGET_DIR=/tmp/moss-publisher-check \
+  python3 rust-spike/module-publisher/tools/negative-controls.py
+```
+
+The script temporarily mutates one guard at a time in this worktree, requires each selected test
+to fail at an assertion (a compiler error does not count), restores the original file in `finally`,
+and reruns the full suite. Use a dedicated clean worktree and do not edit or build it concurrently.
+Logs go to a temporary folder, or `PUBLISH_REVIEW_PROOF_DIR` when explicitly set. The script leaves
+no runtime bypass option in the publisher.

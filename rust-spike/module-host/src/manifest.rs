@@ -294,6 +294,19 @@ pub const MAX_CALL_LIMIT_REQUEST_MS: u64 = 120_000;
 
 impl Manifest {
     pub fn validate(&self, moss: &Version) -> Result<()> {
+        self.validate_package()?;
+        self.check_moss_version(moss)
+    }
+    pub(crate) fn check_moss_version(&self, moss: &Version) -> Result<()> {
+        ensure!(
+            self.requires_moss.matches(moss),
+            "This module needs a different Moss version"
+        );
+        Ok(())
+    }
+    /// Historical packages are compared at publish without requiring them to run on the
+    /// new release's host. Installation still checks compatibility through validate/read.
+    pub(crate) fn validate_package(&self) -> Result<()> {
         crate::metadata::validate(self)?;
         if let Some(fuel) = self.fuel_limit {
             ensure!(
@@ -324,10 +337,6 @@ impl Manifest {
         ensure!(
             self.abi == ABI,
             "This module needs an update from its publisher"
-        );
-        ensure!(
-            self.requires_moss.matches(moss),
-            "This module needs a different Moss version"
         );
         let mut ports = BTreeSet::new();
         crate::account_contracts::validate_routes(self)?;

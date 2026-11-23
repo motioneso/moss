@@ -376,9 +376,7 @@ fn installed_wellness_package_serves_routes_from_the_real_server() {
     const MARK: &str = "PLANTED-LIVE-MARKER-7d2e";
     assert_eq!(
         client
-            .get(format!(
-                "{remote_origin}/api/m/wellness/wellness/ai-consent"
-            ))
+            .get(format!("{remote_origin}/api/m/wellness/wellness/ai-consent"))
             .header("origin", "https://untrusted.example")
             .header("cookie", &cookie)
             .send()
@@ -418,9 +416,7 @@ fn installed_wellness_package_serves_routes_from_the_real_server() {
         Method::POST,
         "/wellness/checkins",
         Some(&cookie),
-        Some(
-            json!({"feelingCore":"happy","feelingSecondary":"Joy","note":MARK,"intensity":4,"energy":3}),
-        ),
+        Some(json!({"feelingCore":"happy","feelingSecondary":"Joy","note":MARK,"intensity":4,"energy":3})),
     );
     assert_eq!(status, 201, "{text}\n{}", log());
     let made = json_of(&text);
@@ -434,12 +430,7 @@ fn installed_wellness_package_serves_routes_from_the_real_server() {
         Some(json!({"feelingCore":"sad"})),
     );
     assert_eq!(status, 201);
-    let (_, text) = call(
-        Method::GET,
-        "/wellness/checkins?limit=1",
-        Some(&cookie),
-        None,
-    );
+    let (_, text) = call(Method::GET, "/wellness/checkins?limit=1", Some(&cookie), None);
     let page = json_of(&text);
     assert_eq!(page["checkins"].as_array().unwrap().len(), 1, "{text}");
     let cursor = page["nextCursor"].as_str().unwrap().to_owned();
@@ -461,11 +452,7 @@ fn installed_wellness_package_serves_routes_from_the_real_server() {
     assert_eq!(json_of(&text)["checkin"]["note"], MARK);
     // The other person sees none of it and cannot change it.
     let (_, text) = call(Method::GET, "/wellness/checkins", Some(&other), None);
-    assert_eq!(
-        json_of(&text),
-        json!({"checkins":[],"nextCursor":null}),
-        "{text}"
-    );
+    assert_eq!(json_of(&text), json!({"checkins":[],"nextCursor":null}), "{text}");
     assert!(!text.to_lowercase().contains(&MARK.to_lowercase()));
     assert_eq!(
         call(
@@ -486,11 +473,7 @@ fn installed_wellness_package_serves_routes_from_the_real_server() {
         Some(&cookie),
         Some(json!({"granted":false})),
     );
-    assert_eq!(
-        json_of(&text),
-        json!({"effective":false,"explicit":false}),
-        "{text}"
-    );
+    assert_eq!(json_of(&text), json!({"effective":false,"explicit":false}), "{text}");
     let (_, text) = call(Method::GET, "/wellness/ai-consent", Some(&other), None);
     assert_eq!(json_of(&text), json!({"effective":true,"explicit":null}));
     // Medicines: the owner adds two, takes a dose, reads the day and the summary. The other person
@@ -500,9 +483,7 @@ fn installed_wellness_package_serves_routes_from_the_real_server() {
         Method::POST,
         "/wellness/medications",
         Some(&cookie),
-        Some(
-            json!({"name":MED_MARK,"dosage":MED_MARK,"notes":MED_MARK,"frequencyType":"times_per_day","timesPerDay":2,"scheduleTimes":["08:00","20:00"]}),
-        ),
+        Some(json!({"name":MED_MARK,"dosage":MED_MARK,"notes":MED_MARK,"frequencyType":"times_per_day","timesPerDay":2,"scheduleTimes":["08:00","20:00"]})),
     );
     assert_eq!(status, 201, "{text}\n{}", log());
     let med = json_of(&text)["medication"].clone();
@@ -515,10 +496,7 @@ fn installed_wellness_package_serves_routes_from_the_real_server() {
         Some(json!({"name":"Live as needed","frequencyType":"as_needed"})),
     );
     assert_eq!(status, 201, "{text}");
-    let prn_id = json_of(&text)["medication"]["id"]
-        .as_str()
-        .unwrap()
-        .to_owned();
+    let prn_id = json_of(&text)["medication"]["id"].as_str().unwrap().to_owned();
     let (status, text) = call(
         Method::POST,
         &format!("/wellness/medications/{med_id}/logs"),
@@ -533,58 +511,26 @@ fn installed_wellness_package_serves_routes_from_the_real_server() {
         Some(json!({"status":"prn","prnReason":MED_MARK})),
     );
     assert_eq!(status, 201);
-    let (status, text) = call(
-        Method::GET,
-        "/wellness/medications/schedule?date=2026-03-15",
-        Some(&cookie),
-        None,
-    );
+    let (status, text) = call(Method::GET, "/wellness/medications/schedule?date=2026-03-15", Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
     let slots = json_of(&text)["slots"].clone();
     let statuses: Vec<(String, String)> = slots
         .as_array()
         .unwrap()
         .iter()
-        .map(|s| {
-            (
-                s["name"].as_str().unwrap().to_owned(),
-                s["status"].as_str().unwrap().to_owned(),
-            )
-        })
+        .map(|s| (s["name"].as_str().unwrap().to_owned(), s["status"].as_str().unwrap().to_owned()))
         .collect();
-    assert!(
-        statuses.contains(&(MED_MARK.into(), "taken".into())),
-        "{text}"
-    );
-    assert!(
-        statuses.contains(&(MED_MARK.into(), "pending".into())),
-        "{text}"
-    );
-    let (status, text) = call(
-        Method::GET,
-        "/wellness/medications/logs",
-        Some(&cookie),
-        None,
-    );
+    assert!(statuses.contains(&(MED_MARK.into(), "taken".into())), "{text}");
+    assert!(statuses.contains(&(MED_MARK.into(), "pending".into())), "{text}");
+    let (status, text) = call(Method::GET, "/wellness/medications/logs", Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
     assert_eq!(json_of(&text)["days"].as_array().unwrap().len(), 30);
     let (_, text) = call(Method::GET, "/wellness/medications", Some(&other), None);
     assert_eq!(json_of(&text), json!({"medications":[]}), "{text}");
-    let (_, text) = call(
-        Method::GET,
-        "/wellness/medications/schedule?date=2026-03-15",
-        Some(&other),
-        None,
-    );
+    let (_, text) = call(Method::GET, "/wellness/medications/schedule?date=2026-03-15", Some(&other), None);
     assert_eq!(json_of(&text)["slots"], json!([]), "{text}");
     assert_eq!(
-        call(
-            Method::PATCH,
-            &format!("/wellness/medications/{med_id}"),
-            Some(&other),
-            Some(json!({"name":"stolen"}))
-        )
-        .0,
+        call(Method::PATCH, &format!("/wellness/medications/{med_id}"), Some(&other), Some(json!({"name":"stolen"}))).0,
         404
     );
     assert_eq!(
@@ -597,117 +543,42 @@ fn installed_wellness_package_serves_routes_from_the_real_server() {
         .0,
         404
     );
-    assert_eq!(
-        call(Method::GET, "/wellness/medications", None, None).0,
-        401
-    );
+    assert_eq!(call(Method::GET, "/wellness/medications", None, None).0, 401);
     println!("PASS live medications: two medicines, a dose, the day and the summary worked over HTTPS, and the second person saw none of it");
     // Therapy notes and export on the real server. The worker runs inside the server process, so
     // the export is polled until it is ready.
     const NOTE: &str = "PLANTED-THERAPY-MARKER-91c3";
-    let (status, text) = call(
-        Method::POST,
-        "/wellness/therapy-notes",
-        Some(&cookie),
-        Some(json!({"body":NOTE,"linkedCheckinId":id})),
-    );
+    let (status, text) = call(Method::POST, "/wellness/therapy-notes", Some(&cookie), Some(json!({"body":NOTE,"linkedCheckinId":id})));
     assert_eq!(status, 201, "{text}\n{}", log());
     let note_id = json_of(&text)["note"]["id"].as_str().unwrap().to_owned();
     let (_, text) = call(Method::GET, "/wellness/therapy-notes", Some(&other), None);
     assert_eq!(json_of(&text), json!({"notes":[]}), "{text}");
-    assert_eq!(
-        call(
-            Method::DELETE,
-            &format!("/wellness/therapy-notes/{note_id}"),
-            Some(&other),
-            None
-        )
-        .0,
-        404
-    );
+    assert_eq!(call(Method::DELETE, &format!("/wellness/therapy-notes/{note_id}"), Some(&other), None).0, 404);
     let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
-    let (status, text) = call(
-        Method::POST,
-        "/wellness/export",
-        Some(&cookie),
-        Some(json!({"from":today,"to":today,"categories":["therapyNotes"]})),
-    );
+    let (status, text) = call(Method::POST, "/wellness/export", Some(&cookie), Some(json!({"from":today,"to":today,"categories":["therapyNotes"]})));
     assert_eq!(status, 202, "{text}\n{}", log());
     let job = json_of(&text)["jobId"].as_str().unwrap().to_owned();
     let waited = std::time::Instant::now();
     loop {
-        let (_, text) = call(
-            Method::GET,
-            &format!("/wellness/export/{job}"),
-            Some(&cookie),
-            None,
-        );
+        let (_, text) = call(Method::GET, &format!("/wellness/export/{job}"), Some(&cookie), None);
         let state = json_of(&text)["status"].as_str().unwrap_or("").to_owned();
         if state == "ready" {
             break;
         }
-        assert!(
-            state != "failed" && waited.elapsed() < std::time::Duration::from_secs(120),
-            "export did not finish: {text}\n{}",
-            log()
-        );
+        assert!(state != "failed" && waited.elapsed() < std::time::Duration::from_secs(120), "export did not finish: {text}\n{}", log());
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
-    let (status, text) = call(
-        Method::GET,
-        &format!("/wellness/export/{job}/download"),
-        Some(&cookie),
-        None,
-    );
+    let (status, text) = call(Method::GET, &format!("/wellness/export/{job}/download"), Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
     let file = json_of(&text);
     assert!(file["html"].as_str().unwrap().contains(NOTE));
-    assert!(
-        !file["html"].as_str().unwrap().contains("Mood check-ins"),
-        "unchosen category present"
-    );
+    assert!(!file["html"].as_str().unwrap().contains("Mood check-ins"), "unchosen category present");
     for who in [&other] {
-        assert_eq!(
-            call(
-                Method::GET,
-                &format!("/wellness/export/{job}/download"),
-                Some(who),
-                None
-            )
-            .0,
-            404
-        );
-        assert_eq!(
-            call(
-                Method::GET,
-                &format!("/wellness/export/{job}"),
-                Some(who),
-                None
-            )
-            .0,
-            404
-        );
+        assert_eq!(call(Method::GET, &format!("/wellness/export/{job}/download"), Some(who), None).0, 404);
+        assert_eq!(call(Method::GET, &format!("/wellness/export/{job}"), Some(who), None).0, 404);
     }
-    assert_eq!(
-        call(
-            Method::GET,
-            &format!("/wellness/export/{job}/download"),
-            None,
-            None
-        )
-        .0,
-        401
-    );
-    assert_eq!(
-        call(
-            Method::DELETE,
-            &format!("/wellness/therapy-notes/{note_id}"),
-            Some(&cookie),
-            None
-        )
-        .0,
-        200
-    );
+    assert_eq!(call(Method::GET, &format!("/wellness/export/{job}/download"), None, None).0, 401);
+    assert_eq!(call(Method::DELETE, &format!("/wellness/therapy-notes/{note_id}"), Some(&cookie), None).0, 200);
     println!("PASS live: therapy notes and a selective export worked over HTTPS for two people; the other person got 404");
     // Real activity rows hold no check-in text, and nothing the test sent reached the server log.
     let services = moss_module_host::services::ServicePorts::new(
@@ -722,76 +593,28 @@ fn installed_wellness_package_serves_routes_from_the_real_server() {
     // Chat tools over the real server. The owner's assistant access is still off from above.
     let tool = |name: &str, who: &str| {
         if who == cookie {
-            services
-                .approve_tool(&access, "wellness", name, &json!({}))
-                .unwrap();
+            services.approve_tool(&access, "wellness", name, &json!({})).unwrap();
         }
-        call(
-            Method::POST,
-            "/wellness/tools/run",
-            Some(who),
-            Some(json!({"tool":name,"parameters":{}})),
-        )
+        call(Method::POST, "/wellness/tools/run", Some(who), Some(json!({"tool":name,"parameters":{}})))
     };
-    let refusal =
-        json!({"data":{"error":"Consent not granted","code":"WELLNESS_CONSENT_REQUIRED"}});
+    let refusal = json!({"data":{"error":"Consent not granted","code":"WELLNESS_CONSENT_REQUIRED"}});
     for name in ["wellness.recentCheckIns", "wellness.medicationAdherence"] {
         let (status, text) = tool(name, &cookie);
         assert_eq!(status, 200, "{text}\n{}", log());
-        assert_eq!(
-            json_of(&text),
-            refusal,
-            "{name} must refuse with consent off"
-        );
+        assert_eq!(json_of(&text), refusal, "{name} must refuse with consent off");
         assert!(!text.contains(MARK) && !text.contains(MED_MARK));
     }
-    assert_eq!(
-        call(
-            Method::POST,
-            "/wellness/tools/run",
-            None,
-            Some(json!({"tool":"wellness.recentCheckIns","parameters":{}}))
-        )
-        .0,
-        401
-    );
-    assert_eq!(
-        call(
-            Method::POST,
-            "/wellness/tools/run",
-            Some(&cookie),
-            Some(json!({"tool":"wellness.recentCheckIns","parameters":{"limit":3}}))
-        )
-        .0,
-        400
-    );
-    let (_, text) = call(
-        Method::PUT,
-        "/wellness/ai-consent",
-        Some(&cookie),
-        Some(json!({"granted":true})),
-    );
-    assert_eq!(
-        json_of(&text),
-        json!({"effective":true,"explicit":true}),
-        "{text}"
-    );
+    assert_eq!(call(Method::POST, "/wellness/tools/run", None, Some(json!({"tool":"wellness.recentCheckIns","parameters":{}}))).0, 401);
+    assert_eq!(call(Method::POST, "/wellness/tools/run", Some(&cookie), Some(json!({"tool":"wellness.recentCheckIns","parameters":{"limit":3}}))).0, 400);
+    let (_, text) = call(Method::PUT, "/wellness/ai-consent", Some(&cookie), Some(json!({"granted":true})));
+    assert_eq!(json_of(&text), json!({"effective":true,"explicit":true}), "{text}");
     let (status, text) = tool("wellness.recentCheckIns", &cookie);
     assert_eq!(status, 200, "{text}\n{}", log());
-    assert!(
-        !json_of(&text)["data"]["items"]
-            .as_array()
-            .unwrap()
-            .is_empty(),
-        "{text}"
-    );
+    assert!(!json_of(&text)["data"]["items"].as_array().unwrap().is_empty(), "{text}");
     let (status, text) = tool("wellness.medicationAdherence", &cookie);
     assert_eq!(status, 200, "{text}");
     assert_eq!(json_of(&text)["data"]["windowDays"], 7);
-    assert!(
-        !text.contains(MED_MARK),
-        "adherence counts must hold no medicine text"
-    );
+    assert!(!text.contains(MED_MARK), "adherence counts must hold no medicine text");
     let (status, text) = call(Method::GET, "/wellness/insights", Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
     assert!(json_of(&text)["insights"].is_array());
@@ -800,11 +623,7 @@ fn installed_wellness_package_serves_routes_from_the_real_server() {
     println!("PASS live tools: both chat tools refused with consent off, answered with it on, and insights worked over HTTPS for two people");
     // Hold the server open so the screens can be used in a browser.
     if let Ok(hold) = std::env::var("WELLNESS_LIVE_HOLD") {
-        fs::write(
-            format!("{hold}/ready.txt"),
-            format!("{origin}\nhttps://{address}:{}\n", port.0),
-        )
-        .unwrap();
+        fs::write(format!("{hold}/ready.txt"), format!("{origin}\nhttps://{address}:{}\n", port.0)).unwrap();
         while !std::path::Path::new(&format!("{hold}/stop")).exists() {
             std::thread::sleep(Duration::from_millis(500));
         }
@@ -813,9 +632,6 @@ fn installed_wellness_package_serves_routes_from_the_real_server() {
     assert!(!activity.contains(MARK) && !activity.contains(MED_MARK) && !activity.contains(NOTE));
     assert!(!log().to_lowercase().contains(&MARK.to_lowercase()));
     assert!(!log().to_lowercase().contains(&MED_MARK.to_lowercase()));
-    assert!(
-        !log().to_lowercase().contains(&NOTE.to_lowercase()),
-        "therapy-note text reached the server log"
-    );
+    assert!(!log().to_lowercase().contains(&NOTE.to_lowercase()), "therapy-note text reached the server log");
     println!("wellness live: check-ins, history paging, change, consent, medicines and therapy notes for two people worked over HTTPS");
 }

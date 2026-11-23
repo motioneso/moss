@@ -3,16 +3,16 @@
 mod common;
 #[path = "people_routes/installed.rs"]
 mod installed;
-use access_context::AccessContext;
 use common::Keys;
 use moss_module_host::{
     archive::Package,
     registry::{Artifact, Channel, Index, Source},
     trust::{self, Publisher, RegistryIdentity},
 };
+use std::collections::{BTreeMap, BTreeSet};
+use access_context::AccessContext;
 use safety_core::db::{Database, RuntimeRole};
 use serde_json::{json, Value};
-use std::collections::{BTreeMap, BTreeSet};
 use std::{
     fs,
     path::Path,
@@ -55,9 +55,7 @@ fn imap_account_on_greenmail_syncs_reads_and_refreshes_on_the_real_server() {
         eprintln!("WATCHDOG: the GreenMail live test ran longer than 900s and was stopped");
         // exit() skips the cleanup guards, so stop the server, fake Google and browser
         // runner and hand the port back here.
-        let _ = Command::new("pkill")
-            .args(["-KILL", "-P", &std::process::id().to_string()])
-            .status();
+        let _ = Command::new("pkill").args(["-KILL", "-P", &std::process::id().to_string()]).status();
         if let Some(port) = CLAIMED_PORT.get() {
             let _ = Command::new("devports").args(["release", port]).output();
         }
@@ -169,10 +167,7 @@ fn imap_account_on_greenmail_syncs_reads_and_refreshes_on_the_real_server() {
         let response = client.post(format!("{origin}/api/auth/sign-up/email")).header("origin", &origin).json(&json!({"name":name,"email":email,"password":"temporary-connectors-password-224-not-a-real-secret"})).send().unwrap();
         let status = response.status();
         if status != 200 {
-            panic!(
-                "sign-up answered {status}: {}",
-                response.text().unwrap_or_default()
-            );
+            panic!("sign-up answered {status}: {}", response.text().unwrap_or_default());
         }
         response.headers()["set-cookie"]
             .to_str()
@@ -221,12 +216,7 @@ fn imap_account_on_greenmail_syncs_reads_and_refreshes_on_the_real_server() {
     // canonical installer, as the server would find it.
     let keys = Keys::new();
     fs::create_dir_all(root.join("registry/packages")).unwrap();
-    let artifacts: Vec<Artifact> = [
-        ("JS225_EMAIL_PACKAGE", "email"),
-        ("JS220_TASKS_PACKAGE", "tasks"),
-        ("JS181_CALENDAR_PACKAGE", "calendar"),
-        ("JS224_CONNECTORS_PACKAGE", "connectors"),
-    ]
+    let artifacts: Vec<Artifact> = [("JS225_EMAIL_PACKAGE", "email"), ("JS220_TASKS_PACKAGE", "tasks"), ("JS181_CALENDAR_PACKAGE", "calendar"), ("JS224_CONNECTORS_PACKAGE", "connectors")]
     .iter()
     .map(|(variable, id)| {
         let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
@@ -234,11 +224,7 @@ fn imap_account_on_greenmail_syncs_reads_and_refreshes_on_the_real_server() {
         let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
         let manifest = &package.manifest;
         assert_eq!(manifest.id, *id);
-        fs::write(
-            root.join(format!("registry/packages/{digest}.mosspkg")),
-            &bytes,
-        )
-        .unwrap();
+        fs::write(root.join(format!("registry/packages/{digest}.mosspkg")), &bytes).unwrap();
         Artifact {
             id: manifest.id.clone(),
             version: manifest.version.clone(),
@@ -281,23 +267,11 @@ fn imap_account_on_greenmail_syncs_reads_and_refreshes_on_the_real_server() {
         revoked: vec![],
     };
     for (name, data, key) in [
-        (
-            "registry.json",
-            serde_json::to_vec(&identity).unwrap(),
-            &keys.root,
-        ),
-        (
-            "index.json",
-            serde_json::to_vec(&index).unwrap(),
-            &keys.index,
-        ),
+        ("registry.json", serde_json::to_vec(&identity).unwrap(), &keys.root),
+        ("index.json", serde_json::to_vec(&index).unwrap(), &keys.index),
     ] {
         fs::write(root.join("registry").join(name), &data).unwrap();
-        fs::write(
-            root.join("registry").join(format!("{name}.sig")),
-            Keys::sign(key, &data),
-        )
-        .unwrap();
+        fs::write(root.join("registry").join(format!("{name}.sig")), Keys::sign(key, &data)).unwrap();
     }
     let installer = installed::reopen(
         &root.join("data"),
@@ -319,14 +293,8 @@ fn imap_account_on_greenmail_syncs_reads_and_refreshes_on_the_real_server() {
     }
     drop(installer);
     let _ = (&owner, &access);
-    let imap_port: u16 = std::env::var("GREENMAIL_IMAP_PORT")
-        .unwrap_or("3143".into())
-        .parse()
-        .unwrap();
-    let smtp_port: u16 = std::env::var("GREENMAIL_SMTP_PORT")
-        .unwrap_or("3025".into())
-        .parse()
-        .unwrap();
+    let imap_port: u16 = std::env::var("GREENMAIL_IMAP_PORT").unwrap_or("3143".into()).parse().unwrap();
+    let smtp_port: u16 = std::env::var("GREENMAIL_SMTP_PORT").unwrap_or("3025".into()).parse().unwrap();
     let username = "probe@greenmail.test";
     let password = "probe-pw";
     let run = format!("{:x}", std::process::id());
@@ -338,18 +306,14 @@ fn imap_account_on_greenmail_syncs_reads_and_refreshes_on_the_real_server() {
     let _server = start(true);
     let log = || fs::read_to_string(root.join("server.log")).unwrap_or_default();
     let call = |method: reqwest::Method, path: &str, cookie: Option<&str>, body: Option<Value>| {
-        let mut request = client
-            .request(method, format!("{origin}/api/m/connectors{path}"))
-            .header("origin", &origin);
+        let mut request = client.request(method, format!("{origin}/api/m/connectors{path}")).header("origin", &origin);
         if let Some(cookie) = cookie {
             request = request.header("cookie", cookie);
         }
         if let Some(body) = body {
             request = request.json(&body);
         }
-        let response = request
-            .send()
-            .unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
+        let response = request.send().unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
         let status = response.status().as_u16();
         let text = response.text().unwrap_or_default();
         println!("{path} -> {status}");
@@ -358,12 +322,7 @@ fn imap_account_on_greenmail_syncs_reads_and_refreshes_on_the_real_server() {
     let json_of = |text: &str| serde_json::from_str::<Value>(text).unwrap_or(Value::Null);
     use reqwest::Method;
     let get_email = |path: &str| {
-        let r = client
-            .get(format!("{origin}/api/m/email{path}"))
-            .header("origin", &origin)
-            .header("cookie", &cookie)
-            .send()
-            .unwrap();
+        let r = client.get(format!("{origin}/api/m/email{path}")).header("origin", &origin).header("cookie", &cookie).send().unwrap();
         (r.status().as_u16(), r.text().unwrap_or_default())
     };
     // Mail goes into GreenMail the way any outside sender would deliver it: plain SMTP.
@@ -384,10 +343,7 @@ fn imap_account_on_greenmail_syncs_reads_and_refreshes_on_the_real_server() {
                     break;
                 }
             }
-            assert!(
-                line.starts_with('2') || line.starts_with('3'),
-                "SMTP refused: {line}"
-            );
+            assert!(line.starts_with('2') || line.starts_with('3'), "SMTP refused: {line}");
         };
         step(None);
         step(Some("HELO live.test\r\n"));
@@ -409,32 +365,11 @@ fn imap_account_on_greenmail_syncs_reads_and_refreshes_on_the_real_server() {
     assert_eq!(get_email("/messages").0, 200, "warm the Email component");
     let mut seen: Vec<String> = vec![];
     let good = json!({"providerId":"imap-fastmail","username":username,"password":password});
-    let wrong =
-        json!({"providerId":"imap-fastmail","username":username,"password":"not-the-password"});
-    let tested = call(
-        Method::POST,
-        "/imap/test-connection",
-        Some(&cookie),
-        Some(good.clone()),
-    );
-    assert_eq!(
-        (tested.0, json_of(&tested.1)),
-        (200, json!({"result":"ok"})),
-        "{}",
-        tested.1
-    );
-    let refused = call(
-        Method::POST,
-        "/imap/test-connection",
-        Some(&cookie),
-        Some(wrong.clone()),
-    );
-    assert_eq!(
-        (refused.0, json_of(&refused.1)),
-        (200, json!({"result":"auth_failed"})),
-        "{}",
-        refused.1
-    );
+    let wrong = json!({"providerId":"imap-fastmail","username":username,"password":"not-the-password"});
+    let tested = call(Method::POST, "/imap/test-connection", Some(&cookie), Some(good.clone()));
+    assert_eq!((tested.0, json_of(&tested.1)), (200, json!({"result":"ok"})), "{}", tested.1);
+    let refused = call(Method::POST, "/imap/test-connection", Some(&cookie), Some(wrong.clone()));
+    assert_eq!((refused.0, json_of(&refused.1)), (200, json!({"result":"auth_failed"})), "{}", refused.1);
     println!("PASS sign-in test against GreenMail: right password ok, wrong password refused");
     // Mail already waiting before the account is connected.
     let s1 = format!("Quarterly plan {run}");
@@ -443,12 +378,7 @@ fn imap_account_on_greenmail_syncs_reads_and_refreshes_on_the_real_server() {
     let b2 = format!("GREEN-LUNCH-BODY-{run}");
     deliver(&s1, &b1);
     deliver(&s2, &b2);
-    let connected = call(
-        Method::POST,
-        "/imap/connect",
-        Some(&cookie),
-        Some(good.clone()),
-    );
+    let connected = call(Method::POST, "/imap/connect", Some(&cookie), Some(good.clone()));
     assert_eq!(connected.0, 201, "{}", connected.1);
     seen.push(connected.1.clone());
     let account = json_of(&connected.1)["account"].clone();
@@ -456,112 +386,59 @@ fn imap_account_on_greenmail_syncs_reads_and_refreshes_on_the_real_server() {
         let started = Instant::now();
         loop {
             let (status, text) = get_email("/messages");
-            let rows: Vec<Value> = if status == 200 {
-                json_of(&text)["messages"]
-                    .as_array()
-                    .cloned()
-                    .unwrap_or_default()
-            } else {
-                vec![]
-            }
-            .into_iter()
-            .filter(|m| {
-                m["externalId"]
-                    .as_str()
-                    .is_some_and(|k| k.starts_with("imap:"))
-            })
-            .collect();
+            let rows: Vec<Value> = if status == 200 { json_of(&text)["messages"].as_array().cloned().unwrap_or_default() } else { vec![] }
+                .into_iter()
+                .filter(|m| m["externalId"].as_str().is_some_and(|k| k.starts_with("imap:")))
+                .collect();
             if want(&rows) {
                 return rows;
             }
             if started.elapsed() > Duration::from_secs(90) {
                 let accounts = call(Method::GET, "/accounts", Some(&cookie), None).1;
-                panic!(
-                    "mail sync did not settle; last {status} {text}\naccounts {accounts}\n{}",
-                    log()
-                );
+                panic!("mail sync did not settle; last {status} {text}\naccounts {accounts}\n{}", log());
             }
             std::thread::sleep(Duration::from_millis(500));
         }
     };
     let has = |rows: &[Value], subject: &str| rows.iter().any(|m| m["subject"] == subject);
     let first = listed(&|rows| has(rows, &s1) && has(rows, &s2));
-    println!(
-        "PASS sync: {} IMAP messages saved, both new subjects present",
-        first.len()
-    );
+    println!("PASS sync: {} IMAP messages saved, both new subjects present", first.len());
     // Read one message in full through its own route, and search the saved list by body text.
     let plan = first.iter().find(|m| m["subject"] == s1.as_str()).unwrap();
     assert!(plan["snippet"].as_str().unwrap().contains(&b1), "{plan}");
-    let id = plan["id"]
-        .as_str()
-        .unwrap_or_else(|| panic!("no id in {plan}"))
-        .to_owned();
+    let id = plan["id"].as_str().unwrap_or_else(|| panic!("no id in {plan}")).to_owned();
     let (status, text) = get_email(&format!("/messages/{id}"));
     assert_eq!(status, 200, "{text}");
-    assert!(
-        text.contains(&s1) && text.contains(&b1) && text.contains("ann@greenmail.test"),
-        "{text}"
-    );
+    assert!(text.contains(&s1) && text.contains(&b1) && text.contains("ann@greenmail.test"), "{text}");
     println!("PASS read: one message opened by id with subject, sender and body");
-    let hits: Vec<&Value> = first
-        .iter()
-        .filter(|m| m["snippet"].as_str().is_some_and(|s| s.contains(&b2)))
-        .collect();
-    assert_eq!(
-        hits.len(),
-        1,
-        "a body-text search over the saved list finds exactly the lunch message"
-    );
+    let hits: Vec<&Value> = first.iter().filter(|m| m["snippet"].as_str().is_some_and(|s| s.contains(&b2))).collect();
+    assert_eq!(hits.len(), 1, "a body-text search over the saved list finds exactly the lunch message");
     println!("PASS search (over saved mail, by body text): exactly one hit");
     // New mail arriving later is picked up by Today's refresh.
     let s3 = format!("Invoice reminder {run}");
     deliver(&s3, &format!("GREEN-INVOICE-BODY-{run}"));
     let key = "6c2a7b8f-4d3e-4f90-8b1c-2d3e4f5a6b7c";
-    let (status, text) = call(
-        Method::POST,
-        "/email-refresh",
-        Some(&cookie),
-        Some(json!({"idempotencyKey": key})),
-    );
+    let (status, text) = call(Method::POST, "/email-refresh", Some(&cookie), Some(json!({"idempotencyKey": key})));
     assert_eq!(status, 202, "{text}");
     let refresh_id = json_of(&text)["refreshId"].as_str().unwrap().to_owned();
     let began = Instant::now();
     let done = loop {
-        let (status, text) = call(
-            Method::GET,
-            &format!("/email-refresh/{refresh_id}"),
-            Some(&cookie),
-            None,
-        );
+        let (status, text) = call(Method::GET, &format!("/email-refresh/{refresh_id}"), Some(&cookie), None);
         assert_eq!(status, 200, "{text}");
         let state = json_of(&text);
         if !matches!(state["status"].as_str(), Some("queued" | "running")) {
             break state;
         }
-        assert!(
-            began.elapsed() < Duration::from_secs(120),
-            "refresh did not settle: {state}\n{}",
-            log()
-        );
+        assert!(began.elapsed() < Duration::from_secs(120), "refresh did not settle: {state}\n{}", log());
         std::thread::sleep(Duration::from_millis(500));
     };
     assert_eq!(done["status"], "succeeded", "{done}");
     let after = listed(&|rows| has(rows, &s3));
-    println!(
-        "PASS later mail: refresh {done} brought in the new message ({} saved)",
-        after.len()
-    );
+    println!("PASS later mail: refresh {done} brought in the new message ({} saved)", after.len());
     let (status, text) = call(Method::GET, "/accounts", Some(&cookie), None);
     assert_eq!(status, 200);
     seen.push(text.clone());
-    let acct = json_of(&text)["accounts"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|a| a["providerId"] == "imap-fastmail")
-        .unwrap()
-        .clone();
+    let acct = json_of(&text)["accounts"].as_array().unwrap().iter().find(|a| a["providerId"] == "imap-fastmail").unwrap().clone();
     assert_eq!(acct["lastSyncStatus"], "success", "{acct}");
     assert_eq!(account["providerId"], "imap-fastmail");
     for body in &seen {

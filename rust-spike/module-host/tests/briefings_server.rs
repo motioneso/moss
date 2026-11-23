@@ -2,16 +2,16 @@
 mod common;
 #[path = "people_routes/installed.rs"]
 mod installed;
-use access_context::AccessContext;
 use common::Keys;
 use moss_module_host::{
     archive::Package,
     registry::{Artifact, Channel, Index, Source},
     trust::{self, Publisher, RegistryIdentity},
 };
+use std::collections::{BTreeMap, BTreeSet};
+use access_context::AccessContext;
 use safety_core::db::{Database, RuntimeRole};
 use serde_json::{json, Value};
-use std::collections::{BTreeMap, BTreeSet};
 use std::{
     fs,
     path::Path,
@@ -85,11 +85,7 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
     }
     if let Ok(shell_web) = std::env::var("MOSS_SHELL_WEB_DIR") {
         // The built app, so a held-open run can show the settings screens.
-        let status = Command::new("cp")
-            .args(["-r", &format!("{shell_web}/.")])
-            .arg(root.join("web"))
-            .status()
-            .unwrap();
+        let status = Command::new("cp").args(["-r", &format!("{shell_web}/.")]).arg(root.join("web")).status().unwrap();
         assert!(status.success());
     } else {
         fs::write(
@@ -124,11 +120,7 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
             .arg("--network")
             .arg(root.join("network.json"))
             .arg("--web")
-            .arg(
-                std::env::var_os("BRIEFINGS_WEB")
-                    .map(std::path::PathBuf::from)
-                    .unwrap_or_else(|| root.join("web")),
-            );
+            .arg(std::env::var_os("BRIEFINGS_WEB").map(std::path::PathBuf::from).unwrap_or_else(|| root.join("web")));
         if modules {
             command.arg("--modules").arg(root.join("modules.json"));
         }
@@ -167,10 +159,7 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
         let response = client.post(format!("{origin}/api/auth/sign-up/email")).header("origin", &origin).json(&json!({"name":name,"email":email,"password":"temporary-briefings-password-263-not-a-real-secret"})).send().unwrap();
         let status = response.status();
         if status != 200 {
-            panic!(
-                "sign-up answered {status}: {}",
-                response.text().unwrap_or_default()
-            );
+            panic!("sign-up answered {status}: {}", response.text().unwrap_or_default());
         }
         response.headers()["set-cookie"]
             .to_str()
@@ -235,36 +224,32 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
         ];
     }
     let artifacts: Vec<Artifact> = wanted
-        .iter()
-        .map(|(variable, id)| {
-            let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
-            let digest = trust::digest(&bytes);
-            let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
-            let manifest = &package.manifest;
-            assert_eq!(manifest.id, *id);
-            fs::write(
-                root.join(format!("registry/packages/{digest}.mosspkg")),
-                &bytes,
-            )
-            .unwrap();
-            Artifact {
-                id: manifest.id.clone(),
-                version: manifest.version.clone(),
-                digest: digest.clone(),
-                size: bytes.len() as u64,
-                publisher_key: "briefings-test".into(),
-                signature: Keys::sign(&keys.publisher, digest.as_bytes()),
-                requires_moss: manifest.requires_moss.clone(),
-                abi: manifest.abi.clone(),
-                capabilities: manifest.capabilities.clone(),
-                migrations: manifest.database.migrations.clone(),
-                requires: manifest.requires.clone(),
-                changelog: "Briefings live gate".into(),
-                channel: Channel::Stable,
-                urgent: false,
-            }
-        })
-        .collect();
+    .iter()
+    .map(|(variable, id)| {
+        let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
+        let digest = trust::digest(&bytes);
+        let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
+        let manifest = &package.manifest;
+        assert_eq!(manifest.id, *id);
+        fs::write(root.join(format!("registry/packages/{digest}.mosspkg")), &bytes).unwrap();
+        Artifact {
+            id: manifest.id.clone(),
+            version: manifest.version.clone(),
+            digest: digest.clone(),
+            size: bytes.len() as u64,
+            publisher_key: "briefings-test".into(),
+            signature: Keys::sign(&keys.publisher, digest.as_bytes()),
+            requires_moss: manifest.requires_moss.clone(),
+            abi: manifest.abi.clone(),
+            capabilities: manifest.capabilities.clone(),
+            migrations: manifest.database.migrations.clone(),
+            requires: manifest.requires.clone(),
+            changelog: "Briefings live gate".into(),
+            channel: Channel::Stable,
+            urgent: false,
+        }
+    })
+    .collect();
     let identity = RegistryIdentity {
         id: "briefings-test-registry".into(),
         name: "Briefings test registry".into(),
@@ -289,23 +274,11 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
         revoked: vec![],
     };
     for (name, data, key) in [
-        (
-            "registry.json",
-            serde_json::to_vec(&identity).unwrap(),
-            &keys.root,
-        ),
-        (
-            "index.json",
-            serde_json::to_vec(&index).unwrap(),
-            &keys.index,
-        ),
+        ("registry.json", serde_json::to_vec(&identity).unwrap(), &keys.root),
+        ("index.json", serde_json::to_vec(&index).unwrap(), &keys.index),
     ] {
         fs::write(root.join("registry").join(name), &data).unwrap();
-        fs::write(
-            root.join("registry").join(format!("{name}.sig")),
-            Keys::sign(key, &data),
-        )
-        .unwrap();
+        fs::write(root.join("registry").join(format!("{name}.sig")), Keys::sign(key, &data)).unwrap();
     }
     let installer = installed::reopen(
         &root.join("data"),
@@ -355,24 +328,16 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
                 }
                 let mut body = vec![0; length];
                 reader.read_exact(&mut body).unwrap();
-                requests
-                    .lock()
-                    .unwrap()
-                    .push(serde_json::from_slice(&body).unwrap_or(Value::Null));
+                requests.lock().unwrap().push(serde_json::from_slice(&body).unwrap_or(Value::Null));
                 let answer = json!({"choices":[{"message":{"content":"Steady morning.\n\n## Prepare\nBring notes at 9 AM. WRITTEN-BY-STANDIN-MODEL"}}]}).to_string();
                 let mut stream = stream;
                 let _ = write!(stream, "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{answer}", answer.len());
             }
         });
     }
-    let sealed = safety_core::secret::SecretCipher::ai(
-        &[("JARVIS_AI_SECRET_KEY".into(), ai_key.clone())].into(),
-    )
-    .unwrap()
-    .seal(&safety_core::secret::SecretFields::new().with(
-        "apiKey",
-        safety_core::secret::Secret::new("TEST-NOT-A-REAL-KEY-267"),
-    ));
+    let sealed = safety_core::secret::SecretCipher::ai(&[("JARVIS_AI_SECRET_KEY".into(), ai_key.clone())].into())
+        .unwrap()
+        .seal(&safety_core::secret::SecretFields::new().with("apiKey", safety_core::secret::Secret::new("TEST-NOT-A-REAL-KEY-267")));
     let (provider, model) = (uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
     runtime.block_on(async {
         let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
@@ -396,28 +361,18 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
         let signed = client.post(format!("{origin}/api/auth/sign-in/email")).header("origin", &origin)
             .json(&json!({"email":"briefings-other@example.test","password":"temporary-briefings-password-263-not-a-real-secret"})).send().unwrap();
         assert_eq!(signed.status(), 200, "second person sign-in");
-        signed.headers()["set-cookie"]
-            .to_str()
-            .unwrap()
-            .split(';')
-            .next()
-            .unwrap()
-            .to_owned()
+        signed.headers()["set-cookie"].to_str().unwrap().split(';').next().unwrap().to_owned()
     };
     let log = || fs::read_to_string(root.join("server.log")).unwrap_or_default();
     let call = |method: reqwest::Method, path: &str, cookie: Option<&str>, body: Option<Value>| {
-        let mut request = client
-            .request(method, format!("{origin}/api/m/briefings{path}"))
-            .header("origin", &origin);
+        let mut request = client.request(method, format!("{origin}/api/m/briefings{path}")).header("origin", &origin);
         if let Some(cookie) = cookie {
             request = request.header("cookie", cookie);
         }
         if let Some(body) = body {
             request = request.json(&body);
         }
-        let response = request
-            .send()
-            .unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
+        let response = request.send().unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
         let status = response.status().as_u16();
         let text = response.text().unwrap_or_default();
         println!("{method_path} -> {status}", method_path = path);
@@ -429,9 +384,7 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
     assert_eq!(call(Method::GET, "/definitions", None, None).0, 401);
     // The server answers 503 until its module host has finished starting.
     let started = std::time::Instant::now();
-    while call(Method::GET, "/definitions", Some(&cookie), None).0 == 503
-        && started.elapsed() < std::time::Duration::from_secs(60)
-    {
+    while call(Method::GET, "/definitions", Some(&cookie), None).0 == 503 && started.elapsed() < std::time::Duration::from_secs(60) {
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
     for who in [&cookie, &other] {
@@ -440,30 +393,11 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
         assert_eq!(json_of(&text)["definitions"], json!([]));
     }
     // The owner saves a daily briefing, and it is registered to run at 7:00.
-    let (status, text) = call(
-        Method::POST,
-        "/definitions",
-        Some(&cookie),
-        Some(
-            json!({"title": format!("Plan {MARK}"), "briefingType": "morning", "cadence": "daily"}),
-        ),
-    );
+    let (status, text) = call(Method::POST, "/definitions", Some(&cookie), Some(json!({"title": format!("Plan {MARK}"), "briefingType": "morning", "cadence": "daily"})));
     assert_eq!(status, 201, "{text}\n{}", log());
-    let id = json_of(&text)["definition"]["id"]
-        .as_str()
-        .unwrap()
-        .to_owned();
-    let (status, text) = call(
-        Method::POST,
-        "/definitions",
-        Some(&cookie),
-        Some(json!({"title": "  "})),
-    );
-    assert_eq!(
-        (status, json_of(&text)["error"].clone()),
-        (400, json!("title must not be empty")),
-        "{text}"
-    );
+    let id = json_of(&text)["definition"]["id"].as_str().unwrap().to_owned();
+    let (status, text) = call(Method::POST, "/definitions", Some(&cookie), Some(json!({"title": "  "})));
+    assert_eq!((status, json_of(&text)["error"].clone()), (400, json!("title must not be empty")), "{text}");
     // A run of the owner's exists.
     runtime.block_on(async {
         let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
@@ -476,286 +410,114 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
             &[&definition, &owner, &format!("Briefing {MARK}")],
         ).await.unwrap();
     });
-    let (status, text) = call(
-        Method::GET,
-        &format!("/definitions/{id}/runs"),
-        Some(&cookie),
-        None,
-    );
+    let (status, text) = call(Method::GET, &format!("/definitions/{id}/runs"), Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
     let run_id = json_of(&text)["runs"][0]["id"].as_str().unwrap().to_owned();
-    let (status, text) = call(
-        Method::GET,
-        &format!("/definitions/{id}/runs/{run_id}"),
-        Some(&cookie),
-        None,
-    );
-    assert_eq!(
-        (status, json_of(&text)["state"].clone()),
-        (200, json!("ready")),
-        "{text}"
-    );
+    let (status, text) = call(Method::GET, &format!("/definitions/{id}/runs/{run_id}"), Some(&cookie), None);
+    assert_eq!((status, json_of(&text)["state"].clone()), (200, json!("ready")), "{text}");
     // The other person sees none of it and cannot change it.
     let (_, text) = call(Method::GET, "/definitions", Some(&other), None);
     assert_eq!(json_of(&text)["definitions"], json!([]));
-    assert_eq!(
-        call(
-            Method::PATCH,
-            &format!("/definitions/{id}"),
-            Some(&other),
-            Some(json!({"title": "intruder"}))
-        )
-        .0,
-        404
-    );
-    assert_eq!(
-        call(
-            Method::GET,
-            &format!("/definitions/{id}/runs"),
-            Some(&other),
-            None
-        )
-        .0,
-        404
-    );
-    assert_eq!(
-        call(
-            Method::GET,
-            &format!("/definitions/{id}/runs/{run_id}"),
-            Some(&other),
-            None
-        )
-        .0,
-        404
-    );
+    assert_eq!(call(Method::PATCH, &format!("/definitions/{id}"), Some(&other), Some(json!({"title": "intruder"}))).0, 404);
+    assert_eq!(call(Method::GET, &format!("/definitions/{id}/runs"), Some(&other), None).0, 404);
+    assert_eq!(call(Method::GET, &format!("/definitions/{id}/runs/{run_id}"), Some(&other), None).0, 404);
     // The owner switching it to manual removes the schedule and leaves the data.
-    let (status, text) = call(
-        Method::PATCH,
-        &format!("/definitions/{id}"),
-        Some(&cookie),
-        Some(json!({"cadence": "manual"})),
-    );
-    assert_eq!(
-        (status, json_of(&text)["definition"]["cadence"].clone()),
-        (200, json!("manual")),
-        "{text}"
-    );
+    let (status, text) = call(Method::PATCH, &format!("/definitions/{id}"), Some(&cookie), Some(json!({"cadence": "manual"})));
+    assert_eq!((status, json_of(&text)["definition"]["cadence"].clone()), (200, json!("manual")), "{text}");
     // A manual run queues, finishes through the real worker and reads back as ready. The other
     // person can neither queue it nor read its status.
-    let (status, text) = call(
-        Method::POST,
-        &format!("/definitions/{id}/run"),
-        Some(&other),
-        Some(json!({})),
-    );
+    let (status, text) = call(Method::POST, &format!("/definitions/{id}/run"), Some(&other), Some(json!({})));
     assert_eq!(status, 404, "{text}");
-    let (status, text) = call(
-        Method::POST,
-        &format!("/definitions/{id}/run"),
-        Some(&cookie),
-        Some(json!({})),
-    );
+    let (status, text) = call(Method::POST, &format!("/definitions/{id}/run"), Some(&cookie), Some(json!({})));
     assert_eq!(status, 202, "{text}\n{}", log());
     let queued = json_of(&text);
-    let (job, fresh) = (
-        queued["jobId"].as_str().unwrap().to_owned(),
-        queued["runId"].as_str().unwrap().to_owned(),
-    );
+    let (job, fresh) = (queued["jobId"].as_str().unwrap().to_owned(), queued["runId"].as_str().unwrap().to_owned());
     let status_path = format!("/definitions/{id}/runs/{fresh}?jobId={job}");
     assert_eq!(call(Method::GET, &status_path, Some(&other), None).0, 404);
     let waited = std::time::Instant::now();
     let finished = loop {
         let (status, text) = call(Method::GET, &status_path, Some(&cookie), None);
         assert_eq!(status, 200, "{text}\n{}", log());
-        let state = json_of(&text)["state"]
-            .as_str()
-            .unwrap_or_default()
-            .to_owned();
+        let state = json_of(&text)["state"].as_str().unwrap_or_default().to_owned();
         if state != "pending" || waited.elapsed() > std::time::Duration::from_secs(300) {
             break (state, text);
         }
         std::thread::sleep(std::time::Duration::from_secs(1));
     };
-    println!(
-        "live manual run finished as {} after {:?}",
-        finished.0,
-        waited.elapsed()
-    );
+    println!("live manual run finished as {} after {:?}", finished.0, waited.elapsed());
     assert_eq!(finished.0, "ready", "{}\n{}", finished.1, log());
     // Gathering ran for the owner: the run records which sources it could not read, and no text.
-    let (status, text) = call(
-        Method::GET,
-        &format!("/definitions/{id}/runs/{fresh}"),
-        Some(&cookie),
-        None,
-    );
+    let (status, text) = call(Method::GET, &format!("/definitions/{id}/runs/{fresh}"), Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
     let detail = json_of(&text);
-    println!(
-        "live run source metadata: {}",
-        detail["run"]["sourceMetadata"]
-    );
-    assert!(
-        detail["run"]["sourceMetadata"]["sourcesFromCache"].is_boolean()
-            || detail["run"]["sourceMetadata"]["gaps"].is_array(),
-        "{text}"
-    );
+    println!("live run source metadata: {}", detail["run"]["sourceMetadata"]);
+    assert!(detail["run"]["sourceMetadata"]["sourcesFromCache"].is_boolean() || detail["run"]["sourceMetadata"]["gaps"].is_array(), "{text}");
     assert!(!text.contains(MARK));
     // The text came from the configured model through the real router, and the model got the
     // trusted block first. The owner's definition title was never sent to it.
     let written = detail["run"]["summaryText"].as_str().unwrap_or_default();
-    assert!(
-        written.contains("WRITTEN-BY-STANDIN-MODEL"),
-        "{text}\n{}",
-        log()
-    );
-    assert_eq!(
-        detail["run"]["sourceMetadata"]["aiModel"]["id"], "router",
-        "{text}"
-    );
+    assert!(written.contains("WRITTEN-BY-STANDIN-MODEL"), "{text}\n{}", log());
+    assert_eq!(detail["run"]["sourceMetadata"]["aiModel"]["id"], "router", "{text}");
     let sent = requests.lock().unwrap().clone();
     assert!(!sent.is_empty(), "the router never reached the model");
-    let prompt = sent[0]["messages"][0]["content"]
-        .as_str()
-        .unwrap_or_default();
+    let prompt = sent[0]["messages"][0]["content"].as_str().unwrap_or_default();
     assert!(prompt.starts_with("<trusted_instructions>"), "{prompt}");
     assert!(!prompt.contains(MARK));
-    println!(
-        "live model run: the router sent {} request(s); the stored text came from the model",
-        sent.len()
-    );
-    let other_view = call(
-        Method::GET,
-        &format!("/definitions/{id}/runs/{fresh}"),
-        Some(&other),
-        None,
-    );
+    println!("live model run: the router sent {} request(s); the stored text came from the model", sent.len());
+    let other_view = call(Method::GET, &format!("/definitions/{id}/runs/{fresh}"), Some(&other), None);
     assert_eq!(other_view.0, 404);
     // An evening review runs through the same real worker and router, with its own prompt.
     let before = requests.lock().unwrap().len();
-    let (status, text) = call(
-        Method::POST,
-        "/definitions",
-        Some(&cookie),
-        Some(
-            json!({"title": format!("Evening {MARK}"), "briefingType": "evening", "cadence": "manual"}),
-        ),
-    );
+    let (status, text) = call(Method::POST, "/definitions", Some(&cookie), Some(json!({"title": format!("Evening {MARK}"), "briefingType": "evening", "cadence": "manual"})));
     assert_eq!(status, 201, "{text}");
-    let evening = json_of(&text)["definition"]["id"]
-        .as_str()
-        .unwrap()
-        .to_owned();
-    let (status, text) = call(
-        Method::POST,
-        &format!("/definitions/{evening}/run"),
-        Some(&cookie),
-        Some(json!({})),
-    );
+    let evening = json_of(&text)["definition"]["id"].as_str().unwrap().to_owned();
+    let (status, text) = call(Method::POST, &format!("/definitions/{evening}/run"), Some(&cookie), Some(json!({})));
     assert_eq!(status, 202, "{text}\n{}", log());
     let queued = json_of(&text);
-    let (job, run) = (
-        queued["jobId"].as_str().unwrap().to_owned(),
-        queued["runId"].as_str().unwrap().to_owned(),
-    );
+    let (job, run) = (queued["jobId"].as_str().unwrap().to_owned(), queued["runId"].as_str().unwrap().to_owned());
     let path = format!("/definitions/{evening}/runs/{run}?jobId={job}");
     let waited = std::time::Instant::now();
     let state = loop {
         let (status, text) = call(Method::GET, &path, Some(&cookie), None);
         assert_eq!(status, 200, "{text}\n{}", log());
-        let state = json_of(&text)["state"]
-            .as_str()
-            .unwrap_or_default()
-            .to_owned();
+        let state = json_of(&text)["state"].as_str().unwrap_or_default().to_owned();
         if state != "pending" || waited.elapsed() > std::time::Duration::from_secs(300) {
             break state;
         }
         std::thread::sleep(std::time::Duration::from_secs(1));
     };
     assert_eq!(state, "ready", "{}", log());
-    let (status, text) = call(
-        Method::GET,
-        &format!("/definitions/{evening}/runs/{run}"),
-        Some(&cookie),
-        None,
-    );
+    let (status, text) = call(Method::GET, &format!("/definitions/{evening}/runs/{run}"), Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
     let detail = json_of(&text);
-    assert!(
-        detail["run"]["summaryText"]
-            .as_str()
-            .unwrap_or_default()
-            .contains("WRITTEN-BY-STANDIN-MODEL"),
-        "{text}"
-    );
-    assert_eq!(
-        detail["run"]["sourceMetadata"]["aiModel"]["id"], "router",
-        "{text}"
-    );
+    assert!(detail["run"]["summaryText"].as_str().unwrap_or_default().contains("WRITTEN-BY-STANDIN-MODEL"), "{text}");
+    assert_eq!(detail["run"]["sourceMetadata"]["aiModel"]["id"], "router", "{text}");
     assert!(!text.contains(MARK));
     let sent = requests.lock().unwrap().clone();
-    assert_eq!(
-        sent.len(),
-        before + 1,
-        "the evening run makes one router request"
-    );
-    let prompt = sent[before]["messages"][0]["content"]
-        .as_str()
-        .unwrap_or_default();
-    assert!(
-        prompt.starts_with("<trusted_instructions>")
-            && prompt.contains("type=\"tasks_reconciliation\""),
-        "{prompt}"
-    );
+    assert_eq!(sent.len(), before + 1, "the evening run makes one router request");
+    let prompt = sent[before]["messages"][0]["content"].as_str().unwrap_or_default();
+    assert!(prompt.starts_with("<trusted_instructions>") && prompt.contains("type=\"tasks_reconciliation\""), "{prompt}");
     assert!(!prompt.contains(MARK));
-    assert_eq!(
-        call(
-            Method::GET,
-            &format!("/definitions/{evening}/runs/{run}"),
-            Some(&other),
-            None
-        )
-        .0,
-        404
-    );
-    println!(
-        "live evening run: stored the model's text after {:?}; the other person gets 404",
-        waited.elapsed()
-    );
+    assert_eq!(call(Method::GET, &format!("/definitions/{evening}/runs/{run}"), Some(&other), None).0, 404);
+    println!("live evening run: stored the model's text after {:?}; the other person gets 404", waited.elapsed());
     // Nothing the test sent reached the server log.
     assert!(!log().contains(MARK));
     if with_owners {
-        let owner_call =
-            |module: &str, method: reqwest::Method, path: &str, who: &str, body: Option<Value>| {
-                let mut request = client
-                    .request(method, format!("{origin}/api/m/{module}{path}"))
-                    .header("origin", &origin)
-                    .header("cookie", who);
-                if let Some(body) = body {
-                    request = request.json(&body);
-                }
-                let response = request
-                    .send()
-                    .unwrap_or_else(|e| panic!("{module}{path}: {e}\n{}", log()));
-                (
-                    response.status().as_u16(),
-                    response.json::<Value>().unwrap_or(Value::Null),
-                )
-            };
+        let owner_call = |module: &str, method: reqwest::Method, path: &str, who: &str, body: Option<Value>| {
+            let mut request = client.request(method, format!("{origin}/api/m/{module}{path}")).header("origin", &origin).header("cookie", who);
+            if let Some(body) = body {
+                request = request.json(&body);
+            }
+            let response = request.send().unwrap_or_else(|e| panic!("{module}{path}: {e}\n{}", log()));
+            (response.status().as_u16(), response.json::<Value>().unwrap_or(Value::Null))
+        };
         let switches = |who: &str| {
             let started = std::time::Instant::now();
-            let (mut signal_status, mut signals) =
-                call(Method::GET, "/source-signals", Some(who), None);
-            println!(
-                "source-signals first answer {signal_status} after {:?}",
-                started.elapsed()
-            );
+            let (mut signal_status, mut signals) = call(Method::GET, "/source-signals", Some(who), None);
+            println!("source-signals first answer {signal_status} after {:?}", started.elapsed());
             if signal_status != 200 {
                 (signal_status, signals) = call(Method::GET, "/source-signals", Some(who), None);
-                println!(
-                    "source-signals second answer {signal_status} after {:?}",
-                    started.elapsed()
-                );
+                println!("source-signals second answer {signal_status} after {:?}", started.elapsed());
             }
             assert_eq!(signal_status, 200, "source-signals answered {signals}");
             let (_, email) = owner_call("email", Method::GET, "/briefing-source", who, None);
@@ -771,58 +533,24 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
         }
         // The owner turns both off on Briefings settings. The Email and Calendar screens read the
         // same value, and the other person's switches do not move.
-        let (status, text) = call(
-            Method::PATCH,
-            "/source-signals",
-            Some(&cookie),
-            Some(json!({"email": false, "calendar": false})),
-        );
-        assert_eq!(
-            (status, json_of(&text)),
-            (200, json!({"email": false, "calendar": false})),
-            "{text}\n{}",
-            log()
-        );
+        let (status, text) = call(Method::PATCH, "/source-signals", Some(&cookie), Some(json!({"email": false, "calendar": false})));
+        assert_eq!((status, json_of(&text)), (200, json!({"email": false, "calendar": false})), "{text}\n{}", log());
         let (signals, email, calendar) = switches(&cookie);
         assert_eq!(signals, json!({"email": false, "calendar": false}));
         assert_eq!(email["enabled"], false);
         assert_eq!(calendar["briefings"], false);
-        assert_eq!(
-            calendar["planning"].as_bool().unwrap_or(true),
-            true,
-            "the planning switch moved"
-        );
+        assert_eq!(calendar["planning"].as_bool().unwrap_or(true), true, "the planning switch moved");
         let (signals, email, calendar) = switches(&other);
-        assert_eq!(
-            signals,
-            json!({"email": true, "calendar": true}),
-            "the other person's switches moved"
-        );
+        assert_eq!(signals, json!({"email": true, "calendar": true}), "the other person's switches moved");
         assert_eq!(email["enabled"], true);
         assert_ne!(calendar["briefings"], false);
         // A switch flipped on the owner's own screen shows on Briefings after a reload.
-        let (status, _) = owner_call(
-            "email",
-            Method::PUT,
-            "/briefing-source",
-            &cookie,
-            Some(json!({"enabled": true})),
-        );
+        let (status, _) = owner_call("email", Method::PUT, "/briefing-source", &cookie, Some(json!({"enabled": true})));
         assert_eq!(status, 200);
-        assert_eq!(
-            json_of(&call(Method::GET, "/source-signals", Some(&cookie), None).1)["email"],
-            true
-        );
+        assert_eq!(json_of(&call(Method::GET, "/source-signals", Some(&cookie), None).1)["email"], true);
         // Bad bodies are refused and nothing moves.
-        for bad in [
-            json!({}),
-            json!({"email": "no"}),
-            json!({"planning": false}),
-        ] {
-            assert_eq!(
-                call(Method::PATCH, "/source-signals", Some(&cookie), Some(bad)).0,
-                400
-            );
+        for bad in [json!({}), json!({"email": "no"}), json!({"planning": false})] {
+            assert_eq!(call(Method::PATCH, "/source-signals", Some(&cookie), Some(bad)).0, 400);
         }
         assert_eq!(call(Method::GET, "/source-signals", None, None).0, 401);
         println!("source switches live: Briefings, Email and Calendar agree, and the other person is unchanged");
@@ -846,48 +574,22 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
                     db.execute("INSERT INTO app.tasks(id,owner_user_id,list_id,title,description,status,source,source_ref,suggestion_metadata) VALUES(gen_random_uuid(),$1,$2,$3,$4,'suggested','email',$5,$6)", &[&owner, &list, &title, &note, &format!("email:{title}"), &metadata]).await.unwrap();
                 }
             });
-            let (status, text) = call(
-                Method::POST,
-                &format!("/definitions/{id}/run"),
-                Some(&cookie),
-                Some(json!({})),
-            );
+            let (status, text) = call(Method::POST, &format!("/definitions/{id}/run"), Some(&cookie), Some(json!({})));
             assert_eq!(status, 202, "{text}");
             let queued = json_of(&text);
-            let (job, run) = (
-                queued["jobId"].as_str().unwrap().to_owned(),
-                queued["runId"].as_str().unwrap().to_owned(),
-            );
+            let (job, run) = (queued["jobId"].as_str().unwrap().to_owned(), queued["runId"].as_str().unwrap().to_owned());
             let waited = std::time::Instant::now();
             loop {
-                let (_, t) = call(
-                    Method::GET,
-                    &format!("/definitions/{id}/runs/{run}?jobId={job}"),
-                    Some(&cookie),
-                    None,
-                );
-                if json_of(&t)["state"] != "pending" {
-                    break;
-                }
-                assert!(
-                    waited.elapsed() < std::time::Duration::from_secs(120),
-                    "seeded morning run did not finish"
-                );
+                let (_, t) = call(Method::GET, &format!("/definitions/{id}/runs/{run}?jobId={job}"), Some(&cookie), None);
+                if json_of(&t)["state"] != "pending" { break; }
+                assert!(waited.elapsed() < std::time::Duration::from_secs(120), "seeded morning run did not finish");
                 std::thread::sleep(std::time::Duration::from_secs(1));
             }
             let (_, t) = call(Method::GET, "/today", Some(&cookie), None);
             let rows = json_of(&t)["rows"].as_array().map(|r| r.len()).unwrap_or(0);
-            assert_eq!(
-                rows, 2,
-                "the morning run should list both suggested tasks: {t}"
-            );
+            assert_eq!(rows, 2, "the morning run should list both suggested tasks: {t}");
         }
-        fs::write(
-            &hold,
-            json!({"origin":origin,"cookie":cookie,"otherCookie":other,"certificate":cert})
-                .to_string(),
-        )
-        .unwrap();
+        fs::write(&hold, json!({"origin":origin,"cookie":cookie,"otherCookie":other,"certificate":cert}).to_string()).unwrap();
         let mut extras = json!({});
         // Real-model pass. Points the router at a real OpenAI-compatible endpoint and runs one
         // morning briefing end to end. The key comes from a file and is never written out.
@@ -897,53 +599,28 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
             std::env::var("BRIEFINGS_REAL_MODEL_NAME"),
         ) {
             let real_key = fs::read_to_string(key_file).unwrap().trim().to_owned();
-            let sealed = safety_core::secret::SecretCipher::ai(
-                &[("JARVIS_AI_SECRET_KEY".into(), ai_key.clone())].into(),
-            )
-            .unwrap()
-            .seal(
-                &safety_core::secret::SecretFields::new()
-                    .with("apiKey", safety_core::secret::Secret::new(&real_key)),
-            );
+            let sealed = safety_core::secret::SecretCipher::ai(&[("JARVIS_AI_SECRET_KEY".into(), ai_key.clone())].into())
+                .unwrap()
+                .seal(&safety_core::secret::SecretFields::new().with("apiKey", safety_core::secret::Secret::new(&real_key)));
             runtime.block_on(async {
                 let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
                 tokio::spawn(async move { let _ = connection.await; });
                 db.execute("UPDATE app.ai_provider_configs SET base_url=$1, encrypted_credential=$2 WHERE id=$3", &[&url, &sealed, &provider]).await.unwrap();
                 db.execute("UPDATE app.ai_configured_models SET provider_model_id=$1 WHERE id=$2", &[&model_name, &model]).await.unwrap();
             });
-            let (status, text) = call(
-                Method::POST,
-                &format!("/definitions/{id}/run"),
-                Some(&cookie),
-                Some(json!({})),
-            );
+            let (status, text) = call(Method::POST, &format!("/definitions/{id}/run"), Some(&cookie), Some(json!({})));
             let queued = json_of(&text);
-            let (job, run) = (
-                queued["jobId"].as_str().unwrap_or_default().to_owned(),
-                queued["runId"].as_str().unwrap_or_default().to_owned(),
-            );
+            let (job, run) = (queued["jobId"].as_str().unwrap_or_default().to_owned(), queued["runId"].as_str().unwrap_or_default().to_owned());
             let waited = std::time::Instant::now();
             let (mut state, mut detail_text) = (String::new(), String::new());
             while status == 202 && waited.elapsed() < std::time::Duration::from_secs(240) {
-                let (_, t) = call(
-                    Method::GET,
-                    &format!("/definitions/{id}/runs/{run}?jobId={job}"),
-                    Some(&cookie),
-                    None,
-                );
+                let (_, t) = call(Method::GET, &format!("/definitions/{id}/runs/{run}?jobId={job}"), Some(&cookie), None);
                 state = json_of(&t)["state"].as_str().unwrap_or_default().to_owned();
                 detail_text = t;
-                if state != "pending" {
-                    break;
-                }
+                if state != "pending" { break; }
                 std::thread::sleep(std::time::Duration::from_secs(2));
             }
-            let (_, t) = call(
-                Method::GET,
-                &format!("/definitions/{id}/runs/{run}"),
-                Some(&cookie),
-                None,
-            );
+            let (_, t) = call(Method::GET, &format!("/definitions/{id}/runs/{run}"), Some(&cookie), None);
             let detail = json_of(&t);
             extras["realModel"] = json!({
                 "queuedStatus": status, "state": state, "seconds": waited.elapsed().as_secs(),
@@ -953,10 +630,7 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
         }
         // Upgrade check. Loads rows copied from the dev database into this throwaway database,
         // then reads them back through the real routes as their original owner.
-        if let (Ok(dump), Ok(dev_owner)) = (
-            std::env::var("BRIEFINGS_UPGRADE_DUMP"),
-            std::env::var("BRIEFINGS_UPGRADE_OWNER_ID"),
-        ) {
+        if let (Ok(dump), Ok(dev_owner)) = (std::env::var("BRIEFINGS_UPGRADE_DUMP"), std::env::var("BRIEFINGS_UPGRADE_OWNER_ID")) {
             let sql = fs::read_to_string(dump).unwrap();
             let dev_owner: uuid::Uuid = dev_owner.parse().unwrap();
             runtime.block_on(async {
@@ -968,42 +642,16 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
             let signed = client.post(format!("{origin}/api/auth/sign-in/email")).header("origin", &origin)
                 .json(&json!({"email":"dev-owner-copy@example.test","password":"temporary-briefings-password-263-not-a-real-secret"})).send().unwrap();
             let sign_status = signed.status().as_u16();
-            let dev_cookie = signed
-                .headers()
-                .get("set-cookie")
-                .and_then(|v| v.to_str().ok())
-                .and_then(|v| v.split(';').next())
-                .unwrap_or_default()
-                .to_owned();
+            let dev_cookie = signed.headers().get("set-cookie").and_then(|v| v.to_str().ok()).and_then(|v| v.split(';').next()).unwrap_or_default().to_owned();
             let (list_status, text) = call(Method::GET, "/definitions", Some(&dev_cookie), None);
-            let defs = json_of(&text)["definitions"]
-                .as_array()
-                .cloned()
-                .unwrap_or_default();
+            let defs = json_of(&text)["definitions"].as_array().cloned().unwrap_or_default();
             let mut runs = vec![];
             for d in &defs {
                 let did = d["id"].as_str().unwrap_or_default();
-                let (rs, t) = call(
-                    Method::GET,
-                    &format!("/definitions/{did}/runs"),
-                    Some(&dev_cookie),
-                    None,
-                );
+                let (rs, t) = call(Method::GET, &format!("/definitions/{did}/runs"), Some(&dev_cookie), None);
                 let n = json_of(&t)["runs"].as_array().map(|a| a.len()).unwrap_or(0);
-                let newest = json_of(&t)["runs"][0]["id"]
-                    .as_str()
-                    .unwrap_or_default()
-                    .to_owned();
-                let (ds, dt) = if newest.is_empty() {
-                    (0, String::new())
-                } else {
-                    call(
-                        Method::GET,
-                        &format!("/definitions/{did}/runs/{newest}"),
-                        Some(&dev_cookie),
-                        None,
-                    )
-                };
+                let newest = json_of(&t)["runs"][0]["id"].as_str().unwrap_or_default().to_owned();
+                let (ds, dt) = if newest.is_empty() { (0, String::new()) } else { call(Method::GET, &format!("/definitions/{did}/runs/{newest}"), Some(&dev_cookie), None) };
                 runs.push(json!({"type": d["briefingType"], "runsStatus": rs, "runs": n, "newestStatus": ds, "newestState": json_of(&dt)["state"], "newestHasText": json_of(&dt)["run"]["summaryText"].as_str().map(|t| !t.is_empty()).unwrap_or(false)}));
             }
             extras["upgrade"] = json!({"signIn": sign_status, "listStatus": list_status, "definitions": defs.len(), "perDefinition": runs});
@@ -1025,11 +673,7 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
                 &[&seeded, &def, &owner, &metadata],
             ).await.unwrap();
         });
-        fs::write(
-            format!("{hold}.seed.json"),
-            json!({"runId": seeded, "definitionId": id}).to_string(),
-        )
-        .unwrap();
+        fs::write(format!("{hold}.seed.json"), json!({"runId": seeded, "definitionId": id}).to_string()).unwrap();
         let feedback = moss_module_host::feedback_port::PostgresFeedback::new(app.clone()).unwrap();
         let mut ratings: std::collections::HashMap<String, String> = Default::default();
         fs::write(format!("{hold}.extras.json"), extras.to_string()).unwrap();
@@ -1037,27 +681,14 @@ fn installed_briefings_package_serves_routes_from_the_real_server() {
             if let Ok(text) = fs::read_to_string(format!("{hold}.cmd")) {
                 use moss_module_host::feedback_port::{Feedback, Record};
                 let cmd = json_of(&text);
-                let (kind, target) = (
-                    cmd["kind"].as_str().unwrap().to_owned(),
-                    cmd["ref"].as_str().unwrap().to_owned(),
-                );
+                let (kind, target) = (cmd["kind"].as_str().unwrap().to_owned(), cmd["ref"].as_str().unwrap().to_owned());
                 let key = format!("{kind}:{target}");
                 let access = AccessContext::new(owner, "briefings-hold");
                 if cmd["op"] == "rate" {
-                    let rating = feedback
-                        .record(
-                            &access,
-                            "briefing_item",
-                            &Record {
-                                target_ref: target,
-                                surface: "briefing".into(),
-                                kind: cmd["rating"].as_str().unwrap().into(),
-                                source_kind: Some("briefing".into()),
-                                source_label: Some("Briefing".into()),
-                                metadata: json!({}),
-                            },
-                        )
-                        .unwrap();
+                    let rating = feedback.record(&access, "briefing_item", &Record {
+                        target_ref: target, surface: "briefing".into(), kind: cmd["rating"].as_str().unwrap().into(),
+                        source_kind: Some("briefing".into()), source_label: Some("Briefing".into()), metadata: json!({}),
+                    }).unwrap();
                     ratings.insert(key, rating);
                 } else if let Some(rating) = ratings.remove(&key) {
                     feedback.undo(&access, "briefing_item", &rating).unwrap();

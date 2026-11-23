@@ -184,6 +184,7 @@ impl SeenRegistry {
                 && self.targets_package(&revocation.target, digest, publisher_id, public_key)
         })
     }
+
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(
@@ -490,11 +491,26 @@ impl Catalog {
         let bytes = self.source.fetch(&path, artifact.size)?;
         self.read_download(artifact, &bytes, moss)
     }
+    /// Authenticate a historical release for publish review, regardless of its host range.
+    pub fn download_for_review(&self, artifact: &Artifact) -> Result<crate::archive::Package> {
+        let path = format!("packages/{}.mosspkg", artifact.digest);
+        let bytes = self.source.fetch(&path, artifact.size)?;
+        self.read_download_for_review(artifact, &bytes)
+    }
     pub fn read_download(
         &self,
         artifact: &Artifact,
         bytes: &[u8],
         moss: &Version,
+    ) -> Result<crate::archive::Package> {
+        let package = self.read_download_for_review(artifact, bytes)?;
+        package.manifest.check_moss_version(moss)?;
+        Ok(package)
+    }
+    fn read_download_for_review(
+        &self,
+        artifact: &Artifact,
+        bytes: &[u8],
     ) -> Result<crate::archive::Package> {
         ensure!(
             bytes.len() as u64 == artifact.size,
@@ -506,7 +522,7 @@ impl Catalog {
             &artifact.digest,
             &artifact.signature,
         )?;
-        let package = crate::archive::Package::read(bytes, &artifact.digest, moss)?;
+        let package = crate::archive::Package::read_for_review(bytes, &artifact.digest)?;
         compare_manifest(&package.manifest, artifact)?;
         Ok(package)
     }

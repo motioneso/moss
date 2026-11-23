@@ -80,3 +80,4 @@ pub fn write(folder: &Path, bytes: &[u8], manifest: &Manifest) -> Result<(String
     std::fs::write(folder.join(format!("packages/{digest}.mosspkg")), bytes)?;
     Ok((public(&root), public(&publisher)))
 }
+

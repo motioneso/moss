@@ -2,16 +2,16 @@
 mod common;
 #[path = "people_routes/installed.rs"]
 mod installed;
-use access_context::AccessContext;
 use common::Keys;
 use moss_module_host::{
     archive::Package,
     registry::{Artifact, Channel, Index, Source},
     trust::{self, Publisher, RegistryIdentity},
 };
+use std::collections::{BTreeMap, BTreeSet};
+use access_context::AccessContext;
 use safety_core::db::{Database, RuntimeRole};
 use serde_json::{json, Value};
-use std::collections::{BTreeMap, BTreeSet};
 use std::{
     fs,
     path::Path,
@@ -36,11 +36,7 @@ fn walk(dir: &Path) -> Vec<std::path::PathBuf> {
     if let Ok(read) = fs::read_dir(dir) {
         for e in read.flatten() {
             let p = e.path();
-            if p.is_dir() {
-                out.extend(walk(&p));
-            } else {
-                out.push(p);
-            }
+            if p.is_dir() { out.extend(walk(&p)); } else { out.push(p); }
         }
     }
     out
@@ -100,11 +96,7 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
     }
     if let Ok(shell_web) = std::env::var("SPORTS_LIVE_WEB") {
         // A built shell, so the screen opens inside the real app frame.
-        let status = Command::new("cp")
-            .args(["-r", "-T", &shell_web])
-            .arg(root.join("web"))
-            .status()
-            .unwrap();
+        let status = Command::new("cp").args(["-r", "-T", &shell_web]).arg(root.join("web")).status().unwrap();
         assert!(status.success());
     } else {
         fs::write(
@@ -178,10 +170,7 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
         let response = client.post(format!("{origin}/api/auth/sign-up/email")).header("origin", &origin).json(&json!({"name":name,"email":email,"password":"temporary-sports-password-273-not-a-real-secret"})).send().unwrap();
         let status = response.status();
         if status != 200 {
-            panic!(
-                "sign-up answered {status}: {}",
-                response.text().unwrap_or_default()
-            );
+            panic!("sign-up answered {status}: {}", response.text().unwrap_or_default());
         }
         response.headers()["set-cookie"]
             .to_str()
@@ -231,36 +220,32 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
     let keys = Keys::new();
     fs::create_dir_all(root.join("registry/packages")).unwrap();
     let artifacts: Vec<Artifact> = [("JS235_SPORTS_PACKAGE", "sports")]
-        .iter()
-        .map(|(variable, id)| {
-            let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
-            let digest = trust::digest(&bytes);
-            let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
-            let manifest = &package.manifest;
-            assert_eq!(manifest.id, *id);
-            fs::write(
-                root.join(format!("registry/packages/{digest}.mosspkg")),
-                &bytes,
-            )
-            .unwrap();
-            Artifact {
-                id: manifest.id.clone(),
-                version: manifest.version.clone(),
-                digest: digest.clone(),
-                size: bytes.len() as u64,
-                publisher_key: "sports-test".into(),
-                signature: Keys::sign(&keys.publisher, digest.as_bytes()),
-                requires_moss: manifest.requires_moss.clone(),
-                abi: manifest.abi.clone(),
-                capabilities: manifest.capabilities.clone(),
-                migrations: manifest.database.migrations.clone(),
-                requires: manifest.requires.clone(),
-                changelog: "Sports live gate".into(),
-                channel: Channel::Stable,
-                urgent: false,
-            }
-        })
-        .collect();
+    .iter()
+    .map(|(variable, id)| {
+        let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
+        let digest = trust::digest(&bytes);
+        let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
+        let manifest = &package.manifest;
+        assert_eq!(manifest.id, *id);
+        fs::write(root.join(format!("registry/packages/{digest}.mosspkg")), &bytes).unwrap();
+        Artifact {
+            id: manifest.id.clone(),
+            version: manifest.version.clone(),
+            digest: digest.clone(),
+            size: bytes.len() as u64,
+            publisher_key: "sports-test".into(),
+            signature: Keys::sign(&keys.publisher, digest.as_bytes()),
+            requires_moss: manifest.requires_moss.clone(),
+            abi: manifest.abi.clone(),
+            capabilities: manifest.capabilities.clone(),
+            migrations: manifest.database.migrations.clone(),
+            requires: manifest.requires.clone(),
+            changelog: "Sports live gate".into(),
+            channel: Channel::Stable,
+            urgent: false,
+        }
+    })
+    .collect();
     let identity = RegistryIdentity {
         id: "sports-test-registry".into(),
         name: "Sports test registry".into(),
@@ -285,23 +270,11 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
         revoked: vec![],
     };
     for (name, data, key) in [
-        (
-            "registry.json",
-            serde_json::to_vec(&identity).unwrap(),
-            &keys.root,
-        ),
-        (
-            "index.json",
-            serde_json::to_vec(&index).unwrap(),
-            &keys.index,
-        ),
+        ("registry.json", serde_json::to_vec(&identity).unwrap(), &keys.root),
+        ("index.json", serde_json::to_vec(&index).unwrap(), &keys.index),
     ] {
         fs::write(root.join("registry").join(name), &data).unwrap();
-        fs::write(
-            root.join("registry").join(format!("{name}.sig")),
-            Keys::sign(key, &data),
-        )
-        .unwrap();
+        fs::write(root.join("registry").join(format!("{name}.sig")), Keys::sign(key, &data)).unwrap();
     }
     let installer = installed::reopen(
         &root.join("data"),
@@ -345,28 +318,18 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
         let signed = client.post(format!("{origin}/api/auth/sign-in/email")).header("origin", &origin)
             .json(&json!({"email":"sports-other@example.test","password":"temporary-sports-password-273-not-a-real-secret"})).send().unwrap();
         assert_eq!(signed.status(), 200, "second person sign-in");
-        signed.headers()["set-cookie"]
-            .to_str()
-            .unwrap()
-            .split(';')
-            .next()
-            .unwrap()
-            .to_owned()
+        signed.headers()["set-cookie"].to_str().unwrap().split(';').next().unwrap().to_owned()
     };
     let log = || fs::read_to_string(root.join("server.log")).unwrap_or_default();
     let call = |method: reqwest::Method, path: &str, cookie: Option<&str>, body: Option<Value>| {
-        let mut request = client
-            .request(method, format!("{origin}/api/m/sports{path}"))
-            .header("origin", &origin);
+        let mut request = client.request(method, format!("{origin}/api/m/sports{path}")).header("origin", &origin);
         if let Some(cookie) = cookie {
             request = request.header("cookie", cookie);
         }
         if let Some(body) = body {
             request = request.json(&body);
         }
-        let response = request
-            .send()
-            .unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
+        let response = request.send().unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
         let status = response.status().as_u16();
         let text = response.text().unwrap_or_default();
         println!("{method_path} -> {status}", method_path = path);
@@ -391,11 +354,7 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
         if ready {
             break;
         }
-        assert!(
-            started.elapsed() < std::time::Duration::from_secs(240),
-            "module host start deadline\n{}",
-            log()
-        );
+        assert!(started.elapsed() < std::time::Duration::from_secs(240), "module host start deadline\n{}", log());
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
     for who in [&cookie, &other] {
@@ -404,126 +363,39 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
         assert_eq!(json_of(&text), json!({"follows":[]}));
     }
     // The owner follows a league twice and gets the same row back.
-    let (status, text) = call(
-        Method::POST,
-        "/follows",
-        Some(&cookie),
-        Some(json!({"competitionKey":"nfl"})),
-    );
+    let (status, text) = call(Method::POST, "/follows", Some(&cookie), Some(json!({"competitionKey":"nfl"})));
     assert_eq!(status, 200, "{text}\n{}", log());
     let id = json_of(&text)["follow"]["id"].as_str().unwrap().to_owned();
-    let (_, again) = call(
-        Method::POST,
-        "/follows",
-        Some(&cookie),
-        Some(json!({"competitionKey":"nfl"})),
-    );
+    let (_, again) = call(Method::POST, "/follows", Some(&cookie), Some(json!({"competitionKey":"nfl"})));
     assert_eq!(json_of(&again)["follow"]["id"], json!(id));
     let (_, list) = call(Method::GET, "/follows", Some(&cookie), None);
-    assert_eq!(
-        json_of(&list)["follows"].as_array().unwrap().len(),
-        1,
-        "{list}"
-    );
+    assert_eq!(json_of(&list)["follows"].as_array().unwrap().len(), 1, "{list}");
     // Bad input gets the old words, and the typed text is never kept.
-    let (status, text) = call(
-        Method::POST,
-        "/follows",
-        Some(&cookie),
-        Some(json!({"competitionKey": MARK})),
-    );
-    assert_eq!(
-        (status, json_of(&text)["error"].clone()),
-        (400, json!(format!("Unknown competition: {MARK}"))),
-        "{text}"
-    );
-    let (status, text) = call(
-        Method::POST,
-        "/follows",
-        Some(&cookie),
-        Some(json!({"competitionKey":"nba","teamKey":"LAL"})),
-    );
-    assert_eq!(
-        (status, json_of(&text)["error"].clone()),
-        (400, json!("Unknown team: LAL")),
-        "{text}"
-    );
-    let (status, text) = call(
-        Method::POST,
-        &format!("/follows/{id}/team"),
-        Some(&cookie),
-        Some(json!({"sourceTeamId":"lal"})),
-    );
-    assert_eq!(
-        (status, json_of(&text)["error"].clone()),
-        (
-            400,
-            json!("That follow is a whole competition, not a team.")
-        ),
-        "{text}"
-    );
+    let (status, text) = call(Method::POST, "/follows", Some(&cookie), Some(json!({"competitionKey": MARK})));
+    assert_eq!((status, json_of(&text)["error"].clone()), (400, json!(format!("Unknown competition: {MARK}"))), "{text}");
+    let (status, text) = call(Method::POST, "/follows", Some(&cookie), Some(json!({"competitionKey":"nba","teamKey":"LAL"})));
+    assert_eq!((status, json_of(&text)["error"].clone()), (400, json!("Unknown team: LAL")), "{text}");
+    let (status, text) = call(Method::POST, &format!("/follows/{id}/team"), Some(&cookie), Some(json!({"sourceTeamId":"lal"})));
+    assert_eq!((status, json_of(&text)["error"].clone()), (400, json!("That follow is a whole competition, not a team.")), "{text}");
     // Standings choices are kept in catalog order and read back.
-    let (status, text) = call(
-        Method::PUT,
-        "/standings-preferences",
-        Some(&cookie),
-        Some(json!({"selectedCompetitionKeys":["nhl","nba"]})),
-    );
-    assert_eq!(
-        (status, json_of(&text)["selectedCompetitionKeys"].clone()),
-        (200, json!(["nba", "nhl"])),
-        "{text}"
-    );
-    let (status, text) = call(
-        Method::PUT,
-        "/standings-preferences",
-        Some(&cookie),
-        Some(json!({"lastViewed":{"competitionKey":"nhl"}})),
-    );
+    let (status, text) = call(Method::PUT, "/standings-preferences", Some(&cookie), Some(json!({"selectedCompetitionKeys":["nhl","nba"]})));
+    assert_eq!((status, json_of(&text)["selectedCompetitionKeys"].clone()), (200, json!(["nba","nhl"])), "{text}");
+    let (status, text) = call(Method::PUT, "/standings-preferences", Some(&cookie), Some(json!({"lastViewed":{"competitionKey":"nhl"}})));
     assert_eq!(status, 200, "{text}");
     let (_, text) = call(Method::GET, "/standings-preferences", Some(&cookie), None);
-    assert_eq!(
-        json_of(&text),
-        json!({"selectedCompetitionKeys":["nba","nhl"],"lastViewed":{"competitionKey":"nhl","viewKey":null,"viewLabel":null}})
-    );
-    let (status, text) = call(
-        Method::PUT,
-        "/standings-preferences",
-        Some(&cookie),
-        Some(json!({"selectedCompetitionKeys":["zzz"]})),
-    );
+    assert_eq!(json_of(&text), json!({"selectedCompetitionKeys":["nba","nhl"],"lastViewed":{"competitionKey":"nhl","viewKey":null,"viewLabel":null}}));
+    let (status, text) = call(Method::PUT, "/standings-preferences", Some(&cookie), Some(json!({"selectedCompetitionKeys":["zzz"]})));
     assert_eq!(status, 400, "{text}");
     // The other person sees none of it and cannot change it.
     let (_, text) = call(Method::GET, "/follows", Some(&other), None);
     assert_eq!(json_of(&text), json!({"follows":[]}));
     let (_, text) = call(Method::GET, "/standings-preferences", Some(&other), None);
-    assert_eq!(
-        json_of(&text),
-        json!({"selectedCompetitionKeys":null,"lastViewed":null})
-    );
-    let (status, text) = call(
-        Method::DELETE,
-        &format!("/follows/{id}"),
-        Some(&other),
-        None,
-    );
+    assert_eq!(json_of(&text), json!({"selectedCompetitionKeys":null,"lastViewed":null}));
+    let (status, text) = call(Method::DELETE, &format!("/follows/{id}"), Some(&other), None);
     assert_eq!((status, json_of(&text)), (200, json!({"ok":false})));
-    assert_eq!(
-        call(
-            Method::POST,
-            &format!("/follows/{id}/team"),
-            Some(&other),
-            Some(json!({"sourceTeamId":"lal"}))
-        )
-        .0,
-        404
-    );
+    assert_eq!(call(Method::POST, &format!("/follows/{id}/team"), Some(&other), Some(json!({"sourceTeamId":"lal"}))).0, 404);
     let (_, list) = call(Method::GET, "/follows", Some(&cookie), None);
-    assert_eq!(
-        json_of(&list)["follows"].as_array().unwrap().len(),
-        1,
-        "B's delete must not remove A's follow"
-    );
+    assert_eq!(json_of(&list)["follows"].as_array().unwrap().len(), 1, "B's delete must not remove A's follow");
     // Public data comes from real ESPN through the real fetch path, for both people alike.
     let (status, text) = call(Method::GET, "/catalog", Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
@@ -536,69 +408,29 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
     assert_eq!(roster["degraded"], json!(false), "{text}");
     assert!(roster["teams"].as_array().unwrap().len() >= 30, "{text}");
     let (_, again) = call(Method::GET, "/leagues/nfl/teams", Some(&other), None);
-    assert_eq!(
-        json_of(&again),
-        roster,
-        "the second person reads the same public roster"
-    );
-    let keys: Vec<String> = json_of(&call(Method::GET, "/catalog", Some(&cookie), None).1)
-        ["competitions"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|c| c["competitionKey"].as_str().unwrap().to_owned())
-        .collect();
+    assert_eq!(json_of(&again), roster, "the second person reads the same public roster");
+    let keys: Vec<String> = json_of(&call(Method::GET, "/catalog", Some(&cookie), None).1)["competitions"]
+        .as_array().unwrap().iter().map(|c| c["competitionKey"].as_str().unwrap().to_owned()).collect();
     for key in &keys {
         let t = std::time::Instant::now();
-        let (status, text) = call(
-            Method::GET,
-            &format!("/leagues/{key}/teams"),
-            Some(&cookie),
-            None,
-        );
+        let (status, text) = call(Method::GET, &format!("/leagues/{key}/teams"), Some(&cookie), None);
         let v = json_of(&text);
-        println!(
-            "ROSTER {key} status={status} degraded={} teams={} in {:?}",
-            v["degraded"],
-            v["teams"].as_array().map_or(0, Vec::len),
-            t.elapsed()
-        );
+        println!("ROSTER {key} status={status} degraded={} teams={} in {:?}", v["degraded"], v["teams"].as_array().map_or(0, Vec::len), t.elapsed());
     }
     let started = std::time::Instant::now();
     let (status, text) = call(Method::GET, "/teams/search?q=dallas", Some(&other), None);
     println!("live ESPN search took {:?}", started.elapsed());
     assert_eq!(status, 200, "{text}\n{}", log());
     let found = json_of(&text);
-    assert!(
-        found["teams"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|t| t["name"] == "Dallas Cowboys"),
-        "{text}"
-    );
-    let (status, text) = call(
-        Method::GET,
-        &format!("/teams/search?q={MARK}"),
-        Some(&cookie),
-        None,
-    );
+    assert!(found["teams"].as_array().unwrap().iter().any(|t| t["name"] == "Dallas Cowboys"), "{text}");
+    let (status, text) = call(Method::GET, &format!("/teams/search?q={MARK}"), Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
     assert_eq!(json_of(&text)["teams"], json!([]));
     // A team follow checks the live roster.
-    let (status, text) = call(
-        Method::POST,
-        "/follows",
-        Some(&other),
-        Some(json!({"competitionKey":"nfl","teamKey":"dal"})),
-    );
+    let (status, text) = call(Method::POST, "/follows", Some(&other), Some(json!({"competitionKey":"nfl","teamKey":"dal"})));
     assert_eq!(status, 200, "{text}\n{}", log());
     let (_, mine) = call(Method::GET, "/follows", Some(&cookie), None);
-    assert_eq!(
-        json_of(&mine)["follows"].as_array().unwrap().len(),
-        1,
-        "A sees none of B's team follow"
-    );
+    assert_eq!(json_of(&mine)["follows"].as_array().unwrap().len(), 1, "A sees none of B's team follow");
     // The overview reads real ESPN through the real fetch path, one person at a time.
     let started = std::time::Instant::now();
     let (status, text) = call(Method::GET, "/overview", Some(&other), None);
@@ -609,134 +441,53 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
     assert_eq!(cards.len(), 1, "{text}");
     assert_eq!(cards[0]["name"], "Dallas Cowboys", "{text}");
     assert_eq!(theirs["degraded"], json!(false), "{text}");
-    assert!(
-        theirs["standings"]
-            .as_array()
-            .is_some_and(|s| !s.is_empty()),
-        "{text}"
-    );
+    assert!(theirs["standings"].as_array().is_some_and(|s| !s.is_empty()), "{text}");
     let (status, text) = call(Method::GET, "/overview", Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
     let mine = json_of(&text);
-    assert_eq!(
-        mine["followed"],
-        json!([]),
-        "A follows no club, so A has no card"
-    );
-    assert_eq!(
-        mine["followedLeagues"][0]["competitionKey"], "nfl",
-        "{text}"
-    );
+    assert_eq!(mine["followed"], json!([]), "A follows no club, so A has no card");
+    assert_eq!(mine["followedLeagues"][0]["competitionKey"], "nfl", "{text}");
     // Part 12b. The stories come from real ESPN, and the featured story's body from ESPN's real
     // article page, with nothing rewritten on the way.
     let hero_mode = mine["hero"]["mode"].as_str().unwrap_or("").to_owned();
-    let band: Vec<&Value> = mine["leagueNews"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .flat_map(|g| g["headlines"].as_array().unwrap())
-        .collect();
+    let band: Vec<&Value> = mine["leagueNews"].as_array().unwrap().iter().flat_map(|g| g["headlines"].as_array().unwrap()).collect();
     let top = mine["topStories"].as_array().unwrap();
-    println!(
-        "sports live: hero {hero_mode}, {} top stories, {} band stories",
-        top.len(),
-        band.len()
-    );
-    assert!(
-        !top.is_empty() && !band.is_empty(),
-        "real NFL stories expected: {text}"
-    );
-    let featured: Vec<&&Value> = band
-        .iter()
-        .filter(|h| h["body"].as_str().is_some_and(|b| !b.is_empty()))
-        .collect();
-    assert_eq!(
-        featured.len(),
-        1,
-        "exactly one featured story with a real body: {text}\n{}",
-        log()
-    );
+    println!("sports live: hero {hero_mode}, {} top stories, {} band stories", top.len(), band.len());
+    assert!(!top.is_empty() && !band.is_empty(), "real NFL stories expected: {text}");
+    let featured: Vec<&&Value> = band.iter().filter(|h| h["body"].as_str().is_some_and(|b| !b.is_empty())).collect();
+    assert_eq!(featured.len(), 1, "exactly one featured story with a real body: {text}\n{}", log());
     let body = featured[0]["body"].as_str().unwrap();
-    println!(
-        "sports live: featured story {:?} body {} characters: {:?}",
-        featured[0]["title"],
-        body.chars().count(),
-        body.chars().take(160).collect::<String>()
-    );
-    assert!(
-        body.encode_utf16().count() <= 901 && !body.contains('<') && !body.contains("&amp;"),
-        "{body}"
-    );
-    assert!(
-        body != featured[0]["summary"].as_str().unwrap_or(""),
-        "the body is the article text, not the summary"
-    );
+    println!("sports live: featured story {:?} body {} characters: {:?}", featured[0]["title"], body.chars().count(), body.chars().take(160).collect::<String>());
+    assert!(body.encode_utf16().count() <= 901 && !body.contains('<') && !body.contains("&amp;"), "{body}");
+    assert!(body != featured[0]["summary"].as_str().unwrap_or(""), "the body is the article text, not the summary");
     let (_, again) = call(Method::GET, "/overview", Some(&cookie), None);
-    assert_eq!(
-        json_of(&again)["degraded"],
-        json!(false),
-        "a second read is served from the shared copy"
-    );
-    let (status, text) = call(
-        Method::GET,
-        "/standings?competitionKey=nfl",
-        Some(&cookie),
-        None,
-    );
+    assert_eq!(json_of(&again)["degraded"], json!(false), "a second read is served from the shared copy");
+    let (status, text) = call(Method::GET, "/standings?competitionKey=nfl", Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
-    assert!(
-        json_of(&text)["group"]["sections"]
-            .as_array()
-            .is_some_and(|s| !s.is_empty()),
-        "{text}"
-    );
-    let (status, text) = call(
-        Method::GET,
-        "/results/latest?competitionKey=nfl&teamName=dallas",
-        Some(&other),
-        None,
-    );
+    assert!(json_of(&text)["group"]["sections"].as_array().is_some_and(|s| !s.is_empty()), "{text}");
+    let (status, text) = call(Method::GET, "/results/latest?competitionKey=nfl&teamName=dallas", Some(&other), None);
     assert_eq!(status, 200, "{text}");
     println!("live results status {}", json_of(&text)["status"]);
     for entry in walk(&root.join("data")) {
         if entry.file_name().is_some_and(|n| n == "kv.json") {
             let kv = fs::read_to_string(&entry).unwrap_or_default();
-            assert!(
-                !kv.contains(MARK) && !kv.contains(&owner.to_string()),
-                "cache file {entry:?} holds a query or a person"
-            );
+            assert!(!kv.contains(MARK) && !kv.contains(&owner.to_string()), "cache file {entry:?} holds a query or a person");
         }
     }
     // Hold the server open so the real screen can be opened in a browser with real ESPN data.
     if let Ok(hold) = std::env::var("SPORTS_LIVE_HOLD") {
         for (key, team) in [("nfl", "dal"), ("nba", "lal"), ("nhl", "")] {
-            let body = if team.is_empty() {
-                json!({"competitionKey":key})
-            } else {
-                json!({"competitionKey":key,"teamKey":team})
-            };
+            let body = if team.is_empty() { json!({"competitionKey":key}) } else { json!({"competitionKey":key,"teamKey":team}) };
             let (status, text) = call(Method::POST, "/follows", Some(&cookie), Some(body));
-            println!(
-                "hold: follow {key} {team}: {status} {}",
-                text.chars().take(80).collect::<String>()
-            );
+            println!("hold: follow {key} {team}: {status} {}", text.chars().take(80).collect::<String>());
         }
-        fs::write(
-            format!("{hold}/ready.txt"),
-            format!("{origin}\n{cookie}\n{origin}/module-frame?module=sports&path=/sports\n"),
-        )
-        .unwrap();
+        fs::write(format!("{hold}/ready.txt"), format!("{origin}\n{cookie}\n{origin}/module-frame?module=sports&path=/sports\n")).unwrap();
         while !std::path::Path::new(&format!("{hold}/stop")).exists() {
             std::thread::sleep(Duration::from_millis(500));
         }
     }
     // The owner removes the follow.
-    let (status, text) = call(
-        Method::DELETE,
-        &format!("/follows/{id}"),
-        Some(&cookie),
-        None,
-    );
+    let (status, text) = call(Method::DELETE, &format!("/follows/{id}"), Some(&cookie), None);
     assert_eq!((status, json_of(&text)), (200, json!({"ok":true})));
     // Adding a real subreddit. The feed is read from the real internet through the server's own
     // public-web fetch, with nothing rewritten on the way. Two spellings that differ only by case
@@ -745,24 +496,11 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
     // retried after a pause. Every answer is the real one and is printed.
     let mut shown = Value::Null;
     for attempt in 1..=4 {
-        let (status, text) = call(
-            Method::POST,
-            "/sources/preview",
-            Some(&cookie),
-            Some(
-                json!({"url":"r/nfl","assignments":[{"target":{"kind":"sport","sportKey":"football"}}]}),
-            ),
-        );
+        let (status, text) = call(Method::POST, "/sources/preview", Some(&cookie), Some(json!({"url":"r/nfl","assignments":[{"target":{"kind":"sport","sportKey":"football"}}]})));
         assert_eq!(status, 200, "{text}\n{}", log());
         shown = json_of(&text);
-        println!(
-            "sports live: r/nfl preview attempt {attempt}: {} {}",
-            shown["status"], shown["reason"]
-        );
-        let retry = matches!(
-            shown["reason"].as_str(),
-            Some("rate_limited" | "auth_required" | "unreachable")
-        );
+        println!("sports live: r/nfl preview attempt {attempt}: {} {}", shown["status"], shown["reason"]);
+        let retry = matches!(shown["reason"].as_str(), Some("rate_limited" | "auth_required" | "unreachable"));
         if shown["status"] == "ok" || !retry {
             break;
         }
@@ -772,11 +510,7 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
         println!("sports live: NOT PROVEN: Reddit refused the real server on every try ({}), so no real subreddit was saved", shown["reason"]);
     } else {
         let candidate = &shown["candidate"];
-        println!(
-            "sports live: real subreddit previewed: {} ({} sample headlines)",
-            candidate["label"],
-            candidate["samples"].as_array().map_or(0, Vec::len)
-        );
+        println!("sports live: real subreddit previewed: {} ({} sample headlines)", candidate["label"], candidate["samples"].as_array().map_or(0, Vec::len));
         let confirm = json!({
             "confirmationId": shown["confirmationId"],
             "authorizationAcknowledgement": shown["authorizationAcknowledgement"],
@@ -784,123 +518,53 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
             "confirmedFetchHosts": candidate["confirmedFetchHosts"],
             "targets": candidate["targets"].as_array().unwrap().iter().map(|t| json!({"target":t["target"],"targetUrl":t["targetUrl"]})).collect::<Vec<_>>(),
         });
-        let (status, text) = call(
-            Method::POST,
-            "/sources",
-            Some(&other),
-            Some(confirm.clone()),
-        );
-        assert_eq!(
-            status, 409,
-            "another person must not save this preview: {text}"
-        );
+        let (status, text) = call(Method::POST, "/sources", Some(&other), Some(confirm.clone()));
+        assert_eq!(status, 409, "another person must not save this preview: {text}");
         let (status, text) = call(Method::POST, "/sources", Some(&cookie), Some(confirm));
         assert_eq!(status, 201, "{text}\n{}", log());
         let saved = json_of(&text);
         let source_id = saved["source"]["id"].as_str().unwrap().to_owned();
         let (_, text) = call(Method::GET, "/sources", Some(&cookie), None);
-        assert_eq!(
-            json_of(&text)["sources"].as_array().unwrap().len(),
-            2,
-            "ESPN plus the subreddit: {text}"
-        );
+        assert_eq!(json_of(&text)["sources"].as_array().unwrap().len(), 2, "ESPN plus the subreddit: {text}");
         let (_, text) = call(Method::GET, "/sources", Some(&other), None);
-        assert_eq!(
-            json_of(&text)["sources"].as_array().unwrap().len(),
-            1,
-            "the other person sees only ESPN: {text}"
-        );
+        assert_eq!(json_of(&text)["sources"].as_array().unwrap().len(), 1, "the other person sees only ESPN: {text}");
         let mut again = Value::Null;
         let mut text = String::new();
         for _ in 0..6 {
-            let (status, body) = call(
-                Method::POST,
-                "/sources/preview",
-                Some(&cookie),
-                Some(json!({"url":"r/NFL"})),
-            );
+            let (status, body) = call(Method::POST, "/sources/preview", Some(&cookie), Some(json!({"url":"r/NFL"})));
             assert_eq!(status, 200, "{body}");
             again = json_of(&body);
             text = body;
             if again["status"] == "ok" {
                 break;
             }
-            println!(
-                "sports live: r/NFL preview answered {} {}",
-                again["status"], again["reason"]
-            );
+            println!("sports live: r/NFL preview answered {} {}", again["status"], again["reason"]);
             std::thread::sleep(std::time::Duration::from_secs(30));
         }
-        assert_eq!(
-            again["duplicateOfSourceId"],
-            json!(source_id),
-            "r/NFL is the same source as r/nfl: {text}"
-        );
-        let (status, text) = call(
-            Method::POST,
-            "/sources",
-            Some(&cookie),
-            Some(json!({
-                "confirmationId": again["confirmationId"],
-                "authorizationAcknowledgement": again["authorizationAcknowledgement"],
-                "canonicalDomain": again["candidate"]["canonicalDomain"],
-                "confirmedFetchHosts": again["candidate"]["confirmedFetchHosts"],
-                "targets": [],
-            })),
-        );
-        assert_eq!(
-            (status, json_of(&text)["error"].clone()),
-            (409, json!("Source already exists")),
-            "{text}\n{}",
-            log()
-        );
+        assert_eq!(again["duplicateOfSourceId"], json!(source_id), "r/NFL is the same source as r/nfl: {text}");
+        let (status, text) = call(Method::POST, "/sources", Some(&cookie), Some(json!({
+            "confirmationId": again["confirmationId"],
+            "authorizationAcknowledgement": again["authorizationAcknowledgement"],
+            "canonicalDomain": again["candidate"]["canonicalDomain"],
+            "confirmedFetchHosts": again["candidate"]["confirmedFetchHosts"],
+            "targets": [],
+        })));
+        assert_eq!((status, json_of(&text)["error"].clone()), (409, json!("Source already exists")), "{text}\n{}", log());
         let (_, text) = call(Method::GET, "/sources", Some(&cookie), None);
-        assert_eq!(
-            json_of(&text)["sources"].as_array().unwrap().len(),
-            2,
-            "still one subreddit: {text}"
-        );
-        let (status, text) = call(
-            Method::DELETE,
-            &format!("/sources/{source_id}"),
-            Some(&other),
-            None,
-        );
-        assert_eq!(
-            (status, json_of(&text)),
-            (200, json!({"deleted":false})),
-            "the other person cannot delete it"
-        );
-        let (status, text) = call(
-            Method::DELETE,
-            &format!("/sources/{source_id}"),
-            Some(&cookie),
-            None,
-        );
-        assert_eq!(
-            (status, json_of(&text)),
-            (200, json!({"deleted":true})),
-            "{text}"
-        );
+        assert_eq!(json_of(&text)["sources"].as_array().unwrap().len(), 2, "still one subreddit: {text}");
+        let (status, text) = call(Method::DELETE, &format!("/sources/{source_id}"), Some(&other), None);
+        assert_eq!((status, json_of(&text)), (200, json!({"deleted":false})), "the other person cannot delete it");
+        let (status, text) = call(Method::DELETE, &format!("/sources/{source_id}"), Some(&cookie), None);
+        assert_eq!((status, json_of(&text)), (200, json!({"deleted":true})), "{text}");
         println!("sports live: the real subreddit was saved once, hidden from the other person and removed");
     }
     // Part 14a. A real feed source is saved and read again through the real fetch path, with
     // nothing rewritten. A site with no feed asks the person's model for a recipe when one is set
     // up, and the answer is printed either way.
-    let (status, text) = call(
-        Method::POST,
-        "/sources/preview",
-        Some(&cookie),
-        Some(
-            json!({"url":"https://www.telegraph.co.uk/sport/rss.xml","assignments":[{"target":{"kind":"sport","sportKey":"football"}}]}),
-        ),
-    );
+    let (status, text) = call(Method::POST, "/sources/preview", Some(&cookie), Some(json!({"url":"https://www.telegraph.co.uk/sport/rss.xml","assignments":[{"target":{"kind":"sport","sportKey":"football"}}]})));
     assert_eq!(status, 200, "{text}\n{}", log());
     let shown = json_of(&text);
-    println!(
-        "sports live: real feed preview: {} {}",
-        shown["status"], shown["reason"]
-    );
+    println!("sports live: real feed preview: {} {}", shown["status"], shown["reason"]);
     if shown["status"] == "ok" {
         let candidate = &shown["candidate"];
         let confirm = json!({
@@ -913,167 +577,68 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
         let (status, text) = call(Method::POST, "/sources", Some(&cookie), Some(confirm));
         assert_eq!(status, 201, "{text}\n{}", log());
         let feed_id = json_of(&text)["source"]["id"].as_str().unwrap().to_owned();
-        let (status, text) = call(
-            Method::POST,
-            &format!("/sources/{feed_id}/retry"),
-            Some(&cookie),
-            None,
-        );
+        let (status, text) = call(Method::POST, &format!("/sources/{feed_id}/retry"), Some(&cookie), None);
         assert_eq!(status, 200, "{text}\n{}", log());
         let source = &json_of(&text)["source"];
-        println!(
-            "sports live: retry of the real feed: health {} checked {}",
-            source["healthState"], source["lastCheckedAt"]
-        );
+        println!("sports live: retry of the real feed: health {} checked {}", source["healthState"], source["lastCheckedAt"]);
         assert_eq!(source["healthState"], "healthy", "{text}");
         // Part 17. The refresh above also looked for story photos, over the real internet, with
         // nothing rewritten. Stored copies are checked on disk, then read back through the route.
         let stored = |dir: &Path| -> Vec<std::path::PathBuf> {
-            walk(dir)
-                .into_iter()
-                .filter(|p| p.extension().is_some_and(|e| e == "jpg"))
-                .collect()
+            walk(dir).into_iter().filter(|p| p.extension().is_some_and(|e| e == "jpg")).collect()
         };
         let copies = stored(&root.join("data/modules/files/sports"));
-        println!(
-            "sports live: photo copies stored by the real refresh: {}",
-            copies.len()
-        );
+        println!("sports live: photo copies stored by the real refresh: {}", copies.len());
         for copy in &copies {
             let bytes = fs::read(copy).unwrap();
             assert_eq!(&bytes[..3], &[0xff, 0xd8, 0xff], "a JPEG");
-            assert!(
-                !bytes.windows(4).any(|w| w == b"Exif"),
-                "no camera data survives"
-            );
+            assert!(!bytes.windows(4).any(|w| w == b"Exif"), "no camera data survives");
             assert!(bytes.len() <= 786_432);
         }
         if copies.is_empty() {
             println!("sports live: NOT PROVEN: the real feed gave no photo that passed the checks");
         } else {
             use sha2::{Digest, Sha256};
-            let feed = client
-                .get("https://www.telegraph.co.uk/sport/rss.xml")
-                .header("user-agent", "Mozilla/5.0")
-                .send()
-                .unwrap()
-                .text()
-                .unwrap();
+            let feed = client.get("https://www.telegraph.co.uk/sport/rss.xml").header("user-agent", "Mozilla/5.0").send().unwrap().text().unwrap();
             let between = |text: &str, open: &str, close: &str| -> Option<String> {
                 let start = text.find(open)? + open.len();
                 let end = text[start..].find(close)? + start;
-                Some(
-                    text[start..end]
-                        .replace("<![CDATA[", "")
-                        .replace("]]>", "")
-                        .trim()
-                        .to_owned(),
-                )
+                Some(text[start..end].replace("<![CDATA[", "").replace("]]>", "").trim().to_owned())
             };
             let mut served = 0;
             for item in feed.split("<item>").skip(1).take(12) {
-                let (Some(title), Some(link)) = (
-                    between(item, "<title>", "</title>"),
-                    between(item, "<link>", "</link>"),
-                ) else {
-                    continue;
-                };
-                let digest = format!(
-                    "{:x}",
-                    Sha256::digest(format!("{link}\0{title}").as_bytes())
-                );
-                let (status, text) = call(
-                    Method::GET,
-                    &format!("/headlines/{feed_id}:{}/photo", &digest[..24]),
-                    Some(&cookie),
-                    None,
-                );
+                let (Some(title), Some(link)) = (between(item, "<title>", "</title>"), between(item, "<link>", "</link>")) else { continue };
+                let digest = format!("{:x}", Sha256::digest(format!("{link}\0{title}").as_bytes()));
+                let (status, text) = call(Method::GET, &format!("/headlines/{feed_id}:{}/photo", &digest[..24]), Some(&cookie), None);
                 if status == 200 {
                     served += 1;
                     assert_eq!(json_of(&text)["contentType"], "image/jpeg");
-                    assert_eq!(
-                        call(
-                            Method::GET,
-                            &format!("/headlines/{feed_id}:{}/photo", &digest[..24]),
-                            Some(&other),
-                            None
-                        )
-                        .0,
-                        404
-                    );
+                    assert_eq!(call(Method::GET, &format!("/headlines/{feed_id}:{}/photo", &digest[..24]), Some(&other), None).0, 404);
                 }
             }
             println!("sports live: photos served through the real route: {served}");
             assert!(served > 0, "at least one stored photo is served");
-            assert_eq!(
-                call(
-                    Method::DELETE,
-                    &format!("/sources/{feed_id}/photos"),
-                    Some(&other),
-                    None
-                )
-                .0,
-                404
-            );
-            let (status, _) = call(
-                Method::DELETE,
-                &format!("/sources/{feed_id}/photos"),
-                Some(&cookie),
-                None,
-            );
+            assert_eq!(call(Method::DELETE, &format!("/sources/{feed_id}/photos"), Some(&other), None).0, 404);
+            let (status, _) = call(Method::DELETE, &format!("/sources/{feed_id}/photos"), Some(&cookie), None);
             assert_eq!(status, 200);
-            assert!(
-                stored(&root.join("data/modules/files/sports")).is_empty(),
-                "stopping photos removed the files"
-            );
+            assert!(stored(&root.join("data/modules/files/sports")).is_empty(), "stopping photos removed the files");
             println!("sports live: stopping photos removed every stored copy");
         }
-        assert_eq!(
-            call(
-                Method::POST,
-                &format!("/sources/{feed_id}/retry"),
-                Some(&other),
-                None
-            )
-            .0,
-            404
-        );
-        let (status, text) = call(
-            Method::POST,
-            &format!("/sources/{feed_id}/rebuild/preview"),
-            Some(&cookie),
-            None,
-        );
-        println!(
-            "sports live: rebuild preview of a feed source: {status} {}",
-            text.chars().take(120).collect::<String>()
-        );
-        call(
-            Method::DELETE,
-            &format!("/sources/{feed_id}"),
-            Some(&cookie),
-            None,
-        );
+        assert_eq!(call(Method::POST, &format!("/sources/{feed_id}/retry"), Some(&other), None).0, 404);
+        let (status, text) = call(Method::POST, &format!("/sources/{feed_id}/rebuild/preview"), Some(&cookie), None);
+        println!("sports live: rebuild preview of a feed source: {status} {}", text.chars().take(120).collect::<String>());
+        call(Method::DELETE, &format!("/sources/{feed_id}"), Some(&cookie), None);
     } else {
-        println!(
-            "sports live: NOT PROVEN: the real feed preview answered {} {}",
-            shown["status"], shown["reason"]
-        );
+        println!("sports live: NOT PROVEN: the real feed preview answered {} {}", shown["status"], shown["reason"]);
     }
     // A real model through the local test endpoint, with the person's own stored provider. The
     // key is read from its config file and never printed. The cheapest model is used.
-    let key_path = std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default())
-        .join(".config/cliproxyapi/client-key");
+    let key_path = std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".config/cliproxyapi/client-key");
     let model_name = std::env::var("SPORTS_LIVE_MODEL").unwrap_or_else(|_| "gpt-6.1-sol".into());
     let has_model = if let Ok(key) = fs::read_to_string(&key_path) {
-        let sealed = safety_core::secret::SecretCipher::ai(
-            &[("JARVIS_AI_SECRET_KEY".into(), ai_key.clone())].into(),
-        )
-        .unwrap()
-        .seal(
-            &safety_core::secret::SecretFields::new()
-                .with("apiKey", safety_core::secret::Secret::new(key.trim())),
-        );
+        let sealed = safety_core::secret::SecretCipher::ai(&[("JARVIS_AI_SECRET_KEY".into(), ai_key.clone())].into())
+            .unwrap()
+            .seal(&safety_core::secret::SecretFields::new().with("apiKey", safety_core::secret::Secret::new(key.trim())));
         let provider: uuid::Uuid = uuid::Uuid::new_v4();
         let model: uuid::Uuid = uuid::Uuid::new_v4();
         runtime.block_on(async {
@@ -1092,20 +657,11 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
     } else {
         false
     };
-    let site =
-        std::env::var("SPORTS_LIVE_SITE").unwrap_or_else(|_| "https://www.thefa.com/news".into());
-    let (status, text) = call(
-        Method::POST,
-        "/sources/preview",
-        Some(&cookie),
-        Some(json!({"url":site,"assignments":[{"target":{"kind":"sport","sportKey":"football"}}]})),
-    );
+    let site = std::env::var("SPORTS_LIVE_SITE").unwrap_or_else(|_| "https://www.thefa.com/news".into());
+    let (status, text) = call(Method::POST, "/sources/preview", Some(&cookie), Some(json!({"url":site,"assignments":[{"target":{"kind":"sport","sportKey":"football"}}]})));
     assert_eq!(status, 200, "{text}\n{}", log());
     let proposed = json_of(&text);
-    println!(
-        "sports live: recipe proposal for a site with no feed ({model_name}): {} {}",
-        proposed["status"], proposed["reason"]
-    );
+    println!("sports live: recipe proposal for a site with no feed ({model_name}): {} {}", proposed["status"], proposed["reason"]);
     if has_model && proposed["status"] == "ok" {
         assert_eq!(proposed["candidate"]["retrievalMethod"], "scrape", "{text}");
         println!("sports live: real model recipe replayed through the real fetch: {} sample headlines {}", proposed["candidate"]["sampleHeadlines"].as_array().map_or(0, Vec::len), proposed["candidate"]["sampleHeadlines"]);
@@ -1119,32 +675,15 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
         let (status, text) = call(Method::POST, "/sources", Some(&cookie), Some(confirm));
         assert_eq!(status, 201, "{text}\n{}", log());
         let scrape_id = json_of(&text)["source"]["id"].as_str().unwrap().to_owned();
-        let (status, text) = call(
-            Method::POST,
-            &format!("/sources/{scrape_id}/retry"),
-            Some(&cookie),
-            None,
-        );
+        let (status, text) = call(Method::POST, &format!("/sources/{scrape_id}/retry"), Some(&cookie), None);
         assert_eq!(status, 200, "{text}");
         let source = json_of(&text)["source"].clone();
-        println!(
-            "sports live: refresh of the model's recipe: health {} recipe {}",
-            source["healthState"], source["recipeStatus"]
-        );
+        println!("sports live: refresh of the model's recipe: health {} recipe {}", source["healthState"], source["recipeStatus"]);
         assert_eq!(source["healthState"], "healthy", "{text}");
-        let (status, text) = call(
-            Method::DELETE,
-            &format!("/sources/{scrape_id}"),
-            Some(&cookie),
-            None,
-        );
+        let (status, text) = call(Method::DELETE, &format!("/sources/{scrape_id}"), Some(&cookie), None);
         assert_eq!(status, 200, "{text}");
     } else {
-        assert!(
-            ["unavailable", "rejected", "ok"]
-                .contains(&proposed["status"].as_str().unwrap_or_default()),
-            "{text}"
-        );
+        assert!(["unavailable", "rejected", "ok"].contains(&proposed["status"].as_str().unwrap_or_default()), "{text}");
         println!("sports live: NOT PROVEN: no usable model answer on this run (key present: {has_model}, answer {})", proposed["status"]);
     }
     // Part 14b. The nine source tools run through the real tool route of the real server. The
@@ -1153,69 +692,31 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
     {
         struct NoModel;
         impl moss_module_host::ai::Intelligence for NoModel {
-            fn generate(
-                &self,
-                _: &moss_module_host::runtime::CallScope,
-                _: &moss_module_host::runtime::Request,
-            ) -> anyhow::Result<Value> {
+            fn generate(&self, _: &moss_module_host::runtime::CallScope, _: &moss_module_host::runtime::Request) -> anyhow::Result<Value> {
                 anyhow::bail!("No model")
             }
-            fn embed(
-                &self,
-                _: &moss_module_host::runtime::CallScope,
-                _: &moss_module_host::runtime::Request,
-            ) -> anyhow::Result<Value> {
+            fn embed(&self, _: &moss_module_host::runtime::CallScope, _: &moss_module_host::runtime::Request) -> anyhow::Result<Value> {
                 anyhow::bail!("No model")
             }
         }
         let services = moss_module_host::services::ServicePorts::new(
             &root.join("data"),
-            std::sync::Arc::new(
-                safety_core::secret::SecretCipher::connectors(&Default::default()).unwrap(),
-            ),
+            std::sync::Arc::new(safety_core::secret::SecretCipher::connectors(&Default::default()).unwrap()),
             std::sync::Arc::new(NoModel),
             std::sync::Arc::new(moss_module_host::runtime::DenyPorts),
         )
         .unwrap();
-        let policies = std::collections::BTreeMap::from(
-            [
-                "sports.listSources",
-                "sports.previewSource",
-                "sports.previewSourceAssignments",
-                "sports.rebuildSourceRecipe",
-                "sports.followedFactsToday",
-                "sports.heartbeatNextFixtures",
-                "sports.latestResult",
-            ]
-            .map(|name| (name.to_owned(), false)),
-        );
-        services
-            .set_action_policy(&access, "sports", &policies)
-            .unwrap();
-        let tool = |who: &str, name: &str, parameters: Value| {
-            call(
-                Method::POST,
-                "/tools/run",
-                Some(who),
-                Some(json!({"tool":name,"parameters":parameters})),
-            )
-        };
+        let policies = std::collections::BTreeMap::from(["sports.listSources", "sports.previewSource", "sports.previewSourceAssignments", "sports.rebuildSourceRecipe", "sports.followedFactsToday", "sports.heartbeatNextFixtures", "sports.latestResult"].map(|name| (name.to_owned(), false)));
+        services.set_action_policy(&access, "sports", &policies).unwrap();
+        let tool = |who: &str, name: &str, parameters: Value| call(Method::POST, "/tools/run", Some(who), Some(json!({"tool":name,"parameters":parameters})));
         let (status, text) = tool(&cookie, "sports.listSources", json!({}));
         assert_eq!(status, 200, "{text}\n{}", log());
-        println!(
-            "sports live: listSources through the tool route answered {}",
-            json_of(&text)["data"]["sources"]
-                .as_array()
-                .map_or(0, Vec::len)
-        );
+        println!("sports live: listSources through the tool route answered {}", json_of(&text)["data"]["sources"].as_array().map_or(0, Vec::len));
         // A read-only preview of a real subreddit, then a save that is refused three ways.
         let (status, text) = tool(&cookie, "sports.previewSource", json!({"url":"r/soccer"}));
         assert_eq!(status, 200, "{text}\n{}", log());
         let shown = json_of(&text)["data"].clone();
-        println!(
-            "sports live: previewSource through the tool route: {} {}",
-            shown["status"], shown["reason"]
-        );
+        println!("sports live: previewSource through the tool route: {} {}", shown["status"], shown["reason"]);
         if shown["status"] == "ok" {
             let confirm = json!({
                 "confirmationId": shown["confirmationId"],
@@ -1226,96 +727,39 @@ fn installed_sports_package_serves_routes_from_the_real_server() {
             });
             let (status, text) = tool(&cookie, "sports.confirmSource", confirm.clone());
             assert_eq!(status, 403, "no approval: {text}");
-            services
-                .approve_tool(&access, "sports", "sports.confirmSource", &confirm)
-                .unwrap();
+            services.approve_tool(&access, "sports", "sports.confirmSource", &confirm).unwrap();
             let (status, text) = tool(&cookie, "sports.confirmSource", confirm.clone());
-            assert_ne!(
-                status, 200,
-                "a plain approval without the displayed version must not save: {text}"
-            );
-            services
-                .approve_tool_at_version(
-                    &access,
-                    "sports",
-                    "sports.confirmSource",
-                    &confirm,
-                    "an-old-version",
-                )
-                .unwrap();
+            assert_ne!(status, 200, "a plain approval without the displayed version must not save: {text}");
+            services.approve_tool_at_version(&access, "sports", "sports.confirmSource", &confirm, "an-old-version").unwrap();
             let (status, text) = tool(&cookie, "sports.confirmSource", confirm.clone());
-            assert!(
-                status == 200
-                    && json_of(&text)["data"]["error"]
-                        .as_str()
-                        .is_some_and(|e| e.contains("approval no longer matches")),
-                "{status} {text}"
-            );
+            assert!(status == 200 && json_of(&text)["data"]["error"].as_str().is_some_and(|e| e.contains("approval no longer matches")), "{status} {text}");
             let (_, text) = call(Method::GET, "/sources", Some(&cookie), None);
-            assert_eq!(
-                json_of(&text)["sources"].as_array().unwrap().len(),
-                1,
-                "nothing was saved: {text}"
-            );
+            assert_eq!(json_of(&text)["sources"].as_array().unwrap().len(), 1, "nothing was saved: {text}");
             println!("sports live: confirmSource refused with no approval, a plain approval and an old version; nothing saved");
         } else {
-            println!(
-                "sports live: NOT PROVEN: the real subreddit preview answered {} {}",
-                shown["status"], shown["reason"]
-            );
+            println!("sports live: NOT PROVEN: the real subreddit preview answered {} {}", shown["status"], shown["reason"]);
         }
-        let (status, text) = tool(
-            &other,
-            "sports.removeSource",
-            json!({"sourceId":"99999999-9999-4999-8999-999999999999"}),
-        );
+        let (status, text) = tool(&other, "sports.removeSource", json!({"sourceId":"99999999-9999-4999-8999-999999999999"}));
         assert_eq!(status, 403, "{text}");
         println!("sports live: removeSource asks first: refused without an approval");
         // The follow tools save and remove only the caller's own follows, and the read tools answer.
         // The host asks for a one-use grant on every tool that is not read-only.
         let league = json!({"competitionKey":"nfl"});
-        services
-            .approve_tool(&access, "sports", "sports.followTeam", &league)
-            .unwrap();
+        services.approve_tool(&access, "sports", "sports.followTeam", &league).unwrap();
         let (status, text) = tool(&cookie, "sports.followTeam", league.clone());
         assert_eq!(status, 200, "{text}\n{}", log());
-        let new_id = json_of(&text)["data"]["follow"]["id"]
-            .as_str()
-            .expect(&text)
-            .to_owned();
+        let new_id = json_of(&text)["data"]["follow"]["id"].as_str().expect(&text).to_owned();
         let (_, text) = call(Method::GET, "/follows", Some(&other), None);
-        assert!(
-            !text.contains(&new_id),
-            "the other person must not see it: {text}"
-        );
-        let (status, text) = tool(
-            &cookie,
-            "sports.followedFactsToday",
-            json!({"timeZone":"America/New_York"}),
-        );
+        assert!(!text.contains(&new_id), "the other person must not see it: {text}");
+        let (status, text) = tool(&cookie, "sports.followedFactsToday", json!({"timeZone":"America/New_York"}));
         assert_eq!(status, 200, "{text}\n{}", log());
-        println!(
-            "sports live: followedFactsToday answered state {}",
-            json_of(&text)["data"]["evidence"]["state"]
-        );
-        let (status, text) = tool(
-            &cookie,
-            "sports.heartbeatNextFixtures",
-            json!({"horizonHours":24,"limit":5}),
-        );
+        println!("sports live: followedFactsToday answered state {}", json_of(&text)["data"]["evidence"]["state"]);
+        let (status, text) = tool(&cookie, "sports.heartbeatNextFixtures", json!({"horizonHours":24,"limit":5}));
         assert_eq!(status, 200, "{text}\n{}", log());
-        println!(
-            "sports live: heartbeatNextFixtures answered {} items, freshness {}",
-            json_of(&text)["data"]["items"]
-                .as_array()
-                .map_or(0, Vec::len),
-            json_of(&text)["data"]["freshness"]
-        );
+        println!("sports live: heartbeatNextFixtures answered {} items, freshness {}", json_of(&text)["data"]["items"].as_array().map_or(0, Vec::len), json_of(&text)["data"]["freshness"]);
         let (status, text) = tool(&cookie, "sports.latestResult", json!({}));
         assert_eq!(status, 200, "{text}\n{}", log());
-        services
-            .approve_tool(&access, "sports", "sports.unfollowTeam", &league)
-            .unwrap();
+        services.approve_tool(&access, "sports", "sports.unfollowTeam", &league).unwrap();
         let (status, text) = tool(&cookie, "sports.unfollowTeam", league);
         assert_eq!(status, 200, "{text}\n{}", log());
         assert_eq!(json_of(&text)["data"]["removed"], true, "{text}");

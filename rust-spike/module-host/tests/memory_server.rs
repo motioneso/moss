@@ -2,16 +2,16 @@
 mod common;
 #[path = "people_routes/installed.rs"]
 mod installed;
-use access_context::AccessContext;
 use common::Keys;
 use moss_module_host::{
     archive::Package,
     registry::{Artifact, Channel, Index, Source},
     trust::{self, Publisher, RegistryIdentity},
 };
+use std::collections::{BTreeMap, BTreeSet};
+use access_context::AccessContext;
 use safety_core::db::{Database, RuntimeRole};
 use serde_json::{json, Value};
-use std::collections::{BTreeMap, BTreeSet};
 use std::{
     fs,
     path::Path,
@@ -80,10 +80,7 @@ fn embedding_stub(port: &str) {
                 let head = String::from_utf8_lossy(&data).to_string();
                 for line in head.lines() {
                     if line.to_ascii_lowercase().starts_with("authorization:") {
-                        SEEN_AUTHORIZATION
-                            .lock()
-                            .unwrap()
-                            .push(line["authorization:".len()..].trim().to_owned());
+                        SEEN_AUTHORIZATION.lock().unwrap().push(line["authorization:".len()..].trim().to_owned());
                     }
                 }
                 if EMBEDDING_FAILS.load(std::sync::atomic::Ordering::SeqCst) {
@@ -92,13 +89,7 @@ fn embedding_stub(port: &str) {
                 }
                 let input: Value = serde_json::from_slice(&body).unwrap();
                 let mut vector = vec![0f64; 768];
-                for word in input["input"]
-                    .as_str()
-                    .unwrap_or_default()
-                    .to_lowercase()
-                    .split(|c: char| !c.is_alphanumeric())
-                    .filter(|w| !w.is_empty())
-                {
+                for word in input["input"].as_str().unwrap_or_default().to_lowercase().split(|c: char| !c.is_alphanumeric()).filter(|w| !w.is_empty()) {
                     let slot = word.bytes().fold(7usize, |h, b| h * 31 + b as usize) % 768;
                     vector[slot] += 1.0;
                 }
@@ -219,10 +210,7 @@ fn installed_memory_package_serves_routes_from_the_real_server() {
         let response = client.post(format!("{origin}/api/auth/sign-up/email")).header("origin", &origin).json(&json!({"name":name,"email":email,"password":"temporary-memory-password-231-not-a-real-secret"})).send().unwrap();
         let status = response.status();
         if status != 200 {
-            panic!(
-                "sign-up answered {status}: {}",
-                response.text().unwrap_or_default()
-            );
+            panic!("sign-up answered {status}: {}", response.text().unwrap_or_default());
         }
         response.headers()["set-cookie"]
             .to_str()
@@ -272,36 +260,32 @@ fn installed_memory_package_serves_routes_from_the_real_server() {
     let keys = Keys::new();
     fs::create_dir_all(root.join("registry/packages")).unwrap();
     let artifacts: Vec<Artifact> = [("JS231_MEMORY_PACKAGE", "memory")]
-        .iter()
-        .map(|(variable, id)| {
-            let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
-            let digest = trust::digest(&bytes);
-            let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
-            let manifest = &package.manifest;
-            assert_eq!(manifest.id, *id);
-            fs::write(
-                root.join(format!("registry/packages/{digest}.mosspkg")),
-                &bytes,
-            )
-            .unwrap();
-            Artifact {
-                id: manifest.id.clone(),
-                version: manifest.version.clone(),
-                digest: digest.clone(),
-                size: bytes.len() as u64,
-                publisher_key: "memory-test".into(),
-                signature: Keys::sign(&keys.publisher, digest.as_bytes()),
-                requires_moss: manifest.requires_moss.clone(),
-                abi: manifest.abi.clone(),
-                capabilities: manifest.capabilities.clone(),
-                migrations: manifest.database.migrations.clone(),
-                requires: manifest.requires.clone(),
-                changelog: "Memory live gate".into(),
-                channel: Channel::Stable,
-                urgent: false,
-            }
-        })
-        .collect();
+    .iter()
+    .map(|(variable, id)| {
+        let bytes = fs::read(std::env::var(variable).unwrap()).unwrap();
+        let digest = trust::digest(&bytes);
+        let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
+        let manifest = &package.manifest;
+        assert_eq!(manifest.id, *id);
+        fs::write(root.join(format!("registry/packages/{digest}.mosspkg")), &bytes).unwrap();
+        Artifact {
+            id: manifest.id.clone(),
+            version: manifest.version.clone(),
+            digest: digest.clone(),
+            size: bytes.len() as u64,
+            publisher_key: "memory-test".into(),
+            signature: Keys::sign(&keys.publisher, digest.as_bytes()),
+            requires_moss: manifest.requires_moss.clone(),
+            abi: manifest.abi.clone(),
+            capabilities: manifest.capabilities.clone(),
+            migrations: manifest.database.migrations.clone(),
+            requires: manifest.requires.clone(),
+            changelog: "Memory live gate".into(),
+            channel: Channel::Stable,
+            urgent: false,
+        }
+    })
+    .collect();
     let identity = RegistryIdentity {
         id: "memory-test-registry".into(),
         name: "Memory test registry".into(),
@@ -326,23 +310,11 @@ fn installed_memory_package_serves_routes_from_the_real_server() {
         revoked: vec![],
     };
     for (name, data, key) in [
-        (
-            "registry.json",
-            serde_json::to_vec(&identity).unwrap(),
-            &keys.root,
-        ),
-        (
-            "index.json",
-            serde_json::to_vec(&index).unwrap(),
-            &keys.index,
-        ),
+        ("registry.json", serde_json::to_vec(&identity).unwrap(), &keys.root),
+        ("index.json", serde_json::to_vec(&index).unwrap(), &keys.index),
     ] {
         fs::write(root.join("registry").join(name), &data).unwrap();
-        fs::write(
-            root.join("registry").join(format!("{name}.sig")),
-            Keys::sign(key, &data),
-        )
-        .unwrap();
+        fs::write(root.join("registry").join(format!("{name}.sig")), Keys::sign(key, &data)).unwrap();
     }
     let installer = installed::reopen(
         &root.join("data"),
@@ -365,16 +337,7 @@ fn installed_memory_package_serves_routes_from_the_real_server() {
     drop(installer);
 
     let embedding_port = Port(
-        String::from_utf8(
-            Command::new("devports")
-                .args(["claim", &format!("js231-embed-{}", std::process::id())])
-                .output()
-                .unwrap()
-                .stdout,
-        )
-        .unwrap()
-        .trim()
-        .into(),
+        String::from_utf8(Command::new("devports").args(["claim", &format!("js231-embed-{}", std::process::id())]).output().unwrap().stdout).unwrap().trim().into(),
     );
     assert!(!embedding_port.0.is_empty());
     embedding_stub(&embedding_port.0);
@@ -390,18 +353,14 @@ fn installed_memory_package_serves_routes_from_the_real_server() {
     let _server = start(true);
     let log = || fs::read_to_string(root.join("server.log")).unwrap_or_default();
     let call = |method: reqwest::Method, path: &str, cookie: Option<&str>, body: Option<Value>| {
-        let mut request = client
-            .request(method, format!("{origin}/api/m/memory{path}"))
-            .header("origin", &origin);
+        let mut request = client.request(method, format!("{origin}/api/m/memory{path}")).header("origin", &origin);
         if let Some(cookie) = cookie {
             request = request.header("cookie", cookie);
         }
         if let Some(body) = body {
             request = request.json(&body);
         }
-        let response = request
-            .send()
-            .unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
+        let response = request.send().unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
         let status = response.status().as_u16();
         let text = response.text().unwrap_or_default();
         println!("{path} -> {status}");
@@ -422,72 +381,31 @@ fn installed_memory_package_serves_routes_from_the_real_server() {
         }
         std::thread::sleep(Duration::from_millis(500));
     };
-    assert_eq!(
-        (status, json_of(&text)),
-        (200, json!({"query":"","items":[]})),
-        "{text}\n{}",
-        log()
-    );
-    let (status, text) = call(
-        Method::POST,
-        "/graph/entities",
-        Some(&cookie),
-        Some(json!({"kind":"self","name":"Me"})),
-    );
+    assert_eq!((status, json_of(&text)), (200, json!({"query":"","items":[]})), "{text}\n{}", log());
+    let (status, text) = call(Method::POST, "/graph/entities", Some(&cookie), Some(json!({"kind":"self","name":"Me"})));
     assert_eq!(status, 200, "{text}");
     let me = json_of(&text)["entity"]["id"].as_str().unwrap().to_owned();
     let fact = json!({"subjectEntityId":me,"predicate":"prefers","objectText":"oolong tea in the afternoon","source":{"sourceKind":"manual","sourceRef":"live-1","excerpt":"I like oolong tea"}});
     let (status, text) = call(Method::POST, "/graph/facts", Some(&cookie), Some(fact));
     assert_eq!(status, 200, "{text}\n{}", log());
     let saved = json_of(&text);
-    assert!(
-        saved["fact"]["id"].is_string() && saved.get("searchPending").is_none(),
-        "{text}"
-    );
-    let (status, text) = call(
-        Method::GET,
-        "/graph/recall?q=oolong%20tea",
-        Some(&cookie),
-        None,
-    );
+    assert!(saved["fact"]["id"].is_string() && saved.get("searchPending").is_none(), "{text}");
+    let (status, text) = call(Method::GET, "/graph/recall?q=oolong%20tea", Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
     let recalled = json_of(&text);
     let items = recalled["items"].as_array().unwrap();
-    assert!(
-        items
-            .iter()
-            .any(|i| i["text"].as_str().is_some_and(|t| t.contains("oolong"))
-                && i["score"].as_f64().unwrap() > 0.0),
-        "{text}"
-    );
-    assert!(
-        items.iter().all(|i| i.get("subjectName").is_none()),
-        "{text}"
-    );
+    assert!(items.iter().any(|i| i["text"].as_str().is_some_and(|t| t.contains("oolong")) && i["score"].as_f64().unwrap() > 0.0), "{text}");
+    assert!(items.iter().all(|i| i.get("subjectName").is_none()), "{text}");
     // The stand-in saw the configured key, and the key never came back out.
     let seen = SEEN_AUTHORIZATION.lock().unwrap().clone();
-    assert!(
-        !seen.is_empty() && seen.iter().all(|v| *v == format!("Bearer {key}")),
-        "{seen:?}"
-    );
+    assert!(!seen.is_empty() && seen.iter().all(|v| *v == format!("Bearer {key}")), "{seen:?}");
     assert!(!text.contains(key) && !log().contains(key), "key leaked");
     // Bad input keeps the old error text.
     let (status, text) = call(Method::GET, "/graph/recall?q=%20", Some(&cookie), None);
-    assert_eq!(
-        (status, json_of(&text)),
-        (400, json!({"error":"q is required"})),
-        "{text}"
-    );
+    assert_eq!((status, json_of(&text)), (400, json!({"error":"q is required"})), "{text}");
     let none = json!({"predicate":"prefers","source":{"sourceKind":"manual","sourceRef":"x","excerpt":"x"}});
     let (status, text) = call(Method::POST, "/graph/facts", Some(&cookie), Some(none));
-    assert_eq!(
-        (status, json_of(&text)),
-        (
-            400,
-            json!({"error":"memory fact requires exactly one object target"})
-        ),
-        "{text}"
-    );
+    assert_eq!((status, json_of(&text)), (400, json!({"error":"memory fact requires exactly one object target"})), "{text}");
     // A failed embedding keeps the fact and flags it.
     EMBEDDING_FAILS.store(true, std::sync::atomic::Ordering::SeqCst);
     let fact = json!({"subjectEntityId":me,"predicate":"prefers","objectText":"quiet mornings with jasmine","source":{"sourceKind":"manual","sourceRef":"live-2","excerpt":"jasmine"}});
@@ -496,150 +414,48 @@ fn installed_memory_package_serves_routes_from_the_real_server() {
     assert_eq!(json_of(&text)["searchPending"], true, "{text}");
     EMBEDDING_FAILS.store(false, std::sync::atomic::Ordering::SeqCst);
     let (_, text) = call(Method::GET, "/graph/recall?q=jasmine", Some(&cookie), None);
-    assert!(
-        json_of(&text)["items"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|i| i["text"].as_str().is_some_and(|t| t.contains("jasmine"))),
-        "{text}"
-    );
+    assert!(json_of(&text)["items"].as_array().unwrap().iter().any(|i| i["text"].as_str().is_some_and(|t| t.contains("jasmine"))), "{text}");
     // Fact lifecycle through the real server: each route, then the old error answers.
     let id = saved["fact"]["id"].as_str().unwrap().to_owned();
     let fact_path = |tail: &str| format!("/graph/facts/{id}{tail}");
-    let (status, _) = call(
-        Method::POST,
-        &fact_path("/pin"),
-        Some(&cookie),
-        Some(json!({"pinned":true})),
-    );
+    let (status, _) = call(Method::POST, &fact_path("/pin"), Some(&cookie), Some(json!({"pinned":true})));
     assert_eq!(status, 204);
-    let (status, text) = call(
-        Method::POST,
-        &fact_path("/confirm"),
-        Some(&cookie),
-        Some(json!({})),
-    );
-    assert_eq!(
-        (status, json_of(&text)["fact"]["confidenceTier"].clone()),
-        (200, json!("confirmed")),
-        "{text}"
-    );
-    let (status, text) = call(
-        Method::POST,
-        &fact_path("/mark-stale"),
-        Some(&cookie),
-        Some(json!({})),
-    );
-    assert_eq!(
-        (status, json_of(&text)["fact"]["status"].clone()),
-        (200, json!("stale")),
-        "{text}"
-    );
-    let (status, text) = call(
-        Method::POST,
-        &fact_path("/status"),
-        Some(&cookie),
-        Some(json!({"status":"active"})),
-    );
-    assert_eq!(
-        (status, json_of(&text)["fact"]["status"].clone()),
-        (200, json!("active")),
-        "{text}"
-    );
-    let (status, text) = call(
-        Method::POST,
-        &fact_path("/correct"),
-        Some(&cookie),
-        Some(json!({"replacementText":"matcha in the afternoon"})),
-    );
-    assert_eq!(
-        (status, json_of(&text)["fact"]["objectText"].clone()),
-        (200, json!("matcha in the afternoon")),
-        "{text}"
-    );
+    let (status, text) = call(Method::POST, &fact_path("/confirm"), Some(&cookie), Some(json!({})));
+    assert_eq!((status, json_of(&text)["fact"]["confidenceTier"].clone()), (200, json!("confirmed")), "{text}");
+    let (status, text) = call(Method::POST, &fact_path("/mark-stale"), Some(&cookie), Some(json!({})));
+    assert_eq!((status, json_of(&text)["fact"]["status"].clone()), (200, json!("stale")), "{text}");
+    let (status, text) = call(Method::POST, &fact_path("/status"), Some(&cookie), Some(json!({"status":"active"})));
+    assert_eq!((status, json_of(&text)["fact"]["status"].clone()), (200, json!("active")), "{text}");
+    let (status, text) = call(Method::POST, &fact_path("/correct"), Some(&cookie), Some(json!({"replacementText":"matcha in the afternoon"})));
+    assert_eq!((status, json_of(&text)["fact"]["objectText"].clone()), (200, json!("matcha in the afternoon")), "{text}");
     let corrected = json_of(&text)["fact"]["id"].as_str().unwrap().to_owned();
     assert_ne!(corrected, id, "a correction is a new fact");
-    let (status, text) = call(
-        Method::POST,
-        &fact_path("/pin"),
-        Some(&cookie),
-        Some(json!({})),
-    );
+    let (status, text) = call(Method::POST, &fact_path("/pin"), Some(&cookie), Some(json!({})));
     assert_eq!(status, 400, "{text}");
     let unknown = "/graph/facts/00000000-0000-4000-8000-0000000000ff";
     let (status, text) = call(Method::DELETE, unknown, Some(&cookie), None);
-    assert_eq!(
-        (status, json_of(&text)),
-        (404, json!({"error":"Memory fact not found"})),
-        "{text}"
-    );
-    let (status, text) = call(
-        Method::POST,
-        &fact_path("/status"),
-        Some(&cookie),
-        Some(json!({"status":"active"})),
-    );
-    assert_eq!(
-        (status, json_of(&text)),
-        (
-            400,
-            json!({"error":"Cannot reactivate a superseded memory record; create a new fact instead"})
-        ),
-        "{text}"
-    );
-    let (status, _) = call(
-        Method::POST,
-        &format!("/graph/facts/{corrected}/supersede"),
-        Some(&cookie),
-        Some(json!({})),
-    );
+    assert_eq!((status, json_of(&text)), (404, json!({"error":"Memory fact not found"})), "{text}");
+    let (status, text) = call(Method::POST, &fact_path("/status"), Some(&cookie), Some(json!({"status":"active"})));
+    assert_eq!((status, json_of(&text)), (400, json!({"error":"Cannot reactivate a superseded memory record; create a new fact instead"})), "{text}");
+    let (status, _) = call(Method::POST, &format!("/graph/facts/{corrected}/supersede"), Some(&cookie), Some(json!({})));
     assert_eq!(status, 204);
-    let (status, _) = call(
-        Method::DELETE,
-        &format!("/graph/facts/{corrected}"),
-        Some(&cookie),
-        None,
-    );
+    let (status, _) = call(Method::DELETE, &format!("/graph/facts/{corrected}"), Some(&cookie), None);
     assert_eq!(status, 204);
-    let (status, _) = call(
-        Method::DELETE,
-        &format!("/graph/facts/{corrected}"),
-        Some(&cookie),
-        None,
-    );
+    let (status, _) = call(Method::DELETE, &format!("/graph/facts/{corrected}"), Some(&cookie), None);
     assert_eq!(status, 404);
-    let (status, _) = call(
-        Method::DELETE,
-        &format!("/graph/facts/{corrected}"),
-        None,
-        None,
-    );
+    let (status, _) = call(Method::DELETE, &format!("/graph/facts/{corrected}"), None, None);
     assert_eq!(status, 401);
     // The Memory screen routes, through the real server with the installed package.
     let sql = |statement: String| {
         runtime.block_on(async {
-            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
-                .await
-                .unwrap();
+            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
             tokio::spawn(async move {
                 let _ = connection.await;
             });
             db.batch_execute(&statement).await.unwrap();
         })
     };
-    for (i, (signature, text, subject)) in [
-        ("live-a", "reads before bed", "self"),
-        ("live-b", "runs on Sundays", "Fitness"),
-        ("live-c", "dislikes loud rooms", "self"),
-        ("live-d", "bikes to work", "self"),
-        ("live-e", "drinks oat milk", "self"),
-        ("live-f", "avoids late meetings", "self"),
-        ("live-g", "plays piano", "self"),
-    ]
-    .iter()
-    .enumerate()
-    {
+    for (i, (signature, text, subject)) in [("live-a", "reads before bed", "self"), ("live-b", "runs on Sundays", "Fitness"), ("live-c", "dislikes loud rooms", "self"), ("live-d", "bikes to work", "self"), ("live-e", "drinks oat milk", "self"), ("live-f", "avoids late meetings", "self"), ("live-g", "plays piano", "self")].iter().enumerate() {
         let payload = json!({"kind":"fact","fact":{"subject":subject,"predicate":"prefers","objectText":text,"recordKind":"preference"}});
         sql(format!(
             "INSERT INTO app.memory_candidates (owner_user_id, kind, action, payload_json, candidate_signature, confidence, importance, provenance, created_at)
@@ -649,107 +465,36 @@ fn installed_memory_package_serves_routes_from_the_real_server() {
     let (status, text) = call(Method::GET, "/dashboard?limit=2", Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
     let page = json_of(&text);
-    assert!(
-        page["counts"]["pending"] == 7
-            && page["counts"]["saved"] == 1
-            && page["items"].as_array().unwrap().len() == 1,
-        "{text}"
-    );
-    assert!(
-        page["hasMore"] == false && page["nextCursor"].is_null(),
-        "{text}"
-    );
-    let (status, text) = call(
-        Method::GET,
-        "/dashboard?cursor=nonsense",
-        Some(&cookie),
-        None,
-    );
-    assert_eq!(
-        (status, json_of(&text)["error"].is_string()),
-        (400, true),
-        "{text}"
-    );
+    assert!(page["counts"]["pending"] == 7 && page["counts"]["saved"] == 1 && page["items"].as_array().unwrap().len() == 1, "{text}");
+    assert!(page["hasMore"] == false && page["nextCursor"].is_null(), "{text}");
+    let (status, text) = call(Method::GET, "/dashboard?cursor=nonsense", Some(&cookie), None);
+    assert_eq!((status, json_of(&text)["error"].is_string()), (400, true), "{text}");
     let (status, text) = call(Method::GET, "/candidates", Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
     let pending = json_of(&text);
-    assert!(
-        pending["total"] == 7
-            && pending["hasMore"] == true
-            && pending["items"].as_array().unwrap().len() == 5,
-        "{text}"
-    );
+    assert!(pending["total"] == 7 && pending["hasMore"] == true && pending["items"].as_array().unwrap().len() == 5, "{text}");
     let first = pending["items"][0]["id"].as_str().unwrap().to_owned();
     let second = pending["items"][1]["id"].as_str().unwrap().to_owned();
-    let (status, text) = call(
-        Method::GET,
-        &format!(
-            "/candidates?cursor={}",
-            pending["nextCursor"].as_str().unwrap()
-        ),
-        Some(&cookie),
-        None,
-    );
-    assert_eq!(
-        (status, json_of(&text)["items"].as_array().map(Vec::len)),
-        (200, Some(2)),
-        "{text}"
-    );
-    let (status, text) = call(
-        Method::POST,
-        &format!("/candidates/{first}/accept"),
-        Some(&cookie),
-        Some(json!({})),
-    );
+    let (status, text) = call(Method::GET, &format!("/candidates?cursor={}", pending["nextCursor"].as_str().unwrap()), Some(&cookie), None);
+    assert_eq!((status, json_of(&text)["items"].as_array().map(Vec::len)), (200, Some(2)), "{text}");
+    let (status, text) = call(Method::POST, &format!("/candidates/{first}/accept"), Some(&cookie), Some(json!({})));
     assert_eq!(status, 200, "{text}");
-    let (status, _) = call(
-        Method::POST,
-        &format!("/candidates/{first}/accept"),
-        Some(&cookie),
-        Some(json!({})),
-    );
+    let (status, _) = call(Method::POST, &format!("/candidates/{first}/accept"), Some(&cookie), Some(json!({})));
     assert_eq!(status, 404);
-    let (status, _) = call(
-        Method::POST,
-        &format!("/candidates/{second}/reject"),
-        Some(&cookie),
-        Some(json!({})),
-    );
+    let (status, _) = call(Method::POST, &format!("/candidates/{second}/reject"), Some(&cookie), Some(json!({})));
     assert_eq!(status, 204);
-    let (status, _) = call(
-        Method::POST,
-        &format!("/candidates/{second}/reject"),
-        Some(&cookie),
-        Some(json!({})),
-    );
+    let (status, _) = call(Method::POST, &format!("/candidates/{second}/reject"), Some(&cookie), Some(json!({})));
     assert_eq!(status, 404);
-    let (status, text) = call(
-        Method::POST,
-        "/memories",
-        Some(&cookie),
-        Some(json!({"text":"keeps a paper diary","recordKind":"fact"})),
-    );
+    let (status, text) = call(Method::POST, "/memories", Some(&cookie), Some(json!({"text":"keeps a paper diary","recordKind":"fact"})));
     assert_eq!(status, 200, "{text}");
     let (status, text) = call(Method::GET, "/dashboard?q=diary", Some(&cookie), None);
-    assert!(
-        status == 200 && json_of(&text)["items"].as_array().unwrap().len() == 1,
-        "{text}"
-    );
+    assert!(status == 200 && json_of(&text)["items"].as_array().unwrap().len() == 1, "{text}");
     assert_eq!(call(Method::GET, "/dashboard", None, None).0, 401);
     assert_eq!(call(Method::GET, "/candidates", None, None).0, 401);
     // Re-embed through the real server: switch the model name, see the notice, run it, then cancel a second run.
     let (status, text) = call(Method::GET, "/reembed", Some(&cookie), None);
-    assert_eq!(
-        (status, json_of(&text)["otherModel"].clone()),
-        (200, json!(0)),
-        "{text}"
-    );
-    let (status, text) = call(
-        Method::PUT,
-        "/embedding",
-        Some(&cookie),
-        Some(json!({"url":embedding_url,"model":"bag-of-words-768-v2","confirmOffDevice":true})),
-    );
+    assert_eq!((status, json_of(&text)["otherModel"].clone()), (200, json!(0)), "{text}");
+    let (status, text) = call(Method::PUT, "/embedding", Some(&cookie), Some(json!({"url":embedding_url,"model":"bag-of-words-768-v2","confirmOffDevice":true})));
     assert_eq!(status, 200, "{text}");
     let (status, text) = call(Method::GET, "/reembed", Some(&cookie), None);
     let waiting = json_of(&text)["otherModel"].as_i64().unwrap_or(0);
@@ -757,21 +502,13 @@ fn installed_memory_package_serves_routes_from_the_real_server() {
     println!("re-embed notice: {waiting} passages use another model");
     // Hold the server open so the screen can be opened in a browser.
     if let Ok(hold) = std::env::var("MEMORY_LIVE_HOLD") {
-        let (frame, _) = (
-            format!("{origin}/module-frame?module=memory&path=/settings/memory/search-model"),
-            0,
-        );
+        let (frame, _) = (format!("{origin}/module-frame?module=memory&path=/settings/memory/search-model"), 0);
         fs::write(format!("{hold}/ready.txt"), format!("{frame}\n")).unwrap();
         while !std::path::Path::new(&format!("{hold}/stop")).exists() {
             std::thread::sleep(Duration::from_millis(500));
         }
     }
-    let (status, text) = call(
-        Method::POST,
-        "/reembed/start",
-        Some(&cookie),
-        Some(json!({})),
-    );
+    let (status, text) = call(Method::POST, "/reembed/start", Some(&cookie), Some(json!({})));
     assert_eq!(status, 200, "{text}");
     let started = Instant::now();
     loop {
@@ -782,73 +519,28 @@ fn installed_memory_package_serves_routes_from_the_real_server() {
             println!("re-embed finished: {text}");
             break;
         }
-        assert!(
-            state["run"]["status"] == "running" && started.elapsed() < Duration::from_secs(90),
-            "{text}"
-        );
+        assert!(state["run"]["status"] == "running" && started.elapsed() < Duration::from_secs(90), "{text}");
         std::thread::sleep(Duration::from_millis(500));
     }
     let (_, text) = call(Method::GET, "/graph/recall?q=jasmine", Some(&cookie), None);
-    assert!(
-        json_of(&text)["items"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|i| i["text"].as_str().is_some_and(|t| t.contains("jasmine"))),
-        "{text}"
-    );
-    let (status, text) = call(
-        Method::POST,
-        "/reembed/start",
-        Some(&cookie),
-        Some(json!({})),
-    );
-    assert_eq!(
-        (status, json_of(&text)["error"].is_string()),
-        (409, true),
-        "{text}"
-    );
-    let (status, _) = call(
-        Method::PUT,
-        "/embedding",
-        Some(&cookie),
-        Some(json!({"url":embedding_url,"model":"bag-of-words-768-v3","confirmOffDevice":true})),
-    );
+    assert!(json_of(&text)["items"].as_array().unwrap().iter().any(|i| i["text"].as_str().is_some_and(|t| t.contains("jasmine"))), "{text}");
+    let (status, text) = call(Method::POST, "/reembed/start", Some(&cookie), Some(json!({})));
+    assert_eq!((status, json_of(&text)["error"].is_string()), (409, true), "{text}");
+    let (status, _) = call(Method::PUT, "/embedding", Some(&cookie), Some(json!({"url":embedding_url,"model":"bag-of-words-768-v3","confirmOffDevice":true})));
     assert_eq!(status, 200);
-    let (status, text) = call(
-        Method::POST,
-        "/reembed/start",
-        Some(&cookie),
-        Some(json!({})),
-    );
+    let (status, text) = call(Method::POST, "/reembed/start", Some(&cookie), Some(json!({})));
     assert_eq!(status, 200, "{text}");
-    let (status, text) = call(
-        Method::POST,
-        "/reembed/cancel",
-        Some(&cookie),
-        Some(json!({})),
-    );
+    let (status, text) = call(Method::POST, "/reembed/cancel", Some(&cookie), Some(json!({})));
     // The few passages here can finish before the cancel lands. Either end is a clean stop.
     let cancelled = json_of(&text)["cancelled"] == true;
     assert_eq!(status, 200, "{text}");
     let (_, text) = call(Method::GET, "/reembed", Some(&cookie), None);
-    assert_eq!(
-        json_of(&text)["run"]["status"],
-        if cancelled { "cancelled" } else { "done" },
-        "{text}"
-    );
+    assert_eq!(json_of(&text)["run"]["status"], if cancelled { "cancelled" } else { "done" }, "{text}");
     println!("second run cancelled: {cancelled}");
     assert_eq!(call(Method::GET, "/reembed", None, None).0, 401);
     // Memory text stays out of the server log.
     let log = log();
-    assert!(
-        !log.contains("oolong")
-            && !log.contains("jasmine")
-            && !log.contains("matcha")
-            && !log.contains("paper diary")
-            && !log.contains("reads before bed"),
-        "memory text in log"
-    );
+    assert!(!log.contains("oolong") && !log.contains("jasmine") && !log.contains("matcha") && !log.contains("paper diary") && !log.contains("reads before bed"), "memory text in log");
 }
 
 /// Memory search on a server with no endpoint configured. The model downloads on first use,
@@ -872,18 +564,10 @@ fn on_device_proof(
     assert_eq!(first["provider"], "device", "{first}");
     assert!(first["message"].is_null(), "{first}");
     while call(Method::GET, "/graph/core", Some(cookie), None).0 == 503 {
-        assert!(
-            started.elapsed() < Duration::from_secs(60),
-            "server did not start"
-        );
+        assert!(started.elapsed() < Duration::from_secs(60), "server did not start");
         std::thread::sleep(Duration::from_millis(500));
     }
-    let (status, text) = call(
-        Method::POST,
-        "/graph/entities",
-        Some(cookie),
-        Some(json!({"kind":"self","name":"Me"})),
-    );
+    let (status, text) = call(Method::POST, "/graph/entities", Some(cookie), Some(json!({"kind":"self","name":"Me"})));
     assert_eq!(status, 200, "{text}");
     let me = json_of(&text)["entity"]["id"].as_str().unwrap().to_owned();
     // The first save happens while the model downloads. The fact is kept and flagged.
@@ -906,10 +590,7 @@ fn on_device_proof(
             Some("failed") => panic!("model download failed: {device}"),
             _ => {}
         }
-        assert!(
-            started.elapsed() < Duration::from_secs(1500),
-            "download took too long"
-        );
+        assert!(started.elapsed() < Duration::from_secs(1500), "download took too long");
         std::thread::sleep(Duration::from_secs(2));
     }
     let fact = json!({"subjectEntityId":me,"predicate":"prefers","objectText":"jasmine green tea before bed","source":{"sourceKind":"manual","sourceRef":"live-2","excerpt":"jasmine"}});
@@ -920,32 +601,12 @@ fn on_device_proof(
     let (status, text) = call(Method::POST, "/graph/facts", Some(cookie), Some(other));
     assert_eq!(status, 200, "{text}");
     // No words are shared with the stored text, so only meaning can find it.
-    let (status, text) = call(
-        Method::GET,
-        "/graph/recall?q=what%20hot%20drink%20do%20I%20like%20at%20night",
-        Some(cookie),
-        None,
-    );
+    let (status, text) = call(Method::GET, "/graph/recall?q=what%20hot%20drink%20do%20I%20like%20at%20night", Some(cookie), None);
     assert_eq!(status, 200, "{text}");
     let items = json_of(&text)["items"].as_array().unwrap().clone();
-    println!(
-        "recall by meaning: {}",
-        items
-            .iter()
-            .map(|i| i["text"].as_str().unwrap_or(""))
-            .collect::<Vec<_>>()
-            .join(" | ")
-    );
-    assert!(
-        items
-            .first()
-            .is_some_and(|i| i["text"].as_str().is_some_and(|t| t.contains("jasmine"))),
-        "{text}"
-    );
+    println!("recall by meaning: {}", items.iter().map(|i| i["text"].as_str().unwrap_or("")).collect::<Vec<_>>().join(" | "));
+    assert!(items.first().is_some_and(|i| i["text"].as_str().is_some_and(|t| t.contains("jasmine"))), "{text}");
     let log = log();
-    assert!(
-        !log.contains("oolong") && !log.contains("jasmine") && !log.contains("bicycle"),
-        "memory text in log"
-    );
+    assert!(!log.contains("oolong") && !log.contains("jasmine") && !log.contains("bicycle"), "memory text in log");
     let _ = root;
 }

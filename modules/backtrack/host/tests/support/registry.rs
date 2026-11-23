@@ -24,12 +24,7 @@ fn sign(k: &Ed25519KeyPair, b: &[u8]) -> String {
     STANDARD.encode(k.sign(b).as_ref())
 }
 pub fn publish(folder: &Path, bytes: &[u8]) -> (String, String, Artifact) {
-    publish_as(
-        folder,
-        bytes,
-        moss_backtrack_host::package::manifest().unwrap(),
-        "backtrack",
-    )
+    publish_as(folder, bytes, moss_backtrack_host::package::manifest().unwrap(), "backtrack")
 }
 
 /// Publishes any module's package into its own disposable registry named `<label>-test-registry`,

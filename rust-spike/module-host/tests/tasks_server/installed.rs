@@ -41,10 +41,7 @@ pub fn install(
             let mut manifest: serde_json::Value =
                 serde_json::from_slice(&files["moss.module.json"]).unwrap();
             manifest["callLimitMs"] = ms.parse::<u64>().unwrap().into();
-            files.insert(
-                "moss.module.json".into(),
-                serde_json::to_vec(&manifest).unwrap(),
-            );
+            files.insert("moss.module.json".into(), serde_json::to_vec(&manifest).unwrap());
             moss_module_host::archive::pack(&files).unwrap()
         }
         Err(_) => tasks,

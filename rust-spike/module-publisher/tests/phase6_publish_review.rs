@@ -1,5 +1,4 @@
 mod support;
-use moss_module_host::archive::pack;
 use serde_json::{json, Value};
 use support::*;
 
@@ -24,6 +23,15 @@ fn clean_package_and_signed_growth_index() {
 fn new_publisher_waits_for_human() {
     let f = Fixture::new();
     f.clear_history();
+    // No permissions at all: only the publisher's novelty requires approval.
+    f.files.borrow_mut().remove("code/module.wasm");
+    f.files
+        .borrow_mut()
+        .insert("ui/index.html".into(), b"<p>Screen</p>".to_vec());
+    f.edit_manifest(|m| {
+        m["capabilities"] = json!([]);
+        m["screens"] = json!({"main":"ui/index.html"});
+    });
     assert_eq!(f.review_ok()["diff"]["newPublisher"], true);
     f.refused("publish", None, "Human approval required");
     let approval = f.approve();
@@ -67,22 +75,44 @@ fn fetch_host_growth_waits_and_is_marked() {
 }
 
 #[test]
-fn modified_approval_digest_diff_and_signer_are_refused() {
+fn approval_digest_mismatch_is_refused() {
     let f = Fixture::new();
     f.clear_history();
-    let approval = f.approve();
-    let mut changed = approval.clone();
-    changed["request"]["digest"] = json!("0".repeat(64));
-    f.refused("publish", Some(&changed), "Approval does not match");
-    let mut changed = approval.clone();
-    changed["request"]["diff"]["newPublisher"] = json!(false);
-    f.refused("publish", Some(&changed), "Approval does not match");
-    let mut changed = approval.clone();
-    changed["reviewer"] = json!("unknown");
-    f.refused("publish", Some(&changed), "Reviewer is not trusted");
-    let mut changed = approval;
-    changed["signature"] = json!(sign(&key(), b"wrong"));
-    f.refused("publish", Some(&changed), "signature does not match");
+    let mut request = f.review_ok();
+    request["digest"] = json!("0".repeat(64));
+    f.refused(
+        "publish",
+        Some(&f.sign_request(request)),
+        "Approval does not match",
+    );
+}
+#[test]
+fn approval_diff_mismatch_is_refused() {
+    let f = Fixture::new();
+    f.clear_history();
+    let mut request = f.review_ok();
+    request["diff"]["newPublisher"] = json!(false);
+    f.refused(
+        "publish",
+        Some(&f.sign_request(request)),
+        "Approval does not match",
+    );
+}
+#[test]
+fn untrusted_reviewer_is_refused() {
+    let f = Fixture::new();
+    f.clear_history();
+    let mut approval = f.approve();
+    approval["reviewer"] = json!("unknown");
+    f.refused("publish", Some(&approval), "Reviewer is not trusted");
+}
+#[test]
+fn forged_human_signature_is_refused() {
+    let f = Fixture::new();
+    f.clear_history();
+    let mut approval = f.approve();
+    approval["signature"] = json!(sign(&key(), b"wrong"));
+    f.refused("publish", Some(&approval), "signature does not match");
 }
 
 #[test]
@@ -139,10 +169,11 @@ fn undeclared_import_is_refused() {
 #[test]
 fn bad_sql_is_refused() {
     let f = Fixture::new();
-    f.edit_manifest(|m| m["database"] = json!({"migrations":["sql/001.sql"]}));
-    f.files
-        .borrow_mut()
-        .insert("sql/001.sql".into(), b"DROP TABLE app.other;".to_vec());
+    f.edit_manifest(|m| m["database"] = json!({"migrations":["sql/001_create.sql"]}));
+    f.files.borrow_mut().insert(
+        "sql/001_create.sql".into(),
+        b"DROP TABLE app.other;".to_vec(),
+    );
     f.write_package();
     f.refused("review", None, "not part of the module package subset");
 }
@@ -158,10 +189,13 @@ fn provider_model_fields_are_refused() {
 }
 
 #[test]
-fn wrong_publisher_name_and_signature_are_refused() {
+fn wrong_publisher_name_is_refused() {
     let f = Fixture::new();
     f.edit_manifest(|m| m["id"] = json!("other.counter"));
     f.refused("review", None, "cannot sign this module name");
+}
+#[test]
+fn wrong_publisher_signature_is_refused() {
     let f = Fixture::new();
     f.edit_submission(|s| s["signature"] = json!(sign(&key(), b"wrong")));
     f.refused("review", None, "signature does not match");
@@ -181,7 +215,7 @@ fn altered_published_sql_is_refused() {
     let f = Fixture::new();
     f.add_prior_sql();
     f.files.borrow_mut().insert(
-        "sql/001.sql".into(),
+        "sql/001_create.sql".into(),
         b"CREATE TABLE app.sample_counter_rows (id text);".to_vec(),
     );
     f.write_package();
@@ -208,17 +242,68 @@ fn tampered_prior_index_is_refused() {
 #[test]
 fn tampered_prior_package_is_refused() {
     let f = Fixture::new();
-    let bytes = pack(&f.files.borrow()).unwrap();
-    let index: Value =
-        serde_json::from_slice(&std::fs::read(f.dir.path().join("registry/index.json")).unwrap())
-            .unwrap();
-    let digest = index["modules"][0]["digest"].as_str().unwrap();
-    std::fs::write(
-        f.dir
-            .path()
-            .join(format!("registry/packages/{digest}.mosspkg")),
-        bytes,
-    )
-    .unwrap();
-    f.refused("review", None, "does not match");
+    f.corrupt_prior();
+    f.refused("review", None, "package hash does not match");
+}
+
+#[test]
+fn prior_for_an_older_moss_version_can_be_compared() {
+    let f = Fixture::new();
+    f.set_prior_requirement(">=0.0.1, <0.1.0");
+    f.verify_index(&f.publish_ok(None));
+}
+
+#[test]
+fn permission_reductions_need_no_human_approval() {
+    let f = Fixture::new();
+    f.edit_manifest(|m| m["capabilities"][0]["operations"] = json!(["get"]));
+    assert_eq!(f.review_ok()["diff"]["capabilities"], json!([]));
+    f.verify_index(&f.publish_ok(None));
+}
+
+#[test]
+fn incompatible_candidate_is_still_refused() {
+    let f = Fixture::new();
+    f.edit_manifest(|m| m["requiresMoss"] = json!(">=0.0.1, <0.1.0"));
+    f.refused("review", None, "different Moss version");
+}
+
+#[test]
+fn wrong_registry_identity_is_refused() {
+    let f = Fixture::new();
+    f.edit_config(|c| c["registryId"] = json!("other"));
+    f.refused("review", None, "Wrong registry identity");
+}
+
+#[test]
+fn expired_base_is_refused() {
+    let f = Fixture::new();
+    f.edit_index(|i| i["expires"] = json!("2000-01-01T00:00:00Z"));
+    f.refused("review", None, "base index has expired");
+}
+
+#[test]
+fn wrong_index_signing_key_is_refused() {
+    let f = Fixture::new();
+    f.replace_index_key();
+    f.refused("publish", None, "Wrong index signing key");
+}
+
+#[test]
+fn oversized_input_is_refused() {
+    let f = Fixture::new();
+    use std::io::Write;
+    let mut file = std::fs::OpenOptions::new()
+        .append(true)
+        .open(f.dir.path().join("config.json"))
+        .unwrap();
+    file.write_all(&vec![b' '; 1024 * 1024]).unwrap();
+    f.refused("review", None, "Publisher input is too large");
+}
+
+#[test]
+fn exhausted_index_serial_is_refused() {
+    let f = Fixture::new();
+    f.edit_index(|i| i["serial"] = json!(u64::MAX));
+    f.refused("publish", None, "Index serial exhausted");
 }

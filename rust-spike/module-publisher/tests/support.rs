@@ -43,7 +43,7 @@ impl Fixture {
         let manifest = json!({
             "schemaVersion":2,"id":"sample.counter","name":"Sample counter","description":"Publisher CLI fixture","publisher":"Sample publisher","version":"1.1.0","requiresMoss":">=0.1.0, <1.0.0","abi":"moss:module@1",
             "capabilities":[{"port":"kv","operations":["get","set"],"resources":["counter"]}],
-            "icons":[],"accounts":{"supportsUserDisable":true,"defaultEnabled":true},
+            "icons":["icons/counter.svg"],"accounts":{"supportsUserDisable":true,"defaultEnabled":true},
             "features":[{"id":"sample.counter","description":"Saves a value through the host"}]
         });
         let wasm = wat::parse_str(include_str!("../../module-host/sample/module.wat")).unwrap();
@@ -53,6 +53,7 @@ impl Fixture {
                 serde_json::to_vec(&manifest).unwrap(),
             ),
             ("code/module.wasm".into(), wasm),
+            ("icons/counter.svg".into(), b"<svg/>".to_vec()),
             ("LICENSE".into(), b"MIT".to_vec()),
             ("NOTICE".into(), b"Fixture".to_vec()),
             ("CHANGELOG.md".into(), b"Fixture update".to_vec()),
@@ -187,8 +188,9 @@ impl Fixture {
         assert!(stderr.contains(reason), "Expected {reason}, got {stderr}");
     }
     pub fn approve(&self) -> Value {
-        let request = self.review_ok();
-        // Sign the publisher's typed canonical request, not serde_json::Value's key ordering.
+        self.sign_request(self.review_ok())
+    }
+    pub fn sign_request(&self, request: Value) -> Value {
         let request_bytes = moss_module_publisher::approval_bytes(
             &serde_json::from_value(request.clone()).unwrap(),
         )
@@ -234,9 +236,9 @@ impl Fixture {
         }
     }
     pub fn add_prior_sql(&self) {
-        self.edit_manifest(|m| m["database"] = json!({"migrations":["sql/001.sql"]}));
+        self.edit_manifest(|m| m["database"] = json!({"migrations":["sql/001_create.sql"]}));
         self.files.borrow_mut().insert(
-            "sql/001.sql".into(),
+            "sql/001_create.sql".into(),
             b"CREATE TABLE app.sample_counter_rows (id uuid);".to_vec(),
         );
         self.write_package();
@@ -246,6 +248,46 @@ impl Fixture {
         files.insert("moss.module.json".into(), serde_json::to_vec(&m).unwrap());
         let a = self.store_prior(&files);
         self.edit_index(|i| i["modules"] = json!([a]));
+    }
+    pub fn corrupt_prior(&self) {
+        let index: Value = serde_json::from_slice(
+            &std::fs::read(self.dir.path().join("registry/index.json")).unwrap(),
+        )
+        .unwrap();
+        let digest = index["modules"][0]["digest"].as_str().unwrap();
+        let size = index["modules"][0]["size"].as_u64().unwrap() as usize;
+        let mut files = self.files.borrow().clone();
+        let mut m: Value = serde_json::from_slice(&files["moss.module.json"]).unwrap();
+        m["version"] = json!("1.0.0");
+        files.insert("moss.module.json".into(), serde_json::to_vec(&m).unwrap());
+        for n in 0..=255u8 {
+            files.insert("LICENSE".into(), vec![n, b'I', b'T']);
+            let bytes = pack(&files).unwrap();
+            if bytes.len() == size && trust::digest(&bytes) != digest {
+                std::fs::write(
+                    self.dir
+                        .path()
+                        .join(format!("registry/packages/{digest}.mosspkg")),
+                    bytes,
+                )
+                .unwrap();
+                return;
+            }
+        }
+        panic!("Could not construct equal-sized tampered archive");
+    }
+    pub fn set_prior_requirement(&self, requirement: &str) {
+        let mut files = self.files.borrow().clone();
+        let mut m: Value = serde_json::from_slice(&files["moss.module.json"]).unwrap();
+        m["version"] = json!("1.0.0");
+        m["requiresMoss"] = json!(requirement);
+        files.insert("moss.module.json".into(), serde_json::to_vec(&m).unwrap());
+        let a = self.store_prior(&files);
+        self.edit_index(|i| i["modules"] = json!([a]));
+    }
+    pub fn replace_index_key(&self) {
+        let pkcs8 = Ed25519KeyPair::generate_pkcs8(&SystemRandom::new()).unwrap();
+        std::fs::write(self.dir.path().join("index.pk8"), pkcs8.as_ref()).unwrap();
     }
     pub fn add_newer_history(&self) {
         let mut files = self.files.borrow().clone();

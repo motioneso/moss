@@ -2,16 +2,16 @@
 mod common;
 #[path = "people_routes/installed.rs"]
 mod installed;
-use access_context::AccessContext;
 use common::Keys;
 use moss_module_host::{
     archive::Package,
     registry::{Artifact, Channel, Index, Source},
     trust::{self, Publisher, RegistryIdentity},
 };
+use std::collections::{BTreeMap, BTreeSet};
+use access_context::AccessContext;
 use safety_core::db::{Database, RuntimeRole};
 use serde_json::{json, Value};
-use std::collections::{BTreeMap, BTreeSet};
 use std::{
     fs,
     path::Path,
@@ -55,29 +55,14 @@ fn pair_android_device(client: &reqwest::blocking::Client, origin: &str, cookie:
         .send().unwrap();
     assert_eq!(response.status(), 200, "create Android pairing attempt");
     let attempt: Value = response.json().unwrap();
-    let code = attempt["approvalPath"]
-        .as_str()
-        .unwrap()
-        .strip_prefix("/link/trail-marker#code=")
-        .unwrap();
-    let response = client
-        .post(format!("{origin}/api/companion/pair/decide"))
+    let code = attempt["approvalPath"].as_str().unwrap().strip_prefix("/link/trail-marker#code=").unwrap();
+    let response = client.post(format!("{origin}/api/companion/pair/decide"))
+        .header("origin", origin).header("cookie", cookie)
+        .json(&json!({"code":code,"decision":"approve"})).send().unwrap();
+    assert_eq!(response.status(), 200, "approve Android pairing as the owner");
+    let response = client.post(format!("{origin}/api/companion/pair/redeem"))
         .header("origin", origin)
-        .header("cookie", cookie)
-        .json(&json!({"code":code,"decision":"approve"}))
-        .send()
-        .unwrap();
-    assert_eq!(
-        response.status(),
-        200,
-        "approve Android pairing as the owner"
-    );
-    let response = client
-        .post(format!("{origin}/api/companion/pair/redeem"))
-        .header("origin", origin)
-        .json(&json!({"attemptId":attempt["attemptId"],"verifier":verifier}))
-        .send()
-        .unwrap();
+        .json(&json!({"attemptId":attempt["attemptId"],"verifier":verifier})).send().unwrap();
     assert_eq!(response.status(), 200, "redeem Android pairing");
     let issued: Value = response.json().unwrap();
     assert_eq!(issued["status"], "issued");
@@ -196,10 +181,7 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
         let response = client.post(format!("{origin}/api/auth/sign-up/email")).header("origin", &origin).json(&json!({"name":name,"email":email,"password":"temporary-meetings-password-235-not-a-real-secret"})).send().unwrap();
         let status = response.status();
         if status != 200 {
-            panic!(
-                "sign-up answered {status}: {}",
-                response.text().unwrap_or_default()
-            );
+            panic!("sign-up answered {status}: {}", response.text().unwrap_or_default());
         }
         response.headers()["set-cookie"]
             .to_str()
@@ -263,11 +245,7 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
         let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
         let manifest = &package.manifest;
         assert_eq!(manifest.id, *id);
-        fs::write(
-            root.join(format!("registry/packages/{digest}.mosspkg")),
-            &bytes,
-        )
-        .unwrap();
+        fs::write(root.join(format!("registry/packages/{digest}.mosspkg")), &bytes).unwrap();
         Artifact {
             id: manifest.id.clone(),
             version: manifest.version.clone(),
@@ -310,23 +288,11 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
         revoked: vec![],
     };
     for (name, data, key) in [
-        (
-            "registry.json",
-            serde_json::to_vec(&identity).unwrap(),
-            &keys.root,
-        ),
-        (
-            "index.json",
-            serde_json::to_vec(&index).unwrap(),
-            &keys.index,
-        ),
+        ("registry.json", serde_json::to_vec(&identity).unwrap(), &keys.root),
+        ("index.json", serde_json::to_vec(&index).unwrap(), &keys.index),
     ] {
         fs::write(root.join("registry").join(name), &data).unwrap();
-        fs::write(
-            root.join("registry").join(format!("{name}.sig")),
-            Keys::sign(key, &data),
-        )
-        .unwrap();
+        fs::write(root.join("registry").join(format!("{name}.sig")), Keys::sign(key, &data)).unwrap();
     }
     let installer = installed::reopen(
         &root.join("data"),
@@ -353,80 +319,36 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
         &json!({"data":root.join("data"),"admin_user_id":owner,"migrations_url":bootstrap_url,"producer_url":app_url,"worker_url":worker_url,"connector_key":connector_key,"ai_key":"cd".repeat(32)}),
     );
     runtime.block_on(async {
-        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
-            .await
-            .unwrap();
-        tokio::spawn(async move {
-            let _ = connection.await;
-        });
-        assert!(
-            !db.query_one(
-                "SELECT to_regclass('app.companion_devices_owner') IS NOT NULL",
-                &[]
-            )
-            .await
-            .unwrap()
-            .get::<_, bool>(0),
-            "registry installation must not accidentally supply the lookup"
-        );
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(async move { let _ = connection.await; });
+        assert!(!db.query_one("SELECT to_regclass('app.companion_devices_owner') IS NOT NULL", &[]).await.unwrap().get::<_,bool>(0), "registry installation must not accidentally supply the lookup");
     });
     let _server = start(true);
     runtime.block_on(async {
-        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
-            .await
-            .unwrap();
-        tokio::spawn(async move {
-            let _ = connection.await;
-        });
-        assert!(
-            db.query_one(
-                "SELECT to_regclass('app.companion_devices_owner') IS NOT NULL",
-                &[]
-            )
-            .await
-            .unwrap()
-            .get::<_, bool>(0),
-            "server startup supplies the lookup after a registry install"
-        );
+        let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(async move { let _ = connection.await; });
+        assert!(db.query_one("SELECT to_regclass('app.companion_devices_owner') IS NOT NULL", &[]).await.unwrap().get::<_,bool>(0), "server startup supplies the lookup after a registry install");
     });
     if std::env::var_os("MOSS_COMPANION_STARTUP_ONLY").is_some() {
         println!("registry install: startup supplies companion lookup without install-module");
         drop(_server);
         runtime.block_on(async {
-            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
-                .await
-                .unwrap();
-            tokio::spawn(async move {
-                let _ = connection.await;
-            });
-            db.batch_execute("DROP VIEW app.companion_devices_owner")
-                .await
-                .unwrap();
+            let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
+            tokio::spawn(async move { let _ = connection.await; });
+            db.batch_execute("DROP VIEW app.companion_devices_owner").await.unwrap();
         });
         // A valid runtime login cannot apply DDL. Failure must leave the server usable,
         // with linking closed until an elevated install or restart can prepare the lookup.
-        let mut settings: Value =
-            serde_json::from_slice(&fs::read(root.join("modules.json")).unwrap()).unwrap();
+        let mut settings: Value = serde_json::from_slice(&fs::read(root.join("modules.json")).unwrap()).unwrap();
         settings["migrations_url"] = json!(app_url);
         fs::write(root.join("modules.json"), settings.to_string()).unwrap();
         let _denied = start(true);
-        assert_eq!(
-            client
-                .get(format!("{origin}/api/hello"))
-                .send()
-                .unwrap()
-                .status(),
-            200
-        );
+        assert_eq!(client.get(format!("{origin}/api/hello")).send().unwrap().status(), 200);
         let response = client.post(format!("{origin}/api/companion/pair"))
             .header("origin", &origin)
             .json(&json!({"deviceName":"Unprepared Mac","platform":"macos","appVersion":"1","osVersion":"14","verifierHash":"a".repeat(43)}))
             .send().unwrap();
-        assert_eq!(
-            response.status(),
-            503,
-            "linking must fail closed without lookup preparation"
-        );
+        assert_eq!(response.status(), 503, "linking must fail closed without lookup preparation");
         println!("unavailable startup DDL: HTTPS stays healthy and linking returns 503");
         return;
     }
@@ -445,28 +367,18 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
         let signed = client.post(format!("{origin}/api/auth/sign-in/email")).header("origin", &origin)
             .json(&json!({"email":"meetings-other@example.test","password":"temporary-meetings-password-235-not-a-real-secret"})).send().unwrap();
         assert_eq!(signed.status(), 200, "second person sign-in");
-        signed.headers()["set-cookie"]
-            .to_str()
-            .unwrap()
-            .split(';')
-            .next()
-            .unwrap()
-            .to_owned()
+        signed.headers()["set-cookie"].to_str().unwrap().split(';').next().unwrap().to_owned()
     };
     let log = || fs::read_to_string(root.join("server.log")).unwrap_or_default();
     let call = |method: reqwest::Method, path: &str, cookie: Option<&str>, body: Option<Value>| {
-        let mut request = client
-            .request(method, format!("{origin}/api/m/meetings{path}"))
-            .header("origin", &origin);
+        let mut request = client.request(method, format!("{origin}/api/m/meetings{path}")).header("origin", &origin);
         if let Some(cookie) = cookie {
             request = request.header("cookie", cookie);
         }
         if let Some(body) = body {
             request = request.json(&body);
         }
-        let response = request
-            .send()
-            .unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
+        let response = request.send().unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
         let status = response.status().as_u16();
         let text = response.text().unwrap_or_default();
         println!("{method_path} -> {status}", method_path = path);
@@ -487,73 +399,25 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
         }
         std::thread::sleep(Duration::from_millis(500));
     };
-    assert_eq!(
-        (status, json_of(&text)),
-        (200, json!({"meetings":[]})),
-        "{text}\n{}",
-        log()
-    );
-    let (status, text) = call(
-        Method::POST,
-        "/records",
-        Some(&cookie),
-        Some(json!({"requestKey":K1,"title":format!("Weekly {MARK}")})),
-    );
+    assert_eq!((status, json_of(&text)), (200, json!({"meetings":[]})), "{text}\n{}", log());
+    let (status, text) = call(Method::POST, "/records", Some(&cookie), Some(json!({"requestKey":K1,"title":format!("Weekly {MARK}")})));
     assert_eq!(status, 201, "{text}\n{}", log());
     let id = json_of(&text)["meeting"]["id"].as_str().unwrap().to_owned();
-    let (status, _) = call(
-        Method::POST,
-        "/records",
-        Some(&cookie),
-        Some(json!({"requestKey":K1,"title":format!("Weekly {MARK}")})),
-    );
+    let (status, _) = call(Method::POST, "/records", Some(&cookie), Some(json!({"requestKey":K1,"title":format!("Weekly {MARK}")})));
     assert_eq!(status, 200, "a repeated key returns the original");
-    let notes = |key: &str, rev: i64, text: &str, who: &str| {
-        call(
-            Method::PUT,
-            &format!("/records/{id}/notes"),
-            Some(who),
-            Some(json!({"requestKey":key,"expectedRevision":rev,"personalNotes":text})),
-        )
-    };
+    let notes = |key: &str, rev: i64, text: &str, who: &str| call(Method::PUT, &format!("/records/{id}/notes"), Some(who), Some(json!({"requestKey":key,"expectedRevision":rev,"personalNotes":text})));
     let (status, text) = notes(K1, 0, &format!("agenda {MARK}"), &cookie);
     assert_eq!(status, 200, "{text}");
     let (status, text) = notes(K2, 0, "stale edit", &cookie);
-    assert_eq!(
-        (status, json_of(&text)["code"].clone()),
-        (409, json!("meeting_notes_conflict")),
-        "{text}"
-    );
-    assert!(
-        json_of(&text)["meeting"]["personalNotes"]
-            .as_str()
-            .is_some_and(|n| n.contains("agenda")),
-        "the stale answer carries the current notes: {text}"
-    );
-    let (status, text) = call(
-        Method::PUT,
-        &format!("/records/{id}/title"),
-        Some(&cookie),
-        Some(json!({"title":"Renamed","expectedTitle":format!("Weekly {MARK}")})),
-    );
-    assert_eq!(
-        (status, json_of(&text)["status"].clone()),
-        (200, json!("saved")),
-        "{text}"
-    );
+    assert_eq!((status, json_of(&text)["code"].clone()), (409, json!("meeting_notes_conflict")), "{text}");
+    assert!(json_of(&text)["meeting"]["personalNotes"].as_str().is_some_and(|n| n.contains("agenda")), "the stale answer carries the current notes: {text}");
+    let (status, text) = call(Method::PUT, &format!("/records/{id}/title"), Some(&cookie), Some(json!({"title":"Renamed","expectedTitle":format!("Weekly {MARK}")})));
+    assert_eq!((status, json_of(&text)["status"].clone()), (200, json!("saved")), "{text}");
     let (status, text) = call(Method::GET, &format!("/records/{id}"), Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
-    assert!(json_of(&text)["meeting"]["personalNotes"]
-        .as_str()
-        .unwrap()
-        .contains("agenda"));
+    assert!(json_of(&text)["meeting"]["personalNotes"].as_str().unwrap().contains("agenda"));
     // Preferences through the real server.
-    let (status, text) = call(
-        Method::PUT,
-        "/preferences",
-        Some(&cookie),
-        Some(json!({"summarizeOnStop":false})),
-    );
+    let (status, text) = call(Method::PUT, "/preferences", Some(&cookie), Some(json!({"summarizeOnStop":false})));
     assert_eq!(status, 200, "{text}\n{}", log());
     let (_, text) = call(Method::GET, "/preferences", Some(&cookie), None);
     assert_eq!(json_of(&text)["summarizeOnStop"], false, "{text}");
@@ -563,90 +427,29 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
         "events":[{"cursor":1,"segment":{"meetingId":id,"segmentId":"s1","sourceId":"mic","epoch":1,"startMs":10,"endMs":19,
             "revision":1,"text":format!("spoken {MARK}"),"finality":"final","provenance":"transcription","speakerId":null}}],
         "stopCutoffMs":null});
-    let (status, text) = call(
-        Method::POST,
-        &format!("/records/{id}/transcript"),
-        Some(&cookie),
-        Some(save),
-    );
-    assert_eq!(
-        (status, json_of(&text)["status"].clone()),
-        (201, json!("saved")),
-        "{text}"
-    );
-    let (status, text) = call(
-        Method::GET,
-        &format!("/records/{id}/transcript?maxSegments=500&maxCharacters=100000"),
-        Some(&cookie),
-        None,
-    );
+    let (status, text) = call(Method::POST, &format!("/records/{id}/transcript"), Some(&cookie), Some(save));
+    assert_eq!((status, json_of(&text)["status"].clone()), (201, json!("saved")), "{text}");
+    let (status, text) = call(Method::GET, &format!("/records/{id}/transcript?maxSegments=500&maxCharacters=100000"), Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
     assert!(text.contains("spoken"), "the saved line reads back: {text}");
-    let (status, text) = call(
-        Method::POST,
-        "/history/search",
-        Some(&cookie),
-        Some(json!({})),
-    );
+    let (status, text) = call(Method::POST, "/history/search", Some(&cookie), Some(json!({})));
     assert_eq!(status, 200, "{text}");
-    assert_eq!(
-        json_of(&text)["meetings"][0]["transcript"]["status"],
-        "retained",
-        "{text}"
-    );
-    let (status, text) = call(
-        Method::GET,
-        &format!("/records/{id}/transcript?maxSegments=500&maxCharacters=100000"),
-        Some(&other),
-        None,
-    );
-    assert!(
-        status == 404 && !text.contains("spoken"),
-        "another person gets no transcript: {status} {text}"
-    );
-    let (_, text) = call(
-        Method::POST,
-        "/history/search",
-        Some(&other),
-        Some(json!({})),
-    );
+    assert_eq!(json_of(&text)["meetings"][0]["transcript"]["status"], "retained", "{text}");
+    let (status, text) = call(Method::GET, &format!("/records/{id}/transcript?maxSegments=500&maxCharacters=100000"), Some(&other), None);
+    assert!(status == 404 && !text.contains("spoken"), "another person gets no transcript: {status} {text}");
+    let (_, text) = call(Method::POST, "/history/search", Some(&other), Some(json!({})));
     assert_eq!(json_of(&text)["meetings"], json!([]), "{text}");
     // A second person sees nothing of the first.
     let (status, text) = call(Method::GET, "/records", Some(&other), None);
-    assert_eq!(
-        (status, json_of(&text)),
-        (200, json!({"meetings":[]})),
-        "{text}"
-    );
-    assert_eq!(
-        call(Method::GET, &format!("/records/{id}"), Some(&other), None).0,
-        404
-    );
+    assert_eq!((status, json_of(&text)), (200, json!({"meetings":[]})), "{text}");
+    assert_eq!(call(Method::GET, &format!("/records/{id}"), Some(&other), None).0, 404);
     assert_eq!(notes(K3, 1, "intruder", &other).0, 404);
-    let missing = call(
-        Method::DELETE,
-        "/records/99999999-9999-4999-8999-999999999999",
-        Some(&other),
-        None,
-    )
-    .0;
-    assert_eq!(
-        call(
-            Method::DELETE,
-            &format!("/records/{id}"),
-            Some(&other),
-            None
-        )
-        .0,
-        missing
-    );
+    let missing = call(Method::DELETE, "/records/99999999-9999-4999-8999-999999999999", Some(&other), None).0;
+    assert_eq!(call(Method::DELETE, &format!("/records/{id}"), Some(&other), None).0, missing);
     let (_, text) = call(Method::GET, "/preferences", Some(&other), None);
     assert_eq!(json_of(&text)["summarizeOnStop"], true, "{text}");
     let (status, text) = call(Method::GET, &format!("/records/{id}"), Some(&cookie), None);
-    assert_eq!(
-        status, 200,
-        "the other person's delete changed nothing: {text}"
-    );
+    assert_eq!(status, 200, "the other person's delete changed nothing: {text}");
     // Owner delete, then gone.
     // Recording types, recording identity and pasted transcripts through the real server.
     let kind = format!("private-{}", MARK.to_lowercase());
@@ -655,71 +458,26 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
         .map(|t| json!({"id": t, "name": t, "description": "d", "templateId": "general", "retired": false}))
         .chain([json!({"id": kind, "name": kind, "description": MARK, "templateId": "general", "retired": false})])
         .collect();
-    let (status, text) = call(
-        Method::PUT,
-        "/recording-types",
-        Some(&cookie),
-        Some(json!({"expectedRevision":0,"types":types})),
-    );
+    let (status, text) = call(Method::PUT, "/recording-types", Some(&cookie), Some(json!({"expectedRevision":0,"types":types})));
     assert_eq!(status, 200, "{text}\n{}", log());
     let (status, text) = call(Method::GET, "/recording-types", Some(&other), None);
-    assert!(
-        !text.contains(MARK),
-        "another person sees no recording types: {status} {text}"
-    );
-    let (status, text) = call(
-        Method::POST,
-        "/manual-transcripts",
-        Some(&cookie),
-        Some(json!({"requestKey":K2,"transcript":format!("budget {MARK} review"),"typeId":kind})),
-    );
+    assert!(!text.contains(MARK), "another person sees no recording types: {status} {text}");
+    let (status, text) = call(Method::POST, "/manual-transcripts", Some(&cookie), Some(json!({"requestKey":K2,"transcript":format!("budget {MARK} review"),"typeId":kind})));
     assert_eq!(status, 201, "{text}\n{}", log());
     let pasted = json_of(&text)["meetingId"].as_str().unwrap().to_owned();
-    let (status, text) = call(
-        Method::POST,
-        "/manual-transcripts",
-        Some(&cookie),
-        Some(json!({"requestKey":K2,"transcript":format!("budget {MARK} review"),"typeId":kind})),
-    );
-    assert_eq!(
-        status, 200,
-        "a repeated key returns the first answer: {text}"
-    );
-    let (status, text) = call(
-        Method::GET,
-        &format!("/records/{pasted}/recording"),
-        Some(&cookie),
-        None,
-    );
+    let (status, text) = call(Method::POST, "/manual-transcripts", Some(&cookie), Some(json!({"requestKey":K2,"transcript":format!("budget {MARK} review"),"typeId":kind})));
+    assert_eq!(status, 200, "a repeated key returns the first answer: {text}");
+    let (status, text) = call(Method::GET, &format!("/records/{pasted}/recording"), Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
-    let (status, text) = call(
-        Method::GET,
-        &format!("/records/{pasted}/transcript?maxSegments=10&maxCharacters=1000"),
-        Some(&cookie),
-        None,
-    );
-    assert!(
-        status == 200 && text.contains(MARK),
-        "the pasted text reads back: {status} {text}"
-    );
+    let (status, text) = call(Method::GET, &format!("/records/{pasted}/transcript?maxSegments=10&maxCharacters=1000"), Some(&cookie), None);
+    assert!(status == 200 && text.contains(MARK), "the pasted text reads back: {status} {text}");
     for (m, path, body) in [
         (Method::GET, format!("/records/{pasted}/recording"), None),
-        (
-            Method::PUT,
-            format!("/records/{pasted}/recording/type"),
-            Some(json!({"expectedRevision":0,"typeId":"idea"})),
-        ),
-        (
-            Method::GET,
-            format!("/records/{pasted}/transcript?maxSegments=10&maxCharacters=1000"),
-            None,
-        ),
+        (Method::PUT, format!("/records/{pasted}/recording/type"), Some(json!({"expectedRevision":0,"typeId":"idea"}))),
+        (Method::GET, format!("/records/{pasted}/transcript?maxSegments=10&maxCharacters=1000"), None),
     ] {
         let (status, text) = call(m, &path, Some(&other), body);
-        assert!(
-            status == 404 && !text.contains(MARK),
-            "another person gets 404: {path} {status} {text}"
-        );
+        assert!(status == 404 && !text.contains(MARK), "another person gets 404: {path} {status} {text}");
     }
     // MOSS_MEETINGS_HOLD names a folder. The test then keeps the server up for a browser check,
     // writes the address to url.txt, and waits for a file named finished in that folder.
@@ -732,97 +490,42 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
     }
     // Summaries through the real server. No model is configured here, so a request ends as a stored
     // failure and never as a server error.
-    let (status, text) = call(
-        Method::GET,
-        &format!("/records/{pasted}/outputs"),
-        Some(&cookie),
-        None,
-    );
+    let (status, text) = call(Method::GET, &format!("/records/{pasted}/outputs"), Some(&cookie), None);
     assert_eq!(status, 200, "{text}\n{}", log());
     let listing = json_of(&text);
     assert_eq!(listing["artifacts"], json!([]), "{text}");
     // The real worker may already have tried. With no model set up the attempt is a stored failure.
     let planned = &listing["automaticSummary"];
     assert!(
-        planned["status"] == "waiting"
-            || (planned["status"] == "failed"
-                && planned["code"] == "meeting_output_provider_failed"),
+        planned["status"] == "waiting" || (planned["status"] == "failed" && planned["code"] == "meeting_output_provider_failed"),
         "a pasted transcript plans a summary: {text}"
     );
-    let (status, text) = call(
-        Method::GET,
-        &format!("/records/{pasted}/transcript?maxSegments=10&maxCharacters=1000"),
-        Some(&cookie),
-        None,
-    );
+    let (status, text) = call(Method::GET, &format!("/records/{pasted}/transcript?maxSegments=10&maxCharacters=1000"), Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
     let transcript_revision = json_of(&text)["transcriptRevision"].as_i64().unwrap_or(1);
     let generate = json!({"requestKey":K3,"expectedOutputVersion":0,"expectedTranscriptRevision":transcript_revision,
         "expectedNotesRevision":0,"templateId":"general","templateVersion":1});
-    let (status, text) = call(
-        Method::POST,
-        &format!("/records/{pasted}/outputs"),
-        Some(&cookie),
-        Some(generate.clone()),
-    );
-    assert!(
-        status < 500 && !text.contains(MARK),
-        "a generate request ends cleanly: {status} {text}\n{}",
-        log()
-    );
+    let (status, text) = call(Method::POST, &format!("/records/{pasted}/outputs"), Some(&cookie), Some(generate.clone()));
+    assert!(status < 500 && !text.contains(MARK), "a generate request ends cleanly: {status} {text}\n{}", log());
     for (m, path, body) in [
         (Method::GET, format!("/records/{pasted}/outputs"), None),
         (Method::GET, format!("/records/{pasted}/outputs/1"), None),
-        (
-            Method::POST,
-            format!("/records/{pasted}/outputs"),
-            Some(generate),
-        ),
-        (
-            Method::PUT,
-            format!("/records/{pasted}/outputs"),
-            Some(json!({"requestKey":K1,"expectedOutputVersion":1,"content":{}})),
-        ),
+        (Method::POST, format!("/records/{pasted}/outputs"), Some(generate)),
+        (Method::PUT, format!("/records/{pasted}/outputs"), Some(json!({"requestKey":K1,"expectedOutputVersion":1,"content":{}}))),
     ] {
         let (status, text) = call(m, &path, Some(&other), body);
-        assert!(
-            status == 404 && !text.contains(MARK),
-            "another person gets 404 on summaries: {path} {status} {text}"
-        );
+        assert!(status == 404 && !text.contains(MARK), "another person gets 404 on summaries: {path} {status} {text}");
     }
     // Private exports through the real server. No summary exists and Notes is not installed here,
     // so the owner sees an empty list and a clean refusal, and another person sees nothing.
-    let (status, text) = call(
-        Method::GET,
-        &format!("/records/{pasted}/exports"),
-        Some(&cookie),
-        None,
-    );
-    assert_eq!(
-        (status, json_of(&text)["receipts"].clone()),
-        (200, json!([])),
-        "{text}\n{}",
-        log()
-    );
+    let (status, text) = call(Method::GET, &format!("/records/{pasted}/exports"), Some(&cookie), None);
+    assert_eq!((status, json_of(&text)["receipts"].clone()), (200, json!([])), "{text}\n{}", log());
     let export = json!({"requestKey":K3,"artifactVersion":1});
-    let (status, text) = call(
-        Method::POST,
-        &format!("/records/{pasted}/exports"),
-        Some(&cookie),
-        Some(export.clone()),
-    );
-    assert_eq!(
-        (status, json_of(&text)["code"].clone()),
-        (404, json!("meeting_output_unavailable")),
-        "{text}\n{}",
-        log()
-    );
+    let (status, text) = call(Method::POST, &format!("/records/{pasted}/exports"), Some(&cookie), Some(export.clone()));
+    assert_eq!((status, json_of(&text)["code"].clone()), (404, json!("meeting_output_unavailable")), "{text}\n{}", log());
     for (m, body) in [(Method::GET, None), (Method::POST, Some(export))] {
         let (status, text) = call(m, &format!("/records/{pasted}/exports"), Some(&other), body);
-        assert!(
-            status == 404 && !text.contains(MARK),
-            "another person gets 404 on exports: {status} {text}"
-        );
+        assert!(status == 404 && !text.contains(MARK), "another person gets 404 on exports: {status} {text}");
     }
     let (status, text) = call(Method::GET, "/output-availability", Some(&cookie), None);
     assert_eq!(status, 200, "{text}");
@@ -831,27 +534,14 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
     // so the transcription job is not expected to finish.
     {
         use sha2::{Digest, Sha256};
-        let digest = |b: &[u8]| {
-            Sha256::digest(b)
-                .iter()
-                .map(|x| format!("{x:02x}"))
-                .collect::<String>()
-        };
+        let digest = |b: &[u8]| Sha256::digest(b).iter().map(|x| format!("{x:02x}")).collect::<String>();
         let ms = 40_000usize;
         let body = ms * 32;
         let mut wav = Vec::with_capacity(44 + body);
         wav.extend_from_slice(b"RIFF");
         wav.extend_from_slice(&((36 + body) as u32).to_le_bytes());
         wav.extend_from_slice(b"WAVEfmt ");
-        for v in [
-            16u32.to_le_bytes().as_slice(),
-            &1u16.to_le_bytes(),
-            &1u16.to_le_bytes(),
-            &16000u32.to_le_bytes(),
-            &32000u32.to_le_bytes(),
-            &2u16.to_le_bytes(),
-            &16u16.to_le_bytes(),
-        ] {
+        for v in [16u32.to_le_bytes().as_slice(), &1u16.to_le_bytes(), &1u16.to_le_bytes(), &16000u32.to_le_bytes(), &32000u32.to_le_bytes(), &2u16.to_le_bytes(), &16u16.to_le_bytes()] {
             wav.extend_from_slice(v);
         }
         wav.extend_from_slice(b"data");
@@ -861,141 +551,47 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
         let sidecar = format!("{{\"record\":[\"1700000000\",\"start\"]}},{{\"btn\":[\"1700000001\",\"1\"]}},{{\"record\":[\"1700000040\",\"end\"]}},{{\"duration\":[\"1700000040\",\"{ms}\"]}}").into_bytes();
         let file = |b: &[u8]| json!({"byteLength": b.len(), "sha256": digest(b)});
         let device = pair_android_device(&client, &origin, &cookie);
-        let recording = format!(
-            "1700000000_ring-{}",
-            &uuid::Uuid::new_v4().simple().to_string()[..8]
-        );
+        let recording = format!("1700000000_ring-{}", &uuid::Uuid::new_v4().simple().to_string()[..8]);
         let manifest = json!({"version":3,"sourceDeviceId":device,"recordingId":recording,"destination":{"intent":"meeting"},
             "packets":file(&packets),"sidecar":file(&sidecar),"wav":file(&wav)});
         let mut unpaired = manifest.clone();
         unpaired["sourceDeviceId"] = json!(uuid::Uuid::new_v4().to_string());
-        let (status, text) = call(
-            Method::POST,
-            "/recording-uploads",
-            Some(&cookie),
-            Some(unpaired),
-        );
+        let (status, text) = call(Method::POST, "/recording-uploads", Some(&cookie), Some(unpaired));
         assert_eq!(status, 403, "an unpaired device may not upload: {text}");
-        assert_eq!(
-            json_of(&text)["error"],
-            "This device may not upload recordings"
-        );
+        assert_eq!(json_of(&text)["error"], "This device may not upload recordings");
         println!("unpaired Android source device -> 403");
-        let (status, text) = call(
-            Method::POST,
-            "/recording-uploads",
-            Some(&cookie),
-            Some(manifest.clone()),
-        );
+        let (status, text) = call(Method::POST, "/recording-uploads", Some(&cookie), Some(manifest.clone()));
         assert_eq!(status, 201, "{text}\n{}", log());
         let reserved = json_of(&text);
-        let upload = reserved["body"]["id"]
-            .as_str()
-            .or(reserved["id"].as_str())
-            .unwrap_or_else(|| panic!("{text}"))
-            .to_owned();
+        let upload = reserved["body"]["id"].as_str().or(reserved["id"].as_str()).unwrap_or_else(|| panic!("{text}")).to_owned();
         let piece = |who: &str, kind: &str, index: usize, bytes: Vec<u8>| {
-            let r = client
-                .put(format!(
-                    "{origin}/api/m/meetings/recording-uploads/{upload}/{kind}/{index}"
-                ))
-                .header("origin", &origin)
-                .header("cookie", who)
-                .header("content-type", "application/octet-stream")
-                .body(bytes)
-                .send()
-                .unwrap_or_else(|e| panic!("chunk {kind} {index}: {e}\n{}", log()));
+            let r = client.put(format!("{origin}/api/m/meetings/recording-uploads/{upload}/{kind}/{index}"))
+                .header("origin", &origin).header("cookie", who).header("content-type", "application/octet-stream")
+                .body(bytes).send().unwrap_or_else(|e| panic!("chunk {kind} {index}: {e}\n{}", log()));
             let status = r.status().as_u16();
             println!("chunk {kind} {index} -> {status}");
             (status, r.text().unwrap_or_default())
         };
         let chunk = 1024 * 1024;
-        assert_eq!(
-            piece(&cookie, "wav", 0, wav[..chunk].to_vec()).0,
-            200,
-            "{}",
-            log()
-        );
-        let (status, text) = call(
-            Method::POST,
-            &format!("/recording-uploads/{upload}/finalize"),
-            Some(&cookie),
-            Some(json!(null)),
-        );
-        assert!(
-            (400..500).contains(&status),
-            "finalize on an incomplete upload: {status} {text}"
-        );
-        assert_eq!(
-            piece(&cookie, "wav", 0, wav[..chunk].to_vec()).0,
-            200,
-            "an identical resend is accepted"
-        );
+        assert_eq!(piece(&cookie, "wav", 0, wav[..chunk].to_vec()).0, 200, "{}", log());
+        let (status, text) = call(Method::POST, &format!("/recording-uploads/{upload}/finalize"), Some(&cookie), Some(json!(null)));
+        assert!((400..500).contains(&status), "finalize on an incomplete upload: {status} {text}");
+        assert_eq!(piece(&cookie, "wav", 0, wav[..chunk].to_vec()).0, 200, "an identical resend is accepted");
         let mut changed = wav[..chunk].to_vec();
         changed[100] ^= 1;
-        assert_eq!(
-            piece(&cookie, "wav", 0, changed).0,
-            409,
-            "different bytes for a sent piece conflict"
-        );
+        assert_eq!(piece(&cookie, "wav", 0, changed).0, 409, "different bytes for a sent piece conflict");
         assert_eq!(piece(&cookie, "wav", 1, wav[chunk..].to_vec()).0, 200);
         assert_eq!(piece(&cookie, "packets", 0, packets.clone()).0, 200);
         assert_eq!(piece(&cookie, "sidecar", 0, sidecar.clone()).0, 200);
-        assert_eq!(
-            piece(&other, "wav", 0, wav[..chunk].to_vec()).0,
-            404,
-            "another person's piece"
-        );
-        assert_eq!(
-            call(
-                Method::GET,
-                &format!("/recording-uploads/{upload}"),
-                Some(&other),
-                None
-            )
-            .0,
-            404
-        );
-        assert_eq!(
-            call(
-                Method::POST,
-                &format!("/recording-uploads/{upload}/finalize"),
-                Some(&other),
-                Some(json!(null))
-            )
-            .0,
-            404
-        );
-        let (status, text) = call(
-            Method::POST,
-            &format!("/recording-uploads/{upload}/finalize"),
-            Some(&cookie),
-            Some(json!(null)),
-        );
+        assert_eq!(piece(&other, "wav", 0, wav[..chunk].to_vec()).0, 404, "another person's piece");
+        assert_eq!(call(Method::GET, &format!("/recording-uploads/{upload}"), Some(&other), None).0, 404);
+        assert_eq!(call(Method::POST, &format!("/recording-uploads/{upload}/finalize"), Some(&other), Some(json!(null))).0, 404);
+        let (status, text) = call(Method::POST, &format!("/recording-uploads/{upload}/finalize"), Some(&cookie), Some(json!(null)));
         assert_eq!(status, 200, "{text}\n{}", log());
-        let (status, text) = call(
-            Method::GET,
-            &format!("/recording-imports/{upload}"),
-            Some(&cookie),
-            None,
-        );
+        let (status, text) = call(Method::GET, &format!("/recording-imports/{upload}"), Some(&cookie), None);
         assert_eq!(status, 200, "{text}");
-        assert_eq!(
-            call(
-                Method::GET,
-                &format!("/recording-imports/{upload}"),
-                Some(&other),
-                None
-            )
-            .0,
-            404
-        );
-        let (status, text) = call(
-            Method::POST,
-            "/recording-uploads",
-            Some(&cookie),
-            Some(manifest),
-        );
+        assert_eq!(call(Method::GET, &format!("/recording-imports/{upload}"), Some(&other), None).0, 404);
+        let (status, text) = call(Method::POST, "/recording-uploads", Some(&cookie), Some(manifest));
         assert!(status == 200 || status == 201, "{status} {text}");
     }
     // Mac link through the real server. The real host does not yet vouch for browser sessions or
@@ -1004,69 +600,30 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
     let start = json!({"requestKey": K1});
     for (who, name) in [(&cookie, "owner"), (&other, "other")] {
         let (status, text) = call(Method::GET, "/capture/devices", Some(who), None);
-        assert_eq!(
-            (status, json_of(&text)["code"].clone()),
-            (401, json!("meeting_capture_unavailable")),
-            "{name} {text}"
-        );
-        let (status, text) = call(
-            Method::POST,
-            &format!("/records/{pasted}/capture/start"),
-            Some(who),
-            Some(start.clone()),
-        );
-        assert_eq!(
-            (status, json_of(&text)["code"].clone()),
-            (401, json!("meeting_capture_unavailable")),
-            "{name} {text}"
-        );
+        assert_eq!((status, json_of(&text)["code"].clone()), (401, json!("meeting_capture_unavailable")), "{name} {text}");
+        let (status, text) = call(Method::POST, &format!("/records/{pasted}/capture/start"), Some(who), Some(start.clone()));
+        assert_eq!((status, json_of(&text)["code"].clone()), (401, json!("meeting_capture_unavailable")), "{name} {text}");
         assert!(!text.contains(MARK), "meeting text in a capture refusal");
     }
-    let (status, _) = call(
-        Method::POST,
-        "/capture/commands",
-        None,
-        Some(json!({"connectionId": K1, "verifier": "x"})),
-    );
+    let (status, _) = call(Method::POST, "/capture/commands", None, Some(json!({"connectionId": K1, "verifier": "x"})));
     assert_eq!(status, 401);
-    assert_eq!(
-        call(
-            Method::DELETE,
-            &format!("/records/{id}"),
-            Some(&cookie),
-            None
-        )
-        .0,
-        204
-    );
-    assert_eq!(
-        call(Method::GET, &format!("/records/{id}"), Some(&cookie), None).0,
-        404
-    );
+    assert_eq!(call(Method::DELETE, &format!("/records/{id}"), Some(&cookie), None).0, 204);
+    assert_eq!(call(Method::GET, &format!("/records/{id}"), Some(&cookie), None).0, 404);
     // Titles and notes stay out of the server log.
     assert!(!log().contains(MARK), "meeting text in the server log");
     // A real summary. The router is pointed at the box's local model proxy on the cheapest model it
     // lists. The key is read from its file and never printed. Without the file the proof is
     // reported as not run, never as passed.
-    let key_file = std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default())
-        .join(".config/cliproxyapi/client-key");
+    let key_file = std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".config/cliproxyapi/client-key");
     let proxy_port = fs::read_to_string(key_file.with_file_name("port")).unwrap_or_default();
-    let model_key = fs::read_to_string(&key_file)
-        .map(|k| k.trim().to_owned())
-        .ok()
-        .filter(|k| !k.is_empty());
+    let model_key = fs::read_to_string(&key_file).map(|k| k.trim().to_owned()).ok().filter(|k| !k.is_empty());
     let (Some(model_key), false) = (model_key, proxy_port.trim().is_empty()) else {
         println!("NOT RUN live model: no local model proxy key on this box");
         return;
     };
-    let sealed = safety_core::secret::SecretCipher::ai(
-        &[("JARVIS_AI_SECRET_KEY".into(), "cd".repeat(32))].into(),
-    )
-    .unwrap()
-    .seal(
-        &safety_core::secret::SecretFields::new()
-            .with("apiKey", safety_core::secret::Secret::new(&model_key)),
-    );
+    let sealed = safety_core::secret::SecretCipher::ai(&[("JARVIS_AI_SECRET_KEY".into(), "cd".repeat(32))].into())
+        .unwrap()
+        .seal(&safety_core::secret::SecretFields::new().with("apiKey", safety_core::secret::Secret::new(&model_key)));
     runtime.block_on(async {
         let (db, connection) = tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls).await.unwrap();
         tokio::spawn(async move { let _ = connection.await; });
@@ -1080,54 +637,24 @@ fn installed_meetings_package_serves_routes_from_the_real_server() {
             &[&model, &provider, &owner],
         ).await.unwrap();
     });
-    let (_, text) = call(
-        Method::GET,
-        &format!("/records/{pasted}/transcript?maxSegments=10&maxCharacters=1000"),
-        Some(&cookie),
-        None,
-    );
+    let (_, text) = call(Method::GET, &format!("/records/{pasted}/transcript?maxSegments=10&maxCharacters=1000"), Some(&cookie), None);
     let revision = json_of(&text)["transcriptRevision"].as_i64().unwrap_or(1);
     let request = json!({"requestKey":"44444444-4444-4444-8444-444444444444","expectedOutputVersion":0,"expectedTranscriptRevision":revision,
         "expectedNotesRevision":0,"templateId":"general","templateVersion":1});
-    let (status, text) = call(
-        Method::POST,
-        &format!("/records/{pasted}/outputs"),
-        Some(&cookie),
-        Some(request),
-    );
-    assert!(
-        status < 500,
-        "a real generate request ends cleanly: {status} {text}\n{}",
-        log()
-    );
+    let (status, text) = call(Method::POST, &format!("/records/{pasted}/outputs"), Some(&cookie), Some(request));
+    assert!(status < 500, "a real generate request ends cleanly: {status} {text}\n{}", log());
     let waited = Instant::now();
     let artifact = loop {
-        let (_, text) = call(
-            Method::GET,
-            &format!("/records/{pasted}/outputs"),
-            Some(&cookie),
-            None,
-        );
+        let (_, text) = call(Method::GET, &format!("/records/{pasted}/outputs"), Some(&cookie), None);
         let listing = json_of(&text);
         if let Some(first) = listing["artifacts"].as_array().and_then(|a| a.first()) {
             break first.clone();
         }
-        assert!(
-            waited.elapsed() < Duration::from_secs(180),
-            "no summary arrived: {listing}\n{}",
-            log()
-        );
+        assert!(waited.elapsed() < Duration::from_secs(180), "no summary arrived: {listing}\n{}", log());
         std::thread::sleep(Duration::from_secs(2));
     };
-    assert!(
-        !log().contains(&model_key),
-        "the model key never reaches the server log"
-    );
-    println!(
-        "PASS live model: gpt-5.6-luna wrote a real summary in {:?}: {}",
-        waited.elapsed(),
-        artifact.to_string().chars().take(300).collect::<String>()
-    );
+    assert!(!log().contains(&model_key), "the model key never reaches the server log");
+    println!("PASS live model: gpt-5.6-luna wrote a real summary in {:?}: {}", waited.elapsed(), artifact.to_string().chars().take(300).collect::<String>());
     // MOSS_MEETINGS_MODEL_HOLD names a folder, as MOSS_MEETINGS_HOLD does, for a browser look at it.
     if let Ok(hold) = std::env::var("MOSS_MEETINGS_MODEL_HOLD") {
         fs::write(Path::new(&hold).join("url.txt"), &origin).unwrap();

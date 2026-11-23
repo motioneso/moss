@@ -30,18 +30,10 @@ const CLIENT: &str = "live-client-MARKER-7f3a";
 const SECRET: &str = "live-secret-MARKER-7f3a";
 struct NoAi;
 impl moss_module_host::ai::Intelligence for NoAi {
-    fn generate(
-        &self,
-        _: &moss_module_host::runtime::CallScope,
-        _: &moss_module_host::runtime::Request,
-    ) -> anyhow::Result<Value> {
+    fn generate(&self, _: &moss_module_host::runtime::CallScope, _: &moss_module_host::runtime::Request) -> anyhow::Result<Value> {
         anyhow::bail!("No configured AI")
     }
-    fn embed(
-        &self,
-        _: &moss_module_host::runtime::CallScope,
-        _: &moss_module_host::runtime::Request,
-    ) -> anyhow::Result<Value> {
+    fn embed(&self, _: &moss_module_host::runtime::CallScope, _: &moss_module_host::runtime::Request) -> anyhow::Result<Value> {
         anyhow::bail!("No configured embeddings")
     }
 }
@@ -228,33 +220,16 @@ fn the_installed_plaid_probe_talks_to_plaid_through_the_host_on_the_real_server(
     let artifacts: Vec<Artifact> = [("JS295_PLAID_WASM", "plaidprobe")]
         .iter()
         .map(|(variable, id)| {
-            let manifest: moss_module_host::manifest::Manifest = serde_json::from_slice(
-                &fs::read(concat!(
-                    env!("CARGO_MANIFEST_DIR"),
-                    "/probes/plaid/moss.module.json"
-                ))
-                .unwrap(),
-            )
-            .unwrap();
+            let manifest: moss_module_host::manifest::Manifest = serde_json::from_slice(&fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/probes/plaid/moss.module.json")).unwrap()).unwrap();
             manifest.validate(&"0.1.0".parse().unwrap()).unwrap();
             let bytes = moss_module_host::archive::pack(&BTreeMap::from([
-                (
-                    "moss.module.json".into(),
-                    serde_json::to_vec(&manifest).unwrap(),
-                ),
-                (
-                    "code/module.wasm".into(),
-                    fs::read(std::env::var(variable).unwrap()).unwrap(),
-                ),
-                (
-                    "icons/plaid-probe.svg".into(),
-                    b"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1 1\"/>".to_vec(),
-                ),
+                ("moss.module.json".into(), serde_json::to_vec(&manifest).unwrap()),
+                ("code/module.wasm".into(), fs::read(std::env::var(variable).unwrap()).unwrap()),
+                ("icons/plaid-probe.svg".into(), b"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1 1\"/>".to_vec()),
                 ("LICENSE".into(), b"test only".to_vec()),
                 ("NOTICE".into(), b"test only".to_vec()),
                 ("CHANGELOG.md".into(), b"test only".to_vec()),
-            ]))
-            .unwrap();
+            ])).unwrap();
             PACKAGE.with(|p| *p.borrow_mut() = bytes.clone());
             let digest = trust::digest(&bytes);
             let package = Package::read(&bytes, &digest, &"0.1.0".parse().unwrap()).unwrap();
@@ -355,28 +330,15 @@ fn the_installed_plaid_probe_talks_to_plaid_through_the_host_on_the_real_server(
         use safety_core::secret::{Secret, SecretCipher, SecretFields};
         let services = moss_module_host::services::ServicePorts::new(
             &root.join("data"),
-            std::sync::Arc::new(
-                SecretCipher::connectors(
-                    &[("JARVIS_CONNECTOR_SECRET_KEY".into(), connector_key.clone())].into(),
-                )
-                .unwrap(),
-            ),
+            std::sync::Arc::new(SecretCipher::connectors(&[("JARVIS_CONNECTOR_SECRET_KEY".into(), connector_key.clone())].into()).unwrap()),
             std::sync::Arc::new(NoAi),
-            std::sync::Arc::new(
-                moss_module_host::local::LocalPorts::new(&root.join("data")).unwrap(),
-            ),
-        )
-        .unwrap();
-        services
-            .set_credential(
-                &AccessContext::new(uuid::Uuid::nil(), "configure"),
-                "plaidprobe",
-                "plaid-keys",
-                &SecretFields::new()
-                    .with("clientId", Secret::new(CLIENT))
-                    .with("clientSecret", Secret::new(SECRET)),
-            )
-            .unwrap();
+            std::sync::Arc::new(moss_module_host::local::LocalPorts::new(&root.join("data")).unwrap()),
+        ).unwrap();
+        services.set_credential(
+            &AccessContext::new(uuid::Uuid::nil(), "configure"),
+            "plaidprobe", "plaid-keys",
+            &SecretFields::new().with("clientId", Secret::new(CLIENT)).with("clientSecret", Secret::new(SECRET)),
+        ).unwrap();
     }
     let _server = start(true);
     // Setup allows one owner over HTTP, so the second person is made in the database with the
@@ -412,9 +374,7 @@ fn the_installed_plaid_probe_talks_to_plaid_through_the_host_on_the_real_server(
         if let Some(cookie) = cookie {
             request = request.header("cookie", cookie);
         }
-        let response = request
-            .send()
-            .unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
+        let response = request.send().unwrap_or_else(|e| panic!("{path}: {e}\n{}", log()));
         let status = response.status().as_u16();
         let value = json_of(&response.text().unwrap_or_default());
         println!("POST {path} -> {status} {value}");
@@ -423,40 +383,23 @@ fn the_installed_plaid_probe_talks_to_plaid_through_the_host_on_the_real_server(
     assert_eq!(post("/status", json!({}), None).0, 401);
     // The server answers 503 until its module host has finished starting.
     let started = Instant::now();
-    while post("/status", json!({}), Some(&cookie)).0 == 503
-        && started.elapsed() < Duration::from_secs(60)
-    {
+    while post("/status", json!({}), Some(&cookie)).0 == 503 && started.elapsed() < Duration::from_secs(60) {
         std::thread::sleep(Duration::from_millis(500));
     }
     // The shared keys are saved once, so both people see them. Nobody has a bank token yet.
     for who in [&cookie, &other] {
         let (status, body) = post("/status", json!({"slot":"bank-1"}), Some(who));
-        assert_eq!(
-            (status, body),
-            (
-                200,
-                json!({"keys":{"configured":true},"bank":{"configured":false}})
-            ),
-            "{}",
-            log()
-        );
+        assert_eq!((status, body), (200, json!({"keys":{"configured":true},"bank":{"configured":false}})), "{}", log());
     }
     // No bank token exists, so a balance call is refused before anything leaves the host.
     let (status, body) = post("/balance", json!({"slot":"bank-1"}), Some(&cookie));
     assert_eq!((status, &body), (200, &json!({"refused":true})));
     // The swap goes from the real server to the real Plaid host with the marker keys attached by
     // the host. Plaid refuses them, and the module sees only the error code.
-    let (status, body) = post(
-        "/link",
-        json!({"slot":"bank-1","public_token":"public-sandbox-live-probe"}),
-        Some(&cookie),
-    );
+    let (status, body) = post("/link", json!({"slot":"bank-1","public_token":"public-sandbox-live-probe"}), Some(&cookie));
     assert_eq!(status, 200, "{body}");
     println!("LIVE swap reply: {body}");
-    let reached_plaid = body["connected"] == json!(false)
-        && body["error"]
-            .as_str()
-            .is_some_and(|c| c.bytes().all(|b| b.is_ascii_uppercase() || b == b'_'));
+    let reached_plaid = body["connected"] == json!(false) && body["error"].as_str().is_some_and(|c| c.bytes().all(|b| b.is_ascii_uppercase() || b == b'_'));
     println!("reached the real Plaid host and got an error code back: {reached_plaid}");
     assert!(reached_plaid, "the swap did not reach Plaid: {body}");
     // A refused swap stores nothing, for either person.
@@ -486,11 +429,7 @@ fn the_installed_plaid_probe_talks_to_plaid_through_the_host_on_the_real_server(
         text
     };
     let scan = |extra: &str| {
-        let mut surfaces = vec![
-            ("server log", log()),
-            ("data folder", files()),
-            ("package", String::from_utf8_lossy(&package).into_owned()),
-        ];
+        let mut surfaces = vec![("server log", log()), ("data folder", files()), ("package", String::from_utf8_lossy(&package).into_owned())];
         surfaces.push(("extra", extra.into()));
         for (name, text) in surfaces {
             for marker in [CLIENT, SECRET] {
