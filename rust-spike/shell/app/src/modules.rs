@@ -703,11 +703,11 @@ async fn screen(
     }
 }
 
-/// Public static files of an installed screen. The frame is opaque and sends no cookies, so
-/// no account data may be served here. The web origin is the request's own host, which the
-/// network guard has already matched against the trusted origins.
+/// Registry screen assets are public; local package code requires the builder's session.
+/// The web origin has already been matched against the network guard's trusted origins.
 async fn ui_asset(
     State(api): State<Arc<Api>>,
+    access: Option<Extension<AccessContext>>,
     UrlPath((module, digest, path)): UrlPath<(String, String, String)>,
     headers: HeaderMap,
 ) -> Response {
@@ -724,9 +724,13 @@ async fn ui_asset(
     match tokio::task::spawn_blocking(move || {
         let _slot = slot;
         let policy = AssetPolicy::new(&origin)?;
-        application
-            .installer
-            .ui_asset(&module, &digest, &path, &policy)
+        application.installer.ui_asset_for(
+            access.as_ref().map(|a| &a.0),
+            &module,
+            &digest,
+            &path,
+            &policy,
+        )
     })
     .await
     {

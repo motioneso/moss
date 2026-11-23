@@ -97,3 +97,5 @@ mod invocation;
 
 mod activation;
 pub mod local_lifecycle;
+
+mod catalog_storage;

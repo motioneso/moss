@@ -480,7 +480,8 @@ impl ServicePorts {
                         .get(provider)
                         .context("Publisher unavailable")?;
                     ensure!(
-                        !provider_entry.is_blocked()
+                        provider_entry.visible_to(access)
+                            && !provider_entry.is_blocked()
                             && host.lifecycle.account_enabled(
                                 provider,
                                 access,

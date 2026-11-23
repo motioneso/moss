@@ -351,6 +351,7 @@ impl Manifest {
         );
         let mut ports = BTreeSet::new();
         crate::account_contracts::validate_routes(self)?;
+        crate::local_packages::validate_scope(self)?;
         for cap in &self.capabilities {
             ensure!(
                 PORTS.contains(&cap.port.as_str()) && ports.insert(&cap.port),

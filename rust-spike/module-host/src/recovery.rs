@@ -158,8 +158,19 @@ impl Installer {
         self.clear_journal()
     }
     pub fn snapshots(&self, access: &AccessContext) -> Result<Vec<Snapshot>> {
-        self.admin(access)?;
-        self.snapshots_internal()
+        let admin = self.lifecycle.is_admin(access)?;
+        Ok(self
+            .snapshots_internal()?
+            .into_iter()
+            .filter(|s| {
+                if s.module.starts_with("local.") {
+                    s.module
+                        .starts_with(&format!("local.{}.", access.actor_user_id()))
+                } else {
+                    admin
+                }
+            })
+            .collect())
     }
     fn snapshots_internal(&self) -> Result<Vec<Snapshot>> {
         let mut snapshots = Vec::new();
@@ -230,7 +241,6 @@ impl Installer {
         typed_name: &str,
         acknowledge_data_loss: bool,
     ) -> Result<()> {
-        self.admin(access)?;
         let _fence = self
             .fence
             .write()
@@ -245,6 +255,7 @@ impl Installer {
         let mut module = stored
             .previous
             .context("This snapshot contains no previous module data")?;
+        self.manage(access, &module)?;
         ensure!(
             typed_name == module.manifest.name && acknowledge_data_loss,
             "Confirm the module name and that newer writes will be lost"

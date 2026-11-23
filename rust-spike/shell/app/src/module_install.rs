@@ -178,6 +178,13 @@ pub(crate) async fn prepare_host_schema(migrations_url: &str) -> Result<tokio_po
             db.batch_execute(sql).await?;
         }
     }
+    let local_upgrade: bool = db.query_one(
+        "SELECT has_column_privilege('jarvis_app_runtime','moss_modules.local_packages','digest','UPDATE')", &[]
+    ).await?.get(0);
+    if !local_upgrade {
+        db.batch_execute(moss_module_host::local_packages::LIFECYCLE_MIGRATION)
+            .await?;
+    }
     // The server opens the host as the migration owner, so it must own what the steps made.
     db.batch_execute(HAND_OVER).await?;
     Ok(db)

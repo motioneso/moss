@@ -1,9 +1,11 @@
 //! Catalog adapter for the existing safety-core data context. Configuration rows contain no
-//! private module data. Runtime roles receive only the admin policy, never table ownership.
+//! private module data; local activation metadata is sealed by the host. Runtime roles receive only the admin policy, never table ownership.
 use crate::store::{CatalogStore, State};
 use access_context::AccessContext;
 use anyhow::{ensure, Result};
 use safety_core::db::{DataContext, Database};
+use safety_core::secret::SecretCipher;
+use std::sync::Arc;
 use tokio::runtime::Runtime;
 
 pub const MIGRATION: &str = r#"
@@ -22,6 +24,7 @@ pub struct PostgresCatalog {
     database: Database,
     access: AccessContext,
     runtime: Runtime,
+    codec: crate::catalog_storage::Codec,
 }
 impl PostgresCatalog {
     pub fn new(database: Database, access: AccessContext) -> Result<Self> {
@@ -29,7 +32,12 @@ impl PostgresCatalog {
             database,
             access,
             runtime: Runtime::new()?,
+            codec: Default::default(),
         })
+    }
+    pub fn with_cipher(mut self, cipher: Arc<SecretCipher>) -> Self {
+        self.codec = crate::catalog_storage::Codec::new(cipher);
+        self
     }
     async fn context(&self) -> Result<DataContext> {
         let cx = DataContext::open(&self.database, &self.access)
@@ -58,7 +66,7 @@ impl CatalogStore for PostgresCatalog {
                 .query_opt("SELECT state FROM moss_modules.catalog WHERE id=true", &[])
                 .await?;
             let state = match row {
-                Some(row) => serde_json::from_value(row.get(0))?,
+                Some(row) => self.codec.decode(row.get(0))?,
                 None => State::default(),
             };
             cx.commit()
@@ -77,7 +85,7 @@ impl CatalogStore for PostgresCatalog {
             cx.db().query_one("SELECT pg_advisory_xact_lock(hashtext('moss:module-catalog'))",&[]).await?;
             let row=cx.db().query_opt("SELECT revision FROM moss_modules.catalog WHERE id=true FOR UPDATE",&[]).await?;
             ensure!(row.as_ref().map_or(0,|row|row.get::<_,i64>(0) as u64)==expected,"Another module change finished first; try again");
-            let state=serde_json::to_value(next)?;
+            let state=self.codec.encode(next)?;
             cx.db().execute("INSERT INTO moss_modules.catalog(id,revision,state) VALUES(true,$1,$2) ON CONFLICT(id) DO UPDATE SET revision=excluded.revision,state=excluded.state",&[&(next.revision as i64),&state]).await?;
             cx.commit().await.map_err(|_|anyhow::anyhow!("Could not commit the configuration data context"))?;Ok(())
         })
