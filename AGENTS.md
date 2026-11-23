@@ -45,7 +45,7 @@ linked doc **in full** and follow it.
 - Calendar deadline fault fixtures set `deadline_ceiling` as well as `deadline`. A manifest call
   budget overrides the fixture default.
 - The module publisher CLI is `cargo run --bin moss --manifest-path
-  rust-spike/module-publisher/Cargo.toml`. Its artifact gate is `pnpm test:rust-phase6-registry-artifacts`.
+rust-spike/module-publisher/Cargo.toml`. Its artifact gate is `pnpm test:rust-phase6-registry-artifacts`.
 - `pnpm test:rust-phase6-offline-bundle` removes and restores refusal guards, and refuses to start
   without explicit `RUSTUP_HOME` and an isolated `CARGO_TARGET_DIR`. Never run it beside another
   cargo build.
