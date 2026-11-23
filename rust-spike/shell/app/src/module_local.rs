@@ -2,7 +2,20 @@
 pub use platform::routes;
 #[cfg(not(unix))]
 pub fn routes() -> axum::Router<std::sync::Arc<crate::module_admin::Admin>> {
+    async fn unavailable() -> impl axum::response::IntoResponse {
+        (
+            axum::http::StatusCode::NOT_IMPLEMENTED,
+            axum::Json(
+                serde_json::json!({"error":"Local signing is unavailable on this platform"}),
+            ),
+        )
+    }
     axum::Router::new()
+        .route("/api/modules/local/sign", axum::routing::post(unavailable))
+        .route(
+            "/api/modules/local/verify",
+            axum::routing::post(unavailable),
+        )
 }
 #[cfg(unix)]
 mod platform {
@@ -56,6 +69,29 @@ mod platform {
         }
         run(admin, access, input, false).await
     }
+    // Bootstrap fixed host SQL through the existing one-shot supervisor, never package SQL.
+    async fn ensure_catalog(admin: &Admin, access: &AccessContext) -> anyhow::Result<()> {
+        let cx = safety_core::db::DataContext::open(&admin.platform.app, access)
+            .await
+            .map_err(|_| anyhow::anyhow!("Cannot check local catalog"))?;
+        let present: bool = cx.db().query_one("SELECT to_regclass('moss_modules.local_packages') IS NOT NULL AND to_regclass('moss_modules.local_trust') IS NOT NULL", &[]).await?.get(0);
+        cx.commit()
+            .await
+            .map_err(|_| anyhow::anyhow!("Cannot finish local catalog check"))?;
+        if present {
+            return Ok(());
+        }
+        let instance = admin.instance.clone();
+        let (url, _fence) = tokio::task::spawn_blocking(move || -> anyhow::Result<_> {
+            let fence = crate::module_operation::lock_file(&instance.join("module-install.lock"))?;
+            fence.lock()?;
+            let url = crate::module_admin::elevated_url(&instance).map_err(anyhow::Error::msg)?;
+            Ok((url, fence))
+        })
+        .await??;
+        crate::module_install::prepare_host_schema(&url).await?;
+        Ok(())
+    }
     async fn run(
         admin: Arc<Admin>,
         access: AccessContext,
@@ -80,6 +116,9 @@ mod platform {
         .await;
         match result {
         Ok(Ok((signature, verified))) => {
+            if ensure_catalog(&admin, &access).await.is_err() {
+                return say(StatusCode::UNPROCESSABLE_ENTITY, "Local package catalog is unavailable; check the host database supervisor");
+            }
             if let Err(error) = local_packages::record(&admin.platform.app, &access, &verified).await {
                 // Do not relay database errors or internal configuration to the browser.
                 let _ = error;

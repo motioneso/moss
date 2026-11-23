@@ -1,7 +1,6 @@
 use super::{bytes, setup};
 use access_context::AccessContext;
 use base64::{engine::general_purpose::STANDARD, Engine};
-use moss_module_host::{local_packages, postgres};
 use serde_json::{json, Value};
 use std::{
     fs,
@@ -50,10 +49,17 @@ fn authenticated_commands_record_local_trust() {
         tokio::spawn(async move {
             conn.await.unwrap();
         });
-        db.batch_execute(postgres::MIGRATION).await.unwrap();
-        db.batch_execute(local_packages::MIGRATION).await.unwrap();
         db
     });
+    assert!(
+        rt.block_on(db.query_one(
+            "SELECT to_regclass('moss_modules.local_packages') IS NULL",
+            &[]
+        ))
+        .unwrap()
+        .get::<_, bool>(0),
+        "start without the local catalog so the real host must bootstrap it"
+    );
     let output = Command::new("devports")
         .args(["claim", &format!("js408-{}", std::process::id())])
         .output()
@@ -90,6 +96,12 @@ fn authenticated_commands_record_local_trust() {
         &root.join("network.json"),
         json!({"listen":format!("127.0.0.1:{}",port.0),"origins":[origin],"certificate":root.join("tls/certificate.pem"),"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
     );
+    let supervisor = root.join("supervisor.py");
+    fs::write(&supervisor, "#!/usr/bin/env python3\nimport os,json\nprint(json.dumps({'install_url':os.environ['JS43_BOOTSTRAP_URL']}))\n").unwrap();
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&supervisor, fs::Permissions::from_mode(0o700)).unwrap();
+    }
     let _server = Server(
         Command::new(std::env::var("JS170_SERVER").unwrap())
             .arg("serve")
@@ -97,6 +109,7 @@ fn authenticated_commands_record_local_trust() {
             .arg(root)
             .arg("--web")
             .arg(root.join("web"))
+            .env("MOSS_DB_PROGRAM", &supervisor)
             .env("XDG_CONFIG_HOME", root.join("config"))
             .env("XDG_DATA_HOME", root.join("data"))
             .stdin(Stdio::null())
@@ -172,7 +185,7 @@ fn authenticated_commands_record_local_trust() {
         request.send().unwrap()
     };
     assert_eq!(
-        post(json!({"package":STANDARD.encode(&package)}), false).status(),
+        post(json!({"package":STANDARD.encode(&original)}), false).status(),
         401
     );
     assert_eq!(
@@ -183,6 +196,9 @@ fn authenticated_commands_record_local_trust() {
         .status(),
         422
     );
+    let accepted = post(json!({"package": STANDARD.encode(&package)}), true);
+    let status = accepted.status();
+    assert_eq!(status, 200, "local signing: {}", accepted.text().unwrap());
     let out = root.join("signature.json");
     let result = Command::new(std::env::var("JS408_MOSS").unwrap())
         .args(["local", "sign", &origin])

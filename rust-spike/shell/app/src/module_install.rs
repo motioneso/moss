@@ -160,8 +160,9 @@ pub(crate) async fn ensure_device_sql(migrations_url: &str) -> Result<()> {
     Ok(())
 }
 
-/// Creates the module tables that are missing and returns the instance owner's id.
-async fn prepare_database(migrations_url: &str) -> Result<uuid::Uuid> {
+/// Trusted host schema bootstrap, shared by registry installation and local trust.
+/// The caller holds the instance's module-install file lock across this operation.
+pub(crate) async fn prepare_host_schema(migrations_url: &str) -> Result<tokio_postgres::Client> {
     let (db, connection) = tokio_postgres::connect(migrations_url, tokio_postgres::NoTls)
         .await
         .map_err(|_| anyhow::anyhow!("Cannot reach the instance database"))?;
@@ -179,6 +180,12 @@ async fn prepare_database(migrations_url: &str) -> Result<uuid::Uuid> {
     }
     // The server opens the host as the migration owner, so it must own what the steps made.
     db.batch_execute(HAND_OVER).await?;
+    Ok(db)
+}
+
+/// Creates the module tables that are missing and returns the instance owner's id.
+async fn prepare_database(migrations_url: &str) -> Result<uuid::Uuid> {
+    let db = prepare_host_schema(migrations_url).await?;
     let owner = db
         .query_opt(
             "SELECT id::text FROM app.users ORDER BY is_instance_admin DESC, created_at LIMIT 1",

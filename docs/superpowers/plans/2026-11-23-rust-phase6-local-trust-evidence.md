@@ -13,7 +13,7 @@ paths and their isolation checks.
 - The host derives `local.<account UUID>.*` from authenticated `AccessContext`. The owner
   segment must be the canonical UUID, not an account name. Request schemas accept no owner.
 - New migration `0006_local_packages.sql` creates public install trust and owner-scoped local
-  package records. It is registered in the existing module schema bootstrap. The pinned
+  package records. It is registered in the existing module schema bootstrap, which the local command prepares on demand through the trusted database supervisor before writing its first record. The pinned
   installation identity, public key and fingerprint cannot silently change. Local provenance
   is fixed to `local`, and registry review is fixed to false.
 - Signature, digest, archive, manifest, SQL and Wasm-import checks run before recording a
@@ -31,11 +31,11 @@ moss local verify https://your-moss-origin PACKAGE SIGNATURE_INPUT VERIFY_OUTPUT
 
 `MOSS_LOCAL_SESSION` supplies the signed-in session cookie through the existing secret
 runner, not a command-line argument. `MOSS_LOCAL_CA` can name a public local CA certificate.
-The client refuses redirects and accepts plain HTTPS origins only. The server derives the
+Signing and verification each record verified provenance; they do not install code. The client refuses redirects and accepts plain HTTPS origins only. The server derives the
 account from its session middleware. The CLI writes only the public signature envelope.
 
 The current keystore backend is Unix-only. Local signing routes use that backend on Unix;
-Windows keeps its existing server behavior without these new routes. Windows key custody is
+Windows returns an explicit unsupported-platform error on the new routes. Windows key custody is
 not implemented or proven here. Host secret storage must already be set up and unlocked;
 these commands never create a recovery store or disclose recovery material.
 
@@ -55,12 +55,23 @@ RUSTUP_HOME="$HOME/.rustup" CARGO_TARGET_DIR=/tmp/js408-target python3 rust-spik
 ```
 
 The initial suite was run before the host module was wired in and exited 101 for the missing
-local-trust API. The restored suite passed twelve tests. Nine guard-removal runs each failed
-its named assertion: install label, key fingerprint label, owner, prefix, wrong signing key,
+local-trust API. The restored suite passed fourteen tests, including the real HTTPS/session/CLI gate. Ten
+guard-removal runs each failed its named assertion: encrypted storage, install label,
+key fingerprint label, owner, prefix, wrong signing key,
 changed bytes, undeclared imports, invalid SQL and registry-local namespace confusion.
 The first SQL control exposed an invalid migration filename in the fixture; it was corrected
 so that the refusal specifically reaches the SQL subset checker.
 
-Full gate and maintainability results are recorded with the task's proof artifact after the
-current run completes. Cross-platform signing, private lifecycle and isolation across guest
-entry points are not proven by this slice.
+The focused gate, host boundary/registry regressions, publisher artifact regressions and
+shell bootstrap-marker test passed. Repository lint, formatting, file-size and type checks
+passed. The task's proof artifact records command output from these runs. Cross-platform
+signing, private lifecycle and isolation across guest entry points are not proven by this slice.
+
+## Review notes
+
+The first independent read-only review found no blocker or major finding. Its minor schema
+bootstrap and unsupported-platform-message findings were addressed. Key-loss recovery and
+rotation remain unavailable: the catalog fails closed against a replacement key. In-memory
+zeroization and a separate encryption domain for signing material are additional hardening,
+not implemented by this slice; the approved existing credential cipher is reused. Signing
+itself writes a provenance record, as described above.

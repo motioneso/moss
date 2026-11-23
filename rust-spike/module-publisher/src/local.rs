@@ -58,6 +58,10 @@ pub fn command(args: &[String]) -> Result<Value> {
         .json(&json!({"package":STANDARD.encode(bytes),"signature":signature}))
         .send()
         .map_err(|_| anyhow::anyhow!("Could not reach Moss for local package validation"))?;
+    ensure!(
+        response.status() != reqwest::StatusCode::NOT_IMPLEMENTED,
+        "Local signing is unavailable on this host platform"
+    );
     ensure!(response.status().is_success(), "Moss refused the local package; check the session, account prefix, install key and validation");
     let mut bytes = Vec::new();
     response
