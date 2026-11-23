@@ -283,6 +283,38 @@ impl Installer {
     ) -> Result<()> {
         self.install_selected(access, catalog, artifact, approved, None, None)
     }
+    /// Execute one reviewed package without changing its pin. A replay after crash recovery
+    /// reports an already active digest instead of activating it twice.
+    pub fn install_reviewed(
+        &self,
+        access: &AccessContext,
+        catalog: &Catalog,
+        artifact: &Artifact,
+        consent: &Consent,
+    ) -> Result<()> {
+        self.admin(access)?;
+        ensure!(
+            consent.digest == artifact.digest,
+            "The package changed since review"
+        );
+        {
+            let _fence = self
+                .fence
+                .read()
+                .map_err(|_| anyhow::anyhow!("Module changes are busy"))?;
+            let _disk = self.disk_lock(false)?;
+            let state = self.catalog.load()?;
+            if state
+                .installed
+                .get(&artifact.id)
+                .is_some_and(|m| m.digest == consent.digest)
+            {
+                self.check_selection(&state, catalog, artifact, None, None)?;
+                return Ok(());
+            }
+        }
+        self.install_selected(access, catalog, artifact, true, None, Some(consent))
+    }
     fn install_selected(
         &self,
         access: &AccessContext,

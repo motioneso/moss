@@ -80,6 +80,7 @@
     "test:rust-people-server": "tsx rust-spike/module-host/tools/people-server-gate.ts",
     "test:rust-chat-host": "tsx rust-spike/module-host/tools/chat-host-gate.ts",
     "test:rust-module-bootstrap": "tsx rust-spike/module-host/tools/bootstrap-server-gate.ts",
+    "test:rust-phase6-catalog-and-review": "tsx rust-spike/module-host/tools/phase6-catalog-and-review-gate.ts",
     "test:rust-install-endpoints": "tsx rust-spike/module-host/tools/install-endpoints-gate.ts",
     "test:rust-calendar-review-live": "tsx modules/calendar/tools/review-live-gate.ts",
     "test:rust-calendar-server": "tsx modules/calendar/tools/server-gate.ts",
