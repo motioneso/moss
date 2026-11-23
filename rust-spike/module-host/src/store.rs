@@ -25,6 +25,8 @@ pub struct State {
     #[serde(default)]
     pub retained: BTreeMap<String, Installed>,
     pub registries: BTreeMap<String, SeenRegistry>,
+    #[serde(default)]
+    pub activity: Vec<crate::revocation::Activity>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Installed {
@@ -35,7 +37,10 @@ pub struct Installed {
     pub registry: String,
     pub pin: Option<Version>,
     pub previous: Option<String>,
+    /// Manual install-wide switch; registry revocations are independent.
     pub disabled: Option<String>,
+    #[serde(default)]
+    pub revocations: Vec<crate::revocation::AppliedRevocation>,
 }
 /// Implementations must compare revision and atomically commit the row. The PostgreSQL
 /// implementation keeps activation in a database row; no symlink or file is the version pointer.
@@ -148,6 +153,7 @@ impl Installer {
         };
         let _disk_lock = installer.disk_lock(true)?;
         installer.recover_locked()?;
+        installer.apply_cached_revocations()?;
         installer.cleanup_snapshots(chrono::Utc::now())?;
         for module in installer.catalog.load()?.installed.values() {
             let package = installer.read_package(&module.digest)?;
@@ -214,39 +220,10 @@ impl Installer {
             self.catalog.load()?.revision == previous,
             "Module settings changed during the registry transfer; refresh again"
         );
-        // Keep every prefix binding visible to the host even before anything is installed.
-        // Installation checks it against other configured registries.
-        let seen = &state.registries[registry_id];
-        for installed in state
-            .installed
-            .values_mut()
-            .filter(|m| m.registry == registry_id)
-        {
-            if [&installed.digest, &installed.publisher_key]
-                .iter()
-                .any(|k| {
-                    seen.revocations
-                        .get(*k)
-                        .is_some_and(|r| r.level == crate::registry::RevocationLevel::Block)
-                })
-            {
-                installed.disabled = Some("The registry blocked this module or publisher".into());
-                self.lifecycle.pause_jobs(&installed.manifest.id)?;
-            } else if installed.disabled.as_deref()
-                == Some("The registry blocked this module or publisher")
-            {
-                installed.disabled = None;
-            }
-        }
+        state.apply_revocations();
         state.revision += 1;
         self.catalog.commit(previous, &state)?;
-        for module in state
-            .installed
-            .values()
-            .filter(|m| m.registry == registry_id && m.disabled.is_none())
-        {
-            self.lifecycle.resume_jobs(&module.manifest.id)?;
-        }
+        self.reconcile_runtime(&state)?;
         catalog.save_metadata(
             self.root
                 .create_subdir("registries")?
@@ -564,7 +541,8 @@ impl Installer {
                     registry: catalog.trust.identity.id.clone(),
                     pin: pin_override.or_else(|| old.as_ref().and_then(|m| m.pin.clone())),
                     previous: old.as_ref().map(|m| m.digest.clone()),
-                    disabled: None,
+                    disabled: old.as_ref().and_then(|m| m.disabled.clone()),
+                    revocations: Vec::new(),
                 },
             );
             state.revision += 1;
@@ -892,7 +870,7 @@ impl Installer {
         for (id, module) in &state.installed {
             if module.registry != catalog.trust.identity.id
                 || module.pin.is_some()
-                || module.disabled.is_some()
+                || module.is_blocked()
             {
                 continue;
             }

@@ -58,7 +58,7 @@ pub struct Revocation {
     pub reason: String,
     pub level: RevocationLevel,
 }
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum RevocationLevel {
     Warn,

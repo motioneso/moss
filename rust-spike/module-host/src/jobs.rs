@@ -227,7 +227,7 @@ impl Installer {
         let declarations: Vec<_> = state
             .installed
             .values()
-            .filter(|m| m.disabled.is_none())
+            .filter(|m| !m.is_blocked())
             .flat_map(|m| specs(&m.manifest))
             .collect();
         let runtime = Runtime::new()?;
@@ -300,7 +300,7 @@ pub(crate) async fn reconcile(
         {
             let id: uuid::Uuid = row.get(0);
             let mut payload: Value = row.get(1);
-            let valid = installed.filter(|m| m.disabled.is_none()).is_some_and(|m| {
+            let valid = installed.filter(|m| !m.is_blocked()).is_some_and(|m| {
                 let local = payload["jobKind"]
                     .as_str()
                     .and_then(|s| s.strip_prefix(&format!("{key}.")))

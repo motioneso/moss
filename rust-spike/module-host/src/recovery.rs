@@ -24,6 +24,17 @@ struct Journal {
     target: Option<String>,
 }
 impl Installer {
+    /// The caller holds the startup disk fence; no guest or worker can run yet.
+    pub(crate) fn apply_cached_revocations(&self) -> Result<()> {
+        let mut state = self.catalog.load()?;
+        let revision = state.revision;
+        if state.apply_revocations() {
+            state.revision += 1;
+            self.catalog.commit(revision, &state)?;
+        }
+        self.reconcile_runtime(&state)
+    }
+
     pub(crate) fn begin_change(
         &self,
         id: &str,

@@ -13,6 +13,13 @@ export const RUST_MODULE_FEATURES: readonly (AppMapItem & {
   },
   {
     moduleId: "core",
+    id: "rust-module-runtime-revocation",
+    runtime: "rust",
+    description:
+      "The Rust module host remembers registry warnings and blocks with their source, target and reason. A block stops the affected package for every account, including routes, chat tools, queued work and module frames; a warning keeps it running. Cached blocks apply before the host serves after an offline restart. Omitting a revocation or changing a block to a warning cannot lift it. A registry root may lift its revocation, but cannot turn a module back on after an administrator switched it off. The host keeps a policy activity journal containing metadata only. These are host service behaviors for future module screens."
+  },
+  {
+    moduleId: "core",
     id: "rust-module-chat",
     runtime: "rust",
     description:
@@ -22,6 +29,13 @@ export const RUST_MODULE_FEATURES: readonly (AppMapItem & {
 
 // Management failures are HTTP statuses and saved result messages, not emitted error codes.
 export const RUST_MODULE_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
+  {
+    id: "core.modules.registry_revocation",
+    description:
+      "An instance administrator can inspect the saved registry reason. A blocked package needs a registry root-signed lift or an approved replacement package; refreshing an index that omits the block cannot clear it. An administrator's separate switch stays off after a registry lift.",
+    path: "/settings?section=instmods",
+    scope: "admin"
+  },
   {
     id: "core.modules.review_package_again",
     description:
