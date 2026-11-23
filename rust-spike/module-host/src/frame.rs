@@ -92,7 +92,7 @@ impl Installer {
         );
         let state = self.catalog.load()?;
         let installed = state.installed.get(id).context("Module is not installed")?;
-        ensure!(installed.disabled.is_none(), "Module is disabled");
+        ensure!(!installed.is_blocked(), "Module is disabled");
         ensure!(
             digest.is_none_or(|d| d == installed.digest),
             "This screen version is no longer active"
@@ -122,7 +122,7 @@ impl Installer {
         let mut entries: Vec<(i64, NavEntry)> = Vec::new();
         for (id, installed) in &state.installed {
             let manifest = &installed.manifest;
-            if installed.disabled.is_some()
+            if installed.is_blocked()
                 || !self
                     .lifecycle
                     .account_enabled(id, access, manifest.accounts.default_enabled)?

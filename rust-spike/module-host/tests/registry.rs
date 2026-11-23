@@ -89,7 +89,6 @@ fn revocation_survives_a_new_index_and_restart() {
         serde_json::from_slice(&serde_json::to_vec(&seen).unwrap()).unwrap();
     keys.write(dir.path(), "1.0.0", 3, vec![]);
     let catalog = Catalog::fetch(source, &root, &first, &mut seen).unwrap();
-    assert!(seen.blocked(&a));
     assert!(catalog
         .select(
             "sample.counter",

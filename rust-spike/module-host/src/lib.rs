@@ -16,6 +16,7 @@ pub mod migrations;
 pub mod postgres;
 
 pub mod recovery;
+pub mod revocation;
 
 pub mod jobs;
 /// The companion device lookup, view and narrow write functions. Needs the Meetings tables.

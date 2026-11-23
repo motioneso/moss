@@ -74,7 +74,7 @@ impl Installer {
             .installed
             .get(id)
             .context("This module is not installed")?;
-        ensure!(installed.disabled.is_none(), "This module is disabled");
+        ensure!(!installed.is_blocked(), "This module is disabled");
         ensure!(
             self.lifecycle.account_enabled(
                 id,

@@ -115,7 +115,7 @@ impl Lifecycle for PostgresLifecycle {
             if state
                 .installed
                 .get(id)
-                .is_some_and(|m| m.disabled.is_none())
+                .is_some_and(|m| !m.is_blocked())
             {
                 db.execute(
                     "DELETE FROM moss_modules.paused_modules WHERE module_id=$1",
