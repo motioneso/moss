@@ -9,6 +9,7 @@ trap 'rm -rf "$scratch"' EXIT
 cargo +1.95.0 test --locked --manifest-path rust-spike/module-host/Cargo.toml --test phase6_offline_bundle -- --test-threads=1
 MOSS_RELEASE_FIXTURE_OUTPUT="$scratch/release" cargo +1.95.0 test --locked --manifest-path rust-spike/module-publisher/Cargo.toml --test phase6_release -- --test-threads=1
 python3 rust-spike/module-publisher/tools/test_release_transport.py
+python3 rust-spike/module-publisher/tools/test_previous_snapshot.py
 MOSS_COMPILED_BUNDLE="$scratch/release/compiled_bundle.rs" cargo +1.95.0 build --locked --manifest-path rust-spike/module-publisher/Cargo.toml --bin moss-bundle-bootstrap
 python3 - "$scratch/release/registry/index.json" <<'PYTHON'
 import datetime, json, sys

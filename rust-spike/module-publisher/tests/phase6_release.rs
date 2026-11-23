@@ -160,17 +160,103 @@ fn production_release_requires_the_exact_human_review_report() {
     );
     if let Some(destination) = std::env::var_os("MOSS_RELEASE_FIXTURE_OUTPUT") {
         // Executable proof starts with an authentically signed, expired index.
-        let index_path = output.join("registry/index.json");
-        let mut index: Value = serde_json::from_slice(&fs::read(&index_path).unwrap()).unwrap();
-        index["expires"] = serde_json::json!(chrono::Utc::now() - chrono::Duration::days(1));
-        let bytes = serde_json::to_vec(&index).unwrap();
-        let pair = ring::signature::Ed25519KeyPair::from_pkcs8(key.as_ref()).unwrap();
-        fs::write(index_path, &bytes).unwrap();
+        expire_registry(&output.join("registry"), key.as_ref());
+        copy_tree(&output, std::path::Path::new(&destination));
+    }
+}
+
+#[test]
+fn release_retains_previous_history_renews_expiry_and_refuses_dropped_modules() {
+    use base64::Engine;
+    let f = Fixture::new();
+    f.first_party_bundle();
+    let input = input_packages(&f);
+    let first = f.dir.path().join("first");
+    let key =
+        ring::signature::Ed25519KeyPair::generate_pkcs8(&ring::rand::SystemRandom::new()).unwrap();
+    let encoded = base64::engine::general_purpose::STANDARD.encode(key.as_ref());
+    let run =
+        |output: &std::path::Path, previous: Option<&std::path::Path>, approval: Option<&str>| {
+            let mut command = Command::new(env!("CARGO_BIN_EXE_moss"));
+            command
+                .args(["release", input.to_str().unwrap(), output.to_str().unwrap()])
+                .env("MOSS_RUST_REGISTRY_SIGNING_KEY_ID", "generated-test")
+                .env("MOSS_RUST_REGISTRY_SIGNING_PRIVATE_KEY", &encoded)
+                .env_remove("MOSS_RUST_REGISTRY_APPROVED_REPORT");
+            if let Some(previous) = previous {
+                command.arg(previous);
+            }
+            if let Some(approval) = approval {
+                command.env("MOSS_RUST_REGISTRY_APPROVED_REPORT", approval);
+            }
+            command.output().unwrap()
+        };
+    let preview = run(&first, None, None);
+    let report = String::from_utf8(preview.stderr).unwrap();
+    let digest = report.rsplit("report digest: ").next().unwrap().trim();
+    let initial = run(&first, None, Some(digest));
+    assert!(
+        initial.status.success(),
+        "{}",
+        String::from_utf8_lossy(&initial.stderr)
+    );
+    expire_registry(&first.join("registry"), key.as_ref());
+    let old: Value =
+        serde_json::from_slice(&fs::read(first.join("registry/index.json")).unwrap()).unwrap();
+    let second = f.dir.path().join("second");
+    let result = run(&second, Some(&first.join("registry")), None);
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let new: Value =
+        serde_json::from_slice(&fs::read(second.join("registry/index.json")).unwrap()).unwrap();
+    assert_eq!(
+        new["modules"], old["modules"],
+        "Prior immutable history must survive renewal"
+    );
+    assert!(new["serial"].as_u64().unwrap() > old["serial"].as_u64().unwrap());
+    assert!(
+        new["expires"]
+            .as_str()
+            .unwrap()
+            .parse::<chrono::DateTime<chrono::Utc>>()
+            .unwrap()
+            > chrono::Utc::now()
+    );
+    fs::remove_file(input.join("finance.mosspkg")).unwrap();
+    let dropped = run(
+        &f.dir.path().join("dropped"),
+        Some(&second.join("registry")),
+        None,
+    );
+    assert!(
+        !dropped.status.success(),
+        "Expected refusal: missing previously published module"
+    );
+    assert!(String::from_utf8_lossy(&dropped.stderr).contains("previously published module"));
+}
+
+fn expire_registry(folder: &std::path::Path, generated_key: &[u8]) {
+    use base64::Engine;
+    let key = ring::signature::Ed25519KeyPair::from_pkcs8(generated_key).unwrap();
+    let mut index: Value =
+        serde_json::from_slice(&fs::read(folder.join("index.json")).unwrap()).unwrap();
+    index["expires"] = serde_json::json!(chrono::Utc::now() - chrono::Duration::days(1));
+    let index_bytes = serde_json::to_vec(&index).unwrap();
+    let mut bundle: Value =
+        serde_json::from_slice(&fs::read(folder.join("bundle.json")).unwrap()).unwrap();
+    bundle["indexDigest"] = serde_json::json!(moss_module_host::trust::digest(&index_bytes));
+    for (name, bytes) in [
+        ("index.json", index_bytes),
+        ("bundle.json", serde_json::to_vec(&bundle).unwrap()),
+    ] {
+        fs::write(folder.join(name), &bytes).unwrap();
         fs::write(
-            output.join("registry/index.json.sig"),
-            base64::engine::general_purpose::STANDARD.encode(pair.sign(&bytes).as_ref()),
+            folder.join(format!("{name}.sig")),
+            base64::engine::general_purpose::STANDARD.encode(key.sign(&bytes).as_ref()),
         )
         .unwrap();
-        copy_tree(&output, std::path::Path::new(&destination));
     }
 }

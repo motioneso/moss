@@ -45,9 +45,11 @@ if __name__ == "__main__":
     repository=sys.argv[2]
     result=subprocess.run(["gh","release","view",TAG,"--repo",repository,"--json","assets"],capture_output=True,text=True)
     if result.returncode:
-        subprocess.run(["gh","release","create",TAG,"--repo",repository,"--title","Rust module registry","--notes","Signed Rust module packages and the complete registry snapshot.","--target",os.environ["GITHUB_SHA"]],check=True)
+        subprocess.run(["gh","release","create",TAG,"--draft","--repo",repository,"--title","Rust module registry","--notes","Signed Rust module packages and the complete registry snapshot.","--target",os.environ["GITHUB_SHA"]],check=True)
         existing=[]
     else:
         existing=[a["name"] for a in json.loads(result.stdout)["assets"]]
     publish(Path(sys.argv[1]), repository, sys.argv[3],
             lambda args: subprocess.run(["gh", *args], check=True),existing, Path(sys.argv[4]))
+
+    subprocess.run(["gh", "release", "edit", TAG, "--repo", repository, "--draft=false"], check=True)

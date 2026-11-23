@@ -54,6 +54,8 @@ digest-named packages and detached signatures first. The complete archive, inclu
 index, swaps last as one asset. Readers use that one complete archive, so metadata and packages
 remain from the same snapshot; failed earlier uploads leave the old archive available. Old package
 assets remain available. The Linux stand-in is uploaded under its executable digest before the snapshot.
+The first publication uses a draft release until the complete archive is uploaded.
+An empty draft can resume; a public release missing its snapshot refuses to reset history.
 GitHub replaces the archive using `--clobber`, which can briefly make it unavailable;
 this is not an atomic availability guarantee. Only manual dispatch from main may publish.
 
@@ -83,7 +85,9 @@ supply `MOSS_BUNDLE_APP_URL` and `MOSS_BUNDLE_MIGRATIONS_URL` by secret name thr
 host/gate setup, and pass `--postgres`. It uses the real Postgres catalog and transactional
 migration/queue lifecycle. It does not provision accounts, database roles or schemas. File mode
 refuses SQL and scheduled modules rather than pretending to install them. Phase 7 consumes this
-bundle contract while supplying real setup and installer UX.
+bundle contract while supplying real setup and installer UX. The Postgres branch is compiled,
+but this focused gate has not exercised it or installed every real first-party default.
+The published Linux executable is an unoptimized stand-in, not a production installer.
 
 Bootstrap cannot replace an existing module or run after any registry observation. Interrupted
 bootstrap resumes only an already active compiled digest signed by the same key. Once a registry

@@ -25,6 +25,7 @@ controls = [
     (bundle, 'trust::verify(\n                self.first_party_key,\n                item.package.digest.as_bytes(),\n                item.package.signature,\n            )?;', "", host, "phase6_offline_bundle", "optional::optional_bytes_are_validated_before_caching"),
     (bundle, 'crate::sql::check(&package, &installer.inventory)?;', "", host, "phase6_offline_bundle", "optional::optional_bytes_are_validated_before_caching"),
     (bundle, 'installer.host.validate(wasm, &package.manifest)?;', "", host, "phase6_offline_bundle", "optional::optional_bytes_are_validated_before_caching"),
+    (base / "src/release.rs", 'candidates.contains_key(id)', "true", base, "phase6_release", "release_retains_previous_history_renews_expiry_and_refuses_dropped_modules"),
 ]
 logs = Path(os.environ.get("RELEASE_PROOF_DIR") or tempfile.mkdtemp(prefix="moss-release-negative-"))
 logs.mkdir(parents=True, exist_ok=True)
@@ -51,10 +52,23 @@ try:
     path.write_text(before.decode().replace(anchor, "False"))
     result = subprocess.run(["python3", str(base / "tools/test_release_transport.py"), "Publication.test_non_dispatch_cannot_publish"], capture_output=True, text=True)
     log = result.stdout + result.stderr
-    (logs / "09-dispatch.txt").write_text(log)
+    (logs / "14-dispatch.txt").write_text(log)
     assert result.returncode != 0 and "Expected refusal:" in log and "FAIL:" in log, log
     print("RED without guard: manual dispatch", flush=True)
 finally:
     path.write_bytes(before)
-print("All thirteen refusal controls failed at assertions; sources restored.", flush=True)
+path = base / "tools/previous_snapshot.py"
+before = path.read_bytes()
+try:
+    anchor = 'raise SystemExit("Public Rust release is missing its snapshot; refusing to reset history")'
+    assert before.decode().count(anchor) == 1
+    path.write_text(before.decode().replace(anchor, "return"))
+    result = subprocess.run(["python3", str(base / "tools/test_previous_snapshot.py"), "PreviousSnapshot.test_public_release_without_snapshot_refuses_history_reset"], capture_output=True, text=True)
+    log = result.stdout + result.stderr
+    (logs / "15-public-history.txt").write_text(log)
+    assert result.returncode != 0 and "Expected refusal:" in log and "FAIL:" in log, log
+    print("RED without guard: missing public snapshot", flush=True)
+finally:
+    path.write_bytes(before)
+print("All fifteen refusal controls failed at assertions; sources restored.", flush=True)
 subprocess.run(["bash", str(base / "tools/release-check.sh")], check=True, env=os.environ | {"MOSS_RELEASE_SKIP_NEGATIVE_CONTROLS": "1"})
