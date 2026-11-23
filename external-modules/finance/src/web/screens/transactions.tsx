@@ -204,7 +204,12 @@ export function TransactionsScreen(
   const [ownOnly, setOwnOnly] = useState(initial.ownOnly);
   const [month, setMonth] = useState(() => initial.month ?? defaultLedgerMonth());
   const [exporting, setExporting] = useState(false);
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilter] = useState<Filter>(() =>
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("filter") === "look"
+      ? "look"
+      : "all"
+  );
   const [draft, setDraft] = useState("");
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState(() => ({

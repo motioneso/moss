@@ -196,7 +196,7 @@ export const transactionsQueryHandler: ToolFactory = (ports) => async (input) =>
     needsLookCount,
     supportsSplits: store.supportsSplits,
     supportsBulk: Boolean(store.bulk),
-    supportsConfirm: Boolean(store.bulk?.confirm),
+    supportsConfirm: Boolean(store.bulk?.confirmWithUndo),
     supportsNotes: Boolean(store.notes),
     categories: await loadCategories(ports),
     accounts: ((accounts.accounts as { shared?: boolean }[] | undefined) ?? []).filter(
