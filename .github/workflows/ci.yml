@@ -415,9 +415,19 @@ jobs:
       - name: Install Calendar gate Chromium
         if: matrix.module == 'calendar' && matrix.suite == 'server'
         run: |
-          sudo python3 scripts/prepare-browser-apt-mirror.py
-          sudo env "PATH=$PATH" timeout --verbose --signal=TERM --kill-after=15s 5m pnpm exec playwright install-deps chromium
-          timeout --verbose --signal=TERM --kill-after=15s 5m pnpm exec playwright install chromium
+          # Try the runner's default apt mirror first, then the standard Ubuntu archive.
+          status=0
+          for attempt in 1 2; do
+            if [ "$attempt" -eq 2 ]; then sudo python3 scripts/prepare-browser-apt-mirror.py; fi
+            status=0
+            sudo env "PATH=$PATH" timeout --verbose --signal=TERM --kill-after=15s 5m \
+              pnpm exec playwright install-deps chromium \
+              && timeout --verbose --signal=TERM --kill-after=15s 5m \
+                pnpm exec playwright install chromium \
+              || status=$?
+            if [ "$status" -eq 0 ]; then break; fi
+          done
+          exit "$status"
 
       - name: Provision the assembly gate's declared Linux dependencies
         if: matrix.module == 'host' && matrix.suite == 'module-assembly'
