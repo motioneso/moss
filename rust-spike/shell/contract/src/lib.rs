@@ -163,6 +163,8 @@ pub struct CardField {
 /// What the browser may see of an approval. It never carries raw tool parameters.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct ApprovalView {
+    #[serde(default)]
+    pub batch: bool,
     pub id: String,
     pub kind: ApprovalKind,
     pub state: ApprovalState,

@@ -15,7 +15,7 @@ use serde_json::Value;
 use crate::approvals::CallFacts;
 use crate::confine::{Confinement, SYSTEM_READ, SYSTEM_WRITE};
 use crate::driver::*;
-use crate::gateway::{CallFactsFn, Confirm, GatewayHost, ToolDef, ToolHost};
+use crate::gateway::{CallFactsFn, Confirm, Confirmation, GatewayHost, ToolDef, ToolHost};
 use crate::policy;
 use crate::session::AgentSession;
 use crate::turn_tools::TurnTools;
@@ -74,7 +74,7 @@ pub struct ApprovalCard {
     pub input: Value,
 }
 
-pub type ApprovalFuture = std::pin::Pin<Box<dyn std::future::Future<Output = Answer> + Send>>;
+pub type ApprovalFuture = std::pin::Pin<Box<dyn std::future::Future<Output = Confirmation> + Send>>;
 pub type AskPerson = Arc<dyn Fn(ApprovalCard) -> ApprovalFuture + Send + Sync>;
 
 /// Who answers approval cards during the current turn. Empty between turns, so a late ask
@@ -323,7 +323,7 @@ impl Runner {
                         })
                         .await
                     }
-                    None => Answer::Deny,
+                    None => Ok(Answer::Deny),
                 }
             })
         });
@@ -457,15 +457,14 @@ fn approver(cwd: PathBuf, home: PathBuf, slot: Slot) -> Approver {
                 policy::Decision::Allow => Answer::Allow,
                 policy::Decision::Deny { .. } => Answer::Deny,
                 policy::Decision::Ask => match person {
-                    Some(person) => {
-                        person(ApprovalCard {
-                            source: ApprovalSource::Agent,
-                            tool: ask.tool_name.unwrap_or_else(|| "unknown".into()),
-                            title: ask.title,
-                            input: ask.raw_input,
-                        })
-                        .await
-                    }
+                    Some(person) => person(ApprovalCard {
+                        source: ApprovalSource::Agent,
+                        tool: ask.tool_name.unwrap_or_else(|| "unknown".into()),
+                        title: ask.title,
+                        input: ask.raw_input,
+                    })
+                    .await
+                    .unwrap_or(Answer::Deny),
                     None => Answer::Deny,
                 },
             }
@@ -613,7 +612,7 @@ mod tests {
     #[tokio::test]
     async fn reading_inside_the_agent_home_is_refused_not_asked() {
         let asked: Slot = Arc::new(Mutex::new(Some(Arc::new(|_| {
-            Box::pin(async { Answer::Allow }) as ApprovalFuture
+            Box::pin(async { Ok(Answer::Allow) }) as ApprovalFuture
         }))));
         let approve = approver("/srv/work".into(), "/home/p".into(), asked);
         let ask = PermissionAsk {
@@ -636,7 +635,7 @@ mod tests {
             "alice",
             dir.path(),
             Arc::new(NoTools),
-            Arc::new(|_, _| Box::pin(async { Answer::Deny })),
+            Arc::new(|_, _| Box::pin(async { Ok(Answer::Deny) })),
             plain_facts(),
         )
         .unwrap();

@@ -17,7 +17,7 @@ use moss_shell_contract::{
     ApprovalKind, ApprovalState, ChatError, ChatMessage, ChatRole, ChatThread, Decision,
     SendMessage, ShellData, ShellView, TodayView,
 };
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 /// How long a turn may run, however busy the agent is.
 const TURN_LIMIT: Duration = Duration::from_secs(15 * 60);
@@ -150,7 +150,7 @@ impl Inner {
     }
 
     #[cfg(unix)]
-    fn run_turn(&self, message: &SendMessage, turn_id: &str) -> Result<(String, usize), String> {
+    fn run_turn(&self, message: &SendMessage, turn_id: &str) -> Result<String, String> {
         let secret = std::fs::read_to_string(self.root.join("runner.secret"))
             .map_err(|e| format!("cannot read the runner secret: {e}"))?;
         let stream = std::os::unix::net::UnixStream::connect(self.root.join("runner.sock"))
@@ -194,7 +194,6 @@ impl Inner {
 
         let started = Instant::now();
         let mut last_heard = started;
-        let mut refused = 0;
         let outcome = loop {
             self.expire(Instant::now());
             if started.elapsed() >= self.limits.turn {
@@ -255,18 +254,17 @@ impl Inner {
                     }
                 }
                 Some("approval") => {
-                    if !self.raise_approval(&m, &turn) {
-                        refused += 1;
+                    if let Err(error) = self.raise_approval(&m, &turn) {
                         if let Err(e) = send_line(
                             &writer,
-                            &json!({"op": "answer", "id": m["id"], "allow": false}),
+                            &json!({"op": "answer", "id": m["id"], "allow": false,"error":error}),
                         ) {
                             break Err(e);
                         }
                     }
                 }
                 Some("done") => {
-                    break Ok((m["text"].as_str().unwrap_or_default().to_string(), refused));
+                    break Ok(m["text"].as_str().unwrap_or_default().to_string());
                 }
                 Some("error") => {
                     break Err(m["message"]
@@ -283,19 +281,27 @@ impl Inner {
     }
 
     #[cfg(not(unix))]
-    fn run_turn(&self, _: &SendMessage, _: &str) -> Result<(String, usize), String> {
+    fn run_turn(&self, _: &SendMessage, _: &str) -> Result<String, String> {
         Err("the runner is not built for this system yet".into())
     }
 
     /// Store only a card built by the host for a tool offered in this open turn, or a fixed
-    /// agent permission disclosure. Failure is answered with a refusal by the caller.
-    fn raise_approval(&self, m: &Value, turn: &ToolTurn) -> bool {
+    /// agent permission disclosure. Preparation failure is returned to the model as a tool error.
+    fn raise_approval(
+        &self,
+        m: &Value,
+        turn: &ToolTurn,
+    ) -> Result<(), moss_agents::gateway::PreparationError> {
+        let failure = |message: &str| moss_agents::gateway::PreparationError {
+            code: "approval_preparation_failed".into(),
+            message: message.into(),
+        };
         let Some(runner_id) = m["id"].as_u64() else {
-            return false;
+            return Err(failure("Approval request is not available for this turn"));
         };
         let tool = m["card"]["tool"].as_str().unwrap_or("unknown");
         let parameters = &m["card"]["input"];
-        let (kind, title, target, fields, content, danger, action) =
+        let (kind, title, target, fields, content, danger, batch, action) =
             match m["card"]["source"].as_str() {
                 Some("agent") => (
                     ApprovalKind::Permission,
@@ -304,16 +310,15 @@ impl Inner {
                     chat_approvals::permission_fields(tool, parameters),
                     None,
                     false,
+                    false,
                     None,
                 ),
                 Some("moss") => {
                     let Some(module) = turn.offered.get(tool) else {
-                        return false;
+                        return Err(failure("Approval request is not available for this turn"));
                     };
                     let name = tool.replace('_', ".");
-                    let Ok(card) = self.tools.card(module, &name, parameters) else {
-                        return false;
-                    };
+                    let card = self.tools.card(module, &name, parameters)?;
                     let action = chat_approvals::Action {
                         module: module.clone(),
                         tool: name,
@@ -333,10 +338,11 @@ impl Inner {
                             .collect(),
                         card.content,
                         card.danger,
+                        card.batch,
                         Some(action),
                     )
                 }
-                _ => return false,
+                _ => return Err(failure("Unknown approval request")),
             };
         let mut st = self.state.lock().expect("chat lock");
         st.book.add(Record {
@@ -350,20 +356,17 @@ impl Inner {
             fields,
             content,
             danger,
+            batch,
             action,
             expires: Instant::now() + self.limits.approval_ttl,
             state: ApprovalState::Pending,
         });
-        true
+        Ok(())
     }
 
-    fn finish_turn(&self, turn_id: &str, result: Result<(String, usize), String>) {
+    fn finish_turn(&self, turn_id: &str, result: Result<String, String>) {
         let text = match result {
-            Ok((reply, 0)) => reply,
-            Ok((reply, refused)) => format!(
-                "{reply}\n\n({refused} action(s) needed a complete approval card, so \
-                 they were declined.)"
-            ),
+            Ok(reply) => reply,
             Err(e) => format!("Moss could not reach your agent: {e}"),
         };
         let mut st = self.state.lock().expect("chat lock");

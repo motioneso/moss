@@ -35,8 +35,12 @@ linked doc **in full** and follow it.
   default), never UTC's today. A UTC anchor fails in Los Angeles evening hours.
 - The Sports installed gate reads live ESPN data, so a red run can depend on that night's game
   volume. Rerun near the failing hour before blaming the code.
-- `pnpm test:rust-connectors-live` needs `RUSTUP_HOME` set explicitly
-  (`export RUSTUP_HOME=$HOME/.rustup`), or the live gate refuses after the whole build.
+- `pnpm test:rust-connectors-live` and `pnpm test:rust-calendar-server` need `RUSTUP_HOME` set
+  explicitly (`export RUSTUP_HOME=$HOME/.rustup`), or the gate refuses after the whole build.
 - Live chat fixture runners need `gateway_bin` pointing at the built `moss-tool-gateway` binary.
 - A script that copies the tree for a protection check must also copy `modules/` and use its own
   `CARGO_TARGET_DIR`.
+- Guest module cargo tests build under their own `CARGO_TARGET_DIR` subfolder. Sharing the host's
+  target folder makes rustc see two `moss_module_sdk` crates.
+- Calendar deadline fault fixtures set `deadline_ceiling` as well as `deadline`. A manifest call
+  budget overrides the fixture default.

@@ -99,7 +99,7 @@ fn model_values_only_appear_in_labelled_fields() {
 }
 
 #[test]
-fn reads_unknown_tools_missing_and_oversize_inputs_do_not_make_cards() {
+fn reads_unknown_tools_and_missing_inputs_do_not_make_cards() {
     let f = Fake::new();
     for (tool, p) in [
         ("finance.accounts.list", json!({})),
@@ -108,10 +108,6 @@ fn reads_unknown_tools_missing_and_oversize_inputs_do_not_make_cards() {
         (
             "finance.activity.undo",
             json!({"activityId":"x","title":"Approve"}),
-        ),
-        (
-            "finance.activity.undo",
-            json!({"activityId":"x".repeat(32769)}),
         ),
     ] {
         assert!(card(&f, tool, p).is_err(), "{tool}");
@@ -242,7 +238,7 @@ fn chat_distribution_can_leave_the_pool_and_refuses_duplicate_categories() {
 }
 
 #[test]
-fn large_batches_and_unicode_notes_keep_every_value_within_host_card_limits() {
+fn large_batches_and_unicode_notes_keep_every_value_in_full() {
     let f = Fake::new();
     let m = manifest();
     let mut p = m["tools"]["finance.transactions.notes.save"]["inputSchema"]["examples"][0].clone();
@@ -300,7 +296,7 @@ fn maximum(schema: &Value) -> Value {
 }
 
 #[test]
-fn every_batch_at_its_schema_limit_fits_a_complete_card() {
+fn every_domain_sized_batch_has_a_complete_card() {
     let f = Fake::new();
     let m = manifest();
     for name in [
@@ -312,21 +308,11 @@ fn every_batch_at_its_schema_limit_fits_a_complete_card() {
         let p = maximum(&m["tools"][name]["inputSchema"]);
         let prepared = card(&f, name, p).unwrap_or_else(|e| panic!("{name}: {e}"));
         let fields = prepared["fields"].as_array().unwrap();
-        assert!(fields.len() <= 32, "{name}");
-        assert!(
-            prepared.to_string().len() <= 32768,
-            "{name}: {} bytes",
-            prepared.to_string().len()
-        );
-        assert!(fields
-            .iter()
-            .all(|field| field["value"].as_str().unwrap().len() <= 4096));
-        if name.contains("bulk-") {
-            let mut oversized = maximum(&m["tools"][name]["inputSchema"]);
-            let row = oversized["transactions"][0].clone();
-            oversized["transactions"] = json!(vec![row; 200]);
-            let error = card(&f, name, oversized).unwrap_err().to_string();
-            assert!(error.contains("smaller batch"));
+        assert!(!fields.is_empty(), "{name}");
+        assert_eq!(prepared["batch"], true);
+        if name.contains("bulk-") || name == "finance.import.apply" {
+            assert!(fields.len() > 32, "{name}");
+            assert!(prepared.to_string().len() > 32768, "{name}");
         }
     }
 }
@@ -383,4 +369,33 @@ fn budget_configure_tool_uses_host_valid_receipt_filters() {
     assert_eq!(receipt["before"], "[]");
     assert!(receipt["after"].as_str().unwrap().contains("USD"));
     assert_eq!(f.rows("app.finance_budget_policy").len(), 1);
+}
+
+#[test]
+fn oversized_batch_has_one_complete_card_without_losing_rows() {
+    let f = Fake::new();
+    let mut p = manifest()["tools"]["finance.import.apply"]["inputSchema"]["examples"][0].clone();
+    let mut rows = Vec::new();
+    for index in 1..=60 {
+        rows.push(
+            json!({"sourceRow":index,"date":"2026-11-20","name":format!("Item {index}"),
+            "amountCents":index * 100,"allowDuplicate":false,"notes":"界".repeat(1200)}),
+        );
+    }
+    p["rows"] = json!(rows);
+    let prepared = card(&f, "finance.import.apply", p).unwrap();
+    let fields = prepared["fields"].as_array().unwrap();
+    assert!(fields.len() > 32);
+    assert!(prepared.to_string().len() > 32768);
+    for index in 1..=60 {
+        let name = format!("Item {index}");
+        assert!(fields.iter().any(|f| f["value"] == name));
+        let label = format!("Row {index}: Transaction note text; treated as outside content.");
+        let shown: String = fields
+            .iter()
+            .filter(|f| f["label"] == label)
+            .map(|f| f["value"].as_str().unwrap())
+            .collect();
+        assert_eq!(shown, "界".repeat(1200), "row {index}");
+    }
 }

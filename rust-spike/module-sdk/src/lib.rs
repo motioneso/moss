@@ -11,7 +11,30 @@ pub mod query;
 pub struct Error {
     pub message: String,
 }
+/// An adapter explicitly declares this message safe for its caller. Hosts still sanitize it.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PublicError {
+    pub code: String,
+    pub message: String,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PublicErrorEnvelope {
+    pub moss_public_error: PublicError,
+}
 impl Error {
+    pub fn public(code: &str, message: &str) -> Self {
+        Self::new(
+            serde_json::to_string(&PublicErrorEnvelope {
+                moss_public_error: PublicError {
+                    code: code.into(),
+                    message: message.into(),
+                },
+            })
+            .expect("public error JSON"),
+        )
+    }
     pub fn new(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),

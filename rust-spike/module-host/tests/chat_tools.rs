@@ -170,8 +170,7 @@ fn switched_off_tools_vanish_and_forged_calls_are_refused() {
     assert!(f
         .host
         .chat_tool_card(&f.a, MODULE, "sample.erase", &params())
-        .unwrap()
-        .is_none());
+        .is_err());
     assert_eq!(f.host.chat_tools(&f.b).unwrap().len(), 5);
     let mut state = f.catalog.load().unwrap();
     let revision = state.revision;
@@ -217,7 +216,7 @@ fn card_fixed_parts_come_from_host_and_manifest() {
     assert_eq!(card.version.as_deref(), Some("row-v1"));
 }
 #[test]
-fn malformed_missing_failed_and_oversized_cards_deny() {
+fn malformed_and_failed_cards_return_errors_missing_builder_is_absent() {
     for raw in [
         Value::Null,
         json!({}),
@@ -226,16 +225,13 @@ fn malformed_missing_failed_and_oversized_cards_deny() {
         json!({"fields":[],"version":null}),
         json!({"fields":[],"version":""}),
         json!({"fields":[{"label":"x","value":3}]}),
-        json!({"fields":[],"target":"x".repeat(4097)}),
         json!({"fields":[],"version":"x".repeat(257)}),
-        json!({"fields":vec![json!({"label":"x","value":"v"});33]}),
     ] {
         let f = Fixture::new(manifest(), raw, None);
         assert!(f
             .host
             .chat_tool_card(&f.a, MODULE, "sample.pin", &params())
-            .unwrap()
-            .is_none());
+            .is_err());
     }
     let mut m = manifest();
     m.tools.get_mut("sample.erase").unwrap().card = None;
@@ -316,4 +312,77 @@ fn duplicate_wire_names_are_refused() {
     state.revision += 1;
     f.catalog.commit(revision, &state).unwrap();
     assert!(f.host.chat_tools(&f.a).is_err());
+}
+
+#[test]
+fn oversized_card_and_arguments_are_complete_and_still_require_exact_approval() {
+    let mut m = manifest();
+    m.tools
+        .get_mut("sample.erase")
+        .unwrap()
+        .input_schema
+        .as_mut()
+        .unwrap()["properties"]["text"]["maxLength"] = json!(100000);
+    let raw = json!({"batch":true,"fields":(0..128).map(|index|
+        json!({"label":format!("Row {index}"),"value":"界".repeat(4000)})).collect::<Vec<_>>(),
+        "content":"Long content ".repeat(1000)});
+    assert!(raw.to_string().len() > 1024 * 1024);
+    let f = Fixture::new(m, raw.clone(), None);
+    // Stored records may produce a large disclosure even when the call only carries an ID.
+    let short = f
+        .host
+        .chat_tool_card(&f.a, MODULE, "sample.erase", &params())
+        .unwrap()
+        .unwrap();
+    assert_eq!(serde_json::to_value(&short.fields).unwrap(), raw["fields"]);
+    assert!(
+        f.host
+            .call(
+                MODULE,
+                f.a.clone(),
+                "api",
+                &json!({"name":"prepare","parameters":{}}).to_string()
+            )
+            .is_err(),
+        "ordinary API response budget remains unchanged"
+    );
+    let p = json!({"text":"p".repeat(70000)});
+    let card = f
+        .host
+        .chat_tool_card(&f.a, MODULE, "sample.erase", &p)
+        .unwrap()
+        .unwrap();
+    assert!(card.batch);
+    assert_eq!(serde_json::to_value(&card.fields).unwrap(), raw["fields"]);
+    assert_eq!(card.content.as_deref(), raw["content"].as_str());
+    assert!(f
+        .host
+        .run_chat_tool(&f.a, MODULE, "sample.erase", p.clone())
+        .is_err());
+    assert_eq!(
+        f.host
+            .run_approved_chat_tool(&f.a, MODULE, "sample.erase", p.clone(), None)
+            .unwrap()["parameters"],
+        p
+    );
+}
+
+#[test]
+fn explicit_public_builder_error_survives_as_a_sanitized_preparation_failure() {
+    let public =
+        moss_module_sdk::Error::public("stale_source", "Read the current revision and try again.");
+    let f = Fixture::new(manifest(), json!({"fixtureError":public.message}), None);
+    let error = f
+        .host
+        .chat_tool_card(&f.a, MODULE, "sample.erase", &params())
+        .unwrap_err();
+    let error = error
+        .downcast_ref::<moss_module_host::chat_tools::CardBuildError>()
+        .unwrap();
+    assert_eq!(error.code, "stale_source");
+    assert_eq!(error.message, "Read the current revision and try again.");
+    assert!(f
+        .host
+        .run_chat_tool(&f.a, MODULE, "sample.erase", params())
+        .is_err());
 }

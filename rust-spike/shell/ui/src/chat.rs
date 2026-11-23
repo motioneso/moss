@@ -6,7 +6,7 @@ use leptos::ev;
 use leptos::html;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
-use moss_shell_contract::{ChatMessage, ChatRole, ChatThread};
+use moss_shell_contract::{ApprovalState, ChatMessage, ChatRole, ChatThread};
 
 use crate::frame::{BrandMark, Icon};
 use crate::{api, icons};
@@ -29,6 +29,7 @@ pub fn ChatDrawer(
     let draft = RwSignal::new(String::new());
     let input_ref = NodeRef::<html::Textarea>::new();
     let body_ref = NodeRef::<html::Div>::new();
+    let last_pending_approval = StoredValue::new(None::<String>);
 
     // Load the thread the first time the drawer opens, and focus the composer on every open.
     Effect::new(move |_| {
@@ -59,11 +60,23 @@ pub fn ChatDrawer(
         });
     });
 
-    // Keep the newest message in view.
+    // Show a new request once; polling the same request must not interrupt its review.
     Effect::new(move |_| {
         messages.track();
         waiting.track();
-        thread.track();
+        let pending = thread.with(|t| {
+            t.as_ref().and_then(|t| {
+                t.approvals
+                    .iter()
+                    .find(|a| a.state == ApprovalState::Pending)
+                    .map(|a| a.id.clone())
+            })
+        });
+        let reviewing = pending.is_some() && pending == last_pending_approval.get_value();
+        last_pending_approval.set_value(pending);
+        if reviewing {
+            return;
+        }
         request_animation_frame(move || {
             if let Some(body) = body_ref.get_untracked() {
                 body.set_scroll_top(body.scroll_height());

@@ -37,7 +37,15 @@ pub trait ToolHost: Send + Sync + 'static {
     fn call(&self, account: &str, name: &str, args: Value) -> ToolFuture;
 }
 
-pub type ConfirmFuture = Pin<Box<dyn Future<Output = Answer> + Send>>;
+/// A safe preparation failure is different from a person's refusal.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct PreparationError {
+    pub code: String,
+    pub message: String,
+}
+pub type Confirmation = Result<Answer, PreparationError>;
+pub type ConfirmFuture = Pin<Box<dyn Future<Output = Confirmation> + Send>>;
 /// Shows the person an approval card and waits for their answer.
 pub type Confirm = Arc<dyn Fn(String, Value) -> ConfirmFuture + Send + Sync>;
 /// The live facts for one call: YOLO switch, taint, marks. Read at call time, never cached.
@@ -221,7 +229,13 @@ pub async fn call_tool(
     let allowed = match decision {
         Route::AutoRun | Route::YoloRun => true,
         Route::Confirm | Route::YoloConfirm => {
-            confirm(name.to_string(), arguments.clone()).await == Answer::Allow
+            match confirm(name.to_string(), arguments.clone()).await {
+                Ok(answer) => answer == Answer::Allow,
+                Err(error) => {
+                    return json!({"isError":true,"route":decision,
+                    "code":error.code,"text":error.message})
+                }
+            }
         }
     };
     if !allowed {

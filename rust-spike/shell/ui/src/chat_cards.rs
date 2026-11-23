@@ -61,6 +61,8 @@ pub fn ApprovalCard(card: ApprovalView, on_thread: Callback<ChatThread>) -> impl
                     {if complete {
                         view! {
                             <p class=if permission { "action-request-target action-request-summary" } else { "action-request-target" }>{card.target}</p>
+                            <div class=if permission { "" } else { "action-request-details" }
+                                role="region" aria-label="Complete action details" tabindex="0">
                             <dl class="action-request-fields">
                                 {card.fields.into_iter().map(|field| view! {
                                     <div class="action-request-field">
@@ -84,6 +86,7 @@ pub fn ApprovalCard(card: ApprovalView, on_thread: Callback<ChatThread>) -> impl
                                     <p class="action-request-preview__body">{content}</p>
                                 </div>
                             })}
+                            </div>
                         }.into_any()
                     } else {
                         view! { <p class="jds-hint action-request-notice" role="status">"Details for this request aren’t available. Reject it and ask Moss again."</p> }.into_any()
@@ -91,10 +94,10 @@ pub fn ApprovalCard(card: ApprovalView, on_thread: Callback<ChatThread>) -> impl
                     <div class="action-request-actions">
                         {complete.then(|| view! {
                             <button type="button" class=if card.danger { "jds-btn jds-btn--danger" } else { "jds-btn jds-btn--primary" }
-                                disabled=move || busy.get() on:click=move |_| resolve(Decision::Approve)>"Approve"</button>
+                                disabled=move || busy.get() on:click=move |_| resolve(Decision::Approve)>{if card.batch { "Approve entire batch" } else { "Approve" }}</button>
                         })}
                         <button type="button" class="jds-btn jds-btn--secondary" disabled=move || busy.get()
-                            on:click=move |_| resolve(Decision::Reject)>"Reject"</button>
+                            on:click=move |_| resolve(Decision::Reject)>{if card.batch { "Reject entire batch" } else { "Reject" }}</button>
                     </div>
                     <Show when=move || busy.get()><p class="jds-hint" role="status">"Resolving…"</p></Show>
                     {move || error.get().map(|e| view! { <p class="form-error" role="status">{e}</p> })}

@@ -90,3 +90,23 @@ moss-goals-today {
 .package-section-host::backdrop {
   background: var(--scrim);
 }
+
+/* One complete module disclosure scrolls independently; its decision controls stay outside. */
+.action-request-details {
+  max-block-size: min(55vh, 32rem);
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  scrollbar-gutter: stable;
+}
+.action-request-details .action-request-preview__body {
+  max-height: none;
+  overflow: visible;
+}
+@media (max-width: 600px) {
+  .action-request-details .action-request-field {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .action-request-card .action-request-actions {
+    flex-direction: column;
+  }
+}
