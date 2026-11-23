@@ -471,6 +471,10 @@ export function createMeetingOutputRuntime(deps: {
       await requireModules(actor.actorUserId);
       const template = getMeetingOutputTemplate(input.template.id, input.template.version);
       if (!template) throw new MeetingOutputError("meeting_output_invalid_input", 400);
+      // Reject invalid configuration before optional owner-context reads can wait
+      // on a cold embedding model. Dispatch still revalidates this route below.
+      const selected = await deps.dataContext.withDataContext(actor, (db) => resolve(db));
+      modelName = selected.model.provider_model_id;
       // JSON escaping prevents source text from closing a markup delimiter. Text remains
       // untrusted data; neither prompt wording nor generated output authorizes any action.
       const escapeData = (value: unknown) =>
@@ -604,8 +608,6 @@ export function createMeetingOutputRuntime(deps: {
               input.inputs,
               (candidate) => promptBytes(candidate) <= piecePromptTarget
             );
-      const selected = await deps.dataContext.withDataContext(actor, (db) => resolve(db));
-      modelName = selected.model.provider_model_id;
       if (selected.model.provider_auth_method === "cli") {
         const readiness = await probeCli?.(
           actor.actorUserId,

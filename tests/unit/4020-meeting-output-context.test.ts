@@ -152,6 +152,28 @@ afterEach(() => {
 });
 
 describe("owner context in the summary prompt", () => {
+  it.each([null, { ...model, capabilities: ["chat", "summarization"] }])(
+    "rejects an unusable summary model before waiting for owner context (case %#)",
+    async (selected) => {
+      // A cold embedding model can keep optional Memory recall pending. Invalid
+      // summary configuration must still report recovery without waiting for it.
+      const memory = vi.fn<OwnerContextSources["memory"]>(() => new Promise(() => {}));
+      const ownerProfile = vi.fn<OwnerContextSources["ownerProfile"]>(async () => ({
+        displayName: "Owner",
+        aliases: []
+      }));
+      const h = setup(sources({ memory, ownerProfile }));
+      vi.mocked(AiRepository.prototype.selectChatModelForUser).mockResolvedValue(selected);
+      await expect(
+        h.generator(actor, baseInput(transcriptOf(["Alex will review Orchid."])))
+      ).rejects.toMatchObject({ code: "meeting_output_route_unavailable" });
+      expect(ownerProfile).not.toHaveBeenCalled();
+      expect(memory).not.toHaveBeenCalled();
+      expect(h.fetch).not.toHaveBeenCalled();
+    },
+    1000
+  );
+
   it("adds an escaped ownerContext block with short guidance", async () => {
     const h = setup(
       sources({

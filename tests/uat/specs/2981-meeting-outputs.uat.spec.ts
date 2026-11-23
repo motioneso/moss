@@ -329,6 +329,8 @@ test("reviewed summary versions create independent Tasks and private vault copie
       await test.step("unsupported summary model explains real configuration recovery", async () => {
         // Change the real synthetic model, not a Moss response. The hard pin stays selected;
         // missing structured-output capability must fail before the provider is dispatched.
+        // Keep the cached available UI: refreshing would disable the button and bypass
+        // generation's configuration check, which must not wait for owner-context recall.
         try {
           expect(
             (
