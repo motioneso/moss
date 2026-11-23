@@ -198,8 +198,10 @@ impl Installer {
         config.root_key = transition.next_key.clone();
         next.configuration = Some(config.clone());
         *seen = next;
+        state.apply_revocations();
         state.revision += 1;
         self.catalog.commit(revision, &state)?;
+        self.reconcile_runtime(&state)?;
         config.root_key = transition.next_key;
         catalog.save_metadata(folder.path())?;
         folder.write("configuration.json", &serde_json::to_vec(&config)?)?;

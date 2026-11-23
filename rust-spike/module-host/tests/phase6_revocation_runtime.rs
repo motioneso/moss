@@ -387,3 +387,112 @@ fn a_compromised_publisher_key_cannot_escape_through_another_alias() {
         "file import must reject the same compromised key"
     );
 }
+
+fn manual_off(f: &Fixture) {
+    let mut state = f.saved.load().unwrap();
+    let revision = state.revision;
+    state.installed.get_mut("sample.counter").unwrap().disabled =
+        Some("Switched off by an administrator".into());
+    state.revision += 1;
+    f.saved.commit(revision, &state).unwrap();
+}
+
+#[test]
+fn updating_preserves_manual_off() {
+    let (f, host) = Fixture::new();
+    manual_off(&f);
+    let update = f.keys.write(f.registry.path(), "2.0.0", 2, vec![]);
+    let catalog = f.refresh(&host);
+    host.install(&f.a, &catalog, &update, true).unwrap();
+    f.assert_calls(&host, true);
+    assert_eq!(
+        f.saved.load().unwrap().installed["sample.counter"]
+            .disabled
+            .as_deref(),
+        Some("Switched off by an administrator")
+    );
+}
+
+#[test]
+fn restoring_preserves_the_current_manual_off() {
+    let (f, host) = Fixture::new();
+    let update = f.keys.write(f.registry.path(), "2.0.0", 2, vec![]);
+    let catalog = f.refresh(&host);
+    host.install(&f.a, &catalog, &update, true).unwrap();
+    let snapshot = host
+        .snapshots(&f.a)
+        .unwrap()
+        .into_iter()
+        .find(|s| s.previous.as_ref().is_some_and(|m| m.digest == f.digest))
+        .unwrap();
+    manual_off(&f);
+    host.restore_snapshot(&f.a, &snapshot, "Sample counter", true)
+        .unwrap();
+    f.assert_calls(&host, true);
+    assert_eq!(
+        f.saved.load().unwrap().installed["sample.counter"]
+            .disabled
+            .as_deref(),
+        Some("Switched off by an administrator")
+    );
+}
+
+#[test]
+fn root_rotation_applies_blocks_and_lifts_at_the_index_read() {
+    use moss_module_host::registry_manager::{RegistryConfiguration, RootTransition};
+    let (mut f, host) = Fixture::new();
+    host.configure_registry(
+        &f.a,
+        &RegistryConfiguration {
+            id: "sample-registry".into(),
+            source: Source::Folder(f.registry.path().into()),
+            root_key: common::Keys::public(&f.keys.root),
+            first_party_key: common::Keys::public(&f.keys.root),
+        },
+    )
+    .unwrap();
+    for (serial, blocked) in [(2, true), (3, false)] {
+        let next_root = common::Keys::new().root;
+        let transition = RootTransition {
+            registry: "sample-registry".into(),
+            previous_fingerprint: f.saved.load().unwrap().registries["sample-registry"]
+                .root_fingerprint
+                .clone()
+                .unwrap(),
+            next_key: common::Keys::public(&next_root),
+            serial,
+        };
+        let document = serde_json::to_vec(&transition).unwrap();
+        let signature = common::Keys::sign(&f.keys.root, &document);
+        f.keys.root = next_root;
+        f.keys.write(
+            f.registry.path(),
+            "1.0.0",
+            serial,
+            if blocked {
+                vec![Revocation {
+                    target: f.digest.clone(),
+                    reason: "Unsafe package".into(),
+                    level: RevocationLevel::Block,
+                }]
+            } else {
+                vec![]
+            },
+        );
+        if !blocked {
+            let path = f.registry.path().join("registry.json");
+            let mut identity: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+            identity["liftedRevocations"] = serde_json::json!([f.digest]);
+            let bytes = serde_json::to_vec(&identity).unwrap();
+            std::fs::write(path, &bytes).unwrap();
+            std::fs::write(
+                f.registry.path().join("registry.json.sig"),
+                common::Keys::sign(&f.keys.root, &bytes),
+            )
+            .unwrap();
+        }
+        host.rotate_root(&f.a, &document, &signature).unwrap();
+        f.assert_calls(&host, blocked);
+    }
+}

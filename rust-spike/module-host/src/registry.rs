@@ -182,13 +182,7 @@ impl SeenRegistry {
                 && self.targets_package(&revocation.target, digest, publisher_id, public_key)
         })
     }
-    pub fn blocked(&self, artifact: &Artifact) -> bool {
-        [&artifact.digest, &artifact.publisher_key].iter().any(|k| {
-            self.revocations
-                .get(*k)
-                .is_some_and(|r| r.level == RevocationLevel::Block)
-        })
-    }
+
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(

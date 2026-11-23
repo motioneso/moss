@@ -32,7 +32,7 @@ export const RUST_MODULE_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] 
   {
     id: "core.modules.registry_revocation",
     description:
-      "An instance administrator can inspect the saved registry reason. A blocked package needs a registry root-signed lift or an approved replacement package; refreshing an index that omits the block cannot clear it. An administrator's separate switch stays off after a registry lift.",
+      "The host saves the registry reason for future module screens. A blocked package needs a registry root-signed lift or an approved replacement package; refreshing an index that omits the block cannot clear it. An administrator's separate switch stays off after a registry lift.",
     path: "/settings?section=instmods",
     scope: "admin"
   },
