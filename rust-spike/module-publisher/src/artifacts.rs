@@ -89,13 +89,13 @@ pub fn catalog(config: &crate::Configuration) -> Result<moss_module_host::regist
 pub fn validate(package: &Package) -> Result<()> {
     use moss_module_host::{
         runtime::{Host, Limits},
-        sql::{self, LegacyInventory},
+        sql::LegacyInventory,
     };
-    sql::check(package, &LegacyInventory::default())?;
-    if let Some(wasm) = package.files.get("code/module.wasm") {
-        Host::new(Limits::default())?.validate(wasm, &package.manifest)?;
-    }
-    Ok(())
+    archive::validate_install(
+        package,
+        &Host::new(Limits::default())?,
+        &LegacyInventory::default(),
+    )
 }
 pub fn verify(config_path: &Path, submission_path: &Path) -> Result<Value> {
     let config = configuration(config_path)?;

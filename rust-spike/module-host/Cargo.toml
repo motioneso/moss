@@ -43,6 +43,9 @@ test-tool-dispatch = []
 # Proof only. Adds controls that weaken the browser's isolation so tests can see each guard fail.
 browser-proof = []
 
+[target.'cfg(unix)'.dependencies]
+keystore = { path = "../keystore" }
+
 [dev-dependencies]
 axum = "0.8"
 moss-email-host = { path = "../../modules/email/host" }

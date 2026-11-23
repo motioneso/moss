@@ -38,6 +38,7 @@ mod module_admin;
 mod module_ai;
 mod module_embedding;
 mod module_install;
+mod module_local;
 mod module_management;
 mod module_operation;
 mod module_sources;

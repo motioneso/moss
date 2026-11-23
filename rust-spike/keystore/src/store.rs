@@ -450,3 +450,90 @@ fn move_aside(path: &Path) -> std::io::Result<PathBuf> {
         }
     }
 }
+
+/// A non-exportable install-local signing key. Only public identity and signatures leave it.
+pub struct LocalSigningKey {
+    installation_id: String,
+    pair: ring::signature::Ed25519KeyPair,
+}
+impl LocalSigningKey {
+    pub fn installation_id(&self) -> &str {
+        &self.installation_id
+    }
+    pub fn public_key(&self) -> String {
+        use ring::signature::KeyPair;
+        STANDARD.encode(self.pair.public_key().as_ref())
+    }
+    pub fn sign(&self, message: &[u8]) -> String {
+        STANDARD.encode(self.pair.sign(message).as_ref())
+    }
+}
+
+/// Reads fresh unlocked host storage; verification never creates or replaces a missing key.
+/// The lock serializes first use across host processes, not just requests in one server.
+pub fn local_signing_key(paths: &Paths, create: bool) -> Result<LocalSigningKey, String> {
+    let State::Unlocked(unlocked) = status(paths) else {
+        return Err("Unlock host secret storage before signing local packages".into());
+    };
+    let path = paths.bundle.with_file_name("install-local-key.json");
+    let lock = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(path.with_extension("lock"))
+        .map_err(|_| "Cannot lock local signing key")?;
+    lock.lock().map_err(|_| "Cannot lock local signing key")?;
+    let cipher = unlocked.keys.ai_cipher();
+    let payload = match fs::read(&path) {
+        Ok(bytes) => {
+            let outer: Value =
+                serde_json::from_slice(&bytes).map_err(|_| "Damaged local signing key")?;
+            let envelope = cipher
+                .parse_envelope(&outer)
+                .map_err(|_| "Damaged local signing key")?;
+            Value::Object(
+                cipher
+                    .decrypt_json(&envelope)
+                    .map_err(|_| "Cannot unlock local signing key")?
+                    .value,
+            )
+        }
+        Err(e) if e.kind() == ErrorKind::NotFound && create => {
+            let pkcs8 =
+                ring::signature::Ed25519KeyPair::generate_pkcs8(&ring::rand::SystemRandom::new())
+                    .map_err(|_| "Cannot generate local signing key")?;
+            let payload = json!({"kind":"moss-install-local-key-v1", "installationId":unlocked.installation_id,
+                "pkcs8":STANDARD.encode(pkcs8.as_ref())});
+            let encrypted = cipher.encrypt_json(payload.as_object().unwrap());
+            write_private(
+                &path,
+                &serde_json::to_vec(&encrypted).map_err(|_| "Cannot seal local signing key")?,
+            )
+            .map_err(|_| "Cannot store local signing key")?;
+            payload
+        }
+        Err(_) => return Err("Local signing key is unavailable".into()),
+    };
+    if payload.get("kind").and_then(Value::as_str) != Some("moss-install-local-key-v1")
+        || payload.get("installationId").and_then(Value::as_str) != Some(&unlocked.installation_id)
+    {
+        return Err("Local signing key belongs to another install".into());
+    }
+    let pkcs8 = STANDARD
+        .decode(
+            payload
+                .get("pkcs8")
+                .and_then(Value::as_str)
+                .ok_or("Damaged local signing key")?,
+        )
+        .map_err(|_| "Damaged local signing key")?;
+    let pair = ring::signature::Ed25519KeyPair::from_pkcs8(&pkcs8)
+        .map_err(|_| "Damaged local signing key")?;
+    Ok(LocalSigningKey {
+        installation_id: unlocked.installation_id,
+        pair,
+    })
+}

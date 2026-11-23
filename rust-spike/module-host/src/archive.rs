@@ -157,3 +157,16 @@ pub fn pack(files: &BTreeMap<String, Vec<u8>>) -> Result<Vec<u8>> {
         9,
     )?)
 }
+
+/// Shared install-time checks for registry and local packages.
+pub fn validate_install(
+    package: &Package,
+    host: &crate::runtime::Host,
+    inventory: &crate::sql::LegacyInventory,
+) -> Result<()> {
+    crate::sql::check(package, inventory)?;
+    if let Some(wasm) = package.files.get("code/module.wasm") {
+        host.validate(wasm, &package.manifest)?;
+    }
+    Ok(())
+}

@@ -107,6 +107,10 @@ impl TrustedRegistry {
         })
     }
     pub fn publisher(&self, key_id: &str, module_id: &str) -> Result<&Publisher> {
+        ensure!(
+            !module_id.starts_with("local."),
+            "Local packages cannot claim registry trust"
+        );
         let key = self
             .identity
             .publishers
