@@ -113,6 +113,10 @@ impl Installer {
         let state = self.catalog.load()?;
         let module = state.installed.get(id).context("Module is not installed")?;
         ensure!(
+            module.visible_to(access),
+            "Module is unavailable for this account"
+        );
+        ensure!(
             module.manifest.accounts.supports_user_disable,
             "This module must stay enabled"
         );

@@ -130,7 +130,7 @@ impl Installer {
         };
         let journal: Journal = serde_json::from_slice(&bytes)?;
         ensure!(
-            crate::manifest::identifier(&journal.module)
+            crate::manifest::package_identifier(&journal.module)
                 && uuid::Uuid::parse_str(&journal.snapshot).is_ok(),
             "Invalid lifecycle journal"
         );
@@ -166,7 +166,8 @@ impl Installer {
         let root = self.root.subdir("snapshots")?;
         for module in root.list("")? {
             ensure!(
-                module.kind == vault::EntryKind::Dir && crate::manifest::identifier(&module.name),
+                module.kind == vault::EntryKind::Dir
+                    && crate::manifest::package_identifier(&module.name),
                 "Invalid snapshot module folder"
             );
             let module_root = root.subdir(&module.name)?;
@@ -268,7 +269,7 @@ impl Installer {
         self.begin_change(&snapshot.module, &backup, Some(module.digest.clone()))?;
         let outcome = (|| {
             self.lifecycle.restore(&snapshot.module, &snapshot.id)?;
-            let package = self.read_package(&module.digest)?;
+            let package = self.read_package_trusted(&module.digest)?;
             let bytes = self.root.subdir("blobs/sha256")?.read(&module.digest)?;
             self.stage(&package, &bytes)?;
             state.retained.remove(&snapshot.module);

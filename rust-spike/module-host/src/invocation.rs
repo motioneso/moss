@@ -74,6 +74,10 @@ impl Installer {
             .installed
             .get(id)
             .context("This module is not installed")?;
+        ensure!(
+            installed.visible_to(&access),
+            "Module is unavailable for this account"
+        );
         ensure!(!installed.is_blocked(), "This module is disabled");
         ensure!(
             self.lifecycle.account_enabled(
@@ -83,7 +87,7 @@ impl Installer {
             )?,
             "This module is switched off for this account"
         );
-        let package = self.read_package(&installed.digest)?;
+        let package = self.read_package_trusted(&installed.digest)?;
         let dir = self
             .root
             .subdir("installed")?

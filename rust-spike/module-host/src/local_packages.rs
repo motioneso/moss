@@ -79,6 +79,10 @@ impl LocalPackages {
             package.manifest.id.starts_with(&prefix),
             "Local package owner or prefix does not match the signed-in account"
         );
+        ensure!(
+            package.manifest.install_wide_kv.is_empty(),
+            "Local packages cannot use install-wide storage"
+        );
         crate::archive::validate_install(
             &package,
             &Host::new(Limits::default())?,

@@ -52,7 +52,7 @@ impl PostgresLifecycle {
     }
     fn snapshot_root(&self, id: &str, snapshot: &str) -> Result<vault::Root> {
         ensure!(
-            crate::manifest::identifier(id) && uuid::Uuid::parse_str(snapshot).is_ok(),
+            crate::manifest::package_identifier(id) && uuid::Uuid::parse_str(snapshot).is_ok(),
             "Invalid snapshot identity"
         );
         Ok(vault::Root::open(
@@ -234,7 +234,7 @@ impl Lifecycle for PostgresLifecycle {
     }
     fn discard_snapshot(&self, id: &str, snapshot: &str) -> Result<()> {
         ensure!(
-            crate::manifest::identifier(id) && uuid::Uuid::parse_str(snapshot).is_ok(),
+            crate::manifest::package_identifier(id) && uuid::Uuid::parse_str(snapshot).is_ok(),
             "Invalid snapshot identity"
         );
         self.runtime.block_on(async {
