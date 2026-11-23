@@ -59,6 +59,8 @@ jobs:
           persist-credentials: false
       - name: Provision the declared toolchain and Wasm targets
         run: rustup toolchain install 1.95.0 --profile minimal --target wasm32-unknown-unknown --target wasm32-wasip2
+      - name: Check reproducible source locations before the full build
+        run: python rust-spike/module-publisher/tools/test_repro_rustc.py
       - name: Build every first-party package with its existing packer
         run: python rust-spike/module-publisher/tools/build_first_party.py .rust-packages
       - name: Record unsigned package digests

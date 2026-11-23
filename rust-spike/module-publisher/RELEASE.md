@@ -36,9 +36,15 @@ while preserving Cargo's output filenames. This gives the local SDK the same
 identity on each runner. For the locked Wasm `wasm_split_helpers` dependency only,
 it also supplies a stable virtual `CARGO_MANIFEST_PATH`: that dependency hashes
 this environment value into its exported version marker. Other crates retain their
-real manifest paths so file-reading macros keep working. The wrapper source digest selects a separate guest/UI
+original manifest environment. The wrapper source digest selects a separate guest/UI
 cache because Cargo does not invalidate outputs when `RUSTC_WRAPPER` changes.
 This wrapper is scoped to these locked first-party graphs, not arbitrary publisher inputs.
+Prefix remapping leaves Windows separators in the remaining source path. The
+wrapper adds exact file mappings for the current crate and generated sources,
+spelling their diagnostic paths with forward slashes. It passes compiler arguments
+through a temporary response file so those mappings cannot exceed Windows' command
+line limit, then removes that file. A compiled Wasm fixture checks path spelling,
+spaces and a large mapping set on every runner before the full package build.
 Unsigned build inputs are retained per platform for investigating a failed comparison.
 The artifact handoff includes hidden paths explicitly and fails if packages are absent.
 
