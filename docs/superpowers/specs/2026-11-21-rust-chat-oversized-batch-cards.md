@@ -1,7 +1,10 @@
 # Rust chat: oversized batch approvals and card errors
 
 - Task: JS-395, follow-up to JS-390 (Finance chat cards).
-- Status: proposed; phase 1 is this spec only. Ben/coordinator approval is required before code.
+- Status: approved for build, 2026-11-22, via coordinator t6n. Ben chose option B: one scrolling card.
+- Ben: “I don’t want users to have to click through all of them before they can approve all.”
+  Approve entire batch and Reject entire batch are available as soon as the full presentation is valid;
+  scrolling, reading progress and card visitation never gate approval.
 - Repository: `~/Jarv1s`. Build on current `origin/main` after approval, including parts 4b/4d.
 
 ## Problem and outcome
@@ -40,8 +43,8 @@ Read on this branch; these are source observations, not executed acceptance resu
 
 | Rank | Option | Assessment |
 | --- | --- | --- |
-| 1 | Several numbered cards inside one approval group | Recommended. Clear item ranges, manageable layout on phones, bounded loading, one decision for the whole batch. More navigation, addressed with progress and Back/Next. |
-| 2 | One scrolling card | Familiar, fewer controls. Long nested scrolling is harder on phones and makes the end easy to miss; virtualization needs accessible navigation and review tracking. |
+| 2 | Several numbered cards inside one approval group | Alternative. Clear item ranges, manageable layout on phones, bounded loading, one decision for the whole batch. More navigation, addressed with progress and Back/Next. |
+| 1 | One scrolling card | Approved recommendation. Familiar, fewer controls. Long nested scrolling is harder on phones and makes the end easy to miss; virtualization needs accessible navigation and complete disclosure. |
 | 3 | Full-width review sheet opened from chat | Most room for very large imports, but adds a modal/screen, focus lifecycle and navigation away from chat. Defer unless real use shows numbered cards inadequate. |
 
 All options share the same backend presentation and one approval ID. Choosing a different layout
@@ -56,7 +59,7 @@ labelled fields. The ellipses describe additional visible/scrollable content, ne
 Use the existing Action request card, type, spacing, button and danger treatments from
 `docs/design-system.md`; no new visual brand. Values wrap at phone width, without horizontal scroll.
 
-### 1. Several cards, one approval group (recommended)
+### A. Several cards, one approval group (alternative)
 
 Desktop, 760px chat area:
 
@@ -71,7 +74,7 @@ Desktop, 760px chat area:
 | | ... complete rows 2–10; scroll this card to its end ...        | |
 | +--------------------------------------------------------------+ |
 | [Back]                         [Review next card]                 |
-| [Approve entire batch — disabled until all cards reviewed]        |
+| [Approve entire batch — available once valid]        |
 | [Reject entire batch]                                            |
 +------------------------------------------------------------------+
 ```
@@ -94,16 +97,15 @@ Phone, 360px viewport (with normal page padding):
 | | ... scroll to row 10 ...   | |
 | +----------------------------+ |
 | [Back] [Review next card]      |
-| [Approve entire batch] locked  |
+| [Approve entire batch] available  |
 | [Reject entire batch]          |
 +--------------------------------+
 ```
 
-Final card replaces Next with “Review complete”; Approve enables only after the full presentation
-is valid and each card's end has been reached. Back and direct card navigation remain available.
-This checks exposure to the details, not that a person read or understood them.
+Back and direct card navigation remain available in this alternative. Approve never depends on
+visiting cards or reaching the end. All options require the full presentation to be valid first.
 
-### 2. One scrolling card
+### B. One scrolling card (approved)
 
 Desktop, 760px:
 
@@ -117,7 +119,7 @@ Desktop, 760px:
 | | Row 60 · all fields                                          | |
 | +--------------------------------------------------------------+ |
 | Reviewed through row 12 of 60                                     |
-| [Approve entire batch — locked until end] [Reject entire batch]   |
+| [Approve entire batch — available once valid] [Reject entire batch]   |
 +------------------------------------------------------------------+
 ```
 
@@ -135,12 +137,12 @@ Phone, 360px:
 | | ... scroll all rows ...    | |
 | +----------------------------+ |
 | Reviewed through row 12       |
-| [Approve entire batch] locked |
+| [Approve entire batch] available |
 | [Reject entire batch]         |
 +--------------------------------+
 ```
 
-### 3. Review sheet opened from chat
+### C. Review sheet opened from chat (alternative)
 
 Desktop, 1000px sheet:
 
@@ -152,7 +154,7 @@ Chat: [Finance wants to import 60 rows] [Review entire batch]
 | Row | Date   | Name   | Account  | Amount | Full details (wrapped)       |
 | 1   | Nov 20 | Market | Everyday | $25.00 | Full note and effects         |
 | ... scroll all rows; no hidden or clipped cells ...                     |
-| [Approve entire batch — locked until reviewed] [Reject entire batch]    |
+| [Approve entire batch — available once valid] [Reject entire batch]    |
 +------------------------------------------------------------------------+
 ```
 
@@ -171,12 +173,12 @@ Chat: [Review entire batch]
 | Amount: $25.00                 |
 | Note: full wrapped text        |
 | ... scroll remaining rows ... |
-| [Approve entire batch] locked  |
+| [Approve entire batch] available  |
 | [Reject entire batch]          |
 +--------------------------------+
 ```
 
-## Recommended host and shell contract
+## Approved host and shell contract
 
 1. Introduce a host-owned `ApprovalPresentation`: shared fixed title/target/danger, one optional
    version, ordered sections with stable item and continuation labels, and a completeness marker.
@@ -204,23 +206,23 @@ Chat: [Review entire batch]
 5. `Book` retains one `Record`, `Action`, expiry and runner ID for the whole group. Store the
    complete parameters server-side; `ApprovalView` exposes summary, page counts and presentation
    identity, with an authenticated page endpoint for full details. No client-supplied params,
-   version, counts or section IDs can mint a grant. Record section exposure server-side against
-   the frozen presentation; approve checks complete preparation and all sections exposed. Reload
-   restores progress from the record. Exposure reports are client-controlled review aids, not a
-   security boundary; complete disclosure, exact-call binding and host rechecks remain mandatory.
-   Expiry or invalidation disables the entire group.
+   version, counts or section IDs can mint a grant. Any optional navigation progress belongs to
+   the frozen presentation only if useful for navigation; approve checks complete preparation,
+   never exposure, scrolling or visitation. Complete disclosure, exact-call binding and host
+   rechecks remain mandatory. Expiry or invalidation disables the entire group.
 6. Keep `consume`'s exact JSON match, actor/open-turn match and single use. Keep offered-tool and
    call-ID checks and host rechecks of current installation, account enablement, policy and pinned
    version. All sections share one Approve/Reject footer. Reject, timeout, changed snapshot or any
    missing section affects the entire batch. One approval dispatches the original tool once;
    presentation paging never invokes a write. Atomic commit/rollback remains the module's batch
    transaction responsibility: do not claim the shared host makes a non-atomic handler atomic.
-7. Use normal page/card scrolling with labelled regions, keyboard-operable Back/Next and direct
-   card navigation. Announce “Card n of m”, put focus at the new card heading, retain visited
-   progress and position, and enable approval only after complete exposure. Long sections scroll
-   to their end before Next records exposure. Reject stays reachable while loading or on failure.
-   On phones use stacked full-width actions and no horizontal tables. Do not add a separate
-   decision per card. Avoid unbounded DOM growth by mounting the current card only.
+7. Render one scrolling card with a labelled, keyboard-scrollable details region. Every row and
+   value is available in full within it. Approve entire batch and Reject entire batch sit outside
+   the scroll region and are usable immediately once the complete presentation is valid. No
+   scroll-to-end, visit-every-card or reading-progress gate. On phones use stacked actions and
+   wrapped values, without horizontal tables. Reuse existing Action request styling and danger
+   treatments. Loading or incomplete/invalid data never offers Approve. Reject remains reachable.
+
 
 ### Size limits beyond the card
 
@@ -297,15 +299,15 @@ Required build evidence (not run or claimed in phase 1):
   builder replies, safe redaction, redaction failure, missing builder, native permissions and an
   actual person's Reject separately.
 - Live installed Finance UI acceptance at desktop and phone widths: inspect first/middle/last
-  cards, long values, review navigation, failure state, Approve/Reject, expiry and final stored
+  rows, long values, scrolling, immediate Approve/Reject, failure state, expiry and final stored
   effects through the real app. Screenshots are real build proof, not these design sketches.
 - Run scoped Rust/format/contract checks and required project gates after implementation. Every
   heavy gate/live run takes the shared heavy-gate flock, with `CARGO_BUILD_JOBS=1` and
   `RUST_TEST_THREADS=1`; scripts/logs go to the task scratch directory specified in the brief.
 
-## Phase 1 exit
+## Phase 1 record and build authorization
 
-Commit this spec, open a draft PR with Release note `Category: N/A`, notify coordinator pane t6n,
-and stop at **Spec ready for Ben**. No implementation, heavy gates, live test, ready/merge request
-or auto-merge in this phase. Recommendation and mockups await approval; the implementation may
-need decomposition once the paged transport seam is reviewed.
+Phase 1 committed the spec and opened draft PR #4441 with Release note `Category: N/A`.
+On 2026-11-22 coordinator t6n relayed Ben’s approval of option B and authorized the build, with
+Approve/Reject immediately available once the entire disclosure is valid. The earlier preference
+for numbered cards and any scroll/visit gate are superseded. Keep auto-merge off.
