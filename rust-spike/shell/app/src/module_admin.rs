@@ -1,6 +1,6 @@
-//! Lets the instance owner install modules from the app. The server never holds the elevated
-//! database login. For each request it asks the database supervisor for it, hands it to a
-//! one-shot `moss-shell install-module` child through the environment, and drops it again.
+//! Lets an authenticated instance administrator manage signed modules through a one-shot
+//! installer child. The supervisor supplies its database login for that child invocation;
+//! management responses project catalog and operation records.
 use axum::{
     extract::State,
     http::StatusCode,
@@ -20,21 +20,12 @@ use std::{
 pub const REGISTRY_FILE: &str = "registry.json";
 const DATABASE_FOLDER: &str = "database";
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct Registry {
-    id: String,
-    folder: Option<PathBuf>,
-    url: Option<String>,
-    root_key: String,
-    first_party_key: String,
-}
-
 pub struct Admin {
     pub platform: Arc<Platform>,
     pub instance: PathBuf,
     /// One install at a time; a second request waits.
-    gate: tokio::sync::Mutex<()>,
+    pub(crate) gate: tokio::sync::Mutex<()>,
+    pub(crate) active: std::sync::Mutex<std::collections::BTreeSet<String>>,
 }
 
 impl Admin {
@@ -43,6 +34,7 @@ impl Admin {
             platform,
             instance,
             gate: tokio::sync::Mutex::new(()),
+            active: Default::default(),
         }
     }
 }
@@ -52,6 +44,7 @@ pub fn routes(admin: Arc<Admin>) -> Router {
         .route("/api/modules", get(list))
         .route("/api/modules/plan", post(plan))
         .route("/api/modules/install", post(install))
+        .merge(crate::module_management::routes())
         .with_state(admin)
 }
 
@@ -60,18 +53,25 @@ pub fn routes(admin: Arc<Admin>) -> Router {
 struct Pick {
     module: String,
     #[serde(default)]
+    source: Option<String>,
+    #[serde(default)]
     approve: bool,
     /// The version the owner reviewed. An approved install must name it.
     #[serde(default)]
     version: Option<String>,
 }
 
-fn say(status: StatusCode, message: &str) -> Response {
+pub(crate) fn say(status: StatusCode, message: &str) -> Response {
     (status, Json(json!({ "error": message }))).into_response()
 }
 
-async fn require_admin(admin: &Admin, access: &AccessContext) -> Result<(), Response> {
-    let refuse = || say(StatusCode::FORBIDDEN, "Only the instance owner can manage modules");
+pub(crate) async fn require_admin(admin: &Admin, access: &AccessContext) -> Result<(), Response> {
+    let refuse = || {
+        say(
+            StatusCode::FORBIDDEN,
+            "Only the instance owner can manage modules",
+        )
+    };
     let cx = DataContext::open(&admin.platform.app, access)
         .await
         .map_err(|_| refuse())?;
@@ -126,15 +126,14 @@ pub(crate) fn elevated_url(instance: &Path) -> Result<String, &'static str> {
         .ok_or("This instance cannot install modules")
 }
 
-fn registry(instance: &Path) -> Result<Registry, &'static str> {
-    let bytes = moss_network::config::private_read(&instance.join(REGISTRY_FILE))
-        .map_err(|_| "No module registry is set up for this server")?;
-    serde_json::from_slice(&bytes).map_err(|_| "The module registry settings are not valid")
-}
-
 /// Runs the installer child and returns its output. Messages are short and never carry an address.
-fn run(instance: &Path, extra: &[String], modules: &[String]) -> Result<String, String> {
-    let registry = registry(instance).map_err(str::to_owned)?;
+fn run(
+    instance: &Path,
+    registry: &crate::module_sources::Registry,
+    extra: &[String],
+    modules: &[String],
+    actor: &str,
+) -> Result<String, String> {
     let url = elevated_url(instance).map_err(str::to_owned)?;
     let exe = std::env::current_exe().map_err(|_| "Cannot find the installer".to_owned())?;
     let mut command = Command::new(exe);
@@ -142,7 +141,8 @@ fn run(instance: &Path, extra: &[String], modules: &[String]) -> Result<String, 
         .arg("install-module")
         .arg("--instance")
         .arg(instance)
-        .args(["--registry-id", &registry.id]);
+        .args(["--registry-id", &registry.id])
+        .args(["--actor", actor]);
     match (&registry.folder, &registry.url) {
         (Some(folder), None) => command.arg("--registry-folder").arg(folder),
         (None, Some(url)) => command.args(["--registry-url", url]),
@@ -174,14 +174,46 @@ fn run(instance: &Path, extra: &[String], modules: &[String]) -> Result<String, 
         .collect())
 }
 
-async fn call(admin: Arc<Admin>, extra: Vec<String>, modules: Vec<String>) -> Response {
+pub(crate) fn run_json(
+    instance: &Path,
+    registry: &crate::module_sources::Registry,
+    extra: &[String],
+    modules: &[String],
+    actor: &str,
+) -> Result<Value, String> {
+    let text = run(instance, registry, extra, modules, actor)?;
+    // Legacy installs print a human result; read-only calls and operations print JSON.
+    Ok(serde_json::from_str(text.lines().last().unwrap_or("")).unwrap_or(json!({"ok":true})))
+}
+
+async fn call(
+    admin: Arc<Admin>,
+    access: AccessContext,
+    source: Option<String>,
+    extra: Vec<String>,
+    modules: Vec<String>,
+) -> Response {
     let _one_at_a_time = admin.gate.lock().await;
+    if let Err(response) = require_admin(&admin, &access).await {
+        return response;
+    }
+    let registry = match crate::module_sources::select(&admin.instance, source.as_deref()) {
+        Ok(registry) => registry,
+        Err(_) => {
+            return say(
+                StatusCode::BAD_REQUEST,
+                "The source registry is not configured",
+            )
+        }
+    };
     let instance = admin.instance.clone();
-    match tokio::task::spawn_blocking(move || run(&instance, &extra, &modules)).await {
-        Ok(Ok(text)) => match serde_json::from_str::<Value>(text.lines().last().unwrap_or("")) {
-            Ok(value) => Json(value).into_response(),
-            Err(_) => Json(json!({ "ok": true })).into_response(),
-        },
+    let actor = access.actor_user_id().to_string();
+    match tokio::task::spawn_blocking(move || {
+        run_json(&instance, &registry, &extra, &modules, &actor)
+    })
+    .await
+    {
+        Ok(Ok(value)) => Json(value).into_response(),
         Ok(Err(message)) => say(StatusCode::UNPROCESSABLE_ENTITY, &message),
         Err(_) => say(StatusCode::INTERNAL_SERVER_ERROR, "The installer stopped"),
     }
@@ -194,11 +226,13 @@ async fn list(
     if let Err(refused) = require_admin(&admin, &access).await {
         return refused;
     }
-    call(admin, vec!["--list".into()], vec![]).await
+    call(admin, access, None, vec!["--list".into()], vec![]).await
 }
 
-fn valid_name(name: &str) -> bool {
-    name.bytes().next().is_some_and(|b| b.is_ascii_alphanumeric())
+pub(crate) fn valid_name(name: &str) -> bool {
+    name.bytes()
+        .next()
+        .is_some_and(|b| b.is_ascii_alphanumeric())
         && name.len() <= 100
         && name
             .bytes()
@@ -216,7 +250,14 @@ async fn plan(
     if !valid_name(&pick.module) {
         return say(StatusCode::BAD_REQUEST, "Invalid module name");
     }
-    call(admin, vec!["--plan".into()], vec![pick.module]).await
+    call(
+        admin,
+        access,
+        pick.source,
+        vec!["--plan".into()],
+        vec![pick.module],
+    )
+    .await
 }
 
 /// Without `approve` the installer refuses a module that asks for permissions, so the owner
@@ -238,9 +279,13 @@ async fn install(
         let Some(version) = pick.version.as_deref().filter(|v| valid_name(v)) else {
             return say(StatusCode::BAD_REQUEST, "Name the version you reviewed");
         };
-        extra.extend(["--approve".to_owned(), "--version".to_owned(), version.to_owned()]);
+        extra.extend([
+            "--approve".to_owned(),
+            "--version".to_owned(),
+            version.to_owned(),
+        ]);
     }
-    call(admin, extra, vec![pick.module]).await
+    call(admin, access, pick.source, extra, vec![pick.module]).await
 }
 
 #[cfg(test)]

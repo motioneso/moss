@@ -1,3 +1,4 @@
+import { RUST_MODULE_FEATURES, RUST_MODULE_REMEDIATIONS } from "./app-map-rust-modules.js";
 import type { AiModelCapability, AiModelTier } from "./ai-types.js";
 import { RUST_CHAT_REMEDIATIONS } from "./app-map-rust-chat.js";
 import {
@@ -90,15 +91,7 @@ export const RUST_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
 export const CORE_APP_FEATURES: readonly (AppMapItem & {
   readonly id: string;
   readonly description: string;
-})[] = [
-  {
-    moduleId: "core",
-    id: "rust-module-chat",
-    runtime: "rust",
-    description:
-      "Moss can use the chat tools of modules you have installed and switched on for your account. Tools with a declared input schema are available. Scratchpad can read your private note through chat. Commitments can list suggestions and show their evidence. Chat asks before deleting, sending outside your account, or pinned actions; approve or reject the card in the chat drawer. After you approve a card, Moss is told you approved it, and when a setting lets an action run without a card it is told that too, so it never says no approval was needed. Agent tool permissions also show a card. Outcomes say Approved, You declined or Timed out. If approval timed out or is no longer available, ask Moss again. Plain writes run unless you chose to ask first, and show Done with the labelled before and after values from the tool. Codex keeps its starting tool list until a fresh conversation."
-  }
-];
+})[] = [...RUST_MODULE_FEATURES];
 
 export const CORE_APP_SCREENS: readonly CoreAppSurfaceDeclaration[] = [
   {
@@ -859,6 +852,7 @@ export const CORE_APP_REMEDIATIONS: readonly CoreAppRemediationDeclaration[] = [
     path: "/",
     scope: "user"
   },
+  ...RUST_MODULE_REMEDIATIONS,
   {
     id: "core.modules.check_page_result",
     description:

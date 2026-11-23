@@ -1,7 +1,7 @@
-//! The instance owner installs People through the server's own module endpoints, with the
-//! permission prompt first. The server holds no elevated login; a stand-in for the database
-//! supervisor hands one to each installer run. Real HTTPS executable.
+//! Real HTTPS server and signed registry fixtures for the Phase 6 management boundary.
 mod common;
+#[path = "phase6_catalog_and_review/fixtures.rs"]
+mod fixtures;
 use serde_json::{json, Value};
 use std::{
     fs,
@@ -91,7 +91,7 @@ fn phase6_catalog_and_review() {
     );
     let registry = root.join("registry");
     let keys = common::Keys::new();
-    let first = keys.write(&registry, "1.0.0", 1, vec![]);
+    let first = fixtures::publish(&keys, &registry, "1.0.0", 1);
     private(
         &root.join("registry.json"),
         &json!({"id":"sample-registry","folder":registry,"rootKey":common::Keys::public(&keys.root),"firstPartyKey":common::Keys::public(&keys.publisher)}),
@@ -100,7 +100,12 @@ fn phase6_catalog_and_review() {
     let supervisor = root.join("supervisor.sh");
     fs::write(
         &supervisor,
-        format!("#!/bin/sh\necho '{}'\n", json!({"install_url": bootstrap_url})),
+        format!(
+            "#!/bin/sh\nwhile [ -e '{}' ]; do touch '{}'; sleep 0.1; done\necho '{}'\n",
+            root.join("hold-installer").display(),
+            root.join("installer-waiting").display(),
+            json!({"install_url": bootstrap_url})
+        ),
     )
     .unwrap();
     {
@@ -113,7 +118,6 @@ fn phase6_catalog_and_review() {
         .timeout(Duration::from_secs(60))
         .build()
         .unwrap();
-    let log = |path: &str| fs::read_to_string(root.join(path)).unwrap_or_default();
     let mut command = Command::new(std::env::var("JS170_SERVER").unwrap());
     command
         .env("MOSS_DB_PROGRAM", &supervisor)
@@ -155,15 +159,22 @@ fn phase6_catalog_and_review() {
         .to_owned();
     use reqwest::Method;
     let api = |method: reqwest::Method, path: &str, body: Option<Value>, cookie: Option<&str>| {
-        let mut request = client.request(method, format!("{origin}{path}")).header("origin", &origin);
+        let mut request = client
+            .request(method, format!("{origin}{path}"))
+            .header("origin", &origin);
         if let Some(cookie) = cookie {
             request = request.header("cookie", cookie);
         }
         if let Some(body) = body {
             request = request.json(&body);
         }
-        let Ok(response) = request.send() else { return (0, Value::Null) };
-        (response.status().as_u16(), response.json::<Value>().unwrap_or(Value::Null))
+        let Ok(response) = request.send() else {
+            return (0, Value::Null);
+        };
+        (
+            response.status().as_u16(),
+            response.json::<Value>().unwrap_or(Value::Null),
+        )
     };
     assert_eq!(api(Method::GET, "/api/modules/catalog", None, None).0, 401);
     let (status, catalog) = api(Method::GET, "/api/modules/catalog", None, Some(&cookie));
@@ -172,40 +183,175 @@ fn phase6_catalog_and_review() {
     assert_eq!(catalog["modules"][0]["digest"], first.digest);
     assert_eq!(catalog["modules"][0]["source"], "sample-registry");
     let review = || {
-        let (status, value) = api(Method::POST, "/api/modules/review", Some(json!({"module":"sample.counter","source":"sample-registry"})), Some(&cookie));
+        let (status, value) = api(
+            Method::POST,
+            "/api/modules/review",
+            Some(json!({"module":"sample.counter","source":"sample-registry"})),
+            Some(&cookie),
+        );
         assert_eq!(status, 200, "review contract: {value}");
         value
     };
+    let (status, legacy_list) = api(Method::GET, "/api/modules", None, Some(&cookie));
+    assert_eq!(status, 200, "{legacy_list}");
+    assert_eq!(legacy_list["registry"], "sample-registry");
+    let (status, legacy_plan) = api(
+        Method::POST,
+        "/api/modules/plan",
+        Some(json!({"module":"sample.counter"})),
+        Some(&cookie),
+    );
+    assert_eq!(status, 200, "{legacy_plan}");
+    assert_eq!(legacy_plan["version"], "1.0.0");
+    assert_eq!(
+        api(
+            Method::POST,
+            "/api/modules/install",
+            Some(json!({"module":"sample.counter"})),
+            Some(&cookie)
+        )
+        .0,
+        422
+    );
+    assert_eq!(
+        api(
+            Method::POST,
+            "/api/modules/install",
+            Some(json!({"module":"sample.counter","approve":true,"version":"0.0.1"})),
+            Some(&cookie)
+        )
+        .0,
+        422
+    );
     let reviewed = review();
     assert_eq!(reviewed["review"]["digest"], first.digest);
-    assert!(reviewed["review"]["capabilities"].as_array().is_some_and(|v| !v.is_empty()));
+    assert!(!serde_json::to_string(&reviewed)
+        .unwrap()
+        .contains(&bootstrap_url));
+    assert!(!serde_json::to_string(&catalog)
+        .unwrap()
+        .contains(&bootstrap_url));
+    assert!(reviewed["review"]["capabilities"]
+        .as_array()
+        .is_some_and(|v| !v.is_empty()));
     assert!(reviewed["review"]["migrations"].is_array());
     let operation = reviewed["id"].as_str().unwrap();
     let execute_path = format!("/api/modules/operations/{operation}/execute");
     let status_path = format!("/api/modules/operations/{operation}");
-    // An account that cannot manage modules cannot inspect or execute the owner's operation.
-    let signup = client.post(format!("{origin}/api/auth/sign-up/email")).header("origin", &origin)
-        .json(&json!({"name":"Member","email":"member@example.test","password":"temporary-member-password-js403"})).send().unwrap();
-    assert_eq!(signup.status(), 200);
-    let member = signup.headers()["set-cookie"].to_str().unwrap().split(';').next().unwrap().to_owned();
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let (db, connection) = runtime
+        .block_on(tokio_postgres::connect(
+            &bootstrap_url,
+            tokio_postgres::NoTls,
+        ))
+        .unwrap();
+    runtime.spawn(async move {
+        connection.await.unwrap();
+    });
+    // Setup only creates one owner; seed a member with the owner's disposable password hash,
+    // then obtain its session through the real sign-in route (as other installed gates do).
+    let owner_id: uuid::Uuid = runtime
+        .block_on(db.query_one(
+            "SELECT id::text FROM app.users WHERE email='bootstrap-owner@example.test'",
+            &[],
+        ))
+        .unwrap()
+        .get::<_, String>(0)
+        .parse()
+        .unwrap();
+    let member_id = uuid::Uuid::new_v4();
+    runtime.block_on(async {
+        db.execute("INSERT INTO app.users(id,name,email,email_verified,is_instance_admin,status) VALUES($1,'Member','member@example.test',false,false,'active')", &[&member_id]).await.unwrap();
+        db.execute("INSERT INTO app.auth_accounts (id,account_id,provider_id,user_id,password,created_at,updated_at) SELECT gen_random_uuid(),$1::uuid::text,'credential',$1::uuid,password,now(),now() FROM app.auth_accounts WHERE user_id=$2::uuid AND provider_id='credential'", &[&member_id,&owner_id]).await.unwrap();
+    });
+    let signup = client.post(format!("{origin}/api/auth/sign-in/email")).header("origin", &origin)
+        .json(&json!({"email":"member@example.test","password":"temporary-bootstrap-password-179-not-a-real-secret"})).send().unwrap();
+    assert_eq!(signup.status(), 200, "member sign-in");
+    let member = signup.headers()["set-cookie"]
+        .to_str()
+        .unwrap()
+        .split(';')
+        .next()
+        .unwrap()
+        .to_owned();
     for path in ["/api/modules/catalog", &status_path] {
         assert_eq!(api(Method::GET, path, None, Some(&member)).0, 403);
     }
-    assert_eq!(api(Method::POST, &execute_path, Some(json!({"approve":true})), Some(&member)).0, 403);
-    assert_eq!(api(Method::POST, &execute_path, Some(json!({"approve":false})), Some(&cookie)).0, 400);
+    assert_eq!(
+        api(
+            Method::POST,
+            &execute_path,
+            Some(json!({"approve":true})),
+            Some(&member)
+        )
+        .0,
+        403
+    );
+    runtime
+        .block_on(db.execute(
+            "UPDATE app.users SET is_instance_admin=true WHERE id=$1",
+            &[&member_id],
+        ))
+        .unwrap();
+    assert_eq!(
+        api(Method::GET, &status_path, None, Some(&member)).0,
+        403,
+        "another admin cannot read the review"
+    );
+    assert_eq!(
+        api(
+            Method::POST,
+            &execute_path,
+            Some(json!({"approve":true})),
+            Some(&member)
+        )
+        .0,
+        403,
+        "another admin cannot execute the review"
+    );
+    runtime
+        .block_on(db.execute(
+            "UPDATE app.users SET is_instance_admin=false WHERE id=$1",
+            &[&member_id],
+        ))
+        .unwrap();
+    assert_eq!(
+        api(
+            Method::POST,
+            &execute_path,
+            Some(json!({"approve":false})),
+            Some(&cookie)
+        )
+        .0,
+        400
+    );
     // The queued operation and review survive server restart.
-    server.0.kill().unwrap(); server.0.wait().unwrap();
+    server.0.kill().unwrap();
+    server.0.wait().unwrap();
     server = Server(command.spawn().unwrap());
     let deadline = Instant::now() + Duration::from_secs(30);
     loop {
-        if api(Method::GET, "/api/hello", None, None).0 == 200 { break; }
+        if api(Method::GET, "/api/hello", None, None).0 == 200 {
+            break;
+        }
         assert!(Instant::now() < deadline);
         std::thread::sleep(Duration::from_millis(100));
     }
-    assert_eq!(api(Method::GET, &status_path, None, Some(&cookie)).1, reviewed);
-    let execute = || api(Method::POST, &execute_path, Some(json!({"approve":true})), Some(&cookie));
+    assert_eq!(
+        api(Method::GET, &status_path, None, Some(&cookie)).1,
+        reviewed
+    );
+    let execute = || {
+        api(
+            Method::POST,
+            &execute_path,
+            Some(json!({"approve":true})),
+            Some(&cookie),
+        )
+    };
     std::thread::scope(|scope| {
-        let one = scope.spawn(&execute); let two = scope.spawn(&execute);
+        let one = scope.spawn(&execute);
+        let two = scope.spawn(&execute);
         for result in [one.join().unwrap(), two.join().unwrap()] {
             assert_eq!(result.0, 202, "{result:?}");
             assert_eq!(result.1["id"], operation);
@@ -214,49 +360,231 @@ fn phase6_catalog_and_review() {
     let wait = |id: &str| {
         let deadline = Instant::now() + Duration::from_secs(90);
         loop {
-            let (status, value) = api(Method::GET, &format!("/api/modules/operations/{id}"), None, Some(&cookie));
+            let (status, value) = api(
+                Method::GET,
+                &format!("/api/modules/operations/{id}"),
+                None,
+                Some(&cookie),
+            );
             assert_eq!(status, 200, "{value}");
-            if ["succeeded", "failed"].contains(&value["stage"].as_str().unwrap()) { break value; }
+            if ["succeeded", "failed"].contains(&value["stage"].as_str().unwrap()) {
+                break value;
+            }
             assert!(Instant::now() < deadline, "operation timed out: {value}");
             std::thread::sleep(Duration::from_millis(100));
         }
     };
     let completed = wait(operation);
     assert_eq!(completed["stage"], "succeeded", "{completed}");
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        let health = api(
+            Method::GET,
+            "/api/m/sample.counter/health",
+            None,
+            Some(&cookie),
+        );
+        if health.0 == 200 {
+            assert_eq!(health.1["live"], true);
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "installed guest must serve its real route: {health:?}"
+        );
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let files = vault::Root::create(&root.join("modules/modules/files")).unwrap();
+    let module_files = files.create_subdir("sample.counter").unwrap();
+    let access = access_context::AccessContext::new(owner_id, "phase6-preserved-data");
+    let data = vault::VaultContext::for_module_files(&module_files, &access).unwrap();
+    data.write(
+        "kv.json",
+        br#"{"counter":{"marker":"kept across refused update"}}"#,
+    )
+    .unwrap();
+    let revision = || {
+        runtime
+            .block_on(db.query_one(
+                "SELECT revision FROM moss_modules.catalog WHERE id=true",
+                &[],
+            ))
+            .unwrap()
+            .get::<_, i64>(0)
+    };
+    // Recheck after the server gate waits, and inside a child started after role revocation.
+    let pending_auth = review();
+    let queued_auth = review();
+    fs::write(root.join("hold-installer"), b"hold").unwrap();
+    let execute_review = |value: &Value| {
+        api(
+            Method::POST,
+            &format!(
+                "/api/modules/operations/{}/execute",
+                value["id"].as_str().unwrap()
+            ),
+            Some(json!({"approve":true})),
+            Some(&cookie),
+        )
+    };
+    assert_eq!(execute_review(&pending_auth).0, 202);
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while !root.join("installer-waiting").exists() {
+        assert!(
+            Instant::now() < deadline,
+            "installer should reach supervisor"
+        );
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    assert_eq!(execute_review(&queued_auth).0, 202);
+    assert_eq!(
+        api(
+            Method::GET,
+            &format!(
+                "/api/modules/operations/{}",
+                queued_auth["id"].as_str().unwrap()
+            ),
+            None,
+            Some(&cookie)
+        )
+        .1["stage"],
+        "queued"
+    );
+    runtime.block_on(db.execute("UPDATE app.users SET is_instance_admin=false WHERE email='bootstrap-owner@example.test'", &[])).unwrap();
+    assert_eq!(execute_review(&queued_auth).0, 403);
+    fs::remove_file(root.join("hold-installer")).unwrap();
+    // While authorization is revoked, inspect only the private host journal to await completion.
+    for value in [&pending_auth, &queued_auth] {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            let saved: Value = serde_json::from_slice(
+                &fs::read(
+                    root.join("module-operations")
+                        .join(format!("{}.json", value["id"].as_str().unwrap())),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+            if saved["view"]["stage"] == "failed" {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "revoked operation must fail: {saved}"
+            );
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+    runtime.block_on(db.execute("UPDATE app.users SET is_instance_admin=true WHERE email='bootstrap-owner@example.test'", &[])).unwrap();
+    let before_retry = revision();
     assert_eq!(execute().1, completed, "retry returns the same result");
+    assert_eq!(revision(), before_retry, "retry must not activate again");
     // A second trusted source remains distinct, even for the same module and publisher.
     let second_dir = root.join("second-registry");
-    keys.write(&second_dir, "1.0.0", 1, vec![]);
-    let mut identity: Value = serde_json::from_slice(&fs::read(second_dir.join("registry.json")).unwrap()).unwrap();
+    fixtures::publish(&keys, &second_dir, "1.0.0", 1);
+    let mut identity: Value =
+        serde_json::from_slice(&fs::read(second_dir.join("registry.json")).unwrap()).unwrap();
     identity["id"] = json!("second-registry");
     let bytes = serde_json::to_vec(&identity).unwrap();
     fs::write(second_dir.join("registry.json"), &bytes).unwrap();
-    fs::write(second_dir.join("registry.json.sig"), common::Keys::sign(&keys.root, &bytes)).unwrap();
+    fs::write(
+        second_dir.join("registry.json.sig"),
+        common::Keys::sign(&keys.root, &bytes),
+    )
+    .unwrap();
     fs::remove_file(root.join("registry.json")).unwrap();
-    private(&root.join("registry.json"), &json!({"registries":[
-        {"id":"sample-registry","folder":registry,"rootKey":common::Keys::public(&keys.root),"firstPartyKey":common::Keys::public(&keys.publisher)},
-        {"id":"second-registry","folder":second_dir,"rootKey":common::Keys::public(&keys.root),"firstPartyKey":common::Keys::public(&keys.publisher)}
-    ]}));
+    private(
+        &root.join("registry.json"),
+        &json!({"registries":[
+            {"id":"sample-registry","folder":registry,"rootKey":common::Keys::public(&keys.root),"firstPartyKey":common::Keys::public(&keys.publisher)},
+            {"id":"second-registry","folder":second_dir,"rootKey":common::Keys::public(&keys.root),"firstPartyKey":common::Keys::public(&keys.publisher)}
+        ]}),
+    );
     let (status, catalog) = api(Method::GET, "/api/modules/catalog", None, Some(&cookie));
     assert_eq!(status, 200, "{catalog}");
     assert_eq!(catalog["sources"].as_array().unwrap().len(), 2);
     assert_eq!(catalog["modules"].as_array().unwrap().len(), 2);
-    assert_eq!(api(Method::POST, "/api/modules/review", Some(json!({"module":"sample.counter","source":"missing"})), Some(&cookie)).0, 400);
-    // Review v2, change its bytes after review, and preserve the running v1 on refusal.
-    let next = keys.write(&registry, "2.0.0", 2, vec![]);
+    assert_eq!(
+        api(
+            Method::POST,
+            "/api/modules/review",
+            Some(json!({"module":"sample.counter","source":"missing"})),
+            Some(&cookie)
+        )
+        .0,
+        400
+    );
+    // A newer signed selection cannot inherit approval of the previously reviewed digest.
+    let next = fixtures::publish(&keys, &registry, "2.0.0", 2);
     let stale = review();
     assert_eq!(stale["review"]["digest"], next.digest);
-    fs::write(registry.join(format!("packages/{}.mosspkg", next.digest)), b"changed after review").unwrap();
+    let newest = fixtures::publish(&keys, &registry, "3.0.0", 3);
+    let stale_id = stale["id"].as_str().unwrap();
+    assert_eq!(
+        api(
+            Method::POST,
+            &format!("/api/modules/operations/{stale_id}/execute"),
+            Some(json!({"approve":true})),
+            Some(&cookie)
+        )
+        .0,
+        202
+    );
+    let stale_result = wait(stale_id);
+    assert_eq!(
+        stale_result["stage"], "failed",
+        "new signed bytes must not inherit review: {stale_result}"
+    );
+    // Even the reviewed filename must be hashed again when execution downloads its bytes.
+    let stale = review();
+    assert_eq!(stale["review"]["digest"], newest.digest);
+    fs::write(
+        registry.join(format!("packages/{}.mosspkg", newest.digest)),
+        b"changed after review",
+    )
+    .unwrap();
     let id = stale["id"].as_str().unwrap();
-    assert_eq!(api(Method::POST, &format!("/api/modules/operations/{id}/execute"), Some(json!({"approve":true})), Some(&cookie)).0, 202);
+    assert_eq!(
+        api(
+            Method::POST,
+            &format!("/api/modules/operations/{id}/execute"),
+            Some(json!({"approve":true})),
+            Some(&cookie)
+        )
+        .0,
+        202
+    );
     let failed = wait(id);
-    assert_eq!(failed["stage"], "failed", "changed bytes must refuse: {failed}");
+    assert_eq!(
+        failed["stage"], "failed",
+        "changed bytes must refuse: {failed}"
+    );
     let (_, catalog) = api(Method::GET, "/api/modules/catalog", None, Some(&cookie));
     assert_eq!(catalog["modules"][0]["installedDigest"], first.digest);
-    server.0.kill().unwrap(); server.0.wait().unwrap();
+    assert_eq!(
+        api(
+            Method::GET,
+            "/api/m/sample.counter/health",
+            None,
+            Some(&cookie)
+        )
+        .0,
+        200,
+        "old signed guest remains callable after refusal"
+    );
+    assert!(data
+        .read_to_string("kv.json")
+        .unwrap()
+        .contains("kept across refused update"));
+    server.0.kill().unwrap();
+    server.0.wait().unwrap();
     server = Server(command.spawn().unwrap());
+    assert!(server.0.try_wait().unwrap().is_none());
     std::thread::sleep(Duration::from_secs(2));
-    assert_eq!(api(Method::GET, &status_path, None, Some(&cookie)).1, completed);
+    assert_eq!(
+        api(Method::GET, &status_path, None, Some(&cookie)).1,
+        completed
+    );
     println!("PASS phase6_catalog_and_review: signed sources, review, auth, concurrent execution, restart and changed bytes refusal with old digest retained");
     println!("NOT PROVEN: UI, remote HTTPS registry, process kill during SQL, three-OS behavior");
 }
