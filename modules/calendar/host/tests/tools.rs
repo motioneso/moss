@@ -18,6 +18,21 @@ use std::{
 use support::Fixture;
 use uuid::Uuid;
 
+fn check_draft_receipt(reply: &mut Value, before: &Value, after: &Value) {
+    let changes = reply["ok"]["data"]
+        .as_object_mut()
+        .unwrap()
+        .remove("changed")
+        .expect("A saved draft must report its before and after values");
+    assert_eq!(
+        changes,
+        json!([
+            {"label":"Day-plan blocks","before":before["blocks"].to_string(),"after":after["blocks"].to_string()},
+            {"label":"Evening intent","before":before["eveningIntent"].to_string(),"after":after["eveningIntent"].to_string()}
+        ])
+    );
+}
+
 struct NoAi;
 impl moss_module_host::ai::Intelligence for NoAi {
     fn generate(&self, _: &CallScope, _: &Request) -> anyhow::Result<Value> {
@@ -200,6 +215,7 @@ impl Installed {
         let mut actual = self.call(actor, "calendar.dayPlanDraft", input.clone());
         if expected.get("plan").is_some() {
             let mut plan = self.plan();
+            check_draft_receipt(&mut actual, &before, &plan);
             let original = before["blocks"].as_array().unwrap();
             let mut index = 0;
             for block in plan["blocks"].as_array_mut().unwrap() {
@@ -340,6 +356,7 @@ fn installed_tools_match_production_typescript_and_keep_drafts_untimed() {
             .unwrap();
     });
     let input = json!({"planId":f.plan,"expectedRevision":3});
+    let before = t.plan_on(&day.to_string());
     let expected = t.oracle(f.a, "calendar.dayPlanDraft", &input);
     let mut actual = t.call(f.a, "calendar.dayPlanDraft", input);
     assert!(
@@ -347,6 +364,8 @@ fn installed_tools_match_production_typescript_and_keep_drafts_untimed() {
         "Saved actor timezone was ignored"
     );
     actual["plan"] = t.plan_on(&day.to_string());
+    let after = actual["plan"].clone();
+    check_draft_receipt(&mut actual, &before, &after);
     assert_eq!(actual, expected);
     // An old plan is rejected even at the current revision.
     f.rt.block_on(f.root.execute(

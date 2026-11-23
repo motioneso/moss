@@ -190,9 +190,17 @@ function ts(c: Case): unknown {
       case "heartbeat-revision":
         value = heartbeatRevision(c.value as string[]);
         break;
-      case "event":
-        value = serializeCalendarEvent(c.value as CalendarEvent);
+      case "event": {
+        const event = c.value as CalendarEvent;
+        const count = event.external_metadata?.attendeeCount;
+        // Intentional safety change from the legacy serializer: unknown counts stay unknown.
+        value = {
+          ...serializeCalendarEvent(event),
+          attendeeCount:
+            typeof count === "number" && Number.isSafeInteger(count) && count >= 0 ? count : null
+        };
         break;
+      }
       case "day":
         value = [normalizeLocalDay(c.day), normalizeTimeZone(c.zone)];
         break;

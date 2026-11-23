@@ -1,4 +1,5 @@
 //! Calendar's guest data layer. Actor identity and storage handles belong to the host.
+pub mod chat;
 use moss_module_sdk::{Host, Response, RouteRequest};
 use serde_json::{json, Value};
 
@@ -7,9 +8,11 @@ mod abi;
 pub mod apply;
 pub mod auto_plan;
 pub mod cache;
+pub mod change_approval;
 mod display;
 mod draft_tool;
 pub mod events;
+pub mod execution;
 pub mod heartbeat;
 mod jobs;
 pub mod mirror;
@@ -80,7 +83,8 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
             _ => Err(Error::new(404, "Calendar tool is unavailable")),
         }
         .map_err(|e| e.message)?;
-        return serde_json::to_string(&result).map_err(|_| "Invalid calendar tool response".into());
+        return serde_json::to_string(&chat::completed(&input.tool, result))
+            .map_err(|_| "Invalid calendar tool response".into());
     }
     if kind == "job" {
         let result = jobs::handle(host, payload).map_err(|e| e.message)?;
@@ -100,23 +104,25 @@ pub fn handle(host: &impl Host, kind: &str, payload: &str) -> std::result::Resul
         return Err("Calendar handler is unavailable".into());
     }
     let response = match serde_json::from_str::<RouteRequest>(payload) {
-        Ok(request) => match route(host, request) {
-            Ok(data) => Response::new(200, data),
-            Err(error) => {
-                let mut body = json!({"error":error.message});
-                if let Some(code) = error.code {
-                    body["code"] = json!(code);
-                }
-                Response::new(error.status, body)
+        Ok(request) => route(host, request),
+        Err(_) => Ok(Response::new(400, json!({"error":"Invalid calendar request"}))),
+    };
+    let response = match response {
+        Ok(data) => data,
+        Err(error) => {
+            let mut body = json!({"error":error.message});
+            if let Some(code) = error.code {
+                body["code"] = json!(code);
             }
-        },
-        Err(_) => Response::new(400, json!({"error":"Invalid calendar request"})),
+            Response::new(error.status, body)
+        }
     };
     serde_json::to_string(&response).map_err(|_| "Invalid calendar response".into())
 }
 
 fn api(host: &impl Host, name: &str, input: Value) -> Result<Value> {
     match name {
+        "prepareChatAction" => chat::prepare(host, &input),
         "listEvents" => Ok(json!({"events":events::list(host)?})),
         "getEvent" => {
             #[derive(serde::Deserialize)]
@@ -226,28 +232,30 @@ fn operation_param(request: &RouteRequest) -> String {
     request.params.get("operation_id").cloned().unwrap_or_default()
 }
 
-fn route(host: &impl Host, request: RouteRequest) -> Result<Value> {
+fn route(host: &impl Host, request: RouteRequest) -> Result<Response> {
     let id = request.params.get("id").cloned().unwrap_or_default();
+    let answer = |data: Result<Value>| data.map(|body| Response::new(200, body));
     match (request.method.as_str(), request.path.as_str()) {
-        ("GET", "/events") => api(host, "listEvents", Value::Null),
-        ("GET", "/events/:id") => api(host, "getEvent", json!({"id":id})),
+        ("GET", "/events") => answer(api(host, "listEvents", Value::Null)),
+        ("GET", "/events/:id") => answer(api(host, "getEvent", json!({"id":id}))),
         ("GET", "/day-plan") => {
             let query = original_day(host, json!(request.query), false)?;
-            saved_read::read(host, serde_json::from_value(query)?)
+            answer(saved_read::read(host, serde_json::from_value(query)?))
         }
         ("POST", "/day-plans") => {
             let body = original_day(host, request.body, false)?;
-            plans::create(host, serde_json::from_value(body)?)
+            answer(plans::create(host, serde_json::from_value(body)?))
         }
         ("PATCH", "/day-plans/:id/draft") => {
             let body = original_day(host, request.body, true)?;
             let mut input: plans::Save = serde_json::from_value(body)?;
             input.plan_id = id;
-            plans::save(host, input)
+            answer(plans::save(host, input))
         }
-        ("POST", "/day-plans/:id/preview") => preview::preview(host, &id, request.body),
-        ("POST", "/day-plans/:id/apply") => apply::route(host, &id, request.body),
-        ("GET", "/day-plans/:id/operations/:operation_id") => operations::read(
+        ("POST", "/day-plans/:id/preview") => answer(preview::preview(host, &id, request.body)),
+        ("POST", "/day-plans/:id/apply") => apply::route(host, &id, request.body)
+            .map(|(status, body)| Response::new(status, body)),
+        ("GET", "/day-plans/:id/operations/:operation_id") => answer(operations::read(
             host,
             &id,
             request
@@ -255,31 +263,39 @@ fn route(host: &impl Host, request: RouteRequest) -> Result<Value> {
                 .get("operation_id")
                 .map(String::as_str)
                 .unwrap_or(""),
-        ),
-        ("POST", "/day-plans/:id/operations/:operation_id/retry") => {
-            apply::retry_route(&id, &operation_param(&request), request.body)
-        }
-        ("POST", "/day-plans/:id/operations/:operation_id/recover") => {
-            apply::recover_route(&id, &operation_param(&request), request.body)
-        }
-        ("POST", "/day-plans/:id/operations/:operation_id/confirm") => {
-            apply::confirm_route(&id, &operation_param(&request), request.body)
-        }
-        ("GET", "/briefing-settings") => settings::read(host),
-        ("PATCH", "/briefing-settings") => {
-            settings::save(host, settings_http::normalize(request.body)?)
-        }
-        ("GET", "/source-behaviors") => Ok(host.call(
+        )),
+        ("POST", "/day-plans/:id/operations/:operation_id/retry") => answer(apply::retry_route(
+            host,
+            &id,
+            &operation_param(&request),
+            request.body,
+        )),
+        ("POST", "/day-plans/:id/operations/:operation_id/recover") => answer(apply::recover_route(
+            host,
+            &id,
+            &operation_param(&request),
+            request.body,
+        )),
+        ("POST", "/day-plans/:id/operations/:operation_id/confirm") => answer(apply::confirm_route(
+            host,
+            &id,
+            &operation_param(&request),
+            request.body,
+        )),
+        ("GET", "/briefing-settings") => answer(settings::read(host)),
+        ("PATCH", "/briefing-settings") => answer(settings::save(
+            host,
+            settings_http::normalize(request.body)?,
+        )),
+        ("GET", "/source-behaviors") => answer(Ok(host.call(
             "kv",
             "get",
             "calendar.source-behaviors",
             json!({}),
-        )?),
-        ("PATCH", "/source-behaviors") => {
-            set_source_switches(host, request.body)
-        }
-        ("GET", "/display-settings") => display::read(host),
-        ("PATCH", "/display-settings") => display::save(host, request.body),
+        )?)),
+        ("PATCH", "/source-behaviors") => answer(set_source_switches(host, request.body)),
+        ("GET", "/display-settings") => answer(display::read(host)),
+        ("PATCH", "/display-settings") => answer(display::save(host, request.body)),
         _ => Err(Error::new(404, "Calendar data operation not found")),
     }
 }

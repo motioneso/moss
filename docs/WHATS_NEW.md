@@ -29,6 +29,22 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-11-22
+
+#### Fixed
+
+- **Sports briefing failures on busy nights.** The daily sports briefing no longer fails on nights with a lot of live games. [PR #4449](https://github.com/motioneso/moss/pull/4449)
+
+#### Added
+
+- **Review and save your day plan.** You can adjust proposed task blocks, add them to your calendar, and confirm moves or removals. [PR #4454](https://github.com/motioneso/moss/pull/4454)
+
+### 2026-11-21
+
+#### Fixed
+
+- **Moss knows when you approved an action.** When you approve an action card in chat, Moss now knows you approved it instead of saying no approval was needed. [PR #4442](https://github.com/motioneso/moss/pull/4442)
+
 ### 2026-11-19
 
 #### Added

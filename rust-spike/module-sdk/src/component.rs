@@ -64,6 +64,12 @@ pub mod ports {
         "feedback",
         "moss:module/feedback@1.0.0"
     );
+    port!(
+        APPROVALS,
+        approvals,
+        "approvals",
+        "moss:module/approvals@1.0.0"
+    );
     port!(TOOLS, tools, "tools", "moss:module/tools@1.0.0");
     port!(
         ACTION_POLICY,

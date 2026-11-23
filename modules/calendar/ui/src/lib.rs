@@ -4,8 +4,13 @@ mod browser;
 mod event_details;
 pub mod model;
 #[cfg(target_arch = "wasm32")]
+mod review_controller;
+pub mod review_model;
+#[cfg(target_arch = "wasm32")]
 mod today;
 pub mod today_model;
+#[cfg(target_arch = "wasm32")]
+mod today_review;
 pub mod toolbar;
 pub mod views;
 

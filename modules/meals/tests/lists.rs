@@ -82,7 +82,16 @@ fn list_inputs_are_checked_with_the_old_messages() {
 fn building_from_a_plan_makes_lines_with_meal_labels_and_follows_the_pantry() {
     let f = Fake::new();
     planned(&f);
-    let built = f.ok("meals.list.build", json!({"planId":PLAN}));
+    let mut built = f.ok("meals.list.build", json!({"planId":PLAN}));
+    let changes = built.as_object_mut().unwrap().remove("changed").unwrap();
+    let item_changes: Vec<_> = changes.as_array().unwrap().iter()
+        .filter(|field| field["label"] == "Shopping item").collect();
+    assert_eq!(item_changes.len(), 2);
+    for item in f.rows(ITEMS) {
+        assert!(item_changes.contains(&&json!({
+            "label":"Shopping item","before":"[]","after":json!([item]).to_string()
+        })));
+    }
     assert_eq!(built["planId"], PLAN);
     let all = lines(&built);
     assert_eq!(all.len(), 2);
@@ -138,7 +147,12 @@ fn clearing_a_list_removes_only_its_lines() {
     );
     let (pantry, staples, undo, kitchens, heads) =
         (before(PANTRY), before(STAPLES), before(UNDO), before("app.meals_kitchens"), before(LISTS));
-    let cleared = f.ok("meals.list.clear", json!({"listId":built["listId"]}));
+    let items = f.rows(ITEMS);
+    assert!(!items.is_empty());
+    let mut cleared = f.ok("meals.list.clear", json!({"listId":built["listId"]}));
+    assert_eq!(cleared.as_object_mut().unwrap().remove("changed").unwrap(), json!([
+        {"label":"Shopping item","before":json!(items).to_string(),"after":"[]"}
+    ]));
     assert_eq!(cleared, json!({"cleared":true}));
     assert!(f.rows(ITEMS).is_empty());
     assert_eq!(f.rows(LISTS), heads);

@@ -32,6 +32,15 @@ if (process.env.MOSS_CHAT_COMMITMENTS_PROOF === "1") {
   ]);
   process.env.JS383_COMMITMENTS_PACKAGE = join(target, "commitments.mosspkg");
 }
+if (process.env.MOSS_CHAT_PART4D_PROOF === "1") {
+  run("bash", ["rust-spike/shell/tools/chat-part4d-live.sh"]);
+  for (const module of ["tasks", "calendar", "email", "connectors", "meals", "web-research"]) {
+    process.env[`JS389_${module.replaceAll("-", "_").toUpperCase()}_PACKAGE`] = join(
+      target,
+      `${module}.mosspkg`
+    );
+  }
+}
 if (process.env.MOSS_CHAT_NOTES_PROOF === "1") {
   run("bash", ["modules/notes/tools/build-component.sh", join(target, "notes.wasm")], {
     NOTES_TOOL_CHECKPOINT: "1",
@@ -53,6 +62,17 @@ if (process.env.MOSS_CHAT_NEWS_PROOF === "1") {
     join(target, "news.mosspkg")
   ]);
   process.env.JS386_NEWS_PACKAGE = join(target, "news.mosspkg");
+}
+if (process.env.MOSS_CHAT_PART4B_PROOF === "1") {
+  for (const module of ["sports", "wellness", "weather", "briefings"]) {
+    run("bash", [`modules/${module}/tools/build-component.sh`, join(target, `${module}.wasm`)]);
+    cargo(`modules/${module}/host/Cargo.toml`, ["build", "--bin", `${module}-package`]);
+    run(join(target, `debug/${module}-package`), [
+      join(target, `${module}.wasm`),
+      join(target, `${module}.mosspkg`)
+    ]);
+    process.env[`JS387_${module.toUpperCase()}_PACKAGE`] = join(target, `${module}.mosspkg`);
+  }
 }
 if (process.env.MOSS_CHAT_FINANCE_PROOF === "1") {
   run("bash", ["modules/finance/tools/build-component.sh", join(target, "finance.wasm")]);

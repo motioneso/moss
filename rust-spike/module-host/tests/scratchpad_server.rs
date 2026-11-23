@@ -2,6 +2,8 @@
 mod common;
 #[path = "people_routes/installed.rs"]
 mod installed;
+#[path = "chat_part4d/live.rs"]
+mod part4d;
 use access_context::AccessContext;
 use common::Keys;
 use moss_module_host::{
@@ -10,7 +12,7 @@ use moss_module_host::{
     trust::{self, Publisher, RegistryIdentity},
 };
 use safety_core::db::{Database, RuntimeRole};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::{
     fs,
@@ -230,11 +232,33 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
     if std::env::var_os("JS383_COMMITMENTS_PACKAGE").is_some() {
         packages.push(("JS383_COMMITMENTS_PACKAGE", "commitments"));
     }
+    for (variable, id) in [
+        ("JS389_TASKS_PACKAGE", "tasks"),
+        ("JS389_CALENDAR_PACKAGE", "calendar"),
+        ("JS389_EMAIL_PACKAGE", "email"),
+        ("JS389_CONNECTORS_PACKAGE", "connectors"),
+        ("JS389_MEALS_PACKAGE", "meals"),
+        ("JS389_WEB_RESEARCH_PACKAGE", "web"),
+    ] {
+        if std::env::var_os(variable).is_some() {
+            packages.push((variable, id));
+        }
+    }
     if std::env::var_os("JS388_NOTES_PACKAGE").is_some() {
         packages.push(("JS388_NOTES_PACKAGE", "notes"));
     }
     if std::env::var_os("JS386_NEWS_PACKAGE").is_some() {
         packages.push(("JS386_NEWS_PACKAGE", "news"));
+    }
+    for (variable, id) in [
+        ("JS387_SPORTS_PACKAGE", "sports"),
+        ("JS387_WELLNESS_PACKAGE", "wellness"),
+        ("JS387_WEATHER_PACKAGE", "weather"),
+        ("JS387_BRIEFINGS_PACKAGE", "briefings"),
+    ] {
+        if std::env::var_os(variable).is_some() {
+            packages.push((variable, id));
+        }
     }
     if std::env::var_os("JS390_FINANCE_PACKAGE").is_some() {
         packages.push(("JS390_FINANCE_PACKAGE", "finance"));
@@ -721,9 +745,23 @@ fn installed_scratchpad_package_serves_routes_from_the_real_server() {
             } else {
                 Vec::new()
             };
+            let part4d = if std::env::var_os("JS389_CONNECTORS_PACKAGE").is_some() {
+                runtime.block_on(async {
+                    let (db, connection) =
+                        tokio_postgres::connect(&bootstrap_url, tokio_postgres::NoTls)
+                            .await
+                            .unwrap();
+                    tokio::spawn(async move {
+                        let _ = connection.await;
+                    });
+                    part4d::seed(&db, owner).await
+                })
+            } else {
+                Value::Null
+            };
             private(
                 &hold.join("bridge.json"),
-                &json!({"root":root,"owner":owner,"other":other_id,"origin":origin,"remote":remote,"server_pid":_server.0.id(),"commitments":commitments}),
+                &json!({"root":root,"owner":owner,"other":other_id,"origin":origin,"remote":remote,"server_pid":_server.0.id(),"commitments":commitments,"part4d":part4d}),
             );
         }
         let deadline = Instant::now() + Duration::from_secs(3600);

@@ -1,5 +1,6 @@
 //! Installed Connectors package served by the real HTTPS executable. Not a native UI proof.
 mod common;
+mod connectors_calendar;
 #[path = "people_routes/installed.rs"]
 mod installed;
 use common::Keys;
@@ -77,11 +78,13 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
     assert!(!port.0.is_empty());
     let _ = CLAIMED_PORT.set(port.0.clone());
     let origin = format!("https://localhost:{}", port.0);
+    let public = std::env::var("MOSS_CALENDAR_PUBLIC_HOST").map(|host|format!("https://{host}:{}",port.0)).unwrap_or_else(|_|origin.clone());
+    let origins=vec![origin.clone(),public.clone()];
     let cert = root.join("tls/certificate.pem");
     assert!(Command::new(std::env::var("JS170_CERTIFICATE").unwrap())
         .args(["local-certificate"])
         .arg(root.join("tls"))
-        .arg(&origin)
+        .args(&origins)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
@@ -97,11 +100,12 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
             .unwrap();
         assert!(status.success());
     }
-    fs::write(
+    if let Ok(web)=std::env::var("MOSS_CALENDAR_SHELL_WEB") {
+        assert!(Command::new("cp").args(["-r",&format!("{web}/.")]).arg(root.join("web")).status().unwrap().success());
+    } else { fs::write(
         root.join("web/index.html"),
         "<!doctype html><title>Connectors HTTP fixture</title>",
-    )
-    .unwrap();
+    ).unwrap(); }
     let app_url = std::env::var("JS43_APP_URL").unwrap();
     let worker_url = std::env::var("JS43_WORKER_URL").unwrap();
     let bootstrap_url = std::env::var("JS43_BOOTSTRAP_URL").unwrap();
@@ -113,7 +117,7 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
     );
     private(
         &root.join("network.json"),
-        &json!({"listen":format!("127.0.0.1:{}",port.0),"origins":[origin],"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
+        &json!({"listen":format!("{}:{}",if public!=origin {"0.0.0.0"} else {"127.0.0.1"},port.0),"origins":origins,"sharing":public!=origin,"certificate":cert,"private_key":root.join("tls/key.pem"),"credentials":root.join("credentials.json")}),
     );
     let client = reqwest::blocking::Client::builder()
         .add_root_certificate(reqwest::Certificate::from_pem(&fs::read(&cert).unwrap()).unwrap())
@@ -192,6 +196,9 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
             moss_module_host::migrations::MIGRATION,
             moss_platform_jobs::MIGRATION,
             moss_module_host::jobs::MIGRATION,
+            // The host approval store the day-plan confirm route depends on. The
+            // first-boot install flow applies it; this test installs directly.
+            moss_module_host::approval_port::MIGRATION,
         ] {
             db.batch_execute(migration).await.unwrap();
         }
@@ -579,6 +586,10 @@ fn installed_connectors_package_serves_routes_from_the_real_server() {
         events.len() == 2 && !events.iter().any(|t| t == "Offsite") && account_row()["lastSyncStatus"] == "success"
     });
     println!("PASS Google sync second run: the event removed in Google is pruned under the runtime role");
+    connectors_calendar::routes(&client, &origin, &cookie, &runtime, &bootstrap_url,
+        &mut google_commands, &log, &saved_events);
+    connectors_calendar::review_browser(&origin, &public);
+
     // The marker must be in no response, no log line, and no stored job; the stored secret is sealed.
     let markers = [MARKER, MARKER_TOKEN, MARKER_REFRESH];
     for body in &seen {

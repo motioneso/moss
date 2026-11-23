@@ -15,6 +15,7 @@ struct Mem {
     tables: RefCell<BTreeMap<String, Vec<Value>>>,
     next: RefCell<u32>,
     inserts: RefCell<u32>,
+    api_calls: RefCell<u32>,
     /// Runs once when the plan's blocks are read, to model a draft save landing mid-reservation.
     on_blocks: RefCell<Option<Box<dyn FnOnce(&mut BTreeMap<String, Vec<Value>>)>>>,
 }
@@ -27,10 +28,19 @@ fn matches(row: &Value, filter: &Value) -> bool {
 }
 impl Host for Mem {
     fn call(&self, port: &str, op: &str, resource: &str, body: Value) -> Result<Value> {
+        if port == "context" && op == "read" {
+            return Ok(json!({"actorUserId":"actor-1","now":"2026-11-10T08:00:00.000Z"}));
+        }
         if port == "context" {
             let mut n = self.next.borrow_mut();
             *n += 1;
             return Ok(json!({"id": format!("00000000-0000-4000-8000-{:012}", *n)}));
+        }
+        // No Connectors package is installed in this fixture: the route's
+        // availability probe fails closed, exactly as on a bare install.
+        if port == "api" {
+            *self.api_calls.borrow_mut() += 1;
+            return Err(moss_module_sdk::Error::new("The required module is not installed"));
         }
         assert_eq!((port, op), ("db", "query"));
         let q: Query = serde_json::from_value(body).unwrap();
@@ -221,7 +231,9 @@ fn the_route_rejects_null_or_repeated_selections_and_empty_operation_keys() {
 #[test]
 fn retry_recover_and_confirm_validate_then_fail_closed() {
     let h = host();
-    let op = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+    let reserved = apply::reserve(&h, PLAN, request("closed-owner-batch", 3, None)).unwrap();
+    let op = reserved["id"].as_str().unwrap();
+    let inserts = *h.inserts.borrow();
     let call = |action: &str, plan: &str, operation: &str, body: Value| {
         handle(&h, "route", &json!({"method":"POST","path":format!("/day-plans/:id/operations/:operation_id/{action}"),"params":{"id":plan,"operation_id":operation},"query":{},"body":body}).to_string()).unwrap()
     };
@@ -241,5 +253,29 @@ fn retry_recover_and_confirm_validate_then_fail_closed() {
     }
     assert!(call("retry", "nope", op, json!({"itemIds":[A]})).contains(bad));
     assert!(call("confirm", PLAN, "nope", json!({"approvalId":A})).contains(bad));
-    assert_eq!(*h.inserts.borrow(), 0);
+    assert_eq!(*h.inserts.borrow(), inserts);
+}
+
+// The host's owner-filtered operation read returns no header for a foreign id.
+// Neither refusal may reach a Connectors read, which can refresh account metadata.
+fn review_operation_rejects_before_connectors(action: &str) {
+    for plan in [PLAN, B] {
+        let h = host();
+        let body = if action == "confirm" {json!({"approvalId":A})} else {json!({"itemIds":[A]})};
+        let reply: Value = serde_json::from_str(&handle(&h, "route", &json!({
+            "method":"POST", "path":format!("/day-plans/:id/operations/:operation_id/{action}"),
+            "params":{"id":plan,"operation_id":C}, "query":{}, "body":body
+        }).to_string()).unwrap()).unwrap();
+        assert_eq!(reply["status"], 404, "{action}: {reply}");
+        assert_eq!(*h.api_calls.borrow(), 0, "{action} reached Connectors");
+        assert_eq!(*h.inserts.borrow(), 0, "{action} wrote a reservation");
+    }
+}
+#[test]
+fn review_operation_confirm_rejects_before_connectors() {
+    review_operation_rejects_before_connectors("confirm");
+}
+#[test]
+fn review_operation_retry_rejects_before_connectors() {
+    review_operation_rejects_before_connectors("retry");
 }

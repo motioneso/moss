@@ -1,4 +1,4 @@
-# Calendar Rust package: cached-event screens and two chat tools
+# Calendar Rust package: cached-event screens and chat tools
 
 `test:rust-calendar-server` builds the Calendar UI/core and packages both Calendar and
 its Tasks dependency before running the installed HTTPS server/browser checks. Use
@@ -16,14 +16,16 @@ Version 0.8.0 combines part 7 with the merged part 8 date and Day legend changes
 wording and settings. Narrow Week screens explain sideways scrolling and bring today
 into view when opening, navigating or resizing; routine refreshes keep the user's
 horizontal position. Day, Week and Month screens, saved views and editable briefing settings are packaged.
-Full shell composition, the source-behavior switch, the remaining four chat tools, jobs,
+Full shell composition, the source-behavior switch, jobs,
 provider execution and the assembled HTTP/UI parity gate remain open.
 
 Version 0.32.0 owns the read-only Today schedule and task-block review. It requires Tasks 0.1.6: the existing public `getTaskReference` now includes title, do time and effort alongside id, owner, status and due time, matching the saved-plan reader's summary. Calendar still reads these facts through the public call under the signed-in account; unavailable task references remain marked unavailable. No new Tasks call is added. Version 0.26.0 introduced that required Tasks dependency. Version 0.25.0 adds the Briefings and Planning source switches on the settings screen. Version 0.2.0 adds `calendar.heartbeatWindow` (owned cache reads) and
 `calendar.dayPlanDraft` (typed evening intent and untimed task proposals). The latter
 retains recorded placement and requires an actor-scoped public Tasks projection for
-new task references. Neither tool calls a provider. The package advertises only these
-two tools; it does not yet wire them into the authenticated chat gateway.
+new task references. Neither tool calls a provider. Version 0.32.1 offers all six Calendar
+tools through the authenticated chat gateway, with validated input schemas and approval
+fields. It adds create, delete, reschedule and visible-event listing to the two tools above.
+Ordinary writes return before/after receipts; deleting asks for approval.
 
 The guest in `src/` depends only on the SDK and pure Rust libraries. Its declared routes
 and five public methods expose cached events, day-plan draft reads/create/save, and legacy

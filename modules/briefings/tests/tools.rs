@@ -144,6 +144,19 @@ fn the_card_shows_the_callers_briefing_and_refuses_extra_keys() {
 }
 
 #[test]
+fn the_card_never_carries_an_internal_content_tag() {
+    let (fake, id) = setup();
+    for input in [json!({"briefingType":"morning"}), json!({"definitionId":id})] {
+        let card = prepare(&fake, input)["ok"].clone();
+        assert!(card.get("content").is_none(), "{card}");
+        assert!(!card.to_string().contains("user_authored"), "{card}");
+    }
+    let envelope = json!({"tool":"briefings.rerun","parameters":{"briefingType":"morning"}});
+    let chat = api(&fake, "prepareBriefingChatAction", envelope);
+    assert!(!chat.to_string().contains("user_authored"), "{chat}");
+}
+
+#[test]
 fn the_approval_version_changes_when_the_briefing_is_edited() {
     let (fake, id) = setup();
     let before = version(&fake, json!({"definitionId":id}));
