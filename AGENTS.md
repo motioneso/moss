@@ -44,6 +44,13 @@ linked doc **in full** and follow it.
   target folder makes rustc see two `moss_module_sdk` crates.
 - Calendar deadline fault fixtures set `deadline_ceiling` as well as `deadline`. A manifest call
   budget overrides the fixture default.
+- The module publisher CLI is `cargo run --bin moss --manifest-path
+rust-spike/module-publisher/Cargo.toml`. Its artifact gate is `pnpm test:rust-phase6-registry-artifacts`.
+- `pnpm test:rust-phase6-offline-bundle` removes and restores refusal guards, and refuses to start
+  without explicit `RUSTUP_HOME` and an isolated `CARGO_TARGET_DIR`. Never run it beside another
+  cargo build.
+- CI compares first-party package digests across Linux, macOS and Windows. A package build change
+  must stay byte-identical on all three.
 - Format Rust with `cargo +1.95.0 fmt` (rustfmt 1.95.0), not the default toolchain's rustfmt.
 - Finance import previews return the ledger revision as `view.revision`.
 - Browser proof on this box runs `herdr-browser` with
